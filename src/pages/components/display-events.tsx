@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import axios from 'axios';
-import { withRouter, NextRouter } from 'next/router';
 import {
   relayInit,
   getEventHash,
@@ -18,7 +18,7 @@ export type Event = {
   sig: string,
 };
 
-const DisplayEvents = ({ router }: { router: NextRouter }) => {
+const DisplayEvents = () => {
   const [eventData, setEventData] = useState<Event[]>([]);
   // const prevPosts = [];
   const imageUrlRegExp = /(https?:\/\/.*\.(?:png|jpg|jpeg|gif))/i;
@@ -56,7 +56,9 @@ const DisplayEvents = ({ router }: { router: NextRouter }) => {
       {eventData?.reverse().map((event) => (
         <div key={event.id} className="p-4 mb-4 bg-gray-100 rounded-md shadow-lg max-w-xl">
           <div className="flex justify-between items-center text-gray-600 text-xs md:text-sm">
-            <span className="max-w-xsm truncate">{event.pubkey}</span>
+            <Link href={{ pathname: '/components/direct-messages', query: { pubkey: event.pubkey } }}>
+              <span className="max-w-xsm truncate">{event.pubkey}</span>
+            </Link>
             <span className="text-gray-400 ml-2 text-xs md:text-sm">{displayDate(event.created_at)}</span>
           </div>
           <div className="mt-2 text-gray-800 text-sm md:text-base whitespace-pre-wrap max-w-xl break-words">

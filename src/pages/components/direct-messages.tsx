@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { relayInit, nip04, getPublicKey, generatePrivateKey } from 'nostr-tools';
 
-const DirectMessages = () => {
+const DirectMessages = ({ pubkey }) => {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -11,7 +11,7 @@ const DirectMessages = () => {
   const pk1 = localStorage.getItem('publicKey');
 
   const sk2 = generatePrivateKey();
-  const pk2 = getPublicKey(sk2);
+  const pk2 = pubkey;
 
   useEffect(() => {
     const relayUrl = 'wss://relay.damus.io';
@@ -29,7 +29,7 @@ const DirectMessages = () => {
     relay.sub([{ kinds: [4], authors: [pk1, pk2] }]).on('event', (event) => {
       let sender = event.pubkey;
       pk1 === sender;
-      let plaintext = nip04.decrypt(localStorage.getItem('privateKey'), pk1, event.content);
+      let plaintext = nip04.decrypt(sk1, pk1, event.content);
     });
 
     return () => {
@@ -53,7 +53,7 @@ const DirectMessages = () => {
         privkey: sk1,
         created_at: Math.floor(Date.now() / 1000),
         kind: 4,
-        tags: [['p', pk2]],
+        tags: [['p', pubkey]],
         content: inputValue,
       }
     });
