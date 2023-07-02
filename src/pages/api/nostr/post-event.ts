@@ -100,16 +100,13 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
     } else if (kind === 4) {
       let sk1 = privkey;
       let pk1 = event.pubkey;
-
-      let sk2 = generatePrivateKey();
-      let pk2 = getPublicKey(sk2);
       
-      // let pk2 = event.tags[0][1];
+      let pk2 = event.tags[0][1];
 
       let ciphertext = await nip04.encrypt(sk1, pk2, event.content);
   
       let nip04Event = {
-        kind: 4,
+        kind: kind,
         pubkey: pk1,
         tags: [['p', pk2]],
         content: ciphertext,
@@ -139,7 +136,10 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
         console.log(`failed to publish to ${relay.url}: ${reason}`);
       });
       
-      // sendEvent(nip04Event);
+      let events = await relay.list([{ kinds: [0, kind] }]);
+      let postedEvent = await relay.get({
+        ids: [event.id],
+      });
     };
 
     relay.close();

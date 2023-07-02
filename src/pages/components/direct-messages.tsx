@@ -24,19 +24,6 @@ const DirectMessages = () => {
     setChats([...chats, pubkey.value]);
     setCurrentChat(pubkey.value);
   }
-  
-  // const handleSendMessage = (message) => {
-  //   const updatedChats = chats.map(chat => {
-  //     if (chat.pubkey === currentChat) {
-  //       return {
-  //         ...chat,
-  //         messages: [...chat.messages, message]
-  //       };
-  //     }
-  //     return chat;
-  //   });
-  //   setChats(updatedChats);
-  // };
 
   const handleChange = (e) => {
     setMessage(e.target.value);
@@ -45,7 +32,21 @@ const DirectMessages = () => {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (message.trim() !== "") {
-      onSend(message); // replace with axios post call
+      axios({
+        method: 'POST',
+        url: '/api/nostr/post-event',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        data: {
+          pubkey: localStorage.getItem('publicKey'),
+          privkey: localStorage.getItem('privateKey'),
+          created_at: Math.floor(Date.now() / 1000),
+          kind: 4,
+          tags: [['p', currentChat]],
+          content: message,
+        }
+      });
       setMessage("");
     }
   };
