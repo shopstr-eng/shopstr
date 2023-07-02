@@ -3,7 +3,9 @@ import {
   relayInit,
   getEventHash,
   signEvent, 
-  nip04
+  nip04,
+  generatePrivateKey, 
+  getPublicKey
 } from 'nostr-tools';
 import 'websocket-polyfill';
 
@@ -99,7 +101,10 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
       let sk1 = privkey;
       let pk1 = event.pubkey;
 
-      let pk2 = event.tags[0][1];
+      let sk2 = generatePrivateKey();
+      let pk2 = getPublicKey(sk2);
+      
+      // let pk2 = event.tags[0][1];
 
       let ciphertext = await nip04.encrypt(sk1, pk2, event.content);
   
@@ -115,7 +120,18 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
   
       nip04Event.sig = signEvent(nip04Event, sk1);
 
-      let pub = relay.publishEvent(nip04Event);
+      let sub = relay.sub([
+        {
+          kinds: [kind],
+          authors: [event.pubkey],
+        },
+      ]);
+  
+      sub.on('event', (event) => {
+        console.log('got event:', event);
+      });
+
+      let pub = relay.publish(nip04Event);
       pub.on('ok', () => {
         console.log(`${relay.url} has accepted our event`);
       });
