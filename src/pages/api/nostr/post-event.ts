@@ -21,27 +21,27 @@ export interface PostEventRequest {
 const parseRequestBody = (body: string) => {
   const parsedBody = typeof body === 'string' ? JSON.parse(body) : body;
   if (!parsedBody.pubkey || typeof parsedBody.pubkey !== 'string') { 
-    console.log("Missing or invalid property: publicKey")
+    console.log("Missing or invalid property: publicKey");
     throw new Error('Invalid request data: missing or invalid property');
   }
   if (!parsedBody.privkey || typeof parsedBody.privkey !== 'string') { 
-    console.log("Missing or invalid property: privateKey")
+    console.log("Missing or invalid property: privateKey");
     throw new Error('Invalid request data: missing or invalid property');
   }
   if (!parsedBody.created_at || typeof parsedBody.created_at !== 'number') { 
-    console.log("Missing or invalid property: created_at")
+    console.log("Missing or invalid property: created_at");
     throw new Error('Invalid request data: missing or invalid property');
   }
   if (!parsedBody.kind || typeof parsedBody.kind !== 'number') { 
-    console.log("Missing or invalid property: kind")
+    console.log("Missing or invalid property: kind");
     throw new Error('Invalid request data: missing or invalid property');
   }
   if (!parsedBody.tags || !Array.isArray(parsedBody.tags)) { 
-    console.log("Missing or invalid property: tags")
+    console.log("Missing or invalid property: tags");
     throw new Error('Invalid request data: missing or invalid property');
   }
   if (!parsedBody.content || typeof parsedBody.content !== 'string') { 
-    console.log("Missing or invalid property: content")
+    console.log("Missing or invalid property: content");
     throw new Error('Invalid request data: missing or invalid property');
   }
   return parsedBody;

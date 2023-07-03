@@ -1,7 +1,7 @@
-run = "cd shopstr && npm run dev"
+run = "cd src && npm run dev"
 
 [nix]
 channel = "stable-22_11"
 
 [deployment]
-run = ["sh", "-c", "cd shopstr && npm run dev"]
+run = ["sh", "-c", "cd src && npm run dev"]

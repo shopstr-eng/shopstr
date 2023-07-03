@@ -6,6 +6,11 @@ import {
   signEvent
 } from 'nostr-tools';
 import 'websocket-polyfill';
+// import DisplayProduct from "./display-product";
+// import getRelay from "../api/nostr/relay";
+// import ProductForm, { ProductFormValues } from "../components/product-form";
+
+// import { Tooltip, Button, Spacer } from "@nextui-org/react";
 
 export type Event = {
   id: string;
@@ -18,14 +23,28 @@ export type Event = {
 };
 
 const DisplayEvents = () => {
+//   const DisplayEvents = ({
+//   router,
+//   pubkey,
+//   clickPubKey,
+//   handlePostListing,
+// }: {
+//   router: NextRouter;
+//   pubkey?: string;
+//   clickPubKey: (pubkey: string) => void;
+//   handlePostListing: (ProductFormValues: ProductFormValues) => void;
+// }) => {
   const [eventData, setEventData] = useState<Event[]>([]);
   // const prevPosts = [];
   const imageUrlRegExp = /(https?:\/\/.*\.(?:png|jpg|jpeg|gif))/i;
   const [showModal, setShowModal] = useState(false);
+  // const [displayComponent, setDisplayComponent] = useState("home");
 
   useEffect(() => {
     const relayUrl = 'wss://relay.damus.io';
     const relay = relayInit(relayUrl);
+    //     setEventData([]);
+    // const relay = getRelay();
 
     relay.on('connect', () => {
       console.log(`connected to ${relay.url}`);
@@ -38,12 +57,32 @@ const DisplayEvents = () => {
 
     relay.sub([{ kinds: [1] }]).on('event', (event) => {
       setEventData((eventData) => [event, ...eventData]); // add new post to top of posts array
+    //     let subParams: { kinds: number[]; authors?: string[] } = {
+    //   kinds: [30018],
+    // };
+
+    // if (pubkey) {
+    //   subParams["authors"] = [pubkey];
+    // }
+    // let productsSub = relay.sub([subParams]);
+    // console.log(subParams);
+    // productsSub.on("event", (event) => {
+    //   setEventData((eventData) => {
+    //     let newEventData = [...eventData, event];
+    //     newEventData.sort((a, b) => b.created_at - a.created_at); // sorts most recently created to least recently created
+    //     return newEventData;
+    //   });
     });
 
     return () => {
       relay.close();
     };
   }, []);
+    // }, [pubkey]);
+
+    //  const handleClickPubkey = (pubkey: string) => {
+  //   clickPubKey(pubkey);
+  // };
 
   const displayDate = (timestamp: number): string => {
     const d = new Date(timestamp * 1000);
@@ -98,11 +137,77 @@ const DisplayEvents = () => {
               ) : (
                 <div>
                   <p>{event.content}</p>
+                      {/* <div>
+      <div
+        className="mt-8 mb-8 overflow-y-scroll"
+        style={{ maxHeight: "80vh" }}
+      >
+        {eventData?.map((event) => {
+          console.log(event);
+          return (
+            <div
+              key={event.id}
+              className="p-4 mb-4 bg-gray-100 rounded-md shadow-lg"
+            >
+              <div className="flex justify-between items-center text-gray-600 text-xs md:text-sm">
+                <Tooltip content={"Go to this sellers store"}>
+                  <span
+                    className="max-w-xsm truncate hover:hover:bg-yellow-100 rounded-md cursor-pointer"
+                    onClick={() => {
+                      handleClickPubkey(event.pubkey);
+                    }}
+                  >
+                    {event.pubkey}
+                  </span>
+                </Tooltip>
+                <span className="text-gray-400 ml-2 text-xs md:text-sm">
+                  {displayDate(event.created_at)}
+                </span> */}
                 </div>
               )}
             </div>
           </div>
         ))}
+        {/* {event.kind == 30018 ? (
+                <DisplayProduct product={JSON.parse(event.content)} />
+              ) : (
+                <div className="mt-2 text-gray-800 text-sm md:text-base whitespace-pre-wrap max-w-xl break-words">
+                  {event.content.indexOf(imageUrlRegExp) ? (
+                    <div>
+                      <p>{event.content.replace(imageUrlRegExp, "")}</p>
+                      <img src={event.content.match(imageUrlRegExp)?.[0]} />
+                    </div>
+                  ) : (
+                    <div>
+                      <p>{event.content}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div>
+        <Button
+          flat
+          // disabled={pubkey === localStorage.getItem("publicKey")}
+          onClick={() => {
+            routeToShop(localStorage.getItem("publicKey"));
+          }}
+        >
+          View Your Shop
+        </Button>
+        <Spacer y={0.3} />
+        <Button flat onClick={handleModalToggle}>
+          Add new listing
+        </Button>
+      </div>
+      <ProductForm
+        handlePostListing={handlePostListing}
+        showModal={showModal}
+        handleModalToggle={handleModalToggle}
+      /> */}
       </div>
       <div className="flex justify-between">
         <button
@@ -121,11 +226,6 @@ const DisplayEvents = () => {
           <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
             <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
               <div className="sm:flex sm:items-start">
-                <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-green-100 sm:mx-0 sm:h-10 sm:w-10">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                  </svg>
-                </div>
                 <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
                   <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
                     Add New Listing
@@ -160,3 +260,4 @@ const DisplayEvents = () => {
 };
 
 export default DisplayEvents;
+

@@ -140,7 +140,6 @@ const ProductForm = ({
                         required
                         className="w-full p-2 border border-gray-300 rounded"
                       />
-
                       <label htmlFor="stall_id" className="block mb-2 font-bold">
                         Stall ID:
                       </label>
