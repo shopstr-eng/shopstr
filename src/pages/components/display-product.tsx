@@ -1,4 +1,4 @@
-const DisplayProduct = ({ product }: any) => {
+const DisplayProduct = ({ content }: any) => {
   const {
     id,
     stall_id,
@@ -9,8 +9,8 @@ const DisplayProduct = ({ product }: any) => {
     price,
     quantity,
     specs,
-  } = product;
-  console.log(product);
+  } = content;
+  
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <h2 className="text-2xl font-bold mb-4">{name}</h2>
@@ -41,17 +41,18 @@ const DisplayProduct = ({ product }: any) => {
           <strong className="font-semibold">Quantity:</strong> {quantity}
         </p>
       </div>
-
-      <div>
-        <h3 className="text-lg font-semibold mb-2">Specifications</h3>
-        <ul>
-          {specs?.map(([key, value], index) => (
-            <li key={index} className="text-gray-700 mb-1">
-              <strong className="font-semibold">{key}:</strong> {value}
-            </li>
-          ))}
-        </ul>
-      </div>
+      {specs?.length > 0 && (
+        <div>
+          <h3 className="text-lg font-semibold mb-2">Specifications</h3>
+          <ul>
+            {specs?.map(([key, value], index) => (
+              <li key={index} className="text-gray-700 mb-1">
+                <strong className="font-semibold">{key}:</strong> {value}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 };

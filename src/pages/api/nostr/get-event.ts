@@ -6,6 +6,7 @@ import {
   signEvent
 } from 'nostr-tools';
 import 'websocket-polyfill';
+import getRelay from "./relays";
 
 export type Event = {
   id: string;
@@ -38,8 +39,7 @@ const GetEvent = async (req: NextApiRequest, res: NextApiResponse) => {
   try {
     const kind = req.body.kind;
 
-    const relayUrl = 'wss://relay.damus.io';
-    const relay = relayInit(relayUrl);
+    const relay = getRelay();
 
     relay.on('connect', () => {
       console.log(`connected to ${relay.url}`);

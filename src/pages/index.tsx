@@ -18,7 +18,6 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
 
       // Redirect user to home page
       router.push('/home');
-      // router.push("/home/12345");
     } else {
       // Handle authentication failure
       setErrorMessage('The public and/or private keys inputted were not valid. Generate a new key pair or try again.');
