@@ -98,7 +98,6 @@ const DisplayEvents = ({
       subParams["authors"] = [pubkey];
     }
     let productsSub = relay.sub([subParams]);
-    console.log(subParams);
     productsSub.on("event", (event) => {
       setEventData((eventData) => {
         let newEventData = [...eventData, event];

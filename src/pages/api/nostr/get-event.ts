@@ -51,7 +51,16 @@ const GetEvent = async (req: NextApiRequest, res: NextApiResponse) => {
     relay.connect();
 
     relay.sub([{ kinds: [kind] }]).on('event', (event) => {
-      events.push(event); // add new post to events array
+      if (kind != 4) {
+        events.push(event); // add new post to events array
+      } else {
+        let sk2 = localStorage.getItem("privateKey");
+        let sender = event.pubkey;
+        let pk1 = sender;
+        let plaintext = await nip04.decrypt(sk2, pk1, event.content);
+        events.push(plaintext);
+        console.log(events)
+      }
     });
 
     relay.close();

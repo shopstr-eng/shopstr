@@ -74,11 +74,8 @@ const ProductForm = ({
     });
   };
 
-  console.log(formValues);
-
   const handleSubmit = () => {
     formValues.id = uuidv4();
-    console.log(formValues);
     handlePostListing(formValues);
   };
 

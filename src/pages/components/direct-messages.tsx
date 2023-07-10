@@ -2,14 +2,52 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { relayInit, nip04, getPublicKey, generatePrivateKey } from 'nostr-tools';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
+import getRelay from "../api/nostr/relays";
 
 const DirectMessages = () => {
   const [chats, setChats] = useState([]);
+  const [chatData, setChatData] = useState([]);
   const [currentChat, setCurrentChat] = useState(null);
   const [newPubKey, setNewPubKey] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const [newChatContent, setNewChatContent] = useState('');
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    const relay = getRelay();
+  
+    relay.on('connect', () => {
+      console.log(`connected to ${relay.url}`);
+    });
+    relay.on('error', () => {
+      console.log(`failed to connect to ${relay.url}`);
+    });
+  
+    relay.connect();
+  
+    let subParams: { kinds: number[]; authors?: string[]; tags?: [] } = {
+      kinds: [4],
+      authors: [localStorage.getItem("publicKey"), currentChat],
+      tags: [['p', currentChat]] && [['p', localStorage.getItem("publicKey")]],
+    };
+  
+    let dmSub = relay.sub([subParams]);
+    dmSub.on("event", async (event) => {
+      let sk2 = localStorage.getItem("privateKey");
+      let sender = event.pubkey;
+      let pk1 = sender;
+      let plaintext = await nip04.decrypt(sk2, pk1, event.content);
+      
+      setChatData((chatData) => {
+        let newChatData = [...chatData, plaintext];
+        return newChatData;
+      });
+      console.log(chatData)
+    });
+    console.log(chatData)
+    return () => {
+      relay.close();
+    };
+  });
   
   const handleToggleModal = () => {
     setShowModal(!showModal);
@@ -23,7 +61,7 @@ const DirectMessages = () => {
     const pubkey = document.getElementById('pubkey') as HTMLTextAreaElement;
     setChats([...chats, pubkey.value]);
     setCurrentChat(pubkey.value);
-  }
+  };
 
   const handleChange = (e) => {
     setMessage(e.target.value);
@@ -104,9 +142,8 @@ const DirectMessages = () => {
         </div>
       </div>
     );
-  }
+  };
 
-  const currentChatObj = chats.find(chat => chat === currentChat);
   return (
     <div>
       <h2 className="max-w-xsm truncate text-yellow-500">
@@ -114,11 +151,9 @@ const DirectMessages = () => {
         {currentChat}
       </h2>
     <div className="mt-8 mb-8 overflow-y-scroll max-h-96 bg-white rounded-md">
-      {/* Render chat messages */}
       {/* {currentChatObj.map((message, index) => (
         <div key={index}>{message}</div>
       ))} */}
-      {/* Render input to send message */}
     </div>
       <form className="flex items-center" onSubmit={handleSubmit}>
         <input
