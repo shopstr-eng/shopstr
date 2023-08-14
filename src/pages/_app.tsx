@@ -1,5 +1,6 @@
-import 'tailwindcss/tailwind.css';
-import type { AppProps } from 'next/app';
+import "tailwindcss/tailwind.css";
+import type { AppProps } from "next/app";
+import "../styles/globals.css";
 
 function App({ Component, pageProps }: AppProps) {
   return (
@@ -7,6 +8,6 @@ function App({ Component, pageProps }: AppProps) {
       <Component {...pageProps} />
     </div>
   );
-};
+}
 
 export default App;
