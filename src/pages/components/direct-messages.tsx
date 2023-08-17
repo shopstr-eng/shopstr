@@ -5,56 +5,77 @@ import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import getRelay from "../api/nostr/relays";
 
 const DirectMessages = () => {
-  const [chats, setChats] = useState([]);
-  const [chatData, setChatData] = useState([]);
-  const [currentChat, setCurrentChat] = useState(null);
+  const [chats, setChats] = useState(() => {
+    const storedValue = localStorage.getItem("chats");
+    return storedValue ? JSON.parse(storedValue) : [];
+  });
+  const [messages, setMessages] = useState<string[]>([]);
+  const [currentChat, setCurrentChat] = useState(false);
   const [newPubKey, setNewPubKey] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
     const relay = getRelay();
-  
+    setMessages([]);
+
     relay.on('connect', () => {
       console.log(`connected to ${relay.url}`);
     });
     relay.on('error', () => {
       console.log(`failed to connect to ${relay.url}`);
     });
-  
+
     relay.connect();
-  
-    let subParams: { kinds: number[]; authors?: string[]; tags?: [] } = {
+
+    let subParams: { kinds: number[]; authors?: string[] } = {
       kinds: [4],
-      authors: [localStorage.getItem("publicKey"), currentChat],
-      tags: [['p', currentChat]] && [['p', localStorage.getItem("publicKey")]],
     };
-  
-    let dmSub = relay.sub([subParams]);
-    dmSub.on("event", async (event) => {
-      let sk2 = localStorage.getItem("privateKey");
-      let sender = event.pubkey;
-      let pk1 = sender;
-      let plaintext = await nip04.decrypt(sk2, pk1, event.content);
+
+    if (currentChat) {
+      subParams["authors"] = [localStorage.getItem('publicKey'), currentChat];
+      // subParams["tags"] = [['p', currentChat], ['p', localStorage.getItem('publicKey')]];
       
-      setChatData((chatData) => {
-        let newChatData = [...chatData, plaintext];
-        return newChatData;
+      let nip04Sub = relay.sub([subParams]);
+    
+      nip04Sub.on("event", (event) => {
+        let sk2 = localStorage.getItem("privateKey");
+        let sender = event.pubkey;
+        let tagPubkey = event.tags[0][1];
+        console.log()
+        let decrypt = async () => {
+          try {
+            if ((localStorage.getItem('publicKey') === sender && tagPubkey === currentChat) || (currentChat === sender && tagPubkey === localStorage.getItem('publicKey'))) {
+              console.log(sender)
+              console.log(event)
+              return await nip04.decrypt(sk2, sender, event.content);
+            };
+          } catch (error) {
+            console.error("Decryption error:", error);
+            return ""; // Return an empty string or handle the error case appropriately for your application
+          }
+        };
+        decrypt().then((plaintext) => {
+          setMessages((messages) => [...messages, plaintext]);
+        });
       });
-      console.log(chatData)
-    });
-    console.log(chatData)
+    };
+
     return () => {
       relay.close();
     };
-  });
+  }, [currentChat]);
+
+  useEffect(() => {
+    localStorage.setItem("chats", JSON.stringify(chats));
+  }, [chats]);
   
   const handleToggleModal = () => {
     setShowModal(!showModal);
   };
   
   const handleGoBack = () => {
-    setCurrentChat(null);
+    setCurrentChat(false);
   };
 
   const handleEnterChat = () => {
@@ -151,9 +172,9 @@ const DirectMessages = () => {
         {currentChat}
       </h2>
     <div className="mt-8 mb-8 overflow-y-scroll max-h-96 bg-white rounded-md">
-      {/* {currentChatObj.map((message, index) => (
+      {messages.map((message, index) => (
         <div key={index}>{message}</div>
-      ))} */}
+      ))}
     </div>
       <form className="flex items-center" onSubmit={handleSubmit}>
         <input

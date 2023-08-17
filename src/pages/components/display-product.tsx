@@ -1,4 +1,12 @@
+import React from 'react';
+import { 
+  BoltIcon
+} from '@heroicons/react/24/outline';
+import { withRouter, NextRouter, useRouter } from 'next/router';
+
 const DisplayProduct = ({ content }: any) => {
+  const router = useRouter();
+  
   const {
     id,
     stall_id,
@@ -10,6 +18,23 @@ const DisplayProduct = ({ content }: any) => {
     quantity,
     specs,
   } = content;
+
+    // Define a new function for alternate checkout behavior
+  const handleAlternateCheckout = (productId: string) => {
+    // Execute a different function for alternate checkout behavior
+    // For example, you may want to redirect to a different page or show a different message
+    console.log("Alternate checkout behavior");
+  };
+
+  // Choose which checkout function to execute based on the current page
+  // Modify this condition as per your requirement, currently checking the page name for 'checkout'
+  const handleCheckout = (productId: string) => {
+    if (window.location.pathname.includes("checkout")) {
+      handleAlternateCheckout(productId);
+    } else {
+      router.push(`/checkout/${productId}`);
+    }
+  };
   
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
@@ -53,6 +78,12 @@ const DisplayProduct = ({ content }: any) => {
           </ul>
         </div>
       )}
+      <div className="flex justify-center">
+        <BoltIcon 
+          className="w-6 h-6 hover:text-yellow-500"
+          onClick={() => handleCheckout(id)}
+        />
+      </div>
     </div>
   );
 };

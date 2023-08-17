@@ -20,14 +20,16 @@ export type Event = {
 
 export interface GetEventRequest {
   kind: number,
-}
+};
 
-// const parseRequestBody = (body: number) => {
-//   const parsedBody = body;
-//   return parsedBody;
-// }
+const parseRequestBody = (body: number) => {
+  const parsedBody = body;
+  return parsedBody;
+};
 
 let events = [];
+let sentMessages = [];
+let receivedMessages = [];
 
 const GetEvent = async (req: NextApiRequest, res: NextApiResponse) => {
   // const [events, setEvents] = useState<Event[]>([]);
@@ -50,7 +52,7 @@ const GetEvent = async (req: NextApiRequest, res: NextApiResponse) => {
 
     relay.connect();
 
-    relay.sub([{ kinds: [kind] }]).on('event', (event) => {
+    relay.sub([{ kinds: [kind] }]).on('event', async (event) => {
       if (kind != 4) {
         events.push(event); // add new post to events array
       } else {
@@ -58,14 +60,19 @@ const GetEvent = async (req: NextApiRequest, res: NextApiResponse) => {
         let sender = event.pubkey;
         let pk1 = sender;
         let plaintext = await nip04.decrypt(sk2, pk1, event.content);
-        events.push(plaintext);
-        console.log(events)
+        if (pk1 == localStorage.getItem("publicKey")) {
+          sentMessages.push(plaintext);
+        } else {
+          receivedMessages.push(plaintext);
+        }
+        console.log(sentMessages);
+        consoel.log(receivedMessages);
       }
     });
 
     relay.close();
 
-    return res.status(200).json({ events: events });
+    return res.status(200).json({ sentMessages: sentMessages });
   } catch (error) {
     console.error(error);
     return res.status(500).json({});

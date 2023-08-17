@@ -170,7 +170,7 @@ const DisplayEvents = ({
             </div>
             <div className="mt-2 text-gray-800 text-sm md:text-base whitespace-pre-wrap max-w-xl break-words">
               {event.kind == 30018 ? (
-              <DisplayProduct content={JSON.parse(event.content)} />
+                <DisplayProduct content={JSON.parse(event.content)} />
               ) : (
                 event.content.indexOf(imageUrlRegExp) ? (
                   <div>
