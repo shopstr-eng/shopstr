@@ -41,8 +41,10 @@ const DirectMessages = () => {
       nip04Sub.on("event", (event) => {
         let sk2 = localStorage.getItem("privateKey");
         let sender = event.pubkey;
+        console.log(sender)
+        console.log(event)
         let tagPubkey = event.tags[0][1];
-        console.log()
+        console.log(tagPubkey)
         let decrypt = async () => {
           try {
             if ((localStorage.getItem('publicKey') === sender && tagPubkey === currentChat) || (currentChat === sender && tagPubkey === localStorage.getItem('publicKey'))) {
@@ -167,7 +169,7 @@ const DirectMessages = () => {
 
   return (
     <div>
-      <h2 className="max-w-xsm truncate text-yellow-500">
+      <h2 className="flex flex-row items-center w-fit pr-2 align-middle text-yellow-500 hover:bg-purple-600 rounded-md cursor-pointer">
         <ArrowLeftIcon className="w-5 h-5 text-yellow-100 hover:text-purple-700" onClick={handleGoBack}>Go Back</ArrowLeftIcon>
         {currentChat}
       </h2>
