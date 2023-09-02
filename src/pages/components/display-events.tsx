@@ -149,7 +149,7 @@ const DisplayEvents = ({
 
   return (
     <div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-8 mb-8 overflow-y-scroll overflow-x-hidden max-h-[80vh] max-w-full">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-8 mb-8 overflow-y-scroll overflow-x-hidden max-h-[70vh] max-w-full">
         {eventData?.map((event) => (
           <div
             key={event.sig}
@@ -169,8 +169,9 @@ const DisplayEvents = ({
               </span>
             </div>
             <div className="mt-2 text-gray-800 text-sm md:text-base whitespace-pre-wrap max-w-xl break-words">
-              {event.kind == 30018 ? (
-                <DisplayProduct content={JSON.parse(event.content)} />
+              {
+                event.kind == 30018 ? (
+                <DisplayProduct content={JSON.parse(event.content)} eventId={event.id} pubkey={event.pubkey} />
               ) : (
                 event.content.indexOf(imageUrlRegExp) ? (
                   <div>
@@ -181,20 +182,9 @@ const DisplayEvents = ({
                   <div>
                     <p>{event.content}</p>
                   </div>
-              ))}
+              ))
+            }
             </div>
-            {event.kind == 30018 ? (
-              <DisplayProduct content={JSON.parse(event.content)} />
-            ) : event.content.indexOf(imageUrlRegExp) ? ( // I'm not sure 173 to 184 is needed. We are only concerned with events of 30018 kind, which are products
-              <div>
-                <p>{event.content.replace(imageUrlRegExp, "")}</p>
-                <img src={event.content.match(imageUrlRegExp)?.[0]} />
-              </div>
-            ) : (
-              <div>
-                <p>{event.content}</p>
-              </div>
-            )}
           </div>
         ))}
       </div>

@@ -1,23 +1,13 @@
-import { CashuMint, CashuWallet, getEncodedToken } from '@cashu/cashu-ts';
+import { relayInit } from "nostr-tools";
 
-const mintTokens = async (req: NextApiRequest, res: NextApiResponse) => {
-
+const getMint = () => {
+  try {
+    // const relayUrl = "wss://relayable.org";
+    const mint = "https://8333.space:3338";
+    return mint;
+  } catch (error) {
+    throw error;
+  }
 };
 
-export default 
-
-const wallet = new CashuWallet(new CashuMint('{MINT_URL}'));
-
-const { pr, hash } = await wallet.requestMint(200);
-
-//pay this LN invoice
-console.log({ pr }, { hash });
-
-async function invoiceHasBeenPaid() {
-    const proofs = await wallet.requestTokens(200, hash);
-    //Encoded proofs can be spent at the mint
-    const encoded = getEncodedToken({
-        token: [{ mint: '{MINT_URL}', proofs }]
-    });
-    console.log(encoded);
-}
+export default getMint;

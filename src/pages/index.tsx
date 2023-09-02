@@ -17,7 +17,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
       localStorage.setItem('privateKey', privateKey);
 
       // Redirect user to home page
-      router.push('/home');
+      router.push('/marketplace');
     } else {
       // Handle authentication failure
       setErrorMessage('The public and/or private keys inputted were not valid. Generate a new key pair or try again.');
@@ -51,9 +51,9 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
   }, [publicKey, privateKey]);
 
   return (
-    <div className="flex flex-col h-screen justify-center items-center bg-yellow-100">
+    <div className="flex flex-col h-full justify-center items-center bg-yellow-100 rounded-md">
       <div className="w-10/12 lg:w-2/3 xl:w-1/2 bg-purple-500 rounded-md py-8 px-16">
-        <h1 className="text-3xl font-bold text-center text-yellow-100 mb-8">Login</h1>
+        <h1 className="text-3xl font-bold text-center text-yellow-100 mb-8">Shopstr</h1>
         {errorMessage && (
           <div className="bg-red-500 text-white py-2 px-4 rounded mb-4">{errorMessage}</div>
         )}
