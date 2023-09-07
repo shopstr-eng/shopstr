@@ -4,7 +4,9 @@ import { relayInit, getEventHash, signEvent } from "nostr-tools";
 import "websocket-polyfill";
 import DisplayProduct from "./display-product";
 import getRelay from "../api/nostr/relays";
-import ProductForm, { ProductFormValues } from "../components/product-form";
+import ProductForm from "../components/product-form";
+// import ProductForm, { ProductFormValues } from "../components/product-form";
+import { ProductFormValues } from "../api/post-event";
 
 const Tooltip = ({ content, children }) => {
   const [showTooltip, setShowTooltip] = useState(false);
@@ -49,7 +51,7 @@ export type Event = {
   pubkey: string;
   created_at: number;
   kind: number;
-  tags: [];
+  tags: ProductFormValues;
   content: string;
   sig: string;
 };
@@ -87,7 +89,8 @@ const DisplayEvents = ({
     // relay.sub([{ kinds: [1] }]).on('event', (event) => {
     //   setEventData((eventData) => [event, ...eventData]); // add new post to top of posts array
     let subParams: { kinds: number[]; authors?: string[] } = {
-      kinds: [30018],
+      kinds: [30402],
+      // kinds: [30018],
     };
 
     if (pubkey) {
@@ -169,21 +172,36 @@ const DisplayEvents = ({
               </span>
             </div>
             <div className="mt-2 text-gray-800 text-sm md:text-base whitespace-pre-wrap max-w-xl break-words">
-              {
+              {/* {
                 event.kind == 30018 ? (
-                <DisplayProduct content={JSON.parse(event.content)} eventId={event.id} pubkey={event.pubkey} />
-              ) : (
-                event.content.indexOf(imageUrlRegExp) ? (
-                  <div>
-                    <p>{event.content.replace(imageUrlRegExp, '')}</p>
-                    <img src={event.content.match(imageUrlRegExp)?.[0]} />
-                  </div>
+                  <DisplayProduct content={JSON.parse(event.content)} eventId={event.id} pubkey={event.pubkey} />
                 ) : (
-                  <div>
-                    <p>{event.content}</p>
-                  </div>
-              ))
-            }
+                  event.content.indexOf(imageUrlRegExp) ? (
+                    <div>
+                      <p>{event.content.replace(imageUrlRegExp, '')}</p>
+                      <img src={event.content.match(imageUrlRegExp)?.[0]} />
+                    </div>
+                  ) : (
+                    <div>
+                      <p>{event.content}</p>
+                    </div>
+                ))
+              } */}
+              {
+                event.kind == 30402 ? (
+                  <DisplayProduct tags={event.tags} eventId={event.id} pubkey={event.pubkey} />
+                ) : (
+                  event.content.indexOf(imageUrlRegExp) ? (
+                    <div>
+                      <p>{event.content.replace(imageUrlRegExp, '')}</p>
+                      <img src={event.content.match(imageUrlRegExp)?.[0]} />
+                    </div>
+                  ) : (
+                    <div>
+                      <p>{event.content}</p>
+                    </div>
+                ))
+              }
             </div>
           </div>
         ))}
