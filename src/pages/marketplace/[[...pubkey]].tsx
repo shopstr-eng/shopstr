@@ -3,6 +3,7 @@ import axios from "axios";
 import DisplayEvents from "../components/display-events";
 import { ProductFormValues } from "../components/product-form";
 import { useRouter } from "next/router";
+import { ArrowUturnLeftIcon } from '@heroicons/react/24/outline';
 
 // const Tooltip = ({ content, children }) => {
 //   const [showTooltip, setShowTooltip] = useState(false);
@@ -56,7 +57,7 @@ const SellerView = () => {
 
   const routeToShop = (pubkey) => {
     setPubkey(pubkey);
-    router.push("/home/" + pubkey);
+    router.push("/marketplace/" + pubkey);
   };
 
   return (
@@ -68,14 +69,14 @@ const SellerView = () => {
             routeToShop("");
           }}
         >
-          <ArrowLeftIcon
-            className="w-5 h-5 text-yellow-100 hover:text-purple-700"
+          <ArrowUturnLeftIcon
+            className="w-5 h-5 text-yellow-100 hover:text-purple-700 pr-1"
             onClick={() => {
               routeToShop("");
             }}
           >
             Go Back
-          </ArrowLeftIcon>
+          </ArrowUturnLeftIcon>
           {pubkey}
         </div>
       ) : undefined}
