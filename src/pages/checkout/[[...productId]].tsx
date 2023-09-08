@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from 'next/router';
 import DisplayProduct from "../components/display-product";
-import type Event from "../components/display-events";
 import getRelay from "../api/nostr/relays";
 
 const Checkout = () => {
@@ -30,16 +29,17 @@ const Checkout = () => {
 
     let subParams: { ids: string[]; kinds: number[] } = {
       ids: [productIdString],
-      kinds: [30018],
+      // kinds: [30018],
+      kinds: [30402],
     };
 
     let productSub = relay.sub([subParams]);
 
     productSub.on("event", (event) => {
-      const data = JSON.parse(event.content)
-      setProduct(data)
-      const pk = event.pubkey;
-      setPubkey(pk)
+      // const data = JSON.parse(event.content);
+      // setProduct(data);
+      setProduct(event.tags);
+      setPubkey(event.pubkey);
     });
 
     return () => {
@@ -49,8 +49,7 @@ const Checkout = () => {
 
   return (
     <div>
-      <h1 className="text-4xl">Checkout</h1>
-      <DisplayProduct content={product} eventId={productIdString} pubkey={pubkey} />
+      <DisplayProduct tags={product} eventId={productIdString} pubkey={pubkey} />
     </div>
   );
 };

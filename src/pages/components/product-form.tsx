@@ -1,83 +1,145 @@
 import { useState } from "react";
-import { v4 as uuidv4 } from "uuid";
+import { ProductFormValues } from "../api/post-event";
+// import { v4 as uuidv4 } from "uuid";
 
-export interface ProductFormValues {
-  id: string;
-  stall_id: string;
-  name: string;
-  description?: string;
-  images: string[];
-  currency: string;
-  price: number;
-  quantity: number;
-  specs: [string, string][];
-}
+// export interface ProductFormValues {
+//   id: string;
+//   stall_id: string;
+//   name: string;
+//   description?: string;
+//   images: string[];
+//   currency: string;
+//   price: number;
+//   quantity: number;
+//   specs: [string, string][];
+// };
+
+// type ProductFormValue = [key: string, ...values: string[]];
+// export type ProductFormValues = ProductFormValue[];
+
+// [
+//  ["title","title"],
+//  ["summary", "short description"],
+//  ["published_at", "timestamp"],
+//  ["location", "Seattle"]
+//  ["price", "1", "USD"]
+// ]
 
 interface ProductFormProps {
   handlePostListing: (product: ProductFormValues) => void;
   handleModalToggle: () => void;
   showModal: boolean;
-}
+};
+
 const ProductForm = ({
   handlePostListing,
   showModal,
   handleModalToggle,
 }: ProductFormProps) => {
-  const [formValues, setFormValues] = useState<ProductFormValues>({
-    id: "",
-    stall_id: "",
-    name: "",
-    description: "",
-    images: [],
-    currency: "",
-    price: 0,
-    quantity: 1,
-    specs: [],
-  });
+  // const [formValues, setFormValues] = useState<ProductFormValues>({
+  //   id: "",
+  //   stall_id: "",
+  //   name: "",
+  //   description: "",
+  //   images: [],
+  //   currency: "",
+  //   price: 0,
+  //   quantity: 1,
+  //   specs: [],
+  // });
+
+  // const initialFormValues: ProductFormValues = [
+  //   ["title",""],
+  //   ["summary", ""],
+  //   ["published_at", ""],
+  //   ["location", ""],
+  //   ["price", "", ""]
+  // ];
+  
+  const [formValues, setFormValues] = useState<ProductFormValues>([]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
-    if (name === "price" || name === "quantity") {
-      setFormValues((prevValues) => ({
-        ...prevValues,
-        [name]: parseInt(value),
-      }));
-      return;
-    }
-    setFormValues((prevValues) => ({
-      ...prevValues,
-      [name]: value,
-    }));
-  };
-
-  const handleSpecChange = (index: number, key: string, value: string) => {
     setFormValues((prevValues) => {
-      const updatedSpecs = [...prevValues.specs];
-      updatedSpecs[index] = [key, value];
-      return {
-        ...prevValues,
-        specs: updatedSpecs,
-      };
+      // Handles when the name is 'currency'
+      if (name === 'currency') {
+        return prevValues.map(([key, price, _]) => 
+          key === 'price' ? [key, price, value] : [key, price]
+        );
+      }
+      // Checks to see if key exists and updates it rather than duplicating
+      for(const [key, ...rest] of prevValues) {
+        if(key === name) {
+          return prevValues.map((item) => item[0] === name ? [name, value] : item);
+        }
+      }
+      // Adds the new key if does not exist already
+      return [...prevValues, [name, value]];
     });
   };
-
-  const handleImageChange = (index: number, value: string) => {
+  
+  const handleImageChange = (value: string) => {
     setFormValues((prevValues) => {
-      const updatedImages = [...prevValues.images];
-      updatedImages[index] = value;
-      return {
+      const updatedImages = [
         ...prevValues,
-        images: updatedImages,
-      };
+        ['image', value]
+      ];
+      return updatedImages;
     });
   };
-
+  
   const handleSubmit = () => {
-    formValues.id = uuidv4();
+    // const idValue: ProductFormValue = ["id", uuidv4()];
+    // const updatedFormValues = [...formValues, idValue];
+    handleModalToggle();
     handlePostListing(formValues);
   };
+
+  // const handleChange = (
+  //   e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  // ) => {
+  //   const { name, value } = e.target;
+  //   if (name === "price" || name === "quantity") {
+  //     setFormValues((prevValues) => ({
+  //       ...prevValues,
+  //       [name]: parseInt(value),
+  //     }));
+  //     return;
+  //   }
+  //   setFormValues((prevValues) => ({
+  //     ...prevValues,
+  //     [name]: value,
+  //   }));
+  // };
+
+  // const handleSpecChange = (index: number, key: string, value: string) => {
+  //   setFormValues((prevValues) => {
+  //     const updatedSpecs = [...prevValues.specs];
+  //     updatedSpecs[index] = [key, value];
+  //     return {
+  //       ...prevValues,
+  //       specs: updatedSpecs,
+  //     };
+  //   });
+  // };
+
+  // const handleImageChange = (index: number, value: string) => {
+  //   setFormValues((prevValues) => {
+  //     const updatedImages = [...prevValues.images];
+  //     updatedImages[index] = value;
+  //     return {
+  //       ...prevValues,
+  //       images: updatedImages,
+  //     };
+  //   });
+  // };
+
+  // const handleSubmit = () => {
+  //   formValues.id = uuidv4();
+  //   handlePostListing(formValues);
+  // };
 
   return (
     <div
@@ -133,14 +195,17 @@ const ProductForm = ({
                         required
                         className="w-full p-2 border border-gray-300 rounded"
                       /> */}
-                    <label htmlFor="name" className="block mb-2 font-bold">
-                      Product Name:
+                    <label 
+                      htmlFor="title" 
+                      className="block mb-2 font-bold"
+                    >
+                      Title:
                     </label>
                     <input
                       type="text"
-                      id="name"
-                      name="name"
-                      value={formValues.name}
+                      id="title"
+                      name="title"
+                      value={formValues.title}
                       onChange={handleChange}
                       required
                       className="w-full p-2 border border-gray-300 rounded"
@@ -150,71 +215,63 @@ const ProductForm = ({
                       htmlFor="description"
                       className="block mb-2 font-bold"
                     >
-                      Product Description:
+                      Summary:
                     </label>
                     <textarea
-                      id="description"
-                      name="description"
-                      value={formValues.description}
+                      id="summary"
+                      name="summary"
+                      value={formValues.summary}
                       onChange={handleChange}
                       className="w-full p-2 border border-gray-300 rounded"
                     />
+                    
                     <div className="flex items-center mb-2">
                       <label
                         htmlFor="images"
                         className="block mb-2 font-bold pr-3"
                       >
-                        Product Images:
+                        Images:
                       </label>
                       <button
                         type="button"
-                        onClick={() =>
-                          setFormValues((prevValues) => ({
-                            ...prevValues,
-                            images: [...prevValues.images, ""],
-                          }))
-                        }
+                        onClick={() => handleImageChange("")}
                         className="bg-blue-500 text-white px-4 py-2 rounded"
                       >
                         Add Image Url
                       </button>
                     </div>
-                    {formValues.images.map((image, index) => (
+                    {formValues.filter(([key]) => key === 'image').map(([_key, image], index) => (
                       <div key={index} className="flex items-center mb-2">
                         <input
                           type="text"
-                          id="images"
-                          name="images"
+                          id={`image-${index}`}
+                          name={`image-${index}`}
                           placeholder="Image Url"
                           value={image}
-                          onChange={(e) =>
-                            handleImageChange(index, e.target.value)
-                          }
+                          onChange={(e) => handleImageChange(e.target.value)}
                           className="w-1/2 p-2 border border-gray-300 rounded"
                         />
                         <button
                           onClick={() => {
-                            let temp = formValues.images;
-                            temp.splice(index, 1);
-                            setFormValues((prevValues) => ({
-                              ...prevValues,
-                              images: temp,
-                            }));
+                            setFormValues(prevValues => {
+                              const filteredImages = prevValues.filter(([_key], imgIndex) => imgIndex !== index);
+                              return filteredImages;
+                            });
                           }}
                         >
-                          delete
+                          Delete
                         </button>
                       </div>
                     ))}
 
-                    <label htmlFor="currency" className="block mb-2 font-bold">
-                      Currency:
+                    <label htmlFor="location" className="block mb-2 font-bold">
+                      Location:
                     </label>
                     <input
                       type="text"
-                      id="currency"
-                      name="currency"
-                      value={formValues.currency}
+                      id="location"
+                      name="location"
+                      value={formValues.location}
                       onChange={handleChange}
                       required
                       className="w-full p-2 border border-gray-300 rounded"
@@ -234,7 +291,33 @@ const ProductForm = ({
                       className="w-full p-2 border border-gray-300 rounded"
                     />
 
-                    <label htmlFor="quantity" className="block mb-2 font-bold">
+                    <label htmlFor="currency" className="block mb-2 font-bold">
+                      Currency:
+                    </label>
+                    <input
+                      type="text"
+                      id="currency"
+                      name="currency"
+                      value={formValues.currency}
+                      onChange={handleChange}
+                      required
+                      className="w-full p-2 border border-gray-300 rounded"
+                    />
+
+                    <label htmlFor="t" className="block mb-2 font-bold">
+                      Category:
+                    </label>
+                    <input
+                      type="text"
+                      id="t"
+                      name="t"
+                      value={formValues.t}
+                      placeholder="Optional"
+                      onChange={handleChange}
+                      className="w-full p-2 border border-gray-300 rounded"
+                    />
+
+                    {/* <label htmlFor="quantity" className="block mb-2 font-bold">
                       Quantity:
                     </label>
                     <input
@@ -245,9 +328,9 @@ const ProductForm = ({
                       onChange={handleChange}
                       required
                       className="w-full p-2 border border-gray-300 rounded"
-                    />
+                    /> */}
 
-                    <div className="specs-container">
+                    {/* <div className="specs-container">
                       <label className="block mb-2 font-bold">
                         Specifications:
                       </label>
@@ -297,7 +380,7 @@ const ProductForm = ({
                       >
                         Add Specification
                       </button>
-                    </div>
+                    </div> */}
                   </form>
                 </div>
               </div>
