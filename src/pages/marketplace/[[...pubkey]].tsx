@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import DisplayEvents from "../components/display-events";
-import { ProductFormValues } from "../components/product-form";
+import { ProductFormValues } from "../api/post-event";
+// import { ProductFormValues } from "../components/product-form";
 import { useRouter } from "next/router";
+import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 
 // const Tooltip = ({ content, children }) => {
 //   const [showTooltip, setShowTooltip] = useState(false);
@@ -36,7 +38,12 @@ const SellerView = () => {
   }, [router.query.pubkey]);
 
   const handlePostListing = (values: ProductFormValues) => {
-    console.log(values);
+    const summary = values.find(([key]) => key === "summary")?.[1] || "";
+    
+    const created_at = Math.floor(Date.now() / 1000);
+    // Add "published_at" key
+    const updatedValues = [...values, ["published_at", String(created_at)]];
+    
     axios({
       method: "POST",
       url: "/api/nostr/post-event",
@@ -46,17 +53,18 @@ const SellerView = () => {
       data: {
         pubkey: localStorage.getItem("publicKey"),
         privkey: localStorage.getItem("privateKey"),
-        created_at: Math.floor(Date.now() / 1000),
-        kind: 30018,
-        tags: [],
-        content: values,
+        created_at: created_at,
+        kind: 30402,
+        // kind: 30018,
+        tags: updatedValues,
+        content: summary,
       },
     });
   };
 
   const routeToShop = (pubkey) => {
     setPubkey(pubkey);
-    router.push("/home/" + pubkey);
+    router.push("/marketplace/" + pubkey);
   };
 
   return (

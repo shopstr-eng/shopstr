@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   BoltIcon
 } from '@heroicons/react/24/outline';
@@ -8,24 +8,70 @@ import requestMint from "../api/cashu/request-mint";
 import { CashuMint, CashuWallet, getEncodedToken } from '@cashu/cashu-ts';
 import getRelay from "../api/nostr/relays";
 
-const DisplayProduct = ({ content, eventId, pubkey }: { content: object, eventId: string, pubkey: string }) => {
+const DisplayProduct = ({ tags, eventId, pubkey }: { tags: [][], eventId: string, pubkey: string }) => {
   const router = useRouter();
+  
+  const [title, setTitle] = useState("");
+  const [summary, setSummary] = useState("");
+  const [publishedAt, setPublishedAt] = useState("");
+  const [images, setImages] = useState([]);
+  const [currentImage, setCurrentImage] = useState<number>(0);
+  const [category, setCategory] = useState("");
+  const [location, setLocation] = useState("");
+  const [price, setPrice] = useState("");
+  const [currency, setCurrency] = useState("");
+  
   const [checkout, setCheckout] = useState(null);
   const [invoice, setInvoice] = useState("");
   const [qrCodeUrl, setQrCodeUrl] = useState<string|null>(null);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   
-  const {
-    id,
-    stall_id,
-    name,
-    description,
-    images,
-    currency,
-    price,
-    quantity,
-    specs,
-  } = content;
+  // const {
+  //   id,
+  //   stall_id,
+  //   name,
+  //   description,
+  //   images,
+  //   currency,
+  //   price,
+  //   quantity,
+  //   specs,
+  // } = content;
+  
+  useEffect(() => {
+    let tmpImages = []; 
+    tags.forEach(tag => {
+      const [key, ...values] = tag;
+      switch(key) {
+        case "title":
+          setTitle(values[0]);
+          break;
+        case "summary":
+          setSummary(values[0]);
+          break;
+        case "published_at":
+          setPublishedAt(values[0]);
+          break;
+        case "image":
+          tmpImages.push(values[0]);
+          break;
+        case "t":
+          setCategory(values[0]);
+          break;
+        case "location":
+          setLocation(values[0]);
+          break;
+        case "price":
+          const [amount, currency] = values;
+          setPrice(amount);
+          setCurrency(currency);
+          break;
+        default:
+          return;
+      }
+    });
+    setImages(tmpImages);
+  }, [tags]);
 
   const sendTokens = async (pk: string, token: string) => {
     axios({
@@ -107,38 +153,61 @@ const DisplayProduct = ({ content, eventId, pubkey }: { content: object, eventId
   const handleCancel = () => {
     setCheckout(null);
   };
+
+  const nextImage = () => {
+    setCurrentImage((currentImage + 1) % images.length);
+  };
+  
+  const prevImage = () => {
+    setCurrentImage((currentImage - 1 + images.length) % images.length);
+  };
   
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-2xl font-bold mb-4">{name}</h2>
-      <p className="text-gray-700 mb-4">{description}</p>
+      <h2 className="text-2xl font-bold mb-4">{title}</h2>
+      <p className="text-gray-700 mb-4">{summary}</p>
 
       <div className="flex flex-wrap -mx-4 mb-4">
-        {images?.map((image, index) => (
-          <img
-            key={index}
-            src={image}
-            alt={`Product Image ${index + 1}`}
-            className="w-1/3 px-4 mb-4"
-          />
-        ))}
+        {images.length > 0 && (
+          <div className="relative">
+            <img
+              src={images[currentImage]}
+              alt={`Product Image ${currentImage + 1}`}
+              className="w-full object-cover h-72"
+            />
+            <button
+              style={{ right: "10px" }}
+              className="absolute top-1/2 p-2 rounded bg-white text-black"
+              onClick={nextImage}
+            >
+              {'>'}
+            </button>
+            <button
+              style={{ left: "10px" }}
+              className="absolute top-1/2 p-2 rounded bg-white text-black"
+              onClick={prevImage}
+            >
+              {'<'}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="mb-4">
         <p>
-          <strong className="font-semibold">Product ID:</strong> {id}
+          <strong className="font-semibold">Category:</strong> {category}
         </p>
         <p>
-          <strong className="font-semibold">Stall ID:</strong> {stall_id}
+          <strong className="font-semibold">Location:</strong> {location}
         </p>
         <p>
-          <strong className="font-semibold">Price:</strong> {currency} {price}
+          <strong className="font-semibold">Price:</strong> {price} {currency}
         </p>
-        <p>
+        {/* <p>
           <strong className="font-semibold">Quantity:</strong> {quantity}
-        </p>
+        </p> */}
       </div>
-      {specs?.length > 0 && (
+      {/* {specs?.length > 0 && (
         <div>
           <h3 className="text-lg font-semibold mb-2">Specifications</h3>
           <ul>
@@ -149,11 +218,11 @@ const DisplayProduct = ({ content, eventId, pubkey }: { content: object, eventId
             ))}
           </ul>
         </div>
-      )}
+      )} */}
       <div className="flex justify-center">
         <BoltIcon 
           className="w-6 h-6 hover:text-yellow-500"
-          onClick={() => handleCheckout(eventId, pubkey, content.price)}
+          onClick={() => handleCheckout(eventId, pubkey, price)}
         />
       </div>
       {(checkout) && (
