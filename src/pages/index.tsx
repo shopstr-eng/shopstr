@@ -43,6 +43,23 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
       });
   };
 
+  const startExtensionLogin = async () => {
+    try {
+      // @ts-ignore
+      var pubkey = await window.nostr.getPublicKey();
+      setPublicKey(pubkey);
+      router.push("/marketplace");
+      let successStr = "signed in as " + pubkey;
+      alert(successStr);
+    } catch (error) {
+      alert("Nostr extension sign on failed");
+    }
+  };
+
+  useEffect(() => {
+    startExtensionLogin();
+  }, []);
+
   useEffect(() => {
     const validKeyString = /[a-f0-9]{64}/;
 
@@ -84,6 +101,12 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
             disabled={disabled}
           >
             Generate Keys
+          </button>
+          <button
+            className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded"
+            onClick={startExtensionLogin}
+          >
+            Sign In with Nostr Extension
           </button>
           <button
             className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded"

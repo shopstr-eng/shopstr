@@ -172,7 +172,8 @@ const DisplayEvents = ({
               </span>
             </div>
             <div className="mt-2 text-gray-800 text-sm md:text-base whitespace-pre-wrap break-words">
-              {/* {
+              {/*
+              {
                 event.kind == 30018 ? (
                   <DisplayProduct content={JSON.parse(event.content)} eventId={event.id} pubkey={event.pubkey} />
                 ) : (
