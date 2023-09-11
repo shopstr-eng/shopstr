@@ -2,7 +2,7 @@ import "tailwindcss/tailwind.css";
 import type { AppProps } from "next/app";
 import "../styles/globals.css";
 import { useRouter } from 'next/router';
-import { HomeIcon, EnvelopeIcon, WalletIcon } from '@heroicons/react/24/outline';
+import { HomeIcon, EnvelopeIcon, WalletIcon, GlobeAltIcon } from '@heroicons/react/24/outline';
 
 function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
@@ -33,6 +33,12 @@ function App({ Component, pageProps }: AppProps) {
                 router.pathname === '/wallet' ? 'text-yellow-100' : ''
               }`}
               onClick={() => router.push('/wallet')}
+            />
+            <GlobeAltIcon
+              className={`w-6 h-6 hover:text-purple-700 ${
+                router.pathname === '/profile' ? 'text-yellow-100' : ''
+              }`}
+              onClick={() => router.push('/relays')}
             />
           </div>
         </div>

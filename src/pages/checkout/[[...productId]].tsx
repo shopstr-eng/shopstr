@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from 'next/router';
 import DisplayProduct from "../components/display-product";
-import getRelay from "../api/nostr/relays";
+import { SimplePool } from 'nostr-tools';
 
 const Checkout = () => {
   const router = useRouter();
@@ -16,16 +16,7 @@ const Checkout = () => {
   const [pubkey, setPubkey] = useState("");
   
   useEffect(() => {
-    const relay = getRelay();
-
-    relay.on("connect", () => {
-      console.log(`connected to ${relay.url}`);
-    });
-    relay.on("error", () => {
-      console.log(`failed to connect to ${relay.url}`);
-    });
-
-    relay.connect();
+    const pool = new SimplePool();
 
     let subParams: { ids: string[]; kinds: number[] } = {
       ids: [productIdString],
@@ -33,7 +24,7 @@ const Checkout = () => {
       kinds: [30402],
     };
 
-    let productSub = relay.sub([subParams]);
+    let productSub = pool.sub(JSON.parse(localStorage.getItem("relays")), [subParams]);
 
     productSub.on("event", (event) => {
       // const data = JSON.parse(event.content);
@@ -41,10 +32,6 @@ const Checkout = () => {
       setProduct(event.tags);
       setPubkey(event.pubkey);
     });
-
-    return () => {
-      relay.close();
-    };
   }, []);
 
   return (

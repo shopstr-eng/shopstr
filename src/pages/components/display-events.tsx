@@ -1,11 +1,8 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { relayInit, getEventHash, signEvent } from "nostr-tools";
-import "websocket-polyfill";
 import DisplayProduct from "./display-product";
-import getRelay from "../api/nostr/relays";
+import { SimplePool } from 'nostr-tools';
 import ProductForm from "../components/product-form";
-// import ProductForm, { ProductFormValues } from "../components/product-form";
 import { ProductFormValues } from "../api/post-event";
 
 const Tooltip = ({ content, children }) => {
@@ -74,20 +71,9 @@ const DisplayEvents = ({
   const [displayComponent, setDisplayComponent] = useState("home");
 
   useEffect(() => {
-    const relay = getRelay();
+    const pool = new SimplePool();
     setEventData([]);
 
-    relay.on("connect", () => {
-      console.log(`connected to ${relay.url}`);
-    });
-    relay.on("error", () => {
-      console.log(`failed to connect to ${relay.url}`);
-    });
-
-    relay.connect();
-
-    // relay.sub([{ kinds: [1] }]).on('event', (event) => {
-    //   setEventData((eventData) => [event, ...eventData]); // add new post to top of posts array
     let subParams: { kinds: number[]; authors?: string[] } = {
       kinds: [30402],
       // kinds: [30018],
@@ -96,7 +82,7 @@ const DisplayEvents = ({
     if (pubkey) {
       subParams["authors"] = [pubkey];
     }
-    let productsSub = relay.sub([subParams]);
+    let productsSub = pool.sub(JSON.parse(localStorage.getItem("relays")), [subParams]);
     productsSub.on("event", (event) => {
       setEventData((eventData) => {
         let newEventData = [...eventData, event];
@@ -104,11 +90,6 @@ const DisplayEvents = ({
         return newEventData;
       });
     });
-
-    return () => {
-      relay.close();
-    };
-    // }, []);
   }, [pubkey]);
 
   const handleClickPubkey = (pubkey: string) => {
@@ -129,26 +110,6 @@ const DisplayEvents = ({
   const handleModalToggle = () => {
     setShowModal(!showModal);
   };
-
-  // const handlePostListing = () => {
-  //   const eventContent = document.getElementById('eventContent') as HTMLTextAreaElement;
-  //   axios({
-  //     method: 'POST',
-  //     url: '/api/nostr/post-event',
-  //     headers: {
-  //       'Content-Type': 'application/json',
-  //     },
-  //     data: {
-  //       pubkey: localStorage.getItem('publicKey'),
-  //       privkey: localStorage.getItem('privateKey'),
-  //       created_at: Math.floor(Date.now() / 1000),
-  //       kind: 1,
-  //       tags: [],
-  //       content: eventContent.value,
-  //     }
-  //   });
-  //   setShowModal(false);
-  // };
 
   return (
     <div>
