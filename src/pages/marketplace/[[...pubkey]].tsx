@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import DisplayEvents from "../components/display-events";
 import { ProductFormValues } from "../api/post-event";
-// import { ProductFormValues } from "../components/product-form";
 import { useRouter } from "next/router";
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 
@@ -58,6 +57,7 @@ const SellerView = () => {
         // kind: 30018,
         tags: updatedValues,
         content: summary,
+        relays: JSON.parse(localStorage.getItem("relays")),
       },
     });
   };

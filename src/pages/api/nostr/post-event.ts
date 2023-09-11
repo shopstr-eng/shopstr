@@ -1,14 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import {
-  relayInit,
-  getEventHash,
-  signEvent, 
+  SimplePool,
+  finishEvent,
   nip04,
   generatePrivateKey, 
   getPublicKey
 } from 'nostr-tools';
 import 'websocket-polyfill';
-import getRelay from "./relays";
 
 export interface PostEventRequest {
   pubkey: string,
@@ -17,6 +15,7 @@ export interface PostEventRequest {
   kind: number,
   tags: [],
   content: string,
+  relays: string[],
 };
 
 // export interface PostProductRequest {
@@ -65,6 +64,10 @@ const parseRequestBody = (body: string) => {
       console.log("Missing or invalid property: content");
       throw new Error("Invalid request data: missing or invalid property");
     // }
+  }
+  if (!parsedBody.relays || typeof parsedBody.relays !== 'object') { 
+    console.log("Missing or invalid property: relays");
+    throw new Error('Invalid request data: missing or invalid property');
   }
   return parsedBody;
 };
@@ -134,55 +137,59 @@ const parseProductFormValues = (body: ProductFormValues): ProductFormValues => {
 //   return parsedBody;
 // };
 
-const isRecord = (obj: unknown): obj is Record<string, unknown> =>
-  obj instanceof Object;
+// const isRecord = (obj: unknown): obj is Record<string, unknown> =>
+//   obj instanceof Object;
 
-export function validateEvent<T>(event: T): event is T {
-  if (!isRecord(event)) {
-    console.log("Invalid event type: event");
-    return false;
-  }
-  if (typeof event.kind !== "number") {
-    console.log("Invalid event type: kind");
-    return false;
-  }
-  if (typeof event.content !== "string") {
-    console.log("Invalid event type: content");
-    return false;
-  }
-  if (typeof event.created_at !== "number") {
-    console.log("Invalid event type: created_at");
-    return false;
-  }
-  if (typeof event.pubkey !== "string") {
-    console.log("Invalid event type: pubkey");
-    return false;
-  }
-  if (!event.pubkey.match(/^[a-f0-9]{64}$/)) {
-    console.log("Invalid event type: pubkey");
-    return false;
-  }
+// export function validateEvent<T>(event: T): event is T {
+//   if (!isRecord(event)) {
+//     console.log("Invalid event type: event");
+//     return false;
+//   }
+//   if (typeof event.kind !== "number") {
+//     console.log("Invalid event type: kind");
+//     return false;
+//   }
+//   if (typeof event.content !== "string") {
+//     console.log("Invalid event type: content");
+//     return false;
+//   }
+//   if (typeof event.created_at !== "number") {
+//     console.log("Invalid event type: created_at");
+//     return false;
+//   }
+//   if (typeof event.pubkey !== "string") {
+//     console.log("Invalid event type: pubkey");
+//     return false;
+//   }
+//   if (!event.pubkey.match(/^[a-f0-9]{64}$/)) {
+//     console.log("Invalid event type: pubkey");
+//     return false;
+//   }
 
-  if (!Array.isArray(event.tags)) {
-    console.log("Invalid event type: tags");
-    return false;
-  }
-  for (let i = 0; i < event.tags.length; i++) {
-    let tag = event.tags[i];
-    if (!Array.isArray(tag)) {
-      console.log("Invalid event type: tags");
-      return false;
-    }
-    for (let j = 0; j < tag.length; j++) {
-      if (typeof tag[j] === "object") {
-        console.log("Invalid event type: tags");
-        return false;
-      }
-    }
-  }
+//   if (!Array.isArray(event.tags)) {
+//     console.log("Invalid event type: tags");
+//     return false;
+//   }
+//   for (let i = 0; i < event.tags.length; i++) {
+//     let tag = event.tags[i];
+//     if (!Array.isArray(tag)) {
+//       console.log("Invalid event type: tags");
+//       return false;
+//     }
+//     for (let j = 0; j < tag.length; j++) {
+//       if (typeof tag[j] === "object") {
+//         console.log("Invalid event type: tags");
+//         return false;
+//       }
+//     }
+//     if (typeof event.relays !== "object") {
+//     console.log("Invalid event type: object");
+//     return false;
+//   }
+//   }
 
-  return true;
-}
+//   return true;
+// }
 
 const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
   if (req.method !== 'POST') {
@@ -196,22 +203,15 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
 
     const kind = event.kind;
 
-    const relay = getRelay()
-    relay.on('connect', () => {
-      console.log(`connected to ${relay.url}`);
-    });
-    relay.on('error', () => {
-      console.log(`failed to connect to ${relay.url}`);
-    });
+    const relays = event.relays;
+    delete event.relays;
 
-    await relay.connect();
+    const pool = new SimplePool();
 
     if (kind === 1) {
-      event.id = getEventHash(event);
+      const signedEvent = finishEvent(event, privkey);
   
-      event.sig = signEvent(event, privkey);
-  
-      let sub = relay.sub([
+      let sub = pool.sub(relays, [
         {
           kinds: [kind],
           authors: [event.pubkey],
@@ -222,16 +222,10 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
         console.log('got event:', event);
       });
   
-      let pub = relay.publish(event);
-      pub.on('ok', () => {
-        console.log(`${relay.url} has accepted our event`);
-      });
-      pub.on('failed', (reason) => {
-        console.log(`failed to publish to ${relay.url}: ${reason}`);
-      });
+      await pool.publish(relays, signedEvent);
   
-      let events = await relay.list([{ kinds: [0, kind] }]);
-      let postedEvent = await relay.get({
+      let events = await pool.list(relays, [{ kinds: [0, kind] }]);
+      let postedEvent = await pool.get(relays, {
         ids: [event.id],
       });
     } else if (kind === 4) {
@@ -250,11 +244,9 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
         created_at: Math.floor(Date.now() / 1000),
       };
 
-      nip04Event.id = getEventHash(nip04Event);
-  
-      nip04Event.sig = signEvent(nip04Event, sk1);
+      const signedEvent = finishEvent(nip04Event, privkey);
 
-      let sub = relay.sub([
+      let sub = pool.sub(relays, [
         {
           kinds: [kind],
           authors: [event.pubkey],
@@ -265,27 +257,20 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
         console.log('got event:', event);
       });
 
-      let pub = relay.publish(nip04Event);
-      pub.on('ok', () => {
-        console.log(`${relay.url} has accepted our event`);
-      });
-      pub.on('failed', (reason) => {
-        console.log(`failed to publish to ${relay.url}: ${reason}`);
-      });
+      await pool.publish(relays, signedEvent);
       
-      let events = await relay.list([{ kinds: [0, kind] }]);
-      let postedEvent = await relay.get({
+      let events = await pool.list(relays, [{ kinds: [0, kind] }]);
+      let postedEvent = await pool.get(relays, {
         ids: [event.id],
       });
     } else if (kind === 30018) {
       event.content.stall_id = event.pubkey; // using users public key as stall id
       const productId = event.content.id;
       event.content = JSON.stringify(event.content);
-      event.id = getEventHash(event);
-      event.sig = signEvent(event, privkey);
+      const signedEvent = finishEvent(event, privkey);
       // event.tags = [["d", event.id]];
   
-      let sub = relay.sub([
+      let sub = pool.sub(relays, [
         {
           kinds: [kind],
           authors: [event.pubkey],
@@ -296,24 +281,16 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
         console.log("got event:", event);
       });
   
-      let pub = relay.publish(event);
-      pub.on("ok", () => {
-        console.log(`${relay.url} has accepted our event`);
-      });
-      pub.on("failed", (reason) => {
-        console.log(`failed to publish to ${relay.url}: ${reason}`);
-      });
+      await pool.publish(relays, signedEvent);
   
-      let events = await relay.list([{ kinds: [0, kind] }]);
-      let postedEvent = await relay.get({
+      let events = await pool.list(relays, [{ kinds: [0, kind] }]);
+      let postedEvent = await pool.get(relays, {
         ids: [event.id],
       });
     } else if (kind === 30402) {
-      event.id = getEventHash(event);
+      const signedEvent = finishEvent(event, privkey);
   
-      event.sig = signEvent(event, privkey);
-  
-      let sub = relay.sub([
+      let sub = pool.sub(relays, [
         {
           kinds: [kind],
           authors: [event.pubkey],
@@ -324,21 +301,13 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
         console.log('got event:', event);
       });
   
-      let pub = relay.publish(event);
-      pub.on('ok', () => {
-        console.log(`${relay.url} has accepted our event`);
-      });
-      pub.on('failed', (reason) => {
-        console.log(`failed to publish to ${relay.url}: ${reason}`);
-      });
+      await pool.publish(relays, signedEvent);
   
-      let events = await relay.list([{ kinds: [0, kind] }]);
-      let postedEvent = await relay.get({
+      let events = await pool.list(relays, [{ kinds: [0, kind] }]);
+      let postedEvent = await pool.get(relays, {
         ids: [event.id],
       });
     };
-
-    relay.close();
 
     return res.status(200).json({});
   } catch (error) {

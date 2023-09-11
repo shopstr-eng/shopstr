@@ -1,32 +1,27 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { relayInit, nip04, getPublicKey, generatePrivateKey } from 'nostr-tools';
+import { nip04, SimplePool } from 'nostr-tools';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
-import getRelay from "../api/nostr/relays";
 
 const DirectMessages = () => {
-  const [chats, setChats] = useState(() => {
-    const storedValue = localStorage.getItem("chats");
-    return storedValue ? JSON.parse(storedValue) : [];
-  });
+  // store chats in indexedDB
+  const [chats, setChats] = useState([]);
   const [messages, setMessages] = useState<string[]>([]);
   const [currentChat, setCurrentChat] = useState(false);
-  const [newPubKey, setNewPubKey] = useState('');
+  const [newPubKey, setNewPubKey] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    const relay = getRelay();
+    if (typeof window !== 'undefined') {
+      const storedChats = localStorage.getItem("chats");
+      setChats(storedChats ? JSON.parse(storedChats) : []);
+    }
+  }, []);
+
+  useEffect(() => {
+    const pool = new SimplePool();
     setMessages([]);
-
-    relay.on('connect', () => {
-      console.log(`connected to ${relay.url}`);
-    });
-    relay.on('error', () => {
-      console.log(`failed to connect to ${relay.url}`);
-    });
-
-    relay.connect();
 
     let subParams: { kinds: number[]; authors?: string[] } = {
       kinds: [4],
@@ -34,37 +29,23 @@ const DirectMessages = () => {
 
     if (currentChat) {
       subParams["authors"] = [localStorage.getItem('publicKey'), currentChat];
-      // subParams["tags"] = [['p', currentChat], ['p', localStorage.getItem('publicKey')]];
       
-      let nip04Sub = relay.sub([subParams]);
+      let nip04Sub = pool.sub(JSON.parse(localStorage.getItem("relays")), [subParams]);
     
-      nip04Sub.on("event", (event) => {
+      nip04Sub.on("event", async (event) => {
         let sk2 = localStorage.getItem("privateKey");
         let sender = event.pubkey;
-        console.log(sender)
-        console.log(event)
-        let tagPubkey = event.tags[0][1];
-        console.log(tagPubkey)
-        let decrypt = async () => {
-          try {
-            if ((localStorage.getItem('publicKey') === sender && tagPubkey === currentChat) || (currentChat === sender && tagPubkey === localStorage.getItem('publicKey'))) {
-              console.log(sender)
-              console.log(event)
-              return await nip04.decrypt(sk2, sender, event.content);
-            };
-          } catch (error) {
-            console.error("Decryption error:", error);
-            return ""; // Return an empty string or handle the error case appropriately for your application
-          }
-        };
-        decrypt().then((plaintext) => {
-          setMessages((messages) => [...messages, plaintext]);
-        });
-      });
-    };
 
-    return () => {
-      relay.close();
+        let tagPubkey = event.tags[0][1];
+
+        let plaintext;
+        if ((localStorage.getItem('publicKey') === sender && tagPubkey === currentChat) || (currentChat === sender && tagPubkey === localStorage.getItem('publicKey'))) {
+          console.log(sender)
+          plaintext = await nip04.decrypt(sk2, sender, event.content);
+        };
+
+        setMessages((messages) => [...messages, plaintext]);
+      });
     };
   }, [currentChat]);
 
@@ -106,6 +87,7 @@ const DirectMessages = () => {
           kind: 4,
           tags: [['p', currentChat]],
           content: message,
+          relays: JSON.parse(localStorage.getItem("relays")),
         }
       });
       setMessage("");
@@ -118,9 +100,12 @@ const DirectMessages = () => {
         <div className="mt-8 mb-8 overflow-y-scroll max-h-96 bg-white rounded-md">
           {chats.map(chat => (
             <div key={chat} className="flex justify-between items-center mb-2">
-              <div className="max-w-xsm truncate">{chat}</div>
-              <div>{chat > 0 ? chat.messages[chat.messages.length - 1] : "No messages"}</div>
-              <button onClick={() => setCurrentChat(chat)}>Enter Chat</button>
+              <div className="max-w-xsm truncate">
+                {chat}
+              </div>
+              <button onClick={() => setCurrentChat(chat)}>
+                Enter Chat
+              </button>
             </div>
           ))}
         </div>
@@ -173,11 +158,11 @@ const DirectMessages = () => {
         <ArrowLeftIcon className="w-5 h-5 text-yellow-100 hover:text-purple-700" onClick={handleGoBack}>Go Back</ArrowLeftIcon>
         {currentChat}
       </h2>
-    <div className="mt-8 mb-8 overflow-y-scroll max-h-96 bg-white rounded-md">
-      {messages.map((message, index) => (
-        <div key={index}>{message}</div>
-      ))}
-    </div>
+      <div className="mt-8 mb-8 overflow-y-scroll max-h-96 bg-white rounded-md">
+        {messages.map((message, index) => (
+          <div key={index}>{message}</div>
+        ))}
+      </div>
       <form className="flex items-center" onSubmit={handleSubmit}>
         <input
           type="text"
