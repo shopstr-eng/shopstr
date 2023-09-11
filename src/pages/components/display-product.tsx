@@ -6,7 +6,6 @@ import { withRouter, NextRouter, useRouter } from 'next/router';
 import axios from "axios";
 import requestMint from "../api/cashu/request-mint";
 import { CashuMint, CashuWallet, getEncodedToken } from '@cashu/cashu-ts';
-import getRelay from "../api/nostr/relays";
 
 const DisplayProduct = ({ tags, eventId, pubkey }: { tags: [][], eventId: string, pubkey: string }) => {
   const router = useRouter();
@@ -87,6 +86,7 @@ const DisplayProduct = ({ tags, eventId, pubkey }: { tags: [][], eventId: string
         kind: 4,
         tags: [['p', pk]],
         content: token,
+        relays: JSON.parse(localStorage.getItem("relays")),
       }
     });
   }
