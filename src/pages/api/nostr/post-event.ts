@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import {
   SimplePool,
-  finishEvent,
+  finishEvent, // this assigns the pubkey, calculates the event id and signs the event in a single step
   nip04,
   generatePrivateKey, 
   getPublicKey
@@ -41,10 +41,10 @@ const parseRequestBody = (body: string) => {
     console.log("Missing or invalid property: publicKey");
     throw new Error('Invalid request data: missing or invalid property');
   }
-  if (!parsedBody.privkey || typeof parsedBody.privkey !== 'string') { 
-    console.log("Missing or invalid property: privateKey");
-    throw new Error('Invalid request data: missing or invalid property');
-  }
+  // if (!parsedBody.privkey || typeof parsedBody.privkey !== 'string') { 
+  //   console.log("Missing or invalid property: privateKey");
+  //   throw new Error('Invalid request data: missing or invalid property');
+  // }
   if (!parsedBody.created_at || typeof parsedBody.created_at !== 'number') { 
     console.log("Missing or invalid property: created_at");
     throw new Error('Invalid request data: missing or invalid property');
@@ -195,47 +195,26 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
   if (req.method !== 'POST') {
     return res.status(405).json({});
   }
-
   try {
     const event = parseRequestBody(req.body);
     const privkey = event.privkey;
     delete event.privkey;
 
     const kind = event.kind;
-
     const relays = event.relays;
     delete event.relays;
-
     const pool = new SimplePool();
+    
+    let signedEvent;
 
     if (kind === 1) {
-      const signedEvent = finishEvent(event, privkey);
-  
-      let sub = pool.sub(relays, [
-        {
-          kinds: [kind],
-          authors: [event.pubkey],
-        },
-      ]);
-  
-      sub.on('event', (event) => {
-        console.log('got event:', event);
-      });
-  
-      await pool.publish(relays, signedEvent);
-  
-      let events = await pool.list(relays, [{ kinds: [0, kind] }]);
-      let postedEvent = await pool.get(relays, {
-        ids: [event.id],
-      });
+      signedEvent = finishEvent(event, privkey);
+
     } else if (kind === 4) {
       let sk1 = privkey;
       let pk1 = event.pubkey;
-      
       let pk2 = event.tags[0][1];
-
       let ciphertext = await nip04.encrypt(sk1, pk2, event.content);
-  
       let nip04Event = {
         kind: kind,
         pubkey: pk1,
@@ -243,71 +222,37 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
         content: ciphertext,
         created_at: Math.floor(Date.now() / 1000),
       };
-
-      const signedEvent = finishEvent(nip04Event, privkey);
-
-      let sub = pool.sub(relays, [
-        {
-          kinds: [kind],
-          authors: [event.pubkey],
-        },
-      ]);
-  
-      sub.on('event', (event) => {
-        console.log('got event:', event);
-      });
-
-      await pool.publish(relays, signedEvent);
       
-      let events = await pool.list(relays, [{ kinds: [0, kind] }]);
-      let postedEvent = await pool.get(relays, {
-        ids: [event.id],
-      });
+      signedEvent = finishEvent(nip04Event, privkey);
+
     } else if (kind === 30018) {
       event.content.stall_id = event.pubkey; // using users public key as stall id
       const productId = event.content.id;
       event.content = JSON.stringify(event.content);
-      const signedEvent = finishEvent(event, privkey);
-      // event.tags = [["d", event.id]];
-  
-      let sub = pool.sub(relays, [
-        {
-          kinds: [kind],
-          authors: [event.pubkey],
-        },
-      ]);
-  
-      sub.on("event", (event) => {
-        console.log("got event:", event);
-      });
-  
-      await pool.publish(relays, signedEvent);
-  
-      let events = await pool.list(relays, [{ kinds: [0, kind] }]);
-      let postedEvent = await pool.get(relays, {
-        ids: [event.id],
-      });
+      signedEvent = finishEvent(event, privkey);
+
     } else if (kind === 30402) {
-      const signedEvent = finishEvent(event, privkey);
-  
-      let sub = pool.sub(relays, [
-        {
-          kinds: [kind],
-          authors: [event.pubkey],
-        },
-      ]);
-  
-      sub.on('event', (event) => {
-        console.log('got event:', event);
-      });
-  
-      await pool.publish(relays, signedEvent);
-  
-      let events = await pool.list(relays, [{ kinds: [0, kind] }]);
-      let postedEvent = await pool.get(relays, {
-        ids: [event.id],
-      });
+      signedEvent = finishEvent(event, privkey);
+
+    }else if (kind === 5) { // Deletion event nip 09
+      if(event.sig === undefined) {
+        signedEvent = finishEvent(event, privkey);
+      }else{
+        signedEvent = event
+      }
     };
+
+    let sub = pool.sub(relays, [
+      {
+        kinds: [kind],
+        authors: [event.pubkey],
+      },
+    ]);
+
+    sub.on('event', (event) => {
+      console.log('got event:', event);
+    });
+    await pool.publish(relays, signedEvent);
 
     return res.status(200).json({});
   } catch (error) {
