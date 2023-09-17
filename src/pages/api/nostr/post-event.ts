@@ -204,26 +204,21 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
     const relays = event.relays;
     delete event.relays;
     const pool = new SimplePool();
-    
-    let signedEvent;
+    let signedEvent = {...event}; // using this as the editable event object which is either signed already or needs to be signed and posted to a relay
 
-    if (kind === 1) {
-      signedEvent = finishEvent(event, privkey);
-
-    } else if (kind === 4) {
+    // if (kind === 1 || kind === 5 #deletion event) { do nothing and just sign event
+    if (kind === 4) {
       let sk1 = privkey;
       let pk1 = event.pubkey;
       let pk2 = event.tags[0][1];
       let ciphertext = await nip04.encrypt(sk1, pk2, event.content);
-      let nip04Event = {
+      signedEvent = {
         kind: kind,
         pubkey: pk1,
         tags: [['p', pk2]],
         content: ciphertext,
         created_at: Math.floor(Date.now() / 1000),
       };
-      
-      signedEvent = finishEvent(nip04Event, privkey);
 
     } else if (kind === 30018) {
       event.content.stall_id = event.pubkey; // using users public key as stall id
@@ -231,27 +226,21 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
       event.content = JSON.stringify(event.content);
       signedEvent = finishEvent(event, privkey);
 
-    } else if (kind === 30402) {
-      signedEvent = finishEvent(event, privkey);
+    }
 
-    }else if (kind === 5) { // Deletion event nip 09
-      if(event.sig === undefined) {
-        signedEvent = finishEvent(event, privkey);
-      }else{
-        signedEvent = event
-      }
-    };
+    if(signedEvent.sig === undefined) { // if signed by extension, don't sign again
+      signedEvent = finishEvent(signedEvent, privkey);
+    }
+    // let sub = pool.sub(relays, [
+    //   {
+    //     kinds: [kind],
+    //     authors: [event.pubkey],
+    //   },
+    // ]);
 
-    let sub = pool.sub(relays, [
-      {
-        kinds: [kind],
-        authors: [event.pubkey],
-      },
-    ]);
-
-    sub.on('event', (event) => {
-      console.log('got event:', event);
-    });
+    // sub.on('event', (event) => {
+    //   console.log('got event:', event);
+    // });
     await pool.publish(relays, signedEvent);
 
     return res.status(200).json({});
