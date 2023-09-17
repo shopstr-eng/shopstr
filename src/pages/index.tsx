@@ -50,6 +50,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
       // @ts-ignore
       var pubkey = await window.nostr.getPublicKey();
       setPublicKey(pubkey);
+      localStorage.setItem('publicKey', pubkey);
       router.push("/marketplace");
       let successStr = "signed in as " + pubkey;
       alert(successStr);

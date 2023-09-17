@@ -1,29 +1,5 @@
-import { useState } from "react";
+import { use, useState } from "react";
 import { ProductFormValues } from "../api/post-event";
-// import { v4 as uuidv4 } from "uuid";
-
-// export interface ProductFormValues {
-//   id: string;
-//   stall_id: string;
-//   name: string;
-//   description?: string;
-//   images: string[];
-//   currency: string;
-//   price: number;
-//   quantity: number;
-//   specs: [string, string][];
-// };
-
-// type ProductFormValue = [key: string, ...values: string[]];
-// export type ProductFormValues = ProductFormValue[];
-
-// [
-//  ["title","title"],
-//  ["summary", "short description"],
-//  ["published_at", "timestamp"],
-//  ["location", "Seattle"]
-//  ["price", "1", "USD"]
-// ]
 
 interface ProductFormProps {
   handlePostListing: (product: ProductFormValues) => void;
@@ -36,27 +12,8 @@ const ProductForm = ({
   showModal,
   handleModalToggle,
 }: ProductFormProps) => {
-  // const [formValues, setFormValues] = useState<ProductFormValues>({
-  //   id: "",
-  //   stall_id: "",
-  //   name: "",
-  //   description: "",
-  //   images: [],
-  //   currency: "",
-  //   price: 0,
-  //   quantity: 1,
-  //   specs: [],
-  // });
-
-  // const initialFormValues: ProductFormValues = [
-  //   ["title",""],
-  //   ["summary", ""],
-  //   ["published_at", ""],
-  //   ["location", ""],
-  //   ["price", "", ""]
-  // ];
-  
   const [formValues, setFormValues] = useState<ProductFormValues>([]);
+  const [images, setImages] = useState<string[]>([]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -80,66 +37,48 @@ const ProductForm = ({
     });
   };
   
-  const handleImageChange = (value: string) => {
-    setFormValues((prevValues) => {
-      const updatedImages = [
-        ...prevValues,
-        ['image', value]
-      ];
+  const handleImageChange = (value: string, index: number) => {
+    setImages((prevValues) => {
+      const updatedImages = [...prevValues];
+      updatedImages[index] = value;
+      return updatedImages;
+    });
+  };
+
+  const handleAddImage = () => {
+    setImages((prevValues) => [...prevValues, ""]);
+  };
+
+  const handleDeleteImage = (index: number) => {
+    setImages(prevValues => {
+      const updatedImages = [...prevValues];
+      updatedImages.splice(index, 1);
       return updatedImages;
     });
   };
   
   const handleSubmit = () => {
-    // const idValue: ProductFormValue = ["id", uuidv4()];
-    // const updatedFormValues = [...formValues, idValue];
+    // integrate image urls into formValues
+    const updatedFormValues = [...formValues, ...images.map((image) => ["image", image])];
+
     handleModalToggle();
-    handlePostListing(formValues);
+    initFormValues();
+    handlePostListing(updatedFormValues);
   };
 
-  // const handleChange = (
-  //   e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  // ) => {
-  //   const { name, value } = e.target;
-  //   if (name === "price" || name === "quantity") {
-  //     setFormValues((prevValues) => ({
-  //       ...prevValues,
-  //       [name]: parseInt(value),
-  //     }));
-  //     return;
-  //   }
-  //   setFormValues((prevValues) => ({
-  //     ...prevValues,
-  //     [name]: value,
-  //   }));
-  // };
+  const initFormValues = () => {
+    setFormValues([]);
+    setImages([]);
+  }
 
-  // const handleSpecChange = (index: number, key: string, value: string) => {
-  //   setFormValues((prevValues) => {
-  //     const updatedSpecs = [...prevValues.specs];
-  //     updatedSpecs[index] = [key, value];
-  //     return {
-  //       ...prevValues,
-  //       specs: updatedSpecs,
-  //     };
-  //   });
-  // };
-
-  // const handleImageChange = (index: number, value: string) => {
-  //   setFormValues((prevValues) => {
-  //     const updatedImages = [...prevValues.images];
-  //     updatedImages[index] = value;
-  //     return {
-  //       ...prevValues,
-  //       images: updatedImages,
-  //     };
-  //   });
-  // };
-
-  // const handleSubmit = () => {
-  //   formValues.id = uuidv4();
-  //   handlePostListing(formValues);
-  // };
+  const getFormValue = (key: string) => {
+    if (key === 'currency') {
+      const currency = formValues.find(([k]) => k === 'price')?.[2] || "";
+      return currency;
+    }
+    const value = formValues.find(([k]) => k === key)?.[1] || "";
+    return value;
+  };
 
   return (
     <div
@@ -165,36 +104,7 @@ const ProductForm = ({
                   Add New Listing
                 </h3>
                 <div className="mt-2">
-                  {/* <textarea
-                        id="eventContent"
-                        className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md mb-2"
-                        placeholder="Enter event content here"
-                      ></textarea> */}
                   <form className="mx-auto" onSubmit={handleSubmit}>
-                    {/* <label htmlFor="id" className="block mb-2 font-bold">
-                        ID:
-                      </label>
-                      <input
-                        type="text"
-                        id="id"
-                        name="id"
-                        value={formValues.id}
-                        onChange={handleChange}
-                        required
-                        className="w-full p-2 border border-gray-300 rounded"
-                      />
-                      <label htmlFor="stall_id" className="block mb-2 font-bold">
-                        Stall ID:
-                      </label>
-                      <input
-                        type="text"
-                        id="stall_id"
-                        name="stall_id"
-                        value={formValues.stall_id}
-                        onChange={handleChange}
-                        required
-                        className="w-full p-2 border border-gray-300 rounded"
-                      /> */}
                     <label 
                       htmlFor="title" 
                       className="block mb-2 font-bold"
@@ -205,7 +115,7 @@ const ProductForm = ({
                       type="text"
                       id="title"
                       name="title"
-                      value={formValues.title}
+                      value={getFormValue('title')}
                       onChange={handleChange}
                       required
                       className="w-full p-2 border border-gray-300 rounded"
@@ -220,8 +130,9 @@ const ProductForm = ({
                     <textarea
                       id="summary"
                       name="summary"
-                      value={formValues.summary}
+                      value={getFormValue('summary')}
                       onChange={handleChange}
+                      required
                       className="w-full p-2 border border-gray-300 rounded"
                     />
                     
@@ -234,13 +145,13 @@ const ProductForm = ({
                       </label>
                       <button
                         type="button"
-                        onClick={() => handleImageChange("")}
+                        onClick={handleAddImage}
                         className="bg-blue-500 text-white px-4 py-2 rounded"
                       >
                         Add Image Url
                       </button>
                     </div>
-                    {formValues.filter(([key]) => key === 'image').map(([_key, image], index) => (
+                    {images.map((image, index) => (
                       <div key={index} className="flex items-center mb-2">
                         <input
                           type="text"
@@ -248,16 +159,11 @@ const ProductForm = ({
                           name={`image-${index}`}
                           placeholder="Image Url"
                           value={image}
-                          onChange={(e) => handleImageChange(e.target.value)}
+                          onChange={(e) => handleImageChange(e.target.value, index)}
                           className="w-1/2 p-2 border border-gray-300 rounded"
                         />
                         <button
-                          onClick={() => {
-                            setFormValues(prevValues => {
-                              const filteredImages = prevValues.filter(([_key], imgIndex) => imgIndex !== index);
-                              return filteredImages;
-                            });
-                          }}
+                          onClick={() => handleDeleteImage(index)}
                         >
                           Delete
                         </button>
@@ -271,7 +177,7 @@ const ProductForm = ({
                       type="text"
                       id="location"
                       name="location"
-                      value={formValues.location}
+                      value={getFormValue('location')}
                       onChange={handleChange}
                       required
                       className="w-full p-2 border border-gray-300 rounded"
@@ -285,7 +191,7 @@ const ProductForm = ({
                       id="price"
                       step="0.01"
                       name="price"
-                      value={formValues.price}
+                      value={getFormValue('price')}
                       onChange={handleChange}
                       required
                       className="w-full p-2 border border-gray-300 rounded"
@@ -298,7 +204,7 @@ const ProductForm = ({
                       type="text"
                       id="currency"
                       name="currency"
-                      value={formValues.currency}
+                      value={getFormValue('currency')}
                       onChange={handleChange}
                       required
                       className="w-full p-2 border border-gray-300 rounded"
@@ -311,76 +217,11 @@ const ProductForm = ({
                       type="text"
                       id="t"
                       name="t"
-                      value={formValues.t}
+                      value={getFormValue('t')}
                       placeholder="Optional"
                       onChange={handleChange}
                       className="w-full p-2 border border-gray-300 rounded"
                     />
-
-                    {/* <label htmlFor="quantity" className="block mb-2 font-bold">
-                      Quantity:
-                    </label>
-                    <input
-                      type="number"
-                      id="quantity"
-                      name="quantity"
-                      value={formValues.quantity}
-                      onChange={handleChange}
-                      required
-                      className="w-full p-2 border border-gray-300 rounded"
-                    /> */}
-
-                    {/* <div className="specs-container">
-                      <label className="block mb-2 font-bold">
-                        Specifications:
-                      </label>
-                      {formValues.specs.map((spec, index) => (
-                        <div key={index} className="flex items-center mb-2">
-                          <input
-                            type="text"
-                            placeholder="Key"
-                            value={spec[0]}
-                            onChange={(e) =>
-                              handleSpecChange(index, e.target.value, spec[1])
-                            }
-                            className="w-1/2 p-2 border border-gray-300 rounded"
-                          />
-                          <input
-                            type="text"
-                            placeholder="Value"
-                            value={spec[1]}
-                            onChange={(e) =>
-                              handleSpecChange(index, spec[0], e.target.value)
-                            }
-                            className="w-1/2 p-2 border border-gray-300 rounded"
-                          />
-                          <button
-                            onClick={() => {
-                              let temp = formValues.specs;
-                              temp.splice(index, 1);
-                              setFormValues((prevValues) => ({
-                                ...prevValues,
-                                specs: temp,
-                              }));
-                            }}
-                          >
-                            delete
-                          </button>
-                        </div>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setFormValues((prevValues) => ({
-                            ...prevValues,
-                            specs: [...prevValues.specs, ["", ""]],
-                          }))
-                        }
-                        className="bg-blue-500 text-white px-4 py-2 rounded"
-                      >
-                        Add Specification
-                      </button>
-                    </div> */}
                   </form>
                 </div>
               </div>
@@ -397,7 +238,10 @@ const ProductForm = ({
             <button
               type="button"
               className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-              onClick={handleModalToggle}
+              onClick={() => {
+                initFormValues();
+                handleModalToggle();
+              }}
             >
               Cancel
             </button>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  BoltIcon
+  BoltIcon,
+  TrashIcon
 } from '@heroicons/react/24/outline';
 import { withRouter, NextRouter, useRouter } from 'next/router';
 import axios from "axios";
@@ -9,7 +10,7 @@ import { CashuMint, CashuWallet, getEncodedToken } from '@cashu/cashu-ts';
 import { SimplePool } from 'nostr-tools';
 import 'websocket-polyfill';
 
-const DisplayProduct = ({ tags, eventId, pubkey }: { tags: [][], eventId: string, pubkey: string }) => {
+const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], eventId: string, pubkey: string, handleDelete: (productId: string) => void }) => {
   const router = useRouter();
   
   const [title, setTitle] = useState("");
@@ -259,6 +260,14 @@ const DisplayProduct = ({ tags, eventId, pubkey }: { tags: [][], eventId: string
           className="w-6 h-6 hover:text-yellow-500"
           onClick={() => handleCheckout(eventId, pubkey, price)}
         />
+        {
+         localStorage.getItem('publicKey') === pubkey ? (
+            <TrashIcon 
+              className="w-6 h-6 hover:text-yellow-500"
+              onClick={() => handleDelete(eventId)}
+            />
+          ) : undefined
+        }
       </div>
       {(checkout) && (
         <div

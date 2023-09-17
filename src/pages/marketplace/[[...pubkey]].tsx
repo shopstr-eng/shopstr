@@ -3,7 +3,7 @@ import axios from "axios";
 import DisplayEvents from "../components/display-events";
 import { ProductFormValues } from "../api/post-event";
 import { useRouter } from "next/router";
-import { ArrowLeftIcon } from '@heroicons/react/24/outline';
+import { ArrowUTurnLeftIcon } from '@heroicons/react/24/outline';
 import { SimplePool } from 'nostr-tools';
 import 'websocket-polyfill';
 
@@ -112,14 +112,14 @@ const SellerView = () => {
             routeToShop("");
           }}
         >
-          <ArrowLeftIcon
-            className="w-5 h-5 text-yellow-100 hover:text-purple-700"
+          <ArrowUturnLeftIcon
+            className="w-5 h-5 text-yellow-100 hover:text-purple-700 pr-1"
             onClick={() => {
               routeToShop("");
             }}
           >
             Go Back
-          </ArrowLeftIcon>
+          </ArrowUturnLeftIcon>
           {pubkey}
         </div>
       ) : undefined}

@@ -3,6 +3,7 @@ import DisplayProduct from "./display-product";
 import { SimplePool } from 'nostr-tools';
 import ProductForm from "../components/product-form";
 import { ProductFormValues } from "../api/post-event";
+import { createNostrDeleteEvent } from '../nostrHelpers';
 
 const Tooltip = ({ content, children }) => {
   const [showTooltip, setShowTooltip] = useState(false);
@@ -77,6 +78,9 @@ const DisplayEvents = ({
       kinds: [30402],
       // kinds: [30018],
     };
+    let deleteEventSubParams : { kinds: number[]; authors?: string[] } = {
+      kinds: [5],
+    };
 
     if (pubkey) {
       subParams["authors"] = [pubkey];
@@ -108,6 +112,25 @@ const DisplayEvents = ({
 
   const handleModalToggle = () => {
     setShowModal(!showModal);
+  };
+
+  const handleDelete = async (productId: string) => {
+    let deleteEvent = await createNostrDeleteEvent([productId], localStorage.getItem('publicKey'), "user deletion request", localStorage.getItem('privateKey'));
+    axios({
+      method: 'POST',
+      url: '/api/nostr/post-event',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      data: {
+        ...deleteEvent,
+        relays: JSON.parse(localStorage.getItem("relays")),
+      }
+    });
+    setEventData((eventData) => {
+      let newEventData = eventData.filter((event) => event.id !== productId); // removes the deleted product from the list
+      return newEventData;
+    });
   };
 
   return (
@@ -150,7 +173,7 @@ const DisplayEvents = ({
               } */}
               {
                 event.kind == 30402 ? (
-                  <DisplayProduct tags={event.tags} eventId={event.id} pubkey={event.pubkey} />
+                  <DisplayProduct tags={event.tags} eventId={event.id} pubkey={event.pubkey} handleDelete={handleDelete}/>
                 ) : (
                   event.content.indexOf(imageUrlRegExp) ? (
                     <div>
