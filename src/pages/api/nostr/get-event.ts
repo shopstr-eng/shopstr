@@ -66,7 +66,7 @@ const GetEvent = async (req: NextApiRequest, res: NextApiResponse) => {
           receivedMessages.push(plaintext);
         }
         console.log(sentMessages);
-        consoel.log(receivedMessages);
+        console.log(receivedMessages);
       }
     });
 
