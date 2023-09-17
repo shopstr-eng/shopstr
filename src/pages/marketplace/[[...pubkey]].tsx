@@ -4,6 +4,8 @@ import DisplayEvents from "../components/display-events";
 import { ProductFormValues } from "../api/post-event";
 import { useRouter } from "next/router";
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
+import { SimplePool } from 'nostr-tools';
+import 'websocket-polyfill';
 
 // const Tooltip = ({ content, children }) => {
 //   const [showTooltip, setShowTooltip] = useState(false);
@@ -36,30 +38,64 @@ const SellerView = () => {
     setPubkey(router.query.pubkey ? router.query.pubkey[0] : ""); // router.query.pubkey returns array of pubkeys
   }, [router.query.pubkey]);
 
-  const handlePostListing = (values: ProductFormValues) => {
+  const handlePostListing = async (values: ProductFormValues) => {
     const summary = values.find(([key]) => key === "summary")?.[1] || "";
     
     const created_at = Math.floor(Date.now() / 1000);
     // Add "published_at" key
     const updatedValues = [...values, ["published_at", String(created_at)]];
-    
-    axios({
-      method: "POST",
-      url: "/api/nostr/post-event",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      data: {
-        pubkey: localStorage.getItem("publicKey"),
-        privkey: localStorage.getItem("privateKey"),
+
+    if (localStorage.getItem("signIn") === "extension") {
+      const event = {
         created_at: created_at,
         kind: 30402,
-        // kind: 30018,
+          // kind: 30018,
         tags: updatedValues,
         content: summary,
-        relays: JSON.parse(localStorage.getItem("relays")),
-      },
-    });
+      }
+  
+      const signedEvent = await window.nostr.signEvent(event);
+
+      const pool = new SimplePool();
+
+      const relays = JSON.parse(localStorage.getItem("relays"));
+  
+      let sub = pool.sub(relays, [
+        {
+          kinds: [signedEvent.kind],
+          authors: [signedEvent.pubkey],
+        },
+      ]);
+  
+      sub.on('event', (event) => {
+        console.log('got event:', event);
+      });
+  
+      await pool.publish(relays, signedEvent);
+  
+      let events = await pool.list(relays, [{ kinds: [0, signedEvent.kind] }]);
+      let postedEvent = await pool.get(relays, {
+        ids: [signedEvent.id],
+      });
+    } else {
+      axios({
+        method: "POST",
+        url: "/api/nostr/post-event",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        data: {
+          pubkey: localStorage.getItem("publicKey"),
+          privkey: localStorage.getItem("privateKey"),
+          created_at: created_at,
+          kind: 30402,
+          // kind: 30018,
+          tags: updatedValues,
+          content: summary,
+          relays: JSON.parse(localStorage.getItem("relays")),
+        },
+      });
+    };
   };
 
   const routeToShop = (pubkey) => {

@@ -6,6 +6,8 @@ import { withRouter, NextRouter, useRouter } from 'next/router';
 import axios from "axios";
 import requestMint from "../api/cashu/request-mint";
 import { CashuMint, CashuWallet, getEncodedToken } from '@cashu/cashu-ts';
+import { SimplePool } from 'nostr-tools';
+import 'websocket-polyfill';
 
 const DisplayProduct = ({ tags, eventId, pubkey }: { tags: [][], eventId: string, pubkey: string }) => {
   const router = useRouter();
@@ -73,22 +75,55 @@ const DisplayProduct = ({ tags, eventId, pubkey }: { tags: [][], eventId: string
   }, [tags]);
 
   const sendTokens = async (pk: string, token: string) => {
-    axios({
-      method: 'POST',
-      url: '/api/nostr/post-event',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      data: {
-        pubkey: localStorage.getItem('publicKey'),
-        privkey: localStorage.getItem('privateKey'),
+    if (localStorage.getItem("signIn") === "extension") {
+      const event = {
         created_at: Math.floor(Date.now() / 1000),
         kind: 4,
         tags: [['p', pk]],
-        content: token,
-        relays: JSON.parse(localStorage.getItem("relays")),
+        content: await window.nostr.nip04.encrypt(localStorage.getItem("publicKey"), token),
       }
-    });
+  
+      const signedEvent = await window.nostr.signEvent(event);
+
+      const pool = new SimplePool();
+
+      const relays = JSON.parse(localStorage.getItem("relays"));
+  
+      let sub = pool.sub(relays, [
+        {
+          kinds: [signedEvent.kind],
+          authors: [signedEvent.pubkey],
+        },
+      ]);
+  
+      sub.on('event', (event) => {
+        console.log('got event:', event);
+      });
+  
+      await pool.publish(relays, signedEvent);
+  
+      let events = await pool.list(relays, [{ kinds: [0, signedEvent.kind] }]);
+      let postedEvent = await pool.get(relays, {
+        ids: [signedEvent.id],
+      });
+    } else {
+      axios({
+        method: 'POST',
+        url: '/api/nostr/post-event',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        data: {
+          pubkey: localStorage.getItem('publicKey'),
+          privkey: localStorage.getItem('privateKey'),
+          created_at: Math.floor(Date.now() / 1000),
+          kind: 4,
+          tags: [['p', pk]],
+          content: token,
+          relays: JSON.parse(localStorage.getItem("relays")),
+        }
+      });
+    };
   }
 
   async function invoiceHasBeenPaid(pk: string, wallet: object, price: number, hash: string) {

@@ -18,6 +18,8 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
 
       // Redirect user to home page
       router.push('/marketplace');
+
+      localStorage.setItem("signIn", "nsec");
     } else {
       // Handle authentication failure
       setErrorMessage('The public and/or private keys inputted were not valid. Generate a new key pair or try again.');
@@ -51,14 +53,12 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
       router.push("/marketplace");
       let successStr = "signed in as " + pubkey;
       alert(successStr);
+      localStorage.setItem("publicKey", pubkey)
+      localStorage.setItem("signIn", "extension");
     } catch (error) {
       alert("Nostr extension sign on failed");
     }
   };
-
-  useEffect(() => {
-    startExtensionLogin();
-  }, []);
 
   useEffect(() => {
     const validKeyString = /[a-f0-9]{64}/;
@@ -106,7 +106,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
             className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded"
             onClick={startExtensionLogin}
           >
-            Sign In with Nostr Extension
+            Sign In With Extension
           </button>
           <button
             className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded"
@@ -122,3 +122,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
 };
 
 export default withRouter(LoginPage);
+
+// store sign in value type (nsec or extension)
+// if value type is equal to extension call wondow.nostr.signEvent()
+// otherwise call API with encrypted key

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { nip04, SimplePool } from 'nostr-tools';
+import 'websocket-polyfill';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 
 const DirectMessages = () => {
@@ -33,15 +34,18 @@ const DirectMessages = () => {
       let nip04Sub = pool.sub(JSON.parse(localStorage.getItem("relays")), [subParams]);
     
       nip04Sub.on("event", async (event) => {
-        let sk2 = localStorage.getItem("privateKey");
         let sender = event.pubkey;
 
         let tagPubkey = event.tags[0][1];
 
         let plaintext;
         if ((localStorage.getItem('publicKey') === sender && tagPubkey === currentChat) || (currentChat === sender && tagPubkey === localStorage.getItem('publicKey'))) {
-          console.log(sender)
-          plaintext = await nip04.decrypt(sk2, sender, event.content);
+          if (localStorage.getItem("signIn") === "extension") {
+            plaintext = await window.nostr.nip04.decrypt(sender, event.content);
+          } else {
+            let sk2 = localStorage.getItem("privateKey");
+            plaintext = await nip04.decrypt(sk2, sender, event.content);
+          }
         };
 
         setMessages((messages) => [...messages, plaintext]);
@@ -71,27 +75,60 @@ const DirectMessages = () => {
     setMessage(e.target.value);
   };
   
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (message.trim() !== "") {
-      axios({
-        method: 'POST',
-        url: '/api/nostr/post-event',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        data: {
-          pubkey: localStorage.getItem('publicKey'),
-          privkey: localStorage.getItem('privateKey'),
+      if (localStorage.getItem("signIn") === "extension") {
+        const event = {
           created_at: Math.floor(Date.now() / 1000),
           kind: 4,
           tags: [['p', currentChat]],
-          content: message,
-          relays: JSON.parse(localStorage.getItem("relays")),
+          content: await window.nostr.nip04.encrypt(currentChat, message),
         }
-      });
+    
+        const signedEvent = await window.nostr.signEvent(event);
+  
+        const pool = new SimplePool();
+  
+        const relays = JSON.parse(localStorage.getItem("relays"));
+    
+        let sub = pool.sub(relays, [
+          {
+            kinds: [signedEvent.kind],
+            authors: [signedEvent.pubkey],
+          },
+        ]);
+    
+        sub.on('event', (event) => {
+          console.log('got event:', event);
+        });
+    
+        await pool.publish(relays, signedEvent);
+    
+        let events = await pool.list(relays, [{ kinds: [0, signedEvent.kind] }]);
+        let postedEvent = await pool.get(relays, {
+          ids: [signedEvent.id],
+        });
+      } else {
+        axios({
+          method: 'POST',
+          url: '/api/nostr/post-event',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          data: {
+            pubkey: localStorage.getItem('publicKey'),
+            privkey: localStorage.getItem('privateKey'),
+            created_at: Math.floor(Date.now() / 1000),
+            kind: 4,
+            tags: [['p', currentChat]],
+            content: message,
+            relays: JSON.parse(localStorage.getItem("relays")),
+          }
+        });
+      };
       setMessage("");
-    }
+    };
   };
 
   if (!currentChat) {

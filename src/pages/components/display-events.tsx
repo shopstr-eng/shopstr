@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
 import DisplayProduct from "./display-product";
 import { SimplePool } from 'nostr-tools';
 import ProductForm from "../components/product-form";
