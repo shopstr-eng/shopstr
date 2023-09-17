@@ -1,31 +1,29 @@
-export async function createNostrDeleteEvent(event_ids, pubkey, content) {
+export async function createNostrDeleteEvent(event_ids, pubkey, content, privkey) {
+  let msg = {
+      kind: 5, // NIP-X - Deletion
+      content: content, // Deletion Reason
+      tags: []
+  };
   try {
-    let msg = {
-        kind: 5, // NIP-X - Deletion
-        content: content, // Deletion Reason
-        tags: []
-    };
-
-    for (let event_id of event_ids) {
-      msg.tags.push(["e", event_id])
-    }
-
-    // set msg fields
-    msg.created_at = Math.floor((new Date()).getTime() / 1000)
-    msg.pubkey = pubkey
-
-    // Generate event id
-    msg.id = await generateNostrEventId(msg)
-
     // Sign event
-    var signed_msg = await window.nostr.signEvent(msg)
-
+    msg = await window.nostr.signEvent(msg)
   } catch (e) {
     console.log("Failed to sign message with browser extension", e)
-    return false;
+  }
+  
+  for (let event_id of event_ids) {
+    msg.tags.push(["e", event_id])
   }
 
-  return signed_msg;
+  // set msg fields
+  msg.created_at = Math.floor((new Date()).getTime() / 1000)
+  msg.pubkey = pubkey
+  if (privkey) msg.privkey = privkey
+  
+  // Generate event id
+  msg.id = await generateNostrEventId(msg)
+  
+  return msg;
 }
 
 export function nostrExtensionLoaded() {

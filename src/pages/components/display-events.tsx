@@ -116,7 +116,7 @@ const DisplayEvents = ({
   };
 
   const handleDelete = async (productId: string) => {
-    let deleteEvent = await createNostrDeleteEvent([productId], localStorage.getItem('publicKey'), "user deletion request");
+    let deleteEvent = await createNostrDeleteEvent([productId], localStorage.getItem('publicKey'), "user deletion request", localStorage.getItem('privateKey'));
     axios({
       method: 'POST',
       url: '/api/nostr/post-event',

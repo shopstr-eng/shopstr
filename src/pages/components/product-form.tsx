@@ -19,7 +19,6 @@ const ProductForm = ({
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
-    console.log(name, value);
     setFormValues((prevValues) => {
       // Handles when the name is 'currency'
       if (name === 'currency') {
@@ -37,7 +36,6 @@ const ProductForm = ({
       return [...prevValues, [name, value]];
     });
   };
-  console.log("formValues", formValues, "images", images);
   
   const handleImageChange = (value: string, index: number) => {
     setImages((prevValues) => {
