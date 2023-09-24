@@ -4,6 +4,8 @@ import DisplayProduct from "../components/display-product";
 import { SimplePool } from 'nostr-tools';
 
 const Checkout = () => {
+  const storedRelays = localStorage.getItem("relays");
+  
   const router = useRouter();
   const { productId } = router.query;
 
@@ -24,7 +26,7 @@ const Checkout = () => {
       kinds: [30402],
     };
 
-    let productSub = pool.sub(JSON.parse(localStorage.getItem("relays")), [subParams]);
+    let productSub = pool.sub(JSON.parse(storedRelays), [subParams]);
 
     productSub.on("event", (event) => {
       // const data = JSON.parse(event.content);

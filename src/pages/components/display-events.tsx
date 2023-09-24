@@ -1,48 +1,11 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import DisplayProduct from "./display-product";
-import { SimplePool } from 'nostr-tools';
+import { nip19, SimplePool } from 'nostr-tools';
 import ProductForm from "../components/product-form";
 import { ProductFormValues } from "../api/post-event";
-import { createNostrDeleteEvent } from '../nostrHelpers';
-
-const Tooltip = ({ content, children }) => {
-  const [showTooltip, setShowTooltip] = useState(false);
-  return (
-    <div className="relative inline-block">
-      <div
-        className={`${
-          showTooltip ? "block" : "hidden"
-        } bg-gray-800 text-white text-xs rounded-md py-1 px-2 absolute z-10`}
-      >
-        {content}
-      </div>
-      <div
-        className="inline-block rounded-md cursor-pointer"
-        onMouseEnter={() => setShowTooltip(true)}
-        onMouseLeave={() => setShowTooltip(false)}
-      >
-        {children}
-      </div>
-    </div>
-  );
-};
-
-//           <div className="flex justify-between items-center text-gray-600 text-xs md:text-sm">
-//             <Tooltip content={"Go to this sellers store"}>
-//               <span
-//                 className="max-w-xsm truncate"
-//                 onClick={() => {
-//                   handleClickPubkey(event.pubkey);
-//                 }}
-//               >
-//                 {event.pubkey}
-//               </span>
-//             </Tooltip>
-//             <span className="text-gray-400 ml-2 text-xs md:text-sm">
-//               {displayDate(event.created_at)}
-//             </span>
-//           </div>
+import { createNostrDeleteEvent } from '../nostr-helpers';
+import * as CryptoJS from 'crypto-js';
 
 export type Event = {
   id: string;
@@ -63,13 +26,30 @@ const DisplayEvents = ({
   router: NextRouter;
   pubkey?: string;
   clickPubkey: (pubkey: string) => void;
-  handlePostListing: (ProductFormValues: ProductFormValues) => void;
+  handlePostListing: (ProductFormValues: ProductFormValues, passphrase: string) => void;
 }) => {
+  const [decryptedNpub, setDecryptedNpub] = useState("");
+  const [encryptedPrivateKey, setEncryptedPrivateKey] = useState("");
+  const [signIn, setSignIn] = useState("");
+  const [relays, setRelays] = useState([]);
+  
   const [eventData, setEventData] = useState<Event[]>([]);
-  // const prevPosts = [];
   const imageUrlRegExp = /(https?:\/\/.*\.(?:png|jpg|jpeg|gif))/i;
   const [showModal, setShowModal] = useState(false);
-  const [displayComponent, setDisplayComponent] = useState("home");
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const npub = localStorage.getItem("npub");
+      const { data } = nip19.decode(npub);
+      setDecryptedNpub(data);
+      const encrypted = localStorage.getItem("encryptedPrivateKey");
+      setEncryptedPrivateKey(encrypted);
+      const signIn = localStorage.getItem("signIn");
+      setSignIn(signIn);
+      const storedRelays = localStorage.getItem("relays");
+      setRelays(storedRelays ? JSON.parse(storedRelays) : []);
+    }
+  }, []);
 
   useEffect(() => {
     const pool = new SimplePool();
@@ -86,7 +66,7 @@ const DisplayEvents = ({
     if (pubkey) {
       subParams["authors"] = [pubkey];
     }
-    let productsSub = pool.sub(JSON.parse(localStorage.getItem("relays")), [subParams]);
+    let productsSub = pool.sub(relays, [subParams]);
     productsSub.on("event", (event) => {
       setEventData((eventData) => {
         let newEventData = [...eventData, event];
@@ -94,7 +74,7 @@ const DisplayEvents = ({
         return newEventData;
       });
     });
-  }, [pubkey]);
+  }, [pubkey, relays]);
 
   const handleClickPubkey = (pubkey: string) => {
     clickPubkey(pubkey);
@@ -115,8 +95,11 @@ const DisplayEvents = ({
     setShowModal(!showModal);
   };
 
-  const handleDelete = async (productId: string) => {
-    let deleteEvent = await createNostrDeleteEvent([productId], localStorage.getItem('publicKey'), "user deletion request", localStorage.getItem('privateKey'));
+  const handleDelete = async (productId: string, passphrase: string) => {
+    let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8);
+      // add error handling and re-prompt for passphrase
+    let { data } = nip19.decode(nsec);
+    let deleteEvent = await createNostrDeleteEvent([productId], decryptedNpub, "user deletion request", data);
     axios({
       method: 'POST',
       url: '/api/nostr/post-event',
@@ -125,7 +108,7 @@ const DisplayEvents = ({
       },
       data: {
         ...deleteEvent,
-        relays: JSON.parse(localStorage.getItem("relays")),
+        relays: relays,
       }
     });
     setEventData((eventData) => {
@@ -156,22 +139,6 @@ const DisplayEvents = ({
               </span>
             </div>
             <div className="mt-2 text-gray-800 text-sm md:text-base whitespace-pre-wrap break-words">
-              {/*
-              {
-                event.kind == 30018 ? (
-                  <DisplayProduct content={JSON.parse(event.content)} eventId={event.id} pubkey={event.pubkey} />
-                ) : (
-                  event.content.indexOf(imageUrlRegExp) ? (
-                    <div>
-                      <p>{event.content.replace(imageUrlRegExp, '')}</p>
-                      <img src={event.content.match(imageUrlRegExp)?.[0]} />
-                    </div>
-                  ) : (
-                    <div>
-                      <p>{event.content}</p>
-                    </div>
-                ))
-              } */}
               {
                 event.kind == 30402 ? (
                   <DisplayProduct tags={event.tags} eventId={event.id} pubkey={event.pubkey} handleDelete={handleDelete}/>
@@ -195,18 +162,17 @@ const DisplayEvents = ({
         <button
           type="button"
           className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded"
-          // disabled={pubkey === localStorage.getItem("publicKey")}
           onClick={() => {
-            handleClickPubkey(localStorage.getItem("publicKey"));
+            handleClickPubkey(decryptedNpub);
           }}
         >
-          View Your Shop
+          View Your Listings
         </button>
         <button
           className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded"
           onClick={handleModalToggle}
         >
-          Add new listing
+          Add New Listing
         </button>
       </div>
       <ProductForm

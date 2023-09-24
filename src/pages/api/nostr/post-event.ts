@@ -2,9 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import {
   SimplePool,
   finishEvent, // this assigns the pubkey, calculates the event id and signs the event in a single step
-  nip04,
-  generatePrivateKey, 
-  getPublicKey
+  nip04
 } from 'nostr-tools';
 import 'websocket-polyfill';
 

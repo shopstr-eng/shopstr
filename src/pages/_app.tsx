@@ -36,7 +36,7 @@ function App({ Component, pageProps }: AppProps) {
             />
             <GlobeAltIcon
               className={`w-6 h-6 hover:text-purple-700 ${
-                router.pathname === '/profile' ? 'text-yellow-100' : ''
+                router.pathname === '/relays' ? 'text-yellow-100' : ''
               }`}
               onClick={() => router.push('/relays')}
             />
