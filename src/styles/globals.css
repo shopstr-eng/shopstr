@@ -27,14 +27,15 @@
 
 :root {
   --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
+  --background-start-rgb: 168, 85, 247;
+  --background-end-rgb: 168, 85, 247;
   -webkit-text-size-adjust: none;
   text-size-adjust: none;
 }
 
 body {
   color: rgb(var(--foreground-rgb));
+  background-color: rgb(168, 85, 247);
 }
 
 html,

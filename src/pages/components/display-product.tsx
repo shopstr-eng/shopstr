@@ -7,11 +7,17 @@ import { withRouter, NextRouter, useRouter } from 'next/router';
 import axios from "axios";
 import requestMint from "../api/cashu/request-mint";
 import { CashuMint, CashuWallet, getEncodedToken } from '@cashu/cashu-ts';
-import { SimplePool } from 'nostr-tools';
+import { nip19, SimplePool } from 'nostr-tools';
 import 'websocket-polyfill';
+import * as CryptoJS from 'crypto-js';
 
-const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], eventId: string, pubkey: string, handleDelete: (productId: string) => void }) => {
+const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], eventId: string, pubkey: string, handleDelete: (productId: string, passphrase: string) => void }) => {
   const router = useRouter();
+
+  const [decryptedNpub, setDecryptedNpub] = useState("");
+  const [encryptedPrivateKey, setEncryptedPrivateKey] = useState("");
+  const [signIn, setSignIn] = useState("");
+  const [relays, setRelays] = useState([]);
   
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
@@ -23,10 +29,14 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], ev
   const [price, setPrice] = useState("");
   const [currency, setCurrency] = useState("");
   
-  const [checkout, setCheckout] = useState(null);
+  const [checkout, setCheckout] = useState(false);
   const [invoice, setInvoice] = useState("");
   const [qrCodeUrl, setQrCodeUrl] = useState<string|null>(null);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+
+  const [enterPassphrase, setEnterPassphrase] = useState(false);
+  const [passphraseUse, setPassphraseUse] = useState<string | null>(null);
+  const [passphrase, setPassphrase] = useState("");
   
   // const {
   //   id,
@@ -39,6 +49,20 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], ev
   //   quantity,
   //   specs,
   // } = content;
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const npub = localStorage.getItem("npub");
+      const { data } = nip19.decode(npub);
+      setDecryptedNpub(data);
+      const encrypted = localStorage.getItem("encryptedPrivateKey");
+      setEncryptedPrivateKey(encrypted);
+      const signIn = localStorage.getItem("signIn");
+      setSignIn(signIn);
+      const storedRelays = localStorage.getItem("relays");
+      setRelays(storedRelays ? JSON.parse(storedRelays) : []);
+    }
+  }, []);
   
   useEffect(() => {
     let tmpImages = []; 
@@ -75,20 +99,20 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], ev
     setImages(tmpImages);
   }, [tags]);
 
-  const sendTokens = async (pk: string, token: string) => {
-    if (localStorage.getItem("signIn") === "extension") {
+  const sendTokens = async (pk: string, token: string, enteredPassphrase: string) => {
+    if (signIn === "extension") {
       const event = {
         created_at: Math.floor(Date.now() / 1000),
         kind: 4,
         tags: [['p', pk]],
-        content: await window.nostr.nip04.encrypt(localStorage.getItem("publicKey"), token),
+        content: await window.nostr.nip04.encrypt(decryptedNpub, token),
       }
   
       const signedEvent = await window.nostr.signEvent(event);
 
       const pool = new SimplePool();
 
-      const relays = JSON.parse(localStorage.getItem("relays"));
+      // const relays = JSON.parse(storedRelays);
   
       let sub = pool.sub(relays, [
         {
@@ -108,6 +132,9 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], ev
         ids: [signedEvent.id],
       });
     } else {
+      let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, enteredPassphrase).toString(CryptoJS.enc.Utf8);
+      // add error handling and re-prompt for passphrase
+      let { data } = nip19.decode(nsec);
       axios({
         method: 'POST',
         url: '/api/nostr/post-event',
@@ -115,19 +142,19 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], ev
           'Content-Type': 'application/json',
         },
         data: {
-          pubkey: localStorage.getItem('publicKey'),
-          privkey: localStorage.getItem('privateKey'),
+          pubkey: decryptedNpub,
+          privkey: data,
           created_at: Math.floor(Date.now() / 1000),
           kind: 4,
           tags: [['p', pk]],
           content: token,
-          relays: JSON.parse(localStorage.getItem("relays")),
+          relays: relays,
         }
       });
     };
   }
 
-  async function invoiceHasBeenPaid(pk: string, wallet: object, price: number, hash: string) {
+  async function invoiceHasBeenPaid(pk: string, wallet: object, price: number, hash: string, enteredPassphrase: string) {
     let encoded;
     while (true) {
       try {
@@ -139,11 +166,11 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], ev
         });
 
         if (encoded) {
-          sendTokens(pk, encoded);
+          sendTokens(pk, encoded, enteredPassphrase);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           setTimeout(() => {
-            router.push("/home");
+            router.push("/marketplace");
           }, 1900);
           break;
         }
@@ -156,7 +183,7 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], ev
     }
   };
 
-  const handlePayment = async (pk: string, price: number) => {
+  const handlePayment = async (pk: string, price: number, enteredPassphrase: string) => {
     const wallet = new CashuWallet(new CashuMint("https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"));
 
     const { pr, hash } = await wallet.requestMint(price);
@@ -175,19 +202,32 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], ev
 
     setCheckout(true);
     
-    invoiceHasBeenPaid(pk, wallet, price, hash);
+    invoiceHasBeenPaid(pk, wallet, price, hash, enteredPassphrase);
   };
 
-  const handleCheckout = (productId: string, pk: string, price: number) => {
+  const handleCheckout = (productId: string, pk: string, price: number, enteredPassphrase: string) => {
     if (window.location.pathname.includes("checkout")) {
-      handlePayment(pk, price);
+      handlePayment(pk, price, enteredPassphrase);
     } else {
       router.push(`/checkout/${productId}`);
     }
   };
 
+  const handleEnterPassphrase = (use: string) => {
+    setPassphraseUse(use);
+    setEnterPassphrase(!enterPassphrase);
+  };
+  
+  const handleSubmitPassphrase = (enteredPassphrase: string) => {
+    if (passphraseUse === "pay") {
+      handleCheckout(eventId, pubkey, price, enteredPassphrase)
+    } else if (passphraseUse === "delete") {
+      handleDelete(eventId, enteredPassphrase);
+    };
+  };
+
   const handleCancel = () => {
-    setCheckout(null);
+    setCheckout(false);
   };
 
   const nextImage = () => {
@@ -196,6 +236,15 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], ev
   
   const prevImage = () => {
     setCurrentImage((currentImage - 1 + images.length) % images.length);
+  };
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value } = e.target;
+    if (name === "passphrase") {
+      setPassphrase(value);
+    };
   };
   
   return (
@@ -258,13 +307,13 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], ev
       <div className="flex justify-center">
         <BoltIcon 
           className="w-6 h-6 hover:text-yellow-500"
-          onClick={() => handleCheckout(eventId, pubkey, price)}
+          onClick={() => handleEnterPassphrase("pay")}
         />
         {
-         localStorage.getItem('publicKey') === pubkey ? (
+         decryptedNpub === pubkey ? (
             <TrashIcon 
               className="w-6 h-6 hover:text-yellow-500"
-              onClick={() => handleDelete(eventId)}
+              onClick={() => handleEnterPassphrase("delete")}
             />
           ) : undefined
         }
@@ -311,6 +360,68 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], ev
           </div>
         </div>
       )}
+      <div
+        className={`fixed z-10 inset-0 overflow-y-auto ${
+          enterPassphrase ? "" : "hidden"
+        }`}
+      >
+        <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+          <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+            <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
+          </div>
+          <span
+            className="hidden sm:inline-block sm:align-middle sm:h-screen"
+            aria-hidden="true"
+          >
+            &#8203;
+          </span>
+          <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+              <div className="sm:flex sm:items-start">
+                <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                  <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+                    Enter Passphrase
+                  </h3>
+                  <div className="mt-2">
+                    <form className="mx-auto" onSubmit={() => handleSubmitPassphrase(passphrase)}>
+                      <label htmlFor="t" className="block mb-2 font-bold">
+                        Passphrase:
+                      </label>
+                      <input
+                        type="text"
+                        id="passphrase"
+                        name="passphrase"
+                        value={passphrase}
+                        required
+                        onChange={handleChange}
+                        className="w-full p-2 border border-gray-300 rounded"
+                      />
+                    </form>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+              <button
+                type="button"
+                className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm"
+                onClick={() => handleSubmitPassphrase(passphrase)}
+              >
+                Submit
+              </button>
+              <button
+                type="button"
+                className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                onClick={() => {
+                  handleEnterPassphrase(null);
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

@@ -1,11 +1,16 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { nip04, SimplePool } from 'nostr-tools';
+import { nip04, nip19, SimplePool } from 'nostr-tools';
 import 'websocket-polyfill';
-import { ArrowLeftIcon } from '@heroicons/react/24/outline';
+import { ArrowUturnLeftIcon } from '@heroicons/react/24/outline';
+import * as CryptoJS from 'crypto-js';
 
 const DirectMessages = () => {
-  // store chats in indexedDB
+  const [decryptedNpub, setDecryptedNpub] = useState("");
+  const [encryptedPrivateKey, setEncryptedPrivateKey] = useState("");
+  const [signIn, setSignIn] = useState("");
+  const [relays, setRelays] = useState([]);
+  
   const [chats, setChats] = useState([]);
   const [messages, setMessages] = useState<string[]>([]);
   const [currentChat, setCurrentChat] = useState(false);
@@ -13,8 +18,22 @@ const DirectMessages = () => {
   const [showModal, setShowModal] = useState(false);
   const [message, setMessage] = useState("");
 
+  const [enterPassphrase, setEnterPassphrase] = useState(false);
+  const [passphrase, setPassphrase] = useState("");
+
+  const [thisChat, setThisChat] = useState("");
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      const npub = localStorage.getItem("npub");
+      const { data } = nip19.decode(npub);
+      setDecryptedNpub(data);
+      const encrypted = localStorage.getItem("encryptedPrivateKey");
+      setEncryptedPrivateKey(encrypted);
+      const signIn = localStorage.getItem("signIn");
+      setSignIn(signIn);
+      const storedRelays = localStorage.getItem("relays");
+      setRelays(storedRelays ? JSON.parse(storedRelays) : []);
       const storedChats = localStorage.getItem("chats");
       setChats(storedChats ? JSON.parse(storedChats) : []);
     }
@@ -29,9 +48,9 @@ const DirectMessages = () => {
     };
 
     if (currentChat) {
-      subParams["authors"] = [localStorage.getItem('publicKey'), currentChat];
+      subParams["authors"] = [decryptedNpub, currentChat];
       
-      let nip04Sub = pool.sub(JSON.parse(localStorage.getItem("relays")), [subParams]);
+      let nip04Sub = pool.sub(relays, [subParams]);
     
       nip04Sub.on("event", async (event) => {
         let sender = event.pubkey;
@@ -39,12 +58,15 @@ const DirectMessages = () => {
         let tagPubkey = event.tags[0][1];
 
         let plaintext;
-        if ((localStorage.getItem('publicKey') === sender && tagPubkey === currentChat) || (currentChat === sender && tagPubkey === localStorage.getItem('publicKey'))) {
-          if (localStorage.getItem("signIn") === "extension") {
-            plaintext = await window.nostr.nip04.decrypt(sender, event.content);
+        if ((decryptedNpub === sender && tagPubkey === currentChat) || (currentChat === sender && tagPubkey === decryptedNpub)) {
+          if (signIn === "extension") {
+            plaintext = await window.nostr.nip04.decrypt(currentChat, event.content);
           } else {
-            let sk2 = localStorage.getItem("privateKey");
-            plaintext = await nip04.decrypt(sk2, sender, event.content);
+            let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8);
+            // add error handling and re-prompt for passphrase
+            let { data } = nip19.decode(nsec);
+            let sk2 = data;
+            plaintext = await nip04.decrypt(sk2, currentChat, event.content);
           }
         };
 
@@ -65,10 +87,11 @@ const DirectMessages = () => {
     setCurrentChat(false);
   };
 
-  const handleEnterChat = () => {
+  const handleEnterNewChat = () => {
     const pubkey = document.getElementById('pubkey') as HTMLTextAreaElement;
     setChats([...chats, pubkey.value]);
     setCurrentChat(pubkey.value);
+    setShowModal(!showModal);
   };
 
   const handleChange = (e) => {
@@ -78,7 +101,7 @@ const DirectMessages = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (message.trim() !== "") {
-      if (localStorage.getItem("signIn") === "extension") {
+      if (signIn === "extension") {
         const event = {
           created_at: Math.floor(Date.now() / 1000),
           kind: 4,
@@ -90,7 +113,7 @@ const DirectMessages = () => {
   
         const pool = new SimplePool();
   
-        const relays = JSON.parse(localStorage.getItem("relays"));
+        // const relays = JSON.parse(storedRelays);
     
         let sub = pool.sub(relays, [
           {
@@ -110,6 +133,10 @@ const DirectMessages = () => {
           ids: [signedEvent.id],
         });
       } else {
+        let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8);
+        // add error handling and re-prompt for passphrase
+        let { data } = nip19.decode(nsec);
+        // request passphrase in popup or form and pass to api
         axios({
           method: 'POST',
           url: '/api/nostr/post-event',
@@ -117,18 +144,45 @@ const DirectMessages = () => {
             'Content-Type': 'application/json',
           },
           data: {
-            pubkey: localStorage.getItem('publicKey'),
-            privkey: localStorage.getItem('privateKey'),
+            pubkey: decryptedNpub,
+            privkey: data,
             created_at: Math.floor(Date.now() / 1000),
             kind: 4,
             tags: [['p', currentChat]],
             content: message,
-            relays: JSON.parse(localStorage.getItem("relays")),
+            relays: relays,
           }
         });
       };
       setMessage("");
     };
+  };
+
+  const handlePassphraseChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value } = e.target;
+    if (name === "passphrase") {
+      setPassphrase(value);
+    };
+  };
+
+  const signInCheck = (chat: string) => {
+    if (signIn != "extension") {
+      handleEnterPassphrase(chat);
+    } else {
+      setCurrentChat(chat);
+    }
+  }
+
+  const handleEnterPassphrase = (chat: string) => {
+    setEnterPassphrase(!enterPassphrase);
+    setThisChat(chat);
+  };
+
+  const handleSubmitPassphrase = () => {
+    setEnterPassphrase(false);
+    setCurrentChat(thisChat);
   };
 
   if (!currentChat) {
@@ -140,9 +194,12 @@ const DirectMessages = () => {
               <div className="max-w-xsm truncate">
                 {chat}
               </div>
-              <button onClick={() => setCurrentChat(chat)}>
+              <button onClick={() => signInCheck(chat)}>
                 Enter Chat
               </button>
+              {/* <button onClick={() => setCurrentChat(chat)}>
+                Enter Chat
+              </button> */}
             </div>
           ))}
         </div>
@@ -162,6 +219,24 @@ const DirectMessages = () => {
                     </h3>
                     <div className="mt-2">
                       <textarea id="pubkey" className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md mb-2" placeholder="Enter pubkey here..."></textarea>
+                      {
+                        signIn === 'nsec' && (
+                          <>
+                            <label htmlFor="t" className="block mb-2 font-bold">
+                              Passphrase:
+                            </label>
+                            <input
+                              type="text"
+                              id="passphrase"
+                              name="passphrase"
+                              value={passphrase}
+                              required
+                              onChange={handlePassphraseChange}
+                              className="w-full p-2 border border-gray-300 rounded"
+                            />
+                          </>
+                        )
+                      }
                     </div>
                   </div>
                 </div>
@@ -170,7 +245,7 @@ const DirectMessages = () => {
                 <button
                   type="button"
                   className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm"
-                  onClick={handleEnterChat}
+                  onClick={handleEnterNewChat}
                 >
                   Enter Chat
                 </button>
@@ -185,6 +260,68 @@ const DirectMessages = () => {
             </div>
           </div>
         </div>
+        <div
+          className={`fixed z-10 inset-0 overflow-y-auto ${
+            enterPassphrase & signIn === 'nsec' ? "" : "hidden"
+          }`}
+        >
+          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+              <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+            <span
+              className="hidden sm:inline-block sm:align-middle sm:h-screen"
+              aria-hidden="true"
+            >
+              &#8203;
+            </span>
+            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="sm:flex sm:items-start">
+                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                    <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+                      Enter Passphrase
+                    </h3>
+                    <div className="mt-2">
+                      <form className="mx-auto" onSubmit={() => handleSubmitPassphrase()}>
+                        <label htmlFor="t" className="block mb-2 font-bold">
+                          Passphrase:
+                        </label>
+                        <input
+                          type="text"
+                          id="passphrase"
+                          name="passphrase"
+                          value={passphrase}
+                          required
+                          onChange={handlePassphraseChange}
+                          className="w-full p-2 border border-gray-300 rounded"
+                        />
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button
+                  type="button"
+                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm"
+                  onClick={() => handleSubmitPassphrase()}
+                >
+                  Submit
+                </button>
+                <button
+                  type="button"
+                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                  onClick={() => {
+                    handleEnterPassphrase("");
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   };
@@ -192,7 +329,7 @@ const DirectMessages = () => {
   return (
     <div>
       <h2 className="flex flex-row items-center w-fit pr-2 align-middle text-yellow-500 hover:bg-purple-600 rounded-md cursor-pointer">
-        <ArrowLeftIcon className="w-5 h-5 text-yellow-100 hover:text-purple-700" onClick={handleGoBack}>Go Back</ArrowLeftIcon>
+        <ArrowUturnLeftIcon className="w-5 h-5 text-yellow-100 hover:text-purple-700" onClick={handleGoBack}>Go Back</ArrowUturnLeftIcon>
         {currentChat}
       </h2>
       <div className="mt-8 mb-8 overflow-y-scroll max-h-96 bg-white rounded-md">

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { withRouter, NextRouter } from 'next/router';
+import { nip19 } from 'nostr-tools'
+import * as CryptoJS from 'crypto-js';
 
 const LoginPage = ({ router }: { router: NextRouter }) => {
   const [publicKey, setPublicKey] = useState<string>('');
@@ -9,52 +11,40 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
   const [disabled, setDisabled] = useState<boolean>(false);
   const [validPublicKey, setValidPublicKey] = useState<boolean>(false);
   const [validPrivateKey, setValidPrivateKey] = useState<boolean>(false);
+  const [passphrase, setPassphrase] = useState<string>('');
 
   const handleSignIn = () => {
-    if (validPublicKey && validPrivateKey) { // Check both key strings for validity
-      // Store credentials in local storage
-      localStorage.setItem('publicKey', publicKey);
-      localStorage.setItem('privateKey', privateKey);
+    if (validPublicKey && validPrivateKey) {
+      localStorage.setItem("npub", publicKey);
 
-      // Redirect user to home page
-      router.push('/marketplace');
-
+      let encryptedPrivateKey = CryptoJS.AES.encrypt(privateKey, passphrase).toString();
+      
+      localStorage.setItem("encryptedPrivateKey", encryptedPrivateKey);
+  
       localStorage.setItem("signIn", "nsec");
+  
+      localStorage.setItem("relays", JSON.stringify(["wss://relay.damus.io"]));
+  
+      router.push("/marketplace");
     } else {
-      // Handle authentication failure
       setErrorMessage('The public and/or private keys inputted were not valid. Generate a new key pair or try again.');
     }
   };
 
   const handleGenerateKeys = () => {
-    setDisabled(true);
-    axios({
-      method: 'GET',
-      url: '/api/nostr/generate-keys',
-    })
-      .then((response) => {
-        setPublicKey(response.data.pk);
-        setPrivateKey(response.data.sk);
-        setErrorMessage(''); // Reset error message
-        setDisabled(true); // Re-enable button
-        alert('Make sure to write down and save your public and private keys in a secure format!');
-      })
-      .catch((error) => {
-        console.error(error);
-        setDisabled(false); // Re-enable button on error
-      });
+    router.push("/keys");
   };
 
   const startExtensionLogin = async () => {
     try {
       // @ts-ignore
       var pubkey = await window.nostr.getPublicKey();
-      setPublicKey(pubkey);
-      localStorage.setItem('publicKey', pubkey);
+      let npub = nip19.npubEncode(pubkey);
+      setPublicKey(npub);
+      localStorage.setItem("npub", npub);
       router.push("/marketplace");
-      let successStr = "signed in as " + pubkey;
+      let successStr = "signed in as " + npub;
       alert(successStr);
-      localStorage.setItem("publicKey", pubkey)
       localStorage.setItem("signIn", "extension");
     } catch (error) {
       alert("Nostr extension sign on failed");
@@ -62,10 +52,11 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
   };
 
   useEffect(() => {
-    const validKeyString = /[a-f0-9]{64}/;
+    const validPubKey = /^npub[a-zA-Z0-9]{59}$/;
+    const validPrivKey = /^nsec[a-zA-Z0-9]{59}$/;
 
-    setValidPublicKey(publicKey.match(validKeyString) !== null);
-    setValidPrivateKey(privateKey.match(validKeyString) !== null);
+    setValidPublicKey(publicKey.match(validPubKey) !== null);
+    setValidPrivateKey(privateKey.match(validPrivKey) !== null);
   }, [publicKey, privateKey]);
 
   return (
@@ -81,6 +72,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
             type="text"
             className="border-b-2 border-yellow-100 bg-purple-900 focus:outline-none focus:border-purple-900 text-yellow-100 text-xl"
             value={publicKey}
+            placeholder={"npub..."}
             onChange={(e) => setPublicKey(e.target.value)}
             style={{ borderColor: validPublicKey ? 'green' : 'red' }}
           />
@@ -91,15 +83,24 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
             type="text"
             className="border-b-2 border-yellow-100 bg-purple-900 focus:outline-none focus:border-purple-900 text-yellow-100 text-xl"
             value={privateKey}
+            placeholder={"nsec..."}
             onChange={(e) => setPrivateKey(e.target.value)}
             style={{ borderColor: validPrivateKey ? 'green' : 'red' }}
+          />
+        </div>
+        <div className="flex flex-col mb-4">
+          <label className="text-xl text-yellow-100">Passphrase</label>
+          <input
+            type="text"
+            className="border-b-2 border-yellow-100 bg-purple-900 focus:outline-none focus:border-purple-900 text-yellow-100 text-xl"
+            value={passphrase}
+            onChange={(e) => setPassphrase(e.target.value)}
           />
         </div>
         <div className="flex justify-between">
           <button
             className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded"
             onClick={handleGenerateKeys}
-            disabled={disabled}
           >
             Generate Keys
           </button>
@@ -123,7 +124,3 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
 };
 
 export default withRouter(LoginPage);
-
-// store sign in value type (nsec or extension)
-// if value type is equal to extension call wondow.nostr.signEvent()
-// otherwise call API with encrypted key

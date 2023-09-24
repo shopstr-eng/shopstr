@@ -2,7 +2,7 @@ import { use, useState } from "react";
 import { ProductFormValues } from "../api/post-event";
 
 interface ProductFormProps {
-  handlePostListing: (product: ProductFormValues) => void;
+  handlePostListing: (product: ProductFormValues, passphrase: string) => void;
   handleModalToggle: () => void;
   showModal: boolean;
 };
@@ -14,27 +14,32 @@ const ProductForm = ({
 }: ProductFormProps) => {
   const [formValues, setFormValues] = useState<ProductFormValues>([]);
   const [images, setImages] = useState<string[]>([]);
+  const [passphrase, setPassphrase] = useState("");
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
-    setFormValues((prevValues) => {
-      // Handles when the name is 'currency'
-      if (name === 'currency') {
-        return prevValues.map(([key, price, _]) => 
-          key === 'price' ? [key, price, value] : [key, price]
-        );
-      }
-      // Checks to see if key exists and updates it rather than duplicating
-      for(const [key, ...rest] of prevValues) {
-        if(key === name) {
-          return prevValues.map((item) => item[0] === name ? [name, value] : item);
+    if (name === "passphrase") {
+      setPassphrase(value);
+    } else {
+      setFormValues((prevValues) => {
+        // Handles when the name is 'currency'
+        if (name === 'currency') {
+          return prevValues.map(([key, price, _]) => 
+            key === 'price' ? [key, price, value] : [key, price]
+          );
         }
-      }
-      // Adds the new key if does not exist already
-      return [...prevValues, [name, value]];
-    });
+        // Checks to see if key exists and updates it rather than duplicating
+        for(const [key, ...rest] of prevValues) {
+          if(key === name) {
+            return prevValues.map((item) => item[0] === name ? [name, value] : item);
+          }
+        }
+        // Adds the new key if does not exist already
+        return [...prevValues, [name, value]];
+      });
+    };
   };
   
   const handleImageChange = (value: string, index: number) => {
@@ -63,7 +68,7 @@ const ProductForm = ({
 
     handleModalToggle();
     initFormValues();
-    handlePostListing(updatedFormValues);
+    handlePostListing(updatedFormValues, passphrase);
   };
 
   const initFormValues = () => {
@@ -219,6 +224,19 @@ const ProductForm = ({
                       name="t"
                       value={getFormValue('t')}
                       placeholder="Optional"
+                      onChange={handleChange}
+                      className="w-full p-2 border border-gray-300 rounded"
+                    />
+
+                    <label htmlFor="t" className="block mb-2 font-bold">
+                      Passphrase:
+                    </label>
+                    <input
+                      type="text"
+                      id="passphrase"
+                      name="passphrase"
+                      value={passphrase}
+                      required
                       onChange={handleChange}
                       className="w-full p-2 border border-gray-300 rounded"
                     />

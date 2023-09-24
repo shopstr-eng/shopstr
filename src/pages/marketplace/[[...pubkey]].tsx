@@ -3,49 +3,48 @@ import axios from "axios";
 import DisplayEvents from "../components/display-events";
 import { ProductFormValues } from "../api/post-event";
 import { useRouter } from "next/router";
-import { ArrowUTurnLeftIcon } from '@heroicons/react/24/outline';
-import { SimplePool } from 'nostr-tools';
+import { ArrowUturnLeftIcon } from '@heroicons/react/24/outline';
+import { nip19, SimplePool } from 'nostr-tools';
 import 'websocket-polyfill';
-
-// const Tooltip = ({ content, children }) => {
-//   const [showTooltip, setShowTooltip] = useState(false);
-//   return (
-//     <div className="relative inline-block">
-//       <div
-//         className={`${
-//           showTooltip ? 'block' : 'hidden'
-//         } bg-gray-800 text-white text-xs rounded-md py-1 px-2 absolute z-10`}
-//       >
-//         {content}
-//       </div>
-//       <div
-//         className="inline-block rounded-md cursor-pointer"
-//         onMouseEnter={() => setShowTooltip(true)}
-//         onMouseLeave={() => setShowTooltip(false)}
-//       >
-//         {children}
-//       </div>
-//     </div>
-//   );
-// };
+import * as CryptoJS from 'crypto-js';
 
 const SellerView = () => {
+  const router = useRouter();
+  
+  const [decryptedNpub, setDecryptedNpub] = useState("");
+  const [encryptedPrivateKey, setEncryptedPrivateKey] = useState("");
+  const [signIn, setSignIn] = useState("");
+  const [relays, setRelays] = useState([]);
+  
   const [pubkey, setPubkey] = useState("");
   const [displayComponent, setDisplayComponent] = useState("home");
 
-  const router = useRouter();
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const npub = localStorage.getItem("npub");
+      const { data } = nip19.decode(npub);
+      setDecryptedNpub(data);
+      const encrypted = localStorage.getItem("encryptedPrivateKey");
+      setEncryptedPrivateKey(encrypted);
+      const signIn = localStorage.getItem("signIn");
+      setSignIn(signIn);
+      const storedRelays = localStorage.getItem("relays");
+      setRelays(storedRelays ? JSON.parse(storedRelays) : []);
+    }
+  }, []);
+  
   useEffect(() => {
     setPubkey(router.query.pubkey ? router.query.pubkey[0] : ""); // router.query.pubkey returns array of pubkeys
   }, [router.query.pubkey]);
 
-  const handlePostListing = async (values: ProductFormValues) => {
+  const handlePostListing = async (values: ProductFormValues, passphrase: string) => {
     const summary = values.find(([key]) => key === "summary")?.[1] || "";
     
     const created_at = Math.floor(Date.now() / 1000);
     // Add "published_at" key
     const updatedValues = [...values, ["published_at", String(created_at)]];
 
-    if (localStorage.getItem("signIn") === "extension") {
+    if (signIn === "extension") {
       const event = {
         created_at: created_at,
         kind: 30402,
@@ -58,7 +57,7 @@ const SellerView = () => {
 
       const pool = new SimplePool();
 
-      const relays = JSON.parse(localStorage.getItem("relays"));
+      // const relays = JSON.parse(storedRelays);
   
       let sub = pool.sub(relays, [
         {
@@ -78,6 +77,9 @@ const SellerView = () => {
         ids: [signedEvent.id],
       });
     } else {
+      let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8);
+      // add error handling and re-prompt for passphrase
+      let { data } = nip19.decode(nsec);
       axios({
         method: "POST",
         url: "/api/nostr/post-event",
@@ -85,14 +87,14 @@ const SellerView = () => {
           "Content-Type": "application/json",
         },
         data: {
-          pubkey: localStorage.getItem("publicKey"),
-          privkey: localStorage.getItem("privateKey"),
+          pubkey: decryptedNpub,
+          privkey: data,
           created_at: created_at,
           kind: 30402,
           // kind: 30018,
           tags: updatedValues,
           content: summary,
-          relays: JSON.parse(localStorage.getItem("relays")),
+          relays: relays,
         },
       });
     };
