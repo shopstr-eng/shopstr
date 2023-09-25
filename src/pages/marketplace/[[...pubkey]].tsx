@@ -122,7 +122,7 @@ const SellerView = () => {
           >
             Go Back
           </ArrowUturnLeftIcon>
-          {pubkey}
+          {nip19.npubEncode(pubkey)}
         </div>
       ) : undefined}
       <DisplayEvents

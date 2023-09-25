@@ -154,7 +154,7 @@ const DisplayEvents = ({
                   handleClickPubkey(event.pubkey);
                 }}
               >
-                {event.pubkey}
+                {nip19.npubEncode(event.pubkey)}
               </span>
               <span className="text-gray-400 ml-2 text-xs md:text-sm">
                 {displayDate(event.created_at)}
