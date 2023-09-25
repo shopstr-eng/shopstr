@@ -4,18 +4,25 @@ import DisplayProduct from "../components/display-product";
 import { SimplePool } from 'nostr-tools';
 
 const Checkout = () => {
-  const storedRelays = localStorage.getItem("relays");
-  
   const router = useRouter();
   const { productId } = router.query;
 
   if (!productId) {
     return <div>Loading...</div>;
   }
+
+  const [relays, setRelays] = useState([]);
   
   const productIdString = productId[0];
   const [product, setProduct] = useState([]);
   const [pubkey, setPubkey] = useState("");
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const storedRelays = localStorage.getItem("relays");
+      setRelays(storedRelays ? JSON.parse(storedRelays) : []);
+    }
+  }, []);
   
   useEffect(() => {
     const pool = new SimplePool();
@@ -26,7 +33,7 @@ const Checkout = () => {
       kinds: [30402],
     };
 
-    let productSub = pool.sub(JSON.parse(storedRelays), [subParams]);
+    let productSub = pool.sub(relays, [subParams]);
 
     productSub.on("event", (event) => {
       // const data = JSON.parse(event.content);
@@ -34,7 +41,7 @@ const Checkout = () => {
       setProduct(event.tags);
       setPubkey(event.pubkey);
     });
-  }, []);
+  }, [relays]);
 
   return (
     <div>

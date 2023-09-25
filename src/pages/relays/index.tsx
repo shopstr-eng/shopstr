@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { MinusCircleIcon } from '@heroicons/react/24/outline';
+import { relayInit } from 'nostr-tools';
 
 const Relays = () => {
   const [relays, setRelays] = useState([]);
@@ -21,14 +22,28 @@ const Relays = () => {
     setShowModal(!showModal);
   };
 
-  const addRelay = () => {
+  const addRelay = async () => {
     const relay = document.getElementById("relay") as HTMLTextAreaElement;
-    handleToggleModal();
-    setRelays([...relays, relay.value]);
+    const validRelay = /^(wss:\/\/|ws:\/\/)/;
+    if (validRelay.test(relay.value)) {
+      const relayTest = relayInit(relay.value);
+      try {
+        await relayTest.connect();
+        handleToggleModal();
+        setRelays([...relays, relay.value]);
+        relayTest.close();
+      } catch {
+        alert("Relay was unable to connect!");
+        relay.value = "";
+      }
+    } else {
+      alert("Invalid relay!");
+      relay.value = "";
+    };
   };
 
   const deleteRelay = (relayToDelete) => {
-    setRelays(relays.filter(relay => relay !== relayToDelete));
+    setRelays(relays.filter((relay) => relay !== relayToDelete));
   };
   
   return (

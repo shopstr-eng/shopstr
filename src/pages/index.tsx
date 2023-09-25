@@ -15,17 +15,21 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
 
   const handleSignIn = () => {
     if (validPublicKey && validPrivateKey) {
-      localStorage.setItem("npub", publicKey);
-
-      let encryptedPrivateKey = CryptoJS.AES.encrypt(privateKey, passphrase).toString();
-      
-      localStorage.setItem("encryptedPrivateKey", encryptedPrivateKey);
-  
-      localStorage.setItem("signIn", "nsec");
-  
-      localStorage.setItem("relays", JSON.stringify(["wss://relay.damus.io"]));
-  
-      router.push("/marketplace");
+      if (passphrase === "" || passphrase === null) {
+        alert("No passphrase provided!");
+      } else {
+        localStorage.setItem("npub", publicKey);
+    
+        let encryptedPrivateKey = CryptoJS.AES.encrypt(privateKey, passphrase).toString();
+        
+        localStorage.setItem("encryptedPrivateKey", encryptedPrivateKey);
+    
+        localStorage.setItem("signIn", "nsec");
+    
+        localStorage.setItem("relays", JSON.stringify(["wss://relay.damus.io"]));
+    
+        router.push("/marketplace");
+      };
     } else {
       setErrorMessage('The public and/or private keys inputted were not valid. Generate a new key pair or try again.');
     }
@@ -43,11 +47,11 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
       setPublicKey(npub);
       localStorage.setItem("npub", npub);
       router.push("/marketplace");
-      let successStr = "signed in as " + npub;
+      let successStr = "Signed in as " + npub;
       alert(successStr);
       localStorage.setItem("signIn", "extension");
     } catch (error) {
-      alert("Nostr extension sign on failed");
+      alert("Extension sign in failed");
     }
   };
 
@@ -89,7 +93,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
           />
         </div>
         <div className="flex flex-col mb-4">
-          <label className="text-xl text-yellow-100">Passphrase</label>
+          <label className="text-xl text-yellow-100">Passphrase<span className="text-red-500">*</span></label>
           <input
             type="text"
             className="border-b-2 border-yellow-100 bg-purple-900 focus:outline-none focus:border-purple-900 text-yellow-100 text-xl"

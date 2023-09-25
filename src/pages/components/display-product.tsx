@@ -11,7 +11,7 @@ import { nip19, SimplePool } from 'nostr-tools';
 import 'websocket-polyfill';
 import * as CryptoJS from 'crypto-js';
 
-const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], eventId: string, pubkey: string, handleDelete: (productId: string, passphrase: string) => void }) => {
+const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], eventId: string, pubkey: string, handleDelete: (productId: string, passphrase: string) => void }) => {
   const router = useRouter();
 
   const [decryptedNpub, setDecryptedNpub] = useState("");
@@ -35,8 +35,9 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], ev
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
 
   const [enterPassphrase, setEnterPassphrase] = useState(false);
-  const [passphraseUse, setPassphraseUse] = useState<string | null>(null);
   const [passphrase, setPassphrase] = useState("");
+
+  const [use, setUse] = useState("");
   
   // const {
   //   id,
@@ -99,7 +100,7 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], ev
     setImages(tmpImages);
   }, [tags]);
 
-  const sendTokens = async (pk: string, token: string, enteredPassphrase: string) => {
+  const sendTokens = async (pk: string, token: string) => {
     if (signIn === "extension") {
       const event = {
         created_at: Math.floor(Date.now() / 1000),
@@ -114,17 +115,6 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], ev
 
       // const relays = JSON.parse(storedRelays);
   
-      let sub = pool.sub(relays, [
-        {
-          kinds: [signedEvent.kind],
-          authors: [signedEvent.pubkey],
-        },
-      ]);
-  
-      sub.on('event', (event) => {
-        console.log('got event:', event);
-      });
-  
       await pool.publish(relays, signedEvent);
   
       let events = await pool.list(relays, [{ kinds: [0, signedEvent.kind] }]);
@@ -132,7 +122,7 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], ev
         ids: [signedEvent.id],
       });
     } else {
-      let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, enteredPassphrase).toString(CryptoJS.enc.Utf8);
+      let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8);
       // add error handling and re-prompt for passphrase
       let { data } = nip19.decode(nsec);
       axios({
@@ -152,9 +142,9 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], ev
         }
       });
     };
-  }
+  };
 
-  async function invoiceHasBeenPaid(pk: string, wallet: object, price: number, hash: string, enteredPassphrase: string) {
+  async function invoiceHasBeenPaid(pk: string, wallet: object, price: number, hash: string) {
     let encoded;
     while (true) {
       try {
@@ -162,11 +152,11 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], ev
 
         // Encoded proofs can be spent at the mint
         encoded = getEncodedToken({
-          token: [{ mint: "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC", proofs }]
+          token: [{ mint: "https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV", proofs }]
         });
 
         if (encoded) {
-          sendTokens(pk, encoded, enteredPassphrase);
+          sendTokens(pk, encoded);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           setTimeout(() => {
@@ -183,8 +173,8 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], ev
     }
   };
 
-  const handlePayment = async (pk: string, price: number, enteredPassphrase: string) => {
-    const wallet = new CashuWallet(new CashuMint("https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"));
+  const handlePayment = async (pk: string, price: number) => {
+    const wallet = new CashuWallet(new CashuMint("https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV"));
 
     const { pr, hash } = await wallet.requestMint(price);
 
@@ -202,28 +192,20 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], ev
 
     setCheckout(true);
     
-    invoiceHasBeenPaid(pk, wallet, price, hash, enteredPassphrase);
+    invoiceHasBeenPaid(pk, wallet, price, hash);
   };
 
-  const handleCheckout = (productId: string, pk: string, price: number, enteredPassphrase: string) => {
+  const handleCheckout = (productId: string, pk: string, price: number) => {
     if (window.location.pathname.includes("checkout")) {
-      handlePayment(pk, price, enteredPassphrase);
+      if (signIn != "extension"){
+        setEnterPassphrase(!enterPassphrase);
+        setUse("pay");
+      } else {
+        handlePayment(pk, price);
+      }
     } else {
       router.push(`/checkout/${productId}`);
     }
-  };
-
-  const handleEnterPassphrase = (use: string) => {
-    setPassphraseUse(use);
-    setEnterPassphrase(!enterPassphrase);
-  };
-  
-  const handleSubmitPassphrase = (enteredPassphrase: string) => {
-    if (passphraseUse === "pay") {
-      handleCheckout(eventId, pubkey, price, enteredPassphrase)
-    } else if (passphraseUse === "delete") {
-      handleDelete(eventId, enteredPassphrase);
-    };
   };
 
   const handleCancel = () => {
@@ -238,13 +220,36 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], ev
     setCurrentImage((currentImage - 1 + images.length) % images.length);
   };
 
-  const handleChange = (
+  const handlePassphraseChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
     if (name === "passphrase") {
       setPassphrase(value);
     };
+  };
+
+  const handleDeleteWithPassphrase = () => {
+    if (signIn != "extension"){
+        setEnterPassphrase(!enterPassphrase);
+        setUse("delete");
+      } else {
+        handleDelete(eventId, "");
+      }
+  };
+
+  const handleSubmitPassphrase = () => {
+    if (CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8)) {
+      setEnterPassphrase(false);
+      if (use === "pay") {
+        handlePayment(pubkey, price);
+      } else if (use === "delete") {
+        handleDelete(eventId, passphrase);
+      }
+      setUse("");
+    } else {
+      alert("Invalid passphrase!");
+    }
   };
   
   return (
@@ -253,7 +258,7 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], ev
       <p className="text-gray-700 mb-4">{summary}</p>
 
       <div className="flex flex-wrap -mx-4 mb-4">
-        {images.length > 0 && (
+        {images.length > 1 && (
           <div className="relative">
             <img
               src={images[currentImage]}
@@ -307,13 +312,13 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], ev
       <div className="flex justify-center">
         <BoltIcon 
           className="w-6 h-6 hover:text-yellow-500"
-          onClick={() => handleEnterPassphrase("pay")}
+          onClick={() => handleCheckout(eventId, pubkey, price)}
         />
         {
          decryptedNpub === pubkey ? (
             <TrashIcon 
               className="w-6 h-6 hover:text-yellow-500"
-              onClick={() => handleEnterPassphrase("delete")}
+              onClick={() => handleDeleteWithPassphrase()}
             />
           ) : undefined
         }
@@ -362,7 +367,7 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], ev
       )}
       <div
         className={`fixed z-10 inset-0 overflow-y-auto ${
-          enterPassphrase ? "" : "hidden"
+          enterPassphrase & signIn === 'nsec' ? "" : "hidden"
         }`}
       >
         <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
@@ -383,9 +388,9 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], ev
                     Enter Passphrase
                   </h3>
                   <div className="mt-2">
-                    <form className="mx-auto" onSubmit={() => handleSubmitPassphrase(passphrase)}>
+                    <form className="mx-auto" onSubmit={() => handleSubmitPassphrase()}>
                       <label htmlFor="t" className="block mb-2 font-bold">
-                        Passphrase:
+                        Passphrase:<span className="text-red-500">*</span>
                       </label>
                       <input
                         type="text"
@@ -393,9 +398,10 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], ev
                         name="passphrase"
                         value={passphrase}
                         required
-                        onChange={handleChange}
+                        onChange={handlePassphraseChange}
                         className="w-full p-2 border border-gray-300 rounded"
                       />
+                      <p className="mt-2 text-red-500 text-sm">* required field</p>
                     </form>
                   </div>
                 </div>
@@ -405,16 +411,14 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete}: { tags: [][], ev
               <button
                 type="button"
                 className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm"
-                onClick={() => handleSubmitPassphrase(passphrase)}
+                onClick={() => handleSubmitPassphrase()}
               >
                 Submit
               </button>
               <button
                 type="button"
                 className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                onClick={() => {
-                  handleEnterPassphrase(null);
-                }}
+                onClick={() => setEnterPassphrase(false)}
               >
                 Cancel
               </button>

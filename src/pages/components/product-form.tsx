@@ -1,5 +1,6 @@
-import { use, useState } from "react";
+import { useState, useEffect } from "react";
 import { ProductFormValues } from "../api/post-event";
+import * as CryptoJS from 'crypto-js';
 
 interface ProductFormProps {
   handlePostListing: (product: ProductFormValues, passphrase: string) => void;
@@ -12,9 +13,22 @@ const ProductForm = ({
   showModal,
   handleModalToggle,
 }: ProductFormProps) => {
+  const [signIn, setSignIn] = useState("");
+  
   const [formValues, setFormValues] = useState<ProductFormValues>([]);
   const [images, setImages] = useState<string[]>([]);
   const [passphrase, setPassphrase] = useState("");
+
+  const [encryptedPrivateKey, setEncryptedPrivateKey] = useState("");
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const encrypted = localStorage.getItem("encryptedPrivateKey");
+      setEncryptedPrivateKey(encrypted);
+      const signIn = localStorage.getItem("signIn");
+      setSignIn(signIn);
+    };
+  }, []);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -63,12 +77,24 @@ const ProductForm = ({
   };
   
   const handleSubmit = () => {
-    // integrate image urls into formValues
-    const updatedFormValues = [...formValues, ...images.map((image) => ["image", image])];
-
-    handleModalToggle();
-    initFormValues();
-    handlePostListing(updatedFormValues, passphrase);
+    if (!formValues.find(([key]) => key === 'title') || !formValues.find(([key]) => key === 'summary') || !formValues.find(([key]) => key === 'location') || !formValues.find(([key]) => key === 'price')) {
+      alert("Missing required fields!");
+    } else {
+      if (formValues.find(([key]) => key === 'price')?.[1] != "" && formValues.find(([key]) => key === 'price').length >= 3) {
+        if (CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8)) {
+          // integrate image urls into formValues
+          const updatedFormValues = [...formValues, ...images.map((image) => ["image", image])];
+    
+          handleModalToggle();
+          initFormValues();
+          handlePostListing(updatedFormValues, passphrase);
+        } else {
+          alert("Invalid passphrase!");
+        };
+      } else {
+        alert("Missing required fields!");
+      };
+    };
   };
 
   const initFormValues = () => {
@@ -114,7 +140,7 @@ const ProductForm = ({
                       htmlFor="title" 
                       className="block mb-2 font-bold"
                     >
-                      Title:
+                      Title:<span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -130,7 +156,7 @@ const ProductForm = ({
                       htmlFor="description"
                       className="block mb-2 font-bold"
                     >
-                      Summary:
+                      Summary:<span className="text-red-500">*</span>
                     </label>
                     <textarea
                       id="summary"
@@ -176,7 +202,7 @@ const ProductForm = ({
                     ))}
 
                     <label htmlFor="location" className="block mb-2 font-bold">
-                      Location:
+                      Location:<span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -189,7 +215,7 @@ const ProductForm = ({
                     />
 
                     <label htmlFor="price" className="block mb-2 font-bold">
-                      Price:
+                      Price:<span className="text-red-500">*</span>
                     </label>
                     <input
                       type="number"
@@ -203,7 +229,7 @@ const ProductForm = ({
                     />
 
                     <label htmlFor="currency" className="block mb-2 font-bold">
-                      Currency:
+                      Currency:<span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -223,23 +249,29 @@ const ProductForm = ({
                       id="t"
                       name="t"
                       value={getFormValue('t')}
-                      placeholder="Optional"
                       onChange={handleChange}
                       className="w-full p-2 border border-gray-300 rounded"
                     />
 
-                    <label htmlFor="t" className="block mb-2 font-bold">
-                      Passphrase:
-                    </label>
-                    <input
-                      type="text"
-                      id="passphrase"
-                      name="passphrase"
-                      value={passphrase}
-                      required
-                      onChange={handleChange}
-                      className="w-full p-2 border border-gray-300 rounded"
-                    />
+                    {
+                      signIn === "nsec" && (
+                      <>
+                        <label htmlFor="passphrase" className="block mb-2 font-bold">
+                          Passphrase:<span className="text-red-500">*</span>
+                        </label>
+                          <input
+                            type="text"
+                            id="passphrase"
+                            name="passphrase"
+                            value={passphrase}
+                            required
+                            onChange={handleChange}
+                            className="w-full p-2 border border-gray-300 rounded"
+                          />
+                        </>
+                      )
+                    }
+                    <p className="mt-2 text-red-500 text-sm">* required field</p>
                   </form>
                 </div>
               </div>

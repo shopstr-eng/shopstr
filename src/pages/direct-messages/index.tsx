@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { nip04, nip19, SimplePool } from 'nostr-tools';
 import 'websocket-polyfill';
-import { ArrowUturnLeftIcon } from '@heroicons/react/24/outline';
+import { ArrowUturnLeftIcon, MinusCircleIcon } from '@heroicons/react/24/outline';
 import * as CryptoJS from 'crypto-js';
 
 const DirectMessages = () => {
@@ -12,9 +12,8 @@ const DirectMessages = () => {
   const [relays, setRelays] = useState([]);
   
   const [chats, setChats] = useState([]);
-  const [messages, setMessages] = useState<string[]>([]);
+  const [messages, setMessages] = useState([]);
   const [currentChat, setCurrentChat] = useState(false);
-  const [newPubKey, setNewPubKey] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -22,6 +21,12 @@ const DirectMessages = () => {
   const [passphrase, setPassphrase] = useState("");
 
   const [thisChat, setThisChat] = useState("");
+
+  const bottomDivRef = useRef();
+  
+  useEffect(() => {
+    bottomDivRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -48,7 +53,9 @@ const DirectMessages = () => {
     };
 
     if (currentChat) {
-      subParams["authors"] = [decryptedNpub, currentChat];
+      let { data: chatPubkey } = nip19.decode(currentChat);
+      
+      subParams["authors"] = [decryptedNpub, chatPubkey];
       
       let nip04Sub = pool.sub(relays, [subParams]);
     
@@ -58,19 +65,25 @@ const DirectMessages = () => {
         let tagPubkey = event.tags[0][1];
 
         let plaintext;
-        if ((decryptedNpub === sender && tagPubkey === currentChat) || (currentChat === sender && tagPubkey === decryptedNpub)) {
+        if ((decryptedNpub === sender && tagPubkey === chatPubkey) || (chatPubkey === sender && tagPubkey === decryptedNpub)) {
           if (signIn === "extension") {
-            plaintext = await window.nostr.nip04.decrypt(currentChat, event.content);
+            plaintext = await window.nostr.nip04.decrypt(chatPubkey, event.content);
           } else {
             let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8);
             // add error handling and re-prompt for passphrase
             let { data } = nip19.decode(nsec);
             let sk2 = data;
-            plaintext = await nip04.decrypt(sk2, currentChat, event.content);
+            plaintext = await nip04.decrypt(sk2, chatPubkey, event.content);
           }
         };
+        let created_at = event.created_at;
 
-        setMessages((messages) => [...messages, plaintext]);
+        setMessages((prevMessages) => 
+          [...prevMessages, { plaintext: plaintext, createdAt: created_at, sender: sender }]
+        );
+        setMessages((prevMessages) => 
+          prevMessages.sort((a, b) => a.createdAt - b.createdAt)
+        );
       });
     };
   }, [currentChat]);
@@ -88,10 +101,27 @@ const DirectMessages = () => {
   };
 
   const handleEnterNewChat = () => {
-    const pubkey = document.getElementById('pubkey') as HTMLTextAreaElement;
-    setChats([...chats, pubkey.value]);
-    setCurrentChat(pubkey.value);
-    setShowModal(!showModal);
+    const npubText = document.getElementById('pubkey') as HTMLTextAreaElement;
+    const validNpub = /^npub[a-zA-Z0-9]{59}$/;
+
+    if (validNpub.test(npubText.value)) {
+      if (signIn != "extension") {
+        if (CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8)) {
+          setChats([...chats, npubText.value]);
+          setCurrentChat(npubText.value);
+          setShowModal(!showModal);
+        } else {
+          alert("Invalid passphrase!");
+        };
+      } else {
+        setChats([...chats, npubText.value]);
+        setCurrentChat(npubText.value);
+        setShowModal(!showModal);
+      };
+    } else {
+      alert("Invalid pubkey!");
+      npubText.value = "";
+    };
   };
 
   const handleChange = (e) => {
@@ -102,11 +132,12 @@ const DirectMessages = () => {
     e.preventDefault();
     if (message.trim() !== "") {
       if (signIn === "extension") {
+        const { data } = nip19.decode(currentChat);
         const event = {
           created_at: Math.floor(Date.now() / 1000),
           kind: 4,
-          tags: [['p', currentChat]],
-          content: await window.nostr.nip04.encrypt(currentChat, message),
+          tags: [['p', data]],
+          content: await window.nostr.nip04.encrypt(data, message),
         }
     
         const signedEvent = await window.nostr.signEvent(event);
@@ -114,17 +145,6 @@ const DirectMessages = () => {
         const pool = new SimplePool();
   
         // const relays = JSON.parse(storedRelays);
-    
-        let sub = pool.sub(relays, [
-          {
-            kinds: [signedEvent.kind],
-            authors: [signedEvent.pubkey],
-          },
-        ]);
-    
-        sub.on('event', (event) => {
-          console.log('got event:', event);
-        });
     
         await pool.publish(relays, signedEvent);
     
@@ -135,8 +155,11 @@ const DirectMessages = () => {
       } else {
         let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8);
         // add error handling and re-prompt for passphrase
-        let { data } = nip19.decode(nsec);
+        let { data: privkey } = nip19.decode(nsec);
         // request passphrase in popup or form and pass to api
+
+        let { data: chatPubkey } = nip19.decode(currentChat);
+        
         axios({
           method: 'POST',
           url: '/api/nostr/post-event',
@@ -145,10 +168,10 @@ const DirectMessages = () => {
           },
           data: {
             pubkey: decryptedNpub,
-            privkey: data,
+            privkey: privkey,
             created_at: Math.floor(Date.now() / 1000),
             kind: 4,
-            tags: [['p', currentChat]],
+            tags: [['p', chatPubkey]],
             content: message,
             relays: relays,
           }
@@ -181,14 +204,22 @@ const DirectMessages = () => {
   };
 
   const handleSubmitPassphrase = () => {
-    setEnterPassphrase(false);
-    setCurrentChat(thisChat);
+    if (CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8)) {
+      setEnterPassphrase(false);
+      setCurrentChat(thisChat);
+    } else {
+      alert("Invalid passphrase!");
+    }
+  };
+
+  const deleteChat = (chatToDelete) => {
+    setChats(chats.filter((chat) => chat !== chatToDelete));
   };
 
   if (!currentChat) {
     return (
       <div>
-        <div className="mt-8 mb-8 overflow-y-scroll max-h-96 bg-white rounded-md">
+        <div className="mt-8 mb-8 overflow-y-scroll max-h-[70vh] bg-white rounded-md">
           {chats.map(chat => (
             <div key={chat} className="flex justify-between items-center mb-2">
               <div className="max-w-xsm truncate">
@@ -197,9 +228,7 @@ const DirectMessages = () => {
               <button onClick={() => signInCheck(chat)}>
                 Enter Chat
               </button>
-              {/* <button onClick={() => setCurrentChat(chat)}>
-                Enter Chat
-              </button> */}
+              <MinusCircleIcon onClick={() => deleteChat(chat)} className="w-5 h-5 text-red-500 hover:text-yellow-700 cursor-pointer" />
             </div>
           ))}
         </div>
@@ -218,12 +247,12 @@ const DirectMessages = () => {
                       Start New Chat
                     </h3>
                     <div className="mt-2">
-                      <textarea id="pubkey" className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md mb-2" placeholder="Enter pubkey here..."></textarea>
+                      <textarea id="pubkey" className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md mb-2" placeholder="Enter npub here..."></textarea>
                       {
                         signIn === 'nsec' && (
                           <>
-                            <label htmlFor="t" className="block mb-2 font-bold">
-                              Passphrase:
+                            <label htmlFor="passphrase" className="block mb-2 font-bold">
+                              Passphrase:<span className="text-red-500">*</span>
                             </label>
                             <input
                               type="text"
@@ -237,6 +266,7 @@ const DirectMessages = () => {
                           </>
                         )
                       }
+                      <p className="mt-2 text-red-500 text-sm">* required field</p>
                     </div>
                   </div>
                 </div>
@@ -285,7 +315,7 @@ const DirectMessages = () => {
                     <div className="mt-2">
                       <form className="mx-auto" onSubmit={() => handleSubmitPassphrase()}>
                         <label htmlFor="t" className="block mb-2 font-bold">
-                          Passphrase:
+                          Passphrase:<span className="text-red-500">*</span>
                         </label>
                         <input
                           type="text"
@@ -296,6 +326,7 @@ const DirectMessages = () => {
                           onChange={handlePassphraseChange}
                           className="w-full p-2 border border-gray-300 rounded"
                         />
+                        <p className="mt-2 text-red-500 text-sm">* required field</p>
                       </form>
                     </div>
                   </div>
@@ -332,10 +363,32 @@ const DirectMessages = () => {
         <ArrowUturnLeftIcon className="w-5 h-5 text-yellow-100 hover:text-purple-700" onClick={handleGoBack}>Go Back</ArrowUturnLeftIcon>
         {currentChat}
       </h2>
-      <div className="mt-8 mb-8 overflow-y-scroll max-h-96 bg-white rounded-md">
+      <div className="mt-8 mb-8 overflow-y-scroll max-h-[70vh] bg-white rounded-md">
         {messages.map((message, index) => (
-          <div key={index}>{message}</div>
+          <div 
+             key={index}
+             className={`my-2 flex ${
+               message.sender === decryptedNpub
+                 ? 'justify-end'
+                 : message.sender === currentChat
+                 ? 'justify-start'
+                 : ''}`
+             }
+           >
+            <p
+             className={`inline-block p-3 rounded-lg max-w-[100vh] break-words ${
+               message.sender === decryptedNpub
+                 ? 'bg-purple-200'
+                 : message.sender === currentChat
+                 ? 'bg-gray-300'
+                 : ''}`
+             }
+            >
+              {message.plaintext}
+            </p>
+          </div>
         ))}
+        <div ref={bottomDivRef} />
       </div>
       <form className="flex items-center" onSubmit={handleSubmit}>
         <input
