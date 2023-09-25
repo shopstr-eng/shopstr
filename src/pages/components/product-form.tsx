@@ -249,7 +249,6 @@ const ProductForm = ({
                       id="t"
                       name="t"
                       value={getFormValue('t')}
-                      placeholder="Optional"
                       onChange={handleChange}
                       className="w-full p-2 border border-gray-300 rounded"
                     />
@@ -272,6 +271,7 @@ const ProductForm = ({
                         </>
                       )
                     }
+                    <p className="mt-2 text-red-500 text-sm">* required field</p>
                   </form>
                 </div>
               </div>

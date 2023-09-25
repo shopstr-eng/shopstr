@@ -247,7 +247,7 @@ const DirectMessages = () => {
                       Start New Chat
                     </h3>
                     <div className="mt-2">
-                      <textarea id="pubkey" className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md mb-2" placeholder="Enter pubkey here..."></textarea>
+                      <textarea id="pubkey" className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md mb-2" placeholder="Enter npub here..."></textarea>
                       {
                         signIn === 'nsec' && (
                           <>
@@ -325,6 +325,7 @@ const DirectMessages = () => {
                           onChange={handlePassphraseChange}
                           className="w-full p-2 border border-gray-300 rounded"
                         />
+                        <p className="mt-2 text-red-500 text-sm">* required field</p>
                       </form>
                     </div>
                   </div>

@@ -401,6 +401,7 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
                         onChange={handlePassphraseChange}
                         className="w-full p-2 border border-gray-300 rounded"
                       />
+                      <p className="mt-2 text-red-500 text-sm">* required field</p>
                     </form>
                   </div>
                 </div>
