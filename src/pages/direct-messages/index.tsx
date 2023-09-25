@@ -252,7 +252,7 @@ const DirectMessages = () => {
                         signIn === 'nsec' && (
                           <>
                             <label htmlFor="passphrase" className="block mb-2 font-bold">
-                              Passphrase:
+                              Passphrase:<span className="text-red-500">*</span>
                             </label>
                             <input
                               type="text"
@@ -314,7 +314,7 @@ const DirectMessages = () => {
                     <div className="mt-2">
                       <form className="mx-auto" onSubmit={() => handleSubmitPassphrase()}>
                         <label htmlFor="t" className="block mb-2 font-bold">
-                          Passphrase:
+                          Passphrase:<span className="text-red-500">*</span>
                         </label>
                         <input
                           type="text"

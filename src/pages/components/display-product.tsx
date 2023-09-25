@@ -390,7 +390,7 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
                   <div className="mt-2">
                     <form className="mx-auto" onSubmit={() => handleSubmitPassphrase()}>
                       <label htmlFor="t" className="block mb-2 font-bold">
-                        Passphrase:
+                        Passphrase:<span className="text-red-500">*</span>
                       </label>
                       <input
                         type="text"

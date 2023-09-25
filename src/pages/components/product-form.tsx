@@ -77,16 +77,24 @@ const ProductForm = ({
   };
   
   const handleSubmit = () => {
-    if (CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8)) {
-      // integrate image urls into formValues
-      const updatedFormValues = [...formValues, ...images.map((image) => ["image", image])];
-
-      handleModalToggle();
-      initFormValues();
-      handlePostListing(updatedFormValues, passphrase);
+    if (!formValues.find(([key]) => key === 'title') || !formValues.find(([key]) => key === 'summary') || !formValues.find(([key]) => key === 'location') || !formValues.find(([key]) => key === 'price')) {
+      alert("Missing required fields!");
     } else {
-      alert("Invalid passphrase!");
-    }
+      if (formValues.find(([key]) => key === 'price')?.[1] != "" && formValues.find(([key]) => key === 'price').length >= 3) {
+        if (CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8)) {
+          // integrate image urls into formValues
+          const updatedFormValues = [...formValues, ...images.map((image) => ["image", image])];
+    
+          handleModalToggle();
+          initFormValues();
+          handlePostListing(updatedFormValues, passphrase);
+        } else {
+          alert("Invalid passphrase!");
+        };
+      } else {
+        alert("Missing required fields!");
+      };
+    };
   };
 
   const initFormValues = () => {
@@ -132,7 +140,7 @@ const ProductForm = ({
                       htmlFor="title" 
                       className="block mb-2 font-bold"
                     >
-                      Title:
+                      Title:<span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -148,7 +156,7 @@ const ProductForm = ({
                       htmlFor="description"
                       className="block mb-2 font-bold"
                     >
-                      Summary:
+                      Summary:<span className="text-red-500">*</span>
                     </label>
                     <textarea
                       id="summary"
@@ -194,7 +202,7 @@ const ProductForm = ({
                     ))}
 
                     <label htmlFor="location" className="block mb-2 font-bold">
-                      Location:
+                      Location:<span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -207,7 +215,7 @@ const ProductForm = ({
                     />
 
                     <label htmlFor="price" className="block mb-2 font-bold">
-                      Price:
+                      Price:<span className="text-red-500">*</span>
                     </label>
                     <input
                       type="number"
@@ -221,7 +229,7 @@ const ProductForm = ({
                     />
 
                     <label htmlFor="currency" className="block mb-2 font-bold">
-                      Currency:
+                      Currency:<span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -250,7 +258,7 @@ const ProductForm = ({
                       signIn === "nsec" && (
                       <>
                         <label htmlFor="passphrase" className="block mb-2 font-bold">
-                          Passphrase:
+                          Passphrase:<span className="text-red-500">*</span>
                         </label>
                           <input
                             type="text"
