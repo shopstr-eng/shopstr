@@ -28,7 +28,7 @@ const Relays = () => {
   };
 
   const deleteRelay = (relayToDelete) => {
-    setRelays(relays.filter(relay => relay !== relayToDelete));
+    setRelays(relays.filter((relay) => relay !== relayToDelete));
   };
   
   return (

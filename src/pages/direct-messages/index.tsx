@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { nip04, nip19, SimplePool } from 'nostr-tools';
 import 'websocket-polyfill';
-import { ArrowUturnLeftIcon } from '@heroicons/react/24/outline';
+import { ArrowUturnLeftIcon, MinusCircleIcon } from '@heroicons/react/24/outline';
 import * as CryptoJS from 'crypto-js';
 
 const DirectMessages = () => {
@@ -12,9 +12,8 @@ const DirectMessages = () => {
   const [relays, setRelays] = useState([]);
   
   const [chats, setChats] = useState([]);
-  const [messages, setMessages] = useState<string[]>([]);
+  const [messages, setMessages] = useState([]);
   const [currentChat, setCurrentChat] = useState(false);
-  const [newPubKey, setNewPubKey] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -22,6 +21,12 @@ const DirectMessages = () => {
   const [passphrase, setPassphrase] = useState("");
 
   const [thisChat, setThisChat] = useState("");
+
+  const bottomDivRef = useRef();
+  
+  useEffect(() => {
+    bottomDivRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -69,8 +74,14 @@ const DirectMessages = () => {
             plaintext = await nip04.decrypt(sk2, currentChat, event.content);
           }
         };
+        let created_at = event.created_at;
 
-        setMessages((messages) => [...messages, plaintext]);
+        setMessages((prevMessages) => 
+          [...prevMessages, { plaintext: plaintext, createdAt: created_at, sender: sender }]
+        );
+        setMessages((prevMessages) => 
+          prevMessages.sort((a, b) => a.createdAt - b.createdAt)
+        );
       });
     };
   }, [currentChat]);
@@ -88,10 +99,17 @@ const DirectMessages = () => {
   };
 
   const handleEnterNewChat = () => {
-    const pubkey = document.getElementById('pubkey') as HTMLTextAreaElement;
-    setChats([...chats, pubkey.value]);
-    setCurrentChat(pubkey.value);
-    setShowModal(!showModal);
+    const npubText = document.getElementById('pubkey') as HTMLTextAreaElement;
+    const validNpub = /^npub[a-zA-Z0-9]{59}$/;
+
+    if (validNpub.test(npubText.value)) {
+      setChats([...chats, npubText.value]);
+      setCurrentChat(npubText.value);
+      setShowModal(!showModal);
+    } else {
+      alert("Invalid pubkey!");
+      npubText.value = "";
+    }
   };
 
   const handleChange = (e) => {
@@ -185,10 +203,14 @@ const DirectMessages = () => {
     setCurrentChat(thisChat);
   };
 
+  const deleteChat = (chatToDelete) => {
+    setChats(chats.filter((chat) => chat !== chatToDelete));
+  };
+
   if (!currentChat) {
     return (
       <div>
-        <div className="mt-8 mb-8 overflow-y-scroll max-h-96 bg-white rounded-md">
+        <div className="mt-8 mb-8 overflow-y-scroll max-h-[70vh] bg-white rounded-md">
           {chats.map(chat => (
             <div key={chat} className="flex justify-between items-center mb-2">
               <div className="max-w-xsm truncate">
@@ -197,9 +219,7 @@ const DirectMessages = () => {
               <button onClick={() => signInCheck(chat)}>
                 Enter Chat
               </button>
-              {/* <button onClick={() => setCurrentChat(chat)}>
-                Enter Chat
-              </button> */}
+              <MinusCircleIcon onClick={() => deleteChat(chat)} className="w-5 h-5 text-red-500 hover:text-yellow-700 cursor-pointer" />
             </div>
           ))}
         </div>
@@ -332,10 +352,32 @@ const DirectMessages = () => {
         <ArrowUturnLeftIcon className="w-5 h-5 text-yellow-100 hover:text-purple-700" onClick={handleGoBack}>Go Back</ArrowUturnLeftIcon>
         {currentChat}
       </h2>
-      <div className="mt-8 mb-8 overflow-y-scroll max-h-96 bg-white rounded-md">
+      <div className="mt-8 mb-8 overflow-y-scroll max-h-[70vh] bg-white rounded-md">
         {messages.map((message, index) => (
-          <div key={index}>{message}</div>
+          <div 
+             key={index}
+             className={`my-2 flex ${
+               message.sender === decryptedNpub
+                 ? 'justify-end'
+                 : message.sender === currentChat
+                 ? 'justify-start'
+                 : ''}`
+             }
+           >
+            <p
+             className={`inline-block p-3 rounded-lg max-w-[100vh] break-words ${
+               message.sender === decryptedNpub
+                 ? 'bg-purple-200'
+                 : message.sender === currentChat
+                 ? 'bg-gray-300'
+                 : ''}`
+             }
+            >
+              {message.plaintext}
+            </p>
+          </div>
         ))}
+        <div ref={bottomDivRef} />
       </div>
       <form className="flex items-center" onSubmit={handleSubmit}>
         <input
