@@ -53,7 +53,9 @@ const DirectMessages = () => {
     };
 
     if (currentChat) {
-      subParams["authors"] = [decryptedNpub, currentChat];
+      let { data: chatPubkey } = nip19.decode(currentChat);
+      
+      subParams["authors"] = [decryptedNpub, chatPubkey];
       
       let nip04Sub = pool.sub(relays, [subParams]);
     
@@ -63,15 +65,15 @@ const DirectMessages = () => {
         let tagPubkey = event.tags[0][1];
 
         let plaintext;
-        if ((decryptedNpub === sender && tagPubkey === currentChat) || (currentChat === sender && tagPubkey === decryptedNpub)) {
+        if ((decryptedNpub === sender && tagPubkey === chatPubkey) || (chatPubkey === sender && tagPubkey === decryptedNpub)) {
           if (signIn === "extension") {
-            plaintext = await window.nostr.nip04.decrypt(currentChat, event.content);
+            plaintext = await window.nostr.nip04.decrypt(chatPubkey, event.content);
           } else {
             let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8);
             // add error handling and re-prompt for passphrase
             let { data } = nip19.decode(nsec);
             let sk2 = data;
-            plaintext = await nip04.decrypt(sk2, currentChat, event.content);
+            plaintext = await nip04.decrypt(sk2, chatPubkey, event.content);
           }
         };
         let created_at = event.created_at;
@@ -103,13 +105,23 @@ const DirectMessages = () => {
     const validNpub = /^npub[a-zA-Z0-9]{59}$/;
 
     if (validNpub.test(npubText.value)) {
-      setChats([...chats, npubText.value]);
-      setCurrentChat(npubText.value);
-      setShowModal(!showModal);
+      if (signIn != "extension") {
+        if (CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8)) {
+          setChats([...chats, npubText.value]);
+          setCurrentChat(npubText.value);
+          setShowModal(!showModal);
+        } else {
+          alert("Invalid passphrase!");
+        };
+      } else {
+        setChats([...chats, npubText.value]);
+        setCurrentChat(npubText.value);
+        setShowModal(!showModal);
+      };
     } else {
       alert("Invalid pubkey!");
       npubText.value = "";
-    }
+    };
   };
 
   const handleChange = (e) => {
@@ -120,11 +132,12 @@ const DirectMessages = () => {
     e.preventDefault();
     if (message.trim() !== "") {
       if (signIn === "extension") {
+        const { data } = nip19.decode(currentChat);
         const event = {
           created_at: Math.floor(Date.now() / 1000),
           kind: 4,
-          tags: [['p', currentChat]],
-          content: await window.nostr.nip04.encrypt(currentChat, message),
+          tags: [['p', data]],
+          content: await window.nostr.nip04.encrypt(data, message),
         }
     
         const signedEvent = await window.nostr.signEvent(event);
@@ -132,17 +145,6 @@ const DirectMessages = () => {
         const pool = new SimplePool();
   
         // const relays = JSON.parse(storedRelays);
-    
-        let sub = pool.sub(relays, [
-          {
-            kinds: [signedEvent.kind],
-            authors: [signedEvent.pubkey],
-          },
-        ]);
-    
-        sub.on('event', (event) => {
-          console.log('got event:', event);
-        });
     
         await pool.publish(relays, signedEvent);
     
@@ -153,8 +155,11 @@ const DirectMessages = () => {
       } else {
         let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8);
         // add error handling and re-prompt for passphrase
-        let { data } = nip19.decode(nsec);
+        let { data: privkey } = nip19.decode(nsec);
         // request passphrase in popup or form and pass to api
+
+        let { data: chatPubkey } = nip19.decode(currentChat);
+        
         axios({
           method: 'POST',
           url: '/api/nostr/post-event',
@@ -163,10 +168,10 @@ const DirectMessages = () => {
           },
           data: {
             pubkey: decryptedNpub,
-            privkey: data,
+            privkey: privkey,
             created_at: Math.floor(Date.now() / 1000),
             kind: 4,
-            tags: [['p', currentChat]],
+            tags: [['p', chatPubkey]],
             content: message,
             relays: relays,
           }
@@ -199,8 +204,12 @@ const DirectMessages = () => {
   };
 
   const handleSubmitPassphrase = () => {
-    setEnterPassphrase(false);
-    setCurrentChat(thisChat);
+    if (CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8)) {
+      setEnterPassphrase(false);
+      setCurrentChat(thisChat);
+    } else {
+      alert("Invalid passphrase!");
+    }
   };
 
   const deleteChat = (chatToDelete) => {
@@ -242,7 +251,7 @@ const DirectMessages = () => {
                       {
                         signIn === 'nsec' && (
                           <>
-                            <label htmlFor="t" className="block mb-2 font-bold">
+                            <label htmlFor="passphrase" className="block mb-2 font-bold">
                               Passphrase:
                             </label>
                             <input

@@ -209,6 +209,7 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
       let sk1 = privkey;
       let pk1 = event.pubkey;
       let pk2 = event.tags[0][1];
+      console.log(pk2);
       let ciphertext = await nip04.encrypt(sk1, pk2, event.content);
       signedEvent = {
         kind: kind,

@@ -43,11 +43,11 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
       setPublicKey(npub);
       localStorage.setItem("npub", npub);
       router.push("/marketplace");
-      let successStr = "signed in as " + npub;
+      let successStr = "Signed in as " + npub;
       alert(successStr);
       localStorage.setItem("signIn", "extension");
     } catch (error) {
-      alert("Nostr extension sign on failed");
+      alert("Extension sign in failed");
     }
   };
 

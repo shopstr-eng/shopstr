@@ -11,7 +11,7 @@ import { nip19, SimplePool } from 'nostr-tools';
 import 'websocket-polyfill';
 import * as CryptoJS from 'crypto-js';
 
-const DisplayProduct = ({ tags, eventId, pubkey }: { tags: [][], eventId: string, pubkey: string }) => {
+const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], eventId: string, pubkey: string, handleDelete: (productId: string, passphrase: string) => void }) => {
   const router = useRouter();
 
   const [decryptedNpub, setDecryptedNpub] = useState("");
@@ -36,6 +36,8 @@ const DisplayProduct = ({ tags, eventId, pubkey }: { tags: [][], eventId: string
 
   const [enterPassphrase, setEnterPassphrase] = useState(false);
   const [passphrase, setPassphrase] = useState("");
+
+  const [use, setUse] = useState("");
   
   // const {
   //   id,
@@ -113,17 +115,6 @@ const DisplayProduct = ({ tags, eventId, pubkey }: { tags: [][], eventId: string
 
       // const relays = JSON.parse(storedRelays);
   
-      let sub = pool.sub(relays, [
-        {
-          kinds: [signedEvent.kind],
-          authors: [signedEvent.pubkey],
-        },
-      ]);
-  
-      sub.on('event', (event) => {
-        console.log('got event:', event);
-      });
-  
       await pool.publish(relays, signedEvent);
   
       let events = await pool.list(relays, [{ kinds: [0, signedEvent.kind] }]);
@@ -161,7 +152,7 @@ const DisplayProduct = ({ tags, eventId, pubkey }: { tags: [][], eventId: string
 
         // Encoded proofs can be spent at the mint
         encoded = getEncodedToken({
-          token: [{ mint: "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC", proofs }]
+          token: [{ mint: "https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV", proofs }]
         });
 
         if (encoded) {
@@ -183,7 +174,7 @@ const DisplayProduct = ({ tags, eventId, pubkey }: { tags: [][], eventId: string
   };
 
   const handlePayment = async (pk: string, price: number) => {
-    const wallet = new CashuWallet(new CashuMint("https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"));
+    const wallet = new CashuWallet(new CashuMint("https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV"));
 
     const { pr, hash } = await wallet.requestMint(price);
 
@@ -208,34 +199,13 @@ const DisplayProduct = ({ tags, eventId, pubkey }: { tags: [][], eventId: string
     if (window.location.pathname.includes("checkout")) {
       if (signIn != "extension"){
         setEnterPassphrase(!enterPassphrase);
+        setUse("pay");
       } else {
         handlePayment(pk, price);
       }
     } else {
       router.push(`/checkout/${productId}`);
     }
-  };
-
-  const handleDelete = async (productId: string, passphrase: string) => {
-    let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8);
-      // add error handling and re-prompt for passphrase
-    let { data } = nip19.decode(nsec);
-    let deleteEvent = await createNostrDeleteEvent([productId], decryptedNpub, "user deletion request", data);
-    axios({
-      method: 'POST',
-      url: '/api/nostr/post-event',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      data: {
-        ...deleteEvent,
-        relays: relays,
-      }
-    });
-    setEventData((eventData) => {
-      let newEventData = eventData.filter((event) => event.id !== productId); // removes the deleted product from the list
-      return newEventData;
-    });
   };
 
   const handleCancel = () => {
@@ -259,9 +229,27 @@ const DisplayProduct = ({ tags, eventId, pubkey }: { tags: [][], eventId: string
     };
   };
 
+  const handleDeleteWithPassphrase = () => {
+    if (signIn != "extension"){
+        setEnterPassphrase(!enterPassphrase);
+        setUse("delete");
+      } else {
+        handleDelete(eventId, "");
+      }
+  };
+
   const handleSubmitPassphrase = () => {
-    setEnterPassphrase(false);
-    handlePayment(pubkey, price);
+    if (CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8)) {
+      setEnterPassphrase(false);
+      if (use === "pay") {
+        handlePayment(pubkey, price);
+      } else if (use === "delete") {
+        handleDelete(eventId, passphrase);
+      }
+      setUse("");
+    } else {
+      alert("Invalid passphrase!");
+    }
   };
   
   return (
@@ -324,13 +312,13 @@ const DisplayProduct = ({ tags, eventId, pubkey }: { tags: [][], eventId: string
       <div className="flex justify-center">
         <BoltIcon 
           className="w-6 h-6 hover:text-yellow-500"
-          onClick={() => handleCheckout(pubkey, eventId, price)}
+          onClick={() => handleCheckout(eventId, pubkey, price)}
         />
         {
          decryptedNpub === pubkey ? (
             <TrashIcon 
               className="w-6 h-6 hover:text-yellow-500"
-              onClick={() => handleDelete(eventId)}
+              onClick={() => handleDeleteWithPassphrase()}
             />
           ) : undefined
         }
@@ -429,7 +417,7 @@ const DisplayProduct = ({ tags, eventId, pubkey }: { tags: [][], eventId: string
               <button
                 type="button"
                 className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                onClick={setEnterPassphrase(false)}
+                onClick={() => setEnterPassphrase(false)}
               >
                 Cancel
               </button>

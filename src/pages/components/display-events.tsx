@@ -95,6 +95,50 @@ const DisplayEvents = ({
     setShowModal(!showModal);
   };
 
+  const handleDelete = async (productId: string, passphrase: string) => {
+    if (signIn === "extension") {
+      const event = {
+        created_at: Math.floor(Date.now() / 1000),
+        kind: 5,
+        tags: [['e', productId]],
+        content: "user deletion request",
+      }
+  
+      const signedEvent = await window.nostr.signEvent(event);
+
+      const pool = new SimplePool();
+
+      // const relays = JSON.parse(storedRelays);
+  
+      await pool.publish(relays, signedEvent);
+  
+      let events = await pool.list(relays, [{ kinds: [0, signedEvent.kind] }]);
+      let postedEvent = await pool.get(relays, {
+        ids: [signedEvent.id],
+      });
+    } else {
+      let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8);
+        // add error handling and re-prompt for passphrase
+      let { data } = nip19.decode(nsec);
+      let deleteEvent = await createNostrDeleteEvent([productId], decryptedNpub, "user deletion request", data);
+      axios({
+        method: 'POST',
+        url: '/api/nostr/post-event',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        data: {
+          ...deleteEvent,
+          relays: relays,
+        }
+      });
+    };
+    setEventData((eventData) => {
+      let newEventData = eventData.filter((event) => event.id !== productId); // removes the deleted product from the list
+      return newEventData;
+    });
+  };
+
   return (
     <div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-8 mb-8 overflow-y-scroll overflow-x-hidden max-h-[70vh] max-w-full">
@@ -119,7 +163,7 @@ const DisplayEvents = ({
             <div className="mt-2 text-gray-800 text-sm md:text-base whitespace-pre-wrap break-words">
               {
                 event.kind == 30402 ? (
-                  <DisplayProduct tags={event.tags} eventId={event.id} pubkey={event.pubkey}/>
+                  <DisplayProduct tags={event.tags} eventId={event.id} pubkey={event.pubkey} handleDelete={handleDelete} />
                 ) : (
                   event.content.indexOf(imageUrlRegExp) ? (
                     <div>

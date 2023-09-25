@@ -1,5 +1,6 @@
-import { use, useState } from "react";
+import { useState, useEffect } from "react";
 import { ProductFormValues } from "../api/post-event";
+import * as CryptoJS from 'crypto-js';
 
 interface ProductFormProps {
   handlePostListing: (product: ProductFormValues, passphrase: string) => void;
@@ -12,9 +13,22 @@ const ProductForm = ({
   showModal,
   handleModalToggle,
 }: ProductFormProps) => {
+  const [signIn, setSignIn] = useState("");
+  
   const [formValues, setFormValues] = useState<ProductFormValues>([]);
   const [images, setImages] = useState<string[]>([]);
   const [passphrase, setPassphrase] = useState("");
+
+  const [encryptedPrivateKey, setEncryptedPrivateKey] = useState("");
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const encrypted = localStorage.getItem("encryptedPrivateKey");
+      setEncryptedPrivateKey(encrypted);
+      const signIn = localStorage.getItem("signIn");
+      setSignIn(signIn);
+    };
+  }, []);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -63,12 +77,16 @@ const ProductForm = ({
   };
   
   const handleSubmit = () => {
-    // integrate image urls into formValues
-    const updatedFormValues = [...formValues, ...images.map((image) => ["image", image])];
+    if (CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8)) {
+      // integrate image urls into formValues
+      const updatedFormValues = [...formValues, ...images.map((image) => ["image", image])];
 
-    handleModalToggle();
-    initFormValues();
-    handlePostListing(updatedFormValues, passphrase);
+      handleModalToggle();
+      initFormValues();
+      handlePostListing(updatedFormValues, passphrase);
+    } else {
+      alert("Invalid passphrase!");
+    }
   };
 
   const initFormValues = () => {
@@ -228,18 +246,24 @@ const ProductForm = ({
                       className="w-full p-2 border border-gray-300 rounded"
                     />
 
-                    <label htmlFor="t" className="block mb-2 font-bold">
-                      Passphrase:
-                    </label>
-                    <input
-                      type="text"
-                      id="passphrase"
-                      name="passphrase"
-                      value={passphrase}
-                      required
-                      onChange={handleChange}
-                      className="w-full p-2 border border-gray-300 rounded"
-                    />
+                    {
+                      signIn === "nsec" && (
+                      <>
+                        <label htmlFor="passphrase" className="block mb-2 font-bold">
+                          Passphrase:
+                        </label>
+                          <input
+                            type="text"
+                            id="passphrase"
+                            name="passphrase"
+                            value={passphrase}
+                            required
+                            onChange={handleChange}
+                            className="w-full p-2 border border-gray-300 rounded"
+                          />
+                        </>
+                      )
+                    }
                   </form>
                 </div>
               </div>
