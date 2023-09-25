@@ -251,6 +251,12 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
       alert("Invalid passphrase!");
     }
   };
+
+  const handleCopyInvoice = () => {
+    navigator.clipboard.writeText(invoice);
+    // navigator.clipboard.writeText(invoiceString);
+    alert('Invoice copied to clipboard!');
+  };
   
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
@@ -342,6 +348,14 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
                 Scan this invoice:
               </h3>
               <img src={qrCodeUrl} alt="QR Code" />
+              <div className="flex justify-center">
+                <p className="inline-block rounded-lg max-w-[48vh] break-words text-center" onClick={handleCopyInvoice}>
+                  {invoice.length > 30 
+                    ? `${invoice.substring(0, 15)}...${invoice.substring(invoice.length - 15, invoice.length)}`
+                    : invoice
+                  }
+                </p>
+              </div>
               <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                 <div className="mt-3 w-full inline-flex justify-center">
                   <button
