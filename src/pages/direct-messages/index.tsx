@@ -266,6 +266,7 @@ const DirectMessages = () => {
                           </>
                         )
                       }
+                      <p className="mt-2 text-red-500 text-sm">* required field</p>
                     </div>
                   </div>
                 </div>
