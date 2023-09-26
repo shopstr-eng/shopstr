@@ -26,7 +26,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
     
         localStorage.setItem("signIn", "nsec");
     
-        localStorage.setItem("relays", JSON.stringify(["wss://relay.damus.io"]));
+        localStorage.setItem("relays", JSON.stringify(["wss://relay.damus.io","wss://nos.lol"]));
     
         router.push("/marketplace");
       };
