@@ -4,12 +4,12 @@ export async function createNostrDeleteEvent(event_ids, pubkey, content, privkey
       content: content, // Deletion Reason
       tags: []
   };
-  try {
-    // Sign event
-    msg = await window.nostr.signEvent(msg)
-  } catch (e) {
-    console.log("Failed to sign message with browser extension", e)
-  }
+  // try {
+  //   // Sign event
+  //   msg = await window.nostr.signEvent(msg)
+  // } catch (e) {
+  //   console.log("Failed to sign message with browser extension", e)
+  // }
   
   for (let event_id of event_ids) {
     msg.tags.push(["e", event_id])
