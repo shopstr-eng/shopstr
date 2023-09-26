@@ -47,11 +47,13 @@ const DirectMessages = () => {
         let passedPubkeyStr = passedPubkey.toString();
         setThisChat(passedPubkeyStr);
         if (!chats.includes(passedPubkeyStr)) {
-          setChats([...chats, passedPubkeyStr]);
+          let newChats = Array.from(new Set([...chats, passedPubkeyStr]))
+          setChats(newChats);
         }
         setEnterPassphrase(!enterPassphrase);
         if (CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8)) {
-          setCurrentChat(passedPubkeyStr);
+          let newChats = Array.from(new Set([...chats, passedPubkeyStr]))
+          setChats(newChats);
         }
       }
 
@@ -159,7 +161,8 @@ const DirectMessages = () => {
       if (signIn != "extension") {
         if (CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8)) {
           if (!chats.includes(npubText.value)) {
-            setChats([...chats, npubText.value]);
+            let newChats = Array.from(new Set([...chats, npubText.value]))
+            setChats(newChats);
           }
           setCurrentChat(npubText.value);
           setShowModal(!showModal);
@@ -168,7 +171,8 @@ const DirectMessages = () => {
         };
       } else {
         if (!chats.includes(npubText.value)) {
-          setChats([...chats, npubText.value]);
+          let newChats = Array.from(new Set([...chats, npubText.value]))
+          setChats(newChats);
         }
         setCurrentChat(npubText.value);
         setShowModal(!showModal);
