@@ -63,6 +63,12 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
     setValidPrivateKey(privateKey.match(validPrivKey) !== null);
   }, [publicKey, privateKey]);
 
+  useEffect(() => {
+    if (localStorage.getItem("signIn") === "extension" || localStorage.getItem("signIn") === "nsec") {
+      router.push("/marketplace");
+    };
+  }, [])
+
   return (
     <div className="flex flex-col h-full justify-center items-center bg-yellow-100 rounded-md">
       <div className="w-10/12 lg:w-2/3 xl:w-1/2 bg-purple-500 rounded-md py-8 px-16">
