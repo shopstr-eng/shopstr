@@ -38,6 +38,7 @@ const SellerView = () => {
   }, [router.query.pubkey]);
 
   const handlePostListing = async (values: ProductFormValues, passphrase: string) => {
+    console.log("post values ", values);
     const summary = values.find(([key]) => key === "summary")?.[1] || "";
     
     const created_at = Math.floor(Date.now() / 1000);

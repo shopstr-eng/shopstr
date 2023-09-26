@@ -81,16 +81,21 @@ const ProductForm = ({
       alert("Missing required fields!");
     } else {
       if (formValues.find(([key]) => key === 'price')?.[1] != "" && formValues.find(([key]) => key === 'price').length >= 3) {
-        if (CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8)) {
-          // integrate image urls into formValues
-          const updatedFormValues = [...formValues, ...images.map((image) => ["image", image])];
-    
+        const updatedFormValues = [...formValues, ...images.map((image) => ["image", image])];
+        if(signIn == 'extension'){
           handleModalToggle();
           initFormValues();
-          handlePostListing(updatedFormValues, passphrase);
-        } else {
-          alert("Invalid passphrase!");
-        };
+          handlePostListing(updatedFormValues, 'undefined');
+        }else{
+          if (CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8)) {
+            // integrate image urls into formValues
+            handleModalToggle();
+            initFormValues();
+            handlePostListing(updatedFormValues, passphrase);
+          } else {
+            alert("Invalid passphrase!");
+          };
+        }
       } else {
         alert("Missing required fields!");
       };

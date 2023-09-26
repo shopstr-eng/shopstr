@@ -287,7 +287,7 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
       <p className="text-gray-700 mb-4">{summary}</p>
 
       <div className="flex flex-wrap -mx-4 mb-4">
-        {images.length > 1 && (
+        {images.length >= 1 && (
           <div className="relative">
             <img
               src={images[currentImage]}

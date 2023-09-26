@@ -54,31 +54,33 @@ const DisplayEvents = ({
   useEffect(() => {
     const pool = new SimplePool();
     setEventData([]);
-
     let subParams: { kinds: number[]; authors?: string[] } = {
       kinds: [30402],
       // kinds: [30018],
     };
-    let deleteEventSubParams : { kinds: number[]; authors?: string[] } = {
-      kinds: [5],
-    };
-
-    if (pubkey) {
-      subParams["authors"] = [pubkey];
-    }
+    // console.log("pubkey", pubkey);
+    // if (pubkey) {
+    //   subParams["authors"] = [pubkey];
+    // } // going to do front end filtering instead of backend. Everytime pubkey changes, we create a new sub and both the sub for [] and desired public key events are fetched
     let productsSub = pool.sub(relays, [subParams]);
     productsSub.on("event", (event) => {
+      if(pubkey && pubkey !== event.pubkey){ // needed cause on reload in a sellers shop, it displays all posts instead of just the sellers 
+        return;
+      }
       setEventData((eventData) => {
         let newEventData = [...eventData, event];
         newEventData.sort((a, b) => b.created_at - a.created_at); // sorts most recently created to least recently created
         return newEventData;
       });
     });
-  }, [pubkey, relays]);
+  }, [relays]);
+
+  console.log("event data: ", eventData);
 
   const handleClickPubkey = (pubkey: string) => {
     clickPubkey(pubkey);
   };
+  
 
   const displayDate = (timestamp: number): string => {
     const d = new Date(timestamp * 1000);
@@ -94,6 +96,11 @@ const DisplayEvents = ({
   const handleModalToggle = () => {
     setShowModal(!showModal);
   };
+
+  const getSelectedSellersProducts = () => {
+    if( pubkey == "" ) return eventData;
+    return eventData.filter(event => event.pubkey == pubkey);
+  }
 
   const handleDelete = async (productId: string, passphrase: string) => {
     if (signIn === "extension") {
@@ -142,9 +149,9 @@ const DisplayEvents = ({
   return (
     <div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-8 mb-8 overflow-y-scroll overflow-x-hidden max-h-[70vh] max-w-full">
-        {eventData?.map((event) => (
+        {getSelectedSellersProducts()?.map((event, index) => (
           <div
-            key={event.sig}
+            key={event.sig+"-"+index}
             className="p-4 mb-4 mx-2 bg-gray-100 rounded-md shadow-lg"
           >
             <div className="flex justify-between items-center text-gray-600 text-xs md:text-sm">
