@@ -31,7 +31,7 @@ const DirectMessages = () => {
     bottomDivRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  useEffect(() => {
+  useEffect(()=>{
     if (typeof window !== 'undefined') {
       const npub = localStorage.getItem("npub");
       const { data } = nip19.decode(npub);
@@ -42,51 +42,58 @@ const DirectMessages = () => {
       setSignIn(signIn);
       const storedRelays = localStorage.getItem("relays");
       setRelays(storedRelays ? JSON.parse(storedRelays) : []);
-      const passedPubkey = router.query.pk ? router.query.pk : null;
-      if (passedPubkey) {
-        let passedPubkeyStr = passedPubkey.toString();
-        setThisChat(passedPubkeyStr);
-        if (!chats.includes(passedPubkeyStr)) {
-          let newChats = Array.from(new Set([...chats, passedPubkeyStr]))
-          setChats(newChats);
+    }
+  }, [])
+  
+  useEffect(() => {
+      if(relays){
+          const passedPubkey = router.query.pk ? router.query.pk : null;
+        if (passedPubkey) {
+          let passedPubkeyStr = passedPubkey.toString();
+          setThisChat(passedPubkeyStr);
+          if (!chats.includes(passedPubkeyStr)) {
+            let newChats = Array.from(new Set([...chats, passedPubkeyStr]))
+            setChats(newChats);
+          }
+          setEnterPassphrase(!enterPassphrase);
+          if (CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8)) {
+            let newChats = Array.from(new Set([...chats, passedPubkeyStr]))
+            setChats(newChats);
+          }
         }
-        setEnterPassphrase(!enterPassphrase);
-        if (CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8)) {
-          let newChats = Array.from(new Set([...chats, passedPubkeyStr]))
-          setChats(newChats);
-        }
-      }
-
-      const pool = new SimplePool();
-
-      const validNpub = /^npub[a-zA-Z0-9]{59}$/;
-
-      let subParams: { kinds: number[]; authors?: string[] } = {
-        kinds: [4],
-      };
   
-      let newNip04Sub = pool.sub(relays, [subParams]);
+        const pool = new SimplePool();
   
-      newNip04Sub.on('event', (event) => {
-        let tagPubkey = event.tags[0][1];
+        const validNpub = /^npub[a-zA-Z0-9]{59}$/;
   
-        if (decryptedNpub === tagPubkey) {
-          let incomingPubkey = event.pubkey;
-          if (!validNpub.test(incomingPubkey)) {
-            if (!chats.includes(incomingPubkey)) {
-              let newChats = Array.from(new Set([...chats, nip19.npubEncode(incomingPubkey)]))
-              setChats(newChats);
-            }
-          } else {
-            if (!chats.includes(incomingPubkey)) {
-              let newChats = Array.from(new Set([...chats, incomingPubkey]))
-              setChats(newChats);
+        let subParams: { kinds: number[]; authors?: string[] } = {
+          kinds: [4],
+        };
+    
+        let newNip04Sub = pool.sub(relays, [subParams]);
+    
+        newNip04Sub.on('event', (event) => {
+          let tagPubkey = event.tags[0][1];
+    
+          if (decryptedNpub === tagPubkey) {
+            let incomingPubkey = event.pubkey;
+            if (!validNpub.test(incomingPubkey)) {
+              if (!chats.includes(incomingPubkey)) {
+                setChats((chats) => {
+                  return Array.from(new Set([...chats, nip19.npubEncode(incomingPubkey)]));
+                });
+              }
+            } else {
+              if (!chats.includes(incomingPubkey)) {
+                setChats((chats) => {
+                  return Array.from(new Set([...chats, incomingPubkey]));
+                });
+              };
             };
           };
-        };
-      });
+        });
     }
-  }, []);
+  }, [relays]);
 
   useEffect(() => {
     const pool = new SimplePool();
