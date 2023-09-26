@@ -4,8 +4,11 @@ import { nip04, nip19, SimplePool } from 'nostr-tools';
 import 'websocket-polyfill';
 import { ArrowUturnLeftIcon, MinusCircleIcon } from '@heroicons/react/24/outline';
 import * as CryptoJS from 'crypto-js';
+import { useRouter } from 'next/router';
 
 const DirectMessages = () => {
+  const router = useRouter();
+  
   const [decryptedNpub, setDecryptedNpub] = useState("");
   const [encryptedPrivateKey, setEncryptedPrivateKey] = useState("");
   const [signIn, setSignIn] = useState("");
@@ -39,8 +42,47 @@ const DirectMessages = () => {
       setSignIn(signIn);
       const storedRelays = localStorage.getItem("relays");
       setRelays(storedRelays ? JSON.parse(storedRelays) : []);
-      const storedChats = localStorage.getItem("chats");
-      setChats(storedChats ? JSON.parse(storedChats) : []);
+      const passedPubkey = router.query.pk ? router.query.pk : null;
+      if (passedPubkey) {
+        let passedPubkeyStr = passedPubkey.toString();
+        setThisChat(passedPubkeyStr);
+        if (!chats.includes(passedPubkeyStr)) {
+          setChats([...chats, passedPubkeyStr]);
+        }
+        setEnterPassphrase(!enterPassphrase);
+        if (CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8)) {
+          setCurrentChat(passedPubkeyStr);
+        }
+      }
+
+      const pool = new SimplePool();
+
+      const validNpub = /^npub[a-zA-Z0-9]{59}$/;
+
+      let subParams: { kinds: number[]; authors?: string[] } = {
+        kinds: [4],
+      };
+  
+      let newNip04Sub = pool.sub(relays, [subParams]);
+  
+      newNip04Sub.on('event', (event) => {
+        let tagPubkey = event.tags[0][1];
+  
+        if (decryptedNpub === tagPubkey) {
+          let incomingPubkey = event.pubkey;
+          if (!validNpub.test(incomingPubkey)) {
+            if (!chats.includes(incomingPubkey)) {
+              let newChats = Array.from(new Set([...chats, nip19.npubEncode(incomingPubkey)]))
+              setChats(newChats);
+            }
+          } else {
+            if (!chats.includes(incomingPubkey)) {
+              let newChats = Array.from(new Set([...chats, incomingPubkey]))
+              setChats(newChats);
+            };
+          };
+        };
+      });
     }
   }, []);
 
@@ -78,12 +120,20 @@ const DirectMessages = () => {
         };
         let created_at = event.created_at;
 
-        setMessages((prevMessages) => 
-          [...prevMessages, { plaintext: plaintext, createdAt: created_at, sender: sender }]
-        );
-        setMessages((prevMessages) => 
-          prevMessages.sort((a, b) => a.createdAt - b.createdAt)
-        );
+        if (plaintext !== undefined) {
+          // Get an array of all existing event IDs
+          let existingEventIds = messages.map(message => message.eventId);
+          // Only add this message if its eventId is not already in existingEventIds
+          if (!existingEventIds.includes(event.id)) {
+            setMessages((prevMessages) => 
+              [...prevMessages, { plaintext: plaintext, createdAt: created_at, sender: sender, eventId: event.id }]
+            );
+          }
+          // Sort the messages with each state update
+          setMessages((prevMessages) => 
+            prevMessages.sort((a, b) => a.createdAt - b.createdAt)
+          );
+        }
       });
     };
   }, [currentChat]);
@@ -98,6 +148,7 @@ const DirectMessages = () => {
   
   const handleGoBack = () => {
     setCurrentChat(false);
+    router.push('/direct-messages');
   };
 
   const handleEnterNewChat = () => {
@@ -107,14 +158,18 @@ const DirectMessages = () => {
     if (validNpub.test(npubText.value)) {
       if (signIn != "extension") {
         if (CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8)) {
-          setChats([...chats, npubText.value]);
+          if (!chats.includes(npubText.value)) {
+            setChats([...chats, npubText.value]);
+          }
           setCurrentChat(npubText.value);
           setShowModal(!showModal);
         } else {
           alert("Invalid passphrase!");
         };
       } else {
-        setChats([...chats, npubText.value]);
+        if (!chats.includes(npubText.value)) {
+          setChats([...chats, npubText.value]);
+        }
         setCurrentChat(npubText.value);
         setShowModal(!showModal);
       };
@@ -378,10 +433,7 @@ const DirectMessages = () => {
             <p
              className={`inline-block p-3 rounded-lg max-w-[100vh] break-words ${
                message.sender === decryptedNpub
-                 ? 'bg-purple-200'
-                 : message.sender === currentChat
-                 ? 'bg-gray-300'
-                 : ''}`
+                 ? 'bg-purple-200' : 'bg-gray-300'}`
              }
             >
               {message.plaintext}

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   BoltIcon,
-  TrashIcon
+  TrashIcon,
+  EnvelopeIcon
 } from '@heroicons/react/24/outline';
 import { withRouter, NextRouter, useRouter } from 'next/router';
 import axios from "axios";
@@ -38,6 +39,8 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
   const [passphrase, setPassphrase] = useState("");
 
   const [use, setUse] = useState("");
+
+  const [btcSpotPrice, setBtcSpotPrice] = useState();
   
   // const {
   //   id,
@@ -146,6 +149,7 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
 
   async function invoiceHasBeenPaid(pk: string, wallet: object, price: number, hash: string) {
     let encoded;
+    
     while (true) {
       try {
         const { proofs } = await wallet.requestTokens(price, hash);
@@ -167,14 +171,25 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
       } catch (error) {
         console.error(error);
               
-        /* wait for 2 sec before try again */
         await new Promise(resolve => setTimeout(resolve, 2000));
-      }
-    }
+      };
+    };
   };
 
-  const handlePayment = async (pk: string, price: number) => {
+  const handlePayment = async (pk: string, price: number, currency: string) => {
     const wallet = new CashuWallet(new CashuMint("https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV"));
+    if (currency === "USD") {
+      try {
+        const res = await axios.get("https://api.coinbase.com/v2/prices/BTC-USD/spot");
+        const btcSpotPrice = Number(res.data.data.amount);
+        console.log(btcSpotPrice);
+        const numSats = (price / btcSpotPrice) * 100000000;
+        price = Math.round(numSats);
+        console.log(price);
+      } catch(err) {
+        console.log(err);
+      }
+    }
 
     const { pr, hash } = await wallet.requestMint(price);
 
@@ -195,22 +210,23 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
     invoiceHasBeenPaid(pk, wallet, price, hash);
   };
 
-  const handleCheckout = (productId: string, pk: string, price: number) => {
+  const handleCheckout = (productId: string, pk: string, price: number, currency: string) => {
     if (window.location.pathname.includes("checkout")) {
       if (signIn != "extension"){
         setEnterPassphrase(!enterPassphrase);
         setUse("pay");
       } else {
-        handlePayment(pk, price);
+        handlePayment(pk, price, currency);
       }
     } else {
       router.push(`/checkout/${productId}`);
     }
   };
 
-  const handleCancel = () => {
-    setCheckout(false);
-  };
+  // const handleCancel = () => {
+  //   setCheckout(false);
+  //   console.log(checkout)
+  // };
 
   const nextImage = () => {
     setCurrentImage((currentImage + 1) % images.length);
@@ -242,7 +258,7 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
     if (CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8)) {
       setEnterPassphrase(false);
       if (use === "pay") {
-        handlePayment(pubkey, price);
+        handlePayment(pubkey, price, currency);
       } else if (use === "delete") {
         handleDelete(eventId, passphrase);
       }
@@ -257,6 +273,13 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
     // navigator.clipboard.writeText(invoiceString);
     alert('Invoice copied to clipboard!');
   };
+
+  const handleSendMessage = (newPubkey: string) => {
+    router.push({
+      pathname: '/direct-messages',
+      query: { pk: nip19.npubEncode(newPubkey) }
+    });
+  }
   
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
@@ -318,13 +341,21 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
       <div className="flex justify-center">
         <BoltIcon 
           className="w-6 h-6 hover:text-yellow-500"
-          onClick={() => handleCheckout(eventId, pubkey, price)}
+          onClick={() => handleCheckout(eventId, pubkey, price, currency)}
         />
         {
          decryptedNpub === pubkey ? (
             <TrashIcon 
               className="w-6 h-6 hover:text-yellow-500"
               onClick={() => handleDeleteWithPassphrase()}
+            />
+          ) : undefined
+        }
+        {
+          decryptedNpub != pubkey ? (
+            <EnvelopeIcon
+              className="w-6 h-6 hover:text-yellow-500"
+              onClick={() => handleSendMessage(pubkey)}
             />
           ) : undefined
         }
@@ -361,7 +392,7 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
                   <button
                     type="button"
                     className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 text-base font-medium text-white bg-red-500 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                    onClick={handleCancel}
+                    onClick={() => setCheckout(false)}
                   >
                     Cancel
                   </button>
