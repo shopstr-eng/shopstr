@@ -156,7 +156,7 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
 
         // Encoded proofs can be spent at the mint
         encoded = getEncodedToken({
-          token: [{ mint: "https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV", proofs }]
+          token: [{ mint: "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC", proofs }]
         });
 
         if (encoded) {
@@ -177,7 +177,7 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
   };
 
   const handlePayment = async (pk: string, price: number, currency: string) => {
-    const wallet = new CashuWallet(new CashuMint("https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV"));
+    const wallet = new CashuWallet(new CashuMint("https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"));
     if (currency === "USD") {
       try {
         const res = await axios.get("https://api.coinbase.com/v2/prices/BTC-USD/spot");
