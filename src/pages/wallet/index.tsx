@@ -9,14 +9,14 @@ const Wallet = () => {
   };
   
   return (
-    <div className="flex items-center justify-center h-max mt-[40vh]">
-      <p className="text-3xl text-yellow-100">
+    <div className="flex items-center justify-center h-max m-[20vh]">
+      <p className="text-3xl text-yellow-100 max-w-[48vh] break-words text-center">
         A native wallet is coming soon! For now, you can claim your tokens for Bitcoin on 
-        <Link href="https://wallet.nutstash.app/" className="hover:text-purple-700">
+        <Link href="https://wallet.nutstash.app/" className="text-yellow-500 hover:text-purple-700">
           {' '}Nutstash{' '}
         </Link>
         using
-        <span className="hover:text-purple-700" onClick={handleCopyInvoice}>{' '}{mintUrl}{' '}</span>
+        <span className="text-yellow-500 hover:text-purple-700" onClick={handleCopyInvoice}>{' '}{mintUrl}{' '}</span>
         as the mint URL.
       </p>
     </div>
