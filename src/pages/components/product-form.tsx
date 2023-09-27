@@ -31,7 +31,7 @@ const ProductForm = ({
   }, []);
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
     if (name === "passphrase") {
@@ -80,13 +80,13 @@ const ProductForm = ({
     if (!formValues.find(([key]) => key === 'title') || !formValues.find(([key]) => key === 'summary') || !formValues.find(([key]) => key === 'location') || !formValues.find(([key]) => key === 'price')) {
       alert("Missing required fields!");
     } else {
-      if (formValues.find(([key]) => key === 'price')?.[1] != "" && formValues.find(([key]) => key === 'price').length >= 3) {
+      if (formValues.find(([key]) => key === 'price')?.[1] != "" && formValues.find(([key]) => key === 'price').length >= 3 && formValues.find(([key]) => key === 'price')?.[2] != "Select currency") {
         const updatedFormValues = [...formValues, ...images.map((image) => ["image", image])];
         if(signIn == 'extension'){
           handleModalToggle();
           initFormValues();
           handlePostListing(updatedFormValues, 'undefined');
-        }else{
+        } else {
           if (CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8)) {
             // integrate image urls into formValues
             handleModalToggle();
@@ -236,15 +236,18 @@ const ProductForm = ({
                     <label htmlFor="currency" className="block mb-2 font-bold">
                       Currency:<span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="text"
+                    <select
                       id="currency"
                       name="currency"
                       value={getFormValue('currency')}
                       onChange={handleChange}
                       required
                       className="w-full p-2 border border-gray-300 rounded"
-                    />
+                    >
+                      <option value="Select currency">Select currency</option>
+                      <option value="Sats">Sat(s)</option>
+                      <option value="USD">USD</option>
+                    </select>
 
                     <label htmlFor="t" className="block mb-2 font-bold">
                       Category:
