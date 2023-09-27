@@ -72,7 +72,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
   return (
     <div className="flex flex-col h-full justify-center items-center bg-yellow-100 rounded-md">
       <div className="w-10/12 lg:w-2/3 xl:w-1/2 bg-purple-500 rounded-md py-8 px-16">
-        <h1 className="text-3xl font-bold text-center text-yellow-100 mb-8">Shopstr</h1>
+        <h1 className="text-3xl font-bold text-center text-yellow-100 mb-4">Shopstr</h1>
         {errorMessage && (
           <div className="bg-red-500 text-white py-2 px-4 rounded mb-4">{errorMessage}</div>
         )}
@@ -107,21 +107,21 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
             onChange={(e) => setPassphrase(e.target.value)}
           />
         </div>
-        <div className="flex justify-between">
+        <div className="flex flex-row justify-between">
           <button
-            className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded"
+            className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded sm:text-sm sm:py-1 sm:px-2"
             onClick={handleGenerateKeys}
           >
             Generate Keys
           </button>
           <button
-            className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded"
+            className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded hidden lg:block"
             onClick={startExtensionLogin}
           >
             Sign In With Extension
           </button>
           <button
-            className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded"
+            className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded sm:text-xs sm:py-1 sm:px-2"
             onClick={handleSignIn}
             disabled={!validPublicKey || !validPrivateKey} // Disable the button only if both key strings are invalid or the button has already been clicked
           >

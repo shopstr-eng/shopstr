@@ -28,6 +28,18 @@ const Keys = () => {
       });
   }, []);
 
+  const handleCopyPubkey = () => {
+    navigator.clipboard.writeText(publicKey);
+    // navigator.clipboard.writeText(invoiceString);
+    alert('Public key was copied to clipboard!');
+  };
+
+  const handleCopyPrivkey = () => {
+    navigator.clipboard.writeText(privateKey);
+    // navigator.clipboard.writeText(invoiceString);
+    alert('Private key was copied to clipboard!');
+  };
+
   const handleSignIn = () => {
     if (passphrase === "" || passphrase === null) {
       alert("No passphrase provided!");
@@ -53,7 +65,7 @@ const Keys = () => {
           <label className="text-xl text-yellow-100">Public Key</label>
           {
             publicKey && (
-              <p className="border-b-2 border-yellow-100 bg-white rounded-md text-xl">{publicKey}</p>
+              <div className="border-b-2 border-yellow-100 bg-white rounded-md text-xl overflow-hidden whitespace-nowrap overflow-ellipsis px-1" onClick={handleCopyPubkey}>{publicKey}</div>
             )
           }
         </div>
@@ -62,10 +74,10 @@ const Keys = () => {
           {
             privateKey && (
               <div className="border-b-2 border-yellow-100 bg-white rounded-md text-xl flex justify-between items-center">
-              <span>{viewState === 'shown' ? privateKey : "* * * * *"}</span>
+              <div className="overflow-hidden whitespace-nowrap overflow-ellipsis px-1" onClick={handleCopyPubkey}>{viewState === 'shown' ? privateKey : "* * * * *"}</div>
               {viewState === 'shown' ? 
-                <EyeSlashIcon className="w-6 h-6 hover:text-purple-700" onClick={() => {setViewState('hidden')}} /> : 
-                <EyeIcon className="w-6 h-6 hover:text-purple-700" onClick={() => {setViewState('shown')}} />
+                <EyeSlashIcon className="w-6 h-6 hover:text-purple-700 flex-shrink-0 px-1" onClick={() => {setViewState('hidden')}} /> : 
+                <EyeIcon className="w-6 h-6 hover:text-purple-700 flex-shrink-0 px-1" onClick={() => {setViewState('shown')}} />
               } 
             </div>
             )
