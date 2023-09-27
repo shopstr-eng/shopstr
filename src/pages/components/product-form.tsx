@@ -244,7 +244,7 @@ const ProductForm = ({
                       required
                       className="w-full p-2 border border-gray-300 rounded"
                     >
-                      <option value="Select currency">Select currency</option>
+                      <option value="Select currency" >(Select currency)</option>
                       <option value="Sats">Sat(s)</option>
                       <option value="USD">USD</option>
                     </select>
