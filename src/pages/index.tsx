@@ -107,9 +107,9 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
             onChange={(e) => setPassphrase(e.target.value)}
           />
         </div>
-        <div className="flex flex-row justify-between">
+        <div className="flex flex-row justify-between space-x-2">
           <button
-            className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded sm:text-sm sm:py-1 sm:px-2"
+            className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded"
             onClick={handleGenerateKeys}
           >
             Generate Keys
@@ -121,7 +121,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
             Sign In With Extension
           </button>
           <button
-            className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded sm:text-xs sm:py-1 sm:px-2"
+            className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded"
             onClick={handleSignIn}
             disabled={!validPublicKey || !validPrivateKey} // Disable the button only if both key strings are invalid or the button has already been clicked
           >
