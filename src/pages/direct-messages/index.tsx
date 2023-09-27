@@ -447,7 +447,7 @@ const DirectMessages = () => {
                  ? 'bg-purple-200' : 'bg-gray-300'}`
              }
             >
-              {message.plaintext}
+              {message.sender === decryptedNpub && message.plaintext.includes("cashuA") ? <i>Payment sent!</i> : message.plaintext}
             </p>
           </div>
         ))}
