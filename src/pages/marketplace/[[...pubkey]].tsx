@@ -38,7 +38,6 @@ const SellerView = () => {
   }, [router.query.pubkey]);
 
   const handlePostListing = async (values: ProductFormValues, passphrase: string) => {
-    console.log("post values ", values);
     const summary = values.find(([key]) => key === "summary")?.[1] || "";
     
     const created_at = Math.floor(Date.now() / 1000);
@@ -60,16 +59,16 @@ const SellerView = () => {
 
       // const relays = JSON.parse(storedRelays);
   
-      let sub = pool.sub(relays, [
-        {
-          kinds: [signedEvent.kind],
-          authors: [signedEvent.pubkey],
-        },
-      ]);
+      // let sub = pool.sub(relays, [
+      //   {
+      //     kinds: [signedEvent.kind],
+      //     authors: [signedEvent.pubkey],
+      //   },
+      // ]);
   
-      sub.on('event', (event) => {
-        console.log('got event:', event);
-      });
+      // sub.on('event', (event) => {
+      //   console.log('got event:', event);
+      // });
   
       await pool.publish(relays, signedEvent);
   

@@ -1,0 +1,17 @@
+{
+  "name": "Shopstr",
+  "short_name": "Shopstr",
+  "description": "Buy and sell anything, anywhere, anytime.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#A855F7",
+  "theme_color": "#A855F7",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/shopstr.png",
+      "sizes": "2000x2000",
+      "type": "image/png"
+    }
+  ]
+}

@@ -75,8 +75,6 @@ const DisplayEvents = ({
     });
   }, [relays]);
 
-  console.log("event data: ", eventData);
-
   const handleClickPubkey = (pubkey: string) => {
     clickPubkey(pubkey);
   };

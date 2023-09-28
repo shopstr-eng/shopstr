@@ -5,6 +5,7 @@ export default function Document() {
     <Html lang="en">
       <Head>
         <link rel="icon" href="/shopstr.ico" />
+        <link rel="manifest" href="/manifest.json" />
       </Head>
       <body>
         <Main />

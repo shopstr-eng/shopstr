@@ -182,10 +182,8 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
       try {
         const res = await axios.get("https://api.coinbase.com/v2/prices/BTC-USD/spot");
         const btcSpotPrice = Number(res.data.data.amount);
-        console.log(btcSpotPrice);
         const numSats = (price / btcSpotPrice) * 100000000;
         price = Math.round(numSats);
-        console.log(price);
       } catch(err) {
         console.log(err);
       }
