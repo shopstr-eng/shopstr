@@ -46,10 +46,11 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
       let npub = nip19.npubEncode(pubkey);
       setPublicKey(npub);
       localStorage.setItem("npub", npub);
-      router.push("/marketplace");
       let successStr = "Signed in as " + npub;
       alert(successStr);
       localStorage.setItem("signIn", "extension");
+      localStorage.setItem("relays", JSON.stringify(["wss://relay.damus.io","wss://nos.lol"]));
+      router.push("/marketplace");
     } catch (error) {
       alert("Extension sign in failed");
     }
