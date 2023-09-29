@@ -1,25 +1,31 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  BoltIcon,
-  TrashIcon,
-  EnvelopeIcon
-} from '@heroicons/react/24/outline';
-import { withRouter, NextRouter, useRouter } from 'next/router';
+import React, { useState, useEffect } from "react";
+import { BoltIcon, TrashIcon, EnvelopeIcon } from "@heroicons/react/24/outline";
+import { withRouter, NextRouter, useRouter } from "next/router";
 import axios from "axios";
 import requestMint from "../api/cashu/request-mint";
-import { CashuMint, CashuWallet, getEncodedToken } from '@cashu/cashu-ts';
-import { nip19, SimplePool } from 'nostr-tools';
-import 'websocket-polyfill';
-import * as CryptoJS from 'crypto-js';
+import { CashuMint, CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
+import { nip19, SimplePool } from "nostr-tools";
+import "websocket-polyfill";
+import * as CryptoJS from "crypto-js";
 
-const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], eventId: string, pubkey: string, handleDelete: (productId: string, passphrase: string) => void }) => {
+const DisplayProduct = ({
+  tags,
+  eventId,
+  pubkey,
+  handleDelete,
+}: {
+  tags: [][];
+  eventId: string;
+  pubkey: string;
+  handleDelete: (productId: string, passphrase: string) => void;
+}) => {
   const router = useRouter();
 
   const [decryptedNpub, setDecryptedNpub] = useState("");
   const [encryptedPrivateKey, setEncryptedPrivateKey] = useState("");
   const [signIn, setSignIn] = useState("");
   const [relays, setRelays] = useState([]);
-  
+
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
   const [publishedAt, setPublishedAt] = useState("");
@@ -29,10 +35,10 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
   const [location, setLocation] = useState("");
   const [price, setPrice] = useState("");
   const [currency, setCurrency] = useState("");
-  
+
   const [checkout, setCheckout] = useState(false);
   const [invoice, setInvoice] = useState("");
-  const [qrCodeUrl, setQrCodeUrl] = useState<string|null>(null);
+  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
 
   const [enterPassphrase, setEnterPassphrase] = useState(false);
@@ -41,7 +47,7 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
   const [use, setUse] = useState("");
 
   const [btcSpotPrice, setBtcSpotPrice] = useState();
-  
+
   // const {
   //   id,
   //   stall_id,
@@ -55,7 +61,7 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
   // } = content;
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       const npub = localStorage.getItem("npub");
       const { data } = nip19.decode(npub);
       setDecryptedNpub(data);
@@ -67,12 +73,12 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
       setRelays(storedRelays ? JSON.parse(storedRelays) : []);
     }
   }, []);
-  
+
   useEffect(() => {
-    let tmpImages = []; 
-    tags.forEach(tag => {
+    let tmpImages = [];
+    tags.forEach((tag) => {
       const [key, ...values] = tag;
-      switch(key) {
+      switch (key) {
         case "title":
           setTitle(values[0]);
           break;
@@ -108,55 +114,67 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
       const event = {
         created_at: Math.floor(Date.now() / 1000),
         kind: 4,
-        tags: [['p', pk]],
+        tags: [["p", pk]],
         content: await window.nostr.nip04.encrypt(decryptedNpub, token),
-      }
-  
+      };
+
       const signedEvent = await window.nostr.signEvent(event);
 
       const pool = new SimplePool();
 
       // const relays = JSON.parse(storedRelays);
-  
+
       await pool.publish(relays, signedEvent);
-  
-      let events = await pool.list(relays, [{ kinds: [0, signedEvent.kind] }]);
+
+      let events = await pool.list(relays, [{ kinds: [0, signedEvent.kind] }]); // TODO kind 0 contains profile information
       let postedEvent = await pool.get(relays, {
         ids: [signedEvent.id],
       });
     } else {
-      let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8);
+      let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
+        CryptoJS.enc.Utf8
+      );
       // add error handling and re-prompt for passphrase
       let { data } = nip19.decode(nsec);
       axios({
-        method: 'POST',
-        url: '/api/nostr/post-event',
+        method: "POST",
+        url: "/api/nostr/post-event",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         data: {
           pubkey: decryptedNpub,
           privkey: data,
           created_at: Math.floor(Date.now() / 1000),
           kind: 4,
-          tags: [['p', pk]],
+          tags: [["p", pk]],
           content: token,
           relays: relays,
-        }
+        },
       });
-    };
+    }
   };
 
-  async function invoiceHasBeenPaid(pk: string, wallet: object, price: number, hash: string) {
+  async function invoiceHasBeenPaid(
+    pk: string,
+    wallet: object,
+    price: number,
+    hash: string
+  ) {
     let encoded;
-    
+
     while (true) {
       try {
         const { proofs } = await wallet.requestTokens(price, hash);
 
         // Encoded proofs can be spent at the mint
         encoded = getEncodedToken({
-          token: [{ mint: "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC", proofs }]
+          token: [
+            {
+              mint: "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC",
+              proofs,
+            },
+          ],
         });
 
         if (encoded) {
@@ -170,21 +188,27 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
         }
       } catch (error) {
         console.error(error);
-              
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      };
-    };
-  };
+
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+    }
+  }
 
   const handlePayment = async (pk: string, price: number, currency: string) => {
-    const wallet = new CashuWallet(new CashuMint("https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"));
+    const wallet = new CashuWallet(
+      new CashuMint(
+        "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"
+      )
+    );
     if (currency === "USD") {
       try {
-        const res = await axios.get("https://api.coinbase.com/v2/prices/BTC-USD/spot");
+        const res = await axios.get(
+          "https://api.coinbase.com/v2/prices/BTC-USD/spot"
+        );
         const btcSpotPrice = Number(res.data.data.amount);
         const numSats = (price / btcSpotPrice) * 100000000;
         price = Math.round(numSats);
-      } catch(err) {
+      } catch (err) {
         console.log(err);
       }
     }
@@ -193,24 +217,29 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
 
     setInvoice(pr);
 
-    const QRCode = require('qrcode')
-    
+    const QRCode = require("qrcode");
+
     QRCode.toDataURL(pr)
-      .then(url => {
+      .then((url) => {
         setQrCodeUrl(url);
       })
-      .catch(err => {
-        console.error(err)
-      })
+      .catch((err) => {
+        console.error(err);
+      });
 
     setCheckout(true);
-    
+
     invoiceHasBeenPaid(pk, wallet, price, hash);
   };
 
-  const handleCheckout = (productId: string, pk: string, price: number, currency: string) => {
+  const handleCheckout = (
+    productId: string,
+    pk: string,
+    price: number,
+    currency: string
+  ) => {
     if (window.location.pathname.includes("checkout")) {
-      if (signIn != "extension"){
+      if (signIn != "extension") {
         setEnterPassphrase(!enterPassphrase);
         setUse("pay");
       } else {
@@ -229,7 +258,7 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
   const nextImage = () => {
     setCurrentImage((currentImage + 1) % images.length);
   };
-  
+
   const prevImage = () => {
     setCurrentImage((currentImage - 1 + images.length) % images.length);
   };
@@ -240,20 +269,24 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
     const { name, value } = e.target;
     if (name === "passphrase") {
       setPassphrase(value);
-    };
+    }
   };
 
   const handleDeleteWithPassphrase = () => {
-    if (signIn != "extension"){
-        setEnterPassphrase(!enterPassphrase);
-        setUse("delete");
-      } else {
-        handleDelete(eventId, "");
-      }
+    if (signIn != "extension") {
+      setEnterPassphrase(!enterPassphrase);
+      setUse("delete");
+    } else {
+      handleDelete(eventId, "");
+    }
   };
 
   const handleSubmitPassphrase = () => {
-    if (CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8)) {
+    if (
+      CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
+        CryptoJS.enc.Utf8
+      )
+    ) {
       setEnterPassphrase(false);
       if (use === "pay") {
         handlePayment(pubkey, price, currency);
@@ -269,16 +302,16 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
   const handleCopyInvoice = () => {
     navigator.clipboard.writeText(invoice);
     // navigator.clipboard.writeText(invoiceString);
-    alert('Invoice copied to clipboard!');
+    alert("Invoice copied to clipboard!");
   };
 
   const handleSendMessage = (newPubkey: string) => {
     router.push({
-      pathname: '/direct-messages',
-      query: { pk: nip19.npubEncode(newPubkey) }
+      pathname: "/direct-messages",
+      query: { pk: nip19.npubEncode(newPubkey) },
     });
-  }
-  
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <h2 className="text-2xl font-bold mb-4">{title}</h2>
@@ -297,14 +330,14 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
               className="absolute top-1/2 p-2 rounded bg-white text-black"
               onClick={nextImage}
             >
-              {'>'}
+              {">"}
             </button>
             <button
               style={{ left: "10px" }}
               className="absolute top-1/2 p-2 rounded bg-white text-black"
               onClick={prevImage}
             >
-              {'<'}
+              {"<"}
             </button>
           </div>
         )}
@@ -337,33 +370,30 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
         </div>
       )} */}
       <div className="flex justify-center">
-        <BoltIcon 
+        <BoltIcon
           className="w-6 h-6 hover:text-yellow-500"
           onClick={() => handleCheckout(eventId, pubkey, price, currency)}
         />
-        {
-         decryptedNpub === pubkey ? (
-            <TrashIcon 
-              className="w-6 h-6 hover:text-yellow-500"
-              onClick={() => handleDeleteWithPassphrase()}
-            />
-          ) : undefined
-        }
-        {
-          decryptedNpub != pubkey ? (
-            <EnvelopeIcon
-              className="w-6 h-6 hover:text-yellow-500"
-              onClick={() => handleSendMessage(pubkey)}
-            />
-          ) : undefined
-        }
+        {decryptedNpub === pubkey ? (
+          <TrashIcon
+            className="w-6 h-6 hover:text-yellow-500"
+            onClick={() => handleDeleteWithPassphrase()}
+          />
+        ) : undefined}
+        {decryptedNpub != pubkey ? (
+          <EnvelopeIcon
+            className="w-6 h-6 hover:text-yellow-500"
+            onClick={() => handleSendMessage(pubkey)}
+          />
+        ) : undefined}
       </div>
-      {(checkout) && (
-        <div
-          className="fixed z-10 inset-0 overflow-y-auto flex items-center justify-center"
-        >
+      {checkout && (
+        <div className="fixed z-10 inset-0 overflow-y-auto flex items-center justify-center">
           <div className="flex items-end justify-center min-h-screen text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+            <div
+              className="fixed inset-0 transition-opacity"
+              aria-hidden="true"
+            >
               <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
             </div>
             <span
@@ -372,31 +402,37 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
             >
               &#8203;
             </span>
-            {(!paymentConfirmed) ? (<div className="inline-block align-bottom bg-white rounded-lg overflow-hidden shadow-xl transform transition-all sm:align-middle sm:max-w-lg sm:w-full">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 mt-3">
-                Scan this invoice:
-              </h3>
-              <img src={qrCodeUrl} alt="QR Code" />
-              <div className="flex justify-center">
-                <p className="inline-block rounded-lg max-w-[48vh] break-words text-center" onClick={handleCopyInvoice}>
-                  {invoice.length > 30 
-                    ? `${invoice.substring(0, 15)}...${invoice.substring(invoice.length - 15, invoice.length)}`
-                    : invoice
-                  }
-                </p>
-              </div>
-              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                <div className="mt-3 w-full inline-flex justify-center">
-                  <button
-                    type="button"
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 text-base font-medium text-white bg-red-500 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                    onClick={() => setCheckout(false)}
+            {!paymentConfirmed ? (
+              <div className="inline-block align-bottom bg-white rounded-lg overflow-hidden shadow-xl transform transition-all sm:align-middle sm:max-w-lg sm:w-full">
+                <h3 className="text-lg leading-6 font-medium text-gray-900 mt-3">
+                  Scan this invoice:
+                </h3>
+                <img src={qrCodeUrl} alt="QR Code" />
+                <div className="flex justify-center">
+                  <p
+                    className="inline-block rounded-lg max-w-[48vh] break-words text-center"
+                    onClick={handleCopyInvoice}
                   >
-                    Cancel
-                  </button>
+                    {invoice.length > 30
+                      ? `${invoice.substring(0, 15)}...${invoice.substring(
+                          invoice.length - 15,
+                          invoice.length
+                        )}`
+                      : invoice}
+                  </p>
+                </div>
+                <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                  <div className="mt-3 w-full inline-flex justify-center">
+                    <button
+                      type="button"
+                      className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 text-base font-medium text-white bg-red-500 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                      onClick={() => setCheckout(false)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
             ) : (
               <div className="inline-block align-bottom bg-white rounded-lg overflow-hidden shadow-xl transform transition-all sm:align-middle sm:max-w-lg sm:w-full">
                 <h3 className="text-lg leading-6 font-medium text-gray-900 mt-3">
@@ -410,7 +446,7 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
       )}
       <div
         className={`fixed z-10 inset-0 overflow-y-auto ${
-          enterPassphrase & signIn === 'nsec' ? "" : "hidden"
+          enterPassphrase & (signIn === "nsec") ? "" : "hidden"
         }`}
       >
         <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
@@ -431,7 +467,10 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
                     Enter Passphrase
                   </h3>
                   <div className="mt-2">
-                    <form className="mx-auto" onSubmit={() => handleSubmitPassphrase()}>
+                    <form
+                      className="mx-auto"
+                      onSubmit={() => handleSubmitPassphrase()}
+                    >
                       <label htmlFor="t" className="block mb-2 font-bold">
                         Passphrase:<span className="text-red-500">*</span>
                       </label>
@@ -444,7 +483,9 @@ const DisplayProduct = ({ tags, eventId, pubkey, handleDelete }: { tags: [][], e
                         onChange={handlePassphraseChange}
                         className="w-full p-2 border border-gray-300 rounded"
                       />
-                      <p className="mt-2 text-red-500 text-sm">* required field</p>
+                      <p className="mt-2 text-red-500 text-sm">
+                        * required field
+                      </p>
                     </form>
                   </div>
                 </div>

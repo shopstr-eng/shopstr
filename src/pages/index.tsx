@@ -1,17 +1,17 @@
-import { useState, useEffect } from 'react';
-import axios from 'axios';
-import { withRouter, NextRouter } from 'next/router';
-import { nip19 } from 'nostr-tools'
-import * as CryptoJS from 'crypto-js';
+import { useState, useEffect } from "react";
+import axios from "axios";
+import { withRouter, NextRouter } from "next/router";
+import { nip19 } from "nostr-tools";
+import * as CryptoJS from "crypto-js";
 
 const LoginPage = ({ router }: { router: NextRouter }) => {
-  const [publicKey, setPublicKey] = useState<string>('');
-  const [privateKey, setPrivateKey] = useState<string>('');
-  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [publicKey, setPublicKey] = useState<string>("");
+  const [privateKey, setPrivateKey] = useState<string>("");
+  const [errorMessage, setErrorMessage] = useState<string>("");
   const [disabled, setDisabled] = useState<boolean>(false);
   const [validPublicKey, setValidPublicKey] = useState<boolean>(false);
   const [validPrivateKey, setValidPrivateKey] = useState<boolean>(false);
-  const [passphrase, setPassphrase] = useState<string>('');
+  const [passphrase, setPassphrase] = useState<string>("");
 
   const handleSignIn = () => {
     if (validPublicKey && validPrivateKey) {
@@ -19,19 +19,27 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
         alert("No passphrase provided!");
       } else {
         localStorage.setItem("npub", publicKey);
-    
-        let encryptedPrivateKey = CryptoJS.AES.encrypt(privateKey, passphrase).toString();
-        
+
+        let encryptedPrivateKey = CryptoJS.AES.encrypt(
+          privateKey,
+          passphrase
+        ).toString();
+
         localStorage.setItem("encryptedPrivateKey", encryptedPrivateKey);
-    
+
         localStorage.setItem("signIn", "nsec");
-    
-        localStorage.setItem("relays", JSON.stringify(["wss://relay.damus.io","wss://nos.lol"]));
-    
+
+        localStorage.setItem(
+          "relays",
+          JSON.stringify(["wss://relay.damus.io", "wss://nos.lol"])
+        );
+
         router.push("/marketplace");
-      };
+      }
     } else {
-      setErrorMessage('The public and/or private keys inputted were not valid. Generate a new key pair or try again.');
+      setErrorMessage(
+        "The public and/or private keys inputted were not valid. Generate a new key pair or try again."
+      );
     }
   };
 
@@ -49,7 +57,10 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
       let successStr = "Signed in as " + npub;
       alert(successStr);
       localStorage.setItem("signIn", "extension");
-      localStorage.setItem("relays", JSON.stringify(["wss://relay.damus.io","wss://nos.lol"]));
+      localStorage.setItem(
+        "relays",
+        JSON.stringify(["wss://relay.damus.io", "wss://nos.lol"])
+      );
       router.push("/marketplace");
     } catch (error) {
       alert("Extension sign in failed");
@@ -65,17 +76,24 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
   }, [publicKey, privateKey]);
 
   useEffect(() => {
-    if (localStorage.getItem("signIn") === "extension" || localStorage.getItem("signIn") === "nsec") {
+    if (
+      localStorage.getItem("signIn") === "extension" ||
+      localStorage.getItem("signIn") === "nsec"
+    ) {
       router.push("/marketplace");
-    };
-  }, [])
+    }
+  }, []);
 
   return (
     <div className="flex flex-col h-full justify-center items-center bg-yellow-100 rounded-md">
       <div className="w-10/12 lg:w-2/3 xl:w-1/2 bg-purple-500 rounded-md py-8 px-16">
-        <h1 className="text-3xl font-bold text-center text-yellow-100 mb-4">Shopstr</h1>
+        <h1 className="text-3xl font-bold text-center text-yellow-100 mb-4">
+          Shopstr
+        </h1>
         {errorMessage && (
-          <div className="bg-red-500 text-white py-2 px-4 rounded mb-4">{errorMessage}</div>
+          <div className="bg-red-500 text-white py-2 px-4 rounded mb-4">
+            {errorMessage}
+          </div>
         )}
         <div className="flex flex-col mb-4">
           <label className="text-xl text-yellow-100">Public Key</label>
@@ -85,7 +103,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
             value={publicKey}
             placeholder={"npub..."}
             onChange={(e) => setPublicKey(e.target.value)}
-            style={{ borderColor: validPublicKey ? 'green' : 'red' }}
+            style={{ borderColor: validPublicKey ? "green" : "red" }}
           />
         </div>
         <div className="flex flex-col mb-4">
@@ -96,11 +114,13 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
             value={privateKey}
             placeholder={"nsec..."}
             onChange={(e) => setPrivateKey(e.target.value)}
-            style={{ borderColor: validPrivateKey ? 'green' : 'red' }}
+            style={{ borderColor: validPrivateKey ? "green" : "red" }}
           />
         </div>
         <div className="flex flex-col mb-4">
-          <label className="text-xl text-yellow-100">Passphrase<span className="text-red-500">*</span></label>
+          <label className="text-xl text-yellow-100">
+            Passphrase<span className="text-red-500">*</span>
+          </label>
           <input
             type="text"
             className="border-b-2 border-yellow-100 bg-purple-900 focus:outline-none focus:border-purple-900 text-yellow-100 text-xl"

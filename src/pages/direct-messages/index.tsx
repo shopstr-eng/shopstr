@@ -1,19 +1,22 @@
-import { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
-import { nip04, nip19, SimplePool } from 'nostr-tools';
-import 'websocket-polyfill';
-import { ArrowUturnLeftIcon, MinusCircleIcon } from '@heroicons/react/24/outline';
-import * as CryptoJS from 'crypto-js';
-import { useRouter } from 'next/router';
+import { useState, useEffect, useRef } from "react";
+import axios from "axios";
+import { nip04, nip19, SimplePool } from "nostr-tools";
+import "websocket-polyfill";
+import {
+  ArrowUturnLeftIcon,
+  MinusCircleIcon,
+} from "@heroicons/react/24/outline";
+import * as CryptoJS from "crypto-js";
+import { useRouter } from "next/router";
 
 const DirectMessages = () => {
   const router = useRouter();
-  
+
   const [decryptedNpub, setDecryptedNpub] = useState("");
   const [encryptedPrivateKey, setEncryptedPrivateKey] = useState("");
   const [signIn, setSignIn] = useState("");
   const [relays, setRelays] = useState([]);
-  
+
   const [chats, setChats] = useState([]);
   const [messages, setMessages] = useState([]);
   const [currentChat, setCurrentChat] = useState(false);
@@ -26,13 +29,13 @@ const DirectMessages = () => {
   const [thisChat, setThisChat] = useState("");
 
   const bottomDivRef = useRef();
-  
+
   useEffect(() => {
     bottomDivRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  useEffect(()=>{
-    if (typeof window !== 'undefined') {
+  useEffect(() => {
+    if (typeof window !== "undefined") {
       const npub = localStorage.getItem("npub");
       const { data } = nip19.decode(npub);
       setDecryptedNpub(data);
@@ -43,55 +46,61 @@ const DirectMessages = () => {
       const storedRelays = localStorage.getItem("relays");
       setRelays(storedRelays ? JSON.parse(storedRelays) : []);
     }
-  }, [])
-  
+  }, []);
+
   useEffect(() => {
-      if(relays){
-          const passedPubkey = router.query.pk ? router.query.pk : null;
-        if (passedPubkey) {
-          let passedPubkeyStr = passedPubkey.toString();
-          setThisChat(passedPubkeyStr);
-          if (!chats.includes(passedPubkeyStr)) {
-            let newChats = Array.from(new Set([...chats, passedPubkeyStr]))
-            setChats(newChats);
-          }
-          setEnterPassphrase(!enterPassphrase);
-          if (CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8)) {
-            let newChats = Array.from(new Set([...chats, passedPubkeyStr]))
-            setChats(newChats);
+    if (relays) {
+      const passedPubkey = router.query.pk ? router.query.pk : null;
+      if (passedPubkey) {
+        let passedPubkeyStr = passedPubkey.toString();
+        setThisChat(passedPubkeyStr);
+        if (!chats.includes(passedPubkeyStr)) {
+          let newChats = Array.from(new Set([...chats, passedPubkeyStr]));
+          setChats(newChats);
+        }
+        setEnterPassphrase(!enterPassphrase);
+        if (
+          CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
+            CryptoJS.enc.Utf8
+          )
+        ) {
+          let newChats = Array.from(new Set([...chats, passedPubkeyStr]));
+          setChats(newChats);
+        }
+      }
+
+      const pool = new SimplePool();
+
+      const validNpub = /^npub[a-zA-Z0-9]{59}$/;
+
+      let subParams: { kinds: number[]; authors?: string[] } = {
+        kinds: [4],
+      };
+
+      let newNip04Sub = pool.sub(relays, [subParams]);
+
+      newNip04Sub.on("event", (event) => {
+        let tagPubkey = event.tags[0][1];
+
+        if (decryptedNpub === tagPubkey) {
+          let incomingPubkey = event.pubkey;
+          if (!validNpub.test(incomingPubkey)) {
+            if (!chats.includes(incomingPubkey)) {
+              setChats((chats) => {
+                return Array.from(
+                  new Set([...chats, nip19.npubEncode(incomingPubkey)])
+                );
+              });
+            }
+          } else {
+            if (!chats.includes(incomingPubkey)) {
+              setChats((chats) => {
+                return Array.from(new Set([...chats, incomingPubkey]));
+              });
+            }
           }
         }
-  
-        const pool = new SimplePool();
-  
-        const validNpub = /^npub[a-zA-Z0-9]{59}$/;
-  
-        let subParams: { kinds: number[]; authors?: string[] } = {
-          kinds: [4],
-        };
-    
-        let newNip04Sub = pool.sub(relays, [subParams]);
-    
-        newNip04Sub.on('event', (event) => {
-          let tagPubkey = event.tags[0][1];
-    
-          if (decryptedNpub === tagPubkey) {
-            let incomingPubkey = event.pubkey;
-            if (!validNpub.test(incomingPubkey)) {
-              if (!chats.includes(incomingPubkey)) {
-                setChats((chats) => {
-                  return Array.from(new Set([...chats, nip19.npubEncode(incomingPubkey)]));
-                });
-              }
-            } else {
-              if (!chats.includes(incomingPubkey)) {
-                setChats((chats) => {
-                  return Array.from(new Set([...chats, incomingPubkey]));
-                });
-              };
-            };
-          };
-        });
+      });
     }
   }, [relays]);
 
@@ -105,95 +114,114 @@ const DirectMessages = () => {
 
     if (currentChat) {
       let { data: chatPubkey } = nip19.decode(currentChat);
-      
+
       subParams["authors"] = [decryptedNpub, chatPubkey];
-      
+
       let nip04Sub = pool.sub(relays, [subParams]);
-    
+
       nip04Sub.on("event", async (event) => {
         let sender = event.pubkey;
 
         let tagPubkey = event.tags[0][1];
 
         let plaintext;
-        if ((decryptedNpub === sender && tagPubkey === chatPubkey) || (chatPubkey === sender && tagPubkey === decryptedNpub)) {
+        if (
+          (decryptedNpub === sender && tagPubkey === chatPubkey) ||
+          (chatPubkey === sender && tagPubkey === decryptedNpub)
+        ) {
           if (signIn === "extension") {
-            plaintext = await window.nostr.nip04.decrypt(chatPubkey, event.content);
+            plaintext = await window.nostr.nip04.decrypt(
+              chatPubkey,
+              event.content
+            );
           } else {
-            let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8);
+            let nsec = CryptoJS.AES.decrypt(
+              encryptedPrivateKey,
+              passphrase
+            ).toString(CryptoJS.enc.Utf8);
             // add error handling and re-prompt for passphrase
             let { data } = nip19.decode(nsec);
             let sk2 = data;
             plaintext = await nip04.decrypt(sk2, chatPubkey, event.content);
           }
-        };
+        }
         let created_at = event.created_at;
 
         if (plaintext !== undefined) {
           // Get an array of all existing event IDs
-          let existingEventIds = messages.map(message => message.eventId);
+          let existingEventIds = messages.map((message) => message.eventId);
           // Only add this message if its eventId is not already in existingEventIds
           if (!existingEventIds.includes(event.id)) {
-            setMessages((prevMessages) => 
-              [...prevMessages, { plaintext: plaintext, createdAt: created_at, sender: sender, eventId: event.id }]
-            );
+            setMessages((prevMessages) => [
+              ...prevMessages,
+              {
+                plaintext: plaintext,
+                createdAt: created_at,
+                sender: sender,
+                eventId: event.id,
+              },
+            ]);
           }
           // Sort the messages with each state update
-          setMessages((prevMessages) => 
+          setMessages((prevMessages) =>
             prevMessages.sort((a, b) => a.createdAt - b.createdAt)
           );
         }
       });
-    };
+    }
   }, [currentChat]);
 
   useEffect(() => {
     localStorage.setItem("chats", JSON.stringify(chats));
   }, [chats]);
-  
+
   const handleToggleModal = () => {
     setShowModal(!showModal);
   };
-  
+
   const handleGoBack = () => {
     setCurrentChat(false);
-    router.push('/direct-messages');
+    router.push("/direct-messages");
   };
 
   const handleEnterNewChat = () => {
-    const npubText = document.getElementById('pubkey') as HTMLTextAreaElement;
+    const npubText = document.getElementById("pubkey") as HTMLTextAreaElement;
     const validNpub = /^npub[a-zA-Z0-9]{59}$/;
 
     if (validNpub.test(npubText.value)) {
       if (signIn != "extension") {
-        if (CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8)) {
+        if (
+          CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
+            CryptoJS.enc.Utf8
+          )
+        ) {
           if (!chats.includes(npubText.value)) {
-            let newChats = Array.from(new Set([...chats, npubText.value]))
+            let newChats = Array.from(new Set([...chats, npubText.value]));
             setChats(newChats);
           }
           setCurrentChat(npubText.value);
           setShowModal(!showModal);
         } else {
           alert("Invalid passphrase!");
-        };
+        }
       } else {
         if (!chats.includes(npubText.value)) {
-          let newChats = Array.from(new Set([...chats, npubText.value]))
+          let newChats = Array.from(new Set([...chats, npubText.value]));
           setChats(newChats);
         }
         setCurrentChat(npubText.value);
         setShowModal(!showModal);
-      };
+      }
     } else {
       alert("Invalid pubkey!");
       npubText.value = "";
-    };
+    }
   };
 
   const handleChange = (e) => {
     setMessage(e.target.value);
   };
-  
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (message.trim() !== "") {
@@ -202,49 +230,54 @@ const DirectMessages = () => {
         const event = {
           created_at: Math.floor(Date.now() / 1000),
           kind: 4,
-          tags: [['p', data]],
+          tags: [["p", data]],
           content: await window.nostr.nip04.encrypt(data, message),
-        }
-    
+        };
+
         const signedEvent = await window.nostr.signEvent(event);
-  
+
         const pool = new SimplePool();
-  
+
         // const relays = JSON.parse(storedRelays);
-    
+
         await pool.publish(relays, signedEvent);
-    
-        let events = await pool.list(relays, [{ kinds: [0, signedEvent.kind] }]);
+
+        let events = await pool.list(relays, [
+          { kinds: [0, signedEvent.kind] },
+        ]);
         let postedEvent = await pool.get(relays, {
           ids: [signedEvent.id],
         });
       } else {
-        let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8);
+        let nsec = CryptoJS.AES.decrypt(
+          encryptedPrivateKey,
+          passphrase
+        ).toString(CryptoJS.enc.Utf8);
         // add error handling and re-prompt for passphrase
         let { data: privkey } = nip19.decode(nsec);
         // request passphrase in popup or form and pass to api
 
         let { data: chatPubkey } = nip19.decode(currentChat);
-        
+
         axios({
-          method: 'POST',
-          url: '/api/nostr/post-event',
+          method: "POST",
+          url: "/api/nostr/post-event",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           data: {
             pubkey: decryptedNpub,
             privkey: privkey,
             created_at: Math.floor(Date.now() / 1000),
             kind: 4,
-            tags: [['p', chatPubkey]],
+            tags: [["p", chatPubkey]],
             content: message,
             relays: relays,
-          }
+          },
         });
-      };
+      }
       setMessage("");
-    };
+    }
   };
 
   const handlePassphraseChange = (
@@ -253,7 +286,7 @@ const DirectMessages = () => {
     const { name, value } = e.target;
     if (name === "passphrase") {
       setPassphrase(value);
-    };
+    }
   };
 
   const signInCheck = (chat: string) => {
@@ -262,7 +295,7 @@ const DirectMessages = () => {
     } else {
       setCurrentChat(chat);
     }
-  }
+  };
 
   const handleEnterPassphrase = (chat: string) => {
     setEnterPassphrase(!enterPassphrase);
@@ -270,7 +303,11 @@ const DirectMessages = () => {
   };
 
   const handleSubmitPassphrase = () => {
-    if (CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8)) {
+    if (
+      CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
+        CryptoJS.enc.Utf8
+      )
+    ) {
       setEnterPassphrase(false);
       setCurrentChat(thisChat);
     } else {
@@ -286,25 +323,41 @@ const DirectMessages = () => {
     return (
       <div>
         <div className="mt-8 mb-8 overflow-y-scroll max-h-[70vh] bg-white rounded-md">
-          {chats.map(chat => (
+          {chats.map((chat) => (
             <div key={chat} className="flex justify-between items-center mb-2">
-              <div className="max-w-xsm truncate">
-                {chat}
-              </div>
-              <button onClick={() => signInCheck(chat)}>
-                Enter Chat
-              </button>
-              <MinusCircleIcon onClick={() => deleteChat(chat)} className="w-5 h-5 text-red-500 hover:text-yellow-700 cursor-pointer" />
+              <div className="max-w-xsm truncate">{chat}</div>
+              <button onClick={() => signInCheck(chat)}>Enter Chat</button>
+              <MinusCircleIcon
+                onClick={() => deleteChat(chat)}
+                className="w-5 h-5 text-red-500 hover:text-yellow-700 cursor-pointer"
+              />
             </div>
           ))}
         </div>
-        <button className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded" onClick={handleToggleModal}>Start New Chat</button>
-        <div className={`fixed z-10 inset-0 overflow-y-auto ${showModal ? "" : "hidden"}`}>
+        <button
+          className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded"
+          onClick={handleToggleModal}
+        >
+          Start New Chat
+        </button>
+        <div
+          className={`fixed z-10 inset-0 overflow-y-auto ${
+            showModal ? "" : "hidden"
+          }`}
+        >
           <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+            <div
+              className="fixed inset-0 transition-opacity"
+              aria-hidden="true"
+            >
               <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
             </div>
-            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <span
+              className="hidden sm:inline-block sm:align-middle sm:h-screen"
+              aria-hidden="true"
+            >
+              &#8203;
+            </span>
             <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
               <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                 <div className="sm:flex sm:items-start">
@@ -313,26 +366,33 @@ const DirectMessages = () => {
                       Start New Chat
                     </h3>
                     <div className="mt-2">
-                      <textarea id="pubkey" className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md mb-2" placeholder="Enter npub here..."></textarea>
-                      {
-                        signIn === 'nsec' && (
-                          <>
-                            <label htmlFor="passphrase" className="block mb-2 font-bold">
-                              Passphrase:<span className="text-red-500">*</span>
-                            </label>
-                            <input
-                              type="text"
-                              id="passphrase"
-                              name="passphrase"
-                              value={passphrase}
-                              required
-                              onChange={handlePassphraseChange}
-                              className="w-full p-2 border border-gray-300 rounded"
-                            />
-                          </>
-                        )
-                      }
-                      <p className="mt-2 text-red-500 text-sm">* required field</p>
+                      <textarea
+                        id="pubkey"
+                        className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md mb-2"
+                        placeholder="Enter npub here..."
+                      ></textarea>
+                      {signIn === "nsec" && (
+                        <>
+                          <label
+                            htmlFor="passphrase"
+                            className="block mb-2 font-bold"
+                          >
+                            Passphrase:<span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            id="passphrase"
+                            name="passphrase"
+                            value={passphrase}
+                            required
+                            onChange={handlePassphraseChange}
+                            className="w-full p-2 border border-gray-300 rounded"
+                          />
+                        </>
+                      )}
+                      <p className="mt-2 text-red-500 text-sm">
+                        * required field
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -358,11 +418,14 @@ const DirectMessages = () => {
         </div>
         <div
           className={`fixed z-10 inset-0 overflow-y-auto ${
-            enterPassphrase & signIn === 'nsec' ? "" : "hidden"
+            enterPassphrase & (signIn === "nsec") ? "" : "hidden"
           }`}
         >
           <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+            <div
+              className="fixed inset-0 transition-opacity"
+              aria-hidden="true"
+            >
               <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
             </div>
             <span
@@ -379,7 +442,10 @@ const DirectMessages = () => {
                       Enter Passphrase
                     </h3>
                     <div className="mt-2">
-                      <form className="mx-auto" onSubmit={() => handleSubmitPassphrase()}>
+                      <form
+                        className="mx-auto"
+                        onSubmit={() => handleSubmitPassphrase()}
+                      >
                         <label htmlFor="t" className="block mb-2 font-bold">
                           Passphrase:<span className="text-red-500">*</span>
                         </label>
@@ -392,7 +458,9 @@ const DirectMessages = () => {
                           onChange={handlePassphraseChange}
                           className="w-full p-2 border border-gray-300 rounded"
                         />
-                        <p className="mt-2 text-red-500 text-sm">* required field</p>
+                        <p className="mt-2 text-red-500 text-sm">
+                          * required field
+                        </p>
                       </form>
                     </div>
                   </div>
@@ -421,33 +489,44 @@ const DirectMessages = () => {
         </div>
       </div>
     );
-  };
+  }
 
   return (
     <div>
       <h2 className="flex flex-row items-center w-fit pr-2 align-middle text-yellow-500 hover:bg-purple-600 rounded-md cursor-pointer">
-        <ArrowUturnLeftIcon className="w-5 h-5 text-yellow-100 hover:text-purple-700" onClick={handleGoBack}>Go Back</ArrowUturnLeftIcon>
+        <ArrowUturnLeftIcon
+          className="w-5 h-5 text-yellow-100 hover:text-purple-700"
+          onClick={handleGoBack}
+        >
+          Go Back
+        </ArrowUturnLeftIcon>
         {currentChat}
       </h2>
       <div className="mt-8 mb-8 overflow-y-scroll max-h-[70vh] bg-white rounded-md">
         {messages.map((message, index) => (
-          <div 
-             key={index}
-             className={`my-2 flex ${
-               message.sender === decryptedNpub
-                 ? 'justify-end'
-                 : message.sender === currentChat
-                 ? 'justify-start'
-                 : ''}`
-             }
-           >
+          <div
+            key={index}
+            className={`my-2 flex ${
+              message.sender === decryptedNpub
+                ? "justify-end"
+                : message.sender === currentChat
+                ? "justify-start"
+                : ""
+            }`}
+          >
             <p
-             className={`inline-block p-3 rounded-lg max-w-[100vh] break-words ${
-               message.sender === decryptedNpub
-                 ? 'bg-purple-200' : 'bg-gray-300'}`
-             }
+              className={`inline-block p-3 rounded-lg max-w-[100vh] break-words ${
+                message.sender === decryptedNpub
+                  ? "bg-purple-200"
+                  : "bg-gray-300"
+              }`}
             >
-              {message.sender === decryptedNpub && message.plaintext.includes("cashuA") ? <i>Payment sent!</i> : message.plaintext}
+              {message.sender === decryptedNpub &&
+              message.plaintext.includes("cashuA") ? (
+                <i>Payment sent!</i>
+              ) : (
+                message.plaintext
+              )}
             </p>
           </div>
         ))}

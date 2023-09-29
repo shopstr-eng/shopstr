@@ -1,26 +1,22 @@
-import { useState } from 'react';
-import type { NextApiRequest, NextApiResponse } from 'next';
-import {
-  relayInit,
-  getEventHash,
-  signEvent
-} from 'nostr-tools';
-import 'websocket-polyfill';
+import { useState } from "react";
+import type { NextApiRequest, NextApiResponse } from "next";
+import { relayInit, getEventHash, signEvent } from "nostr-tools";
+import "websocket-polyfill";
 import getRelay from "./relays";
 
 export type Event = {
   id: string;
-  pubkey: string,
-  created_at: number,
-  kind: number,
-  tags: [],
-  content: string,
-  sig: string,
+  pubkey: string;
+  created_at: number;
+  kind: number;
+  tags: [];
+  content: string;
+  sig: string;
 };
 
 export interface GetEventRequest {
-  kind: number,
-};
+  kind: number;
+}
 
 const parseRequestBody = (body: number) => {
   const parsedBody = body;
@@ -33,26 +29,26 @@ let receivedMessages = [];
 
 const GetEvent = async (req: NextApiRequest, res: NextApiResponse) => {
   // const [events, setEvents] = useState<Event[]>([]);
-  
-  if (req.method !== 'POST') {
+
+  if (req.method !== "POST") {
     return res.status(405).json({});
   }
-  
+
   try {
     const kind = req.body.kind;
 
     const relay = getRelay();
 
-    relay.on('connect', () => {
+    relay.on("connect", () => {
       console.log(`connected to ${relay.url}`);
     });
-    relay.on('error', () => {
+    relay.on("error", () => {
       console.log(`failed to connect to ${relay.url}`);
     });
 
     relay.connect();
 
-    relay.sub([{ kinds: [kind] }]).on('event', async (event) => {
+    relay.sub([{ kinds: [kind] }]).on("event", async (event) => {
       if (kind != 4) {
         events.push(event); // add new post to events array
       } else {

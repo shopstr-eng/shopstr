@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { useRouter } from 'next/router';
+import { useRouter } from "next/router";
 import DisplayProduct from "../components/display-product";
-import { SimplePool } from 'nostr-tools';
+import { SimplePool } from "nostr-tools";
 
 const Checkout = () => {
   const router = useRouter();
@@ -12,18 +12,18 @@ const Checkout = () => {
   }
 
   const [relays, setRelays] = useState([]);
-  
+
   const productIdString = productId[0];
   const [product, setProduct] = useState([]);
   const [pubkey, setPubkey] = useState("");
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       const storedRelays = localStorage.getItem("relays");
       setRelays(storedRelays ? JSON.parse(storedRelays) : []);
     }
   }, []);
-  
+
   useEffect(() => {
     const pool = new SimplePool();
 
@@ -45,7 +45,11 @@ const Checkout = () => {
 
   return (
     <div>
-      <DisplayProduct tags={product} eventId={productIdString} pubkey={pubkey} />
+      <DisplayProduct
+        tags={product}
+        eventId={productIdString}
+        pubkey={pubkey}
+      />
     </div>
   );
 };

@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
 import { ProductFormValues } from "../api/post-event";
-import * as CryptoJS from 'crypto-js';
+import * as CryptoJS from "crypto-js";
 
 interface ProductFormProps {
   handlePostListing: (product: ProductFormValues, passphrase: string) => void;
   handleModalToggle: () => void;
   showModal: boolean;
-};
+}
 
 const ProductForm = ({
   handlePostListing,
@@ -14,7 +14,7 @@ const ProductForm = ({
   handleModalToggle,
 }: ProductFormProps) => {
   const [signIn, setSignIn] = useState("");
-  
+
   const [formValues, setFormValues] = useState<ProductFormValues>([]);
   const [images, setImages] = useState<string[]>([]);
   const [passphrase, setPassphrase] = useState("");
@@ -22,16 +22,18 @@ const ProductForm = ({
   const [encryptedPrivateKey, setEncryptedPrivateKey] = useState("");
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       const encrypted = localStorage.getItem("encryptedPrivateKey");
       setEncryptedPrivateKey(encrypted);
       const signIn = localStorage.getItem("signIn");
       setSignIn(signIn);
-    };
+    }
   }, []);
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >
   ) => {
     const { name, value } = e.target;
     if (name === "passphrase") {
@@ -39,23 +41,25 @@ const ProductForm = ({
     } else {
       setFormValues((prevValues) => {
         // Handles when the name is 'currency'
-        if (name === 'currency') {
-          return prevValues.map(([key, price, _]) => 
-            key === 'price' ? [key, price, value] : [key, price]
+        if (name === "currency") {
+          return prevValues.map(([key, price, _]) =>
+            key === "price" ? [key, price, value] : [key, price]
           );
         }
         // Checks to see if key exists and updates it rather than duplicating
-        for(const [key, ...rest] of prevValues) {
-          if(key === name) {
-            return prevValues.map((item) => item[0] === name ? [name, value] : item);
+        for (const [key, ...rest] of prevValues) {
+          if (key === name) {
+            return prevValues.map((item) =>
+              item[0] === name ? [name, value] : item
+            );
           }
         }
         // Adds the new key if does not exist already
         return [...prevValues, [name, value]];
       });
-    };
+    }
   };
-  
+
   const handleImageChange = (value: string, index: number) => {
     setImages((prevValues) => {
       const updatedImages = [...prevValues];
@@ -69,47 +73,63 @@ const ProductForm = ({
   };
 
   const handleDeleteImage = (index: number) => {
-    setImages(prevValues => {
+    setImages((prevValues) => {
       const updatedImages = [...prevValues];
       updatedImages.splice(index, 1);
       return updatedImages;
     });
   };
-  
+
   const handleSubmit = () => {
-    if (!formValues.find(([key]) => key === 'title') || !formValues.find(([key]) => key === 'summary') || !formValues.find(([key]) => key === 'location') || !formValues.find(([key]) => key === 'price')) {
+    if (
+      !formValues.find(([key]) => key === "title") ||
+      !formValues.find(([key]) => key === "summary") ||
+      !formValues.find(([key]) => key === "location") ||
+      !formValues.find(([key]) => key === "price")
+    ) {
       alert("Missing required fields!");
     } else {
-      if (formValues.find(([key]) => key === 'price')?.[1] != "" && formValues.find(([key]) => key === 'price').length >= 3 && formValues.find(([key]) => key === 'price')?.[2] != "Select currency") {
-        const updatedFormValues = [...formValues, ...images.map((image) => ["image", image])];
-        if(signIn == 'extension'){
+      if (
+        formValues.find(([key]) => key === "price")?.[1] != "" &&
+        formValues.find(([key]) => key === "price").length >= 3 &&
+        formValues.find(([key]) => key === "price")?.[2] != "Select currency"
+      ) {
+        const updatedFormValues = [
+          ...formValues,
+          ...images.map((image) => ["image", image]),
+        ];
+        if (signIn == "extension") {
           handleModalToggle();
           initFormValues();
-          handlePostListing(updatedFormValues, 'undefined');
+          handlePostListing(updatedFormValues, "undefined");
         } else {
-          if (CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8)) {
+          if (
+            CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
+              CryptoJS.enc.Utf8
+            )
+          ) {
             // integrate image urls into formValues
             handleModalToggle();
             initFormValues();
             handlePostListing(updatedFormValues, passphrase);
           } else {
             alert("Invalid passphrase!");
-          };
+          }
         }
       } else {
         alert("Missing required fields!");
-      };
-    };
+      }
+    }
   };
 
   const initFormValues = () => {
     setFormValues([]);
     setImages([]);
-  }
+  };
 
   const getFormValue = (key: string) => {
-    if (key === 'currency') {
-      const currency = formValues.find(([k]) => k === 'price')?.[2] || "";
+    if (key === "currency") {
+      const currency = formValues.find(([k]) => k === "price")?.[2] || "";
       return currency;
     }
     const value = formValues.find(([k]) => k === key)?.[1] || "";
@@ -141,17 +161,14 @@ const ProductForm = ({
                 </h3>
                 <div className="mt-2">
                   <form className="mx-auto" onSubmit={handleSubmit}>
-                    <label 
-                      htmlFor="title" 
-                      className="block mb-2 font-bold"
-                    >
+                    <label htmlFor="title" className="block mb-2 font-bold">
                       Title:<span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
                       id="title"
                       name="title"
-                      value={getFormValue('title')}
+                      value={getFormValue("title")}
                       onChange={handleChange}
                       required
                       className="w-full p-2 border border-gray-300 rounded"
@@ -166,12 +183,12 @@ const ProductForm = ({
                     <textarea
                       id="summary"
                       name="summary"
-                      value={getFormValue('summary')}
+                      value={getFormValue("summary")}
                       onChange={handleChange}
                       required
                       className="w-full p-2 border border-gray-300 rounded"
                     />
-                    
+
                     <div className="flex items-center mb-2">
                       <label
                         htmlFor="images"
@@ -195,12 +212,12 @@ const ProductForm = ({
                           name={`image-${index}`}
                           placeholder="Image Url"
                           value={image}
-                          onChange={(e) => handleImageChange(e.target.value, index)}
+                          onChange={(e) =>
+                            handleImageChange(e.target.value, index)
+                          }
                           className="w-1/2 p-2 border border-gray-300 rounded"
                         />
-                        <button
-                          onClick={() => handleDeleteImage(index)}
-                        >
+                        <button onClick={() => handleDeleteImage(index)}>
                           Delete
                         </button>
                       </div>
@@ -213,7 +230,7 @@ const ProductForm = ({
                       type="text"
                       id="location"
                       name="location"
-                      value={getFormValue('location')}
+                      value={getFormValue("location")}
                       onChange={handleChange}
                       required
                       className="w-full p-2 border border-gray-300 rounded"
@@ -227,7 +244,7 @@ const ProductForm = ({
                       id="price"
                       step="0.01"
                       name="price"
-                      value={getFormValue('price')}
+                      value={getFormValue("price")}
                       onChange={handleChange}
                       required
                       className="w-full p-2 border border-gray-300 rounded"
@@ -239,12 +256,12 @@ const ProductForm = ({
                     <select
                       id="currency"
                       name="currency"
-                      value={getFormValue('currency')}
+                      value={getFormValue("currency")}
                       onChange={handleChange}
                       required
                       className="w-full p-2 border border-gray-300 rounded"
                     >
-                      <option value="Select currency" >(Select currency)</option>
+                      <option value="Select currency">(Select currency)</option>
                       <option value="Sats">Sat(s)</option>
                       <option value="USD">USD</option>
                     </select>
@@ -256,30 +273,33 @@ const ProductForm = ({
                       type="text"
                       id="t"
                       name="t"
-                      value={getFormValue('t')}
+                      value={getFormValue("t")}
                       onChange={handleChange}
                       className="w-full p-2 border border-gray-300 rounded"
                     />
 
-                    {
-                      signIn === "nsec" && (
+                    {signIn === "nsec" && (
                       <>
-                        <label htmlFor="passphrase" className="block mb-2 font-bold">
+                        <label
+                          htmlFor="passphrase"
+                          className="block mb-2 font-bold"
+                        >
                           Passphrase:<span className="text-red-500">*</span>
                         </label>
-                          <input
-                            type="text"
-                            id="passphrase"
-                            name="passphrase"
-                            value={passphrase}
-                            required
-                            onChange={handleChange}
-                            className="w-full p-2 border border-gray-300 rounded"
-                          />
-                        </>
-                      )
-                    }
-                    <p className="mt-2 text-red-500 text-sm">* required field</p>
+                        <input
+                          type="text"
+                          id="passphrase"
+                          name="passphrase"
+                          value={passphrase}
+                          required
+                          onChange={handleChange}
+                          className="w-full p-2 border border-gray-300 rounded"
+                        />
+                      </>
+                    )}
+                    <p className="mt-2 text-red-500 text-sm">
+                      * required field
+                    </p>
                   </form>
                 </div>
               </div>
