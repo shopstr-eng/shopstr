@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from "react";
-import axios from "axios";
 import DisplayEvents from "../components/display-events";
-import { ProductFormValues } from "../api/post-event";
 import { useRouter } from "next/router";
 import { ArrowUturnLeftIcon } from "@heroicons/react/24/outline";
 import { nip19, SimplePool } from "nostr-tools";
 import "websocket-polyfill";
-import * as CryptoJS from "crypto-js";
+import { handlePostListing } from "../nostr-helpers";
+import ProductForm from "../components/product-form";
 
 const SellerView = () => {
   const router = useRouter();
@@ -15,9 +14,8 @@ const SellerView = () => {
   const [encryptedPrivateKey, setEncryptedPrivateKey] = useState("");
   const [signIn, setSignIn] = useState("");
   const [relays, setRelays] = useState([]);
-
-  const [pubkey, setPubkey] = useState("");
-  const [displayComponent, setDisplayComponent] = useState("home");
+  const [focusedPubkey, setfocusedPubkey] = useState(""); // pubkey of shop being viewed
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -33,86 +31,30 @@ const SellerView = () => {
     }
   }, []);
 
+  // Update focusedPubkey when pubkey in url changes
   useEffect(() => {
-    setPubkey(router.query.pubkey ? router.query.pubkey[0] : ""); // router.query.pubkey returns array of pubkeys
+    let focusedPubkeys = router.query.pubkey;
+    if (focusedPubkeys && typeof focusedPubkeys[0] === "string") {
+      const { data } = nip19.decode(focusedPubkeys[0]);
+      setfocusedPubkey(data); // router.query.pubkey returns array of pubkeys
+    }
   }, [router.query.pubkey]);
 
-  const handlePostListing = async (
-    values: ProductFormValues,
-    passphrase: string
-  ) => {
-    const summary = values.find(([key]) => key === "summary")?.[1] || "";
-
-    const created_at = Math.floor(Date.now() / 1000);
-    // Add "published_at" key
-    const updatedValues = [...values, ["published_at", String(created_at)]];
-
-    if (signIn === "extension") {
-      const event = {
-        created_at: created_at,
-        kind: 30402,
-        // kind: 30018,
-        tags: updatedValues,
-        content: summary,
-      };
-
-      const signedEvent = await window.nostr.signEvent(event);
-
-      const pool = new SimplePool();
-
-      // const relays = JSON.parse(storedRelays);
-
-      // let sub = pool.sub(relays, [
-      //   {
-      //     kinds: [signedEvent.kind],
-      //     authors: [signedEvent.pubkey],
-      //   },
-      // ]);
-
-      // sub.on('event', (event) => {
-      //   console.log('got event:', event);
-      // });
-
-      await pool.publish(relays, signedEvent);
-
-      let events = await pool.list(relays, [{ kinds: [0, signedEvent.kind] }]);
-      let postedEvent = await pool.get(relays, {
-        ids: [signedEvent.id],
-      });
-    } else {
-      let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-        CryptoJS.enc.Utf8
-      );
-      // add error handling and re-prompt for passphrase
-      let { data } = nip19.decode(nsec);
-      axios({
-        method: "POST",
-        url: "/api/nostr/post-event",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        data: {
-          pubkey: decryptedNpub,
-          privkey: data,
-          created_at: created_at,
-          kind: 30402,
-          // kind: 30018,
-          tags: updatedValues,
-          content: summary,
-          relays: relays,
-        },
-      });
+  const routeToShop = (npubkey) => {
+    if (npubkey === "") {
+      // handles case where we pass in empty string to clear focusedPubkey
+      setfocusedPubkey("");
     }
+    router.push("/marketplace/" + npubkey);
   };
 
-  const routeToShop = (pubkey) => {
-    setPubkey(pubkey);
-    router.push("/marketplace/" + pubkey);
+  const handleModalToggle = () => {
+    setShowModal(!showModal);
   };
 
   return (
     <div>
-      {pubkey ? (
+      {focusedPubkey ? (
         <div
           className="flex flex-row items-center w-fit pr-2 align-middle text-yellow-500 hover:bg-purple-600 rounded-md cursor-pointer"
           onClick={() => {
@@ -127,16 +69,45 @@ const SellerView = () => {
           >
             Go Back
           </ArrowUturnLeftIcon>
-          {nip19.npubEncode(pubkey)}
+          {nip19.npubEncode(focusedPubkey)}
         </div>
       ) : undefined}
       <DisplayEvents
-        router={router}
-        pubkey={pubkey}
-        clickPubkey={(pubkey) => {
-          routeToShop(pubkey);
+        focusedPubkey={focusedPubkey}
+        clickNPubkey={(npubkey) => {
+          routeToShop(npubkey);
         }}
-        handlePostListing={handlePostListing}
+      />
+      <div className="flex flex-row justify-between">
+        <button
+          type="button"
+          className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded"
+          onClick={() => {
+            routeToShop(decryptedNpub);
+          }}
+        >
+          View Your Listings
+        </button>
+        <button
+          className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded"
+          onClick={handleModalToggle}
+        >
+          Add New Listing
+        </button>
+      </div>
+      <ProductForm
+        handlePostListing={(values, passphrase) => {
+          handlePostListing(
+            values,
+            passphrase,
+            signIn,
+            encryptedPrivateKey,
+            decryptedNpub,
+            relays
+          );
+        }}
+        showModal={showModal}
+        handleModalToggle={handleModalToggle}
       />
     </div>
   );

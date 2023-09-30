@@ -3,6 +3,7 @@ import axios from "axios";
 import { withRouter, NextRouter } from "next/router";
 import { nip19 } from "nostr-tools";
 import * as CryptoJS from "crypto-js";
+import { validateNPubKey, validateNSecKey } from "./nostr-helpers";
 
 const LoginPage = ({ router }: { router: NextRouter }) => {
   const [publicKey, setPublicKey] = useState<string>("");
@@ -66,11 +67,8 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
   };
 
   useEffect(() => {
-    const validPubKey = /^npub[a-zA-Z0-9]{59}$/;
-    const validPrivKey = /^nsec[a-zA-Z0-9]{59}$/;
-
-    setValidPublicKey(publicKey.match(validPubKey) !== null);
-    setValidPrivateKey(privateKey.match(validPrivKey) !== null);
+    setValidPublicKey(validateNPubKey(publicKey));
+    setValidPrivateKey(validateNSecKey(privateKey));
   }, [publicKey, privateKey]);
 
   useEffect(() => {
