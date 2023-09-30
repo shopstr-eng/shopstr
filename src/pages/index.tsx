@@ -12,14 +12,6 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
   const [validPrivateKey, setValidPrivateKey] = useState<boolean>(false);
   const [passphrase, setPassphrase] = useState<string>("");
 
-  const handleLogOut = () => {
-    localStorage.removeItem("npub");
-    localStorage.removeItem("signIn");
-    router.push("/");
-    let successStr = "Logged out";
-    alert(successStr);
-  };
-
   const handleSignIn = () => {
     if (validPublicKey && validPrivateKey) {
       if (passphrase === "" || passphrase === null) {
@@ -61,13 +53,12 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
       let npub = nip19.npubEncode(pubkey);
       setPublicKey(npub);
       localStorage.setItem("npub", npub);
-      let successStr = "Signed in as " + npub;
-      alert(successStr);
       localStorage.setItem("signIn", "extension");
       localStorage.setItem(
         "relays",
         JSON.stringify(["wss://relay.damus.io", "wss://nos.lol"])
       );
+      alert("Signed in as " + npub);
       router.push("/marketplace");
     } catch (error) {
       alert("Extension sign in failed");
@@ -83,12 +74,9 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
   }, [publicKey, privateKey]);
 
   useEffect(() => {
-    if (
-      localStorage.getItem("signIn") === "extension" ||
-      localStorage.getItem("signIn") === "nsec"
-    ) {
+    let signinMethod = localStorage.getItem("signIn");
+    if (signinMethod === "extension" || signinMethod === "nsec")
       router.push("/marketplace");
-    }
   }, []);
 
   return (

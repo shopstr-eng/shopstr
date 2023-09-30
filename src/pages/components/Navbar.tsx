@@ -4,6 +4,7 @@ import {
   EnvelopeOpenIcon,
   WalletIcon,
   GlobeAltIcon,
+  ArrowLeftOnRectangleIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 
@@ -36,6 +37,18 @@ const Navbar = () => {
             router.pathname === "/relays" ? "text-yellow-100" : ""
           }`}
           onClick={() => router.push("/relays")}
+        />
+        <ArrowLeftOnRectangleIcon
+          className="w-6 h-6 hover:text-purple-700"
+          onClick={() => {
+            localStorage.removeItem("npub");
+            localStorage.removeItem("signIn");
+            localStorage.removeItem("encryptedPrivateKey");
+            console.log(localStorage.getItem("signIn"));
+            router.push("/");
+            let successStr = "Logged out";
+            alert(successStr);
+          }}
         />
       </div>
     </div>
