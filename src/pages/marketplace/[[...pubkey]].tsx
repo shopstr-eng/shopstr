@@ -4,32 +4,12 @@ import { useRouter } from "next/router";
 import { ArrowUturnLeftIcon } from "@heroicons/react/24/outline";
 import { nip19, SimplePool } from "nostr-tools";
 import "websocket-polyfill";
-import { handlePostListing } from "../nostr-helpers";
 import ProductForm from "../components/product-form";
 
 const SellerView = () => {
   const router = useRouter();
-
-  const [decryptedNpub, setDecryptedNpub] = useState("");
-  const [encryptedPrivateKey, setEncryptedPrivateKey] = useState("");
-  const [signIn, setSignIn] = useState("");
-  const [relays, setRelays] = useState([]);
   const [focusedPubkey, setfocusedPubkey] = useState(""); // pubkey of shop being viewed
   const [showModal, setShowModal] = useState(false);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const npub = localStorage.getItem("npub");
-      const { data } = nip19.decode(npub);
-      setDecryptedNpub(data);
-      const encrypted = localStorage.getItem("encryptedPrivateKey");
-      setEncryptedPrivateKey(encrypted);
-      const signIn = localStorage.getItem("signIn");
-      setSignIn(signIn);
-      const storedRelays = localStorage.getItem("relays");
-      setRelays(storedRelays ? JSON.parse(storedRelays) : []);
-    }
-  }, []);
 
   // Update focusedPubkey when pubkey in url changes
   useEffect(() => {
@@ -97,16 +77,6 @@ const SellerView = () => {
         </button>
       </div>
       <ProductForm
-        handlePostListing={(values, passphrase) => {
-          handlePostListing(
-            values,
-            passphrase,
-            signIn,
-            encryptedPrivateKey,
-            decryptedNpub,
-            relays
-          );
-        }}
         showModal={showModal}
         handleModalToggle={handleModalToggle}
       />

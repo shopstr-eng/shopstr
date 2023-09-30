@@ -3,14 +3,30 @@ import { nip19, SimplePool } from "nostr-tools";
 import { ProductFormValues } from "../api/post-event";
 import axios from "axios";
 
-export async function handlePostListing(
+export const getLocalStorageData = () => {
+  let signIn;
+  let encryptedPrivateKey;
+  let decryptedNpub;
+  let relays;
+
+  if (typeof window !== "undefined") {
+    const npub = localStorage.getItem("npub");
+    const { data } = nip19.decode(npub);
+    decryptedNpub = data;
+    encryptedPrivateKey = localStorage.getItem("encryptedPrivateKey");
+    signIn = localStorage.getItem("signIn");
+    const storedRelays = localStorage.getItem("relays");
+    relays = storedRelays ? JSON.parse(storedRelays) : [];
+  }
+  return { signIn, encryptedPrivateKey, decryptedNpub, relays };
+};
+
+export async function PostListing(
   values: ProductFormValues,
-  passphrase: string,
-  signIn: string,
-  encryptedPrivateKey: string,
-  decryptedNpub: string,
-  relays: [string]
+  passphrase: string
 ) {
+  const { signIn, encryptedPrivateKey, decryptedNpub, relays } =
+    getLocalStorageData();
   const summary = values.find(([key]) => key === "summary")?.[1] || "";
 
   const created_at = Math.floor(Date.now() / 1000);
