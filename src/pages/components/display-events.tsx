@@ -59,12 +59,7 @@ const DisplayEvents = ({
     setEventData([]);
     let subParams: { kinds: number[]; authors?: string[] } = {
       kinds: [30402],
-      // kinds: [30018],
     };
-    // console.log("pubkey", pubkey);
-    // if (pubkey) {
-    //   subParams["authors"] = [pubkey];
-    // } // going to do front end filtering instead of backend. Everytime pubkey changes, we create a new sub and both the sub for [] and desired public key events are fetched
     let productsSub = pool.sub(relays, [subParams]);
     productsSub.on("event", (event) => {
       if (pubkey && pubkey !== event.pubkey) {

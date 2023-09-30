@@ -8,10 +8,17 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
   const [publicKey, setPublicKey] = useState<string>("");
   const [privateKey, setPrivateKey] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string>("");
-  const [disabled, setDisabled] = useState<boolean>(false);
   const [validPublicKey, setValidPublicKey] = useState<boolean>(false);
   const [validPrivateKey, setValidPrivateKey] = useState<boolean>(false);
   const [passphrase, setPassphrase] = useState<string>("");
+
+  const handleLogOut = () => {
+    localStorage.removeItem("npub");
+    localStorage.removeItem("signIn");
+    router.push("/");
+    let successStr = "Logged out";
+    alert(successStr);
+  };
 
   const handleSignIn = () => {
     if (validPublicKey && validPrivateKey) {
