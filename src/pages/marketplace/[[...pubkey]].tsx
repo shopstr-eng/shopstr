@@ -83,7 +83,8 @@ const SellerView = () => {
           type="button"
           className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded"
           onClick={() => {
-            routeToShop(decryptedNpub);
+            let usersNPubkey = localStorage.getItem("npub");
+            routeToShop(usersNPubkey);
           }}
         >
           View Your Listings
