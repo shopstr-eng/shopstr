@@ -115,7 +115,7 @@ const DisplayProduct = ({
         created_at: Math.floor(Date.now() / 1000),
         kind: 4,
         tags: [["p", pk]],
-        content: await window.nostr.nip04.encrypt(decryptedNpub, token),
+        content: await window.nostr.nip04.encrypt(pk, token),
       };
 
       const signedEvent = await window.nostr.signEvent(event);
