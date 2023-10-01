@@ -21,6 +21,10 @@ const ProductForm = ({
 
   const [encryptedPrivateKey, setEncryptedPrivateKey] = useState("");
 
+  const [showAddedInput, setShowAddedInput] = useState(false);
+
+  const [currencyVal, setCurrencyVal] = useState("");
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       const encrypted = localStorage.getItem("encryptedPrivateKey");
@@ -36,16 +40,45 @@ const ProductForm = ({
     >
   ) => {
     const { name, value } = e.target;
+    console.log(name);
+    console.log(value)
     if (name === "passphrase") {
       setPassphrase(value);
+    } else if (name === "shipping") {
+      if (value === "Added cost") {
+        setShowAddedInput(true);
+      } else {
+        console.log("yo");
+        setFormValues((prevValues) => {
+          // Handles when the name is 'currency'
+          if (name === "currency") {
+            setCurrencyVal(value);
+            return prevValues.map(([key, price, _]) => 
+              key === "price" ? [key, price, value] : [key, price]
+            );
+          }
+          // Checks to see if key exists and updates it rather than duplicating
+          for (const [key, ...rest] of prevValues) {
+            if (key === name) {
+              return prevValues.map((item) =>
+                item[0] === name ? [name, value] : item
+              );
+            }
+          }
+          // Adds the new key if does not exist already
+          return [...prevValues, [name, value]];
+        });
+      }
     } else {
       setFormValues((prevValues) => {
         // Handles when the name is 'currency'
         if (name === "currency") {
-          return prevValues.map(([key, price, _]) =>
+          setCurrencyVal(value);
+          return prevValues.map(([key, price, _]) => 
             key === "price" ? [key, price, value] : [key, price]
           );
         }
+
         // Checks to see if key exists and updates it rather than duplicating
         for (const [key, ...rest] of prevValues) {
           if (key === name) {
@@ -58,6 +91,7 @@ const ProductForm = ({
         return [...prevValues, [name, value]];
       });
     }
+    console.log(formValues);
   };
 
   const handleImageChange = (value: string, index: number) => {
@@ -176,7 +210,7 @@ const ProductForm = ({
 
                     <label
                       htmlFor="description"
-                      className="block mb-2 font-bold"
+                      className="block my-2 font-bold"
                     >
                       Summary:<span className="text-red-500">*</span>
                     </label>
@@ -192,7 +226,7 @@ const ProductForm = ({
                     <div className="flex items-center mb-2">
                       <label
                         htmlFor="images"
-                        className="block mb-2 font-bold pr-3"
+                        className="block my-2 font-bold pr-3"
                       >
                         Images:
                       </label>
@@ -223,7 +257,7 @@ const ProductForm = ({
                       </div>
                     ))}
 
-                    <label htmlFor="location" className="block mb-2 font-bold">
+                    <label htmlFor="location" className="block my-2 font-bold">
                       Location:<span className="text-red-500">*</span>
                     </label>
                     <input
@@ -236,7 +270,7 @@ const ProductForm = ({
                       className="w-full p-2 border border-gray-300 rounded"
                     />
 
-                    <label htmlFor="price" className="block mb-2 font-bold">
+                    <label htmlFor="price" className="block my-2 font-bold">
                       Price:<span className="text-red-500">*</span>
                     </label>
                     <input
@@ -250,7 +284,7 @@ const ProductForm = ({
                       className="w-full p-2 border border-gray-300 rounded"
                     />
 
-                    <label htmlFor="currency" className="block mb-2 font-bold">
+                    <label htmlFor="currency" className="block my-2 font-bold">
                       Currency:<span className="text-red-500">*</span>
                     </label>
                     <select
@@ -266,7 +300,47 @@ const ProductForm = ({
                       <option value="USD">USD</option>
                     </select>
 
-                    <label htmlFor="t" className="block mb-2 font-bold">
+                    <label htmlFor="shipping" className="block my-2 font-bold">
+                      Shipping:<span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      id="shipping"
+                      name="shipping"
+                      value={getFormValue("shipping")}
+                      onChange={handleChange}
+                      required
+                      className="w-full p-2 border border-gray-300 rounded"
+                    >
+                      <option value="Shipping option">
+                        (Shipping option)
+                      </option>
+                      <option value="Added cost">
+                        Added cost
+                      </option>
+                      <option value="Free">
+                        Free
+                      </option>
+                      <option value="Pickup">
+                        Pickup
+                      </option>
+                    </select>
+                    <div className="relative">
+                      {showAddedInput && (
+                        <input
+                          type="number"
+                          id="added cost"
+                          name="added cost"
+                          value={getFormValue("shipping")}
+                          onChange={handleChange}
+                          className="w-full p-2 pl-6 border border-gray-300 rounded"
+                        />
+                      )}
+                      {showAddedInput && (
+                        <span className="absolute right-8 top-2">{currencyVal}</span>
+                      )}
+                    </div>
+
+                    <label htmlFor="t" className="block my-2 font-bold">
                       Category:
                     </label>
                     <input
