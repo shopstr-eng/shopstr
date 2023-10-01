@@ -48,7 +48,7 @@ const DirectMessages = () => {
     }
   }, []);
 
-useEffect(() => {
+  useEffect(() => {
     if (relays) {
       const passedPubkey = router.query.pk ? router.query.pk : null;
       if (passedPubkey) {
