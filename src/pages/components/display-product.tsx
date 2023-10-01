@@ -7,6 +7,9 @@ import { CashuMint, CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
 import { nip19, SimplePool } from "nostr-tools";
 import "websocket-polyfill";
 import * as CryptoJS from "crypto-js";
+// add an aggregated sum of cost
+// aggregate sum in token send
+
 
 const DisplayProduct = ({
   tags,
@@ -35,6 +38,9 @@ const DisplayProduct = ({
   const [location, setLocation] = useState("");
   const [price, setPrice] = useState("");
   const [currency, setCurrency] = useState("");
+  const [shipping, setShipping] = useState(null);
+
+  const [totalCost, setTotalCost] = useState("");
 
   const [checkout, setCheckout] = useState(false);
   const [invoice, setInvoice] = useState("");
@@ -78,6 +84,7 @@ const DisplayProduct = ({
     let tmpImages = [];
     tags.forEach((tag) => {
       const [key, ...values] = tag;
+      console.log(key, values);
       switch (key) {
         case "title":
           setTitle(values[0]);
@@ -102,11 +109,28 @@ const DisplayProduct = ({
           setPrice(amount);
           setCurrency(currency);
           break;
+        case "shipping":
+          if (values.length < 2) {
+            setShipping(values[0]);
+            break;
+          } else {
+            const [cost, currency] = values;
+            setShipping(cost);
+            console.log(cost);
+            break;
+          }
         default:
           return;
       }
     });
     setImages(tmpImages);
+    console.log(price)
+    console.log(shipping)
+    console.log(Number(shipping))
+    if (Number(shipping) != 0) {
+      setTotalCost(Number(price) + Number(shipping));
+      console.log(totalCost);
+    }
   }, [tags]);
 
   const sendTokens = async (pk: string, token: string) => {
@@ -344,15 +368,21 @@ const DisplayProduct = ({
       </div>
 
       <div className="mb-4">
-        <p>
+        {category && <p>
           <strong className="font-semibold">Category:</strong> {category}
-        </p>
+        </p>}
         <p>
           <strong className="font-semibold">Location:</strong> {location}
         </p>
         <p>
           <strong className="font-semibold">Price:</strong> {price} {currency}
         </p>
+        {shipping && <p>
+          <strong className="font-semibold">Shipping:</strong> {shipping} {currency}
+        </p>}
+        {totalCost && <p>
+          <strong className="font-semibold">Total cost:</strong> {totalCost} {currency}
+        </p>}
         {/* <p>
           <strong className="font-semibold">Quantity:</strong> {quantity}
         </p> */}

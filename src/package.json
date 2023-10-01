@@ -21,6 +21,7 @@
     "next-pwa": "^5.6.0",
     "nostr-tools": "^1.15.0",
     "postcss": "8.4.21",
+    "prettier": "^3.0.3",
     "qrcode": "^1.5.3",
     "react": "18.2.0",
     "tailwindcss": "3.3.1",

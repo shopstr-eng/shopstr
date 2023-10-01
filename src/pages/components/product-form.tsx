@@ -21,9 +21,14 @@ const ProductForm = ({
 
   const [encryptedPrivateKey, setEncryptedPrivateKey] = useState("");
 
-  const [showAddedInput, setShowAddedInput] = useState(false);
+  const [showAddedCostInput, setShowAddedCostInput] = useState(false);
 
   const [currencyVal, setCurrencyVal] = useState("");
+
+  const initFormValues = () => {
+    setFormValues([]);
+    setImages([]);
+  };
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -40,35 +45,8 @@ const ProductForm = ({
     >
   ) => {
     const { name, value } = e.target;
-    console.log(name);
-    console.log(value)
     if (name === "passphrase") {
       setPassphrase(value);
-    } else if (name === "shipping") {
-      if (value === "Added cost") {
-        setShowAddedInput(true);
-      } else {
-        console.log("yo");
-        setFormValues((prevValues) => {
-          // Handles when the name is 'currency'
-          if (name === "currency") {
-            setCurrencyVal(value);
-            return prevValues.map(([key, price, _]) => 
-              key === "price" ? [key, price, value] : [key, price]
-            );
-          }
-          // Checks to see if key exists and updates it rather than duplicating
-          for (const [key, ...rest] of prevValues) {
-            if (key === name) {
-              return prevValues.map((item) =>
-                item[0] === name ? [name, value] : item
-              );
-            }
-          }
-          // Adds the new key if does not exist already
-          return [...prevValues, [name, value]];
-        });
-      }
     } else {
       setFormValues((prevValues) => {
         // Handles when the name is 'currency'
@@ -77,6 +55,30 @@ const ProductForm = ({
           return prevValues.map(([key, price, _]) => 
             key === "price" ? [key, price, value] : [key, price]
           );
+        }
+
+        if (value === "Added cost") {
+          setShowAddedCostInput(true);
+        } else if (value === "Shipping option" || value === "Free" || value === "Pickup") {
+          setShowAddedCostInput(false);
+        };
+
+        if (name === "Added cost") {
+          return prevValues.map((formValue) => {
+            const [key, value] = formValue;
+            // Handle "shipping" key
+            if (key === "shipping") {
+              // Set new value for "Added cost"
+              return [key, e.target.value, currencyVal];
+            }
+            // Handle "price" key
+            if (key === "price") {
+              // Keep existing currency value
+              return [key, value, currencyVal];
+            }
+            // Return all other keys without modification
+            return formValue;
+          });
         }
 
         // Checks to see if key exists and updates it rather than duplicating
@@ -128,27 +130,35 @@ const ProductForm = ({
         formValues.find(([key]) => key === "price").length >= 3 &&
         formValues.find(([key]) => key === "price")?.[2] != "Select currency"
       ) {
-        const updatedFormValues = [
-          ...formValues,
-          ...images.map((image) => ["image", image]),
-        ];
-        if (signIn == "extension") {
-          handleModalToggle();
-          initFormValues();
-          handlePostListing(updatedFormValues, "undefined");
-        } else {
-          if (
-            CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-              CryptoJS.enc.Utf8
-            )
-          ) {
-            // integrate image urls into formValues
+        if (
+          formValues.find(([key]) => key === "shipping")?.[1] != "" &&
+          formValues.find(([key]) => key === "shipping")?.[1] != "Shipping option"
+        ) {
+          const updatedFormValues = [
+            ...formValues,
+            ...images.map((image) => ["image", image]),
+          ];
+          if (signIn == "extension") {
             handleModalToggle();
             initFormValues();
-            handlePostListing(updatedFormValues, passphrase);
+            handlePostListing(updatedFormValues, "undefined");
           } else {
-            alert("Invalid passphrase!");
+            if (
+              CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
+                CryptoJS.enc.Utf8
+              )
+            ) {
+              // integrate image urls into formValues
+              handleModalToggle();
+              initFormValues();
+              setShowAddedCostInput(false);
+              handlePostListing(updatedFormValues, passphrase);
+            } else {
+              alert("Invalid passphrase!");
+            }
           }
+        } else {
+          alert("Missing shipping option!");
         }
       } else {
         alert("Missing required fields!");
@@ -156,17 +166,22 @@ const ProductForm = ({
     }
   };
 
-  const initFormValues = () => {
-    setFormValues([]);
-    setImages([]);
-  };
-
   const getFormValue = (key: string) => {
     if (key === "currency") {
-      const currency = formValues.find(([k]) => k === "price")?.[2] || "";
+      const currency = formValues?.find(([k]) => k === "price")?.[2] || "";
       return currency;
     }
-    const value = formValues.find(([k]) => k === key)?.[1] || "";
+    if (key === "shipping") {
+      const value = formValues?.find(([k]) => k === key)?.[1] || "";
+      if (!isNaN(value)) {
+        return "Added cost";
+      };
+    };
+    if (key === "Added cost") {
+      const value = formValues?.find(([k]) => k === "shipping")?.[1] || "";
+      return value;
+    };
+    const value = formValues?.find(([k]) => k === key)?.[1] || "";
     return value;
   };
 
@@ -296,7 +311,7 @@ const ProductForm = ({
                       className="w-full p-2 border border-gray-300 rounded"
                     >
                       <option value="Select currency">(Select currency)</option>
-                      <option value="Sats">Sat(s)</option>
+                      <option value="Sat(s)">Sat(s)</option>
                       <option value="USD">USD</option>
                     </select>
 
@@ -325,17 +340,17 @@ const ProductForm = ({
                       </option>
                     </select>
                     <div className="relative">
-                      {showAddedInput && (
+                      {showAddedCostInput && (
                         <input
                           type="number"
-                          id="added cost"
-                          name="added cost"
-                          value={getFormValue("shipping")}
+                          id="Added cost"
+                          name="Added cost"
+                          value={getFormValue("Added cost")}
                           onChange={handleChange}
                           className="w-full p-2 pl-6 border border-gray-300 rounded"
                         />
                       )}
-                      {showAddedInput && (
+                      {showAddedCostInput && (
                         <span className="absolute right-8 top-2">{currencyVal}</span>
                       )}
                     </div>
