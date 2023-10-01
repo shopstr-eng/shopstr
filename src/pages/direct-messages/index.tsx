@@ -52,18 +52,30 @@ const DirectMessages = () => {
     if (relays) {
       const passedPubkey = router.query.pk ? router.query.pk : null;
       if (passedPubkey) {
-        let passedPubkeyStr = passedPubkey.toString();
-        setThisChat(passedPubkeyStr);
-        if (!chats.includes(passedPubkeyStr)) {
-          let newChats = Array.from(new Set([...chats, passedPubkeyStr]));
-          setChats(newChats);
-        }
-        setEnterPassphrase(!enterPassphrase);
-        if (
-          CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-            CryptoJS.enc.Utf8
-          )
-        ) {
+        if (signIn != "extension") {
+          let passedPubkeyStr = passedPubkey.toString();
+          setThisChat(passedPubkeyStr);
+          if (!chats.includes(passedPubkeyStr)) {
+            let newChats = Array.from(new Set([...chats, passedPubkeyStr]));
+            setChats(newChats);
+          }
+          setEnterPassphrase(!enterPassphrase);
+          if (
+            CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
+              CryptoJS.enc.Utf8
+            )
+          ) {
+            let newChats = Array.from(new Set([...chats, passedPubkeyStr]));
+            setChats(newChats);
+          }
+        } else {
+          let passedPubkeyStr = passedPubkey.toString();
+          setThisChat(passedPubkeyStr);
+          if (!chats.includes(passedPubkeyStr)) {
+            let newChats = Array.from(new Set([...chats, passedPubkeyStr]));
+            setChats(newChats);
+          }
+          setEnterPassphrase(!enterPassphrase);
           let newChats = Array.from(new Set([...chats, passedPubkeyStr]));
           setChats(newChats);
         }
@@ -147,7 +159,7 @@ const DirectMessages = () => {
         }
         let created_at = event.created_at;
 
-        if (plaintext !== undefined) {
+        if (plaintext != undefined) {
           // Get an array of all existing event IDs
           let existingEventIds = messages.map((message) => message.eventId);
           // Only add this message if its eventId is not already in existingEventIds

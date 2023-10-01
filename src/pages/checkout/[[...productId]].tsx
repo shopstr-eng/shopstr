@@ -7,10 +7,6 @@ const Checkout = () => {
   const router = useRouter();
   const { productId } = router.query;
 
-  if (!productId) {
-    return <div>Loading...</div>;
-  }
-
   const [relays, setRelays] = useState([]);
 
   const productIdString = productId[0];
