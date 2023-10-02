@@ -1,25 +1,20 @@
 import { useState, useEffect } from "react";
 import { ProductFormValues } from "../api/post-event";
 import * as CryptoJS from "crypto-js";
+import { PostListing } from "../nostr-helpers";
+import { nip19 } from "nostr-tools";
 
 interface ProductFormProps {
-  handlePostListing: (product: ProductFormValues, passphrase: string) => void;
   handleModalToggle: () => void;
   showModal: boolean;
 }
 
-const ProductForm = ({
-  handlePostListing,
-  showModal,
-  handleModalToggle,
-}: ProductFormProps) => {
+const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
+  const [encryptedPrivateKey, setEncryptedPrivateKey] = useState("");
   const [signIn, setSignIn] = useState("");
-
   const [formValues, setFormValues] = useState<ProductFormValues>([]);
   const [images, setImages] = useState<string[]>([]);
   const [passphrase, setPassphrase] = useState("");
-
-  const [encryptedPrivateKey, setEncryptedPrivateKey] = useState("");
 
   const [showAddedCostInput, setShowAddedCostInput] = useState(false);
 
@@ -116,6 +111,10 @@ const ProductForm = ({
     });
   };
 
+  const handlePostListing = async (values) => {
+    await PostListing(values, passphrase);
+  };
+
   const handleSubmit = () => {
     if (
       !formValues.find(([key]) => key === "title") ||
@@ -141,10 +140,10 @@ const ProductForm = ({
           if (signIn == "extension") {
             handleModalToggle();
             initFormValues();
-            handlePostListing(updatedFormValues, "undefined");
+            handlePostListing(updatedFormValues);
           } else {
             if (
-              CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
+            CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
                 CryptoJS.enc.Utf8
               )
             ) {

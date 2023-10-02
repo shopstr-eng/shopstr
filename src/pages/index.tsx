@@ -3,12 +3,12 @@ import axios from "axios";
 import { withRouter, NextRouter } from "next/router";
 import { nip19 } from "nostr-tools";
 import * as CryptoJS from "crypto-js";
+import { validateNPubKey, validateNSecKey } from "./nostr-helpers";
 
 const LoginPage = ({ router }: { router: NextRouter }) => {
   const [publicKey, setPublicKey] = useState<string>("");
   const [privateKey, setPrivateKey] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string>("");
-  const [disabled, setDisabled] = useState<boolean>(false);
   const [validPublicKey, setValidPublicKey] = useState<boolean>(false);
   const [validPrivateKey, setValidPrivateKey] = useState<boolean>(false);
   const [passphrase, setPassphrase] = useState<string>("");
@@ -54,13 +54,12 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
       let npub = nip19.npubEncode(pubkey);
       setPublicKey(npub);
       localStorage.setItem("npub", npub);
-      let successStr = "Signed in as " + npub;
-      alert(successStr);
       localStorage.setItem("signIn", "extension");
       localStorage.setItem(
         "relays",
         JSON.stringify(["wss://relay.damus.io", "wss://nos.lol"])
       );
+      alert("Signed in as " + npub);
       router.push("/marketplace");
     } catch (error) {
       alert("Extension sign in failed");
@@ -68,20 +67,14 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
   };
 
   useEffect(() => {
-    const validPubKey = /^npub[a-zA-Z0-9]{59}$/;
-    const validPrivKey = /^nsec[a-zA-Z0-9]{59}$/;
-
-    setValidPublicKey(publicKey.match(validPubKey) !== null);
-    setValidPrivateKey(privateKey.match(validPrivKey) !== null);
+    setValidPublicKey(validateNPubKey(publicKey));
+    setValidPrivateKey(validateNSecKey(privateKey));
   }, [publicKey, privateKey]);
 
   useEffect(() => {
-    if (
-      localStorage.getItem("signIn") === "extension" ||
-      localStorage.getItem("signIn") === "nsec"
-    ) {
+    let signinMethod = localStorage.getItem("signIn");
+    if (signinMethod === "extension" || signinMethod === "nsec")
       router.push("/marketplace");
-    }
   }, []);
 
   return (
