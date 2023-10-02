@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import DisplayProduct from "./display-product";
 import { nip19, SimplePool } from "nostr-tools";
-import ProductForm from "../components/product-form";
 import { ProductFormValues } from "../api/post-event";
 import { createNostrDeleteEvent } from "../nostr-helpers";
 import * as CryptoJS from "crypto-js";
@@ -18,27 +17,18 @@ export type Event = {
 };
 
 const DisplayEvents = ({
-  router,
-  pubkey,
-  clickPubkey,
-  handlePostListing,
+  focusedPubkey,
+  clickNPubkey,
 }: {
-  router: NextRouter;
-  pubkey?: string;
-  clickPubkey: (pubkey: string) => void;
-  handlePostListing: (
-    ProductFormValues: ProductFormValues,
-    passphrase: string
-  ) => void;
+  focusedPubkey?: string;
+  clickNPubkey: (npubkey: string) => void;
 }) => {
   const [decryptedNpub, setDecryptedNpub] = useState("");
   const [encryptedPrivateKey, setEncryptedPrivateKey] = useState("");
   const [signIn, setSignIn] = useState("");
   const [relays, setRelays] = useState([]);
-
   const [eventData, setEventData] = useState<Event[]>([]);
   const imageUrlRegExp = /(https?:\/\/.*\.(?:png|jpg|jpeg|gif))/i;
-  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -59,15 +49,10 @@ const DisplayEvents = ({
     setEventData([]);
     let subParams: { kinds: number[]; authors?: string[] } = {
       kinds: [30402],
-      // kinds: [30018],
     };
-    // console.log("pubkey", pubkey);
-    // if (pubkey) {
-    //   subParams["authors"] = [pubkey];
-    // } // going to do front end filtering instead of backend. Everytime pubkey changes, we create a new sub and both the sub for [] and desired public key events are fetched
     let productsSub = pool.sub(relays, [subParams]);
     productsSub.on("event", (event) => {
-      if (pubkey && pubkey !== event.pubkey) {
+      if (focusedPubkey && focusedPubkey !== event.pubkey) {
         // needed cause on reload in a sellers shop, it displays all posts instead of just the sellers
         return;
       }
@@ -79,28 +64,15 @@ const DisplayEvents = ({
     });
   }, [relays]);
 
-  const handleClickPubkey = (pubkey: string) => {
-    clickPubkey(pubkey);
-  };
-
   const displayDate = (timestamp: number): string => {
     const d = new Date(timestamp * 1000);
     const dateString = d.toLocaleString();
     return dateString;
   };
 
-  // const handleCopyPubkey = (pubkey: string) => {
-  //   navigator.clipboard.writeText(pubkey);
-  //   alert(`Pubkey '${pubkey}' copied to clipboard!`);
-  // };
-
-  const handleModalToggle = () => {
-    setShowModal(!showModal);
-  };
-
   const getSelectedSellersProducts = () => {
-    if (pubkey == "") return eventData;
-    return eventData.filter((event) => event.pubkey == pubkey);
+    if (focusedPubkey == "") return eventData;
+    return eventData.filter((event) => event.pubkey == focusedPubkey);
   };
 
   const handleDelete = async (productId: string, passphrase: string) => {
@@ -157,68 +129,49 @@ const DisplayEvents = ({
   return (
     <div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-8 mb-8 overflow-y-scroll overflow-x-hidden max-h-[70vh] max-w-full">
-        {getSelectedSellersProducts()?.map((event, index) => (
-          <div
-            key={event.sig + "-" + index}
-            className="p-4 mb-4 mx-2 bg-gray-100 rounded-md shadow-lg"
-          >
-            <div className="flex justify-between items-center text-gray-600 text-xs md:text-sm">
-              <span
-                className="max-w-xsm truncate hover:text-purple-600 rounded-md cursor-pointer"
-                onClick={() => {
-                  handleClickPubkey(event.pubkey);
-                }}
-              >
-                {nip19.npubEncode(event.pubkey)}
-              </span>
-              <span className="text-gray-400 ml-2 text-xs md:text-sm">
-                {displayDate(event.created_at)}
-              </span>
+        {getSelectedSellersProducts()?.map((event, index) => {
+          let npub = nip19.npubEncode(event.pubkey);
+          return (
+            <div
+              key={event.sig + "-" + index}
+              className="p-4 mb-4 mx-2 bg-gray-100 rounded-md shadow-lg"
+            >
+              <div className="flex justify-between items-center text-gray-600 text-xs md:text-sm">
+                <span
+                  className="max-w-xsm truncate hover:text-purple-600 rounded-md cursor-pointer"
+                  onClick={() => {
+                    clickNPubkey(npub);
+                  }}
+                >
+                  {npub}
+                </span>
+                <span className="text-gray-400 ml-2 text-xs md:text-sm">
+                  {displayDate(event.created_at)}
+                </span>
+              </div>
+              <div className="mt-2 text-gray-800 text-sm md:text-base whitespace-pre-wrap break-words">
+                {event.kind == 30402 ? (
+                  <DisplayProduct
+                    tags={event.tags}
+                    eventId={event.id}
+                    pubkey={event.pubkey}
+                    handleDelete={handleDelete}
+                  />
+                ) : event.content.indexOf(imageUrlRegExp) ? (
+                  <div>
+                    <p>{event.content.replace(imageUrlRegExp, "")}</p>
+                    <img src={event.content.match(imageUrlRegExp)?.[0]} />
+                  </div>
+                ) : (
+                  <div>
+                    <p>{event.content}</p>
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="mt-2 text-gray-800 text-sm md:text-base whitespace-pre-wrap break-words">
-              {event.kind == 30402 ? (
-                <DisplayProduct
-                  tags={event.tags}
-                  eventId={event.id}
-                  pubkey={event.pubkey}
-                  handleDelete={handleDelete}
-                />
-              ) : event.content.indexOf(imageUrlRegExp) ? (
-                <div>
-                  <p>{event.content.replace(imageUrlRegExp, "")}</p>
-                  <img src={event.content.match(imageUrlRegExp)?.[0]} />
-                </div>
-              ) : (
-                <div>
-                  <p>{event.content}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
-      <div className="flex flex-row justify-between">
-        <button
-          type="button"
-          className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded"
-          onClick={() => {
-            handleClickPubkey(decryptedNpub);
-          }}
-        >
-          View Your Listings
-        </button>
-        <button
-          className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded"
-          onClick={handleModalToggle}
-        >
-          Add New Listing
-        </button>
-      </div>
-      <ProductForm
-        handlePostListing={handlePostListing}
-        showModal={showModal}
-        handleModalToggle={handleModalToggle}
-      />
     </div>
   );
 };

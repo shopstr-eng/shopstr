@@ -6,6 +6,7 @@ const Relays = () => {
   const [relays, setRelays] = useState([]);
   // make initial state equal to proprietary relay
   const [showModal, setShowModal] = useState(false);
+  const [addNewRelayText, setAddNewRelayText] = useState("");
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -19,26 +20,29 @@ const Relays = () => {
   }, [relays]);
 
   const handleToggleModal = () => {
+    if (showModal) {
+      setAddNewRelayText(""); // if closing modal, clear input
+    }
     setShowModal(!showModal);
   };
 
   const addRelay = async () => {
-    const relay = document.getElementById("relay") as HTMLTextAreaElement;
     const validRelay = /^(wss:\/\/|ws:\/\/)/;
-    if (validRelay.test(relay.value)) {
-      const relayTest = relayInit(relay.value);
+    if (validRelay.test(addNewRelayText)) {
+      const relayTest = relayInit(addNewRelayText);
       try {
         await relayTest.connect();
         handleToggleModal();
-        setRelays([...relays, relay.value]);
+        setRelays([...relays, addNewRelayText]);
         relayTest.close();
+        setAddNewRelayText("");
       } catch {
-        alert("Relay was unable to connect!");
-        relay.value = "";
+        alert(`Relay ${addNewRelayText} was unable to connect!`);
+        setAddNewRelayText("");
       }
     } else {
-      alert("Invalid relay!");
-      relay.value = "";
+      alert(`Invalid relay: ${addNewRelayText}`);
+      setAddNewRelayText("");
     }
   };
 
@@ -92,6 +96,10 @@ const Relays = () => {
                       id="relay"
                       className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md mb-2"
                       placeholder="Enter relay here..."
+                      onChange={(e) => {
+                        setAddNewRelayText(e.target.value);
+                      }}
+                      value={addNewRelayText}
                     ></textarea>
                   </div>
                 </div>
