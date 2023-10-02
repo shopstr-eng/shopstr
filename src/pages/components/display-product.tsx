@@ -40,7 +40,7 @@ const DisplayProduct = ({
   const [currency, setCurrency] = useState("");
   const [shipping, setShipping] = useState(null);
 
-  const [totalCost, setTotalCost] = useState("");
+  const [totalCost, setTotalCost] = useState(null);
 
   const [checkout, setCheckout] = useState(false);
   const [invoice, setInvoice] = useState("");
@@ -82,9 +82,11 @@ const DisplayProduct = ({
 
   useEffect(() => {
     let tmpImages = [];
+    let tempShipping = 0;
+    let tempPrice = 0;
+    
     tags.forEach((tag) => {
       const [key, ...values] = tag;
-      console.log(key, values);
       switch (key) {
         case "title":
           setTitle(values[0]);
@@ -106,30 +108,30 @@ const DisplayProduct = ({
           break;
         case "price":
           const [amount, currency] = values;
-          setPrice(amount);
+          tempPrice = Number(amount);
           setCurrency(currency);
           break;
         case "shipping":
-          if (values.length < 2) {
-            setShipping(values[0]);
-            break;
+          if (values.length < 3) {
+            tempShipping = values[0];
           } else {
             const [cost, currency] = values;
-            setShipping(cost);
-            console.log(cost);
-            break;
+            tempShipping = Number(cost);
           }
+          break;
         default:
           return;
       }
     });
+    
     setImages(tmpImages);
-    console.log(price)
-    console.log(shipping)
-    console.log(Number(shipping))
-    if (Number(shipping) != 0) {
-      setTotalCost(Number(price) + Number(shipping));
-      console.log(totalCost);
+    setPrice(tempPrice);
+    setShipping(tempShipping);
+
+    if ((tempShipping != "Free" && tempShipping != "Pickup") && (Number(tempPrice) != 0 && !isNaN(Number(tempPrice)))) {
+      setTotalCost(Number(tempPrice) + Number(tempShipping));
+    } else if (tempShipping === "Free" || tempShipping === "Pickup") {
+      setTotalCost(Number(tempPrice));
     }
   }, [tags]);
 
@@ -182,14 +184,14 @@ const DisplayProduct = ({
   async function invoiceHasBeenPaid(
     pk: string,
     wallet: object,
-    price: number,
+    newPrice: number,
     hash: string
   ) {
     let encoded;
 
     while (true) {
       try {
-        const { proofs } = await wallet.requestTokens(price, hash);
+        const { proofs } = await wallet.requestTokens(newPrice, hash);
 
         // Encoded proofs can be spent at the mint
         encoded = getEncodedToken({
@@ -218,7 +220,7 @@ const DisplayProduct = ({
     }
   }
 
-  const handlePayment = async (pk: string, price: number, currency: string) => {
+  const handlePayment = async (pk: string, newPrice: number, currency: string) => {
     const wallet = new CashuWallet(
       new CashuMint(
         "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"
@@ -230,14 +232,14 @@ const DisplayProduct = ({
           "https://api.coinbase.com/v2/prices/BTC-USD/spot"
         );
         const btcSpotPrice = Number(res.data.data.amount);
-        const numSats = (price / btcSpotPrice) * 100000000;
-        price = Math.round(numSats);
+        const numSats = (newPrice / btcSpotPrice) * 100000000;
+        newPrice = Math.round(numSats);
       } catch (err) {
         console.log(err);
       }
     }
 
-    const { pr, hash } = await wallet.requestMint(price);
+    const { pr, hash } = await wallet.requestMint(newPrice);
 
     setInvoice(pr);
 
@@ -253,13 +255,13 @@ const DisplayProduct = ({
 
     setCheckout(true);
 
-    invoiceHasBeenPaid(pk, wallet, price, hash);
+    invoiceHasBeenPaid(pk, wallet, newPrice, hash);
   };
 
   const handleCheckout = (
     productId: string,
     pk: string,
-    price: number,
+    newPrice: number,
     currency: string
   ) => {
     if (window.location.pathname.includes("checkout")) {
@@ -267,7 +269,7 @@ const DisplayProduct = ({
         setEnterPassphrase(!enterPassphrase);
         setUse("pay");
       } else {
-        handlePayment(pk, price, currency);
+        handlePayment(pk, newPrice, currency);
       }
     } else {
       router.push(`/checkout/${productId}`);
@@ -313,7 +315,7 @@ const DisplayProduct = ({
     ) {
       setEnterPassphrase(false);
       if (use === "pay") {
-        handlePayment(pubkey, price, currency);
+        handlePayment(pubkey, totalCost, currency);
       } else if (use === "delete") {
         handleDelete(eventId, passphrase);
       }
@@ -349,20 +351,24 @@ const DisplayProduct = ({
               alt={`Product Image ${currentImage + 1}`}
               className="w-full object-cover h-72"
             />
-            <button
-              style={{ right: "10px" }}
-              className="absolute top-1/2 p-2 rounded bg-white text-black"
-              onClick={nextImage}
-            >
-              {">"}
-            </button>
-            <button
-              style={{ left: "10px" }}
-              className="absolute top-1/2 p-2 rounded bg-white text-black"
-              onClick={prevImage}
-            >
-              {"<"}
-            </button>
+            {images.length > 1 && (
+              <button
+                style={{ right: "10px" }}
+                className="absolute top-1/2 p-2 rounded bg-white text-black"
+                onClick={nextImage}
+              >
+                {">"}
+              </button>
+            )}
+            {images.length > 1 && (
+              <button
+                style={{ left: "10px" }}
+                className="absolute top-1/2 p-2 rounded bg-white text-black"
+                onClick={prevImage}
+              >
+                {"<"}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -377,12 +383,20 @@ const DisplayProduct = ({
         <p>
           <strong className="font-semibold">Price:</strong> {price} {currency}
         </p>
-        {shipping && <p>
-          <strong className="font-semibold">Shipping:</strong> {shipping} {currency}
-        </p>}
-        {totalCost && <p>
-          <strong className="font-semibold">Total cost:</strong> {totalCost} {currency}
-        </p>}
+        {shipping && (shipping != "Free" && shipping != "Pickup") ? (
+          <p>
+            <strong className="font-semibold">Shipping Cost:</strong> {shipping} {currency}
+          </p>
+        ) : shipping ? (
+          <p>
+            <strong className="font-semibold">Shipping Cost:</strong> {shipping}
+          </p>
+        ) : undefined}
+        {totalCost ? (
+          <p>
+            <strong className="font-semibold">Total Cost:</strong> {totalCost} {currency}
+          </p>
+        ) : undefined}
         {/* <p>
           <strong className="font-semibold">Quantity:</strong> {quantity}
         </p> */}
@@ -402,7 +416,7 @@ const DisplayProduct = ({
       <div className="flex justify-center">
         <BoltIcon
           className="w-6 h-6 hover:text-yellow-500"
-          onClick={() => handleCheckout(eventId, pubkey, price, currency)}
+          onClick={() => handleCheckout(eventId, pubkey, totalCost, currency)}
         />
         {decryptedNpub === pubkey ? (
           <TrashIcon

@@ -53,9 +53,12 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
         }
 
         if (value === "Added cost") {
-          setShowAddedCostInput(true);
-        } else if (value === "Shipping option" || value === "Free" || value === "Pickup") {
-          setShowAddedCostInput(false);
+            setShowAddedCostInput(true);
+        } else if (value === "Shipping option") {
+            setShowAddedCostInput(false);
+            return prevValues.filter(([key]) => key !== "shipping"); // filter out "shipping"
+        } else if (value === "Free" || value === "Pickup") {
+            setShowAddedCostInput(false);
         };
 
         if (name === "Added cost") {
@@ -129,7 +132,31 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
         formValues.find(([key]) => key === "price").length >= 3 &&
         formValues.find(([key]) => key === "price")?.[2] != "Select currency"
       ) {
-        if (
+        if (formValues.find(([key]) => key === "shipping") === undefined) {
+          const updatedFormValues = [
+            ...formValues,
+            ...images.map((image) => ["image", image]),
+          ];
+          if (signIn == "extension") {
+            handleModalToggle();
+            initFormValues();
+            handlePostListing(updatedFormValues);
+          } else {
+            if (
+            CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
+                CryptoJS.enc.Utf8
+              )
+            ) {
+              // integrate image urls into formValues
+              handleModalToggle();
+              initFormValues();
+              setShowAddedCostInput(false);
+              handlePostListing(updatedFormValues);
+              } else {
+                alert("Invalid passphrase!");
+              }
+          }
+        } else if (
           formValues.find(([key]) => key === "shipping")?.[1] != "" &&
           formValues.find(([key]) => key === "shipping")?.[1] != "Shipping option"
         ) {
@@ -151,7 +178,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
               handleModalToggle();
               initFormValues();
               setShowAddedCostInput(false);
-              handlePostListing(updatedFormValues, passphrase);
+              handlePostListing(updatedFormValues);
             } else {
               alert("Invalid passphrase!");
             }
@@ -173,7 +200,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
     if (key === "shipping") {
       const value = formValues?.find(([k]) => k === key)?.[1] || "";
       if (!isNaN(value)) {
-        return "Added cost";
+        return "(Shipping option)";
       };
     };
     if (key === "Added cost") {
@@ -315,7 +342,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
                     </select>
 
                     <label htmlFor="shipping" className="block my-2 font-bold">
-                      Shipping:<span className="text-red-500">*</span>
+                      Shipping:
                     </label>
                     <select
                       id="shipping"
