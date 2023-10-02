@@ -16,6 +16,15 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
   const [images, setImages] = useState<string[]>([]);
   const [passphrase, setPassphrase] = useState("");
 
+  const [showAddedCostInput, setShowAddedCostInput] = useState(false);
+
+  const [currencyVal, setCurrencyVal] = useState("");
+
+  const initFormValues = () => {
+    setFormValues([]);
+    setImages([]);
+  };
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       const encrypted = localStorage.getItem("encryptedPrivateKey");
@@ -37,10 +46,39 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
       setFormValues((prevValues) => {
         // Handles when the name is 'currency'
         if (name === "currency") {
-          return prevValues.map(([key, price, _]) =>
+          setCurrencyVal(value);
+          return prevValues.map(([key, price, _]) => 
             key === "price" ? [key, price, value] : [key, price]
           );
         }
+
+        if (value === "Added cost") {
+            setShowAddedCostInput(true);
+        } else if (value === "Shipping option") {
+            setShowAddedCostInput(false);
+            return prevValues.filter(([key]) => key !== "shipping"); // filter out "shipping"
+        } else if (value === "Free" || value === "Pickup") {
+            setShowAddedCostInput(false);
+        };
+
+        if (name === "Added cost") {
+          return prevValues.map((formValue) => {
+            const [key, value] = formValue;
+            // Handle "shipping" key
+            if (key === "shipping") {
+              // Set new value for "Added cost"
+              return [key, e.target.value, currencyVal];
+            }
+            // Handle "price" key
+            if (key === "price") {
+              // Keep existing currency value
+              return [key, value, currencyVal];
+            }
+            // Return all other keys without modification
+            return formValue;
+          });
+        }
+
         // Checks to see if key exists and updates it rather than duplicating
         for (const [key, ...rest] of prevValues) {
           if (key === name) {
@@ -53,6 +91,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
         return [...prevValues, [name, value]];
       });
     }
+    console.log(formValues);
   };
 
   const handleImageChange = (value: string, index: number) => {
@@ -93,27 +132,59 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
         formValues.find(([key]) => key === "price").length >= 3 &&
         formValues.find(([key]) => key === "price")?.[2] != "Select currency"
       ) {
-        const updatedFormValues = [
-          ...formValues,
-          ...images.map((image) => ["image", image]),
-        ];
-        if (signIn == "extension") {
-          handleModalToggle();
-          initFormValues();
-          handlePostListing(updatedFormValues);
-        } else {
-          if (
-            CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-              CryptoJS.enc.Utf8
-            )
-          ) {
-            // integrate image urls into formValues
+        if (formValues.find(([key]) => key === "shipping") === undefined) {
+          const updatedFormValues = [
+            ...formValues,
+            ...images.map((image) => ["image", image]),
+          ];
+          if (signIn == "extension") {
             handleModalToggle();
             initFormValues();
-            handlePostListing(updatedFormValues, passphrase);
+            handlePostListing(updatedFormValues);
           } else {
-            alert("Invalid passphrase!");
+            if (
+            CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
+                CryptoJS.enc.Utf8
+              )
+            ) {
+              // integrate image urls into formValues
+              handleModalToggle();
+              initFormValues();
+              setShowAddedCostInput(false);
+              handlePostListing(updatedFormValues);
+              } else {
+                alert("Invalid passphrase!");
+              }
           }
+        } else if (
+          formValues.find(([key]) => key === "shipping")?.[1] != "" &&
+          formValues.find(([key]) => key === "shipping")?.[1] != "Shipping option"
+        ) {
+          const updatedFormValues = [
+            ...formValues,
+            ...images.map((image) => ["image", image]),
+          ];
+          if (signIn == "extension") {
+            handleModalToggle();
+            initFormValues();
+            handlePostListing(updatedFormValues);
+          } else {
+            if (
+            CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
+                CryptoJS.enc.Utf8
+              )
+            ) {
+              // integrate image urls into formValues
+              handleModalToggle();
+              initFormValues();
+              setShowAddedCostInput(false);
+              handlePostListing(updatedFormValues);
+            } else {
+              alert("Invalid passphrase!");
+            }
+          }
+        } else {
+          alert("Missing shipping option!");
         }
       } else {
         alert("Missing required fields!");
@@ -121,17 +192,22 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
     }
   };
 
-  const initFormValues = () => {
-    setFormValues([]);
-    setImages([]);
-  };
-
   const getFormValue = (key: string) => {
     if (key === "currency") {
-      const currency = formValues.find(([k]) => k === "price")?.[2] || "";
+      const currency = formValues?.find(([k]) => k === "price")?.[2] || "";
       return currency;
     }
-    const value = formValues.find(([k]) => k === key)?.[1] || "";
+    if (key === "shipping") {
+      const value = formValues?.find(([k]) => k === key)?.[1] || "";
+      if (!isNaN(value)) {
+        return "(Shipping option)";
+      };
+    };
+    if (key === "Added cost") {
+      const value = formValues?.find(([k]) => k === "shipping")?.[1] || "";
+      return value;
+    };
+    const value = formValues?.find(([k]) => k === key)?.[1] || "";
     return value;
   };
 
@@ -175,7 +251,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
 
                     <label
                       htmlFor="description"
-                      className="block mb-2 font-bold"
+                      className="block my-2 font-bold"
                     >
                       Summary:<span className="text-red-500">*</span>
                     </label>
@@ -191,7 +267,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
                     <div className="flex items-center mb-2">
                       <label
                         htmlFor="images"
-                        className="block mb-2 font-bold pr-3"
+                        className="block my-2 font-bold pr-3"
                       >
                         Images:
                       </label>
@@ -222,7 +298,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
                       </div>
                     ))}
 
-                    <label htmlFor="location" className="block mb-2 font-bold">
+                    <label htmlFor="location" className="block my-2 font-bold">
                       Location:<span className="text-red-500">*</span>
                     </label>
                     <input
@@ -235,7 +311,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
                       className="w-full p-2 border border-gray-300 rounded"
                     />
 
-                    <label htmlFor="price" className="block mb-2 font-bold">
+                    <label htmlFor="price" className="block my-2 font-bold">
                       Price:<span className="text-red-500">*</span>
                     </label>
                     <input
@@ -249,7 +325,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
                       className="w-full p-2 border border-gray-300 rounded"
                     />
 
-                    <label htmlFor="currency" className="block mb-2 font-bold">
+                    <label htmlFor="currency" className="block my-2 font-bold">
                       Currency:<span className="text-red-500">*</span>
                     </label>
                     <select
@@ -261,11 +337,51 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
                       className="w-full p-2 border border-gray-300 rounded"
                     >
                       <option value="Select currency">(Select currency)</option>
-                      <option value="Sats">Sat(s)</option>
+                      <option value="Sat(s)">Sat(s)</option>
                       <option value="USD">USD</option>
                     </select>
 
-                    <label htmlFor="t" className="block mb-2 font-bold">
+                    <label htmlFor="shipping" className="block my-2 font-bold">
+                      Shipping:
+                    </label>
+                    <select
+                      id="shipping"
+                      name="shipping"
+                      value={getFormValue("shipping")}
+                      onChange={handleChange}
+                      required
+                      className="w-full p-2 border border-gray-300 rounded"
+                    >
+                      <option value="Shipping option">
+                        (Shipping option)
+                      </option>
+                      <option value="Added cost">
+                        Added cost
+                      </option>
+                      <option value="Free">
+                        Free
+                      </option>
+                      <option value="Pickup">
+                        Pickup
+                      </option>
+                    </select>
+                    <div className="relative">
+                      {showAddedCostInput && (
+                        <input
+                          type="number"
+                          id="Added cost"
+                          name="Added cost"
+                          value={getFormValue("Added cost")}
+                          onChange={handleChange}
+                          className="w-full p-2 pl-6 border border-gray-300 rounded"
+                        />
+                      )}
+                      {showAddedCostInput && (
+                        <span className="absolute right-8 top-2">{currencyVal}</span>
+                      )}
+                    </div>
+
+                    <label htmlFor="t" className="block my-2 font-bold">
                       Category:
                     </label>
                     <input
