@@ -1,5 +1,5 @@
 import * as CryptoJS from "crypto-js";
-import { nip19, SimplePool } from "nostr-tools";
+import { nip19, nip98, SimplePool } from "nostr-tools";
 import { ProductFormValues } from "../api/post-event";
 import axios from "axios";
 

@@ -3,6 +3,7 @@ import { ProductFormValues } from "../api/post-event";
 import * as CryptoJS from "crypto-js";
 import { PostListing } from "../nostr-helpers";
 import { nip19 } from "nostr-tools";
+import { PhotoIcon } from "@heroicons/react/24/outline";
 
 interface ProductFormProps {
   handleModalToggle: () => void;
