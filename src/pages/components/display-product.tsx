@@ -128,9 +128,9 @@ const DisplayProduct = ({
     setPrice(tempPrice);
     setShipping(tempShipping);
 
-    if ((tempShipping != "Free" && tempShipping != "Pickup" && tempShipping != "Free/pickup") && (Number(tempPrice) != 0 && !isNaN(Number(tempPrice)))) {
+    if ((tempShipping != "Added cost" && tempShipping != "Free" && tempShipping != "Pickup" && tempShipping != "Free/pickup") && (Number(tempPrice) != 0 && !isNaN(Number(tempPrice)))) {
       setTotalCost(Number(tempPrice) + Number(tempShipping));
-    } else if (tempShipping === "Free" || tempShipping === "Pickup" || tempShipping === "Free/pickup") {
+    } else if (tempShipping === "Added cost" || tempShipping === "Free" || tempShipping === "Pickup" || tempShipping === "Free/pickup") {
       setTotalCost(Number(tempPrice));
     }
   }, [tags]);
