@@ -159,7 +159,8 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
           }
         } else if (
           formValues.find(([key]) => key === "shipping")?.[1] != "" &&
-          formValues.find(([key]) => key === "shipping")?.[1] != "Shipping option"
+          formValues.find(([key]) => key === "shipping")?.[1] != "Shipping option" && 
+          formValues.find(([key]) => key === "shipping")?.[1] != "Added cost"
         ) {
           const updatedFormValues = [
             ...formValues,

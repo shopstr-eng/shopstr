@@ -383,7 +383,7 @@ const DisplayProduct = ({
         <p>
           <strong className="font-semibold">Price:</strong> {price} {currency}
         </p>
-        {shipping && (shipping != "Free" && shipping != "Pickup" && shipping != "Free/pickup") ? (
+        {shipping && (shipping != "Added cost" && shipping != "Free" && shipping != "Pickup" && shipping != "Free/pickup") ? (
           <p>
             <strong className="font-semibold">Shipping Cost:</strong> {shipping} {currency}
           </p>
