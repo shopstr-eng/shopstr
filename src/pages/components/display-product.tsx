@@ -128,9 +128,9 @@ const DisplayProduct = ({
     setPrice(tempPrice);
     setShipping(tempShipping);
 
-    if ((tempShipping != "Free" && tempShipping != "Pickup") && (Number(tempPrice) != 0 && !isNaN(Number(tempPrice)))) {
+    if ((tempShipping != "Free" && tempShipping != "Pickup" && tempShipping != "Free/Pickup") && (Number(tempPrice) != 0 && !isNaN(Number(tempPrice)))) {
       setTotalCost(Number(tempPrice) + Number(tempShipping));
-    } else if (tempShipping === "Free" || tempShipping === "Pickup") {
+    } else if (tempShipping === "Free" || tempShipping === "Pickup" || tempShipping === "Free/Pickup") {
       setTotalCost(Number(tempPrice));
     }
   }, [tags]);
@@ -383,7 +383,7 @@ const DisplayProduct = ({
         <p>
           <strong className="font-semibold">Price:</strong> {price} {currency}
         </p>
-        {shipping && (shipping != "Free" && shipping != "Pickup") ? (
+        {shipping && (shipping != "Free" && shipping != "Pickup" && shipping != "Free/Pickup") ? (
           <p>
             <strong className="font-semibold">Shipping Cost:</strong> {shipping} {currency}
           </p>
