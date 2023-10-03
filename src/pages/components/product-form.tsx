@@ -92,7 +92,6 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
         return [...prevValues, [name, value]];
       });
     }
-    console.log(formValues);
   };
 
   const handleImageChange = (value: string, index: number) => {
