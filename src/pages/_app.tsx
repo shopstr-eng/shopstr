@@ -2,7 +2,7 @@ import "tailwindcss/tailwind.css";
 import type { AppProps } from "next/app";
 import "../styles/globals.css";
 import { useRouter } from "next/router";
-import Navbar from "./components/Navbar";
+import Navbar from "./components/navbar";
 
 function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
