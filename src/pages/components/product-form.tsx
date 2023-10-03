@@ -57,7 +57,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
         } else if (value === "Shipping option") {
             setShowAddedCostInput(false);
             return prevValues.filter(([key]) => key !== "shipping"); // filter out "shipping"
-        } else if (value === "Free" || value === "Pickup" || value === "Free/Pickup") {
+        } else if (value === "Free" || value === "Pickup" || value === "Free/pickup") {
             setShowAddedCostInput(false);
         };
 
@@ -364,8 +364,8 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
                       <option value="Pickup">
                         Pickup
                       </option>
-                      <option value="Free/Pickup">
-                        Free/Pickup
+                      <option value="Free/pickup">
+                        Free/pickup
                       </option>
                     </select>
                     <div className="relative">
