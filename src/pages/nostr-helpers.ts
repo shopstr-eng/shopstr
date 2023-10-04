@@ -1,3 +1,4 @@
+import React, { useContext } from "react";
 import * as CryptoJS from "crypto-js";
 import { nip19, nip98, SimplePool } from "nostr-tools";
 import { ProductFormValues } from "../api/post-event";
@@ -45,19 +46,6 @@ export async function PostListing(
     const signedEvent = await window.nostr.signEvent(event);
 
     const pool = new SimplePool();
-
-    // const relays = JSON.parse(storedRelays);
-
-    // let sub = pool.sub(relays, [
-    //   {
-    //     kinds: [signedEvent.kind],
-    //     authors: [signedEvent.pubkey],
-    //   },
-    // ]);
-
-    // sub.on('event', (event) => {
-    //   console.log('got event:', event);
-    // });
 
     await pool.publish(relays, signedEvent);
 
@@ -161,4 +149,68 @@ export function validateNPubKey(publicKey) {
 export function validateNSecKey(privateKey) {
   const validPrivKey = /^nsec[a-zA-Z0-9]{59}$/;
   return privateKey.match(validPrivKey) !== null;
+}
+
+type NostrBuildResponse = {
+  status: "success" | "error";
+  message: string;
+  data: [
+    {
+      input_name: "APIv2";
+      name: string;
+      url: string;
+      thumbnail: string;
+      responsive: {
+        "240p": string;
+        "360p": string;
+        "480p": string;
+        "720p": string;
+        "1080p": string;
+      };
+      blurhash: string;
+      sha256: string;
+      type: "picture" | "video";
+      mime: string;
+      size: number;
+      metadata: Record<string, string>;
+      dimensions: {
+        width: number;
+        height: number;
+      };
+    },
+  ];
+};
+
+export type NostrEvent = {
+  id: string;
+  pubkey: string;
+  created_at: number;
+  kind: number;
+  tags: Tag[];
+  content: string;
+  sig: string;
+};
+
+export type DraftNostrEvent = Omit<NostrEvent, "pubkey" | "id" | "sig">;
+
+export async function nostrBuildUploadImage(image: File, sign?: (draft: DraftNostrEvent) => Promise<NostrEvent>) {
+  if (!image.type.includes("image")) throw new Error("Only images are supported");
+
+  const url = "https://nostr.build/api/v2/upload/files";
+
+  const payload = new FormData();
+  payload.append("fileToUpload", image);
+
+  const headers: HeadersInit = {};
+  if (sign) {
+    // @ts-ignore
+    const token = await nip98.getToken(url, "POST", sign, true);
+    headers.Authorization = token;
+  }
+
+  const response = await fetch(url, { body: payload, method: "POST", headers }).then(
+    (res) => res.json() as Promise<NostrBuildResponse>,
+  );
+
+  return response.data[0];
 }

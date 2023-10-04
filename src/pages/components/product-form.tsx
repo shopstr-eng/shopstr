@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
 import { ProductFormValues } from "../api/post-event";
 import * as CryptoJS from "crypto-js";
-import { PostListing } from "../nostr-helpers";
+import { PostListing, nostrBuildUploadImage } from "../nostr-helpers";
 import { nip19 } from "nostr-tools";
-import { PhotoIcon } from "@heroicons/react/24/outline";
+import { PhotoIcon, TrashIcon } from "@heroicons/react/24/outline";
 
 interface ProductFormProps {
   handleModalToggle: () => void;
@@ -20,6 +20,8 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
   const [showAddedCostInput, setShowAddedCostInput] = useState(false);
 
   const [currencyVal, setCurrencyVal] = useState("");
+
+  const fileInput = useRef(null);
 
   const initFormValues = () => {
     setFormValues([]);
@@ -92,26 +94,6 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
         return [...prevValues, [name, value]];
       });
     }
-  };
-
-  const handleImageChange = (value: string, index: number) => {
-    setImages((prevValues) => {
-      const updatedImages = [...prevValues];
-      updatedImages[index] = value;
-      return updatedImages;
-    });
-  };
-
-  const handleAddImage = () => {
-    setImages((prevValues) => [...prevValues, ""]);
-  };
-
-  const handleDeleteImage = (index: number) => {
-    setImages((prevValues) => {
-      const updatedImages = [...prevValues];
-      updatedImages.splice(index, 1);
-      return updatedImages;
-    });
   };
 
   const handlePostListing = async (values) => {
@@ -212,6 +194,46 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
     return value;
   };
 
+  // const handleImageChange = (value: string, index: number) => {
+  //   setImages((prevValues) => {
+  //     const updatedImages = [...prevValues];
+  //     updatedImages[index] = value;
+  //     return updatedImages;
+  //   });
+  // };
+
+  const handleAddImage = () => {
+    setImages((prevValues) => [...prevValues, ""]);
+  };
+
+  const handleDeleteImage = (index: number) => {
+    setImages((prevValues) => {
+      const updatedImages = [...prevValues];
+      updatedImages.splice(index, 1);
+      return updatedImages;
+    });
+  };
+
+  const uploadImage = useCallback(
+    async (imageFile: File, index: number) => {
+      try {
+        if (!imageFile.type.includes("image")) throw new Error("Only images are supported");
+
+        const response = await nostrBuildUploadImage(imageFile, async (e) => await window.nostr.signEvent(e));
+        const imageUrl = response.url;
+
+        setImages((prevValues) => {
+          const updatedImages = [...prevValues];
+          updatedImages[index] = imageUrl;
+          return updatedImages;
+        });
+      } catch (e) {
+        if (e instanceof Error) alert(e.message);
+      }
+    },
+    [setImages],
+  );
+
   return (
     <div
       className={`fixed z-10 inset-0 overflow-y-auto ${
@@ -275,27 +297,33 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
                       <button
                         type="button"
                         onClick={handleAddImage}
-                        className="bg-blue-500 text-white px-4 py-2 rounded"
+                        className="bg-blue-500 text-white px-2 py-1 rounded"
                       >
-                        Add Image Url
+                        Add Image
                       </button>
                     </div>
                     {images.map((image, index) => (
                       <div key={index} className="flex items-center mb-2">
                         <input
-                          type="text"
+                          type="file"
+                          accept="image/*" 
                           id={`image-${index}`}
                           name={`image-${index}`}
                           placeholder="Image Url"
-                          value={image}
-                          onChange={(e) =>
-                            handleImageChange(e.target.value, index)
-                          }
-                          className="w-1/2 p-2 border border-gray-300 rounded"
+                          ref={fileInput}
+                          onChange={(e) => {uploadImage(e.target.files[0], index)}}
+                          className="w-1/2 p-2 border border-gray-300 rounded hidden"
                         />
-                        <button onClick={() => handleDeleteImage(index)}>
-                          Delete
-                        </button>
+                        {image ? 
+                          <a href={image} target="_blank" rel="noopener noreferrer">
+                            {image.substring(0,20) + '...'}
+                          </a>
+                          : 
+                          <PhotoIcon className="w-8 h-8 hover:text-purple-700" onClick={() => fileInput.current.click()} />
+                        }
+                        <TrashIcon className="w-8 h-8 ml-auto hover:text-red-500" onClick={() => handleDeleteImage(index)} />
+                          {/* Delete
+                        </button> */}
                       </div>
                     ))}
 
