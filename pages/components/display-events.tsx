@@ -98,7 +98,7 @@ const DisplayEvents = ({
       });
     } else {
       let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-        CryptoJS.enc.Utf8
+        CryptoJS.enc.Utf8,
       );
       // add error handling and re-prompt for passphrase
       let { data } = nip19.decode(nsec);
@@ -106,7 +106,7 @@ const DisplayEvents = ({
         [productId],
         decryptedNpub,
         "user deletion request",
-        data
+        data,
       );
       axios({
         method: "POST",

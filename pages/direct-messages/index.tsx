@@ -61,7 +61,7 @@ const DirectMessages = () => {
           setEnterPassphrase(!enterPassphrase);
           if (
             CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-              CryptoJS.enc.Utf8
+              CryptoJS.enc.Utf8,
             )
           ) {
             let newChats = Array.from(new Set([...chats, passedPubkeyStr]));
@@ -99,7 +99,7 @@ const DirectMessages = () => {
             if (!chats.includes(incomingPubkey)) {
               setChats((chats) => {
                 return Array.from(
-                  new Set([...chats, nip19.npubEncode(incomingPubkey)])
+                  new Set([...chats, nip19.npubEncode(incomingPubkey)]),
                 );
               });
             }
@@ -143,12 +143,12 @@ const DirectMessages = () => {
           if (signIn === "extension") {
             plaintext = await window.nostr.nip04.decrypt(
               chatPubkey,
-              event.content
+              event.content,
             );
           } else {
             let nsec = CryptoJS.AES.decrypt(
               encryptedPrivateKey,
-              passphrase
+              passphrase,
             ).toString(CryptoJS.enc.Utf8);
             // add error handling and re-prompt for passphrase
             let { data } = nip19.decode(nsec);
@@ -175,7 +175,7 @@ const DirectMessages = () => {
           }
           // Sort the messages with each state update
           setMessages((prevMessages) =>
-            prevMessages.sort((a, b) => a.createdAt - b.createdAt)
+            prevMessages.sort((a, b) => a.createdAt - b.createdAt),
           );
         }
       });
@@ -203,7 +203,7 @@ const DirectMessages = () => {
       if (signIn != "extension") {
         if (
           CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-            CryptoJS.enc.Utf8
+            CryptoJS.enc.Utf8,
           )
         ) {
           if (!chats.includes(npubText.value)) {
@@ -262,7 +262,7 @@ const DirectMessages = () => {
       } else {
         let nsec = CryptoJS.AES.decrypt(
           encryptedPrivateKey,
-          passphrase
+          passphrase,
         ).toString(CryptoJS.enc.Utf8);
         // add error handling and re-prompt for passphrase
         let { data: privkey } = nip19.decode(nsec);
@@ -292,7 +292,7 @@ const DirectMessages = () => {
   };
 
   const handlePassphraseChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
     const { name, value } = e.target;
     if (name === "passphrase") {
@@ -316,7 +316,7 @@ const DirectMessages = () => {
   const handleSubmitPassphrase = () => {
     if (
       CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-        CryptoJS.enc.Utf8
+        CryptoJS.enc.Utf8,
       )
     ) {
       setEnterPassphrase(false);

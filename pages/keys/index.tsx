@@ -26,7 +26,7 @@ const Keys = () => {
         setPublicKey(response.data.npub);
         setPrivateKey(response.data.nsec);
         alert(
-          "Make sure to write down and save your public and private keys in a secure format!"
+          "Make sure to write down and save your public and private keys in a secure format!",
         );
       })
       .catch((error) => {
@@ -54,7 +54,7 @@ const Keys = () => {
 
       let encryptedPrivateKey = CryptoJS.AES.encrypt(
         privateKey,
-        passphrase
+        passphrase,
       ).toString();
 
       localStorage.setItem("encryptedPrivateKey", encryptedPrivateKey);
@@ -63,7 +63,7 @@ const Keys = () => {
 
       localStorage.setItem(
         "relays",
-        JSON.stringify(["wss://relay.damus.io", "wss://nos.lol"])
+        JSON.stringify(["wss://relay.damus.io", "wss://nos.lol"]),
       );
 
       router.push("/marketplace");

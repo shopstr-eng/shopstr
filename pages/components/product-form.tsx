@@ -40,7 +40,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
   const handleChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >
+    >,
   ) => {
     const { name, value } = e.target;
     if (name === "passphrase") {
@@ -48,7 +48,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
     } else {
       setFormValues((prevValues) => {
         // Handles when the name is 'currency'
-        if(name === "currency") {
+        if (name === "currency") {
           setCurrencyVal(value);
           // let priceState = prevValues.find(([key]) => key === "price") === undefined;
           // let shippingState = prevValues.find(([key]) => key === "shipping") === undefined;
@@ -56,14 +56,14 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
           //   return [...prevValues, ["price", "", value], ["shipping", "", "", value]];
           // } else if (priceState) {
           //   return [...prevValues, ["price", "", value]];
-          
+
           // } else if (shippingState) {
           //   return [...prevValues, ["shipping", "", "", value]];
           // }
           return prevValues.map(([key, ...rest]) => {
             if (key === "price") {
               let price = rest[0];
-              return [key, price, value]
+              return [key, price, value];
             } else if (key === "shipping") {
               let type = rest[0];
               if (rest[1]) {
@@ -77,11 +77,15 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
         }
 
         if (value === "Shipping option") {
-            setShowAddedCostInput(false);
-            return prevValues.filter(([key]) => key !== "shipping"); // filter out "shipping"
+          setShowAddedCostInput(false);
+          return prevValues.filter(([key]) => key !== "shipping"); // filter out "shipping"
         } else if (value === "Added cost") {
-            setShowAddedCostInput(true);
-        } else if (value === "Free" || value === "Pickup" || value === "Free/pickup") {
+          setShowAddedCostInput(true);
+        } else if (
+          value === "Free" ||
+          value === "Pickup" ||
+          value === "Free/pickup"
+        ) {
           setShowAddedCostInput(false);
           if (prevValues.find(([key]) => key === "shipping") === undefined) {
             return [...prevValues, [name, value, "0", currencyVal]];
@@ -90,7 +94,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
               if (key === "shipping") {
                 return [key, value, "0", currencyVal];
               } else {
-                return [key, ...rest];  // return the original value for other keys
+                return [key, ...rest]; // return the original value for other keys
               }
             });
           }
@@ -118,7 +122,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
         for (const [key, ...rest] of prevValues) {
           if (key === name) {
             return prevValues.map((item) =>
-              item[0] === name ? [name, value] : item
+              item[0] === name ? [name, value] : item,
             );
           }
         }
@@ -162,12 +166,12 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
     // here we know that added shipping is a valid number and greater than 0
     if (
       Number(formValues.find(([key]) => key === "shipping")?.[2]) <= 0 ||
-    isNaN(Number(formValues.find(([key]) => key === "shipping")?.[2]))
+      isNaN(Number(formValues.find(([key]) => key === "shipping")?.[2]))
     ) {
       alert("Missing shipping option!");
       return;
     }
-    
+
     const updatedFormValues = [
       ...formValues,
       ...images.map((image) => ["image", image]),
@@ -180,7 +184,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
     } else {
       if (
         CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-          CryptoJS.enc.Utf8
+          CryptoJS.enc.Utf8,
         )
       ) {
         // integrate image urls into formValues
@@ -203,12 +207,12 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
       const value = formValues?.find(([k]) => k === key)?.[1] || "";
       if (!isNaN(value)) {
         return "(Shipping option)";
-      };
-    };
+      }
+    }
     if (key === "Added cost") {
       const value = formValues?.find(([k]) => k === "shipping")?.[2] || "";
       return value;
-    };
+    }
     const value = formValues?.find(([k]) => k === key)?.[1] || "";
     return value;
   };
@@ -228,9 +232,13 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
   const uploadImage = useCallback(
     async (imageFile: File, index: number) => {
       try {
-        if (!imageFile.type.includes("image")) throw new Error("Only images are supported");
+        if (!imageFile.type.includes("image"))
+          throw new Error("Only images are supported");
 
-        const response = await nostrBuildUploadImage(imageFile, async (e) => await window.nostr.signEvent(e));
+        const response = await nostrBuildUploadImage(
+          imageFile,
+          async (e) => await window.nostr.signEvent(e),
+        );
         const imageUrl = response.url;
 
         setImages((prevValues) => {
@@ -317,23 +325,35 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
                       <div key={index} className="flex items-center mb-2">
                         <input
                           type="file"
-                          accept="image/*" 
+                          accept="image/*"
                           id={`image-${index}`}
                           name={`image-${index}`}
                           placeholder="Image Url"
                           ref={fileInput}
-                          onChange={(e) => {uploadImage(e.target.files[0], index)}}
+                          onChange={(e) => {
+                            uploadImage(e.target.files[0], index);
+                          }}
                           className="w-1/2 p-2 border border-gray-300 rounded hidden"
                         />
-                        {image ? 
-                          <a href={image} target="_blank" rel="noopener noreferrer">
-                            {image.substring(0,20) + '...'}
+                        {image ? (
+                          <a
+                            href={image}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {image.substring(0, 20) + "..."}
                           </a>
-                          : 
-                          <PhotoIcon className="w-8 h-8 hover:text-purple-700" onClick={() => fileInput.current.click()} />
-                        }
-                        <TrashIcon className="w-8 h-8 ml-auto hover:text-red-500" onClick={() => handleDeleteImage(index)} />
-                          {/* Delete
+                        ) : (
+                          <PhotoIcon
+                            className="w-8 h-8 hover:text-purple-700"
+                            onClick={() => fileInput.current.click()}
+                          />
+                        )}
+                        <TrashIcon
+                          className="w-8 h-8 ml-auto hover:text-red-500"
+                          onClick={() => handleDeleteImage(index)}
+                        />
+                        {/* Delete
                         </button> */}
                       </div>
                     ))}
@@ -392,21 +412,11 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
                       required
                       className="w-full p-2 border border-gray-300 rounded"
                     >
-                      <option value="Shipping option">
-                        (Shipping option)
-                      </option>
-                      <option value="Added cost">
-                        Added cost
-                      </option>
-                      <option value="Free">
-                        Free
-                      </option>
-                      <option value="Pickup">
-                        Pickup
-                      </option>
-                      <option value="Free/pickup">
-                        Free/pickup
-                      </option>
+                      <option value="Shipping option">(Shipping option)</option>
+                      <option value="Added cost">Added cost</option>
+                      <option value="Free">Free</option>
+                      <option value="Pickup">Pickup</option>
+                      <option value="Free/pickup">Free/pickup</option>
                     </select>
                     <div className="relative">
                       {showAddedCostInput && (
@@ -420,7 +430,9 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
                         />
                       )}
                       {showAddedCostInput && (
-                        <span className="absolute right-8 top-2">{currencyVal}</span>
+                        <span className="absolute right-8 top-2">
+                          {currencyVal}
+                        </span>
                       )}
                     </div>
 

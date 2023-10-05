@@ -6,13 +6,13 @@ import {
 } from "nostr-tools";
 
 export interface PostEventRequest {
-  pubkey: string,
-  privkey: string,
-  created_at: number,
-  kind: number,
-  tags: [],
-  content: string,
-  relays: string[],
+  pubkey: string;
+  privkey: string;
+  created_at: number;
+  kind: number;
+  tags: [];
+  content: string;
+  relays: string[];
 }
 
 type ProductFormValue = [key: string, ...values: string[]];

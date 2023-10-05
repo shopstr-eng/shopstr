@@ -80,7 +80,7 @@ const DisplayProduct = ({
     let tmpImages = [];
     let tempShipping = 0;
     let tempPrice = 0;
-    
+
     tags.forEach((tag) => {
       const [key, ...values] = tag;
       switch (key) {
@@ -114,8 +114,12 @@ const DisplayProduct = ({
             const [cost, currency] = values;
             tempShipping = Number(cost);
           } else {
-            const [type, cost, _] = values
-            if (type === "Free" || type === "Pickup" || type === "Free/pickup") {
+            const [type, cost, _] = values;
+            if (
+              type === "Free" ||
+              type === "Pickup" ||
+              type === "Free/pickup"
+            ) {
               tempShipping = type;
             } else {
               tempShipping = Number(cost);
@@ -126,14 +130,26 @@ const DisplayProduct = ({
           return;
       }
     });
-    
+
     setImages(tmpImages);
     setPrice(tempPrice);
     setShipping(tempShipping);
 
-    if ((tempShipping != "Added cost" && tempShipping != "Free" && tempShipping != "Pickup" && tempShipping != "Free/pickup") && (Number(tempPrice) != 0 && !isNaN(Number(tempPrice)))) {
+    if (
+      tempShipping != "Added cost" &&
+      tempShipping != "Free" &&
+      tempShipping != "Pickup" &&
+      tempShipping != "Free/pickup" &&
+      Number(tempPrice) != 0 &&
+      !isNaN(Number(tempPrice))
+    ) {
       setTotalCost(Number(tempPrice) + Number(tempShipping));
-    } else if (tempShipping === "Added cost" || tempShipping === "Free" || tempShipping === "Pickup" || tempShipping === "Free/pickup") {
+    } else if (
+      tempShipping === "Added cost" ||
+      tempShipping === "Free" ||
+      tempShipping === "Pickup" ||
+      tempShipping === "Free/pickup"
+    ) {
       setTotalCost(Number(tempPrice));
     }
   }, [tags]);
@@ -161,7 +177,7 @@ const DisplayProduct = ({
       });
     } else {
       let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-        CryptoJS.enc.Utf8
+        CryptoJS.enc.Utf8,
       );
       // add error handling and re-prompt for passphrase
       let { data } = nip19.decode(nsec);
@@ -188,7 +204,7 @@ const DisplayProduct = ({
     pk: string,
     wallet: object,
     newPrice: number,
-    hash: string
+    hash: string,
   ) {
     let encoded;
 
@@ -223,16 +239,20 @@ const DisplayProduct = ({
     }
   }
 
-  const handlePayment = async (pk: string, newPrice: number, currency: string) => {
+  const handlePayment = async (
+    pk: string,
+    newPrice: number,
+    currency: string,
+  ) => {
     const wallet = new CashuWallet(
       new CashuMint(
-        "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"
-      )
+        "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC",
+      ),
     );
     if (currency === "USD") {
       try {
         const res = await axios.get(
-          "https://api.coinbase.com/v2/prices/BTC-USD/spot"
+          "https://api.coinbase.com/v2/prices/BTC-USD/spot",
         );
         const btcSpotPrice = Number(res.data.data.amount);
         const numSats = (newPrice / btcSpotPrice) * 100000000;
@@ -265,7 +285,7 @@ const DisplayProduct = ({
     productId: string,
     pk: string,
     newPrice: number,
-    currency: string
+    currency: string,
   ) => {
     if (window.location.pathname.includes("checkout")) {
       if (signIn != "extension") {
@@ -288,7 +308,7 @@ const DisplayProduct = ({
   };
 
   const handlePassphraseChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
     const { name, value } = e.target;
     if (name === "passphrase") {
@@ -308,7 +328,7 @@ const DisplayProduct = ({
   const handleSubmitPassphrase = () => {
     if (
       CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-        CryptoJS.enc.Utf8
+        CryptoJS.enc.Utf8,
       )
     ) {
       setEnterPassphrase(false);
@@ -372,18 +392,25 @@ const DisplayProduct = ({
       </div>
 
       <div className="mb-4">
-        {category && <p>
-          <strong className="font-semibold">Category:</strong> {category}
-        </p>}
+        {category && (
+          <p>
+            <strong className="font-semibold">Category:</strong> {category}
+          </p>
+        )}
         <p>
           <strong className="font-semibold">Location:</strong> {location}
         </p>
         <p>
           <strong className="font-semibold">Price:</strong> {price} {currency}
         </p>
-        {shipping && (shipping != "Added cost" && shipping != "Free" && shipping != "Pickup" && shipping != "Free/pickup") ? (
+        {shipping &&
+        shipping != "Added cost" &&
+        shipping != "Free" &&
+        shipping != "Pickup" &&
+        shipping != "Free/pickup" ? (
           <p>
-            <strong className="font-semibold">Shipping Cost:</strong> {shipping} {currency}
+            <strong className="font-semibold">Shipping Cost:</strong> {shipping}{" "}
+            {currency}
           </p>
         ) : shipping ? (
           <p>
@@ -392,7 +419,8 @@ const DisplayProduct = ({
         ) : undefined}
         {totalCost ? (
           <p>
-            <strong className="font-semibold">Total Cost:</strong> {totalCost} {currency}
+            <strong className="font-semibold">Total Cost:</strong> {totalCost}{" "}
+            {currency}
           </p>
         ) : undefined}
         {/* <p>
@@ -458,7 +486,7 @@ const DisplayProduct = ({
                     {invoice.length > 30
                       ? `${invoice.substring(0, 15)}...${invoice.substring(
                           invoice.length - 15,
-                          invoice.length
+                          invoice.length,
                         )}`
                       : invoice}
                   </p>

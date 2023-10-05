@@ -24,7 +24,7 @@ export const getLocalStorageData = () => {
 
 export async function PostListing(
   values: ProductFormValues,
-  passphrase: string
+  passphrase: string,
 ) {
   const { signIn, encryptedPrivateKey, decryptedNpub, relays } =
     getLocalStorageData();
@@ -55,7 +55,7 @@ export async function PostListing(
     });
   } else {
     let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-      CryptoJS.enc.Utf8
+      CryptoJS.enc.Utf8,
     );
     // add error handling and re-prompt for passphrase
     let { data } = nip19.decode(nsec);
@@ -83,7 +83,7 @@ export async function createNostrDeleteEvent(
   event_ids,
   pubkey,
   content,
-  privkey
+  privkey,
 ) {
   let msg = {
     kind: 5, // NIP-X - Deletion
@@ -193,8 +193,12 @@ export type NostrEvent = {
 
 export type DraftNostrEvent = Omit<NostrEvent, "pubkey" | "id" | "sig">;
 
-export async function nostrBuildUploadImage(image: File, sign?: (draft: DraftNostrEvent) => Promise<NostrEvent>) {
-  if (!image.type.includes("image")) throw new Error("Only images are supported");
+export async function nostrBuildUploadImage(
+  image: File,
+  sign?: (draft: DraftNostrEvent) => Promise<NostrEvent>,
+) {
+  if (!image.type.includes("image"))
+    throw new Error("Only images are supported");
 
   const url = "https://nostr.build/api/v2/upload/files";
 
@@ -208,9 +212,11 @@ export async function nostrBuildUploadImage(image: File, sign?: (draft: DraftNos
     headers.Authorization = token;
   }
 
-  const response = await fetch(url, { body: payload, method: "POST", headers }).then(
-    (res) => res.json() as Promise<NostrBuildResponse>,
-  );
+  const response = await fetch(url, {
+    body: payload,
+    method: "POST",
+    headers,
+  }).then((res) => res.json() as Promise<NostrBuildResponse>);
 
   return response.data[0];
 }
