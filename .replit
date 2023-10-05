@@ -1,8 +1,8 @@
-run = "cd src && npm run dev"
+run = "npm run dev"
 
 [nix]
 channel = "stable-22_11"
 
 [deployment]
-run = ["sh", "-c", "cd src && npm run dev"]
+run = ["sh", "-c", "npm run dev"]
 deploymentTarget = "cloudrun"

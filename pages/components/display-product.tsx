@@ -7,9 +7,6 @@ import { CashuMint, CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
 import { nip19, SimplePool } from "nostr-tools";
 import "websocket-polyfill";
 import * as CryptoJS from "crypto-js";
-// add an aggregated sum of cost
-// aggregate sum in token send
-
 
 const DisplayProduct = ({
   tags,
@@ -112,11 +109,18 @@ const DisplayProduct = ({
           setCurrency(currency);
           break;
         case "shipping":
-          if (values.length < 3) {
+          if (values.length === 1) {
             tempShipping = values[0];
-          } else {
+          } else if (values.length === 2) {
             const [cost, currency] = values;
             tempShipping = Number(cost);
+          } else {
+            const [type, cost, _] = values
+            if (type === "Free" || type === "Pickup" || type === "Free/pickup") {
+              tempShipping = type;
+            } else {
+              tempShipping = Number(cost);
+            }
           }
           break;
         default:
@@ -275,11 +279,6 @@ const DisplayProduct = ({
       router.push(`/checkout/${productId}`);
     }
   };
-
-  // const handleCancel = () => {
-  //   setCheckout(false);
-  //   console.log(checkout)
-  // };
 
   const nextImage = () => {
     setCurrentImage((currentImage + 1) % images.length);

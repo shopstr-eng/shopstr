@@ -48,21 +48,53 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
     } else {
       setFormValues((prevValues) => {
         // Handles when the name is 'currency'
-        if (name === "currency") {
+        if(name === "currency") {
           setCurrencyVal(value);
-          return prevValues.map(([key, price, _]) => 
-            key === "price" ? [key, price, value] : [key, price]
-          );
+          // let priceState = prevValues.find(([key]) => key === "price") === undefined;
+          // let shippingState = prevValues.find(([key]) => key === "shipping") === undefined;
+          // if(priceState && shippingState) {
+          //   return [...prevValues, ["price", "", value], ["shipping", "", "", value]];
+          // } else if (priceState) {
+          //   return [...prevValues, ["price", "", value]];
+          
+          // } else if (shippingState) {
+          //   return [...prevValues, ["shipping", "", "", value]];
+          // }
+          return prevValues.map(([key, ...rest]) => {
+            if (key === "price") {
+              let price = rest[0];
+              return [key, price, value]
+            } else if (key === "shipping") {
+              let type = rest[0];
+              if (rest[1]) {
+                return [key, type, rest[1], value];
+              }
+              return [key, type, "", value];
+            } else {
+              return [key, ...rest];
+            }
+          });
         }
 
-        if (value === "Added cost") {
-            setShowAddedCostInput(true);
-        } else if (value === "Shipping option") {
+        if (value === "Shipping option") {
             setShowAddedCostInput(false);
             return prevValues.filter(([key]) => key !== "shipping"); // filter out "shipping"
+        } else if (value === "Added cost") {
+            setShowAddedCostInput(true);
         } else if (value === "Free" || value === "Pickup" || value === "Free/pickup") {
-            setShowAddedCostInput(false);
-        };
+          setShowAddedCostInput(false);
+          if (prevValues.find(([key]) => key === "shipping") === undefined) {
+            return [...prevValues, [name, value, "0", currencyVal]];
+          } else {
+            return prevValues.map(([key, ...rest]) => {
+              if (key === "shipping") {
+                return [key, value, "0", currencyVal];
+              } else {
+                return [key, ...rest];  // return the original value for other keys
+              }
+            });
+          }
+        }
 
         if (name === "Added cost") {
           return prevValues.map((formValue) => {
@@ -70,7 +102,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
             // Handle "shipping" key
             if (key === "shipping") {
               // Set new value for "Added cost"
-              return [key, e.target.value, currencyVal];
+              return [key, "Added cost", e.target.value, currencyVal];
             }
             // Handle "price" key
             if (key === "price") {
@@ -108,69 +140,56 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
       !formValues.find(([key]) => key === "price")
     ) {
       alert("Missing required fields!");
+      return;
+    }
+    if (
+      formValues.find(([key]) => key === "price").length < 3 || // check all fields exist for price
+      formValues.find(([key]) => key === "price")?.[1] === "" || // check that price is not empty
+      formValues.find(([key]) => key === "price")?.[2] === "Select currency" // check that currency is not empty
+    ) {
+      alert("Missing required fields!");
+      return;
+    }
+    // here we know that added shipping is not empty
+    if (
+      formValues.find(([key]) => key === "shipping") != undefined &&
+      formValues.find(([key]) => key === "shipping")?.[1] === "Added cost" &&
+      formValues.find(([key]) => key === "shipping").length < 4
+    ) {
+      alert("Missing shipping option!");
+      return;
+    }
+    // here we know that added shipping is a valid number and greater than 0
+    if (
+      Number(formValues.find(([key]) => key === "shipping")?.[2]) <= 0 ||
+    isNaN(Number(formValues.find(([key]) => key === "shipping")?.[2]))
+    ) {
+      alert("Missing shipping option!");
+      return;
+    }
+    
+    const updatedFormValues = [
+      ...formValues,
+      ...images.map((image) => ["image", image]),
+    ];
+    if (signIn == "extension") {
+      handleModalToggle();
+      initFormValues();
+      setShowAddedCostInput(false);
+      handlePostListing(updatedFormValues);
     } else {
       if (
-        formValues.find(([key]) => key === "price")?.[1] != "" &&
-        formValues.find(([key]) => key === "price").length >= 3 &&
-        formValues.find(([key]) => key === "price")?.[2] != "Select currency"
+        CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
+          CryptoJS.enc.Utf8
+        )
       ) {
-        if (formValues.find(([key]) => key === "shipping") === undefined) {
-          const updatedFormValues = [
-            ...formValues,
-            ...images.map((image) => ["image", image]),
-          ];
-          if (signIn == "extension") {
-            handleModalToggle();
-            initFormValues();
-            handlePostListing(updatedFormValues);
-          } else {
-            if (
-            CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-                CryptoJS.enc.Utf8
-              )
-            ) {
-              // integrate image urls into formValues
-              handleModalToggle();
-              initFormValues();
-              setShowAddedCostInput(false);
-              handlePostListing(updatedFormValues);
-              } else {
-                alert("Invalid passphrase!");
-              }
-          }
-        } else if (
-          formValues.find(([key]) => key === "shipping")?.[1] != "" &&
-          formValues.find(([key]) => key === "shipping")?.[1] != "Shipping option" && 
-          formValues.find(([key]) => key === "shipping")?.[1] != "Added cost"
-        ) {
-          const updatedFormValues = [
-            ...formValues,
-            ...images.map((image) => ["image", image]),
-          ];
-          if (signIn == "extension") {
-            handleModalToggle();
-            initFormValues();
-            handlePostListing(updatedFormValues);
-          } else {
-            if (
-            CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-                CryptoJS.enc.Utf8
-              )
-            ) {
-              // integrate image urls into formValues
-              handleModalToggle();
-              initFormValues();
-              setShowAddedCostInput(false);
-              handlePostListing(updatedFormValues);
-            } else {
-              alert("Invalid passphrase!");
-            }
-          }
-        } else {
-          alert("Missing shipping option!");
-        }
+        // integrate image urls into formValues
+        handleModalToggle();
+        initFormValues();
+        setShowAddedCostInput(false);
+        handlePostListing(updatedFormValues);
       } else {
-        alert("Missing required fields!");
+        alert("Invalid passphrase!");
       }
     }
   };
@@ -187,20 +206,12 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
       };
     };
     if (key === "Added cost") {
-      const value = formValues?.find(([k]) => k === "shipping")?.[1] || "";
+      const value = formValues?.find(([k]) => k === "shipping")?.[2] || "";
       return value;
     };
     const value = formValues?.find(([k]) => k === key)?.[1] || "";
     return value;
   };
-
-  // const handleImageChange = (value: string, index: number) => {
-  //   setImages((prevValues) => {
-  //     const updatedImages = [...prevValues];
-  //     updatedImages[index] = value;
-  //     return updatedImages;
-  //   });
-  // };
 
   const handleAddImage = () => {
     setImages((prevValues) => [...prevValues, ""]);
