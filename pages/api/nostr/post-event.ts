@@ -4,7 +4,6 @@ import {
   finishEvent, // this assigns the pubkey, calculates the event id and signs the event in a single step
   nip04,
 } from "nostr-tools";
-import "websocket-polyfill";
 
 export interface PostEventRequest {
   pubkey: string,

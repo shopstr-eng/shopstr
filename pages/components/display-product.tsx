@@ -5,7 +5,6 @@ import axios from "axios";
 import requestMint from "../api/cashu/request-mint";
 import { CashuMint, CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
 import { nip19, SimplePool } from "nostr-tools";
-import "websocket-polyfill";
 import * as CryptoJS from "crypto-js";
 
 const DisplayProduct = ({

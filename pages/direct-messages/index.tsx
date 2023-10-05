@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { nip04, nip19, SimplePool } from "nostr-tools";
-import "websocket-polyfill";
 import {
   ArrowUturnLeftIcon,
   MinusCircleIcon,

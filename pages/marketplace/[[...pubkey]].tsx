@@ -3,7 +3,6 @@ import DisplayEvents from "../components/display-events";
 import { useRouter } from "next/router";
 import { ArrowUturnLeftIcon } from "@heroicons/react/24/outline";
 import { nip19, SimplePool } from "nostr-tools";
-import "websocket-polyfill";
 import ProductForm from "../components/product-form";
 
 const SellerView = () => {
