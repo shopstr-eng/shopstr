@@ -132,6 +132,8 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
     }
   };
 
+  console.log(formValues);
+
   const handlePostListing = async (values) => {
     await PostListing(values, passphrase);
   };
@@ -165,10 +167,12 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
     }
     // here we know that added shipping is a valid number and greater than 0
     if (
-      Number(formValues.find(([key]) => key === "shipping")?.[2]) <= 0 ||
-      isNaN(Number(formValues.find(([key]) => key === "shipping")?.[2]))
+      (formValues.find(([key]) => key === "shipping") === "Shipping option" ||
+        formValues.find(([key]) => key === "shipping") === "Added cost") &&
+      (Number(formValues.find(([key]) => key === "shipping")?.[2]) <= 0 ||
+        isNaN(Number(formValues.find(([key]) => key === "shipping")?.[2])))
     ) {
-      alert("Missing shipping option!");
+      alert("Missing shipping cost!");
       return;
     }
 
@@ -205,9 +209,10 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
     }
     if (key === "shipping") {
       const value = formValues?.find(([k]) => k === key)?.[1] || "";
-      if (!isNaN(value)) {
-        return "(Shipping option)";
-      }
+      return value;
+      // if (!isNaN(value)) {
+      //   return "(Shipping option)";
+      // }
     }
     if (key === "Added cost") {
       const value = formValues?.find(([k]) => k === "shipping")?.[2] || "";
