@@ -132,8 +132,6 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
     }
   };
 
-  console.log(formValues);
-
   const handlePostListing = async (values) => {
     await PostListing(values, passphrase);
   };
