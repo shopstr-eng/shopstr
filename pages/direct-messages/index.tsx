@@ -93,7 +93,7 @@ const DirectMessages = () => {
       newNip04Sub.on("event", (event) => {
         let tagPubkey = event.tags[0][1];
         let incomingPubkey = event.pubkey;
-        
+
         if (decryptedNpub === tagPubkey) {
           if (!validNpub.test(incomingPubkey)) {
             if (!chats.includes(incomingPubkey)) {
