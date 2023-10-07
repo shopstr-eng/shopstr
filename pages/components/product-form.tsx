@@ -1,67 +1,210 @@
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
 import { ProductFormValues } from "../api/post-event";
-import * as CryptoJS from 'crypto-js';
+import * as CryptoJS from "crypto-js";
+import { PostListing, nostrBuildUploadImage } from "../nostr-helpers";
+import { nip19, finishEvent } from "nostr-tools";
+import { PhotoIcon, TrashIcon } from "@heroicons/react/24/outline";
 
 interface ProductFormProps {
-  handlePostListing: (product: ProductFormValues, passphrase: string) => void;
   handleModalToggle: () => void;
   showModal: boolean;
-};
+}
 
-const ProductForm = ({
-  handlePostListing,
-  showModal,
-  handleModalToggle,
-}: ProductFormProps) => {
+const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
+  const [encryptedPrivateKey, setEncryptedPrivateKey] = useState("");
   const [signIn, setSignIn] = useState("");
-  
   const [formValues, setFormValues] = useState<ProductFormValues>([]);
   const [images, setImages] = useState<string[]>([]);
   const [passphrase, setPassphrase] = useState("");
 
-  const [encryptedPrivateKey, setEncryptedPrivateKey] = useState("");
+  const [showAddedCostInput, setShowAddedCostInput] = useState(false);
+
+  const [currencyVal, setCurrencyVal] = useState("");
+
+  const fileInput = useRef(null);
+
+  const initFormValues = () => {
+    setFormValues([]);
+    setImages([]);
+  };
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       const encrypted = localStorage.getItem("encryptedPrivateKey");
       setEncryptedPrivateKey(encrypted);
       const signIn = localStorage.getItem("signIn");
       setSignIn(signIn);
-    };
+    }
   }, []);
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >,
   ) => {
     const { name, value } = e.target;
     if (name === "passphrase") {
       setPassphrase(value);
+      console.log(passphrase);
     } else {
       setFormValues((prevValues) => {
         // Handles when the name is 'currency'
-        if (name === 'currency') {
-          return prevValues.map(([key, price, _]) => 
-            key === 'price' ? [key, price, value] : [key, price]
-          );
+        if (name === "currency") {
+          setCurrencyVal(value);
+          return prevValues.map(([key, ...rest]) => {
+            if (key === "price") {
+              let price = rest[0];
+              return [key, price, value];
+            } else if (key === "shipping") {
+              let type = rest[0];
+              if (rest[1]) {
+                return [key, type, rest[1], value];
+              }
+              return [key, type, "", value];
+            } else {
+              return [key, ...rest];
+            }
+          });
         }
+
+        if (value === "Shipping option") {
+          setShowAddedCostInput(false);
+          return prevValues.filter(([key]) => key !== "shipping"); // filter out "shipping"
+        } else if (value === "Added cost") {
+          setShowAddedCostInput(true);
+        } else if (
+          value === "Free" ||
+          value === "Pickup" ||
+          value === "Free/pickup"
+        ) {
+          setShowAddedCostInput(false);
+          if (prevValues.find(([key]) => key === "shipping") === undefined) {
+            return [...prevValues, [name, value, "0", currencyVal]];
+          } else {
+            return prevValues.map(([key, ...rest]) => {
+              if (key === "shipping") {
+                return [key, value, "0", currencyVal];
+              } else {
+                return [key, ...rest]; // return the original value for other keys
+              }
+            });
+          }
+        }
+
+        if (name === "Added cost") {
+          return prevValues.map((formValue) => {
+            const [key, value] = formValue;
+            // Handle "shipping" key
+            if (key === "shipping") {
+              // Set new value for "Added cost"
+              return [key, "Added cost", e.target.value, currencyVal];
+            }
+            // Handle "price" key
+            if (key === "price") {
+              // Keep existing currency value
+              return [key, value, currencyVal];
+            }
+            // Return all other keys without modification
+            return formValue;
+          });
+        }
+
         // Checks to see if key exists and updates it rather than duplicating
-        for(const [key, ...rest] of prevValues) {
-          if(key === name) {
-            return prevValues.map((item) => item[0] === name ? [name, value] : item);
+        for (const [key, ...rest] of prevValues) {
+          if (key === name) {
+            return prevValues.map((item) =>
+              item[0] === name ? [name, value] : item,
+            );
           }
         }
         // Adds the new key if does not exist already
         return [...prevValues, [name, value]];
       });
-    };
+    }
   };
-  
-  const handleImageChange = (value: string, index: number) => {
-    setImages((prevValues) => {
-      const updatedImages = [...prevValues];
-      updatedImages[index] = value;
-      return updatedImages;
-    });
+
+  const handlePostListing = async (values) => {
+    await PostListing(values, passphrase);
+  };
+
+  const handleSubmit = () => {
+    if (
+      !formValues.find(([key]) => key === "title") ||
+      !formValues.find(([key]) => key === "summary") ||
+      !formValues.find(([key]) => key === "location") ||
+      !formValues.find(([key]) => key === "price")
+    ) {
+      alert("Missing required fields!");
+      return;
+    }
+    if (
+      formValues.find(([key]) => key === "price").length < 3 || // check all fields exist for price
+      formValues.find(([key]) => key === "price")?.[1] === "" || // check that price is not empty
+      formValues.find(([key]) => key === "price")?.[2] === "Select currency" // check that currency is not empty
+    ) {
+      alert("Missing required fields!");
+      return;
+    }
+    // here we know that added shipping is not empty
+    if (
+      formValues.find(([key]) => key === "shipping") != undefined &&
+      formValues.find(([key]) => key === "shipping")?.[1] === "Added cost" &&
+      formValues.find(([key]) => key === "shipping").length < 4
+    ) {
+      alert("Missing shipping option!");
+      return;
+    }
+    // here we know that added shipping is a valid number and greater than 0
+    if (
+      (formValues.find(([key]) => key === "shipping") === "Shipping option" ||
+        formValues.find(([key]) => key === "shipping") === "Added cost") &&
+      (Number(formValues.find(([key]) => key === "shipping")?.[2]) <= 0 ||
+        isNaN(Number(formValues.find(([key]) => key === "shipping")?.[2])))
+    ) {
+      alert("Missing shipping cost!");
+      return;
+    }
+
+    const updatedFormValues = [
+      ...formValues,
+      ...images.map((image) => ["image", image]),
+    ];
+    if (signIn == "extension") {
+      handleModalToggle();
+      initFormValues();
+      setShowAddedCostInput(false);
+      handlePostListing(updatedFormValues);
+    } else {
+      if (
+        CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
+          CryptoJS.enc.Utf8,
+        )
+      ) {
+        handleModalToggle();
+        initFormValues();
+        setShowAddedCostInput(false);
+        handlePostListing(updatedFormValues);
+      } else {
+        alert("Invalid passphrase!");
+      }
+    }
+  };
+
+  const getFormValue = (key: string) => {
+    if (key === "currency") {
+      const currency = formValues?.find(([k]) => k === "price")?.[2] || "";
+      return currency;
+    }
+    if (key === "shipping") {
+      const value = formValues?.find(([k]) => k === key)?.[1] || "";
+      return value;
+    }
+    if (key === "Added cost") {
+      const value = formValues?.find(([k]) => k === "shipping")?.[2] || "";
+      return value;
+    }
+    const value = formValues?.find(([k]) => k === key)?.[1] || "";
+    return value;
   };
 
   const handleAddImage = () => {
@@ -69,52 +212,56 @@ const ProductForm = ({
   };
 
   const handleDeleteImage = (index: number) => {
-    setImages(prevValues => {
+    setImages((prevValues) => {
       const updatedImages = [...prevValues];
       updatedImages.splice(index, 1);
       return updatedImages;
     });
   };
-  
-  const handleSubmit = () => {
-    if (!formValues.find(([key]) => key === 'title') || !formValues.find(([key]) => key === 'summary') || !formValues.find(([key]) => key === 'location') || !formValues.find(([key]) => key === 'price')) {
-      alert("Missing required fields!");
-    } else {
-      if (formValues.find(([key]) => key === 'price')?.[1] != "" && formValues.find(([key]) => key === 'price').length >= 3 && formValues.find(([key]) => key === 'price')?.[2] != "Select currency") {
-        const updatedFormValues = [...formValues, ...images.map((image) => ["image", image])];
-        if(signIn == 'extension'){
-          handleModalToggle();
-          initFormValues();
-          handlePostListing(updatedFormValues, 'undefined');
+
+  const uploadImage = useCallback(
+    async (imageFile: File, index: number) => {
+      try {
+        if (!imageFile.type.includes("image"))
+          throw new Error("Only images are supported");
+
+        let response;
+
+        if (signIn === "extension") {
+          response = await nostrBuildUploadImage(
+            imageFile,
+            async (e) => await window.nostr.signEvent(e),
+          );
+        } else if (
+          CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
+            CryptoJS.enc.Utf8,
+          )
+        ) {
+          let nsec = CryptoJS.AES.decrypt(
+            encryptedPrivateKey,
+            passphrase,
+          ).toString(CryptoJS.enc.Utf8);
+          let { data } = nip19.decode(nsec);
+          response = await nostrBuildUploadImage(imageFile, (e) =>
+            finishEvent(e, data),
+          );
         } else {
-          if (CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(CryptoJS.enc.Utf8)) {
-            // integrate image urls into formValues
-            handleModalToggle();
-            initFormValues();
-            handlePostListing(updatedFormValues, passphrase);
-          } else {
-            alert("Invalid passphrase!");
-          };
+          alert("Input your passphrase before uploading an image!");
         }
-      } else {
-        alert("Missing required fields!");
-      };
-    };
-  };
+        
+        const imageUrl = response.url;
 
-  const initFormValues = () => {
-    setFormValues([]);
-    setImages([]);
-  }
-
-  const getFormValue = (key: string) => {
-    if (key === 'currency') {
-      const currency = formValues.find(([k]) => k === 'price')?.[2] || "";
-      return currency;
-    }
-    const value = formValues.find(([k]) => k === key)?.[1] || "";
-    return value;
-  };
+        setImages((prevValues) => {
+          const updatedImages = [...prevValues];
+          updatedImages[index] = imageUrl;
+          return updatedImages;
+        });
+      } catch (e) {
+        if (e instanceof Error) alert("Failed to upload image!");
+      }
+    },
+    [setImages, passphrase, signIn]
+  );
 
   return (
     <div
@@ -141,17 +288,14 @@ const ProductForm = ({
                 </h3>
                 <div className="mt-2">
                   <form className="mx-auto" onSubmit={handleSubmit}>
-                    <label 
-                      htmlFor="title" 
-                      className="block mb-2 font-bold"
-                    >
+                    <label htmlFor="title" className="block mb-2 font-bold">
                       Title:<span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
                       id="title"
                       name="title"
-                      value={getFormValue('title')}
+                      value={getFormValue("title")}
                       onChange={handleChange}
                       required
                       className="w-full p-2 border border-gray-300 rounded"
@@ -159,67 +303,83 @@ const ProductForm = ({
 
                     <label
                       htmlFor="description"
-                      className="block mb-2 font-bold"
+                      className="block my-2 font-bold"
                     >
                       Summary:<span className="text-red-500">*</span>
                     </label>
                     <textarea
                       id="summary"
                       name="summary"
-                      value={getFormValue('summary')}
+                      value={getFormValue("summary")}
                       onChange={handleChange}
                       required
                       className="w-full p-2 border border-gray-300 rounded"
                     />
-                    
+
                     <div className="flex items-center mb-2">
                       <label
                         htmlFor="images"
-                        className="block mb-2 font-bold pr-3"
+                        className="block my-2 font-bold pr-3"
                       >
                         Images:
                       </label>
                       <button
                         type="button"
                         onClick={handleAddImage}
-                        className="bg-blue-500 text-white px-4 py-2 rounded"
+                        className="bg-blue-500 text-white px-2 py-1 rounded"
                       >
-                        Add Image Url
+                        Add Image
                       </button>
                     </div>
                     {images.map((image, index) => (
                       <div key={index} className="flex items-center mb-2">
                         <input
-                          type="text"
+                          type="file"
+                          accept="image/*"
                           id={`image-${index}`}
                           name={`image-${index}`}
                           placeholder="Image Url"
-                          value={image}
-                          onChange={(e) => handleImageChange(e.target.value, index)}
-                          className="w-1/2 p-2 border border-gray-300 rounded"
+                          ref={fileInput}
+                          onChange={(e) => {
+                            uploadImage(e.target.files[0], index);
+                          }}
+                          className="w-1/2 p-2 border border-gray-300 rounded hidden"
                         />
-                        <button
+                        {image ? (
+                          <a
+                            href={image}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {image.substring(0, 20) + "..."}
+                          </a>
+                        ) : (
+                          <PhotoIcon
+                            className="w-8 h-8 hover:text-purple-700"
+                            onClick={() => fileInput.current.click()}
+                          />
+                        )}
+                        <TrashIcon
+                          className="w-8 h-8 ml-auto hover:text-red-500"
                           onClick={() => handleDeleteImage(index)}
-                        >
-                          Delete
-                        </button>
+                        />
                       </div>
                     ))}
 
-                    <label htmlFor="location" className="block mb-2 font-bold">
+                    <label htmlFor="location" className="block my-2 font-bold">
                       Location:<span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
                       id="location"
                       name="location"
-                      value={getFormValue('location')}
+                      value={getFormValue("location")}
                       onChange={handleChange}
                       required
                       className="w-full p-2 border border-gray-300 rounded"
                     />
 
-                    <label htmlFor="price" className="block mb-2 font-bold">
+                    <label htmlFor="price" className="block my-2 font-bold">
                       Price:<span className="text-red-500">*</span>
                     </label>
                     <input
@@ -227,59 +387,97 @@ const ProductForm = ({
                       id="price"
                       step="0.01"
                       name="price"
-                      value={getFormValue('price')}
+                      value={getFormValue("price")}
                       onChange={handleChange}
                       required
                       className="w-full p-2 border border-gray-300 rounded"
                     />
 
-                    <label htmlFor="currency" className="block mb-2 font-bold">
+                    <label htmlFor="currency" className="block my-2 font-bold">
                       Currency:<span className="text-red-500">*</span>
                     </label>
                     <select
                       id="currency"
                       name="currency"
-                      value={getFormValue('currency')}
+                      value={getFormValue("currency")}
                       onChange={handleChange}
                       required
                       className="w-full p-2 border border-gray-300 rounded"
                     >
-                      <option value="Select currency" >(Select currency)</option>
-                      <option value="Sats">Sat(s)</option>
+                      <option value="Select currency">(Select currency)</option>
+                      <option value="Sat(s)">Sat(s)</option>
                       <option value="USD">USD</option>
                     </select>
 
-                    <label htmlFor="t" className="block mb-2 font-bold">
+                    <label htmlFor="shipping" className="block my-2 font-bold">
+                      Shipping:
+                    </label>
+                    <select
+                      id="shipping"
+                      name="shipping"
+                      value={getFormValue("shipping")}
+                      onChange={handleChange}
+                      required
+                      className="w-full p-2 border border-gray-300 rounded"
+                    >
+                      <option value="Shipping option">(Shipping option)</option>
+                      <option value="Added cost">Added cost</option>
+                      <option value="Free">Free</option>
+                      <option value="Pickup">Pickup</option>
+                      <option value="Free/pickup">Free/pickup</option>
+                    </select>
+                    <div className="relative">
+                      {showAddedCostInput && (
+                        <input
+                          type="number"
+                          id="Added cost"
+                          name="Added cost"
+                          value={getFormValue("Added cost")}
+                          onChange={handleChange}
+                          className="w-full p-2 pl-6 border border-gray-300 rounded"
+                        />
+                      )}
+                      {showAddedCostInput && (
+                        <span className="absolute right-8 top-2">
+                          {currencyVal}
+                        </span>
+                      )}
+                    </div>
+
+                    <label htmlFor="t" className="block my-2 font-bold">
                       Category:
                     </label>
                     <input
                       type="text"
                       id="t"
                       name="t"
-                      value={getFormValue('t')}
+                      value={getFormValue("t")}
                       onChange={handleChange}
                       className="w-full p-2 border border-gray-300 rounded"
                     />
 
-                    {
-                      signIn === "nsec" && (
+                    {signIn === "nsec" && (
                       <>
-                        <label htmlFor="passphrase" className="block mb-2 font-bold">
+                        <label
+                          htmlFor="passphrase"
+                          className="block mb-2 font-bold"
+                        >
                           Passphrase:<span className="text-red-500">*</span>
                         </label>
-                          <input
-                            type="text"
-                            id="passphrase"
-                            name="passphrase"
-                            value={passphrase}
-                            required
-                            onChange={handleChange}
-                            className="w-full p-2 border border-gray-300 rounded"
-                          />
-                        </>
-                      )
-                    }
-                    <p className="mt-2 text-red-500 text-sm">* required field</p>
+                        <input
+                          type="text"
+                          id="passphrase"
+                          name="passphrase"
+                          value={passphrase}
+                          required
+                          onChange={handleChange}
+                          className="w-full p-2 border border-gray-300 rounded"
+                        />
+                      </>
+                    )}
+                    <p className="mt-2 text-red-500 text-sm">
+                      * required field
+                    </p>
                   </form>
                 </div>
               </div>

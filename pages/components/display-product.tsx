@@ -3,9 +3,8 @@ import { BoltIcon, TrashIcon, EnvelopeIcon } from "@heroicons/react/24/outline";
 import { withRouter, NextRouter, useRouter } from "next/router";
 import axios from "axios";
 import requestMint from "../api/cashu/request-mint";
-import { CashuMint, CashuWallet, Proof, getEncodedToken } from "@cashu/cashu-ts";
+import { CashuMint, CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
 import { nip19, SimplePool } from "nostr-tools";
-import "websocket-polyfill";
 import * as CryptoJS from "crypto-js";
 
 const DisplayProduct = ({
@@ -35,6 +34,9 @@ const DisplayProduct = ({
   const [location, setLocation] = useState("");
   const [price, setPrice] = useState("");
   const [currency, setCurrency] = useState("");
+  const [shipping, setShipping] = useState(null);
+
+  const [totalCost, setTotalCost] = useState(null);
 
   const [checkout, setCheckout] = useState(false);
   const [invoice, setInvoice] = useState("");
@@ -76,6 +78,9 @@ const DisplayProduct = ({
 
   useEffect(() => {
     let tmpImages = [];
+    let tempShipping = 0;
+    let tempPrice = 0;
+
     tags.forEach((tag) => {
       const [key, ...values] = tag;
       switch (key) {
@@ -99,14 +104,54 @@ const DisplayProduct = ({
           break;
         case "price":
           const [amount, currency] = values;
-          setPrice(amount);
+          tempPrice = Number(amount);
           setCurrency(currency);
+          break;
+        case "shipping":
+          if (values.length === 1) {
+            tempShipping = values[0];
+          } else if (values.length === 2) {
+            const [cost, currency] = values;
+            tempShipping = Number(cost);
+          } else {
+            const [type, cost, _] = values;
+            if (
+              type === "Free" ||
+              type === "Pickup" ||
+              type === "Free/pickup"
+            ) {
+              tempShipping = type;
+            } else {
+              tempShipping = Number(cost);
+            }
+          }
           break;
         default:
           return;
       }
     });
+
     setImages(tmpImages);
+    setPrice(tempPrice);
+    setShipping(tempShipping);
+
+    if (
+      tempShipping != "Added cost" &&
+      tempShipping != "Free" &&
+      tempShipping != "Pickup" &&
+      tempShipping != "Free/pickup" &&
+      Number(tempPrice) != 0 &&
+      !isNaN(Number(tempPrice))
+    ) {
+      setTotalCost(Number(tempPrice) + Number(tempShipping));
+    } else if (
+      tempShipping === "Added cost" ||
+      tempShipping === "Free" ||
+      tempShipping === "Pickup" ||
+      tempShipping === "Free/pickup"
+    ) {
+      setTotalCost(Number(tempPrice));
+    }
   }, [tags]);
 
   const sendTokens = async (pk: string, token: string) => {
@@ -115,7 +160,7 @@ const DisplayProduct = ({
         created_at: Math.floor(Date.now() / 1000),
         kind: 4,
         tags: [["p", pk]],
-        content: await window.nostr.nip04.encrypt(decryptedNpub, token),
+        content: await window.nostr.nip04.encrypt(pk, token),
       };
 
       const signedEvent = await window.nostr.signEvent(event);
@@ -132,7 +177,7 @@ const DisplayProduct = ({
       });
     } else {
       let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-        CryptoJS.enc.Utf8
+        CryptoJS.enc.Utf8,
       );
       // add error handling and re-prompt for passphrase
       let { data } = nip19.decode(nsec);
@@ -172,14 +217,14 @@ const DisplayProduct = ({
     id: string,
     pk: string,
     wallet: CashuWallet,
-    price: number,
-    hash: string
+    newPrice: number,
+    hash: string,
   ) {
     let encoded;
 
     while (true) {
       try {
-        const { proofs } = await wallet.requestTokens(price, hash);
+        const { proofs } = await wallet.requestTokens(newPrice, hash);
 
         // Encoded proofs can be spent at the mint
         encoded = getEncodedToken({
@@ -209,20 +254,24 @@ const DisplayProduct = ({
     }
   }
 
-  const handlePayment = async (pk: string, price: number, currency: string) => {
+  const handlePayment = async (
+    pk: string,
+    newPrice: number,
+    currency: string,
+  ) => {
     const wallet = new CashuWallet(
       new CashuMint(
-        "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"
-      )
+        "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC",
+      ),
     );
     if (currency === "USD") {
       try {
         const res = await axios.get(
-          "https://api.coinbase.com/v2/prices/BTC-USD/spot"
+          "https://api.coinbase.com/v2/prices/BTC-USD/spot",
         );
         const btcSpotPrice = Number(res.data.data.amount);
-        const numSats = (price / btcSpotPrice) * 100000000;
-        price = Math.round(numSats);
+        const numSats = (newPrice / btcSpotPrice) * 100000000;
+        newPrice = Math.round(numSats);
       } catch (err) {
         console.log(err);
       }
@@ -252,31 +301,26 @@ const DisplayProduct = ({
 
     setCheckout(true);
 
-    invoiceHasBeenPaid(id, pk, wallet, price, hash);
+    invoiceHasBeenPaid(id, pk, wallet, newPrice, hash);
   };
 
   const handleCheckout = (
     productId: string,
     pk: string,
-    price: number,
-    currency: string
+    newPrice: number,
+    currency: string,
   ) => {
     if (window.location.pathname.includes("checkout")) {
       if (signIn != "extension") {
         setEnterPassphrase(!enterPassphrase);
         setUse("pay");
       } else {
-        handlePayment(pk, price, currency);
+        handlePayment(pk, newPrice, currency);
       }
     } else {
       router.push(`/checkout/${productId}`);
     }
   };
-
-  // const handleCancel = () => {
-  //   setCheckout(false);
-  //   console.log(checkout)
-  // };
 
   const nextImage = () => {
     setCurrentImage((currentImage + 1) % images.length);
@@ -287,7 +331,7 @@ const DisplayProduct = ({
   };
 
   const handlePassphraseChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
     const { name, value } = e.target;
     if (name === "passphrase") {
@@ -307,12 +351,12 @@ const DisplayProduct = ({
   const handleSubmitPassphrase = () => {
     if (
       CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-        CryptoJS.enc.Utf8
+        CryptoJS.enc.Utf8,
       )
     ) {
       setEnterPassphrase(false);
       if (use === "pay") {
-        handlePayment(pubkey, price, currency);
+        handlePayment(pubkey, totalCost, currency);
       } else if (use === "delete") {
         handleDelete(eventId, passphrase);
       }
@@ -348,34 +392,60 @@ const DisplayProduct = ({
               alt={`Product Image ${currentImage + 1}`}
               className="w-full object-cover h-72"
             />
-            <button
-              style={{ right: "10px" }}
-              className="absolute top-1/2 p-2 rounded bg-white text-black"
-              onClick={nextImage}
-            >
-              {">"}
-            </button>
-            <button
-              style={{ left: "10px" }}
-              className="absolute top-1/2 p-2 rounded bg-white text-black"
-              onClick={prevImage}
-            >
-              {"<"}
-            </button>
+            {images.length > 1 && (
+              <button
+                style={{ right: "10px" }}
+                className="absolute top-1/2 p-2 rounded bg-white text-black"
+                onClick={nextImage}
+              >
+                {">"}
+              </button>
+            )}
+            {images.length > 1 && (
+              <button
+                style={{ left: "10px" }}
+                className="absolute top-1/2 p-2 rounded bg-white text-black"
+                onClick={prevImage}
+              >
+                {"<"}
+              </button>
+            )}
           </div>
         )}
       </div>
 
       <div className="mb-4">
-        <p>
-          <strong className="font-semibold">Category:</strong> {category}
-        </p>
+        {category && (
+          <p>
+            <strong className="font-semibold">Category:</strong> {category}
+          </p>
+        )}
         <p>
           <strong className="font-semibold">Location:</strong> {location}
         </p>
         <p>
           <strong className="font-semibold">Price:</strong> {price} {currency}
         </p>
+        {shipping &&
+        shipping != "Added cost" &&
+        shipping != "Free" &&
+        shipping != "Pickup" &&
+        shipping != "Free/pickup" ? (
+          <p>
+            <strong className="font-semibold">Shipping Cost:</strong> {shipping}{" "}
+            {currency}
+          </p>
+        ) : shipping ? (
+          <p>
+            <strong className="font-semibold">Shipping Cost:</strong> {shipping}
+          </p>
+        ) : undefined}
+        {totalCost ? (
+          <p>
+            <strong className="font-semibold">Total Cost:</strong> {totalCost}{" "}
+            {currency}
+          </p>
+        ) : undefined}
         {/* <p>
           <strong className="font-semibold">Quantity:</strong> {quantity}
         </p> */}
@@ -395,7 +465,7 @@ const DisplayProduct = ({
       <div className="flex justify-center">
         <BoltIcon
           className="w-6 h-6 hover:text-yellow-500"
-          onClick={() => handleCheckout(eventId, pubkey, price, currency)}
+          onClick={() => handleCheckout(eventId, pubkey, totalCost, currency)}
         />
         {decryptedNpub === pubkey ? (
           <TrashIcon
@@ -439,7 +509,7 @@ const DisplayProduct = ({
                     {invoice.length > 30
                       ? `${invoice.substring(0, 15)}...${invoice.substring(
                           invoice.length - 15,
-                          invoice.length
+                          invoice.length,
                         )}`
                       : invoice}
                   </p>
