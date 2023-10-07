@@ -9,7 +9,22 @@ import * as CryptoJS from "crypto-js";
 import {
   getNsecWithPassphrase,
   getPrivKeyWithPassphrase,
+  getPubKey,
 } from "../nostr-helpers";
+
+// Define a type for product data
+interface ProductData {
+  title: string;
+  summary: string;
+  publishedAt: string;
+  images: string[];
+  category: string;
+  location: string;
+  price: number;
+  currency: string;
+  shippingType: string | null;
+  shippingCost: number | null;
+}
 
 const DisplayProduct = ({
   tags,
@@ -25,22 +40,37 @@ const DisplayProduct = ({
   const router = useRouter();
 
   const [decryptedNpub, setDecryptedNpub] = useState("");
-  const [encryptedPrivateKey, setEncryptedPrivateKey] = useState("");
   const [signIn, setSignIn] = useState("");
   const [relays, setRelays] = useState([]);
 
-  const [title, setTitle] = useState("");
-  const [summary, setSummary] = useState("");
-  const [publishedAt, setPublishedAt] = useState("");
-  const [images, setImages] = useState([]);
-  const [currentImage, setCurrentImage] = useState<number>(0);
-  const [category, setCategory] = useState("");
-  const [location, setLocation] = useState("");
-  const [price, setPrice] = useState("");
-  const [currency, setCurrency] = useState("");
-  const [shipping, setShipping] = useState(null);
+  const [productData, setProductData] = useState<ProductData>({
+    title: "",
+    summary: "",
+    publishedAt: "",
+    images: [],
+    category: "",
+    location: "",
+    price: 0,
+    currency: "",
+    shippingType: null,
+    shippingCost: null,
+  });
 
-  const [totalCost, setTotalCost] = useState(null);
+  const {
+    title,
+    summary,
+    publishedAt,
+    images,
+    category,
+    location,
+    price,
+    currency,
+    shippingType,
+    shippingCost,
+  } = productData;
+
+  const [currentImage, setCurrentImage] = useState(0);
+  const [totalCost, setTotalCost] = useState<number>(0);
 
   const [checkout, setCheckout] = useState(false);
   const [invoice, setInvoice] = useState("");
@@ -54,25 +84,9 @@ const DisplayProduct = ({
 
   const [btcSpotPrice, setBtcSpotPrice] = useState();
 
-  // const {
-  //   id,
-  //   stall_id,
-  //   name,
-  //   description,
-  //   images,
-  //   currency,
-  //   price,
-  //   quantity,
-  //   specs,
-  // } = content;
-
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const npub = localStorage.getItem("npub");
-      const { data } = nip19.decode(npub);
-      setDecryptedNpub(data);
-      const encrypted = localStorage.getItem("encryptedPrivateKey");
-      setEncryptedPrivateKey(encrypted);
+      setDecryptedNpub(getPubKey());
       const signIn = localStorage.getItem("signIn");
       setSignIn(signIn);
       const storedRelays = localStorage.getItem("relays");
@@ -81,82 +95,61 @@ const DisplayProduct = ({
   }, []);
 
   useEffect(() => {
-    let tmpImages = [];
-    let tempShipping = 0;
-    let tempPrice = 0;
+    const parsedTags = parseTags(tags);
+    setProductData((prevState) => ({ ...prevState, ...parsedTags }));
+    setTotalCost(calculateTotalCost(parsedTags));
+  }, [tags]);
 
+  const calculateTotalCost = (parsedTags: ProductData) => {
+    const { price, shippingType, shippingCost } = parsedTags;
+    let total = price;
+    total += shippingCost ? shippingCost : 0;
+    return total;
+  };
+
+  const parseTags = (tags) => {
+    let parsedData: ProductData = {};
     tags.forEach((tag) => {
       const [key, ...values] = tag;
       switch (key) {
         case "title":
-          setTitle(values[0]);
+          parsedData.title = values[0];
           break;
         case "summary":
-          setSummary(values[0]);
+          parsedData.summary = values[0];
           break;
         case "published_at":
-          setPublishedAt(values[0]);
+          parsedData.publishedAt = values[0];
           break;
         case "image":
-          tmpImages.push(values[0]);
+          if (parsedData.images === undefined) parsedData.images = [];
+          parsedData.images.push(values[0]);
           break;
         case "t":
-          setCategory(values[0]);
+          parsedData.category = values[0];
           break;
         case "location":
-          setLocation(values[0]);
+          parsedData.location = values[0];
           break;
         case "price":
           const [amount, currency] = values;
-          tempPrice = Number(amount);
-          setCurrency(currency);
+          parsedData.price = Number(amount);
+          parsedData.currency = currency;
           break;
         case "shipping":
-          if (values.length === 1) {
-            tempShipping = values[0];
-          } else if (values.length === 2) {
-            const [cost, currency] = values;
-            tempShipping = Number(cost);
-          } else {
-            const [type, cost, _] = values;
-            if (
-              type === "Free" ||
-              type === "Pickup" ||
-              type === "Free/pickup"
-            ) {
-              tempShipping = type;
-            } else {
-              tempShipping = Number(cost);
-            }
+          if (values.length === 3) {
+            const [type, cost, currency] = values;
+            parsedData.shippingType = type;
+            parsedData.shippingCost = Number(cost);
+            break;
           }
           break;
         default:
           return;
       }
     });
-
-    setImages(tmpImages);
-    setPrice(tempPrice);
-    setShipping(tempShipping);
-
-    if (
-      tempShipping != "Added cost" &&
-      tempShipping != "Free" &&
-      tempShipping != "Pickup" &&
-      tempShipping != "Free/pickup" &&
-      Number(tempPrice) != 0 &&
-      !isNaN(Number(tempPrice))
-    ) {
-      setTotalCost(Number(tempPrice) + Number(tempShipping));
-    } else if (
-      tempShipping === "Added cost" ||
-      tempShipping === "Free" ||
-      tempShipping === "Pickup" ||
-      tempShipping === "Free/pickup"
-    ) {
-      setTotalCost(Number(tempPrice));
-    }
-  }, [tags]);
+    return parsedData;
+  };
 
   const sendTokens = async (pk: string, token: string) => {
     if (signIn === "extension") {
@@ -170,8 +163,6 @@ const DisplayProduct = ({
       const signedEvent = await window.nostr.signEvent(event);
 
       const pool = new SimplePool();
-
-      // const relays = JSON.parse(storedRelays);
 
       await pool.publish(relays, signedEvent);
 
@@ -365,22 +356,26 @@ const DisplayProduct = ({
               className="w-full object-cover h-72"
             />
             {images.length > 1 && (
-              <button
-                style={{ right: "10px" }}
-                className="absolute top-1/2 p-2 rounded bg-white text-black"
-                onClick={nextImage}
-              >
-                {">"}
-              </button>
-            )}
-            {images.length > 1 && (
-              <button
-                style={{ left: "10px" }}
-                className="absolute top-1/2 p-2 rounded bg-white text-black"
-                onClick={prevImage}
-              >
-                {"<"}
-              </button>
+              <>
+                {currentImage !== 0 && (
+                  <button
+                    style={{ left: "10px", border: "2px solid black" }}
+                    className="absolute top-1/2 p-2 rounded bg-white text-black"
+                    onClick={prevImage}
+                  >
+                    {"<"}
+                  </button>
+                )}
+                {currentImage !== images.length - 1 && (
+                  <button
+                    style={{ right: "10px", border: "2px solid black" }}
+                    className="absolute top-1/2 p-2 rounded bg-white text-black"
+                    onClick={nextImage}
+                  >
+                    {">"}
+                  </button>
+                )}
+              </>
             )}
           </div>
         )}
@@ -398,59 +393,37 @@ const DisplayProduct = ({
         <p>
           <strong className="font-semibold">Price:</strong> {price} {currency}
         </p>
-        {shipping &&
-        shipping != "Added cost" &&
-        shipping != "Free" &&
-        shipping != "Pickup" &&
-        shipping != "Free/pickup" ? (
+        {shippingType && (
           <p>
-            <strong className="font-semibold">Shipping Cost:</strong> {shipping}{" "}
-            {currency}
+            <strong className="font-semibold">Shipping Type:</strong>
+            {` ${shippingType} - ${shippingCost} ${currency}`}
           </p>
-        ) : shipping ? (
-          <p>
-            <strong className="font-semibold">Shipping Cost:</strong> {shipping}
-          </p>
-        ) : undefined}
+        )}
+
         {totalCost ? (
           <p>
             <strong className="font-semibold">Total Cost:</strong> {totalCost}{" "}
             {currency}
           </p>
         ) : undefined}
-        {/* <p>
-          <strong className="font-semibold">Quantity:</strong> {quantity}
-        </p> */}
       </div>
-      {/* {specs?.length > 0 && (
-        <div>
-          <h3 className="text-lg font-semibold mb-2">Specifications</h3>
-          <ul>
-            {specs?.map(([key, value], index) => (
-              <li key={index} className="text-gray-700 mb-1">
-                <strong className="font-semibold">{key}:</strong> {value}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )} */}
       <div className="flex justify-center">
         <BoltIcon
           className="w-6 h-6 hover:text-yellow-500"
           onClick={() => handleCheckout(eventId, pubkey, totalCost, currency)}
         />
-        {decryptedNpub === pubkey ? (
+        {decryptedNpub === pubkey && (
           <TrashIcon
             className="w-6 h-6 hover:text-yellow-500"
             onClick={() => handleDeleteWithPassphrase()}
           />
-        ) : undefined}
-        {decryptedNpub != pubkey ? (
+        )}
+        {decryptedNpub != pubkey && (
           <EnvelopeIcon
             className="w-6 h-6 hover:text-yellow-500"
             onClick={() => handleSendMessage(pubkey)}
           />
-        ) : undefined}
+        )}
       </div>
       {checkout && (
         <div className="fixed z-10 inset-0 overflow-y-auto flex items-center justify-center">
@@ -511,7 +484,7 @@ const DisplayProduct = ({
       )}
       <div
         className={`fixed z-10 inset-0 overflow-y-auto ${
-          enterPassphrase & (signIn === "nsec") ? "" : "hidden"
+          enterPassphrase && signIn === "nsec" ? "" : "hidden"
         }`}
       >
         <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">

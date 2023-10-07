@@ -192,6 +192,12 @@ async function generateNostrEventId(msg) {
   return hash;
 }
 
+export function getPubKey() {
+  const npub = localStorage.getItem("npub");
+  const { data } = nip19.decode(npub);
+  return data;
+}
+
 export function getNsecWithPassphrase(passphrase: string) {
   const { encryptedPrivateKey } = getLocalStorageData();
   let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
