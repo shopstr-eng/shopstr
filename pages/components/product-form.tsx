@@ -1,7 +1,12 @@
 import { useCallback, useState, useEffect, useRef } from "react";
 import { ProductFormValues } from "../api/post-event";
 import * as CryptoJS from "crypto-js";
-import { PostListing, nostrBuildUploadImage } from "../nostr-helpers";
+import {
+  PostListing,
+  getNsecWithPassphrase,
+  getPrivKeyWithPassphrase,
+  nostrBuildUploadImage,
+} from "../nostr-helpers";
 import { nip19, finishEvent } from "nostr-tools";
 import { PhotoIcon, TrashIcon } from "@heroicons/react/24/outline";
 
@@ -40,7 +45,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
   const handleChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >,
+    >
   ) => {
     const { name, value } = e.target;
     if (name === "passphrase") {
@@ -113,7 +118,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
         for (const [key, ...rest] of prevValues) {
           if (key === name) {
             return prevValues.map((item) =>
-              item[0] === name ? [name, value] : item,
+              item[0] === name ? [name, value] : item
             );
           }
         }
@@ -122,7 +127,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
       });
     }
   };
-
+  console.log(formValues);
   const handlePostListing = async (values) => {
     await PostListing(values, passphrase);
   };
@@ -169,25 +174,18 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
       ...formValues,
       ...images.map((image) => ["image", image]),
     ];
-    if (signIn == "extension") {
-      handleModalToggle();
-      initFormValues();
-      setShowAddedCostInput(false);
-      handlePostListing(updatedFormValues);
-    } else {
-      if (
-        CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-          CryptoJS.enc.Utf8,
-        )
-      ) {
-        handleModalToggle();
-        initFormValues();
-        setShowAddedCostInput(false);
-        handlePostListing(updatedFormValues);
-      } else {
+
+    if (signIn === "nsec") {
+      // checks that the passphrase is correct
+      if (!getNsecWithPassphrase(passphrase)) {
         alert("Invalid passphrase!");
+        return;
       }
     }
+    handleModalToggle();
+    initFormValues();
+    setShowAddedCostInput(false);
+    handlePostListing(updatedFormValues);
   };
 
   const getFormValue = (key: string) => {
@@ -219,49 +217,40 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
     });
   };
 
-  const uploadImage = useCallback(
-    async (imageFile: File, index: number) => {
-      try {
-        if (!imageFile.type.includes("image"))
-          throw new Error("Only images are supported");
+  const uploadImage = async (imageFile: File, index: number) => {
+    try {
+      if (!imageFile.type.includes("image"))
+        throw new Error("Only images are supported");
 
-        let response;
+      let response;
 
-        if (signIn === "extension") {
-          response = await nostrBuildUploadImage(
-            imageFile,
-            async (e) => await window.nostr.signEvent(e),
-          );
-        } else if (
-          CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-            CryptoJS.enc.Utf8,
-          )
-        ) {
-          let nsec = CryptoJS.AES.decrypt(
-            encryptedPrivateKey,
-            passphrase,
-          ).toString(CryptoJS.enc.Utf8);
-          let { data } = nip19.decode(nsec);
-          response = await nostrBuildUploadImage(imageFile, (e) =>
-            finishEvent(e, data),
-          );
-        } else {
-          alert("Input your passphrase before uploading an image!");
-        }
-        
-        const imageUrl = response.url;
+      if (signIn === "nsec") {
+        console.log("passphrase", passphrase);
+        if (!getNsecWithPassphrase(passphrase))
+          throw new Error("Invalid passphrase!");
 
-        setImages((prevValues) => {
-          const updatedImages = [...prevValues];
-          updatedImages[index] = imageUrl;
-          return updatedImages;
-        });
-      } catch (e) {
-        if (e instanceof Error) alert("Failed to upload image!");
+        const privkey = getPrivKeyWithPassphrase(passphrase);
+        response = await nostrBuildUploadImage(imageFile, (e) =>
+          finishEvent(e, privkey)
+        );
+      } else if (signIn === "extension") {
+        response = await nostrBuildUploadImage(
+          imageFile,
+          async (e) => await window.nostr.signEvent(e)
+        );
       }
-    },
-    [setImages, passphrase, signIn]
-  );
+
+      const imageUrl = response.url;
+
+      setImages((prevValues) => {
+        const updatedImages = [...prevValues];
+        updatedImages[index] = imageUrl;
+        return updatedImages;
+      });
+    } catch (e) {
+      if (e instanceof Error) alert("Failed to upload image! " + e.message);
+    }
+  };
 
   return (
     <div
@@ -342,6 +331,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
                           ref={fileInput}
                           onChange={(e) => {
                             uploadImage(e.target.files[0], index);
+                            e.target.value = "";
                           }}
                           className="w-1/2 p-2 border border-gray-300 rounded hidden"
                         />

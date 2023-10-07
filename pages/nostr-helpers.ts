@@ -4,27 +4,9 @@ import { nip19, nip98, SimplePool } from "nostr-tools";
 import { ProductFormValues } from "../api/post-event";
 import axios from "axios";
 
-export const getLocalStorageData = () => {
-  let signIn;
-  let encryptedPrivateKey;
-  let decryptedNpub;
-  let relays;
-
-  if (typeof window !== "undefined") {
-    const npub = localStorage.getItem("npub");
-    const { data } = nip19.decode(npub);
-    decryptedNpub = data;
-    encryptedPrivateKey = localStorage.getItem("encryptedPrivateKey");
-    signIn = localStorage.getItem("signIn");
-    const storedRelays = localStorage.getItem("relays");
-    relays = storedRelays ? JSON.parse(storedRelays) : [];
-  }
-  return { signIn, encryptedPrivateKey, decryptedNpub, relays };
-};
-
 export async function PostListing(
   values: ProductFormValues,
-  passphrase: string,
+  passphrase: string
 ) {
   const { signIn, encryptedPrivateKey, decryptedNpub, relays } =
     getLocalStorageData();
@@ -44,21 +26,10 @@ export async function PostListing(
     };
 
     const signedEvent = await window.nostr.signEvent(event);
-
     const pool = new SimplePool();
 
     await pool.publish(relays, signedEvent);
-
-    let events = await pool.list(relays, [{ kinds: [0, signedEvent.kind] }]);
-    let postedEvent = await pool.get(relays, {
-      ids: [signedEvent.id],
-    });
   } else {
-    let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-      CryptoJS.enc.Utf8,
-    );
-    // add error handling and re-prompt for passphrase
-    let { data } = nip19.decode(nsec);
     axios({
       method: "POST",
       url: "/api/nostr/post-event",
@@ -67,7 +38,7 @@ export async function PostListing(
       },
       data: {
         pubkey: decryptedNpub,
-        privkey: data,
+        privkey: getPrivKeyWithPassphrase(passphrase),
         created_at: created_at,
         kind: 30402,
         // kind: 30018,
@@ -79,76 +50,36 @@ export async function PostListing(
   }
 }
 
-export async function createNostrDeleteEvent(
-  event_ids,
-  pubkey,
-  content,
-  privkey,
+export async function DeleteListing(
+  event_ids_to_delete: ProductFormValues,
+  passphrase: string
 ) {
-  let msg = {
-    kind: 5, // NIP-X - Deletion
-    content: content, // Deletion Reason
-    tags: [],
-  };
+  const { signIn, decryptedNpub, relays } = getLocalStorageData();
+  let deletionEvent = await createNostrDeleteEvent(
+    event_ids_to_delete,
+    decryptedNpub,
+    "user deletion request",
+    signIn == "extension" ? undefined : getPrivKeyWithPassphrase(passphrase)
+  );
 
-  for (let event_id of event_ids) {
-    msg.tags.push(["e", event_id]);
+  if (signIn === "extension") {
+    const signedEvent = await window.nostr.signEvent(deletionEvent);
+    const pool = new SimplePool();
+
+    await pool.publish(relays, signedEvent);
+  } else {
+    axios({
+      method: "POST",
+      url: "/api/nostr/post-event",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      data: {
+        ...deletionEvent,
+        relays: relays,
+      },
+    });
   }
-
-  // set msg fields
-  msg.created_at = Math.floor(new Date().getTime() / 1000);
-  msg.pubkey = pubkey;
-  if (privkey) msg.privkey = privkey;
-
-  // Generate event id
-  msg.id = await generateNostrEventId(msg);
-
-  return msg;
-}
-
-export function nostrExtensionLoaded() {
-  if (!window.nostr) {
-    return false;
-  }
-  return true;
-}
-
-function sha256Hex(string) {
-  const utf8 = new TextEncoder().encode(string);
-
-  return crypto.subtle.digest("SHA-256", utf8).then((hashBuffer) => {
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray
-      .map((bytes) => bytes.toString(16).padStart(2, "0"))
-      .join("");
-
-    return hashHex;
-  });
-}
-
-async function generateNostrEventId(msg) {
-  const digest = [
-    0,
-    msg.pubkey,
-    msg.created_at,
-    msg.kind,
-    msg.tags,
-    msg.content,
-  ];
-  const digest_str = JSON.stringify(digest);
-  const hash = await sha256Hex(digest_str);
-
-  return hash;
-}
-
-// function to validate public and private keys
-export function validateNPubKey(publicKey) {
-  const validPubKey = /^npub[a-zA-Z0-9]{59}$/;
-  return publicKey.match(validPubKey) !== null;
-}
-export function validateNSecKey(privateKey) {
-  const validPrivKey = /^nsec[a-zA-Z0-9]{59}$/;
-  return privateKey.match(validPrivKey) !== null;
 }
 
 type NostrBuildResponse = {
@@ -195,7 +126,7 @@ export type DraftNostrEvent = Omit<NostrEvent, "pubkey" | "id" | "sig">;
 
 export async function nostrBuildUploadImage(
   image: File,
-  sign?: (draft: DraftNostrEvent) => Promise<NostrEvent>,
+  sign?: (draft: DraftNostrEvent) => Promise<NostrEvent>
 ) {
   if (!image.type.includes("image"))
     throw new Error("Only images are supported");
@@ -219,4 +150,115 @@ export async function nostrBuildUploadImage(
   }).then((res) => res.json() as Promise<NostrBuildResponse>);
 
   return response.data[0];
+}
+
+/***** HELPER FUNCTIONS *****/
+
+// function to validate public and private keys
+export function validateNPubKey(publicKey) {
+  const validPubKey = /^npub[a-zA-Z0-9]{59}$/;
+  return publicKey.match(validPubKey) !== null;
+}
+export function validateNSecKey(privateKey) {
+  const validPrivKey = /^nsec[a-zA-Z0-9]{59}$/;
+  return privateKey.match(validPrivKey) !== null;
+}
+
+function sha256Hex(string) {
+  const utf8 = new TextEncoder().encode(string);
+
+  return crypto.subtle.digest("SHA-256", utf8).then((hashBuffer) => {
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray
+      .map((bytes) => bytes.toString(16).padStart(2, "0"))
+      .join("");
+
+    return hashHex;
+  });
+}
+
+async function generateNostrEventId(msg) {
+  const digest = [
+    0,
+    msg.pubkey,
+    msg.created_at,
+    msg.kind,
+    msg.tags,
+    msg.content,
+  ];
+  const digest_str = JSON.stringify(digest);
+  const hash = await sha256Hex(digest_str);
+
+  return hash;
+}
+
+export function getPubKey() {
+  const npub = localStorage.getItem("npub");
+  const { data } = nip19.decode(npub);
+  return data;
+}
+
+export function getNsecWithPassphrase(passphrase: string) {
+  const { encryptedPrivateKey } = getLocalStorageData();
+  let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
+    CryptoJS.enc.Utf8
+  );
+  // returns undefined or "" thanks to the toString method
+  return nsec;
+}
+
+export function getPrivKeyWithPassphrase(passphrase: string) {
+  let { data } = nip19.decode(getNsecWithPassphrase(passphrase));
+  return data;
+}
+
+export const getLocalStorageData = () => {
+  let signIn;
+  let encryptedPrivateKey;
+  let decryptedNpub;
+  let relays;
+
+  if (typeof window !== "undefined") {
+    const npub = localStorage.getItem("npub");
+    const { data } = nip19.decode(npub);
+    decryptedNpub = data;
+    encryptedPrivateKey = localStorage.getItem("encryptedPrivateKey");
+    signIn = localStorage.getItem("signIn");
+    const storedRelays = localStorage.getItem("relays");
+    relays = storedRelays ? JSON.parse(storedRelays) : [];
+  }
+  return { signIn, encryptedPrivateKey, decryptedNpub, relays };
+};
+
+export async function createNostrDeleteEvent(
+  event_ids: [string],
+  pubkey: string,
+  content: string,
+  privkey: String
+) {
+  let msg = {
+    kind: 5, // NIP-X - Deletion
+    content: content, // Deletion Reason
+    tags: [],
+  };
+
+  for (let event_id of event_ids) {
+    msg.tags.push(["e", event_id]);
+  }
+
+  // set msg fields
+  msg.created_at = Math.floor(new Date().getTime() / 1000);
+  msg.pubkey = pubkey;
+  if (privkey) msg.privkey = privkey;
+
+  // Generate event id
+  msg.id = await generateNostrEventId(msg);
+  return msg;
+}
+
+export function nostrExtensionLoaded() {
+  if (!window.nostr) {
+    return false;
+  }
+  return true;
 }
