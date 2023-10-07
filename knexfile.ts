@@ -5,7 +5,7 @@ import 'dotenv/config'
 
 const config: { [key: string]: Knex.Config } = {
   development: {
-    client: 'postgres',
+    client: 'pg',
     connection: {
       connectionString: process.env['DATABASE_URL'],
       ssl: { rejectUnauthorized: false, },
@@ -19,7 +19,7 @@ const config: { [key: string]: Knex.Config } = {
     }
   },
   production: {
-    client: 'postgres',
+    client: 'pg',
     connection: {
       connectionString: process.env['DATABASE_URL'],
       ssl: { rejectUnauthorized: false, },
