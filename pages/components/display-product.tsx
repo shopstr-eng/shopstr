@@ -143,6 +143,20 @@ const DisplayProduct = ({
             parsedData.shippingCost = Number(cost);
             break;
           }
+          // TODO Deprecate Below after 11/07/2023
+          else if (values.length === 2) {
+            // [cost, currency]
+            const [cost, currency] = values;
+            parsedData.shippingType = "Added Cost";
+            parsedData.shippingCost = Number(cost);
+            break;
+          } else if (values.length === 1) {
+            // [type]
+            const [type] = values;
+            parsedData.shippingType = type;
+            parsedData.shippingCost = 0;
+            break;
+          }
           break;
         default:
           return;
