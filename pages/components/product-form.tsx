@@ -4,9 +4,10 @@ import * as CryptoJS from "crypto-js";
 import {
   PostListing,
   getNsecWithPassphrase,
+  getPrivKeyWithPassphrase,
   nostrBuildUploadImage,
 } from "../nostr-helpers";
-import { nip19 } from "nostr-tools";
+import { nip19, finishEvent } from "nostr-tools";
 import { PhotoIcon, TrashIcon } from "@heroicons/react/24/outline";
 
 interface ProductFormProps {
@@ -49,21 +50,12 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
     const { name, value } = e.target;
     if (name === "passphrase") {
       setPassphrase(value);
+      console.log(passphrase);
     } else {
       setFormValues((prevValues) => {
         // Handles when the name is 'currency'
         if (name === "currency") {
           setCurrencyVal(value);
-          // let priceState = prevValues.find(([key]) => key === "price") === undefined;
-          // let shippingState = prevValues.find(([key]) => key === "shipping") === undefined;
-          // if(priceState && shippingState) {
-          //   return [...prevValues, ["price", "", value], ["shipping", "", "", value]];
-          // } else if (priceState) {
-          //   return [...prevValues, ["price", "", value]];
-
-          // } else if (shippingState) {
-          //   return [...prevValues, ["shipping", "", "", value]];
-          // }
           return prevValues.map(([key, ...rest]) => {
             if (key === "price") {
               let price = rest[0];
@@ -204,9 +196,6 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
     if (key === "shipping") {
       const value = formValues?.find(([k]) => k === key)?.[1] || "";
       return value;
-      // if (!isNaN(value)) {
-      //   return "(Shipping option)";
-      // }
     }
     if (key === "Added cost") {
       const value = formValues?.find(([k]) => k === "shipping")?.[2] || "";
@@ -228,29 +217,40 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
     });
   };
 
-  const uploadImage = useCallback(
-    async (imageFile: File, index: number) => {
-      try {
-        if (!imageFile.type.includes("image"))
-          throw new Error("Only images are supported");
+  const uploadImage = async (imageFile: File, index: number) => {
+    try {
+      if (!imageFile.type.includes("image"))
+        throw new Error("Only images are supported");
 
-        const response = await nostrBuildUploadImage(
+      let response;
+
+      if (signIn === "nsec") {
+        console.log("passphrase", passphrase);
+        if (!getNsecWithPassphrase(passphrase))
+          throw new Error("Invalid passphrase!");
+
+        const privkey = getPrivKeyWithPassphrase(passphrase);
+        response = await nostrBuildUploadImage(imageFile, (e) =>
+          finishEvent(e, privkey)
+        );
+      } else if (signIn === "extension") {
+        response = await nostrBuildUploadImage(
           imageFile,
           async (e) => await window.nostr.signEvent(e)
         );
-        const imageUrl = response.url;
-
-        setImages((prevValues) => {
-          const updatedImages = [...prevValues];
-          updatedImages[index] = imageUrl;
-          return updatedImages;
-        });
-      } catch (e) {
-        if (e instanceof Error) alert(e.message);
       }
-    },
-    [setImages]
-  );
+
+      const imageUrl = response.url;
+
+      setImages((prevValues) => {
+        const updatedImages = [...prevValues];
+        updatedImages[index] = imageUrl;
+        return updatedImages;
+      });
+    } catch (e) {
+      if (e instanceof Error) alert("Failed to upload image! " + e.message);
+    }
+  };
 
   return (
     <div
@@ -331,6 +331,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
                           ref={fileInput}
                           onChange={(e) => {
                             uploadImage(e.target.files[0], index);
+                            e.target.value = "";
                           }}
                           className="w-1/2 p-2 border border-gray-300 rounded hidden"
                         />
@@ -352,8 +353,6 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
                           className="w-8 h-8 ml-auto hover:text-red-500"
                           onClick={() => handleDeleteImage(index)}
                         />
-                        {/* Delete
-                        </button> */}
                       </div>
                     ))}
 
