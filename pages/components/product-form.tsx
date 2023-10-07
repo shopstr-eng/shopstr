@@ -180,7 +180,6 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
           CryptoJS.enc.Utf8,
         )
       ) {
-        // integrate image urls into formValues
         handleModalToggle();
         initFormValues();
         setShowAddedCostInput(false);
@@ -199,9 +198,6 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
     if (key === "shipping") {
       const value = formValues?.find(([k]) => k === key)?.[1] || "";
       return value;
-      // if (!isNaN(value)) {
-      //   return "(Shipping option)";
-      // }
     }
     if (key === "Added cost") {
       const value = formValues?.find(([k]) => k === "shipping")?.[2] || "";
@@ -252,11 +248,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
         } else {
           alert("Input your passphrase before uploading an image!");
         }
-
-        // const response = await nostrBuildUploadImage(
-        //   imageFile,
-        //   async (e) => await window.nostr.signEvent(e),
-        // );
+        
         const imageUrl = response.url;
 
         setImages((prevValues) => {
@@ -268,7 +260,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
         if (e instanceof Error) alert("Failed to upload image!");
       }
     },
-    [setImages, passphrase, signIn],
+    [setImages, passphrase, signIn]
   );
 
   return (
@@ -371,8 +363,6 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
                           className="w-8 h-8 ml-auto hover:text-red-500"
                           onClick={() => handleDeleteImage(index)}
                         />
-                        {/* Delete
-                        </button> */}
                       </div>
                     ))}
 
