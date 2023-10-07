@@ -1,7 +1,7 @@
 import { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
-  return knex.schema.createTable('transactions', (table) => {
+  return knex.schema.createTable('invoices', (table) => {
 
     table.uuid('id');
     table.dateTime('time');
@@ -18,11 +18,14 @@ export async function up(knex: Knex): Promise<void> {
     table.text('notes');
     table.string('customer_id');
     table.string('merchant_id');
+    table.specificType('product_ids', 'text ARRAY');
+    table.text('invoice');
+    table.string('hash');
 
     table.primary(['id', 'time']);
   });
 }
 
 export async function down(knex: Knex): Promise<void> {
-  return knex.schema.dropTable('transactions');
+  return knex.schema.dropTable('invoices');
 }

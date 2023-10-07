@@ -2,7 +2,7 @@ import "tailwindcss/tailwind.css";
 import type { AppProps } from "next/app";
 import "../styles/globals.css";
 import { useRouter } from 'next/router';
-import { HomeIcon, EnvelopeOpenIcon, WalletIcon, GlobeAltIcon } from '@heroicons/react/24/outline';
+import { HomeIcon, EnvelopeOpenIcon, WalletIcon, GlobeAltIcon, ChartBarIcon } from '@heroicons/react/24/outline';
 
 function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
@@ -39,6 +39,12 @@ function App({ Component, pageProps }: AppProps) {
                 router.pathname === '/relays' ? 'text-yellow-100' : ''
               }`}
               onClick={() => router.push('/relays')}
+            />
+            <ChartBarIcon
+              className={`w-6 h-6 hover:text-purple-700 ${
+                router.pathname === '/metrics' ? 'text-yellow-100' : ''
+              }`}
+              onClick={() => router.push('/metrics')}
             />
           </div>
         </div>
