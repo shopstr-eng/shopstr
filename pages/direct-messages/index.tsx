@@ -7,6 +7,10 @@ import {
 } from "@heroicons/react/24/outline";
 import * as CryptoJS from "crypto-js";
 import { useRouter } from "next/router";
+import {
+  getNsecWithPassphrase,
+  getPrivKeyWithPassphrase,
+} from "../nostr-helpers";
 
 const DirectMessages = () => {
   const router = useRouter();
@@ -59,11 +63,7 @@ const DirectMessages = () => {
             setChats(newChats);
           }
           setEnterPassphrase(!enterPassphrase);
-          if (
-            CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-              CryptoJS.enc.Utf8,
-            )
-          ) {
+          if (getNsecWithPassphrase(passphrase)) {
             let newChats = Array.from(new Set([...chats, passedPubkeyStr]));
             setChats(newChats);
           }
@@ -99,7 +99,7 @@ const DirectMessages = () => {
             if (!chats.includes(incomingPubkey)) {
               setChats((chats) => {
                 return Array.from(
-                  new Set([...chats, nip19.npubEncode(incomingPubkey)]),
+                  new Set([...chats, nip19.npubEncode(incomingPubkey)])
                 );
               });
             }
@@ -159,16 +159,10 @@ const DirectMessages = () => {
           if (signIn === "extension") {
             plaintext = await window.nostr.nip04.decrypt(
               chatPubkey,
-              event.content,
+              event.content
             );
           } else {
-            let nsec = CryptoJS.AES.decrypt(
-              encryptedPrivateKey,
-              passphrase,
-            ).toString(CryptoJS.enc.Utf8);
-            // add error handling and re-prompt for passphrase
-            let { data } = nip19.decode(nsec);
-            let sk2 = data;
+            let sk2 = getPrivKeyWithPassphrase(passphrase);
             plaintext = await nip04.decrypt(sk2, chatPubkey, event.content);
           }
         }
@@ -191,7 +185,7 @@ const DirectMessages = () => {
           }
           // Sort the messages with each state update
           setMessages((prevMessages) =>
-            prevMessages.sort((a, b) => a.createdAt - b.createdAt),
+            prevMessages.sort((a, b) => a.createdAt - b.createdAt)
           );
         }
       });
@@ -217,11 +211,7 @@ const DirectMessages = () => {
 
     if (validNpub.test(npubText.value)) {
       if (signIn != "extension") {
-        if (
-          CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-            CryptoJS.enc.Utf8,
-          )
-        ) {
+        if (getNsecWithPassphrase(passphrase)) {
           if (!chats.includes(npubText.value)) {
             let newChats = Array.from(new Set([...chats, npubText.value]));
             setChats(newChats);
@@ -276,12 +266,7 @@ const DirectMessages = () => {
           ids: [signedEvent.id],
         });
       } else {
-        let nsec = CryptoJS.AES.decrypt(
-          encryptedPrivateKey,
-          passphrase,
-        ).toString(CryptoJS.enc.Utf8);
-        // add error handling and re-prompt for passphrase
-        let { data: privkey } = nip19.decode(nsec);
+        let privkey = getPrivKeyWithPassphrase(passphrase);
         // request passphrase in popup or form and pass to api
 
         let { data: chatPubkey } = nip19.decode(currentChat);
@@ -308,7 +293,7 @@ const DirectMessages = () => {
   };
 
   const handlePassphraseChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
     if (name === "passphrase") {
@@ -330,11 +315,7 @@ const DirectMessages = () => {
   };
 
   const handleSubmitPassphrase = () => {
-    if (
-      CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-        CryptoJS.enc.Utf8,
-      )
-    ) {
+    if (getNsecWithPassphrase(passphrase)) {
       setEnterPassphrase(false);
       setCurrentChat(thisChat);
     } else {
