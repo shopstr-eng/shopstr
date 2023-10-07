@@ -45,7 +45,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
     const { name, value } = e.target;
     if (name === "passphrase") {
       setPassphrase(value);
-      console.log(passphrase)
+      console.log(passphrase);
     } else {
       setFormValues((prevValues) => {
         // Handles when the name is 'currency'
@@ -237,17 +237,17 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
             async (e) => await window.nostr.signEvent(e),
           );
         } else if (
-        CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-          CryptoJS.enc.Utf8,
-        )
-      ) {
-          let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
+          CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
             CryptoJS.enc.Utf8,
-          );
+          )
+        ) {
+          let nsec = CryptoJS.AES.decrypt(
+            encryptedPrivateKey,
+            passphrase,
+          ).toString(CryptoJS.enc.Utf8);
           let { data } = nip19.decode(nsec);
-          response = await nostrBuildUploadImage(
-            imageFile,
-            (e) => finishEvent(e, data),
+          response = await nostrBuildUploadImage(imageFile, (e) =>
+            finishEvent(e, data),
           );
         } else {
           alert("Input your passphrase before uploading an image!");
