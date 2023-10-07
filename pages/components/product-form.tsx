@@ -2,7 +2,7 @@ import { useCallback, useState, useEffect, useRef } from "react";
 import { ProductFormValues } from "../api/post-event";
 import * as CryptoJS from "crypto-js";
 import { PostListing, nostrBuildUploadImage } from "../nostr-helpers";
-import { nip19 } from "nostr-tools";
+import { nip19, finishEvent } from "nostr-tools";
 import { PhotoIcon, TrashIcon } from "@heroicons/react/24/outline";
 
 interface ProductFormProps {
@@ -45,21 +45,12 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
     const { name, value } = e.target;
     if (name === "passphrase") {
       setPassphrase(value);
+      console.log(passphrase)
     } else {
       setFormValues((prevValues) => {
         // Handles when the name is 'currency'
         if (name === "currency") {
           setCurrencyVal(value);
-          // let priceState = prevValues.find(([key]) => key === "price") === undefined;
-          // let shippingState = prevValues.find(([key]) => key === "shipping") === undefined;
-          // if(priceState && shippingState) {
-          //   return [...prevValues, ["price", "", value], ["shipping", "", "", value]];
-          // } else if (priceState) {
-          //   return [...prevValues, ["price", "", value]];
-
-          // } else if (shippingState) {
-          //   return [...prevValues, ["shipping", "", "", value]];
-          // }
           return prevValues.map(([key, ...rest]) => {
             if (key === "price") {
               let price = rest[0];
@@ -238,10 +229,34 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
         if (!imageFile.type.includes("image"))
           throw new Error("Only images are supported");
 
-        const response = await nostrBuildUploadImage(
-          imageFile,
-          async (e) => await window.nostr.signEvent(e),
-        );
+        let response;
+
+        if (signIn === "extension") {
+          response = await nostrBuildUploadImage(
+            imageFile,
+            async (e) => await window.nostr.signEvent(e),
+          );
+        } else if (
+        CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
+          CryptoJS.enc.Utf8,
+        )
+      ) {
+          let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
+            CryptoJS.enc.Utf8,
+          );
+          let { data } = nip19.decode(nsec);
+          response = await nostrBuildUploadImage(
+            imageFile,
+            (e) => finishEvent(e, data),
+          );
+        } else {
+          alert("Input your passphrase before uploading an image!");
+        }
+
+        // const response = await nostrBuildUploadImage(
+        //   imageFile,
+        //   async (e) => await window.nostr.signEvent(e),
+        // );
         const imageUrl = response.url;
 
         setImages((prevValues) => {
@@ -250,10 +265,10 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
           return updatedImages;
         });
       } catch (e) {
-        if (e instanceof Error) alert(e.message);
+        if (e instanceof Error) alert("Failed to upload image!");
       }
     },
-    [setImages],
+    [setImages, passphrase, signIn],
   );
 
   return (
