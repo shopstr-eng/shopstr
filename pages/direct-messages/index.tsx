@@ -92,9 +92,9 @@ const DirectMessages = () => {
 
       newNip04Sub.on("event", (event) => {
         let tagPubkey = event.tags[0][1];
-
+        let incomingPubkey = event.pubkey;
+        
         if (decryptedNpub === tagPubkey) {
-          let incomingPubkey = event.pubkey;
           if (!validNpub.test(incomingPubkey)) {
             if (!chats.includes(incomingPubkey)) {
               setChats((chats) => {
@@ -107,6 +107,22 @@ const DirectMessages = () => {
             if (!chats.includes(incomingPubkey)) {
               setChats((chats) => {
                 return Array.from(new Set([...chats, incomingPubkey]));
+              });
+            }
+          }
+        } else if (decryptedNpub === incomingPubkey) {
+          if (!validNpub.test(tagPubkey)) {
+            if (!chats.includes(tagPubkey)) {
+              setChats((chats) => {
+                return Array.from(
+                  new Set([...chats, nip19.npubEncode(tagPubkey)]),
+                );
+              });
+            }
+          } else {
+            if (!chats.includes(tagPubkey)) {
+              setChats((chats) => {
+                return Array.from(new Set([...chats, tagPubkey]));
               });
             }
           }
