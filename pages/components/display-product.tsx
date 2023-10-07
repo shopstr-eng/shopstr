@@ -6,6 +6,10 @@ import requestMint from "../api/cashu/request-mint";
 import { CashuMint, CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
 import { nip19, SimplePool } from "nostr-tools";
 import * as CryptoJS from "crypto-js";
+import {
+  getNsecWithPassphrase,
+  getPrivKeyWithPassphrase,
+} from "../nostr-helpers";
 
 const DisplayProduct = ({
   tags,
@@ -176,11 +180,6 @@ const DisplayProduct = ({
         ids: [signedEvent.id],
       });
     } else {
-      let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-        CryptoJS.enc.Utf8,
-      );
-      // add error handling and re-prompt for passphrase
-      let { data } = nip19.decode(nsec);
       axios({
         method: "POST",
         url: "/api/nostr/post-event",
@@ -189,7 +188,7 @@ const DisplayProduct = ({
         },
         data: {
           pubkey: decryptedNpub,
-          privkey: data,
+          privkey: getPrivKeyWithPassphrase(passphrase),
           created_at: Math.floor(Date.now() / 1000),
           kind: 4,
           tags: [["p", pk]],
@@ -204,7 +203,7 @@ const DisplayProduct = ({
     pk: string,
     wallet: object,
     newPrice: number,
-    hash: string,
+    hash: string
   ) {
     let encoded;
 
@@ -242,17 +241,17 @@ const DisplayProduct = ({
   const handlePayment = async (
     pk: string,
     newPrice: number,
-    currency: string,
+    currency: string
   ) => {
     const wallet = new CashuWallet(
       new CashuMint(
-        "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC",
-      ),
+        "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"
+      )
     );
     if (currency === "USD") {
       try {
         const res = await axios.get(
-          "https://api.coinbase.com/v2/prices/BTC-USD/spot",
+          "https://api.coinbase.com/v2/prices/BTC-USD/spot"
         );
         const btcSpotPrice = Number(res.data.data.amount);
         const numSats = (newPrice / btcSpotPrice) * 100000000;
@@ -285,7 +284,7 @@ const DisplayProduct = ({
     productId: string,
     pk: string,
     newPrice: number,
-    currency: string,
+    currency: string
   ) => {
     if (window.location.pathname.includes("checkout")) {
       if (signIn != "extension") {
@@ -308,7 +307,7 @@ const DisplayProduct = ({
   };
 
   const handlePassphraseChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
     if (name === "passphrase") {
@@ -326,11 +325,7 @@ const DisplayProduct = ({
   };
 
   const handleSubmitPassphrase = () => {
-    if (
-      CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-        CryptoJS.enc.Utf8,
-      )
-    ) {
+    if (getNsecWithPassphrase(passphrase)) {
       setEnterPassphrase(false);
       if (use === "pay") {
         handlePayment(pubkey, totalCost, currency);
@@ -486,7 +481,7 @@ const DisplayProduct = ({
                     {invoice.length > 30
                       ? `${invoice.substring(0, 15)}...${invoice.substring(
                           invoice.length - 15,
-                          invoice.length,
+                          invoice.length
                         )}`
                       : invoice}
                   </p>

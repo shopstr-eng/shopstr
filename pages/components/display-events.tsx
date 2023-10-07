@@ -1,10 +1,8 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
 import DisplayProduct from "./display-product";
 import { nip19, SimplePool } from "nostr-tools";
 import { ProductFormValues } from "../api/post-event";
-import { createNostrDeleteEvent } from "../nostr-helpers";
-import * as CryptoJS from "crypto-js";
+import { DeleteListing } from "../nostr-helpers";
 
 export type Event = {
   id: string;
@@ -23,22 +21,12 @@ const DisplayEvents = ({
   focusedPubkey?: string;
   clickNPubkey: (npubkey: string) => void;
 }) => {
-  const [decryptedNpub, setDecryptedNpub] = useState("");
-  const [encryptedPrivateKey, setEncryptedPrivateKey] = useState("");
-  const [signIn, setSignIn] = useState("");
   const [relays, setRelays] = useState([]);
   const [eventData, setEventData] = useState<Event[]>([]);
   const imageUrlRegExp = /(https?:\/\/.*\.(?:png|jpg|jpeg|gif))/i;
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const npub = localStorage.getItem("npub");
-      const { data } = nip19.decode(npub);
-      setDecryptedNpub(data);
-      const encrypted = localStorage.getItem("encryptedPrivateKey");
-      setEncryptedPrivateKey(encrypted);
-      const signIn = localStorage.getItem("signIn");
-      setSignIn(signIn);
       const storedRelays = localStorage.getItem("relays");
       setRelays(storedRelays ? JSON.parse(storedRelays) : []);
     }
@@ -52,10 +40,6 @@ const DisplayEvents = ({
     };
     let productsSub = pool.sub(relays, [subParams]);
     productsSub.on("event", (event) => {
-      if (focusedPubkey && focusedPubkey !== event.pubkey) {
-        // needed cause on reload in a sellers shop, it displays all posts instead of just the sellers
-        return;
-      }
       setEventData((eventData) => {
         let newEventData = [...eventData, event];
         newEventData.sort((a, b) => b.created_at - a.created_at); // sorts most recently created to least recently created
@@ -76,54 +60,15 @@ const DisplayEvents = ({
   };
 
   const handleDelete = async (productId: string, passphrase: string) => {
-    if (signIn === "extension") {
-      const event = {
-        created_at: Math.floor(Date.now() / 1000),
-        kind: 5,
-        tags: [["e", productId]],
-        content: "user deletion request",
-      };
-
-      const signedEvent = await window.nostr.signEvent(event);
-
-      const pool = new SimplePool();
-
-      // const relays = JSON.parse(storedRelays);
-
-      await pool.publish(relays, signedEvent);
-
-      let events = await pool.list(relays, [{ kinds: [0, signedEvent.kind] }]);
-      let postedEvent = await pool.get(relays, {
-        ids: [signedEvent.id],
+    try {
+      await DeleteListing([productId], passphrase);
+      setEventData((eventData) => {
+        let newEventData = eventData.filter((event) => event.id !== productId); // removes the deleted product from the list
+        return newEventData;
       });
-    } else {
-      let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-        CryptoJS.enc.Utf8,
-      );
-      // add error handling and re-prompt for passphrase
-      let { data } = nip19.decode(nsec);
-      let deleteEvent = await createNostrDeleteEvent(
-        [productId],
-        decryptedNpub,
-        "user deletion request",
-        data,
-      );
-      axios({
-        method: "POST",
-        url: "/api/nostr/post-event",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        data: {
-          ...deleteEvent,
-          relays: relays,
-        },
-      });
+    } catch (e) {
+      console.log(e);
     }
-    setEventData((eventData) => {
-      let newEventData = eventData.filter((event) => event.id !== productId); // removes the deleted product from the list
-      return newEventData;
-    });
   };
 
   return (

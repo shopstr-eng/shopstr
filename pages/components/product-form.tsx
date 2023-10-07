@@ -1,7 +1,11 @@
 import { useCallback, useState, useEffect, useRef } from "react";
 import { ProductFormValues } from "../api/post-event";
 import * as CryptoJS from "crypto-js";
-import { PostListing, nostrBuildUploadImage } from "../nostr-helpers";
+import {
+  PostListing,
+  getNsecWithPassphrase,
+  nostrBuildUploadImage,
+} from "../nostr-helpers";
 import { nip19 } from "nostr-tools";
 import { PhotoIcon, TrashIcon } from "@heroicons/react/24/outline";
 
@@ -40,7 +44,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
   const handleChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >,
+    >
   ) => {
     const { name, value } = e.target;
     if (name === "passphrase") {
@@ -122,7 +126,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
         for (const [key, ...rest] of prevValues) {
           if (key === name) {
             return prevValues.map((item) =>
-              item[0] === name ? [name, value] : item,
+              item[0] === name ? [name, value] : item
             );
           }
         }
@@ -178,26 +182,18 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
       ...formValues,
       ...images.map((image) => ["image", image]),
     ];
-    if (signIn == "extension") {
-      handleModalToggle();
-      initFormValues();
-      setShowAddedCostInput(false);
-      handlePostListing(updatedFormValues);
-    } else {
-      if (
-        CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-          CryptoJS.enc.Utf8,
-        )
-      ) {
-        // integrate image urls into formValues
-        handleModalToggle();
-        initFormValues();
-        setShowAddedCostInput(false);
-        handlePostListing(updatedFormValues);
-      } else {
+
+    if (signIn === "nsec") {
+      // checks that the passphrase is correct
+      if (!getNsecWithPassphrase(passphrase)) {
         alert("Invalid passphrase!");
+        return;
       }
     }
+    handleModalToggle();
+    initFormValues();
+    setShowAddedCostInput(false);
+    handlePostListing(updatedFormValues);
   };
 
   const getFormValue = (key: string) => {
@@ -240,7 +236,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
 
         const response = await nostrBuildUploadImage(
           imageFile,
-          async (e) => await window.nostr.signEvent(e),
+          async (e) => await window.nostr.signEvent(e)
         );
         const imageUrl = response.url;
 
@@ -253,7 +249,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
         if (e instanceof Error) alert(e.message);
       }
     },
-    [setImages],
+    [setImages]
   );
 
   return (
