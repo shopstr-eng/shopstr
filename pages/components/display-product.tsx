@@ -395,7 +395,7 @@ const DisplayProduct = ({
         </p>
         {shippingType && (
           <p>
-            <strong className="font-semibold">Shipping Type:</strong>
+            <strong className="font-semibold">Shipping:</strong>
             {` ${shippingType} - ${shippingCost} ${currency}`}
           </p>
         )}

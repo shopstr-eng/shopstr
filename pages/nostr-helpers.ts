@@ -203,6 +203,7 @@ export function getNsecWithPassphrase(passphrase: string) {
   let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
     CryptoJS.enc.Utf8
   );
+  // returns undefined or "" thanks to the toString method
   return nsec;
 }
 
