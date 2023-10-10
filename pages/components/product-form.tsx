@@ -16,13 +16,10 @@ interface ProductFormProps {
 }
 
 const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
-  const [encryptedPrivateKey, setEncryptedPrivateKey] = useState("");
   const [signIn, setSignIn] = useState("");
   const [formValues, setFormValues] = useState<ProductFormValues>([]);
   const [images, setImages] = useState<string[]>([]);
   const [passphrase, setPassphrase] = useState("");
-
-  const [showAddedCostInput, setShowAddedCostInput] = useState(false);
 
   const [currencyVal, setCurrencyVal] = useState("");
 
@@ -35,8 +32,6 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const encrypted = localStorage.getItem("encryptedPrivateKey");
-      setEncryptedPrivateKey(encrypted);
       const signIn = localStorage.getItem("signIn");
       setSignIn(signIn);
     }
@@ -50,7 +45,6 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
     const { name, value } = e.target;
     if (name === "passphrase") {
       setPassphrase(value);
-      console.log(passphrase);
     } else {
       setFormValues((prevValues) => {
         // Handles when the name is 'currency'
@@ -73,16 +67,12 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
         }
 
         if (value === "Shipping option") {
-          setShowAddedCostInput(false);
           return prevValues.filter(([key]) => key !== "shipping"); // filter out "shipping"
-        } else if (value === "Added cost") {
-          setShowAddedCostInput(true);
         } else if (
           value === "Free" ||
           value === "Pickup" ||
           value === "Free/pickup"
         ) {
-          setShowAddedCostInput(false);
           if (prevValues.find(([key]) => key === "shipping") === undefined) {
             return [...prevValues, [name, value, "0", currencyVal]];
           } else {
@@ -127,7 +117,6 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
       });
     }
   };
-  console.log(formValues);
   const handlePostListing = async (values) => {
     await PostListing(values, passphrase);
   };
@@ -225,7 +214,6 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
       let response;
 
       if (signIn === "nsec") {
-        console.log("passphrase", passphrase);
         if (!getNsecWithPassphrase(passphrase))
           throw new Error("Invalid passphrase!");
 
@@ -304,7 +292,6 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
                       required
                       className="w-full p-2 border border-gray-300 rounded"
                     />
-
                     <div className="flex items-center mb-2">
                       <label
                         htmlFor="images"
@@ -417,7 +404,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
                       <option value="Free/pickup">Free/pickup</option>
                     </select>
                     <div className="relative">
-                      {showAddedCostInput && (
+                      {getFormValue("shipping") === "Added cost" && (
                         <input
                           type="number"
                           id="Added cost"
@@ -427,7 +414,7 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
                           className="w-full p-2 pl-6 border border-gray-300 rounded"
                         />
                       )}
-                      {showAddedCostInput && (
+                      {getFormValue("shipping") === "Added cost" && (
                         <span className="absolute right-8 top-2">
                           {currencyVal}
                         </span>
@@ -465,9 +452,6 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
                         />
                       </>
                     )}
-                    <p className="mt-2 text-red-500 text-sm">
-                      * required field
-                    </p>
                   </form>
                 </div>
               </div>
@@ -475,14 +459,12 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
           </div>
           <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
             <button
-              type="button"
               className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm"
               onClick={handleSubmit}
             >
               Add Listing
             </button>
             <button
-              type="button"
               className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
               onClick={() => {
                 initFormValues();

@@ -4,6 +4,7 @@ import { useRouter } from "next/router";
 import { ArrowUturnLeftIcon } from "@heroicons/react/24/outline";
 import { nip19, SimplePool } from "nostr-tools";
 import ProductForm from "../components/product-form";
+import NewForm from "../components/NewForm";
 
 const SellerView = () => {
   const router = useRouter();
@@ -75,10 +76,11 @@ const SellerView = () => {
           Add New Listing
         </button>
       </div>
-      <ProductForm
+      {/* <ProductForm
         showModal={showModal}
         handleModalToggle={handleModalToggle}
-      />
+      /> */}
+      <NewForm showModal={showModal} handleModalToggle={handleModalToggle} />
     </div>
   );
 };
