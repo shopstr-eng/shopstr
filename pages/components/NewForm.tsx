@@ -138,10 +138,10 @@ export default function NewForm({
   }, []);
 
   const shippingOptions = [
-    "Free",
-    "Free Shipping",
-    "Free/Pickup",
-    "Added Cost",
+    "Free", // free shipping you are going to ship it
+    "Pickup", // you are only going to have someone pick it up
+    "Free/Pickup", // you are open to do either
+    "Added Cost", // you are going to charge for shipping
   ];
   const categories = [
     "Digital Products",
@@ -165,7 +165,7 @@ export default function NewForm({
       return true; // invalid passphrase
     }
     return false;
-  }, [passphrase]);
+  }, [signIn, passphrase]);
 
   const buttonClassName = useMemo(() => {
     const disabledStyle = " from-gray-300 to-gray-400 cursor-not-allowed";
@@ -274,7 +274,6 @@ export default function NewForm({
       backdrop="blur"
       isOpen={showModal}
       onClose={handleModalToggle}
-      isDismissable={false}
       classNames={{
         body: "py-6",
         backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -454,7 +453,7 @@ export default function NewForm({
                               >
                                 <option key="USD">USD</option>
                                 <option key="SATS">SATS</option>
-                                <option key="EUR">EUR</option>
+                                {/* <option key="EUR">EUR</option> */}
                               </select>
                             </div>
                           );
@@ -584,7 +583,7 @@ export default function NewForm({
                           >
                             <option key="USD">USD</option>
                             <option key="SATS">SATS</option>
-                            <option key="EUR">EUR</option>
+                            {/* <option key="EUR">EUR</option> */}
                           </select>
                         </div>
                       }
