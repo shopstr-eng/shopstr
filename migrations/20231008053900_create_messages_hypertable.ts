@@ -1,8 +1,10 @@
 import { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
-    return knex.raw(`SELECT create_hypertable('invoices', 'time');`);
+  return knex.raw(`SELECT create_hypertable('messages', 'time');`);
 }
 
 export async function down(knex: Knex): Promise<void> {
 }
+
+

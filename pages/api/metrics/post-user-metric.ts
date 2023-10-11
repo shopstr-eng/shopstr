@@ -16,11 +16,10 @@ const PostCustomer = async (req: NextApiRequest, res: NextApiResponse) => {
   const event = parseRequestBody(req.body);
 
   try {
-    await repo()('customers').insert({
-      id: uuid(),
+    await repo()('users').insert({
       time: DateTime.now().toUTC().toSQL(),
-      customer_id: event.customer_id,
-      merchant_id: event.merchant_id,
+      user_id: event.user_id,
+      // location: event.lcoation,
     });
     return res.status(201).json({});
   } catch (error: any) {

@@ -3,6 +3,7 @@ import * as CryptoJS from "crypto-js";
 import { nip19, nip98, SimplePool } from "nostr-tools";
 import { ProductFormValues } from "../api/post-event";
 import axios from "axios";
+import { DateTime } from "luxon";
 
 export async function PostListing(
   values: ProductFormValues,
@@ -26,6 +27,21 @@ export async function PostListing(
     };
 
     const signedEvent = await window.nostr.signEvent(event);
+
+    axios({
+      method: "POST",
+      url: "/api/metrics/post-product-metric",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      data: {
+        // price: event.price,
+        merchant_id: getPubKey(),
+        // relays: event.relays,
+        // category: event.tags[],
+      }
+    });
+  
     const pool = new SimplePool();
 
     await pool.publish(relays, signedEvent);

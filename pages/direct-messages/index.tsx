@@ -253,6 +253,19 @@ const DirectMessages = () => {
 
         const signedEvent = await window.nostr.signEvent(event);
 
+        axios({
+          method: "POST",
+          url: "/api/metrics/post-message-metric",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          data: {
+            sender_id: decryptedNpub,
+            recipient_id: data,
+            relays: relays,
+          }
+        });
+
         const pool = new SimplePool();
 
         // const relays = JSON.parse(storedRelays);

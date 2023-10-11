@@ -4,6 +4,7 @@ import { useRouter } from "next/router";
 import { ArrowUturnLeftIcon } from "@heroicons/react/24/outline";
 import { nip19, SimplePool } from "nostr-tools";
 import ProductForm from "../components/product-form";
+import { getPubKey } from "../nostr-helpers";
 
 const SellerView = () => {
   const router = useRouter();
@@ -18,6 +19,28 @@ const SellerView = () => {
       setfocusedPubkey(data); // router.query.pubkey returns array of pubkeys
     }
   }, [router.query.pubkey]);
+
+  useEffect(() => {
+    try {
+      const loggedIn = getPubKey();
+      if (loggedIn) {
+        fetch('/api/metrics/post-user-metric', {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            // price: event.price,
+            user_id: loggedIn,
+            // relays: event.relays,
+            // category: event.tags[],
+          })
+        });
+      }
+    } catch {
+
+    }
+  })
 
   const routeToShop = (npubkey) => {
     if (npubkey === "") {

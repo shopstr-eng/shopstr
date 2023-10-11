@@ -11,6 +11,7 @@ import {
   getPrivKeyWithPassphrase,
   getPubKey,
 } from "../nostr-helpers";
+import { DateTime } from "luxon";
 
 // Define a type for product data
 interface ProductData {
@@ -175,6 +176,20 @@ const DisplayProduct = ({
       };
 
       const signedEvent = await window.nostr.signEvent(event);
+
+      axios({
+        method: "POST",
+        url: "/api/metrics/post-message-metric",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        data: {
+          time: DateTime.now().toUTC().toSQL(),
+          sender_id: decryptedNpub,
+          recipient_id: pk,
+          relays: relays,
+        }
+      });
 
       const pool = new SimplePool();
 
@@ -490,9 +505,9 @@ const DisplayProduct = ({
                   >
                     {invoice.length > 30
                       ? `${invoice.substring(0, 15)}...${invoice.substring(
-                          invoice.length - 15,
-                          invoice.length
-                        )}`
+                        invoice.length - 15,
+                        invoice.length
+                      )}`
                       : invoice}
                   </p>
                 </div>
@@ -520,9 +535,8 @@ const DisplayProduct = ({
         </div>
       )}
       <div
-        className={`fixed z-10 inset-0 overflow-y-auto ${
-          enterPassphrase && signIn === "nsec" ? "" : "hidden"
-        }`}
+        className={`fixed z-10 inset-0 overflow-y-auto ${enterPassphrase && signIn === "nsec" ? "" : "hidden"
+          }`}
       >
         <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
           <div className="fixed inset-0 transition-opacity" aria-hidden="true">

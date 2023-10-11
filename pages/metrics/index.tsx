@@ -1,109 +1,142 @@
 'use client';
 
-import { Card, Metric, Text, Title, BarList, Flex, Grid, DateRangePicker, DateRangePickerValue } from '@tremor/react';
-import Chart from './totalSalesCard';
-import { ChartData, formatDataWithEmptyDateTime } from '@/utils/metrics';
+import { Card, Metric, Text, Title, BarList, Flex, Grid, DateRangePicker, DateRangePickerValue, LineChart, DateRangePickerItem } from '@tremor/react';
+import { formatDataWithEmptyDateTime } from '@/utils/metrics';
 import { DateTime } from 'luxon';
 import { useState, useEffect } from 'react';
-import TotalSalesCard from './totalSalesCard';
-import UniqueCustomers from './uniqueCustomers';
+import { nip19 } from 'nostr-tools';
 
-const website = [
-  { name: '/home', value: 1230 },
-  { name: '/contact', value: 751 },
-  { name: '/gallery', value: 471 },
-  { name: '/august-discount-offer', value: 280 },
-  { name: '/case-studies', value: 78 }
-];
+type Data = {
+  label: string;
+  category: Category;
+}
 
-const shop = [
-  { name: '/home', value: 453 },
-  { name: '/imprint', value: 351 },
-  { name: '/shop', value: 271 },
-  { name: '/pricing', value: 191 }
-];
+type Category = {
+  title: string;
+  subtitle: string;
+  total: number;
+  symbol: string;
+  metrics: Metrics[];
+};
 
-const app = [
-  { name: '/shop', value: 789 },
-  { name: '/product-features', value: 676 },
-  { name: '/about', value: 564 },
-  { name: '/login', value: 234 },
-  { name: '/downloads', value: 191 }
-];
-
-const data = [
-  {
-    category: 'Most Viewed',
-    stat: '10,234',
-    data: website
-  },
-  {
-    category: 'Top Selling',
-    stat: '12,543',
-    data: shop
-  },
-  {
-    category: 'Mobile App',
-    stat: '2,543',
-    data: app
-  }
-];
+type Metrics = {
+  period: string;
+} & {
+  [label: string]: number;
+}
 
 export default function MetricsPage() {
 
-  const [value, setValue] = useState<DateRangePickerValue>({
+  const [date, setDate] = useState<DateRangePickerValue>({
     from: DateTime.now().minus({ days: 7 }).toJSDate(),
     to: DateTime.now().toJSDate(),
   });
+  const [data, setData] = useState<Data[]>([]);
+
+  useEffect(() => {
+    const { data: merchantId } = nip19.decode(localStorage.getItem("npub"));
+
+    const startDate = DateTime.fromJSDate(date.from!).toISO();
+    const endDate = DateTime.fromJSDate(date.to!).toISO();
+
+    if (!startDate || !endDate || !merchantId) return;
+
+    fetch(`/api/metrics/get-metrics?startDate=${startDate}&endDate=${endDate}&merchantId=${merchantId}`)
+      .then((res) => res.json())
+      .then((data: Data[]) => {
+        console.log(JSON.stringify(data))
+
+        const formattedData = data.map(data => {
+          const formattedMetrics =
+            formatDataWithEmptyDateTime(data.category.metrics, data.label, startDate, endDate) || [];
+          console.log('hhhh ', formattedMetrics);
+          return {
+            label: data.label,
+            category: {
+              ...data.category,
+              metrics: formattedMetrics,
+            }
+          }
+        })
+
+        setData(formattedData);
+      })
+  }, [date])
+
+  const wut = (a) => {
+    console.log(a)
+  }
 
   return (
     <main className="p-4 md:p-10 mx-auto max-w-7xl">
-      {/* 
-      1 day - 15 minute interval
-      7 days - hourly interval
-      30 days - daily interval
-       */}
       <DateRangePicker
-        className="max-w-md mx-auto"
-        value={value}
-        onValueChange={setValue}
+      className='my-5'
+        value={date}
+        onValueChange={setDate}
         color="rose"
-      ></DateRangePicker>
+      >
+        <DateRangePickerItem
+          key="today"
+          value="today"
+          from={DateTime.now().startOf('day').toJSDate()}
+          to={DateTime.now().toJSDate()}>
+          Today
+        </DateRangePickerItem>
+        <DateRangePickerItem
+          key="sevenDats"
+          value="sevenDats"
+          from={DateTime.now().minus({ days: 7 }).toJSDate()}
+          to={DateTime.now().toJSDate()}>
+          Last 7 Days
+        </DateRangePickerItem>
+        <DateRangePickerItem
+          key="thirtyDats"
+          value="thirtyDats"
+          from={DateTime.now().minus({ days: 30 }).toJSDate()}
+          to={DateTime.now().toJSDate()}>
+          Last 30 Days
+        </DateRangePickerItem>
+        <DateRangePickerItem
+          key="mtd"
+          value="ytd"
+          from={DateTime.now().startOf('month').toJSDate()}
+          to={DateTime.now().toJSDate()}>
+          Month to Date
+        </DateRangePickerItem>
+        <DateRangePickerItem
+          key="ytd"
+          value="ytd"
+          from={DateTime.now().startOf('year').toJSDate()}
+          to={DateTime.now().toJSDate()}>
+          Year to Date
+        </DateRangePickerItem>
+      </DateRangePicker>
       <Grid numItemsSm={2} numItemsLg={3} className="gap-6">
-        <TotalSalesCard
-          startDate={DateTime.fromJSDate(value.from || new Date()).toISO() || ''}
-          endDate={DateTime.fromJSDate(value.to || new Date()).toISO() || ''}
-          interval='WEEK'
-        ></TotalSalesCard>
-        <UniqueCustomers
-          startDate={DateTime.fromJSDate(value.from || new Date()).toISO() || ''}
-          endDate={DateTime.fromJSDate(value.to || new Date()).toISO() || ''}
-          interval='WEEK'
-        ></UniqueCustomers>
-        {/* {data.map((item) => (
-          <Card key={item.category}>
-            <Title>{item.category}</Title>
+        {data.map((item) => (
+          <Card key={item.category.title}>
+            <Title>{item.category.title}</Title>
             <Flex
               justifyContent="start"
               alignItems="baseline"
               className="space-x-2"
             >
-              <Metric>{item.stat}</Metric>
-              <Text>Total views</Text>
+              <Metric>{item.category.total} {item.category.symbol}</Metric>
             </Flex>
-            <Flex className="mt-6">
-              <Text>Pages</Text>
-              <Text className="text-right">Views</Text>
-            </Flex>
-            <BarList
-              data={item.data}
+            <Text>{item.category.subtitle}</Text>
+            <LineChart
+              className="mt-4 h-80"
+              data={item.category.metrics}
+              categories={[item.label]}
+              index='period'
+              colors={['indigo', 'fuchsia']}
               valueFormatter={(number: number) =>
-                Intl.NumberFormat('us').format(number).toString()
+                `${number.toString()} ${item.category.symbol}`
+                // `$ ${Intl.NumberFormat('us').format(number).toString()}`
               }
-              className="mt-2"
+              yAxisWidth={60}
             />
           </Card>
-        ))} */}
+        ))}
       </Grid>
     </main>
   );

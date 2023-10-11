@@ -4,6 +4,8 @@ import {
   finishEvent, // this assigns the pubkey, calculates the event id and signs the event in a single step
   nip04,
 } from "nostr-tools";
+import repo from '../../../utils/repo';
+import { DateTime } from "luxon";
 
 export interface PostEventRequest {
   pubkey: string;
@@ -77,6 +79,28 @@ const parseProductFormValues = (body: ProductFormValues): ProductFormValues => {
   return parsedBody;
 };
 
+const PostMetric = async (event: any) => {
+  if (event.kind === 4) {
+    await repo()('messages').insert({
+      time: DateTime.now().toUTC().toSQL(),
+      sender_id: event.pubkey,
+      recipient_id: event.tags[0][1],
+      relays: event.relays,
+      // location: event.location,
+    });
+  }
+  if (event.kind === 30018 || event.kind === 30402) {
+    await repo()('products').insert({
+      time: DateTime.now().toUTC().toSQL(),
+      // price: '',
+      merchant_id: event.pubkey,
+      relays: event.relays,
+      // location: '',
+      // category: '',
+    });
+  }
+}
+
 const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
   if (req.method !== "POST") {
     return res.status(405).json({});
@@ -127,6 +151,8 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
     //   console.log('got event:', event);
     // });
     await pool.publish(relays, signedEvent);
+
+    await PostMetric(event);
 
     return res.status(200).json({});
   } catch (error) {
