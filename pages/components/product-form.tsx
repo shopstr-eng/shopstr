@@ -68,7 +68,7 @@ export default function NewForm({
       [
         "shipping",
         data["Shipping Option"],
-        data["Shipping Cost"],
+        data["Shipping Cost"] ? data["Shipping Cost"] : 0,
         data["Currency"],
       ],
     ];

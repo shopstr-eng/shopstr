@@ -26,6 +26,7 @@ export async function PostListing(
     };
 
     const signedEvent = await window.nostr.signEvent(event);
+
     const pool = new SimplePool();
 
     await pool.publish(relays, signedEvent);
