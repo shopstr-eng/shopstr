@@ -37,7 +37,7 @@ const getParamsFromURI = (uri: string) => {
   return new URLSearchParams(paramString);
 };
 
-export default async function GetTotalSales(req: NextApiRequest, res: NextApiResponse) {
+export default async function GetMetrics(req: NextApiRequest, res: NextApiResponse) {
   const params = getParamsFromURI(req.url || '');
   const startDate = params.get('startDate')
   const endDate = params.get('endDate')
