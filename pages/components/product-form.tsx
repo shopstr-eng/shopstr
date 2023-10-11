@@ -55,7 +55,7 @@ export default function NewForm({
   } = useForm({
     defaultValues: {
       Currency: "SATS",
-      "Shipping Option": "Free",
+      "Shipping Option": "N/A",
     },
   });
 
@@ -167,6 +167,7 @@ export default function NewForm({
   }, []);
 
   const shippingOptions = [
+    "N/A",
     "Free", // free shipping you are going to ship it
     "Pickup", // you are only going to have someone pick it up
     "Free/Pickup", // you are open to do either
