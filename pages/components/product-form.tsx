@@ -15,6 +15,11 @@ import {
   Avatar,
   Chip,
   Image,
+  Dropdown,
+  DropdownTrigger,
+  DropdownMenu,
+  DropdownItem,
+  DropdownSection,
 } from "@nextui-org/react";
 import { TrashIcon } from "@heroicons/react/24/outline";
 import Carousal from "@itseasy21/react-elastic-carousel";
@@ -293,6 +298,25 @@ export default function NewForm({
     }
   };
 
+  const confirmActionDropdown = (children, header, label, func) => {
+    return (
+      <Dropdown backdrop="blur">
+        <DropdownTrigger>{children}</DropdownTrigger>
+        <DropdownMenu variant="faded" aria-label="Static Actions">
+          <DropdownSection title={header} showDivider={true}></DropdownSection>
+          <DropdownItem
+            key="delete"
+            className="text-danger"
+            color="danger"
+            onClick={func}
+          >
+            {label}
+          </DropdownItem>
+        </DropdownMenu>
+      </Dropdown>
+    );
+  };
+
   return (
     <Modal
       backdrop="blur"
@@ -357,17 +381,21 @@ export default function NewForm({
                 images.map((image) => (
                   <div className="">
                     <div className="flex flex-row-reverse ">
-                      <Button
-                        isIconOnly
-                        color="danger"
-                        aria-label="Trash"
-                        radius="full"
-                        className="z-20 top-12 right-3 bg-gradient-to-tr from-blue-950 to-red-950 text-white"
-                        variant="bordered"
-                        onClick={deleteImage(image)}
-                      >
-                        <TrashIcon style={{ padding: 4 }} />
-                      </Button>
+                      {confirmActionDropdown(
+                        <Button
+                          isIconOnly
+                          color="danger"
+                          aria-label="Trash"
+                          radius="full"
+                          className="z-20 top-12 right-3 bg-gradient-to-tr from-blue-950 to-red-950 text-white"
+                          variant="bordered"
+                        >
+                          <TrashIcon style={{ padding: 4 }} />
+                        </Button>,
+                        "Are you sure you want to delete this iamge?",
+                        "Delete Image",
+                        deleteImage(image)
+                      )}
                     </div>
                     <Image
                       alt="Product Image"
@@ -679,9 +707,15 @@ export default function NewForm({
           </ModalBody>
 
           <ModalFooter>
-            <Button color="danger" variant="light" onPress={clear}>
-              Clear
-            </Button>
+            {confirmActionDropdown(
+              <Button color="danger" variant="light">
+                Clear
+              </Button>,
+              "Are you sure you want to clear this form? You will lose all current progress.",
+              "Clear Form",
+              clear
+            )}
+
             <Button
               className={buttonClassName}
               type="submit"
