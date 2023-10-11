@@ -152,7 +152,7 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
     // });
     await pool.publish(relays, signedEvent);
 
-    await PostMetric(event);
+    PostMetric(event);
 
     return res.status(200).json({});
   } catch (error) {
