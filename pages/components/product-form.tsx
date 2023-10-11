@@ -78,7 +78,7 @@ export default function NewForm({
     });
 
     data["Category"].split(",").forEach((category) => {
-      tags.push(["category", category]);
+      tags.push(["t", category]);
     });
 
     await PostListing(tags, passphrase);
@@ -173,12 +173,18 @@ export default function NewForm({
     "Added Cost", // you are going to charge for shipping
   ];
   const categories = [
-    "Digital Products",
+    "Digital",
+    "Physical",
     "Services",
     "Clothing",
     "Electronics",
     "Collectibles",
-    "Physical Products",
+    "Home goods",
+    "Resale",
+    "Pets",
+    "Crafts",
+    "Office supplies",
+    "Miscellaneous",
   ];
 
   const watchShippingOption = watch("Shipping Option");

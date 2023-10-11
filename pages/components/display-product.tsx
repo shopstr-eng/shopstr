@@ -18,7 +18,7 @@ interface ProductData {
   summary: string;
   publishedAt: string;
   images: string[];
-  category: string;
+  categories: string[];
   location: string;
   price: number;
   currency: string;
@@ -48,7 +48,7 @@ const DisplayProduct = ({
     summary: "",
     publishedAt: "",
     images: [],
-    category: "",
+    categories: [],
     location: "",
     price: 0,
     currency: "",
@@ -61,7 +61,7 @@ const DisplayProduct = ({
     summary,
     publishedAt,
     images,
-    category,
+    categories,
     location,
     price,
     currency,
@@ -126,7 +126,8 @@ const DisplayProduct = ({
           parsedData.images.push(values[0]);
           break;
         case "t":
-          parsedData.category = values[0];
+          if (parsedData.categories === undefined) parsedData.categories = [];
+          parsedData.categories.push(values[0]);
           break;
         case "location":
           parsedData.location = values[0];
@@ -396,9 +397,9 @@ const DisplayProduct = ({
       </div>
 
       <div className="mb-4">
-        {category && (
+        {categories && (
           <p>
-            <strong className="font-semibold">Category:</strong> {category}
+            <strong className="font-semibold">Categories:</strong> {categories.join(', ')}
           </p>
         )}
         <p>
