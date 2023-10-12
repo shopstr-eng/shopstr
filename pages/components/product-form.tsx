@@ -1,223 +1,286 @@
-import { useCallback, useState, useEffect, useRef } from "react";
-import { ProductFormValues } from "../api/post-event";
-import * as CryptoJS from "crypto-js";
+import React, { useMemo, useRef, useEffect, useState } from "react";
+import { useForm, Controller } from "react-hook-form";
+import {
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Button,
+  Textarea,
+  Input,
+  Select,
+  SelectItem,
+  SelectSection,
+  Avatar,
+  Chip,
+  Image,
+  Dropdown,
+  DropdownTrigger,
+  DropdownMenu,
+  DropdownItem,
+  DropdownSection,
+} from "@nextui-org/react";
+import { TrashIcon } from "@heroicons/react/24/outline";
+import Carousal from "@itseasy21/react-elastic-carousel";
+
+import locations from "../../public/locationSelection.json";
 import {
   PostListing,
   getNsecWithPassphrase,
   getPrivKeyWithPassphrase,
   nostrBuildUploadImage,
 } from "../nostr-helpers";
-import { nip19, finishEvent } from "nostr-tools";
-import { PhotoIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { finishEvent } from "nostr-tools";
 
 interface ProductFormProps {
   handleModalToggle: () => void;
   showModal: boolean;
 }
 
-const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
-  const [encryptedPrivateKey, setEncryptedPrivateKey] = useState("");
-  const [signIn, setSignIn] = useState("");
-  const [formValues, setFormValues] = useState<ProductFormValues>([]);
-  const [images, setImages] = useState<string[]>([]);
+export default function NewForm({
+  showModal,
+  handleModalToggle,
+}: ProductFormProps) {
   const [passphrase, setPassphrase] = useState("");
+  const [images, setImages] = useState<string[]>([]);
+  const [signIn, setSignIn] = useState("");
 
-  const [showAddedCostInput, setShowAddedCostInput] = useState(false);
+  const {
+    handleSubmit,
+    formState: { errors },
+    control,
+    reset,
+    watch,
+  } = useForm({
+    defaultValues: {
+      Currency: "SATS",
+      "Shipping Option": "N/A",
+    },
+  });
 
-  const [currencyVal, setCurrencyVal] = useState("");
+  const onSubmit = async (data) => {
+    let tags = [
+      ["title", data["Product Name"]],
+      ["summary", data["Description"]],
+      ["price", data["Price"], data["Currency"]],
+      ["location", data["Location"]],
+      [
+        "shipping",
+        data["Shipping Option"],
+        data["Shipping Cost"] ? data["Shipping Cost"] : 0,
+        data["Currency"],
+      ],
+    ];
 
-  const fileInput = useRef(null);
+    images.forEach((image) => {
+      tags.push(["image", image]);
+    });
 
-  const initFormValues = () => {
-    setFormValues([]);
-    setImages([]);
+    data["Category"].split(",").forEach((category) => {
+      tags.push(["t", category]);
+    });
+
+    await PostListing(tags, passphrase);
+    clear();
   };
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const encrypted = localStorage.getItem("encryptedPrivateKey");
-      setEncryptedPrivateKey(encrypted);
       const signIn = localStorage.getItem("signIn");
       setSignIn(signIn);
     }
   }, []);
 
-  const handleChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >
-  ) => {
-    const { name, value } = e.target;
-    if (name === "passphrase") {
-      setPassphrase(value);
-      console.log(passphrase);
-    } else {
-      setFormValues((prevValues) => {
-        // Handles when the name is 'currency'
-        if (name === "currency") {
-          setCurrencyVal(value);
-          return prevValues.map(([key, ...rest]) => {
-            if (key === "price") {
-              let price = rest[0];
-              return [key, price, value];
-            } else if (key === "shipping") {
-              let type = rest[0];
-              if (rest[1]) {
-                return [key, type, rest[1], value];
-              }
-              return [key, type, "", value];
-            } else {
-              return [key, ...rest];
-            }
-          });
-        }
-
-        if (value === "Shipping option") {
-          setShowAddedCostInput(false);
-          return prevValues.filter(([key]) => key !== "shipping"); // filter out "shipping"
-        } else if (value === "Added cost") {
-          setShowAddedCostInput(true);
-        } else if (
-          value === "Free" ||
-          value === "Pickup" ||
-          value === "Free/pickup"
-        ) {
-          setShowAddedCostInput(false);
-          if (prevValues.find(([key]) => key === "shipping") === undefined) {
-            return [...prevValues, [name, value, "0", currencyVal]];
-          } else {
-            return prevValues.map(([key, ...rest]) => {
-              if (key === "shipping") {
-                return [key, value, "0", currencyVal];
-              } else {
-                return [key, ...rest]; // return the original value for other keys
-              }
-            });
-          }
-        }
-
-        if (name === "Added cost") {
-          return prevValues.map((formValue) => {
-            const [key, value] = formValue;
-            // Handle "shipping" key
-            if (key === "shipping") {
-              // Set new value for "Added cost"
-              return [key, "Added cost", e.target.value, currencyVal];
-            }
-            // Handle "price" key
-            if (key === "price") {
-              // Keep existing currency value
-              return [key, value, currencyVal];
-            }
-            // Return all other keys without modification
-            return formValue;
-          });
-        }
-
-        // Checks to see if key exists and updates it rather than duplicating
-        for (const [key, ...rest] of prevValues) {
-          if (key === name) {
-            return prevValues.map((item) =>
-              item[0] === name ? [name, value] : item
-            );
-          }
-        }
-        // Adds the new key if does not exist already
-        return [...prevValues, [name, value]];
-      });
-    }
-  };
-  console.log(formValues);
-  const handlePostListing = async (values) => {
-    await PostListing(values, passphrase);
+  const clear = () => {
+    handleModalToggle();
+    setPassphrase("");
+    setImages([]);
+    reset();
   };
 
-  const handleSubmit = () => {
-    if (
-      !formValues.find(([key]) => key === "title") ||
-      !formValues.find(([key]) => key === "summary") ||
-      !formValues.find(([key]) => key === "location") ||
-      !formValues.find(([key]) => key === "price")
-    ) {
-      alert("Missing required fields!");
-      return;
-    }
-    if (
-      formValues.find(([key]) => key === "price").length < 3 || // check all fields exist for price
-      formValues.find(([key]) => key === "price")?.[1] === "" || // check that price is not empty
-      formValues.find(([key]) => key === "price")?.[2] === "Select currency" // check that currency is not empty
-    ) {
-      alert("Missing required fields!");
-      return;
-    }
-    // here we know that added shipping is not empty
-    if (
-      formValues.find(([key]) => key === "shipping") != undefined &&
-      formValues.find(([key]) => key === "shipping")?.[1] === "Added cost" &&
-      formValues.find(([key]) => key === "shipping").length < 4
-    ) {
-      alert("Missing shipping option!");
-      return;
-    }
-    // here we know that added shipping is a valid number and greater than 0
-    if (
-      (formValues.find(([key]) => key === "shipping") === "Shipping option" ||
-        formValues.find(([key]) => key === "shipping") === "Added cost") &&
-      (Number(formValues.find(([key]) => key === "shipping")?.[2]) <= 0 ||
-        isNaN(Number(formValues.find(([key]) => key === "shipping")?.[2])))
-    ) {
-      alert("Missing shipping cost!");
-      return;
-    }
+  const locationMap = useMemo(() => {
+    let countries = locations.countries.map((country) => [
+      country.country,
+      country,
+    ]);
+    let states = locations.states.map((state) => [state.state, state]);
+    return new Map([...countries, ...states]);
+  }, []);
 
-    const updatedFormValues = [
-      ...formValues,
-      ...images.map((image) => ["image", image]),
-    ];
+  const countryOptions = useMemo(() => {
+    const headingClasses =
+      "flex w-full sticky top-1 z-20 py-1.5 px-2 bg-default-100 shadow-small rounded-small";
 
-    if (signIn === "nsec") {
-      // checks that the passphrase is correct
-      if (!getNsecWithPassphrase(passphrase)) {
-        alert("Invalid passphrase!");
+    let countryOptions = (
+      <SelectSection
+        title="Countries"
+        classNames={{
+          heading: headingClasses,
+        }}
+      >
+        {locations.countries.map((country) => {
+          return (
+            <SelectItem
+              key={country.country}
+              startContent={
+                <Avatar
+                  alt={country.country}
+                  className="w-6 h-6"
+                  src={`https://flagcdn.com/16x12/${country.iso3166}.png`}
+                />
+              }
+            >
+              {country.country}
+            </SelectItem>
+          );
+        })}
+      </SelectSection>
+    );
+
+    let stateOptions = (
+      <SelectSection
+        title="States of America"
+        classNames={{
+          heading: headingClasses,
+        }}
+      >
+        {locations.states.map((state) => {
+          return (
+            <SelectItem
+              key={state.state}
+              startContent={
+                <Avatar
+                  alt={state.state}
+                  className="w-6 h-6"
+                  src={`https://flagcdn.com/16x12/${state.iso3166}.png`}
+                />
+              }
+            >
+              {state.state}
+            </SelectItem>
+          );
+        })}
+      </SelectSection>
+    );
+    return [stateOptions, countryOptions];
+  }, []);
+
+  const shippingOptions = [
+    "N/A",
+    "Free", // free shipping you are going to ship it
+    "Pickup", // you are only going to have someone pick it up
+    "Free/Pickup", // you are open to do either
+    "Added Cost", // you are going to charge for shipping
+  ];
+  const categories = [
+    "Digital",
+    "Physical",
+    "Services",
+    "Resale",
+    "Clothing",
+    "Shoes",
+    "Accessories",
+    "Electronics",
+    "Collectibles",
+    "Books",
+    "Pets",
+    "Sports",
+    "Fitness",
+    "Art",
+    "Crafts",
+    "Home",
+    "Office",
+    "Food",
+    "Miscellaneous",
+  ];
+
+  const watchShippingOption = watch("Shipping Option");
+  const watchCurrency = watch("Currency");
+
+  const isButtonDisabled = useMemo(() => {
+    if (signIn === "extension") return false; // extension can upload without passphrase
+    if (passphrase === "") return true; // nsec needs passphrase
+    try {
+      let nsec = getNsecWithPassphrase(passphrase);
+      if (!nsec) return true; // invalid passphrase
+    } catch (e) {
+      return true; // invalid passphrase
+    }
+    return false;
+  }, [signIn, passphrase]);
+
+  const buttonClassName = useMemo(() => {
+    const disabledStyle = " from-gray-300 to-gray-400 cursor-not-allowed";
+    const enabledStyle = " from-purple-600 via-purple-500 to-purple-600";
+    const className =
+      "text-white shadow-lg bg-gradient-to-tr" +
+      (isButtonDisabled ? disabledStyle : enabledStyle);
+    return className;
+  }, [isButtonDisabled]);
+
+  const passphraseInputRef = useRef(null);
+
+  const FileUploader = ({
+    uploadImage,
+    disabled,
+    passphraseInputRef,
+    buttonClassName,
+  }) => {
+    const [loading, setLoading] = useState(false);
+    // Create a reference to the hidden file input element
+    const hiddenFileInput = useRef(null);
+
+    // Programatically click the hidden file input element
+    // when the Button component is clicked
+    const handleClick = (event) => {
+      if (disabled && signIn === "nsec") {
+        // shows user that they need to enter passphrase
+        passphraseInputRef.current.focus();
         return;
       }
-    }
-    handleModalToggle();
-    initFormValues();
-    setShowAddedCostInput(false);
-    handlePostListing(updatedFormValues);
+      hiddenFileInput.current.click();
+    };
+    // Call a function (passed as a prop from the parent component)
+    // to handle the user-selected file
+    const handleChange = async (event) => {
+      const fileUploaded = event.target.files[0];
+      setLoading(true);
+      await uploadImage(fileUploaded);
+      setLoading(false);
+    };
+    return (
+      <>
+        <Button
+          isLoading={loading}
+          onClick={handleClick}
+          className={buttonClassName}
+        >
+          {disabled ? "Enter your passphrase!" : "Upload An Image"}
+        </Button>
+        <input
+          type="file"
+          accept="image/*"
+          ref={hiddenFileInput}
+          onChange={handleChange}
+          style={{ display: "none" }}
+        />
+      </>
+    );
   };
 
-  const getFormValue = (key: string) => {
-    if (key === "currency") {
-      const currency = formValues?.find(([k]) => k === "price")?.[2] || "";
-      return currency;
-    }
-    if (key === "shipping") {
-      const value = formValues?.find(([k]) => k === key)?.[1] || "";
-      return value;
-    }
-    if (key === "Added cost") {
-      const value = formValues?.find(([k]) => k === "shipping")?.[2] || "";
-      return value;
-    }
-    const value = formValues?.find(([k]) => k === key)?.[1] || "";
-    return value;
-  };
-
-  const handleAddImage = () => {
-    setImages((prevValues) => [...prevValues, ""]);
-  };
-
-  const handleDeleteImage = (index: number) => {
+  const deleteImage = (image) => () => {
     setImages((prevValues) => {
       const updatedImages = [...prevValues];
-      updatedImages.splice(index, 1);
+      const index = updatedImages.indexOf(image);
+      if (index > -1) {
+        updatedImages.splice(index, 1);
+      }
       return updatedImages;
     });
   };
 
-  const uploadImage = async (imageFile: File, index: number) => {
+  const uploadImage = async (imageFile: File) => {
     try {
       if (!imageFile.type.includes("image"))
         throw new Error("Only images are supported");
@@ -225,277 +288,467 @@ const ProductForm = ({ showModal, handleModalToggle }: ProductFormProps) => {
       let response;
 
       if (signIn === "nsec") {
-        console.log("passphrase", passphrase);
-        if (!getNsecWithPassphrase(passphrase))
+        if (!passphrase || !getNsecWithPassphrase(passphrase))
           throw new Error("Invalid passphrase!");
 
         const privkey = getPrivKeyWithPassphrase(passphrase);
         response = await nostrBuildUploadImage(imageFile, (e) =>
-          finishEvent(e, privkey)
+          finishEvent(e, privkey),
         );
       } else if (signIn === "extension") {
         response = await nostrBuildUploadImage(
           imageFile,
-          async (e) => await window.nostr.signEvent(e)
+          async (e) => await window.nostr.signEvent(e),
         );
       }
 
       const imageUrl = response.url;
-
       setImages((prevValues) => {
         const updatedImages = [...prevValues];
-        updatedImages[index] = imageUrl;
-        return updatedImages;
+        return [...updatedImages, imageUrl];
       });
     } catch (e) {
       if (e instanceof Error) alert("Failed to upload image! " + e.message);
     }
   };
 
+  const confirmActionDropdown = (children, header, label, func) => {
+    return (
+      <Dropdown backdrop="blur">
+        <DropdownTrigger>{children}</DropdownTrigger>
+        <DropdownMenu variant="faded" aria-label="Static Actions">
+          <DropdownSection title={header} showDivider={true}></DropdownSection>
+          <DropdownItem
+            key="delete"
+            className="text-danger"
+            color="danger"
+            onClick={func}
+          >
+            {label}
+          </DropdownItem>
+        </DropdownMenu>
+      </Dropdown>
+    );
+  };
+
   return (
-    <div
-      className={`fixed z-10 inset-0 overflow-y-auto ${
-        showModal ? "" : "hidden"
-      }`}
+    <Modal
+      backdrop="blur"
+      isOpen={showModal}
+      onClose={handleModalToggle}
+      classNames={{
+        body: "py-6",
+        backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+        // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
+        header: "border-b-[1px] border-[#292f46]",
+        footer: "border-t-[1px] border-[#292f46]",
+        closeButton: "hover:bg-black/5 active:bg-white/10",
+      }}
+      scrollBehavior={"outside"}
+      size="2xl"
     >
-      <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-        <div className="fixed inset-0 transition-opacity" aria-hidden="true">
-          <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
-        </div>
-        <span
-          className="hidden sm:inline-block sm:align-middle sm:h-screen"
-          aria-hidden="true"
-        >
-          &#8203;
-        </span>
-        <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-          <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-            <div className="sm:flex sm:items-start">
-              <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-                <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-                  Add New Listing
-                </h3>
-                <div className="mt-2">
-                  <form className="mx-auto" onSubmit={handleSubmit}>
-                    <label htmlFor="title" className="block mb-2 font-bold">
-                      Title:<span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      id="title"
-                      name="title"
-                      value={getFormValue("title")}
-                      onChange={handleChange}
-                      required
-                      className="w-full p-2 border border-gray-300 rounded"
-                    />
-
-                    <label
-                      htmlFor="description"
-                      className="block my-2 font-bold"
-                    >
-                      Summary:<span className="text-red-500">*</span>
-                    </label>
-                    <textarea
-                      id="summary"
-                      name="summary"
-                      value={getFormValue("summary")}
-                      onChange={handleChange}
-                      required
-                      className="w-full p-2 border border-gray-300 rounded"
-                    />
-
-                    <div className="flex items-center mb-2">
-                      <label
-                        htmlFor="images"
-                        className="block my-2 font-bold pr-3"
-                      >
-                        Images:
-                      </label>
-                      <button
-                        type="button"
-                        onClick={handleAddImage}
-                        className="bg-blue-500 text-white px-2 py-1 rounded"
-                      >
-                        Add Image
-                      </button>
-                    </div>
-                    {images.map((image, index) => (
-                      <div key={index} className="flex items-center mb-2">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          id={`image-${index}`}
-                          name={`image-${index}`}
-                          placeholder="Image Url"
-                          ref={fileInput}
-                          onChange={(e) => {
-                            uploadImage(e.target.files[0], index);
-                            e.target.value = "";
-                          }}
-                          className="w-1/2 p-2 border border-gray-300 rounded hidden"
-                        />
-                        {image ? (
-                          <a
-                            href={image}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            {image.substring(0, 20) + "..."}
-                          </a>
-                        ) : (
-                          <PhotoIcon
-                            className="w-8 h-8 hover:text-purple-700"
-                            onClick={() => fileInput.current.click()}
-                          />
-                        )}
-                        <TrashIcon
-                          className="w-8 h-8 ml-auto hover:text-red-500"
-                          onClick={() => handleDeleteImage(index)}
-                        />
-                      </div>
-                    ))}
-
-                    <label htmlFor="location" className="block my-2 font-bold">
-                      Location:<span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      id="location"
-                      name="location"
-                      value={getFormValue("location")}
-                      onChange={handleChange}
-                      required
-                      className="w-full p-2 border border-gray-300 rounded"
-                    />
-
-                    <label htmlFor="price" className="block my-2 font-bold">
-                      Price:<span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      id="price"
-                      step="0.01"
-                      name="price"
-                      value={getFormValue("price")}
-                      onChange={handleChange}
-                      required
-                      className="w-full p-2 border border-gray-300 rounded"
-                    />
-
-                    <label htmlFor="currency" className="block my-2 font-bold">
-                      Currency:<span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      id="currency"
-                      name="currency"
-                      value={getFormValue("currency")}
-                      onChange={handleChange}
-                      required
-                      className="w-full p-2 border border-gray-300 rounded"
-                    >
-                      <option value="Select currency">(Select currency)</option>
-                      <option value="Sat(s)">Sat(s)</option>
-                      <option value="USD">USD</option>
-                    </select>
-
-                    <label htmlFor="shipping" className="block my-2 font-bold">
-                      Shipping:
-                    </label>
-                    <select
-                      id="shipping"
-                      name="shipping"
-                      value={getFormValue("shipping")}
-                      onChange={handleChange}
-                      required
-                      className="w-full p-2 border border-gray-300 rounded"
-                    >
-                      <option value="Shipping option">(Shipping option)</option>
-                      <option value="Added cost">Added cost</option>
-                      <option value="Free">Free</option>
-                      <option value="Pickup">Pickup</option>
-                      <option value="Free/pickup">Free/pickup</option>
-                    </select>
-                    <div className="relative">
-                      {showAddedCostInput && (
-                        <input
-                          type="number"
-                          id="Added cost"
-                          name="Added cost"
-                          value={getFormValue("Added cost")}
-                          onChange={handleChange}
-                          className="w-full p-2 pl-6 border border-gray-300 rounded"
-                        />
-                      )}
-                      {showAddedCostInput && (
-                        <span className="absolute right-8 top-2">
-                          {currencyVal}
-                        </span>
-                      )}
-                    </div>
-
-                    <label htmlFor="t" className="block my-2 font-bold">
-                      Category:
-                    </label>
-                    <input
-                      type="text"
-                      id="t"
-                      name="t"
-                      value={getFormValue("t")}
-                      onChange={handleChange}
-                      className="w-full p-2 border border-gray-300 rounded"
-                    />
-
-                    {signIn === "nsec" && (
-                      <>
-                        <label
-                          htmlFor="passphrase"
-                          className="block mb-2 font-bold"
-                        >
-                          Passphrase:<span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          id="passphrase"
-                          name="passphrase"
-                          value={passphrase}
-                          required
-                          onChange={handleChange}
-                          className="w-full p-2 border border-gray-300 rounded"
-                        />
-                      </>
-                    )}
-                    <p className="mt-2 text-red-500 text-sm">
-                      * required field
-                    </p>
-                  </form>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-            <button
-              type="button"
-              className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm"
-              onClick={handleSubmit}
+      <ModalContent>
+        <ModalHeader className="flex flex-col gap-1">
+          Add New Product Listing
+        </ModalHeader>
+        <form onSubmit={handleSubmit(onSubmit)}>
+          <ModalBody>
+            <Controller
+              name="Product Name"
+              control={control}
+              rules={{
+                required: "A Product Name is required.",
+                maxLength: {
+                  value: 50,
+                  message: "This input exceed maxLength of 50.",
+                },
+              }}
+              render={({
+                field: { onChange, onBlur, value },
+                fieldState: { error },
+              }) => {
+                let isErrored = error !== undefined;
+                let errorMessage: string = error?.message ? error.message : "";
+                return (
+                  <Input
+                    autoFocus
+                    variant="bordered"
+                    fullWidth={true}
+                    label="Product Name"
+                    labelPlacement="inside"
+                    isInvalid={isErrored}
+                    errorMessage={errorMessage}
+                    // controller props
+                    onChange={onChange} // send value to hook form
+                    onBlur={onBlur} // notify when input is touched/blur
+                    value={value}
+                  />
+                );
+              }}
+            />
+            <Carousal
+              isRTL={false}
+              showArrows={images.length > 1}
+              pagination={false}
             >
-              Add Listing
-            </button>
-            <button
-              type="button"
-              className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-              onClick={() => {
-                initFormValues();
-                handleModalToggle();
+              {images.length > 0 ? (
+                images.map((image) => (
+                  <div className="">
+                    <div className="flex flex-row-reverse ">
+                      {confirmActionDropdown(
+                        <Button
+                          isIconOnly
+                          color="danger"
+                          aria-label="Trash"
+                          radius="full"
+                          className="z-20 top-12 right-3 bg-gradient-to-tr from-blue-950 to-red-950 text-white"
+                          variant="bordered"
+                        >
+                          <TrashIcon style={{ padding: 4 }} />
+                        </Button>,
+                        "Are you sure you want to delete this iamge?",
+                        "Delete Image",
+                        deleteImage(image),
+                      )}
+                    </div>
+                    <Image
+                      alt="Product Image"
+                      className="object-cover"
+                      width={350}
+                      src={image}
+                    />
+                  </div>
+                ))
+              ) : (
+                <div className="flex items-center justify-center w-full h-full">
+                  <Image
+                    alt="Product Image"
+                    className="object-cover"
+                    src="/no-image-placeholder.png"
+                    width={350}
+                  />
+                </div>
+              )}
+            </Carousal>
+            <FileUploader
+              uploadImage={uploadImage}
+              disabled={isButtonDisabled}
+              passphraseInputRef={passphraseInputRef}
+              buttonClassName={buttonClassName}
+            />
+            <Controller
+              name="Description"
+              control={control}
+              rules={{
+                required: "A description is required.",
+                maxLength: {
+                  value: 300,
+                  message: "This input exceed maxLength of 300.",
+                },
+              }}
+              render={({
+                field: { onChange, onBlur, value },
+                fieldState: { error },
+              }) => {
+                let isErrored = error !== undefined;
+                let errorMessage: string = error?.message ? error.message : "";
+                return (
+                  <Textarea
+                    variant="bordered"
+                    fullWidth={true}
+                    placeholder="Description"
+                    isInvalid={isErrored}
+                    errorMessage={errorMessage}
+                    // controller props
+                    onChange={onChange} // send value to hook form
+                    onBlur={onBlur} // notify when input is touched/blur
+                    value={value}
+                  />
+                );
+              }}
+            />
+
+            <Controller
+              name="Price"
+              control={control}
+              rules={{
+                required: "A price is required.",
+                min: { value: 0, message: "Price must be greater than 0" },
+              }}
+              render={({
+                field: { onChange, onBlur, value },
+                fieldState: { error },
+              }) => {
+                let isErrored = error !== undefined;
+                let errorMessage: string = error?.message ? error.message : "";
+                return (
+                  <Input
+                    type="number"
+                    autoFocus
+                    variant="flat"
+                    // label="Price"
+                    // labelPlacement="outside"
+                    placeholder="Price"
+                    isInvalid={isErrored}
+                    errorMessage={errorMessage}
+                    // controller props
+                    onChange={onChange} // send value to hook form
+                    onBlur={onBlur} // notify when input is touched/blur
+                    value={value}
+                    endContent={
+                      <Controller
+                        control={control}
+                        name="Currency"
+                        rules={{
+                          required: "Please specify a currency.",
+                        }}
+                        render={({
+                          field: { onChange, onBlur, value },
+                          fieldState: { error },
+                        }) => {
+                          return (
+                            <div className="flex items-center">
+                              <select
+                                className="outline-none border-0 bg-transparent text-default-400 text-small"
+                                key={"currency"}
+                                id="currency"
+                                name="currency"
+                                onChange={onChange} // send value to hook form
+                                onBlur={onBlur} // notify when input is touched/blur
+                                value={value}
+                              >
+                                <option key="USD">USD</option>
+                                <option key="SATS">SATS</option>
+                                {/* <option key="EUR">EUR</option> */}
+                              </select>
+                            </div>
+                          );
+                        }}
+                      />
+                    }
+                  />
+                );
+              }}
+            />
+
+            <Controller
+              name="Location"
+              control={control}
+              rules={{
+                required: "Please specify a location.",
+              }}
+              render={({
+                field: { onChange, onBlur, value },
+                fieldState: { error },
+              }) => {
+                let isErrored = error !== undefined;
+                let errorMessage: string = error?.message ? error.message : "";
+
+                let startContent = locationMap.get(value) ? (
+                  <Avatar
+                    alt={value}
+                    className="w-6 h-6"
+                    src={`https://flagcdn.com/16x12/${locationMap.get(value)
+                      ?.iso3166}.png`}
+                  />
+                ) : null;
+                return (
+                  <Select
+                    autoFocus
+                    variant="bordered"
+                    aria-label="Select Location"
+                    startContent={startContent}
+                    placeholder="Location"
+                    isInvalid={isErrored}
+                    errorMessage={errorMessage}
+                    // controller props
+                    onChange={onChange} // send value to hook form
+                    onBlur={onBlur} // notify when input is touched/blur
+                    value={value}
+                  >
+                    {countryOptions}
+                  </Select>
+                );
+              }}
+            />
+
+            <Controller
+              name="Shipping Option"
+              control={control}
+              rules={{
+                required: "Please specify a shipping option.",
+              }}
+              render={({
+                field: { onChange, onBlur, value },
+                fieldState: { error },
+              }) => {
+                let isErrored = error !== undefined;
+                let errorMessage: string = error?.message ? error.message : "";
+                return (
+                  <Select
+                    autoFocus
+                    variant="bordered"
+                    aria-label="Shipping Option"
+                    placeholder="Shipping Option"
+                    isInvalid={isErrored}
+                    errorMessage={errorMessage}
+                    disallowEmptySelection={true}
+                    // controller props
+                    onChange={onChange} // send value to hook form
+                    onBlur={onBlur} // notify when input is touched/blur
+                    selectedKeys={[value]}
+                  >
+                    {shippingOptions.map((option) => (
+                      <SelectItem key={option}>{option}</SelectItem>
+                    ))}
+                  </Select>
+                );
+              }}
+            />
+
+            {watchShippingOption === "Added Cost" && (
+              <Controller
+                name="Shipping Cost"
+                control={control}
+                rules={{
+                  required: "A Shipping Cost is required.",
+                  min: {
+                    value: 0,
+                    message: "Shipping Cost must be greater than 0",
+                  },
+                }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => {
+                  let isErrored = error !== undefined;
+                  let errorMessage: string = error?.message
+                    ? error.message
+                    : "";
+                  return (
+                    <Input
+                      type="number"
+                      autoFocus
+                      variant="flat"
+                      placeholder="Shipping Cost"
+                      isInvalid={isErrored}
+                      errorMessage={errorMessage}
+                      // controller props
+                      onChange={onChange} // send value to hook form
+                      onBlur={onBlur} // notify when input is touched/blur
+                      value={value}
+                      endContent={
+                        <div className="flex items-center">
+                          <select
+                            className="outline-none border-0 bg-transparent text-default-400 text-small"
+                            key={"currency"}
+                            id="currency"
+                            name="currency"
+                            value={watchCurrency}
+                            disabled={true}
+                          >
+                            <option key="USD">USD</option>
+                            <option key="SATS">SATS</option>
+                            {/* <option key="EUR">EUR</option> */}
+                          </select>
+                        </div>
+                      }
+                    />
+                  );
+                }}
+              />
+            )}
+            <Controller
+              name="Category"
+              control={control}
+              rules={{
+                required: "A Category is required.",
+              }}
+              render={({
+                field: { onChange, onBlur, value },
+                fieldState: { error },
+              }) => {
+                let isErrored = error !== undefined;
+                let errorMessage: string = error?.message ? error.message : "";
+                return (
+                  <Select
+                    variant="bordered"
+                    isMultiline={true}
+                    autoFocus
+                    aria-label="Category"
+                    placeholder="Category"
+                    selectionMode="multiple"
+                    isInvalid={isErrored}
+                    errorMessage={errorMessage}
+                    // controller props
+                    onChange={onChange} // send value to hook form
+                    onBlur={onBlur} // notify when input is touched/blur
+                    value={value}
+                    renderValue={(items) => {
+                      return (
+                        <div className="flex flex-wrap gap-2">
+                          {items.map((item) => (
+                            <Chip key={item.key}>
+                              {item.key
+                                ? (item.key as string)
+                                : "unknown category"}
+                            </Chip>
+                          ))}
+                        </div>
+                      );
+                    }}
+                  >
+                    {categories.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category}
+                      </SelectItem>
+                    ))}
+                  </Select>
+                );
+              }}
+            />
+            {signIn === "nsec" && (
+              <Input
+                autoFocus
+                ref={passphraseInputRef}
+                variant="flat"
+                label="Passphrase"
+                labelPlacement="inside"
+                onChange={(e) => setPassphrase(e.target.value)}
+                value={passphrase}
+              />
+            )}
+          </ModalBody>
+
+          <ModalFooter>
+            {confirmActionDropdown(
+              <Button color="danger" variant="light">
+                Clear
+              </Button>,
+              "Are you sure you want to clear this form? You will lose all current progress.",
+              "Clear Form",
+              clear,
+            )}
+
+            <Button
+              className={buttonClassName}
+              type="submit"
+              onClick={(e) => {
+                if (
+                  isButtonDisabled &&
+                  signIn === "nsec" &&
+                  passphraseInputRef.current
+                ) {
+                  e.preventDefault();
+                  passphraseInputRef.current.focus();
+                }
               }}
             >
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+              List Product
+            </Button>
+          </ModalFooter>
+        </form>
+      </ModalContent>
+    </Modal>
   );
-};
-
-export default ProductForm;
+}

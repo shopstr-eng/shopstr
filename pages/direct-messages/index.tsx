@@ -1,10 +1,26 @@
-import { useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
+import { useForm, Controller } from "react-hook-form";
 import axios from "axios";
 import { nip04, nip19, SimplePool } from "nostr-tools";
 import {
   ArrowUturnLeftIcon,
   MinusCircleIcon,
 } from "@heroicons/react/24/outline";
+import {
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Button,
+  Textarea,
+  Input,
+  Dropdown,
+  DropdownTrigger,
+  DropdownMenu,
+  DropdownItem,
+  DropdownSection,
+} from "@nextui-org/react";
 import * as CryptoJS from "crypto-js";
 import { useRouter } from "next/router";
 import {
@@ -99,7 +115,7 @@ const DirectMessages = () => {
             if (!chats.includes(incomingPubkey)) {
               setChats((chats) => {
                 return Array.from(
-                  new Set([...chats, nip19.npubEncode(incomingPubkey)])
+                  new Set([...chats, nip19.npubEncode(incomingPubkey)]),
                 );
               });
             }
@@ -159,7 +175,7 @@ const DirectMessages = () => {
           if (signIn === "extension") {
             plaintext = await window.nostr.nip04.decrypt(
               chatPubkey,
-              event.content
+              event.content,
             );
           } else {
             let sk2 = getPrivKeyWithPassphrase(passphrase);
@@ -185,7 +201,7 @@ const DirectMessages = () => {
           }
           // Sort the messages with each state update
           setMessages((prevMessages) =>
-            prevMessages.sort((a, b) => a.createdAt - b.createdAt)
+            prevMessages.sort((a, b) => a.createdAt - b.createdAt),
           );
         }
       });
@@ -196,7 +212,68 @@ const DirectMessages = () => {
     localStorage.setItem("chats", JSON.stringify(chats));
   }, [chats]);
 
+  const {
+    handleSubmit,
+    formState: { errors },
+    control,
+    reset,
+  } = useForm();
+
+  const isButtonDisabled = useMemo(() => {
+    if (signIn === "extension") return false; // extension can upload without passphrase
+    if (passphrase === "") return true; // nsec needs passphrase
+    try {
+      let nsec = getNsecWithPassphrase(passphrase);
+      if (!nsec) return true; // invalid passphrase
+    } catch (e) {
+      return true; // invalid passphrase
+    }
+    return false;
+  }, [signIn, passphrase]);
+
+  const buttonClassName = useMemo(() => {
+    const disabledStyle = " from-gray-300 to-gray-400 cursor-not-allowed";
+    const enabledStyle = " from-purple-600 via-purple-500 to-purple-600";
+    const className =
+      "text-white shadow-lg bg-gradient-to-tr" +
+      (isButtonDisabled ? disabledStyle : enabledStyle);
+    return className;
+  }, [isButtonDisabled]);
+
+  const passphraseInputRef = useRef(null);
+
+  const confirmActionDropdown = (children, header, label, func) => {
+    return (
+      <Dropdown backdrop="blur">
+        <DropdownTrigger>{children}</DropdownTrigger>
+        <DropdownMenu variant="faded" aria-label="Static Actions">
+          <DropdownSection title={header} showDivider={true}></DropdownSection>
+          <DropdownItem
+            key="delete"
+            className="text-danger"
+            color="danger"
+            onClick={func}
+          >
+            {label}
+          </DropdownItem>
+        </DropdownMenu>
+      </Dropdown>
+    );
+  };
+
+  const onSubmit = async (data) => {
+    let npub = data["npub"];
+    await handleEnterNewChat(npub);
+  };
+
+  const cancel = () => {
+    setEnterPassphrase(false);
+    setPassphrase("");
+  };
+
   const handleToggleModal = () => {
+    reset();
+    setPassphrase;
     setShowModal(!showModal);
   };
 
@@ -205,33 +282,21 @@ const DirectMessages = () => {
     router.push("/direct-messages");
   };
 
-  const handleEnterNewChat = () => {
-    const npubText = document.getElementById("pubkey") as HTMLTextAreaElement;
-    const validNpub = /^npub[a-zA-Z0-9]{59}$/;
-
-    if (validNpub.test(npubText.value)) {
-      if (signIn != "extension") {
-        if (getNsecWithPassphrase(passphrase)) {
-          if (!chats.includes(npubText.value)) {
-            let newChats = Array.from(new Set([...chats, npubText.value]));
-            setChats(newChats);
-          }
-          setCurrentChat(npubText.value);
-          setShowModal(!showModal);
-        } else {
-          alert("Invalid passphrase!");
-        }
-      } else {
-        if (!chats.includes(npubText.value)) {
-          let newChats = Array.from(new Set([...chats, npubText.value]));
-          setChats(newChats);
-        }
-        setCurrentChat(npubText.value);
-        setShowModal(!showModal);
+  const handleEnterNewChat = (newNpub: string) => {
+    if (signIn != "extension") {
+      if (!chats.includes(newNpub)) {
+        let newChats = Array.from(new Set([...chats, newNpub]));
+        setChats(newChats);
       }
+      setCurrentChat(newNpub);
+      setShowModal(!showModal);
     } else {
-      alert("Invalid pubkey!");
-      npubText.value = "";
+      if (!chats.includes(newNpub)) {
+        let newChats = Array.from(new Set([...chats, newNpub]));
+        setChats(newChats);
+      }
+      setCurrentChat(newNpub);
+      setShowModal(!showModal);
     }
   };
 
@@ -239,7 +304,7 @@ const DirectMessages = () => {
     setMessage(e.target.value);
   };
 
-  const handleSubmit = async (e) => {
+  const handleSend = async (e) => {
     e.preventDefault();
     if (message.trim() !== "") {
       if (signIn === "extension") {
@@ -293,7 +358,7 @@ const DirectMessages = () => {
   };
 
   const handlePassphraseChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
     const { name, value } = e.target;
     if (name === "passphrase") {
@@ -348,153 +413,174 @@ const DirectMessages = () => {
         >
           Start New Chat
         </button>
-        <div
-          className={`fixed z-10 inset-0 overflow-y-auto ${
-            showModal ? "" : "hidden"
-          }`}
+        <Modal
+          backdrop="blur"
+          isOpen={showModal}
+          onClose={handleToggleModal}
+          classNames={{
+            body: "py-6",
+            backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+            // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
+            header: "border-b-[1px] border-[#292f46]",
+            footer: "border-t-[1px] border-[#292f46]",
+            closeButton: "hover:bg-black/5 active:bg-white/10",
+          }}
+          scrollBehavior={"outside"}
+          size="2xl"
         >
-          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div
-              className="fixed inset-0 transition-opacity"
-              aria-hidden="true"
-            >
-              <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
-            </div>
-            <span
-              className="hidden sm:inline-block sm:align-middle sm:h-screen"
-              aria-hidden="true"
-            >
-              &#8203;
-            </span>
-            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="sm:flex sm:items-start">
-                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-                      Start New Chat
-                    </h3>
-                    <div className="mt-2">
-                      <textarea
-                        id="pubkey"
-                        className="shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md mb-2"
-                        placeholder="Enter npub here..."
-                      ></textarea>
-                      {signIn === "nsec" && (
-                        <>
-                          <label
-                            htmlFor="passphrase"
-                            className="block mb-2 font-bold"
-                          >
-                            Passphrase:<span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            id="passphrase"
-                            name="passphrase"
-                            value={passphrase}
-                            required
-                            onChange={handlePassphraseChange}
-                            className="w-full p-2 border border-gray-300 rounded"
-                          />
-                        </>
-                      )}
-                      <p className="mt-2 text-red-500 text-sm">
-                        * required field
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                <button
-                  type="button"
-                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm"
-                  onClick={handleEnterNewChat}
-                >
-                  Enter Chat
-                </button>
-                <button
-                  type="button"
-                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                  onClick={handleToggleModal}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div
-          className={`fixed z-10 inset-0 overflow-y-auto ${
-            enterPassphrase & (signIn === "nsec") ? "" : "hidden"
-          }`}
-        >
-          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div
-              className="fixed inset-0 transition-opacity"
-              aria-hidden="true"
-            >
-              <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
-            </div>
-            <span
-              className="hidden sm:inline-block sm:align-middle sm:h-screen"
-              aria-hidden="true"
-            >
-              &#8203;
-            </span>
-            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="sm:flex sm:items-start">
-                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-                      Enter Passphrase
-                    </h3>
-                    <div className="mt-2">
-                      <form
-                        className="mx-auto"
-                        onSubmit={() => handleSubmitPassphrase()}
-                      >
-                        <label htmlFor="t" className="block mb-2 font-bold">
-                          Passphrase:<span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          id="passphrase"
-                          name="passphrase"
-                          value={passphrase}
-                          required
-                          onChange={handlePassphraseChange}
-                          className="w-full p-2 border border-gray-300 rounded"
-                        />
-                        <p className="mt-2 text-red-500 text-sm">
-                          * required field
-                        </p>
-                      </form>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                <button
-                  type="button"
-                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm"
-                  onClick={() => handleSubmitPassphrase()}
-                >
-                  Submit
-                </button>
-                <button
-                  type="button"
-                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                  onClick={() => {
-                    handleEnterPassphrase("");
+          <ModalContent>
+            <ModalHeader className="flex flex-col gap-1">
+              Start New Chat
+            </ModalHeader>
+            <form onSubmit={handleSubmit(onSubmit)}>
+              <ModalBody>
+                <Controller
+                  name="npub"
+                  control={control}
+                  rules={{
+                    required: "An npub is required.",
+                    maxLength: {
+                      value: 300,
+                      message: "This input exceed maxLength of 300.",
+                    },
+                    validate: (value) =>
+                      /^npub[a-zA-Z0-9]{59}$/.test(value) || "Invalid npub.",
+                  }}
+                  render={({
+                    field: { onChange, onBlur, value },
+                    fieldState: { error },
+                  }) => {
+                    let isErrored = error !== undefined;
+                    let errorMessage: string = error?.message
+                      ? error.message
+                      : "";
+                    return (
+                      <Textarea
+                        variant="bordered"
+                        fullWidth={true}
+                        placeholder="npub..."
+                        isInvalid={isErrored}
+                        errorMessage={errorMessage}
+                        // controller props
+                        onChange={onChange} // send value to hook form
+                        onBlur={onBlur} // notify when input is touched/blur
+                        value={value}
+                      />
+                    );
+                  }}
+                />
+                {signIn === "nsec" && (
+                  <Input
+                    autoFocus
+                    ref={passphraseInputRef}
+                    variant="flat"
+                    label="Passphrase"
+                    labelPlacement="inside"
+                    onChange={(e) => setPassphrase(e.target.value)}
+                    value={passphrase}
+                  />
+                )}
+              </ModalBody>
+
+              <ModalFooter>
+                {confirmActionDropdown(
+                  <Button color="danger" variant="light">
+                    Cancel
+                  </Button>,
+                  "Are you sure you want to cancel?",
+                  "Cancel",
+                  handleToggleModal,
+                )}
+
+                <Button
+                  className={buttonClassName}
+                  type="submit"
+                  onClick={(e) => {
+                    if (
+                      isButtonDisabled &&
+                      signIn === "nsec" &&
+                      passphraseInputRef.current
+                    ) {
+                      e.preventDefault();
+                      passphraseInputRef.current.focus();
+                    }
                   }}
                 >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+                  Enter Chat
+                </Button>
+              </ModalFooter>
+            </form>
+          </ModalContent>
+        </Modal>
+        <Modal
+          backdrop="blur"
+          isOpen={enterPassphrase}
+          onClose={() => handleEnterPassphrase("")}
+          classNames={{
+            body: "py-6",
+            backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+            // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
+            header: "border-b-[1px] border-[#292f46]",
+            footer: "border-t-[1px] border-[#292f46]",
+            closeButton: "hover:bg-black/5 active:bg-white/10",
+          }}
+          scrollBehavior={"outside"}
+          size="2xl"
+        >
+          <ModalContent>
+            <ModalHeader className="flex flex-col gap-1">
+              Enter Passphrase
+            </ModalHeader>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSubmitPassphrase();
+              }}
+            >
+              <ModalBody>
+                {signIn === "nsec" && (
+                  <Input
+                    autoFocus
+                    ref={passphraseInputRef}
+                    variant="flat"
+                    label="Passphrase"
+                    labelPlacement="inside"
+                    onChange={(e) => setPassphrase(e.target.value)}
+                    value={passphrase}
+                  />
+                )}
+              </ModalBody>
+
+              <ModalFooter>
+                {confirmActionDropdown(
+                  <Button color="danger" variant="light">
+                    Cancel
+                  </Button>,
+                  "Are you sure you want to cancel?",
+                  "Cancel",
+                  cancel,
+                )}
+
+                <Button
+                  className={buttonClassName}
+                  type="submit"
+                  onClick={(e) => {
+                    if (
+                      isButtonDisabled &&
+                      signIn === "nsec" &&
+                      passphraseInputRef.current
+                    ) {
+                      e.preventDefault();
+                      passphraseInputRef.current.focus();
+                    }
+                  }}
+                >
+                  Submit
+                </Button>
+              </ModalFooter>
+            </form>
+          </ModalContent>
+        </Modal>
       </div>
     );
   }
@@ -540,7 +626,7 @@ const DirectMessages = () => {
         ))}
         <div ref={bottomDivRef} />
       </div>
-      <form className="flex items-center" onSubmit={handleSubmit}>
+      <form className="flex items-center" onSubmit={handleSend}>
         <input
           type="text"
           className="rounded-md py-1 px-2 mr-2 bg-gray-200 focus:outline-none focus:bg-white flex-grow"

@@ -44,7 +44,6 @@ const Navbar = () => {
             localStorage.removeItem("npub");
             localStorage.removeItem("signIn");
             localStorage.removeItem("encryptedPrivateKey");
-            console.log(localStorage.getItem("signIn"));
             router.push("/");
             let successStr = "Logged out";
             alert(successStr);
