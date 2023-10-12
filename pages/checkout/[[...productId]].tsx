@@ -6,6 +6,7 @@ import { SimplePool } from "nostr-tools";
 const Checkout = () => {
   const router = useRouter();
   const { productId } = router.query;
+  console.log(productId[0]);
 
   const [relays, setRelays] = useState([]);
 
