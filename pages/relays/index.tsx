@@ -61,7 +61,7 @@ const Relays = () => {
   };
 
   const onSubmit = async (data) => {
-    let relay = data["relay"]
+    let relay = data["relay"];
     await addRelay(relay);
   };
 
@@ -106,80 +106,84 @@ const Relays = () => {
         Add New Relay
       </button>
       <Modal
-          backdrop="blur"
-          isOpen={showModal}
-          onClose={handleToggleModal}
-          classNames={{
-            body: "py-6",
-            backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-            // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
-            header: "border-b-[1px] border-[#292f46]",
-            footer: "border-t-[1px] border-[#292f46]",
-            closeButton: "hover:bg-black/5 active:bg-white/10",
-          }}
-          scrollBehavior={"outside"}
-          size="2xl"
-        >
-          <ModalContent>
-            <ModalHeader className="flex flex-col gap-1">
-              Add New Relay
-            </ModalHeader>
-            <form onSubmit={handleSubmit(onSubmit)}>
-              <ModalBody>
-                <Controller
-                  name="relay"
-                  control={control}
-                  rules={{
-                    required: "A relay URL is required.",
-                    maxLength: {
-                      value: 300,
-                      message: "This input exceed maxLength of 300.",
-                    },
-                    validate: value => /^(wss:\/\/|ws:\/\/)/.test(value) || 'Invalid relay URL, must start with wss:// or ws://.'
-                  }}
-                  render={({
-                    field: { onChange, onBlur, value },
-                    fieldState: { error },
-                  }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message ? error.message : "";
-                    return (
-                      <Textarea
-                        variant="bordered"
-                        fullWidth={true}
-                        placeholder="wss://..."
-                        isInvalid={isErrored}
-                        errorMessage={errorMessage}
-                        // controller props
-                        onChange={onChange} // send value to hook form
-                        onBlur={onBlur} // notify when input is touched/blur
-                        value={value}
-                      />
-                    );
-                  }}
-                />
-              </ModalBody>
-    
-              <ModalFooter>
-                {confirmActionDropdown(
-                  <Button color="danger" variant="light">
-                    Cancel
-                  </Button>,
-                  "Are you sure you want to cancel?",
-                  "Cancel",
-                  handleToggleModal
-                )}
-    
-                <Button
-                  className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600"
-                  type="submit"
-                >
-                  Add Relay
-                </Button>
-              </ModalFooter>
-            </form>
-          </ModalContent>
-        </Modal>
+        backdrop="blur"
+        isOpen={showModal}
+        onClose={handleToggleModal}
+        classNames={{
+          body: "py-6",
+          backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+          // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
+          header: "border-b-[1px] border-[#292f46]",
+          footer: "border-t-[1px] border-[#292f46]",
+          closeButton: "hover:bg-black/5 active:bg-white/10",
+        }}
+        scrollBehavior={"outside"}
+        size="2xl"
+      >
+        <ModalContent>
+          <ModalHeader className="flex flex-col gap-1">
+            Add New Relay
+          </ModalHeader>
+          <form onSubmit={handleSubmit(onSubmit)}>
+            <ModalBody>
+              <Controller
+                name="relay"
+                control={control}
+                rules={{
+                  required: "A relay URL is required.",
+                  maxLength: {
+                    value: 300,
+                    message: "This input exceed maxLength of 300.",
+                  },
+                  validate: (value) =>
+                    /^(wss:\/\/|ws:\/\/)/.test(value) ||
+                    "Invalid relay URL, must start with wss:// or ws://.",
+                }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => {
+                  let isErrored = error !== undefined;
+                  let errorMessage: string = error?.message
+                    ? error.message
+                    : "";
+                  return (
+                    <Textarea
+                      variant="bordered"
+                      fullWidth={true}
+                      placeholder="wss://..."
+                      isInvalid={isErrored}
+                      errorMessage={errorMessage}
+                      // controller props
+                      onChange={onChange} // send value to hook form
+                      onBlur={onBlur} // notify when input is touched/blur
+                      value={value}
+                    />
+                  );
+                }}
+              />
+            </ModalBody>
+
+            <ModalFooter>
+              {confirmActionDropdown(
+                <Button color="danger" variant="light">
+                  Cancel
+                </Button>,
+                "Are you sure you want to cancel?",
+                "Cancel",
+                handleToggleModal,
+              )}
+
+              <Button
+                className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600"
+                type="submit"
+              >
+                Add Relay
+              </Button>
+            </ModalFooter>
+          </form>
+        </ModalContent>
+      </Modal>
     </div>
   );
 };

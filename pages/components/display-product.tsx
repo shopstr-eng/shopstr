@@ -1,5 +1,10 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
-import { BoltIcon, ClipboardIcon, TrashIcon, EnvelopeIcon } from "@heroicons/react/24/outline";
+import {
+  BoltIcon,
+  ClipboardIcon,
+  TrashIcon,
+  EnvelopeIcon,
+} from "@heroicons/react/24/outline";
 import { withRouter, NextRouter, useRouter } from "next/router";
 import {
   Modal,
@@ -271,7 +276,7 @@ const DisplayProduct = ({
     pk: string,
     wallet: object,
     newPrice: number,
-    hash: string
+    hash: string,
   ) {
     let encoded;
 
@@ -309,17 +314,17 @@ const DisplayProduct = ({
   const handlePayment = async (
     pk: string,
     newPrice: number,
-    currency: string
+    currency: string,
   ) => {
     const wallet = new CashuWallet(
       new CashuMint(
-        "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"
-      )
+        "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC",
+      ),
     );
     if (currency === "USD") {
       try {
         const res = await axios.get(
-          "https://api.coinbase.com/v2/prices/BTC-USD/spot"
+          "https://api.coinbase.com/v2/prices/BTC-USD/spot",
         );
         const btcSpotPrice = Number(res.data.data.amount);
         const numSats = (newPrice / btcSpotPrice) * 100000000;
@@ -352,14 +357,14 @@ const DisplayProduct = ({
     productId: string,
     pk: string,
     newPrice: number,
-    currency: string
+    currency: string,
   ) => {
     if (window.location.pathname.includes("checkout")) {
       if (signIn != "extension") {
         setEnterPassphrase(!enterPassphrase);
         setUse("pay");
       } else {
-        console.log(productId)
+        console.log(productId);
         handlePayment(pk, newPrice, currency);
       }
     } else {
@@ -449,7 +454,8 @@ const DisplayProduct = ({
       <div className="mb-4">
         {categories && (
           <p>
-            <strong className="font-semibold">Categories:</strong> {categories.join(', ')}
+            <strong className="font-semibold">Categories:</strong>{" "}
+            {categories.join(", ")}
           </p>
         )}
         <p>
@@ -506,10 +512,8 @@ const DisplayProduct = ({
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="flex flex-col gap-1">
-            Checkout
-          </ModalHeader>
-          
+          <ModalHeader className="flex flex-col gap-1">Checkout</ModalHeader>
+
           {!paymentConfirmed ? (
             <ModalBody className="flex flex-col items-center justify-center">
               <Image
@@ -519,17 +523,18 @@ const DisplayProduct = ({
                 width={350}
               />
               <div className="flex items-center justify-center">
-                <p
-                  className="text-center"
-                >
+                <p className="text-center">
                   {invoice.length > 30
                     ? `${invoice.substring(0, 10)}...${invoice.substring(
                         invoice.length - 10,
-                        invoice.length
+                        invoice.length,
                       )}`
                     : invoice}
                 </p>
-                <ClipboardIcon onClick={handleCopyInvoice} className="w-4 h-4 cursor-pointer ml-2"/>
+                <ClipboardIcon
+                  onClick={handleCopyInvoice}
+                  className="w-4 h-4 cursor-pointer ml-2"
+                />
               </div>
             </ModalBody>
           ) : (
@@ -546,18 +551,20 @@ const DisplayProduct = ({
             </ModalBody>
           )}
 
-          <ModalFooter style={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center', 
-          }}>
+          <ModalFooter
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
             {confirmActionDropdown(
               <Button color="danger" variant="light">
                 Cancel
               </Button>,
               "Are you sure you want to cancel?",
               "Cancel",
-              () => setCheckout(false)
+              () => setCheckout(false),
             )}
           </ModalFooter>
         </ModalContent>
@@ -581,7 +588,12 @@ const DisplayProduct = ({
           <ModalHeader className="flex flex-col gap-1">
             Enter Passphrase
           </ModalHeader>
-          <form onSubmit={(e) => { e.preventDefault(); handleSubmitPassphrase(); }}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSubmitPassphrase();
+            }}
+          >
             <ModalBody>
               {signIn === "nsec" && (
                 <Input
@@ -595,7 +607,7 @@ const DisplayProduct = ({
                 />
               )}
             </ModalBody>
-  
+
             <ModalFooter>
               {confirmActionDropdown(
                 <Button color="danger" variant="light">
@@ -603,9 +615,9 @@ const DisplayProduct = ({
                 </Button>,
                 "Are you sure you want to cancel?",
                 "Cancel",
-                cancel
+                cancel,
               )}
-  
+
               <Button
                 className={buttonClassName}
                 type="submit"

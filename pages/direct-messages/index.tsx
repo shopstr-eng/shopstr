@@ -115,7 +115,7 @@ const DirectMessages = () => {
             if (!chats.includes(incomingPubkey)) {
               setChats((chats) => {
                 return Array.from(
-                  new Set([...chats, nip19.npubEncode(incomingPubkey)])
+                  new Set([...chats, nip19.npubEncode(incomingPubkey)]),
                 );
               });
             }
@@ -175,7 +175,7 @@ const DirectMessages = () => {
           if (signIn === "extension") {
             plaintext = await window.nostr.nip04.decrypt(
               chatPubkey,
-              event.content
+              event.content,
             );
           } else {
             let sk2 = getPrivKeyWithPassphrase(passphrase);
@@ -201,7 +201,7 @@ const DirectMessages = () => {
           }
           // Sort the messages with each state update
           setMessages((prevMessages) =>
-            prevMessages.sort((a, b) => a.createdAt - b.createdAt)
+            prevMessages.sort((a, b) => a.createdAt - b.createdAt),
           );
         }
       });
@@ -262,7 +262,7 @@ const DirectMessages = () => {
   };
 
   const onSubmit = async (data) => {
-    let npub = data["npub"]
+    let npub = data["npub"];
     await handleEnterNewChat(npub);
   };
 
@@ -273,7 +273,7 @@ const DirectMessages = () => {
 
   const handleToggleModal = () => {
     reset();
-    setPassphrase
+    setPassphrase;
     setShowModal(!showModal);
   };
 
@@ -358,7 +358,7 @@ const DirectMessages = () => {
   };
 
   const handlePassphraseChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
     const { name, value } = e.target;
     if (name === "passphrase") {
@@ -443,14 +443,17 @@ const DirectMessages = () => {
                       value: 300,
                       message: "This input exceed maxLength of 300.",
                     },
-                    validate: value => /^npub[a-zA-Z0-9]{59}$/.test(value) || 'Invalid npub.'
+                    validate: (value) =>
+                      /^npub[a-zA-Z0-9]{59}$/.test(value) || "Invalid npub.",
                   }}
                   render={({
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
                     let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message ? error.message : "";
+                    let errorMessage: string = error?.message
+                      ? error.message
+                      : "";
                     return (
                       <Textarea
                         variant="bordered"
@@ -478,7 +481,7 @@ const DirectMessages = () => {
                   />
                 )}
               </ModalBody>
-    
+
               <ModalFooter>
                 {confirmActionDropdown(
                   <Button color="danger" variant="light">
@@ -486,9 +489,9 @@ const DirectMessages = () => {
                   </Button>,
                   "Are you sure you want to cancel?",
                   "Cancel",
-                  handleToggleModal
+                  handleToggleModal,
                 )}
-    
+
                 <Button
                   className={buttonClassName}
                   type="submit"
@@ -528,7 +531,12 @@ const DirectMessages = () => {
             <ModalHeader className="flex flex-col gap-1">
               Enter Passphrase
             </ModalHeader>
-            <form onSubmit={(e) => { e.preventDefault(); handleSubmitPassphrase(); }}>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSubmitPassphrase();
+              }}
+            >
               <ModalBody>
                 {signIn === "nsec" && (
                   <Input
@@ -542,7 +550,7 @@ const DirectMessages = () => {
                   />
                 )}
               </ModalBody>
-    
+
               <ModalFooter>
                 {confirmActionDropdown(
                   <Button color="danger" variant="light">
@@ -550,9 +558,9 @@ const DirectMessages = () => {
                   </Button>,
                   "Are you sure you want to cancel?",
                   "Cancel",
-                  cancel
+                  cancel,
                 )}
-    
+
                 <Button
                   className={buttonClassName}
                   type="submit"
