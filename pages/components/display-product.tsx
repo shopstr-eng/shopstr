@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
-import { BoltIcon, TrashIcon, EnvelopeIcon } from "@heroicons/react/24/outline";
+import { BoltIcon, ClipboardIcon, TrashIcon, EnvelopeIcon } from "@heroicons/react/24/outline";
 import { withRouter, NextRouter, useRouter } from "next/router";
 import {
   Modal,
@@ -9,6 +9,7 @@ import {
   ModalFooter,
   Button,
   Input,
+  Image,
   Dropdown,
   DropdownTrigger,
   DropdownMenu,
@@ -489,63 +490,78 @@ const DisplayProduct = ({
           />
         )}
       </div>
-      {checkout && (
-        <div className="fixed z-10 inset-0 overflow-y-auto flex items-center justify-center">
-          <div className="flex items-end justify-center min-h-screen text-center sm:block sm:p-0">
-            <div
-              className="fixed inset-0 transition-opacity"
-              aria-hidden="true"
-            >
-              <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
-            </div>
-            <span
-              className="hidden sm:inline-block sm:align-middle sm:h-screen"
-              aria-hidden="true"
-            >
-              &#8203;
-            </span>
-            {!paymentConfirmed ? (
-              <div className="inline-block align-bottom bg-white rounded-lg overflow-hidden shadow-xl transform transition-all sm:align-middle sm:max-w-lg sm:w-full">
-                <h3 className="text-lg leading-6 font-medium text-gray-900 mt-3">
-                  Scan this invoice:
-                </h3>
-                <img src={qrCodeUrl} alt="QR Code" />
-                <div className="flex justify-center">
-                  <p
-                    className="inline-block rounded-lg max-w-[48vh] break-words text-center"
-                    onClick={handleCopyInvoice}
-                  >
-                    {invoice.length > 30
-                      ? `${invoice.substring(0, 15)}...${invoice.substring(
-                          invoice.length - 15,
-                          invoice.length
-                        )}`
-                      : invoice}
-                  </p>
-                </div>
-                <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                  <div className="mt-3 w-full inline-flex justify-center">
-                    <button
-                      type="button"
-                      className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 text-base font-medium text-white bg-red-500 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                      onClick={() => setCheckout(false)}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
+      <Modal
+        backdrop="blur"
+        isOpen={checkout}
+        onClose={() => setCheckout(false)}
+        classNames={{
+          body: "py-6",
+          backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+          // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
+          header: "border-b-[1px] border-[#292f46]",
+          footer: "border-t-[1px] border-[#292f46]",
+          closeButton: "hover:bg-black/5 active:bg-white/10",
+        }}
+        scrollBehavior={"outside"}
+        size="2xl"
+      >
+        <ModalContent>
+          <ModalHeader className="flex flex-col gap-1">
+            Checkout
+          </ModalHeader>
+          
+          {!paymentConfirmed ? (
+            <ModalBody className="flex flex-col items-center justify-center">
+              <Image
+                alt="Lightning invoice"
+                className="object-cover"
+                src={qrCodeUrl}
+                width={350}
+              />
+              <div className="flex items-center justify-center">
+                <p
+                  className="text-center"
+                >
+                  {invoice.length > 30
+                    ? `${invoice.substring(0, 10)}...${invoice.substring(
+                        invoice.length - 10,
+                        invoice.length
+                      )}`
+                    : invoice}
+                </p>
+                <ClipboardIcon onClick={handleCopyInvoice} className="w-4 h-4 cursor-pointer ml-2"/>
               </div>
-            ) : (
-              <div className="inline-block align-bottom bg-white rounded-lg overflow-hidden shadow-xl transform transition-all sm:align-middle sm:max-w-lg sm:w-full">
-                <h3 className="text-lg leading-6 font-medium text-gray-900 mt-3">
-                  Payment confirmed!
-                </h3>
-                <img src="../payment-confirmed.gif" alt="Payment Confirmed" />
-              </div>
+            </ModalBody>
+          ) : (
+            <ModalBody className="flex flex-col items-center justify-center">
+              <h3 className="text-center text-lg leading-6 font-medium text-gray-900 mt-3">
+                Payment confirmed!
+              </h3>
+              <Image
+                alt="Payment Confirmed"
+                className="object-cover"
+                src="../payment-confirmed.gif"
+                width={350}
+              />
+            </ModalBody>
+          )}
+
+          <ModalFooter style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center', 
+          }}>
+            {confirmActionDropdown(
+              <Button color="danger" variant="light">
+                Cancel
+              </Button>,
+              "Are you sure you want to cancel?",
+              "Cancel",
+              () => setCheckout(false)
             )}
-          </div>
-        </div>
-      )}
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
       <Modal
         backdrop="blur"
         isOpen={enterPassphrase}
