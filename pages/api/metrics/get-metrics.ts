@@ -49,6 +49,7 @@ export default async function GetMetrics(req: NextApiRequest, res: NextApiRespon
 
   const start = DateTime.fromISO(startDate).toSQL();
   const end = DateTime.fromISO(endDate).toSQL();
+  const tz = DateTime.fromISO(startDate).zone.name || DateTime.fromISO(endDate).zone.name;
   const isToday = DateTime.fromISO(endDate).hasSame(DateTime.fromISO(startDate), 'day')
   console.log('isToday', isToday)
   const bucket = isToday ? '1 hour' : '1 day';
@@ -61,7 +62,7 @@ export default async function GetMetrics(req: NextApiRequest, res: NextApiRespon
   // TODO: USE ONE SQL QUERY TO GET ALL DATA INSTEAD OF MULTIPLE QUERIES
 
   const salesMetricsPromise = repo?.raw<{ rows: Metrics[] }>(`
-    SELECT time_bucket('${bucket}', time) AS period, cast(sum(total) AS INTEGER) AS "${label}"
+    SELECT time_bucket('${bucket}', time, '${tz}') AS period, cast(sum(total) AS INTEGER) AS "${label}"
     FROM invoices
     WHERE time BETWEEN '${start}' AND '${end}'
     AND status = 'PAID'
@@ -69,21 +70,21 @@ export default async function GetMetrics(req: NextApiRequest, res: NextApiRespon
     ORDER BY period DESC;`)
 
   const usersMetricsPromise = repo?.raw<{ rows: Metrics[] }>(`
-    SELECT time_bucket('${bucket}', time) AS period, cast(count(distinct(user_id)) AS INTEGER) AS "${label}"
+    SELECT time_bucket('${bucket}', time, '${tz}') AS period, cast(count(distinct(user_id)) AS INTEGER) AS "${label}"
     FROM users
     WHERE time BETWEEN '${start}' AND '${end}'
     GROUP BY period
     ORDER BY period DESC;`)
 
   const productsMetricsPromise = repo?.raw<{ rows: Metrics[] }>(`
-    SELECT time_bucket('${bucket}', time) AS period, cast(count(id) AS INTEGER) AS "${label}"
+    SELECT time_bucket('${bucket}', time, '${tz}') AS period, cast(count(id) AS INTEGER) AS "${label}"
     FROM products
     WHERE time BETWEEN '${start}' AND '${end}'
     GROUP BY period
     ORDER BY period DESC;`)
 
   const messagesMetricsPromise = repo?.raw<{ rows: Metrics[] }>(`
-    SELECT time_bucket('${bucket}', time) AS period, cast(count(id) AS INTEGER) AS "${label}"
+    SELECT time_bucket('${bucket}', time, '${tz}') AS period, cast(count(id) AS INTEGER) AS "${label}"
     FROM messages
     WHERE time BETWEEN '${start}' AND '${end}'
     GROUP BY period
@@ -165,7 +166,6 @@ export default async function GetMetrics(req: NextApiRequest, res: NextApiRespon
   if (usersData != null) data.push(usersData)
   if (productsData != null) data.push(productsData)
   if (messagesData != null) data.push(messagesData)
-
 
   return res.status(200).json(data)
 }

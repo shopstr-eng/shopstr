@@ -28,19 +28,6 @@ const requestMint = async (req: NextApiRequest, res: NextApiResponse) => {
 
     const id = uuid();
 
-    console.log({
-      id,
-      time: DateTime.now().toUTC().toSQL(),
-      total,
-      currency,
-      status: 'NOT_PAID',
-      funding_source,
-      customer_id,
-      merchant_id,
-      invoice: pr,
-      hash,
-    })
-
     await repo()('invoices').insert({
       id,
       time: DateTime.now().toUTC().toSQL(),

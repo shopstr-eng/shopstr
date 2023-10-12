@@ -1,17 +1,24 @@
 import type { Config } from 'tailwindcss';
+import { nextui } from '@nextui-org/react';
 
 export default {
   content: [
     "./pages/**/*.{js,ts,jsx,tsx}",
     "./components/**/*.{js,ts,jsx,tsx}",
     "./app/**/*.{js,ts,jsx,tsx}",
-    './node_modules/@tremor/**/*.{js,ts,jsx,tsx,mdx}'
+    './node_modules/@tremor/**/*.{js,ts,jsx,tsx,mdx}',
+    "./node_modules/@nextui-org/theme/dist/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     transparent: 'transparent',
     current: 'currentColor',
     extend: {
       colors: {
+        backgroundImage: {
+          "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
+          "gradient-conic":
+            "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
+        },
         // light mode
         tremor: {
           brand: {
@@ -93,5 +100,6 @@ export default {
         /^(fill-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|100|200|300|400|500|600|700|800|900|950))$/
     }
   ],
-  plugins: [require('@headlessui/tailwindcss')]
+  darkMode: "class",
+  plugins: [nextui()],
 } satisfies Config;

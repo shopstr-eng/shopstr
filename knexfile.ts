@@ -10,10 +10,6 @@ const config: { [key: string]: Knex.Config } = {
       connectionString: process.env['DATABASE_URL'],
       ssl: { rejectUnauthorized: false, },
     },
-    pool: {
-      min: 2,
-      max: 10
-    },
     migrations: {
       tableName: 'knex_migrations'
     }
@@ -23,10 +19,6 @@ const config: { [key: string]: Knex.Config } = {
     connection: {
       connectionString: process.env['DATABASE_URL'],
       ssl: { rejectUnauthorized: false, },
-    },
-    pool: {
-      min: 2,
-      max: 10
     },
     migrations: {
       tableName: 'knex_migrations'
