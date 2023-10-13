@@ -132,7 +132,7 @@ const DisplayEvents = ({
 
   return (
     <div>
-      <div className="flex space-x-4">
+      <div className="flex space-x-2">
         <Select
           autoFocus
           className="mt-2"
