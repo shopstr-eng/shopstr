@@ -32,6 +32,7 @@ const DisplayEvents = ({
     "Physical",
     "Services",
     "Resale",
+    "Exchange/swap",
     "Clothing",
     "Shoes",
     "Accessories",

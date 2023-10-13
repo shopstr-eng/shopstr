@@ -178,6 +178,7 @@ export default function NewForm({
     "Physical",
     "Services",
     "Resale",
+    "Exchange/swap",
     "Clothing",
     "Shoes",
     "Accessories",
