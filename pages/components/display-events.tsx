@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
-import { Select, SelectItem } from "@nextui-org/react";
+import { useMemo, useState, useEffect } from "react";
+import { Avatar, Select, SelectItem, SelectSection } from "@nextui-org/react";
 import DisplayProduct from "./display-product";
 import { nip19, SimplePool } from "nostr-tools";
 import { ProductFormValues } from "../api/post-event";
 import { DeleteListing } from "../nostr-helpers";
+import locations from "../../public/locationSelection.json";
 
 export type Event = {
   id: string;
@@ -26,6 +27,7 @@ const DisplayEvents = ({
   const [eventData, setEventData] = useState<Event[]>([]);
   const imageUrlRegExp = /(https?:\/\/.*\.(?:png|jpg|jpeg|gif))/i;
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedLocation, setSelectedLocation] = useState("");
 
   const categories = [
     "Digital",
@@ -49,6 +51,15 @@ const DisplayEvents = ({
     "Food",
     "Miscellaneous",
   ];
+
+  const locationMap = useMemo(() => {
+    let states = locations.states.map((state) => [state.state, state]);
+    let countries = locations.countries.map((country) => [
+      country.country,
+      country,
+    ]);
+    return new Map([...states, ...countries]);
+  }, []);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -94,6 +105,16 @@ const DisplayEvents = ({
         return eventCategories.includes(selectedCategory);
       });
     }
+    if (selectedLocation !== "" && typeof selectedLocation !== "undefined") {
+      result = result.filter((event) => {
+        // project the 'tags' 2D array to an array of categories
+        const eventLocation = event.tags
+          .filter((tagArray) => tagArray[0] === "location")
+          .map((tagArray) => tagArray[1]);
+        // check if the selected category is within event categories
+        return eventLocation.includes(selectedLocation);
+      });
+    }
     return result;
   };
 
@@ -111,24 +132,100 @@ const DisplayEvents = ({
 
   return (
     <div>
-      <Select
-        autoFocus
-        className="mt-2"
-        placeholder="Select category"
-        value={selectedCategory}
-        onChange={(event) => {
-          const index = event.target.value;
-          const selectedVal = categories[index];
-          setSelectedCategory(selectedVal);
-          getSelectedSellersProducts();
-        }}
-      >
-        {categories.map((category, index) => (
-          <SelectItem value={category} key={index}>
-            {category}
-          </SelectItem>
-        ))}
-      </Select>
+      <div className="flex space-x-4">
+        <Select
+          autoFocus
+          className="mt-2"
+          placeholder="Select category"
+          value={selectedCategory}
+          onChange={(event) => {
+            const index = event.target.value;
+            const selectedVal = categories[index];
+            setSelectedCategory(selectedVal);
+            getSelectedSellersProducts();
+          }}
+        >
+          {categories.map((category, index) => (
+            <SelectItem value={category} key={index}>
+              {category}
+            </SelectItem>
+          ))}
+        </Select>
+        <Select
+          autoFocus
+          className="mt-2"
+          placeholder="Select location"
+          value={selectedLocation}
+          onChange={(event) => {
+            const selectedVal = Array.from(locationMap.keys())[
+              event.target.value
+            ];
+            setSelectedLocation(selectedVal);
+            getSelectedSellersProducts();
+          }}
+        >
+          <SelectSection
+            title="US States"
+            classNames="flex w-full sticky top-1 z-20 py-1.5 px-2 bg-default-100 shadow-small rounded-small"
+          >
+            {Array.from(locationMap.keys()).map((location, index) => {
+              const locationInfo = locationMap.get(location);
+              if (!locationInfo.country) {
+                return (
+                  <SelectItem
+                    startContent={
+                      locationMap.get(location) ? (
+                        <Avatar
+                          alt={location}
+                          className="w-6 h-6"
+                          src={`https://flagcdn.com/16x12/${
+                            locationMap.get(location).iso3166
+                          }.png`}
+                        />
+                      ) : null
+                    }
+                    value={index}
+                    key={index}
+                  >
+                    {location}
+                  </SelectItem>
+                );
+              }
+              return null;
+            })}
+          </SelectSection>
+          <SelectSection
+            title="Countries"
+            classNames="flex w-full sticky top-1 z-20 py-1.5 px-2 bg-default-100 shadow-small rounded-small"
+          >
+            {Array.from(locationMap.keys()).map((location, index) => {
+              const locationInfo = locationMap.get(location);
+              if (locationInfo.country) {
+                return (
+                  <SelectItem
+                    startContent={
+                      locationMap.get(location) ? (
+                        <Avatar
+                          alt={location}
+                          className="w-6 h-6"
+                          src={`https://flagcdn.com/16x12/${
+                            locationMap.get(location).iso3166
+                          }.png`}
+                        />
+                      ) : null
+                    }
+                    value={index}
+                    key={index}
+                  >
+                    {location}
+                  </SelectItem>
+                );
+              }
+              return null;
+            })}
+          </SelectSection>
+        </Select>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 my-2 overflow-y-scroll overflow-x-hidden max-h-[70vh] max-w-full">
         {getSelectedSellersProducts()?.map((event, index) => {
           let npub = nip19.npubEncode(event.pubkey);
