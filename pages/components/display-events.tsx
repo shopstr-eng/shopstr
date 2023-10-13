@@ -61,6 +61,82 @@ const DisplayEvents = ({
     return new Map([...states, ...countries]);
   }, []);
 
+  const locationOptions = useMemo(() => {
+    const headingClasses =
+      "flex w-full sticky top-1 z-20 py-1.5 px-2 bg-default-100 shadow-small rounded-small";
+
+    let countryOptions = (
+      <SelectSection
+        title="Countries"
+        classNames={{
+          heading: headingClasses,
+        }}
+      >
+        {Array.from(locationMap.keys()).map((location, index) => {
+          const locationInfo = locationMap.get(location);
+          if (locationInfo.country) {
+            return (
+              <SelectItem
+                startContent={
+                  locationMap.get(location) ? (
+                    <Avatar
+                      alt={location}
+                      className="w-6 h-6"
+                      src={`https://flagcdn.com/16x12/${
+                        locationMap.get(location).iso3166
+                      }.png`}
+                    />
+                  ) : null
+                }
+                value={index}
+                key={index}
+              >
+                {location}
+              </SelectItem>
+            );
+          }
+          return null;
+        })}
+      </SelectSection>
+    );
+
+    let stateOptions = (
+      <SelectSection
+        title="U.S. States"
+        classNames={{
+          heading: headingClasses,
+        }}
+      >
+        {Array.from(locationMap.keys()).map((location, index) => {
+          const locationInfo = locationMap.get(location);
+          if (!locationInfo.country) {
+            return (
+              <SelectItem
+                startContent={
+                  locationMap.get(location) ? (
+                    <Avatar
+                      alt={location}
+                      className="w-6 h-6"
+                      src={`https://flagcdn.com/16x12/${
+                        locationMap.get(location).iso3166
+                      }.png`}
+                    />
+                  ) : null
+                }
+                value={index}
+                key={index}
+              >
+                {location}
+              </SelectItem>
+            );
+          }
+          return null;
+        })}
+      </SelectSection>
+    );
+    return [stateOptions, countryOptions];
+  }, []);
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       const storedRelays = localStorage.getItem("relays");
@@ -164,66 +240,7 @@ const DisplayEvents = ({
             getSelectedSellersProducts();
           }}
         >
-          <SelectSection
-            title="U.S. States"
-            classNames="flex w-full sticky top-1 z-20 py-1.5 px-2 bg-default-100 shadow-small rounded-small"
-          >
-            {Array.from(locationMap.keys()).map((location, index) => {
-              const locationInfo = locationMap.get(location);
-              if (!locationInfo.country) {
-                return (
-                  <SelectItem
-                    startContent={
-                      locationMap.get(location) ? (
-                        <Avatar
-                          alt={location}
-                          className="w-6 h-6"
-                          src={`https://flagcdn.com/16x12/${
-                            locationMap.get(location).iso3166
-                          }.png`}
-                        />
-                      ) : null
-                    }
-                    value={index}
-                    key={index}
-                  >
-                    {location}
-                  </SelectItem>
-                );
-              }
-              return null;
-            })}
-          </SelectSection>
-          <SelectSection
-            title="Countries"
-            classNames="flex w-full sticky top-1 z-20 py-1.5 px-2 bg-default-100 shadow-small rounded-small"
-          >
-            {Array.from(locationMap.keys()).map((location, index) => {
-              const locationInfo = locationMap.get(location);
-              if (locationInfo.country) {
-                return (
-                  <SelectItem
-                    startContent={
-                      locationMap.get(location) ? (
-                        <Avatar
-                          alt={location}
-                          className="w-6 h-6"
-                          src={`https://flagcdn.com/16x12/${
-                            locationMap.get(location).iso3166
-                          }.png`}
-                        />
-                      ) : null
-                    }
-                    value={index}
-                    key={index}
-                  >
-                    {location}
-                  </SelectItem>
-                );
-              }
-              return null;
-            })}
-          </SelectSection>
+          {locationOptions}
         </Select>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 my-2 overflow-y-scroll overflow-x-hidden max-h-[70vh] max-w-full">
