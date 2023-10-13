@@ -9,7 +9,7 @@ function App({ Component, pageProps }: AppProps) {
   const isLoginPage = router.pathname === "/";
 
   return (
-    <div className="xl:w-full h-full bg-purple-500 py-1 px-2 md:py-8 md:px-16">
+    <div className="xl:w-full h-full bg-purple-500 px-2 md:py-4 md:px-8">
       {isLoginPage ? null : <Navbar />}
       <Component {...pageProps} />
     </div>
