@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Select, SelectItem } from "@nextui-org/react";
 import DisplayProduct from "./display-product";
 import { nip19, SimplePool } from "nostr-tools";
 import { ProductFormValues } from "../api/post-event";
@@ -24,6 +25,29 @@ const DisplayEvents = ({
   const [relays, setRelays] = useState([]);
   const [eventData, setEventData] = useState<Event[]>([]);
   const imageUrlRegExp = /(https?:\/\/.*\.(?:png|jpg|jpeg|gif))/i;
+  const [selectedCategory, setSelectedCategory] = useState("");
+
+  const categories = [
+    "Digital",
+    "Physical",
+    "Services",
+    "Resale",
+    "Clothing",
+    "Shoes",
+    "Accessories",
+    "Electronics",
+    "Collectibles",
+    "Books",
+    "Pets",
+    "Sports",
+    "Fitness",
+    "Art",
+    "Crafts",
+    "Home",
+    "Office",
+    "Food",
+    "Miscellaneous",
+  ];
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -55,8 +79,21 @@ const DisplayEvents = ({
   };
 
   const getSelectedSellersProducts = () => {
-    if (focusedPubkey == "") return eventData;
-    return eventData.filter((event) => event.pubkey == focusedPubkey);
+    let result = eventData;
+    if (focusedPubkey !== "") {
+      result = result.filter((event) => event.pubkey === focusedPubkey);
+    }
+    if (selectedCategory !== "" && typeof selectedCategory !== "undefined") {
+      result = result.filter((event) => {
+        // project the 'tags' 2D array to an array of categories
+        const eventCategories = event.tags
+          .filter((tagArray) => tagArray[0] === "t")
+          .map((tagArray) => tagArray[1]);
+        // check if the selected category is within event categories
+        return eventCategories.includes(selectedCategory);
+      });
+    }
+    return result;
   };
 
   const handleDelete = async (productId: string, passphrase: string) => {
@@ -73,6 +110,23 @@ const DisplayEvents = ({
 
   return (
     <div>
+      <Select
+        autoFocus
+        placeholder="Select category"
+        value={selectedCategory}
+        onChange={(event) => {
+          const index = event.target.value;
+          const selectedVal = categories[index];
+          setSelectedCategory(selectedVal);
+          getSelectedSellersProducts();
+        }}
+      >
+        {categories.map((category, index) => (
+          <SelectItem value={category} key={index}>
+            {category}
+          </SelectItem>
+        ))}
+      </Select>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-8 mb-8 overflow-y-scroll overflow-x-hidden max-h-[70vh] max-w-full">
         {getSelectedSellersProducts()?.map((event, index) => {
           let npub = nip19.npubEncode(event.pubkey);
