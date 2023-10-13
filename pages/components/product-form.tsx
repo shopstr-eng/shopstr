@@ -140,7 +140,7 @@ export default function NewForm({
 
     let stateOptions = (
       <SelectSection
-        title="US States"
+        title="U.S. States"
         classNames={{
           heading: headingClasses,
         }}

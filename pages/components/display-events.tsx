@@ -165,7 +165,7 @@ const DisplayEvents = ({
           }}
         >
           <SelectSection
-            title="US States"
+            title="U.S. States"
             classNames="flex w-full sticky top-1 z-20 py-1.5 px-2 bg-default-100 shadow-small rounded-small"
           >
             {Array.from(locationMap.keys()).map((location, index) => {
