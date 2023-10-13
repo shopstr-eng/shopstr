@@ -112,6 +112,7 @@ const DisplayEvents = ({
     <div>
       <Select
         autoFocus
+        className="mt-2"
         placeholder="Select category"
         value={selectedCategory}
         onChange={(event) => {
@@ -127,7 +128,7 @@ const DisplayEvents = ({
           </SelectItem>
         ))}
       </Select>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-8 mb-8 overflow-y-scroll overflow-x-hidden max-h-[70vh] max-w-full">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 my-2 overflow-y-scroll overflow-x-hidden max-h-[70vh] max-w-full">
         {getSelectedSellersProducts()?.map((event, index) => {
           let npub = nip19.npubEncode(event.pubkey);
           return (
