@@ -1,8 +1,10 @@
-import { useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { Avatar, Select, SelectItem, SelectSection } from "@nextui-org/react";
 import DisplayProduct from "./display-product";
 import { nip19, SimplePool } from "nostr-tools";
 import { ProductFormValues } from "../api/post-event";
 import { DeleteListing } from "../nostr-helpers";
+import locations from "../../public/locationSelection.json";
 
 export type Event = {
   id: string;
@@ -24,6 +26,116 @@ const DisplayEvents = ({
   const [relays, setRelays] = useState([]);
   const [eventData, setEventData] = useState<Event[]>([]);
   const imageUrlRegExp = /(https?:\/\/.*\.(?:png|jpg|jpeg|gif))/i;
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedLocation, setSelectedLocation] = useState("");
+
+  const categories = [
+    "Digital",
+    "Physical",
+    "Services",
+    "Resale",
+    "Exchange/swap",
+    "Clothing",
+    "Shoes",
+    "Accessories",
+    "Electronics",
+    "Collectibles",
+    "Books",
+    "Pets",
+    "Sports",
+    "Fitness",
+    "Art",
+    "Crafts",
+    "Home",
+    "Office",
+    "Food",
+    "Miscellaneous",
+  ];
+
+  const locationMap = useMemo(() => {
+    let states = locations.states.map((state) => [state.state, state]);
+    let countries = locations.countries.map((country) => [
+      country.country,
+      country,
+    ]);
+    return new Map([...states, ...countries]);
+  }, []);
+
+  const locationOptions = useMemo(() => {
+    const headingClasses =
+      "flex w-full sticky top-1 z-20 py-1.5 px-2 bg-default-100 shadow-small rounded-small";
+
+    let countryOptions = (
+      <SelectSection
+        title="Countries"
+        classNames={{
+          heading: headingClasses,
+        }}
+      >
+        {Array.from(locationMap.keys()).map((location, index) => {
+          const locationInfo = locationMap.get(location);
+          if (locationInfo.country) {
+            return (
+              <SelectItem
+                startContent={
+                  locationMap.get(location) ? (
+                    <Avatar
+                      alt={location}
+                      className="w-6 h-6"
+                      src={`https://flagcdn.com/16x12/${
+                        locationMap.get(location).iso3166
+                      }.png`}
+                    />
+                  ) : null
+                }
+                value={index}
+                key={index}
+              >
+                {location}
+              </SelectItem>
+            );
+          }
+          return null;
+        })}
+      </SelectSection>
+    );
+
+    let stateOptions = (
+      <SelectSection
+        title="U.S. States"
+        classNames={{
+          heading: headingClasses,
+        }}
+      >
+        {Array.from(locationMap.keys()).map((location, index) => {
+          const locationInfo = locationMap.get(location);
+          if (!locationInfo.country) {
+            return (
+              <SelectItem
+                startContent={
+                  locationMap.get(location) ? (
+                    <Avatar
+                      alt={location}
+                      className="w-6 h-6"
+                      src={`https://flagcdn.com/16x12/${
+                        locationMap.get(location).iso3166
+                      }.png`}
+                    />
+                  ) : null
+                }
+                value={index}
+                key={index}
+              >
+                {location}
+              </SelectItem>
+            );
+          }
+          return null;
+        })}
+      </SelectSection>
+    );
+    return [stateOptions, countryOptions];
+  }, []);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -55,8 +167,31 @@ const DisplayEvents = ({
   };
 
   const getSelectedSellersProducts = () => {
-    if (focusedPubkey == "") return eventData;
-    return eventData.filter((event) => event.pubkey == focusedPubkey);
+    let result = eventData;
+    if (focusedPubkey !== "") {
+      result = result.filter((event) => event.pubkey === focusedPubkey);
+    }
+    if (selectedCategory !== "" && typeof selectedCategory !== "undefined") {
+      result = result.filter((event) => {
+        // project the 'tags' 2D array to an array of categories
+        const eventCategories = event.tags
+          .filter((tagArray) => tagArray[0] === "t")
+          .map((tagArray) => tagArray[1]);
+        // check if the selected category is within event categories
+        return eventCategories.includes(selectedCategory);
+      });
+    }
+    if (selectedLocation !== "" && typeof selectedLocation !== "undefined") {
+      result = result.filter((event) => {
+        // project the 'tags' 2D array to an array of categories
+        const eventLocation = event.tags
+          .filter((tagArray) => tagArray[0] === "location")
+          .map((tagArray) => tagArray[1]);
+        // check if the selected category is within event categories
+        return eventLocation.some(location => location.includes(selectedLocation));
+      });
+    }
+    return result;
   };
 
   const handleDelete = async (productId: string, passphrase: string) => {
@@ -73,7 +208,42 @@ const DisplayEvents = ({
 
   return (
     <div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-8 mb-8 overflow-y-scroll overflow-x-hidden max-h-[70vh] max-w-full">
+      <div className="flex space-x-2">
+        <Select
+          autoFocus
+          className="mt-2"
+          placeholder="Select category"
+          value={selectedCategory}
+          onChange={(event) => {
+            const index = event.target.value;
+            const selectedVal = categories[index];
+            setSelectedCategory(selectedVal);
+            getSelectedSellersProducts();
+          }}
+        >
+          {categories.map((category, index) => (
+            <SelectItem value={category} key={index}>
+              {category}
+            </SelectItem>
+          ))}
+        </Select>
+        <Select
+          autoFocus
+          className="mt-2"
+          placeholder="Select location"
+          value={selectedLocation}
+          onChange={(event) => {
+            const selectedVal = Array.from(locationMap.keys())[
+              event.target.value
+            ];
+            setSelectedLocation(selectedVal);
+            getSelectedSellersProducts();
+          }}
+        >
+          {locationOptions}
+        </Select>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 my-2 overflow-y-scroll overflow-x-hidden max-h-[70vh] max-w-full">
         {getSelectedSellersProducts()?.map((event, index) => {
           let npub = nip19.npubEncode(event.pubkey);
           return (
