@@ -21,7 +21,7 @@ function App({ Component, pageProps }: AppProps) {
     {
       productData: [],
       isLoading: true,
-    }
+    },
   );
 
   useEffect(() => {
@@ -30,7 +30,7 @@ function App({ Component, pageProps }: AppProps) {
       setRelays(
         localStorage.getItem("relays")
           ? JSON.parse(localStorage.getItem("relays"))
-          : []
+          : [],
       );
     }
   }, []);
@@ -71,8 +71,8 @@ function App({ Component, pageProps }: AppProps) {
       new Set(
         productContext.productData.map((product) => {
           return product.pubkey;
-        })
-      )
+        }),
+      ),
     ) as string[];
 
     const pool = new SimplePool();

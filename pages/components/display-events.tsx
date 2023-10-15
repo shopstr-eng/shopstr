@@ -2,8 +2,7 @@ import { useState, useEffect, useContext, useMemo } from "react";
 import DisplayProduct from "./display-product";
 import { Avatar, Select, SelectItem, SelectSection } from "@nextui-org/react";
 import { nip19 } from "nostr-tools";
-import { ProductFormValues } from "../api/post-event";
-import { DeleteListing } from "../nostr-helpers";
+import { DeleteListing, NostrEvent } from "../nostr-helpers";
 import { ProductContext } from "../context";
 import { ProfileAvatar } from "./avatar";
 import locations from "../../public/locationSelection.json";
@@ -15,7 +14,7 @@ const DisplayEvents = ({
   focusedPubkey?: string;
   clickNPubkey: (npubkey: string) => void;
 }) => {
-  const [productData, setProductData] = useState<ProductFormValues[]>([]);
+  const [productData, setProductData] = useState<NostrEvent[]>([]);
   const [filteredProductData, setFilteredProductData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const imageUrlRegExp = /(https?:\/\/.*\.(?:png|jpg|jpeg|gif))/i;
@@ -135,7 +134,7 @@ const DisplayEvents = ({
     if (!productDataContext.isLoading && productDataContext.productData) {
       // is product sub reaches eose then we can sort the product data
       let sortedProductData = productDataContext.productData.sort(
-        (a, b) => b.created_at - a.created_at
+        (a, b) => b.created_at - a.created_at,
       ); // sorts most recently created to least recently created
       setProductData(sortedProductData);
       return;
@@ -151,30 +150,36 @@ const DisplayEvents = ({
 
   /** FILTERS PRODUCT DATA ON CATEGORY, LOCATION, FOCUSED PUBKEY (SELLER) **/
   useEffect(() => {
-    if (!productData || isLoading) return;
-
-    let filteredData = focusedPubkey
-      ? productData.filter((event) => event.pubkey === focusedPubkey)
-      : productData;
-    console.log(selectedCategory, selectedLocation);
-    if (!selectedCategory && !selectedLocation) {
-      setFilteredProductData(filteredData);
-      return;
+    let filteredData = productData;
+    if (productData && !isLoading) {
+      if (focusedPubkey) {
+        filteredData = filteredData.filter(
+          (event) => event.pubkey === focusedPubkey,
+        );
+      }
+      if (selectedCategory !== "" && typeof selectedCategory !== "undefined") {
+        filteredData = filteredData.filter((event) => {
+          // project the 'tags' 2D array to an array of categories
+          const eventCategories = event.tags
+            .filter((tagArray) => tagArray[0] === "t")
+            .map((tagArray) => tagArray[1]);
+          // check if the selected category is within event categories
+          return eventCategories.includes(selectedCategory);
+        });
+      }
+      if (selectedLocation !== "" && typeof selectedLocation !== "undefined") {
+        filteredData = filteredData.filter((event) => {
+          // project the 'tags' 2D array to an array of categories
+          const eventLocation = event.tags
+            .filter((tagArray) => tagArray[0] === "location")
+            .map((tagArray) => tagArray[1]);
+          // check if the selected category is within event categories
+          return eventLocation.some((location) =>
+            location.includes(selectedLocation),
+          );
+        });
+      }
     }
-
-    filteredData = filteredData.filter((event) => {
-      let isCategoryMatch = false;
-      let isLocationMatch = false;
-      if (selectedCategory) {
-        isCategoryMatch = event.tags.includes(selectedCategory);
-      }
-      if (selectedLocation) {
-        isLocationMatch = event.tags.includes(selectedLocation);
-      }
-
-      return isCategoryMatch || isLocationMatch;
-    });
-    console.log(filteredData);
     setFilteredProductData(filteredData);
   }, [isLoading, focusedPubkey, selectedCategory, selectedLocation]);
 
