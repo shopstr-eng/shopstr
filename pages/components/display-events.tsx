@@ -230,47 +230,55 @@ const DisplayEvents = ({
           {locationOptions}
         </Select>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 my-2 overflow-y-scroll overflow-x-hidden max-h-[70vh] max-w-full">
-        {filteredProductData.map((event, index) => {
-          let npub = nip19.npubEncode(event.pubkey);
-          return (
-            <div
-              key={event.sig + "-" + index}
-              className="p-4 mb-4 mx-2 bg-gray-100 rounded-md shadow-lg"
-            >
-              <div className="flex justify-between items-center text-gray-600 text-xs md:text-sm">
-                <ProfileAvatar
-                  pubkey={event.pubkey}
-                  npub={npub}
-                  clickNPubkey={clickNPubkey}
-                />
-                <span className="text-gray-400 ml-2 text-xs md:text-sm">
-                  {displayDate(event.created_at)}
-                </span>
-              </div>
-              <div className="mt-2 text-gray-800 text-sm md:text-base whitespace-pre-wrap break-words">
-                {event.kind == 30402 ? (
-                  <DisplayProduct
-                    tags={event.tags}
-                    eventId={event.id}
+      {filteredProductData.length != 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 my-2 overflow-y-scroll overflow-x-hidden max-h-[70vh] max-w-full">
+          {filteredProductData.map((event, index) => {
+            let npub = nip19.npubEncode(event.pubkey);
+            return (
+              <div
+                key={event.sig + "-" + index}
+                className="p-4 mb-4 mx-2 bg-gray-100 rounded-md shadow-lg"
+              >
+                <div className="flex justify-between items-center text-gray-600 text-xs md:text-sm">
+                  <ProfileAvatar
                     pubkey={event.pubkey}
-                    handleDelete={handleDelete}
+                    npub={npub}
+                    clickNPubkey={clickNPubkey}
                   />
-                ) : event.content.indexOf(imageUrlRegExp) ? (
-                  <div>
-                    <p>{event.content.replace(imageUrlRegExp, "")}</p>
-                    <img src={event.content.match(imageUrlRegExp)?.[0]} />
-                  </div>
-                ) : (
-                  <div>
-                    <p>{event.content}</p>
-                  </div>
-                )}
+                  <span className="text-gray-400 ml-2 text-xs md:text-sm">
+                    {displayDate(event.created_at)}
+                  </span>
+                </div>
+                <div className="mt-2 text-gray-800 text-sm md:text-base whitespace-pre-wrap break-words">
+                  {event.kind == 30402 ? (
+                    <DisplayProduct
+                      tags={event.tags}
+                      eventId={event.id}
+                      pubkey={event.pubkey}
+                      handleDelete={handleDelete}
+                    />
+                  ) : event.content.indexOf(imageUrlRegExp) ? (
+                    <div>
+                      <p>{event.content.replace(imageUrlRegExp, "")}</p>
+                      <img src={event.content.match(imageUrlRegExp)?.[0]} />
+                    </div>
+                  ) : (
+                    <div>
+                      <p>{event.content}</p>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="mt-8 flex items-center justify-center">
+          <p className="text-xl break-words text-center">
+            No listings found . . .
+          </p>
+        </div>
+      )}
     </div>
   );
 };
