@@ -188,7 +188,9 @@ const DisplayEvents = ({
           .filter((tagArray) => tagArray[0] === "location")
           .map((tagArray) => tagArray[1]);
         // check if the selected category is within event categories
-        return eventLocation.some(location => location.includes(selectedLocation));
+        return eventLocation.some((location) =>
+          location.includes(selectedLocation),
+        );
       });
     }
     return result;

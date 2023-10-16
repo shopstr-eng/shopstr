@@ -395,6 +395,13 @@ const DirectMessages = () => {
   if (!currentChat) {
     return (
       <div>
+        {chats.length === 0 && (
+          <div className="mt-8 flex items-center justify-center">
+            <p className="text-xl text-yellow-100 break-words text-center">
+              No messages . . . yet!
+            </p>
+          </div>
+        )}
         <div className="mt-8 mb-8 overflow-y-scroll max-h-[70vh] bg-white rounded-md">
           {chats.map((chat) => (
             <div key={chat} className="flex justify-between items-center mb-2">
