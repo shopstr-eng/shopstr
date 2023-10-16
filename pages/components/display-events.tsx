@@ -245,50 +245,58 @@ const DisplayEvents = ({
           {locationOptions}
         </Select>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 my-2 overflow-y-scroll overflow-x-hidden max-h-[70vh] max-w-full">
-        {getSelectedSellersProducts()?.map((event, index) => {
-          let npub = nip19.npubEncode(event.pubkey);
-          return (
-            <div
-              key={event.sig + "-" + index}
-              className="p-4 mb-4 mx-2 bg-gray-100 rounded-md shadow-lg"
-            >
-              <div className="flex justify-between items-center text-gray-600 text-xs md:text-sm">
-                <span
-                  className="max-w-xsm truncate hover:text-purple-600 rounded-md cursor-pointer"
-                  onClick={() => {
-                    clickNPubkey(npub);
-                  }}
-                >
-                  {npub}
-                </span>
-                <span className="text-gray-400 ml-2 text-xs md:text-sm">
-                  {displayDate(event.created_at)}
-                </span>
+      {getSelectedSellersProducts().length != 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 my-2 overflow-y-scroll overflow-x-hidden max-h-[70vh] max-w-full">
+          {getSelectedSellersProducts()?.map((event, index) => {
+            let npub = nip19.npubEncode(event.pubkey);
+            return (
+              <div
+                key={event.sig + "-" + index}
+                className="p-4 mb-4 mx-2 bg-gray-100 rounded-md shadow-lg"
+              >
+                <div className="flex justify-between items-center text-gray-600 text-xs md:text-sm">
+                  <span
+                    className="max-w-xsm truncate hover:text-purple-600 rounded-md cursor-pointer"
+                    onClick={() => {
+                      clickNPubkey(npub);
+                    }}
+                  >
+                    {npub}
+                  </span>
+                  <span className="text-gray-400 ml-2 text-xs md:text-sm">
+                    {displayDate(event.created_at)}
+                  </span>
+                </div>
+                <div className="mt-2 text-gray-800 text-sm md:text-base whitespace-pre-wrap break-words">
+                  {event.kind == 30402 ? (
+                    <DisplayProduct
+                      tags={event.tags}
+                      eventId={event.id}
+                      pubkey={event.pubkey}
+                      handleDelete={handleDelete}
+                    />
+                  ) : event.content.indexOf(imageUrlRegExp) ? (
+                    <div>
+                      <p>{event.content.replace(imageUrlRegExp, "")}</p>
+                      <img src={event.content.match(imageUrlRegExp)?.[0]} />
+                    </div>
+                  ) : (
+                    <div>
+                      <p>{event.content}</p>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="mt-2 text-gray-800 text-sm md:text-base whitespace-pre-wrap break-words">
-                {event.kind == 30402 ? (
-                  <DisplayProduct
-                    tags={event.tags}
-                    eventId={event.id}
-                    pubkey={event.pubkey}
-                    handleDelete={handleDelete}
-                  />
-                ) : event.content.indexOf(imageUrlRegExp) ? (
-                  <div>
-                    <p>{event.content.replace(imageUrlRegExp, "")}</p>
-                    <img src={event.content.match(imageUrlRegExp)?.[0]} />
-                  </div>
-                ) : (
-                  <div>
-                    <p>{event.content}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="mt-8 flex items-center justify-center">
+          <p className="text-xl break-words text-center">
+            No listings found . . .
+          </p>
+        </div>
+      )}
     </div>
   );
 };
