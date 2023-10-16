@@ -15,6 +15,7 @@ import type { NostrEvent } from "../nostr-helpers";
 function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
   const isLoginPage = router.pathname === "/";
+  const isKeyPage = router.pathname === "/keys";
   const [relays, setRelays] = useState([]);
   const [profileMap, setProfileMap] = useState(new Map());
   const [productContext, setProductContext] = useState<ProductContextInterface>(
@@ -100,7 +101,7 @@ function App({ Component, pageProps }: AppProps) {
     <ProfileMapContext.Provider value={profileMap}>
       <ProductContext.Provider value={productContext}>
         <div className="xl:w-full h-full bg-purple-500 px-2 md:py-4 md:px-8">
-          {isLoginPage ? null : <Navbar />}
+          {isLoginPage || isKeyPage ? null : <Navbar />}
           <Component {...pageProps} />
         </div>
       </ProductContext.Provider>

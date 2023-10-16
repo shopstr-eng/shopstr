@@ -12,14 +12,12 @@
 }
 
 *::-webkit-scrollbar-track {
-  background: rgb(56, 115, 226);
   border-radius: 5px;
 }
 
 *::-webkit-scrollbar-thumb {
-  background-color: rgb(236, 247, 85);
   border-radius: 14px;
-  border: 3px solid purple;
+  border: 3px solid;
 }
 
 @tailwind components;
@@ -35,7 +33,6 @@
 
 body {
   color: rgb(var(--foreground-rgb));
-  background-color: rgb(168, 85, 247);
 }
 
 html,

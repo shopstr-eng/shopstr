@@ -11,7 +11,7 @@ const Wallet = () => {
 
   return (
     <div className="flex items-center justify-center h-max m-[20vh]">
-      <p className="text-3xl text-yellow-100 max-w-[48vh] break-words text-center">
+      <p className="text-3xl max-w-[48vh] break-words text-center">
         A native wallet is coming soon! For now, you can claim your tokens for
         Bitcoin on
         <Link
