@@ -90,7 +90,10 @@ const Relays = () => {
     <div>
       <div className="mt-8 mb-8 overflow-y-scroll max-h-96 bg-white rounded-md">
         {relays.map((relay) => (
-          <div key={relay} className="flex justify-between items-center mb-2 border-2">
+          <div
+            key={relay}
+            className="flex justify-between items-center mb-2 border-2"
+          >
             <div className="max-w-xsm truncate">{relay}</div>
             <MinusCircleIcon
               onClick={() => deleteRelay(relay)}

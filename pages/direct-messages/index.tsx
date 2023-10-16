@@ -403,7 +403,10 @@ const DirectMessages = () => {
         )}
         <div className="mt-8 mb-8 overflow-y-scroll max-h-[70vh] bg-white rounded-md">
           {chats.map((chat) => (
-            <div key={chat} className="flex justify-between items-center mb-2 border-2">
+            <div
+              key={chat}
+              className="flex justify-between items-center mb-2 border-2"
+            >
               <div className="max-w-xsm truncate">{chat}</div>
               <button onClick={() => signInCheck(chat)}>Enter Chat</button>
               <MinusCircleIcon

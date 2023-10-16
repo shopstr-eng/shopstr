@@ -4,13 +4,7 @@ import { withRouter, NextRouter } from "next/router";
 import { nip19 } from "nostr-tools";
 import * as CryptoJS from "crypto-js";
 import { validateNPubKey, validateNSecKey } from "./nostr-helpers";
-import {
-  Card,
-  CardBody,
-  Button,
-  Input,
-  Image,
-} from "@nextui-org/react";
+import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
 
 const LoginPage = ({ router }: { router: NextRouter }) => {
   const [publicKey, setPublicKey] = useState<string>("");
