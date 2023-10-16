@@ -7,7 +7,13 @@ import {
   EyeSlashIcon,
   InformationCircleIcon,
 } from "@heroicons/react/24/outline";
-import Tooltip from "../components/tooltip";
+import {
+  Card,
+  CardBody,
+  Button,
+  Input,
+  Image,
+} from "@nextui-org/react";
 
 const Keys = () => {
   const router = useRouter();
@@ -71,68 +77,83 @@ const Keys = () => {
   };
 
   return (
-    <div className="mt-8 mb-8 max-h-96 rounded-md">
-      <h1 className="text-3xl font-bold text-center text-yellow-100 mb-8">
-        Keys
-      </h1>
-      <div className="flex flex-col mb-4">
-        <label className="text-xl text-yellow-100">Public Key</label>
-        {publicKey && (
-          <div
-            className="border-b-2 border-yellow-100 bg-white rounded-md text-xl overflow-hidden whitespace-nowrap overflow-ellipsis px-1"
-            onClick={handleCopyPubkey}
-          >
-            {publicKey}
+    <div className="flex flex-row justify-center items-center min-h-screen">
+      <Card>
+        <CardBody>
+          <div className="flex flex-row items-center justify-center mb-4">
+            <Image
+              alt="Shopstr logo"
+              height={50}
+              radius="sm"
+              src="/shopstr.png"
+              width={50}
+            />
+            <h1 className="text-3xl font-bold text-center text-purple-500">
+              Shopstr
+            </h1>
           </div>
-        )}
-      </div>
-      <div className="flex flex-col mb-4">
-        <label className="text-xl text-yellow-100">Private Key</label>
-        {privateKey && (
-          <div className="border-b-2 border-yellow-100 bg-white rounded-md text-xl flex justify-between items-center">
-            <div
-              className="overflow-hidden whitespace-nowrap overflow-ellipsis px-1"
-              onClick={handleCopyPubkey}
-            >
-              {viewState === "shown" ? privateKey : "* * * * *"}
-            </div>
-            {viewState === "shown" ? (
-              <EyeSlashIcon
-                className="w-6 h-6 hover:text-purple-700 flex-shrink-0 px-1"
-                onClick={() => {
-                  setViewState("hidden");
-                }}
-              />
-            ) : (
-              <EyeIcon
-                className="w-6 h-6 hover:text-purple-700 flex-shrink-0 px-1"
-                onClick={() => {
-                  setViewState("shown");
-                }}
-              />
+          <div className="flex flex-col mb-4">
+            <label className="text-xl">Public Key:</label>
+            {publicKey && (
+              <div
+                className="border-b-2 border-l-2 border-purple-500 border-color-yellow-500 bg-white rounded-md text-xl overflow-hidden whitespace-nowrap overflow-ellipsis px-1"
+                onClick={handleCopyPubkey}
+              >
+                {publicKey}
+              </div>
             )}
           </div>
-        )}
-      </div>
-      <div className="flex flex-col mb-4">
-        <label className="text-xl text-yellow-100">
-          Passphrase<span className="text-red-500">*</span>
-        </label>
-        <input
-          type="text"
-          className="border-b-2 border-yellow-100 bg-purple-900 focus:outline-none focus:border-purple-900 text-yellow-100 text-xl"
-          value={passphrase}
-          onChange={(e) => setPassphrase(e.target.value)}
-        />
-      </div>
-      <div className="flex justify-center">
-        <button
-          className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded"
-          onClick={handleSignIn}
-        >
-          Sign In
-        </button>
-      </div>
+          <div className="flex flex-col mb-4">
+            <label className="text-xl">Private Key:</label>
+            {privateKey && (
+              <div className="border-b-2 border-l-2 border-purple-500 bg-white rounded-md text-xl flex justify-between items-center">
+                <div
+                  className="overflow-hidden whitespace-nowrap overflow-ellipsis px-1"
+                  onClick={handleCopyPubkey}
+                >
+                  {viewState === "shown" ? privateKey : "* * * * *"}
+                </div>
+                {viewState === "shown" ? (
+                  <EyeSlashIcon
+                    className="w-6 h-6 hover:text-purple-700 flex-shrink-0 px-1"
+                    onClick={() => {
+                      setViewState("hidden");
+                    }}
+                  />
+                ) : (
+                  <EyeIcon
+                    className="w-6 h-6 hover:text-purple-700 flex-shrink-0 px-1"
+                    onClick={() => {
+                      setViewState("shown");
+                    }}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex flex-col mb-4">
+            <label className="text-xl">
+              Encryption Passphrase:<span className="text-red-500">*</span>
+            </label>
+            <Input
+              type="text"
+              width="100%"
+              size="large"
+              value={passphrase}
+              placeholder="Enter a passphrase of your choice..."
+              onChange={(e) => setPassphrase(e.target.value)}
+            />
+          </div>
+          <div className="flex justify-center">
+            <Button
+              className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600"
+              onClick={handleSignIn}
+            >
+              Sign In
+            </Button>
+          </div>
+        </CardBody>
+      </Card>
     </div>
   );
 };

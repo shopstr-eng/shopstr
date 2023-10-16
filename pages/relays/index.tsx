@@ -90,7 +90,7 @@ const Relays = () => {
     <div>
       <div className="mt-8 mb-8 overflow-y-scroll max-h-96 bg-white rounded-md">
         {relays.map((relay) => (
-          <div key={relay} className="flex justify-between items-center mb-2">
+          <div key={relay} className="flex justify-between items-center mb-2 border-2">
             <div className="max-w-xsm truncate">{relay}</div>
             <MinusCircleIcon
               onClick={() => deleteRelay(relay)}
@@ -99,12 +99,12 @@ const Relays = () => {
           </div>
         ))}
       </div>
-      <button
-        className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded"
+      <Button
+        className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600"
         onClick={handleToggleModal}
       >
         Add New Relay
-      </button>
+      </Button>
       <Modal
         backdrop="blur"
         isOpen={showModal}

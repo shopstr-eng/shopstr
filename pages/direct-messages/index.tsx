@@ -396,14 +396,14 @@ const DirectMessages = () => {
       <div>
         {chats.length === 0 && (
           <div className="mt-8 flex items-center justify-center">
-            <p className="text-xl text-yellow-100 break-words text-center">
+            <p className="text-xl break-words text-center">
               No messages . . . yet!
             </p>
           </div>
         )}
         <div className="mt-8 mb-8 overflow-y-scroll max-h-[70vh] bg-white rounded-md">
           {chats.map((chat) => (
-            <div key={chat} className="flex justify-between items-center mb-2">
+            <div key={chat} className="flex justify-between items-center mb-2 border-2">
               <div className="max-w-xsm truncate">{chat}</div>
               <button onClick={() => signInCheck(chat)}>Enter Chat</button>
               <MinusCircleIcon
@@ -413,12 +413,12 @@ const DirectMessages = () => {
             </div>
           ))}
         </div>
-        <button
-          className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded"
+        <Button
+          className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600"
           onClick={handleToggleModal}
         >
           Start New Chat
-        </button>
+        </Button>
         <Modal
           backdrop="blur"
           isOpen={showModal}
@@ -593,16 +593,14 @@ const DirectMessages = () => {
 
   return (
     <div>
-      <h2 className="flex flex-row items-center w-fit pr-2 align-middle text-yellow-500 hover:bg-purple-600 rounded-md cursor-pointer">
+      <h2 className="flex flex-row items-center w-fit pr-2 mt-2 align-middle text-yellow-500 hover:bg-purple-600 rounded-md cursor-pointer">
         <ArrowUturnLeftIcon
-          className="w-5 h-5 text-yellow-100 hover:text-purple-700"
+          className="w-5 h-5 text-purple-500 hover:text-purple-700"
           onClick={handleGoBack}
-        >
-          Go Back
-        </ArrowUturnLeftIcon>
+        />
         {currentChat}
       </h2>
-      <div className="mt-8 mb-8 overflow-y-scroll max-h-[70vh] bg-white rounded-md">
+      <div className="my-2 overflow-y-scroll max-h-[70vh] bg-white rounded-md border-2">
         {messages.map((message, index) => (
           <div
             key={index}
@@ -632,20 +630,21 @@ const DirectMessages = () => {
         ))}
         <div ref={bottomDivRef} />
       </div>
-      <form className="flex items-center" onSubmit={handleSend}>
-        <input
+      <form className="flex items-center space-x-2" onSubmit={handleSend}>
+        <Input
           type="text"
-          className="rounded-md py-1 px-2 mr-2 bg-gray-200 focus:outline-none focus:bg-white flex-grow"
-          placeholder="Type your message..."
+          width="100%"
+          size="large"
           value={message}
+          placeholder="Type your message..."
           onChange={handleChange}
         />
-        <button
+        <Button
           type="submit"
-          className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold rounded-md py-1 px-2"
+          className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600"
         >
           Send
-        </button>
+        </Button>
       </form>
     </div>
   );

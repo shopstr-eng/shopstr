@@ -7,10 +7,11 @@ import Navbar from "./components/navbar";
 function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
   const isLoginPage = router.pathname === "/";
+  const isKeyPage = router.pathname === "/keys";
 
   return (
-    <div className="xl:w-full h-full bg-purple-500 px-2 md:py-4 md:px-8">
-      {isLoginPage ? null : <Navbar />}
+    <div className="xl:w-full h-full px-2 md:py-4 md:px-8">
+      {isLoginPage || isKeyPage ? null : <Navbar />}
       <Component {...pageProps} />
     </div>
   );
