@@ -42,7 +42,7 @@ const DirectMessages = () => {
   const [showModal, setShowModal] = useState(false);
   const [message, setMessage] = useState("");
 
-  const [enterPassphrase, setEnterPassphrase] = useState(false);
+  const [enterPassphrase, setEnterPassphrase] = useState(null);
   const [passphrase, setPassphrase] = useState("");
 
   const [thisChat, setThisChat] = useState("");
@@ -68,17 +68,17 @@ const DirectMessages = () => {
   }, []);
 
   useEffect(() => {
-    if (relays) {
+    if (relays && signIn != "") {
       const passedPubkey = router.query.pk ? router.query.pk : null;
       if (passedPubkey) {
-        if (signIn != "extension") {
+        if (signIn === "nsec") {
           let passedPubkeyStr = passedPubkey.toString();
           setThisChat(passedPubkeyStr);
           if (!chats.includes(passedPubkeyStr)) {
             let newChats = Array.from(new Set([...chats, passedPubkeyStr]));
             setChats(newChats);
           }
-          setEnterPassphrase(!enterPassphrase);
+          setEnterPassphrase(true);
           if (getNsecWithPassphrase(passphrase)) {
             let newChats = Array.from(new Set([...chats, passedPubkeyStr]));
             setChats(newChats);
@@ -90,7 +90,6 @@ const DirectMessages = () => {
             let newChats = Array.from(new Set([...chats, passedPubkeyStr]));
             setChats(newChats);
           }
-          setEnterPassphrase(!enterPassphrase);
           let newChats = Array.from(new Set([...chats, passedPubkeyStr]));
           setChats(newChats);
         }
@@ -145,7 +144,7 @@ const DirectMessages = () => {
         }
       });
     }
-  }, [relays]);
+  }, [relays, signIn]);
 
   useEffect(() => {
     const pool = new SimplePool();
@@ -375,7 +374,7 @@ const DirectMessages = () => {
   };
 
   const handleEnterPassphrase = (chat: string) => {
-    setEnterPassphrase(!enterPassphrase);
+    setEnterPassphrase(true);
     setThisChat(chat);
   };
 
