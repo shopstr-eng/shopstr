@@ -100,7 +100,7 @@ function App({ Component, pageProps }: AppProps) {
   return (
     <ProfileMapContext.Provider value={profileMap}>
       <ProductContext.Provider value={productContext}>
-        <div className="xl:w-full h-full bg-purple-500 px-2 md:py-4 md:px-8">
+        <div className="xl:w-full h-full px-2 md:py-4 md:px-8">
           {isLoginPage || isKeyPage ? null : <Navbar />}
           <Component {...pageProps} />
         </div>
