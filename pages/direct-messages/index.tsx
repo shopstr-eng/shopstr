@@ -286,7 +286,7 @@ const DirectMessages = () => {
 
   const handleToggleModal = () => {
     reset();
-    setPassphrase;
+    setPassphrase("");
     setShowModal(!showModal);
   };
 

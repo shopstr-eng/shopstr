@@ -200,6 +200,7 @@ export function getPubKey() {
 }
 
 export function getNsecWithPassphrase(passphrase: string) {
+  if (!passphrase) return undefined;
   const { encryptedPrivateKey } = getLocalStorageData();
   let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
     CryptoJS.enc.Utf8
