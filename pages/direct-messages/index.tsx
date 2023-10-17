@@ -421,7 +421,7 @@ const DirectMessages = () => {
             return (
               <div
                 key={chat}
-                className="flex justify-between items-center mb-2"
+                className="flex justify-between items-center mb-2 border-2"
               >
                 <ProfileAvatar
                   pubkey={pubkey}
