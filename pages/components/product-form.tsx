@@ -480,7 +480,7 @@ export default function NewForm({
                     autoFocus
                     variant="bordered"
                     aria-label="Shipping Option"
-                    placeholder="Shipping Option"
+                    label="Shipping Option"
                     isInvalid={isErrored}
                     errorMessage={errorMessage}
                     disallowEmptySelection={true}
@@ -567,7 +567,8 @@ export default function NewForm({
                     isMultiline={true}
                     autoFocus
                     aria-label="Category"
-                    placeholder="Category"
+                    label="Categories"
+                    labelPlacement="outside"
                     selectionMode="multiple"
                     isInvalid={isErrored}
                     errorMessage={errorMessage}
@@ -575,6 +576,11 @@ export default function NewForm({
                     onChange={onChange} // send value to hook form
                     onBlur={onBlur} // notify when input is touched/blur
                     value={value}
+                    classNames={{
+                      base: "mt-4",
+                      trigger: "min-h-unit-12 py-2",
+                      label: "top-5",
+                    }}
                     renderValue={(items) => {
                       return (
                         <div className="flex flex-wrap gap-2">
