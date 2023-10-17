@@ -103,7 +103,7 @@ const Keys = () => {
               <div className="border-b-2 border-l-2 border-purple-500 bg-white rounded-md text-xl flex justify-between items-center">
                 <div
                   className="overflow-hidden whitespace-nowrap overflow-ellipsis px-1"
-                  onClick={handleCopyPubkey}
+                  onClick={handleCopyPrivkey}
                 >
                   {viewState === "shown" ? privateKey : "* * * * *"}
                 </div>
