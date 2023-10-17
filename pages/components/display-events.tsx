@@ -134,9 +134,11 @@ const DisplayEvents = ({
     setIsLoading(productDataContext.isLoading);
     if (!productDataContext.isLoading && productDataContext.productData) {
       // is product sub reaches eose then we can sort the product data
-      let sortedProductData = productDataContext.productData.sort(
-        (a, b) => b.created_at - a.created_at
-      ); // sorts most recently created to least recently created
+      let sortedProductData = [
+        ...productDataContext.productData.sort(
+          (a, b) => b.created_at - a.created_at
+        ),
+      ]; // sorts most recently created to least recently created
       setProductData(sortedProductData);
       return;
     }
@@ -186,6 +188,7 @@ const DisplayEvents = ({
     }
     setFilteredProductData(filteredData);
   }, [
+    productData,
     isLoading,
     focusedPubkey,
     selectedCategory,
