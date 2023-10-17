@@ -1,11 +1,12 @@
 import { useState, useEffect, useContext, useMemo } from "react";
 import DisplayProduct from "./display-product";
-import { Avatar, Select, SelectItem, SelectSection } from "@nextui-org/react";
+import { Select, SelectItem } from "@nextui-org/react";
 import { nip19 } from "nostr-tools";
 import { DeleteListing, NostrEvent } from "../nostr-helpers";
 import { ProductContext } from "../context";
 import { ProfileAvatar } from "./avatar";
-import locations from "../../public/locationSelection.json";
+import { CATEGORIES } from "./STATIC-VARIABLES";
+import LocationDropdown from "./location-dropdown";
 
 const DisplayEvents = ({
   focusedPubkey,
@@ -22,112 +23,6 @@ const DisplayEvents = ({
   const productDataContext = useContext(ProductContext);
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedLocation, setSelectedLocation] = useState("");
-  const categories = [
-    "Digital",
-    "Physical",
-    "Services",
-    "Resale",
-    "Exchange/swap",
-    "Clothing",
-    "Shoes",
-    "Accessories",
-    "Electronics",
-    "Collectibles",
-    "Books",
-    "Pets",
-    "Sports",
-    "Fitness",
-    "Art",
-    "Crafts",
-    "Home",
-    "Office",
-    "Food",
-    "Miscellaneous",
-  ];
-  const locationMap = useMemo(() => {
-    let states = locations.states.map((state) => [state.state, state]);
-    let countries = locations.countries.map((country) => [
-      country.country,
-      country,
-    ]);
-    return new Map([...states, ...countries]);
-  }, []);
-
-  const locationOptions = useMemo(() => {
-    const headingClasses =
-      "flex w-full sticky top-1 z-20 py-1.5 px-2 bg-default-100 shadow-small rounded-small";
-
-    let countryOptions = (
-      <SelectSection
-        title="Countries"
-        classNames={{
-          heading: headingClasses,
-        }}
-      >
-        {Array.from(locationMap.keys()).map((location, index) => {
-          const locationInfo = locationMap.get(location);
-          if (locationInfo.country) {
-            return (
-              <SelectItem
-                startContent={
-                  locationMap.get(location) ? (
-                    <Avatar
-                      alt={location}
-                      className="w-6 h-6"
-                      src={`https://flagcdn.com/16x12/${
-                        locationMap.get(location).iso3166
-                      }.png`}
-                    />
-                  ) : null
-                }
-                value={index}
-                key={index}
-              >
-                {location}
-              </SelectItem>
-            );
-          }
-          return null;
-        })}
-      </SelectSection>
-    );
-
-    let stateOptions = (
-      <SelectSection
-        title="U.S. States"
-        classNames={{
-          heading: headingClasses,
-        }}
-      >
-        {Array.from(locationMap.keys()).map((location, index) => {
-          const locationInfo = locationMap.get(location);
-          if (!locationInfo.country) {
-            return (
-              <SelectItem
-                startContent={
-                  locationMap.get(location) ? (
-                    <Avatar
-                      alt={location}
-                      className="w-6 h-6"
-                      src={`https://flagcdn.com/16x12/${
-                        locationMap.get(location).iso3166
-                      }.png`}
-                    />
-                  ) : null
-                }
-                value={index}
-                key={index}
-              >
-                {location}
-              </SelectItem>
-            );
-          }
-          return null;
-        })}
-      </SelectSection>
-    );
-    return [stateOptions, countryOptions];
-  }, []);
 
   useEffect(() => {
     if (!productDataContext) return;
@@ -215,31 +110,26 @@ const DisplayEvents = ({
           value={selectedCategory}
           onChange={(event) => {
             const index = event.target.value;
-            const selectedVal = categories[index];
+            const selectedVal = CATEGORIES[index];
             setSelectedCategory(selectedVal);
           }}
         >
-          {categories.map((category, index) => (
+          {CATEGORIES.map((category, index) => (
             <SelectItem value={category} key={index}>
               {category}
             </SelectItem>
           ))}
         </Select>
-        <Select
-          autoFocus
+        <LocationDropdown
           className="mt-2"
           placeholder="Select location"
           value={selectedLocation}
           onChange={(event) => {
-            const selectedVal = Array.from(locationMap.keys())[
-              event.target.value
-            ];
-            setSelectedLocation(selectedVal);
+            setSelectedLocation(event.target.value);
           }}
-        >
-          {locationOptions}
-        </Select>
+        />
       </div>
+      {/* DISPLAYS PRODUCT LISTINGS HERE */}
       {filteredProductData.length != 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 my-2 overflow-y-scroll overflow-x-hidden max-h-[70vh] max-w-full">
           {filteredProductData.map((event, index) => {

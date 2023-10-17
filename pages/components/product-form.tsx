@@ -11,8 +11,6 @@ import {
   Input,
   Select,
   SelectItem,
-  SelectSection,
-  Avatar,
   Chip,
   Image,
   Dropdown,
@@ -24,7 +22,6 @@ import {
 import { TrashIcon } from "@heroicons/react/24/outline";
 import Carousal from "@itseasy21/react-elastic-carousel";
 
-import locations from "../../public/locationSelection.json";
 import {
   PostListing,
   getNsecWithPassphrase,
@@ -32,6 +29,8 @@ import {
   nostrBuildUploadImage,
 } from "../nostr-helpers";
 import { finishEvent } from "nostr-tools";
+import { CATEGORIES, SHIPPING_OPTIONS } from "./STATIC-VARIABLES";
+import LocationDropdown from "./location-dropdown";
 
 interface ProductFormProps {
   handleModalToggle: () => void;
@@ -99,105 +98,8 @@ export default function NewForm({
     reset();
   };
 
-  const locationMap = useMemo(() => {
-    let countries = locations.countries.map((country) => [
-      country.country,
-      country,
-    ]);
-    let states = locations.states.map((state) => [state.state, state]);
-    return new Map([...countries, ...states]);
-  }, []);
-
-  const countryOptions = useMemo(() => {
-    const headingClasses =
-      "flex w-full sticky top-1 z-20 py-1.5 px-2 bg-default-100 shadow-small rounded-small";
-
-    let countryOptions = (
-      <SelectSection
-        title="Countries"
-        classNames={{
-          heading: headingClasses,
-        }}
-      >
-        {locations.countries.map((country) => {
-          return (
-            <SelectItem
-              key={country.country}
-              startContent={
-                <Avatar
-                  alt={country.country}
-                  className="w-6 h-6"
-                  src={`https://flagcdn.com/16x12/${country.iso3166}.png`}
-                />
-              }
-            >
-              {country.country}
-            </SelectItem>
-          );
-        })}
-      </SelectSection>
-    );
-
-    let stateOptions = (
-      <SelectSection
-        title="U.S. States"
-        classNames={{
-          heading: headingClasses,
-        }}
-      >
-        {locations.states.map((state) => {
-          return (
-            <SelectItem
-              key={state.state}
-              startContent={
-                <Avatar
-                  alt={state.state}
-                  className="w-6 h-6"
-                  src={`https://flagcdn.com/16x12/${state.iso3166}.png`}
-                />
-              }
-            >
-              {state.state}
-            </SelectItem>
-          );
-        })}
-      </SelectSection>
-    );
-    return [stateOptions, countryOptions];
-  }, []);
-
-  const shippingOptions = [
-    "N/A",
-    "Free", // free shipping you are going to ship it
-    "Pickup", // you are only going to have someone pick it up
-    "Free/Pickup", // you are open to do either
-    "Added Cost", // you are going to charge for shipping
-  ];
-  const categories = [
-    "Digital",
-    "Physical",
-    "Services",
-    "Resale",
-    "Exchange/swap",
-    "Clothing",
-    "Shoes",
-    "Accessories",
-    "Electronics",
-    "Collectibles",
-    "Books",
-    "Pets",
-    "Sports",
-    "Fitness",
-    "Art",
-    "Crafts",
-    "Home",
-    "Office",
-    "Food",
-    "Miscellaneous",
-  ];
-
-  const watchShippingOption = watch("Shipping Option");
-  const watchCurrency = watch("Currency");
+  const watchShippingOption = watch("Shipping Option"); // acts as state for shippingOption input. when shippingOption changes, this variable changes as well
+  const watchCurrency = watch("Currency"); // acts as state for currency input. when currency changes, this variable changes as well
 
   const isButtonDisabled = useMemo(() => {
     if (signIn === "extension") return false; // extension can upload without passphrase
@@ -294,12 +196,12 @@ export default function NewForm({
 
         const privkey = getPrivKeyWithPassphrase(passphrase);
         response = await nostrBuildUploadImage(imageFile, (e) =>
-          finishEvent(e, privkey),
+          finishEvent(e, privkey)
         );
       } else if (signIn === "extension") {
         response = await nostrBuildUploadImage(
           imageFile,
-          async (e) => await window.nostr.signEvent(e),
+          async (e) => await window.nostr.signEvent(e)
         );
       }
 
@@ -409,7 +311,7 @@ export default function NewForm({
                         </Button>,
                         "Are you sure you want to delete this iamge?",
                         "Delete Image",
-                        deleteImage(image),
+                        deleteImage(image)
                       )}
                     </div>
                     <Image
@@ -544,21 +446,11 @@ export default function NewForm({
               }) => {
                 let isErrored = error !== undefined;
                 let errorMessage: string = error?.message ? error.message : "";
-
-                let startContent = locationMap.get(value) ? (
-                  <Avatar
-                    alt={value}
-                    className="w-6 h-6"
-                    src={`https://flagcdn.com/16x12/${locationMap.get(value)
-                      ?.iso3166}.png`}
-                  />
-                ) : null;
                 return (
-                  <Select
+                  <LocationDropdown
                     autoFocus
                     variant="bordered"
                     aria-label="Select Location"
-                    startContent={startContent}
                     placeholder="Location"
                     isInvalid={isErrored}
                     errorMessage={errorMessage}
@@ -566,9 +458,7 @@ export default function NewForm({
                     onChange={onChange} // send value to hook form
                     onBlur={onBlur} // notify when input is touched/blur
                     value={value}
-                  >
-                    {countryOptions}
-                  </Select>
+                  />
                 );
               }}
             />
@@ -599,7 +489,7 @@ export default function NewForm({
                     onBlur={onBlur} // notify when input is touched/blur
                     selectedKeys={[value]}
                   >
-                    {shippingOptions.map((option) => (
+                    {SHIPPING_OPTIONS.map((option) => (
                       <SelectItem key={option}>{option}</SelectItem>
                     ))}
                   </Select>
@@ -699,7 +589,7 @@ export default function NewForm({
                       );
                     }}
                   >
-                    {categories.map((category) => (
+                    {CATEGORIES.map((category) => (
                       <SelectItem key={category} value={category}>
                         {category}
                       </SelectItem>
@@ -728,7 +618,7 @@ export default function NewForm({
               </Button>,
               "Are you sure you want to clear this form? You will lose all current progress.",
               "Clear Form",
-              clear,
+              clear
             )}
 
             <Button
