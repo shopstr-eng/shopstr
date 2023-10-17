@@ -1,20 +1,11 @@
-import { useMemo, useState, useEffect } from "react";
-import { Avatar, Select, SelectItem, SelectSection } from "@nextui-org/react";
+import { useState, useEffect, useContext, useMemo } from "react";
 import DisplayProduct from "./display-product";
-import { nip19, SimplePool } from "nostr-tools";
-import { ProductFormValues } from "../api/post-event";
-import { DeleteListing } from "../nostr-helpers";
+import { Avatar, Select, SelectItem, SelectSection } from "@nextui-org/react";
+import { nip19 } from "nostr-tools";
+import { DeleteListing, NostrEvent } from "../nostr-helpers";
+import { ProductContext } from "../context";
+import { ProfileAvatar } from "./avatar";
 import locations from "../../public/locationSelection.json";
-
-export type Event = {
-  id: string;
-  pubkey: string;
-  created_at: number;
-  kind: number;
-  tags: ProductFormValues;
-  content: string;
-  sig: string;
-};
 
 const DisplayEvents = ({
   focusedPubkey,
@@ -23,12 +14,14 @@ const DisplayEvents = ({
   focusedPubkey?: string;
   clickNPubkey: (npubkey: string) => void;
 }) => {
-  const [relays, setRelays] = useState([]);
-  const [eventData, setEventData] = useState<Event[]>([]);
+  const [productData, setProductData] = useState<NostrEvent[]>([]);
+  const [filteredProductData, setFilteredProductData] = useState([]);
+  const [deletedProducts, setDeletedProducts] = useState<string[]>([]); // list of product ids that have been deleted
+  const [isLoading, setIsLoading] = useState(true);
   const imageUrlRegExp = /(https?:\/\/.*\.(?:png|jpg|jpeg|gif))/i;
+  const productDataContext = useContext(ProductContext);
   const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedLocation, setSelectedLocation] = useState("");
-
   const categories = [
     "Digital",
     "Physical",
@@ -51,7 +44,6 @@ const DisplayEvents = ({
     "Food",
     "Miscellaneous",
   ];
-
   const locationMap = useMemo(() => {
     let states = locations.states.map((state) => [state.state, state]);
     let countries = locations.countries.map((country) => [
@@ -138,27 +130,20 @@ const DisplayEvents = ({
   }, []);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const storedRelays = localStorage.getItem("relays");
-      setRelays(storedRelays ? JSON.parse(storedRelays) : []);
+    if (!productDataContext) return;
+    setIsLoading(productDataContext.isLoading);
+    if (!productDataContext.isLoading && productDataContext.productData) {
+      // is product sub reaches eose then we can sort the product data
+      let sortedProductData = [
+        ...productDataContext.productData.sort(
+          (a, b) => b.created_at - a.created_at
+        ),
+      ]; // sorts most recently created to least recently created
+      setProductData(sortedProductData);
+      return;
     }
-  }, []);
-
-  useEffect(() => {
-    const pool = new SimplePool();
-    setEventData([]);
-    let subParams: { kinds: number[]; authors?: string[] } = {
-      kinds: [30402],
-    };
-    let productsSub = pool.sub(relays, [subParams]);
-    productsSub.on("event", (event) => {
-      setEventData((eventData) => {
-        let newEventData = [...eventData, event];
-        newEventData.sort((a, b) => b.created_at - a.created_at); // sorts most recently created to least recently created
-        return newEventData;
-      });
-    });
-  }, [relays]);
+    setProductData(productDataContext.productData);
+  }, [productDataContext]);
 
   const displayDate = (timestamp: number): string => {
     const d = new Date(timestamp * 1000);
@@ -166,43 +151,55 @@ const DisplayEvents = ({
     return dateString;
   };
 
-  const getSelectedSellersProducts = () => {
-    let result = eventData;
-    if (focusedPubkey !== "") {
-      result = result.filter((event) => event.pubkey === focusedPubkey);
-    }
-    if (selectedCategory !== "" && typeof selectedCategory !== "undefined") {
-      result = result.filter((event) => {
-        // project the 'tags' 2D array to an array of categories
-        const eventCategories = event.tags
-          .filter((tagArray) => tagArray[0] === "t")
-          .map((tagArray) => tagArray[1]);
-        // check if the selected category is within event categories
-        return eventCategories.includes(selectedCategory);
-      });
-    }
-    if (selectedLocation !== "" && typeof selectedLocation !== "undefined") {
-      result = result.filter((event) => {
-        // project the 'tags' 2D array to an array of categories
-        const eventLocation = event.tags
-          .filter((tagArray) => tagArray[0] === "location")
-          .map((tagArray) => tagArray[1]);
-        // check if the selected category is within event categories
-        return eventLocation.some((location) =>
-          location.includes(selectedLocation),
+  /** FILTERS PRODUCT DATA ON CATEGORY, LOCATION, FOCUSED PUBKEY (SELLER) **/
+  useEffect(() => {
+    let filteredData = productData.filter((event) => {
+      // gets rid of products that were deleted
+      return !deletedProducts.includes(event.id);
+    });
+    if (productData && !isLoading) {
+      if (focusedPubkey) {
+        filteredData = filteredData.filter(
+          (event) => event.pubkey === focusedPubkey
         );
-      });
+      }
+      if (selectedCategory !== "" && typeof selectedCategory !== "undefined") {
+        filteredData = filteredData.filter((event) => {
+          // project the 'tags' 2D array to an array of categories
+          const eventCategories = event.tags
+            .filter((tagArray) => tagArray[0] === "t")
+            .map((tagArray) => tagArray[1]);
+          // check if the selected category is within event categories
+          return eventCategories.includes(selectedCategory);
+        });
+      }
+      if (selectedLocation !== "" && typeof selectedLocation !== "undefined") {
+        filteredData = filteredData.filter((event) => {
+          // project the 'tags' 2D array to an array of categories
+          const eventLocation = event.tags
+            .filter((tagArray) => tagArray[0] === "location")
+            .map((tagArray) => tagArray[1]);
+          // check if the selected category is within event categories
+          return eventLocation.some((location) =>
+            location.includes(selectedLocation)
+          );
+        });
+      }
     }
-    return result;
-  };
+    setFilteredProductData(filteredData);
+  }, [
+    productData,
+    isLoading,
+    focusedPubkey,
+    selectedCategory,
+    selectedLocation,
+    deletedProducts,
+  ]);
 
   const handleDelete = async (productId: string, passphrase: string) => {
     try {
       await DeleteListing([productId], passphrase);
-      setEventData((eventData) => {
-        let newEventData = eventData.filter((event) => event.id !== productId); // removes the deleted product from the list
-        return newEventData;
-      });
+      setDeletedProducts((deletedProducts) => [...deletedProducts, productId]);
     } catch (e) {
       console.log(e);
     }
@@ -220,7 +217,6 @@ const DisplayEvents = ({
             const index = event.target.value;
             const selectedVal = categories[index];
             setSelectedCategory(selectedVal);
-            getSelectedSellersProducts();
           }}
         >
           {categories.map((category, index) => (
@@ -239,15 +235,14 @@ const DisplayEvents = ({
               event.target.value
             ];
             setSelectedLocation(selectedVal);
-            getSelectedSellersProducts();
           }}
         >
           {locationOptions}
         </Select>
       </div>
-      {getSelectedSellersProducts().length != 0 ? (
+      {filteredProductData.length != 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 my-2 overflow-y-scroll overflow-x-hidden max-h-[70vh] max-w-full">
-          {getSelectedSellersProducts()?.map((event, index) => {
+          {filteredProductData.map((event, index) => {
             let npub = nip19.npubEncode(event.pubkey);
             return (
               <div
@@ -255,14 +250,11 @@ const DisplayEvents = ({
                 className="p-4 mb-4 mx-2 bg-gray-100 rounded-md shadow-lg"
               >
                 <div className="flex justify-between items-center text-gray-600 text-xs md:text-sm">
-                  <span
-                    className="max-w-xsm truncate hover:text-purple-600 rounded-md cursor-pointer"
-                    onClick={() => {
-                      clickNPubkey(npub);
-                    }}
-                  >
-                    {npub}
-                  </span>
+                  <ProfileAvatar
+                    pubkey={event.pubkey}
+                    npub={npub}
+                    clickNPubkey={clickNPubkey}
+                  />
                   <span className="text-gray-400 ml-2 text-xs md:text-sm">
                     {displayDate(event.created_at)}
                   </span>

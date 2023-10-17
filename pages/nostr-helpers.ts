@@ -6,7 +6,7 @@ import axios from "axios";
 
 export async function PostListing(
   values: ProductFormValues,
-  passphrase: string,
+  passphrase: string
 ) {
   const { signIn, encryptedPrivateKey, decryptedNpub, relays } =
     getLocalStorageData();
@@ -53,14 +53,14 @@ export async function PostListing(
 
 export async function DeleteListing(
   event_ids_to_delete: ProductFormValues,
-  passphrase: string,
+  passphrase: string
 ) {
   const { signIn, decryptedNpub, relays } = getLocalStorageData();
   let deletionEvent = await createNostrDeleteEvent(
     event_ids_to_delete,
     decryptedNpub,
     "user deletion request",
-    signIn == "extension" ? undefined : getPrivKeyWithPassphrase(passphrase),
+    signIn == "extension" ? undefined : getPrivKeyWithPassphrase(passphrase)
   );
 
   if (signIn === "extension") {
@@ -127,7 +127,7 @@ export type DraftNostrEvent = Omit<NostrEvent, "pubkey" | "id" | "sig">;
 
 export async function nostrBuildUploadImage(
   image: File,
-  sign?: (draft: DraftNostrEvent) => Promise<NostrEvent>,
+  sign?: (draft: DraftNostrEvent) => Promise<NostrEvent>
 ) {
   if (!image.type.includes("image"))
     throw new Error("Only images are supported");
@@ -200,9 +200,10 @@ export function getPubKey() {
 }
 
 export function getNsecWithPassphrase(passphrase: string) {
+  if (!passphrase) return undefined;
   const { encryptedPrivateKey } = getLocalStorageData();
   let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-    CryptoJS.enc.Utf8,
+    CryptoJS.enc.Utf8
   );
   // returns undefined or "" thanks to the toString method
   return nsec;
@@ -231,11 +232,16 @@ export const getLocalStorageData = () => {
   return { signIn, encryptedPrivateKey, decryptedNpub, relays };
 };
 
+export const decryptNpub = (nPub: string) => {
+  const { data } = nip19.decode(nPub);
+  return data;
+};
+
 export async function createNostrDeleteEvent(
   event_ids: [string],
   pubkey: string,
   content: string,
-  privkey: String,
+  privkey: String
 ) {
   let msg = {
     kind: 5, // NIP-X - Deletion

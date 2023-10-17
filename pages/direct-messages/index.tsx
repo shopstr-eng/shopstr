@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect, useRef, useContext } from "react";
 import { useForm, Controller } from "react-hook-form";
 import axios from "axios";
 import { nip04, nip19, SimplePool } from "nostr-tools";
@@ -24,9 +24,12 @@ import {
 import * as CryptoJS from "crypto-js";
 import { useRouter } from "next/router";
 import {
+  decryptNpub,
   getNsecWithPassphrase,
   getPrivKeyWithPassphrase,
 } from "../nostr-helpers";
+import { ProfileAvatar } from "../components/avatar";
+import { ProfileMapContext } from "../context";
 
 const DirectMessages = () => {
   const router = useRouter();
@@ -114,7 +117,7 @@ const DirectMessages = () => {
             if (!chats.includes(incomingPubkey)) {
               setChats((chats) => {
                 return Array.from(
-                  new Set([...chats, nip19.npubEncode(incomingPubkey)]),
+                  new Set([...chats, nip19.npubEncode(incomingPubkey)])
                 );
               });
             }
@@ -130,7 +133,7 @@ const DirectMessages = () => {
             if (!chats.includes(tagPubkey)) {
               setChats((chats) => {
                 return Array.from(
-                  new Set([...chats, nip19.npubEncode(tagPubkey)]),
+                  new Set([...chats, nip19.npubEncode(tagPubkey)])
                 );
               });
             }
@@ -174,7 +177,7 @@ const DirectMessages = () => {
           if (signIn === "extension") {
             plaintext = await window.nostr.nip04.decrypt(
               chatPubkey,
-              event.content,
+              event.content
             );
           } else {
             let sk2 = getPrivKeyWithPassphrase(passphrase);
@@ -200,15 +203,26 @@ const DirectMessages = () => {
           }
           // Sort the messages with each state update
           setMessages((prevMessages) =>
-            prevMessages.sort((a, b) => a.createdAt - b.createdAt),
+            prevMessages.sort((a, b) => a.createdAt - b.createdAt)
           );
         }
       });
     }
   }, [currentChat]);
-
+  const profileContext = useContext(ProfileMapContext);
   useEffect(() => {
     localStorage.setItem("chats", JSON.stringify(chats));
+    if (Array.isArray(chats) && chats.length > 0) {
+      // HERE WE MUST TURN THESE NPUB KEYS INTO PUB KEYS BEFORE FETCHING THEIR PROFILE INFORMATION
+      const pubkeyChats = chats.map((chat) => {
+        const { data } = nip19.decode(chat);
+        return data;
+      }) as [string];
+      profileContext.addPubkeyToFetch(pubkeyChats);
+    } else if (typeof chats == "string") {
+      const { data } = nip19.decode(chats);
+      profileContext.addPubkeyToFetch([data as string]);
+    }
   }, [chats]);
 
   const {
@@ -272,7 +286,7 @@ const DirectMessages = () => {
 
   const handleToggleModal = () => {
     reset();
-    setPassphrase;
+    setPassphrase("");
     setShowModal(!showModal);
   };
 
@@ -357,7 +371,7 @@ const DirectMessages = () => {
   };
 
   const handlePassphraseChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
     if (name === "passphrase") {
@@ -402,19 +416,28 @@ const DirectMessages = () => {
           </div>
         )}
         <div className="mt-8 mb-8 overflow-y-scroll max-h-[70vh] bg-white rounded-md">
-          {chats.map((chat) => (
-            <div
-              key={chat}
-              className="flex justify-between items-center mb-2 border-2"
-            >
-              <div className="max-w-xsm truncate">{chat}</div>
-              <button onClick={() => signInCheck(chat)}>Enter Chat</button>
-              <MinusCircleIcon
-                onClick={() => deleteChat(chat)}
-                className="w-5 h-5 text-red-500 hover:text-yellow-700 cursor-pointer"
-              />
-            </div>
-          ))}
+          {chats.map((chat) => {
+            const pubkey = decryptNpub(chat);
+            return (
+              <div
+                key={chat}
+                className="flex justify-between items-center mb-2 border-2"
+              >
+                <ProfileAvatar
+                  pubkey={pubkey}
+                  npub={chat}
+                  clickNPubkey={() => {
+                    console.log("npub clicked in dms");
+                  }}
+                />
+                <button onClick={() => signInCheck(chat)}>Enter Chat</button>
+                <MinusCircleIcon
+                  onClick={() => deleteChat(chat)}
+                  className="w-5 h-5 text-red-500 hover:text-yellow-700 cursor-pointer"
+                />
+              </div>
+            );
+          })}
         </div>
         <Button
           className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600"
@@ -498,7 +521,7 @@ const DirectMessages = () => {
                   </Button>,
                   "Are you sure you want to cancel?",
                   "Cancel",
-                  handleToggleModal,
+                  handleToggleModal
                 )}
 
                 <Button
@@ -567,7 +590,7 @@ const DirectMessages = () => {
                   </Button>,
                   "Are you sure you want to cancel?",
                   "Cancel",
-                  cancel,
+                  cancel
                 )}
 
                 <Button
