@@ -70,12 +70,11 @@ const LocationDropdown = ({ value, ...props }) => {
     return new Map([...countries, ...states]);
   }, []);
 
-  let startContent = locationMap.get(location) ? (
+  let startContent = locationMap.get(value) ? (
     <Avatar
       alt={value}
       className="w-6 h-6"
-      src={`https://flagcdn.com/16x12/${locationMap.get(location)
-        ?.iso3166}.png`}
+      src={`https://flagcdn.com/16x12/${locationMap.get(value)?.iso3166}.png`}
     />
   ) : null;
   return (
