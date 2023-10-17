@@ -1,5 +1,5 @@
 import { Avatar, avatar } from "@nextui-org/react";
-import { useContext } from "react";
+import { useContext, useEffect, useState } from "react";
 import { ProfileMapContext } from "../context";
 
 export const ProfileAvatar = ({
@@ -11,17 +11,27 @@ export const ProfileAvatar = ({
   npub: string;
   clickNPubkey: any;
 }) => {
-  const profileMap = useContext(ProfileMapContext);
+  const [pfp, setPfp] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const profileContext = useContext(ProfileMapContext);
 
-  const profile = profileMap.has(pubkey) ? profileMap.get(pubkey) : undefined;
+  useEffect(() => {
+    const profileMap = profileContext.profileData;
+    const profile = profileMap.has(pubkey) ? profileMap.get(pubkey) : undefined;
+    setPfp(
+      profile && profile.content.picture
+        ? profile.content.picture
+        : `https://robohash.idena.io/${pubkey}`
+    );
+    setDisplayName(
+      profile && profile.content.name ? profile.content.name : npub
+    );
+  }, [profileContext]);
+
   return (
     <>
       <Avatar
-        src={
-          profile && profile.content.picture
-            ? profile.content.picture
-            : `https://robohash.idena.io/${pubkey}`
-        }
+        src={pfp}
         size="lg"
         className="w-12 h-auto min-w-[40px] min-h-[40px] mr-5"
       />
@@ -31,7 +41,7 @@ export const ProfileAvatar = ({
           clickNPubkey(npub);
         }}
       >
-        {profile && profile.content.name ? profile.content.name : npub}
+        {displayName}
       </span>
     </>
   );
