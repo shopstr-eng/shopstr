@@ -16,6 +16,7 @@ const DisplayEvents = ({
 }) => {
   const [productData, setProductData] = useState<NostrEvent[]>([]);
   const [filteredProductData, setFilteredProductData] = useState([]);
+  const [deletedProducts, setDeletedProducts] = useState<string[]>([]); // list of product ids that have been deleted
   const [isLoading, setIsLoading] = useState(true);
   const imageUrlRegExp = /(https?:\/\/.*\.(?:png|jpg|jpeg|gif))/i;
   const productDataContext = useContext(ProductContext);
@@ -134,7 +135,7 @@ const DisplayEvents = ({
     if (!productDataContext.isLoading && productDataContext.productData) {
       // is product sub reaches eose then we can sort the product data
       let sortedProductData = productDataContext.productData.sort(
-        (a, b) => b.created_at - a.created_at,
+        (a, b) => b.created_at - a.created_at
       ); // sorts most recently created to least recently created
       setProductData(sortedProductData);
       return;
@@ -150,11 +151,14 @@ const DisplayEvents = ({
 
   /** FILTERS PRODUCT DATA ON CATEGORY, LOCATION, FOCUSED PUBKEY (SELLER) **/
   useEffect(() => {
-    let filteredData = productData;
+    let filteredData = productData.filter((event) => {
+      // gets rid of products that were deleted
+      return !deletedProducts.includes(event.id);
+    });
     if (productData && !isLoading) {
       if (focusedPubkey) {
         filteredData = filteredData.filter(
-          (event) => event.pubkey === focusedPubkey,
+          (event) => event.pubkey === focusedPubkey
         );
       }
       if (selectedCategory !== "" && typeof selectedCategory !== "undefined") {
@@ -175,21 +179,24 @@ const DisplayEvents = ({
             .map((tagArray) => tagArray[1]);
           // check if the selected category is within event categories
           return eventLocation.some((location) =>
-            location.includes(selectedLocation),
+            location.includes(selectedLocation)
           );
         });
       }
     }
     setFilteredProductData(filteredData);
-  }, [isLoading, focusedPubkey, selectedCategory, selectedLocation]);
+  }, [
+    isLoading,
+    focusedPubkey,
+    selectedCategory,
+    selectedLocation,
+    deletedProducts,
+  ]);
 
   const handleDelete = async (productId: string, passphrase: string) => {
     try {
       await DeleteListing([productId], passphrase);
-      setEventData((eventData) => {
-        let newEventData = eventData.filter((event) => event.id !== productId); // removes the deleted product from the list
-        return newEventData;
-      });
+      setDeletedProducts((deletedProducts) => [...deletedProducts, productId]);
     } catch (e) {
       console.log(e);
     }
