@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect, useRef, useContext } from "react";
 import { useForm, Controller } from "react-hook-form";
 import axios from "axios";
 import { nip04, nip19, SimplePool } from "nostr-tools";
@@ -24,9 +24,12 @@ import {
 import * as CryptoJS from "crypto-js";
 import { useRouter } from "next/router";
 import {
+  decryptNpub,
   getNsecWithPassphrase,
   getPrivKeyWithPassphrase,
 } from "../nostr-helpers";
+import { ProfileAvatar } from "../components/avatar";
+import { ProfileMapContext } from "../context";
 
 const DirectMessages = () => {
   const router = useRouter();
@@ -42,7 +45,7 @@ const DirectMessages = () => {
   const [showModal, setShowModal] = useState(false);
   const [message, setMessage] = useState("");
 
-  const [enterPassphrase, setEnterPassphrase] = useState(false);
+  const [enterPassphrase, setEnterPassphrase] = useState(null);
   const [passphrase, setPassphrase] = useState("");
 
   const [thisChat, setThisChat] = useState("");
@@ -68,17 +71,17 @@ const DirectMessages = () => {
   }, []);
 
   useEffect(() => {
-    if (relays) {
+    if (relays && signIn != "") {
       const passedPubkey = router.query.pk ? router.query.pk : null;
       if (passedPubkey) {
-        if (signIn != "extension") {
+        if (signIn === "nsec") {
           let passedPubkeyStr = passedPubkey.toString();
           setThisChat(passedPubkeyStr);
           if (!chats.includes(passedPubkeyStr)) {
             let newChats = Array.from(new Set([...chats, passedPubkeyStr]));
             setChats(newChats);
           }
-          setEnterPassphrase(!enterPassphrase);
+          setEnterPassphrase(true);
           if (getNsecWithPassphrase(passphrase)) {
             let newChats = Array.from(new Set([...chats, passedPubkeyStr]));
             setChats(newChats);
@@ -90,7 +93,6 @@ const DirectMessages = () => {
             let newChats = Array.from(new Set([...chats, passedPubkeyStr]));
             setChats(newChats);
           }
-          setEnterPassphrase(!enterPassphrase);
           let newChats = Array.from(new Set([...chats, passedPubkeyStr]));
           setChats(newChats);
         }
@@ -115,7 +117,7 @@ const DirectMessages = () => {
             if (!chats.includes(incomingPubkey)) {
               setChats((chats) => {
                 return Array.from(
-                  new Set([...chats, nip19.npubEncode(incomingPubkey)]),
+                  new Set([...chats, nip19.npubEncode(incomingPubkey)])
                 );
               });
             }
@@ -131,7 +133,7 @@ const DirectMessages = () => {
             if (!chats.includes(tagPubkey)) {
               setChats((chats) => {
                 return Array.from(
-                  new Set([...chats, nip19.npubEncode(tagPubkey)]),
+                  new Set([...chats, nip19.npubEncode(tagPubkey)])
                 );
               });
             }
@@ -145,7 +147,7 @@ const DirectMessages = () => {
         }
       });
     }
-  }, [relays]);
+  }, [relays, signIn]);
 
   useEffect(() => {
     const pool = new SimplePool();
@@ -175,7 +177,7 @@ const DirectMessages = () => {
           if (signIn === "extension") {
             plaintext = await window.nostr.nip04.decrypt(
               chatPubkey,
-              event.content,
+              event.content
             );
           } else {
             let sk2 = getPrivKeyWithPassphrase(passphrase);
@@ -201,15 +203,26 @@ const DirectMessages = () => {
           }
           // Sort the messages with each state update
           setMessages((prevMessages) =>
-            prevMessages.sort((a, b) => a.createdAt - b.createdAt),
+            prevMessages.sort((a, b) => a.createdAt - b.createdAt)
           );
         }
       });
     }
   }, [currentChat]);
-
+  const profileContext = useContext(ProfileMapContext);
   useEffect(() => {
     localStorage.setItem("chats", JSON.stringify(chats));
+    if (Array.isArray(chats) && chats.length > 0) {
+      // HERE WE MUST TURN THESE NPUB KEYS INTO PUB KEYS BEFORE FETCHING THEIR PROFILE INFORMATION
+      const pubkeyChats = chats.map((chat) => {
+        const { data } = nip19.decode(chat);
+        return data;
+      }) as [string];
+      profileContext.addPubkeyToFetch(pubkeyChats);
+    } else if (typeof chats == "string") {
+      const { data } = nip19.decode(chats);
+      profileContext.addPubkeyToFetch([data as string]);
+    }
   }, [chats]);
 
   const {
@@ -273,7 +286,7 @@ const DirectMessages = () => {
 
   const handleToggleModal = () => {
     reset();
-    setPassphrase;
+    setPassphrase("");
     setShowModal(!showModal);
   };
 
@@ -371,7 +384,7 @@ const DirectMessages = () => {
   };
 
   const handlePassphraseChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
     const { name, value } = e.target;
     if (name === "passphrase") {
@@ -388,7 +401,7 @@ const DirectMessages = () => {
   };
 
   const handleEnterPassphrase = (chat: string) => {
-    setEnterPassphrase(!enterPassphrase);
+    setEnterPassphrase(true);
     setThisChat(chat);
   };
 
@@ -408,24 +421,43 @@ const DirectMessages = () => {
   if (!currentChat) {
     return (
       <div>
+        {chats.length === 0 && (
+          <div className="mt-8 flex items-center justify-center">
+            <p className="text-xl break-words text-center">
+              No messages . . . yet!
+            </p>
+          </div>
+        )}
         <div className="mt-8 mb-8 overflow-y-scroll max-h-[70vh] bg-white rounded-md">
-          {chats.map((chat) => (
-            <div key={chat} className="flex justify-between items-center mb-2">
-              <div className="max-w-xsm truncate">{chat}</div>
-              <button onClick={() => signInCheck(chat)}>Enter Chat</button>
-              <MinusCircleIcon
-                onClick={() => deleteChat(chat)}
-                className="w-5 h-5 text-red-500 hover:text-yellow-700 cursor-pointer"
-              />
-            </div>
-          ))}
+          {chats.map((chat) => {
+            const pubkey = decryptNpub(chat);
+            return (
+              <div
+                key={chat}
+                className="flex justify-between items-center mb-2 border-2"
+              >
+                <ProfileAvatar
+                  pubkey={pubkey}
+                  npub={chat}
+                  clickNPubkey={() => {
+                    console.log("npub clicked in dms");
+                  }}
+                />
+                <button onClick={() => signInCheck(chat)}>Enter Chat</button>
+                <MinusCircleIcon
+                  onClick={() => deleteChat(chat)}
+                  className="w-5 h-5 text-red-500 hover:text-yellow-700 cursor-pointer"
+                />
+              </div>
+            );
+          })}
         </div>
-        <button
-          className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold py-2 px-4 rounded"
+        <Button
+          className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600"
           onClick={handleToggleModal}
         >
           Start New Chat
-        </button>
+        </Button>
         <Modal
           backdrop="blur"
           isOpen={showModal}
@@ -502,7 +534,7 @@ const DirectMessages = () => {
                   </Button>,
                   "Are you sure you want to cancel?",
                   "Cancel",
-                  handleToggleModal,
+                  handleToggleModal
                 )}
 
                 <Button
@@ -571,7 +603,7 @@ const DirectMessages = () => {
                   </Button>,
                   "Are you sure you want to cancel?",
                   "Cancel",
-                  cancel,
+                  cancel
                 )}
 
                 <Button
@@ -600,16 +632,14 @@ const DirectMessages = () => {
 
   return (
     <div>
-      <h2 className="flex flex-row items-center w-fit pr-2 align-middle text-yellow-500 hover:bg-purple-600 rounded-md cursor-pointer">
+      <h2 className="flex flex-row items-center w-fit pr-2 mt-2 align-middle text-yellow-500 hover:bg-purple-600 rounded-md cursor-pointer">
         <ArrowUturnLeftIcon
-          className="w-5 h-5 text-yellow-100 hover:text-purple-700"
+          className="w-5 h-5 text-purple-500 hover:text-purple-700"
           onClick={handleGoBack}
-        >
-          Go Back
-        </ArrowUturnLeftIcon>
+        />
         {currentChat}
       </h2>
-      <div className="mt-8 mb-8 overflow-y-scroll max-h-[70vh] bg-white rounded-md">
+      <div className="my-2 overflow-y-scroll max-h-[70vh] bg-white rounded-md border-2">
         {messages.map((message, index) => (
           <div
             key={index}
@@ -639,20 +669,21 @@ const DirectMessages = () => {
         ))}
         <div ref={bottomDivRef} />
       </div>
-      <form className="flex items-center" onSubmit={handleSend}>
-        <input
+      <form className="flex items-center space-x-2" onSubmit={handleSend}>
+        <Input
           type="text"
-          className="rounded-md py-1 px-2 mr-2 bg-gray-200 focus:outline-none focus:bg-white flex-grow"
-          placeholder="Type your message..."
+          width="100%"
+          size="large"
           value={message}
+          placeholder="Type your message..."
           onChange={handleChange}
         />
-        <button
+        <Button
           type="submit"
-          className="bg-yellow-100 hover:bg-purple-700 text-purple-500 font-bold rounded-md py-1 px-2"
+          className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600"
         >
           Send
-        </button>
+        </Button>
       </form>
     </div>
   );
