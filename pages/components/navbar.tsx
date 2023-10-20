@@ -71,8 +71,9 @@ const Navbar = () => {
               localStorage.removeItem("signIn");
               localStorage.removeItem("encryptedPrivateKey");
               router.push("/");
-              let successStr = "Logged out";
+              let successStr = "Signed out!";
               alert(successStr);
+              router.reload();
             }}
           />
         )}
