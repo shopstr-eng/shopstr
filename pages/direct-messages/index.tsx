@@ -66,7 +66,6 @@ const DirectMessages = () => {
         setDecryptedNpub(data);
         const encrypted = localStorage.getItem("encryptedPrivateKey");
         setEncryptedPrivateKey(encrypted);
-        const signIn = localStorage.getItem("signIn");
         const storedRelays = localStorage.getItem("relays");
         setRelays(storedRelays ? JSON.parse(storedRelays) : []);
       }

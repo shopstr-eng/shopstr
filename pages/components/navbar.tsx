@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   HomeIcon,
   EnvelopeOpenIcon,
@@ -11,6 +11,17 @@ import { useRouter } from "next/router";
 
 const Navbar = () => {
   const router = useRouter();
+  const [signIn, setSignIn] = useState("");
+  
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const signInType = localStorage.getItem("signIn");
+      if (signInType) {
+        setSignIn(signInType);
+      }
+    }
+  }, []);
+  
   return (
     <div className="flex flex-row justify-between">
       <h1
@@ -44,7 +55,7 @@ const Navbar = () => {
           }`}
           onClick={() => router.push("/relays")}
         />
-        {!localStorage.getItem("signIn") && (
+        {!signIn && (
           <ArrowRightOnRectangleIcon
             className="w-6 h-6 hover:text-purple-700 cursor-pointer"
             onClick={() => {
@@ -52,7 +63,7 @@ const Navbar = () => {
             }}
           />
         )}
-        {localStorage.getItem("signIn") && (
+        {signIn && (
           <ArrowLeftOnRectangleIcon
             className="w-6 h-6 hover:text-purple-700 cursor-pointer"
             onClick={() => {

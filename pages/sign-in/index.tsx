@@ -72,12 +72,6 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
     setValidPrivateKey(validateNSecKey(privateKey));
   }, [publicKey, privateKey]);
 
-  // useEffect(() => {
-  //   let signinMethod = localStorage.getItem("signIn");
-  //   if (signinMethod === "extension" || signinMethod === "nsec")
-  //     router.push("/");
-  // }, []);
-
   return (
     <div className="flex flex-row justify-center items-center min-h-screen">
       <Card>
