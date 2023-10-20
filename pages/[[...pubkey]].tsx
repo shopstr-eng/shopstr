@@ -21,6 +21,7 @@ const SellerView = () => {
   }, [router.query.pubkey]);
 
   const routeToShop = (npubkey) => {
+    npubkey = encodeURIComponent(npubkey);
     if (npubkey === "") {
       // handles case where we pass in empty string to clear focusedPubkey
       setfocusedPubkey("");
