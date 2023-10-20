@@ -4,6 +4,7 @@ import {
   EnvelopeOpenIcon,
   WalletIcon,
   GlobeAltIcon,
+  ArrowRightOnRectangleIcon,
   ArrowLeftOnRectangleIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
@@ -14,16 +15,16 @@ const Navbar = () => {
     <div className="flex flex-row justify-between">
       <h1
         className="text-3xl font-bold text-purple-500 hover:text-purple-700 cursor-pointer"
-        onClick={() => router.push("/marketplace")}
+        onClick={() => router.push("/")}
       >
         Shopstr
       </h1>
       <div className="flex space-x-2 mt-2">
         <HomeIcon
           className={`w-6 h-6 hover:text-purple-700 cursor-pointer ${
-            router.pathname === "/marketplace" ? "text-purple-500" : ""
+            router.pathname === "/" ? "text-purple-500" : ""
           }`}
-          onClick={() => router.push("/marketplace")}
+          onClick={() => router.push("/")}
         />
         <EnvelopeOpenIcon
           className={`w-6 h-6 hover:text-purple-700 cursor-pointer ${
@@ -42,6 +43,12 @@ const Navbar = () => {
             router.pathname === "/relays" ? "text-purple-500" : ""
           }`}
           onClick={() => router.push("/relays")}
+        />
+        <ArrowRightOnRectangleIcon 
+          className="w-6 h-6 hover:text-purple-700 cursor-pointer"
+          onClick={() => {
+            router.push("/sign-in");
+          }}
         />
         <ArrowLeftOnRectangleIcon
           className="w-6 h-6 hover:text-purple-700 cursor-pointer"

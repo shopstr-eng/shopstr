@@ -106,11 +106,13 @@ const DisplayProduct = ({
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      setDecryptedNpub(getPubKey());
-      const signIn = localStorage.getItem("signIn");
-      setSignIn(signIn);
-      const storedRelays = localStorage.getItem("relays");
-      setRelays(storedRelays ? JSON.parse(storedRelays) : []);
+      const signInType = localStorage.getItem("signIn");
+      if (signInType) {
+        setSignIn(signInType);
+        setDecryptedNpub(getPubKey());
+        const storedRelays = localStorage.getItem("relays");
+        setRelays(storedRelays ? JSON.parse(storedRelays) : []);
+      }
     }
   }, []);
 
@@ -299,7 +301,7 @@ const DisplayProduct = ({
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           setTimeout(() => {
-            router.push("/marketplace");
+            router.push("/");
           }, 1900);
           break;
         }
@@ -478,17 +480,19 @@ const DisplayProduct = ({
         ) : undefined}
       </div>
       <div className="flex justify-center">
-        <BoltIcon
+        {signIn && (
+      <BoltIcon
           className="w-6 h-6 hover:text-yellow-500"
           onClick={() => handleCheckout(eventId, pubkey, totalCost, currency)}
         />
+        )}
         {decryptedNpub === pubkey && (
           <TrashIcon
             className="w-6 h-6 hover:text-yellow-500"
             onClick={() => handleDeleteWithPassphrase()}
           />
         )}
-        {decryptedNpub != pubkey && (
+        {signIn && decryptedNpub != pubkey && (
           <EnvelopeIcon
             className="w-6 h-6 hover:text-yellow-500"
             onClick={() => handleSendMessage(pubkey)}

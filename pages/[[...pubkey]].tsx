@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
-import DisplayEvents from "../components/display-events";
+import DisplayEvents from "./components/display-events";
 import { useRouter } from "next/router";
 import { ArrowUturnLeftIcon } from "@heroicons/react/24/outline";
 import { nip19, SimplePool } from "nostr-tools";
-import ProductForm from "../components/product-form";
+import ProductForm from "./components/product-form";
 import { Button } from "@nextui-org/react";
 
 const SellerView = () => {
@@ -25,11 +25,15 @@ const SellerView = () => {
       // handles case where we pass in empty string to clear focusedPubkey
       setfocusedPubkey("");
     }
-    router.push("/marketplace/" + npubkey);
+    router.push("/" + npubkey);
   };
 
   const handleModalToggle = () => {
-    setShowModal(!showModal);
+    if (localStorage.getItem("signIn")) {
+      setShowModal(!showModal);
+    } else {
+      alert("You must be signed in to add a listing!");
+    }
   };
 
   return (
@@ -63,8 +67,12 @@ const SellerView = () => {
           type="button"
           className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600"
           onClick={() => {
-            let usersNPubkey = localStorage.getItem("npub");
-            routeToShop(usersNPubkey);
+            if (localStorage.getItem("signIn")) {
+              let usersNPubkey = localStorage.getItem("npub");
+              routeToShop(usersNPubkey);
+            } else {
+              alert("You must be signed in to view your listings!");
+            }
           }}
         >
           View Your Listings
@@ -76,10 +84,6 @@ const SellerView = () => {
           Add New Listing
         </Button>
       </div>
-      {/* <ProductForm
-        showModal={showModal}
-        handleModalToggle={handleModalToggle}
-      /> */}
       <ProductForm
         showModal={showModal}
         handleModalToggle={handleModalToggle}

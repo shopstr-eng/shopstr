@@ -58,15 +58,18 @@ const DirectMessages = () => {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const npub = localStorage.getItem("npub");
-      const { data } = nip19.decode(npub);
-      setDecryptedNpub(data);
-      const encrypted = localStorage.getItem("encryptedPrivateKey");
-      setEncryptedPrivateKey(encrypted);
-      const signIn = localStorage.getItem("signIn");
-      setSignIn(signIn);
-      const storedRelays = localStorage.getItem("relays");
-      setRelays(storedRelays ? JSON.parse(storedRelays) : []);
+      const signInType = localStorage.getItem("signIn");
+      if (signInType) {
+        setSignIn(signInType);
+        const npub = localStorage.getItem("npub");
+        const { data } = nip19.decode(npub);
+        setDecryptedNpub(data);
+        const encrypted = localStorage.getItem("encryptedPrivateKey");
+        setEncryptedPrivateKey(encrypted);
+        const signIn = localStorage.getItem("signIn");
+        const storedRelays = localStorage.getItem("relays");
+        setRelays(storedRelays ? JSON.parse(storedRelays) : []);
+      }
     }
   }, []);
 
@@ -285,9 +288,13 @@ const DirectMessages = () => {
   };
 
   const handleToggleModal = () => {
-    reset();
-    setPassphrase("");
-    setShowModal(!showModal);
+    if (signIn) {
+      reset();
+      setPassphrase("");
+      setShowModal(!showModal);
+    } else {
+      alert("You must be signed in to start a chat!");
+    }
   };
 
   const handleGoBack = () => {
