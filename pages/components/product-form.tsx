@@ -196,12 +196,12 @@ export default function NewForm({
 
         const privkey = getPrivKeyWithPassphrase(passphrase);
         response = await nostrBuildUploadImage(imageFile, (e) =>
-          finishEvent(e, privkey)
+          finishEvent(e, privkey),
         );
       } else if (signIn === "extension") {
         response = await nostrBuildUploadImage(
           imageFile,
-          async (e) => await window.nostr.signEvent(e)
+          async (e) => await window.nostr.signEvent(e),
         );
       }
 
@@ -311,7 +311,7 @@ export default function NewForm({
                         </Button>,
                         "Are you sure you want to delete this iamge?",
                         "Delete Image",
-                        deleteImage(image)
+                        deleteImage(image),
                       )}
                     </div>
                     <Image
@@ -624,7 +624,7 @@ export default function NewForm({
               </Button>,
               "Are you sure you want to clear this form? You will lose all current progress.",
               "Clear Form",
-              clear
+              clear,
             )}
 
             <Button

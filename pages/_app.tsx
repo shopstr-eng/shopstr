@@ -26,7 +26,7 @@ function App({ Component, pageProps }: AppProps) {
     {
       productData: [],
       isLoading: true,
-    }
+    },
   );
   const [profileContext, setProfileContext] = useState<ProfileContextInterface>(
     {
@@ -40,7 +40,7 @@ function App({ Component, pageProps }: AppProps) {
           return newPubkeyProfilesToFetch;
         });
       },
-    }
+    },
   );
 
   useEffect(() => {
@@ -49,7 +49,7 @@ function App({ Component, pageProps }: AppProps) {
       setRelays(
         localStorage.getItem("relays")
           ? JSON.parse(localStorage.getItem("relays"))
-          : []
+          : [],
       );
     }
   }, []);

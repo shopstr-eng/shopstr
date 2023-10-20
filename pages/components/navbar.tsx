@@ -44,23 +44,27 @@ const Navbar = () => {
           }`}
           onClick={() => router.push("/relays")}
         />
-        <ArrowRightOnRectangleIcon 
-          className="w-6 h-6 hover:text-purple-700 cursor-pointer"
-          onClick={() => {
-            router.push("/sign-in");
-          }}
-        />
-        <ArrowLeftOnRectangleIcon
-          className="w-6 h-6 hover:text-purple-700 cursor-pointer"
-          onClick={() => {
-            localStorage.removeItem("npub");
-            localStorage.removeItem("signIn");
-            localStorage.removeItem("encryptedPrivateKey");
-            router.push("/");
-            let successStr = "Logged out";
-            alert(successStr);
-          }}
-        />
+        {!localStorage.getItem("signIn") && (
+          <ArrowRightOnRectangleIcon
+            className="w-6 h-6 hover:text-purple-700 cursor-pointer"
+            onClick={() => {
+              router.push("/sign-in");
+            }}
+          />
+        )}
+        {localStorage.getItem("signIn") && (
+          <ArrowLeftOnRectangleIcon
+            className="w-6 h-6 hover:text-purple-700 cursor-pointer"
+            onClick={() => {
+              localStorage.removeItem("npub");
+              localStorage.removeItem("signIn");
+              localStorage.removeItem("encryptedPrivateKey");
+              router.push("/");
+              let successStr = "Logged out";
+              alert(successStr);
+            }}
+          />
+        )}
       </div>
     </div>
   );
