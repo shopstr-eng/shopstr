@@ -106,11 +106,13 @@ const DisplayProduct = ({
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      setDecryptedNpub(getPubKey());
-      const signIn = localStorage.getItem("signIn");
-      setSignIn(signIn);
-      const storedRelays = localStorage.getItem("relays");
-      setRelays(storedRelays ? JSON.parse(storedRelays) : []);
+      const signInType = localStorage.getItem("signIn");
+      if (signInType) {
+        setSignIn(signInType);
+        setDecryptedNpub(getPubKey());
+        const storedRelays = localStorage.getItem("relays");
+        setRelays(storedRelays ? JSON.parse(storedRelays) : []);
+      }
     }
   }, []);
 
@@ -276,7 +278,7 @@ const DisplayProduct = ({
     pk: string,
     wallet: object,
     newPrice: number,
-    hash: string
+    hash: string,
   ) {
     let encoded;
 
@@ -299,7 +301,7 @@ const DisplayProduct = ({
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           setTimeout(() => {
-            router.push("/marketplace");
+            router.push("/");
           }, 1900);
           break;
         }
@@ -314,17 +316,17 @@ const DisplayProduct = ({
   const handlePayment = async (
     pk: string,
     newPrice: number,
-    currency: string
+    currency: string,
   ) => {
     const wallet = new CashuWallet(
       new CashuMint(
-        "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"
-      )
+        "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC",
+      ),
     );
     if (currency === "USD") {
       try {
         const res = await axios.get(
-          "https://api.coinbase.com/v2/prices/BTC-USD/spot"
+          "https://api.coinbase.com/v2/prices/BTC-USD/spot",
         );
         const btcSpotPrice = Number(res.data.data.amount);
         const numSats = (newPrice / btcSpotPrice) * 100000000;
@@ -357,7 +359,7 @@ const DisplayProduct = ({
     productId: string,
     pk: string,
     newPrice: number,
-    currency: string
+    currency: string,
   ) => {
     if (window.location.pathname.includes("checkout")) {
       if (signIn != "extension") {
@@ -478,17 +480,19 @@ const DisplayProduct = ({
         ) : undefined}
       </div>
       <div className="flex justify-center">
-        <BoltIcon
-          className="w-6 h-6 hover:text-yellow-500"
-          onClick={() => handleCheckout(eventId, pubkey, totalCost, currency)}
-        />
+        {signIn && (
+          <BoltIcon
+            className="w-6 h-6 hover:text-yellow-500"
+            onClick={() => handleCheckout(eventId, pubkey, totalCost, currency)}
+          />
+        )}
         {decryptedNpub === pubkey && (
           <TrashIcon
             className="w-6 h-6 hover:text-yellow-500"
             onClick={() => handleDeleteWithPassphrase()}
           />
         )}
-        {decryptedNpub != pubkey && (
+        {signIn && decryptedNpub != pubkey && (
           <EnvelopeIcon
             className="w-6 h-6 hover:text-yellow-500"
             onClick={() => handleSendMessage(pubkey)}
@@ -526,7 +530,7 @@ const DisplayProduct = ({
                   {invoice.length > 30
                     ? `${invoice.substring(0, 10)}...${invoice.substring(
                         invoice.length - 10,
-                        invoice.length
+                        invoice.length,
                       )}`
                     : invoice}
                 </p>
@@ -563,7 +567,7 @@ const DisplayProduct = ({
               </Button>,
               "Are you sure you want to cancel?",
               "Cancel",
-              () => setCheckout(false)
+              () => setCheckout(false),
             )}
           </ModalFooter>
         </ModalContent>
@@ -614,7 +618,7 @@ const DisplayProduct = ({
                 </Button>,
                 "Are you sure you want to cancel?",
                 "Cancel",
-                cancel
+                cancel,
               )}
 
               <Button

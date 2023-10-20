@@ -15,7 +15,7 @@ import type { NostrEvent } from "../nostr-helpers";
 
 function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
-  const isLoginPage = router.pathname === "/";
+  const isSignInPage = router.pathname === "/sign-in";
   const isKeyPage = router.pathname === "/keys";
   const [relays, setRelays] = useState([]);
   const [profileMap, setProfileMap] = useState(new Map());
@@ -26,7 +26,7 @@ function App({ Component, pageProps }: AppProps) {
     {
       productData: [],
       isLoading: true,
-    }
+    },
   );
   const [profileContext, setProfileContext] = useState<ProfileContextInterface>(
     {
@@ -40,7 +40,7 @@ function App({ Component, pageProps }: AppProps) {
           return newPubkeyProfilesToFetch;
         });
       },
-    }
+    },
   );
 
   useEffect(() => {
@@ -49,7 +49,7 @@ function App({ Component, pageProps }: AppProps) {
       setRelays(
         localStorage.getItem("relays")
           ? JSON.parse(localStorage.getItem("relays"))
-          : []
+          : [],
       );
     }
   }, []);
@@ -125,7 +125,7 @@ function App({ Component, pageProps }: AppProps) {
     <ProfileMapContext.Provider value={profileContext}>
       <ProductContext.Provider value={productContext}>
         <div className="xl:w-full h-full px-2 md:py-4 md:px-8">
-          {isLoginPage || isKeyPage ? null : <Navbar />}
+          {isSignInPage || isKeyPage ? null : <Navbar />}
           <Component {...pageProps} />
         </div>
       </ProductContext.Provider>

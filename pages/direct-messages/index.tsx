@@ -58,15 +58,17 @@ const DirectMessages = () => {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const npub = localStorage.getItem("npub");
-      const { data } = nip19.decode(npub);
-      setDecryptedNpub(data);
-      const encrypted = localStorage.getItem("encryptedPrivateKey");
-      setEncryptedPrivateKey(encrypted);
-      const signIn = localStorage.getItem("signIn");
-      setSignIn(signIn);
-      const storedRelays = localStorage.getItem("relays");
-      setRelays(storedRelays ? JSON.parse(storedRelays) : []);
+      const signInType = localStorage.getItem("signIn");
+      if (signInType) {
+        setSignIn(signInType);
+        const npub = localStorage.getItem("npub");
+        const { data } = nip19.decode(npub);
+        setDecryptedNpub(data);
+        const encrypted = localStorage.getItem("encryptedPrivateKey");
+        setEncryptedPrivateKey(encrypted);
+        const storedRelays = localStorage.getItem("relays");
+        setRelays(storedRelays ? JSON.parse(storedRelays) : []);
+      }
     }
   }, []);
 
@@ -117,7 +119,7 @@ const DirectMessages = () => {
             if (!chats.includes(incomingPubkey)) {
               setChats((chats) => {
                 return Array.from(
-                  new Set([...chats, nip19.npubEncode(incomingPubkey)])
+                  new Set([...chats, nip19.npubEncode(incomingPubkey)]),
                 );
               });
             }
@@ -133,7 +135,7 @@ const DirectMessages = () => {
             if (!chats.includes(tagPubkey)) {
               setChats((chats) => {
                 return Array.from(
-                  new Set([...chats, nip19.npubEncode(tagPubkey)])
+                  new Set([...chats, nip19.npubEncode(tagPubkey)]),
                 );
               });
             }
@@ -177,7 +179,7 @@ const DirectMessages = () => {
           if (signIn === "extension") {
             plaintext = await window.nostr.nip04.decrypt(
               chatPubkey,
-              event.content
+              event.content,
             );
           } else {
             let sk2 = getPrivKeyWithPassphrase(passphrase);
@@ -203,7 +205,7 @@ const DirectMessages = () => {
           }
           // Sort the messages with each state update
           setMessages((prevMessages) =>
-            prevMessages.sort((a, b) => a.createdAt - b.createdAt)
+            prevMessages.sort((a, b) => a.createdAt - b.createdAt),
           );
         }
       });
@@ -285,9 +287,13 @@ const DirectMessages = () => {
   };
 
   const handleToggleModal = () => {
-    reset();
-    setPassphrase("");
-    setShowModal(!showModal);
+    if (signIn) {
+      reset();
+      setPassphrase("");
+      setShowModal(!showModal);
+    } else {
+      alert("You must be signed in to start a chat!");
+    }
   };
 
   const handleGoBack = () => {
@@ -371,7 +377,7 @@ const DirectMessages = () => {
   };
 
   const handlePassphraseChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
   ) => {
     const { name, value } = e.target;
     if (name === "passphrase") {
@@ -521,7 +527,7 @@ const DirectMessages = () => {
                   </Button>,
                   "Are you sure you want to cancel?",
                   "Cancel",
-                  handleToggleModal
+                  handleToggleModal,
                 )}
 
                 <Button
@@ -590,7 +596,7 @@ const DirectMessages = () => {
                   </Button>,
                   "Are you sure you want to cancel?",
                   "Cancel",
-                  cancel
+                  cancel,
                 )}
 
                 <Button
