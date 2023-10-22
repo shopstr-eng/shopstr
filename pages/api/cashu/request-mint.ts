@@ -16,12 +16,9 @@ const requestMint = async (req: NextApiRequest, res: NextApiResponse) => {
   }
 
   try {
-    const { 
+    const {
       total,
       currency,
-      funding_source,
-      customer_id,
-      merchant_id,
     } = req.body;
 
     const { pr, hash } = await wallet.requestMint(total);
@@ -30,14 +27,9 @@ const requestMint = async (req: NextApiRequest, res: NextApiResponse) => {
 
     await repo()('invoices').insert({
       id,
-      time: DateTime.now().toUTC().toSQL(),
+      date_time: DateTime.now().toUTC().toSQL(),
       total,
       currency,
-      status: 'NOT_PAID',
-      funding_source,
-      customer_id,
-      merchant_id,
-      invoice: pr,
       hash,
     });
     return res.status(200).json({ pr, hash, id });

@@ -79,28 +79,6 @@ const parseProductFormValues = (body: ProductFormValues): ProductFormValues => {
   return parsedBody;
 };
 
-const PostMetric = async (event: any) => {
-  if (event.kind === 4) {
-    await repo()('messages').insert({
-      time: DateTime.now().toUTC().toSQL(),
-      sender_id: event.pubkey,
-      recipient_id: event.tags[0][1],
-      relays: event.relays,
-      // location: event.location,
-    });
-  }
-  if (event.kind === 30018 || event.kind === 30402) {
-    await repo()('products').insert({
-      time: DateTime.now().toUTC().toSQL(),
-      // price: '',
-      merchant_id: event.pubkey,
-      relays: event.relays,
-      // location: '',
-      // category: '',
-    });
-  }
-}
-
 const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
   if (req.method !== "POST") {
     return res.status(405).json({});
@@ -152,9 +130,7 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
     // });
     await pool.publish(relays, signedEvent);
 
-    PostMetric(event);
-
-    return res.status(200).json({});
+    return res.status(200).json({ id: signedEvent.id });
   } catch (error) {
     console.error(error);
     return res.status(500).json({});

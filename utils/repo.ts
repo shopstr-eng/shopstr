@@ -1,7 +1,5 @@
 import { knex, Knex } from "knex";
 
-// types.setTypeParser(types.builtins.TIMESTAMPTZ, val => DateTime.fromSQL(val).toUTC().toISO())
-
 let _repo: Knex;
 export const repo = () => {
   if (_repo) return _repo;

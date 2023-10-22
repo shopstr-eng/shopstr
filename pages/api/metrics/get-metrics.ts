@@ -1,6 +1,6 @@
 import Repo from '@/utils/repo';
 import { Knex } from 'knex';
-import { DateTime, Interval } from 'luxon';
+import { DateTime } from 'luxon';
 import type { NextApiRequest, NextApiResponse } from 'next'
 
 let repo: Knex | null = null;
@@ -62,50 +62,59 @@ export default async function GetMetrics(req: NextApiRequest, res: NextApiRespon
   // TODO: USE ONE SQL QUERY TO GET ALL DATA INSTEAD OF MULTIPLE QUERIES
 
   const salesMetricsPromise = repo?.raw<{ rows: Metrics[] }>(`
-    SELECT time_bucket('${bucket}', time, '${tz}') AS period, cast(sum(total) AS INTEGER) AS "${label}"
+    SELECT time_bucket('${bucket}', date_time, '${tz}') AS period, cast(sum(total) AS INTEGER) AS "${label}"
+    FROM transactions
+    WHERE date_time BETWEEN '${start}' AND '${end}'
+    GROUP BY period
+    ORDER BY period DESC;`)
+
+  const shoppersMetricsPromise = repo?.raw<{ rows: Metrics[] }>(`
+    SELECT time_bucket('${bucket}', date_time, '${tz}') AS period, cast(count(distinct(shopper_id)) AS INTEGER) AS "${label}"
+    FROM shoppers
+    WHERE date_time BETWEEN '${start}' AND '${end}'
+    GROUP BY period
+    ORDER BY period DESC;`)
+
+  const listingsMetricsPromise = repo?.raw<{ rows: Metrics[] }>(`
+    SELECT time_bucket('${bucket}', date_time, '${tz}') AS period, cast(count(distinct(listing_id)) AS INTEGER) AS "${label}"
+    FROM listings
+    WHERE date_time BETWEEN '${start}' AND '${end}'
+    GROUP BY period
+    ORDER BY period DESC;`)
+
+  const inquiriesMetricsPromise = repo?.raw<{ rows: Metrics[] }>(`
+    SELECT time_bucket('${bucket}', date_time, '${tz}') AS period, cast(count(id) AS INTEGER) AS "${label}"
+    FROM inquiries
+    WHERE date_time BETWEEN '${start}' AND '${end}'
+    GROUP BY period
+    ORDER BY period DESC;`)
+
+  const invoicesMetricsPromise = repo?.raw<{ rows: Metrics[] }>(`
+    SELECT time_bucket('${bucket}', date_time, '${tz}') AS period, cast(count(id) AS INTEGER) AS "${label}"
     FROM invoices
-    WHERE time BETWEEN '${start}' AND '${end}'
-    AND status = 'PAID'
-    GROUP BY period
-    ORDER BY period DESC;`)
-
-  const usersMetricsPromise = repo?.raw<{ rows: Metrics[] }>(`
-    SELECT time_bucket('${bucket}', time, '${tz}') AS period, cast(count(distinct(user_id)) AS INTEGER) AS "${label}"
-    FROM users
-    WHERE time BETWEEN '${start}' AND '${end}'
-    GROUP BY period
-    ORDER BY period DESC;`)
-
-  const productsMetricsPromise = repo?.raw<{ rows: Metrics[] }>(`
-    SELECT time_bucket('${bucket}', time, '${tz}') AS period, cast(count(id) AS INTEGER) AS "${label}"
-    FROM products
-    WHERE time BETWEEN '${start}' AND '${end}'
-    GROUP BY period
-    ORDER BY period DESC;`)
-
-  const messagesMetricsPromise = repo?.raw<{ rows: Metrics[] }>(`
-    SELECT time_bucket('${bucket}', time, '${tz}') AS period, cast(count(id) AS INTEGER) AS "${label}"
-    FROM messages
-    WHERE time BETWEEN '${start}' AND '${end}'
+    WHERE date_time BETWEEN '${start}' AND '${end}'
     GROUP BY period
     ORDER BY period DESC;`)
 
   const [
     salesMetrics,
-    usersMetrics,
-    productsMetrics,
-    messagesMetrics
+    shoppersMetrics,
+    listingsMetrics,
+    inquiriesMetrics,
+    invoicesMetrics,
   ] = await Promise.allSettled([
     salesMetricsPromise,
-    usersMetricsPromise,
-    productsMetricsPromise,
-    messagesMetricsPromise
+    shoppersMetricsPromise,
+    listingsMetricsPromise,
+    inquiriesMetricsPromise,
+    invoicesMetricsPromise
   ]);
 
   console.log(salesMetrics)
-  console.log(usersMetrics)
-  console.log(productsMetrics)
-  console.log(messagesMetrics)
+  console.log(shoppersMetrics)
+  console.log(listingsMetrics)
+  console.log(inquiriesMetrics)
+  console.log(invoicesMetrics)
 
   let salesData: Data | null = null;
   if (salesMetrics.status === 'fulfilled' && salesMetrics.value) {
@@ -121,51 +130,64 @@ export default async function GetMetrics(req: NextApiRequest, res: NextApiRespon
       }
     }
   }
-  let usersData: Data | null = null;
-  if (usersMetrics.status === 'fulfilled' && usersMetrics.value) {
-    usersData = {
+  let shoppersData: Data | null = null;
+  if (shoppersMetrics.status === 'fulfilled' && shoppersMetrics.value) {
+    shoppersData = {
       label,
       category: {
-        title: 'Total Users',
-        subtitle: 'Users Over Time',
-        total: usersMetrics.value.rows.reduce((prev, curr) => prev + curr[label], 0),
+        title: 'Total Shoppers',
+        subtitle: 'Shoppers Over Time',
+        total: shoppersMetrics.value.rows.reduce((prev, curr) => prev + curr[label], 0),
         symbol: '',
-        metrics: usersMetrics.value.rows
+        metrics: shoppersMetrics.value.rows
       }
     }
   }
-  let productsData: Data | null = null;
-  if (productsMetrics.status === 'fulfilled' && productsMetrics.value) {
-    productsData = {
+  let listingsData: Data | null = null;
+  if (listingsMetrics.status === 'fulfilled' && listingsMetrics.value) {
+    listingsData = {
       label,
       category: {
-        title: 'Total Products Listed',
-        subtitle: 'Products Over Time',
-        total: productsMetrics.value.rows.reduce((prev, curr) => prev + curr[label], 0),
+        title: 'Total Listings Posted',
+        subtitle: 'Listings Over Time',
+        total: listingsMetrics.value.rows.reduce((prev, curr) => prev + curr[label], 0),
         symbol: '',
-        metrics: productsMetrics.value.rows
+        metrics: listingsMetrics.value.rows
       }
     }
   }
-  let messagesData: Data | null = null;
-  if (messagesMetrics.status === 'fulfilled' && messagesMetrics.value) {
-    messagesData = {
+  let inquiriesData: Data | null = null;
+  if (inquiriesMetrics.status === 'fulfilled' && inquiriesMetrics.value) {
+    inquiriesData = {
       label,
       category: {
-        title: 'Total Messages Sent',
-        subtitle: 'Messages Over Time',
-        total: messagesMetrics.value.rows.reduce((prev, curr) => prev + curr[label], 0),
+        title: 'Total Inquiries Sent',
+        subtitle: 'Inquiries Over Time',
+        total: inquiriesMetrics.value.rows.reduce((prev, curr) => prev + curr[label], 0),
         symbol: '',
-        metrics: messagesMetrics.value.rows
+        metrics: inquiriesMetrics.value.rows
+      }
+    }
+  }
+  let invoicesData: Data | null = null;
+  if (invoicesMetrics.status === 'fulfilled' && invoicesMetrics.value) {
+    invoicesData = {
+      label,
+      category: {
+        title: 'Total Invoices Created',
+        subtitle: 'Invoices Over Time',
+        total: invoicesMetrics.value.rows.reduce((prev, curr) => prev + curr[label], 0),
+        symbol: '',
+        metrics: invoicesMetrics.value.rows
       }
     }
   }
 
-  const data = []
-  if (salesData != null) data.push(salesData)
-  if (usersData != null) data.push(usersData)
-  if (productsData != null) data.push(productsData)
-  if (messagesData != null) data.push(messagesData)
-
-  return res.status(200).json(data)
+  return res.status(200).json([
+    salesData,
+    shoppersData,
+    listingsData,
+    inquiriesData,
+    invoicesData
+  ].filter(n => n))
 }

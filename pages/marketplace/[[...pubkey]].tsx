@@ -22,24 +22,17 @@ const SellerView = () => {
   }, [router.query.pubkey]);
 
   useEffect(() => {
-    try {
-      const loggedIn = getPubKey();
-      if (loggedIn) {
-        fetch('/api/metrics/post-user-metric', {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            // price: event.price,
-            user_id: loggedIn,
-            // relays: event.relays,
-            // category: event.tags[],
-          })
-        });
-      }
-    } catch {
-
+    const loggedIn = getPubKey();
+    if (loggedIn) {
+      fetch('/api/metrics/post-shopper', {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: loggedIn,
+        })
+      });
     }
   })
 

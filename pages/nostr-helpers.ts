@@ -17,6 +17,7 @@ export async function PostListing(
   // Add "published_at" key
   const updatedValues = [...values, ["published_at", String(created_at)]];
 
+  let eventId;
   if (signIn === "extension") {
     const event = {
       created_at: created_at,
@@ -28,25 +29,14 @@ export async function PostListing(
 
     const signedEvent = await window.nostr.signEvent(event);
 
-    axios({
-      method: "POST",
-      url: "/api/metrics/post-product-metric",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      data: {
-        // price: event.price,
-        merchant_id: getPubKey(),
-        // relays: event.relays,
-        // category: event.tags[],
-      }
-    });
-  
+
     const pool = new SimplePool();
 
     await pool.publish(relays, signedEvent);
+
+    eventId = signedEvent.id;
   } else {
-    axios({
+    const res = await axios({
       method: "POST",
       url: "/api/nostr/post-event",
       headers: {
@@ -63,7 +53,21 @@ export async function PostListing(
         relays: relays,
       },
     });
+    eventId = res.data.id;
   }
+  axios({
+    method: "POST",
+    url: "/api/metrics/post-listing",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: {
+      listing_id: eventId,
+      merchant_id: getPubKey(),
+      merchant_location: values.find(([key]: [key: string]) => key === "location")?.[1] || "",
+      relays,
+    }
+  });
 }
 
 export async function DeleteListing(

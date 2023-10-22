@@ -245,20 +245,6 @@ const DisplayProduct = ({
 
       const signedEvent = await window.nostr.signEvent(event);
 
-      axios({
-        method: "POST",
-        url: "/api/metrics/post-message-metric",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        data: {
-          time: DateTime.now().toUTC().toSQL(),
-          sender_id: decryptedNpub,
-          recipient_id: pk,
-          relays: relays,
-        }
-      });
-
       const pool = new SimplePool();
 
       await pool.publish(relays, signedEvent);
@@ -295,7 +281,9 @@ const DisplayProduct = ({
         "Content-Type": "application/json",
       },
       data: {
-        id
+        id,
+        listing_id: eventId,
+        merchant_location: location,
       },
     });
   }
@@ -367,9 +355,6 @@ const DisplayProduct = ({
     const invoiceMinted = await axios.post('/api/cashu/request-mint', {
       total: price,
       currency,
-      customer_id: decryptedNpub,
-      merchant_id: pk,
-      funding_source: 'ln'
     })
 
     const { id, pr, hash } = invoiceMinted.data;
@@ -563,9 +548,9 @@ const DisplayProduct = ({
                 <p className="text-center">
                   {invoice.length > 30
                     ? `${invoice.substring(0, 10)}...${invoice.substring(
-                        invoice.length - 10,
-                        invoice.length
-                      )}`
+                      invoice.length - 10,
+                      invoice.length
+                    )}`
                     : invoice}
                 </p>
                 <ClipboardIcon
