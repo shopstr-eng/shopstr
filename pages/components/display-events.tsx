@@ -123,7 +123,7 @@ const DisplayEvents = ({
         <Input
           className="mt-2"
           isClearable
-          label="Listing Titles"
+          label="Listings"
           placeholder="Type to search..."
           startContent={
             <MagnifyingGlassIcon height={"1em"} />
