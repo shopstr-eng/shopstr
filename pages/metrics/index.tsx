@@ -1,10 +1,9 @@
 'use client';
 
-import { Card, Metric, Text, Title, BarList, Flex, Grid, DateRangePicker, DateRangePickerValue, LineChart, DateRangePickerItem } from '@tremor/react';
+import { Card, Metric, Text, Title, Flex, Grid, DateRangePicker, DateRangePickerValue, LineChart, DateRangePickerItem } from '@tremor/react';
 import { formatDataWithEmptyDateTime } from '@/utils/metrics';
 import { DateTime } from 'luxon';
 import { useState, useEffect } from 'react';
-import { nip19 } from 'nostr-tools';
 
 type Data = {
   label: string;
@@ -34,22 +33,17 @@ export default function MetricsPage() {
   const [data, setData] = useState<Data[]>([]);
 
   useEffect(() => {
-    const { data: merchantId } = nip19.decode(localStorage.getItem("npub"));
-
     const startDate = DateTime.fromJSDate(date.from!).toISO();
     const endDate = DateTime.fromJSDate(date.to!).toISO();
 
-    if (!startDate || !endDate || !merchantId) return;
+    if (!startDate || !endDate) return;
 
-    fetch(`/api/metrics/get-metrics?startDate=${startDate}&endDate=${endDate}&merchantId=${merchantId}`)
+    fetch(`/api/metrics/get-metrics?startDate=${startDate}&endDate=${endDate}`)
       .then((res) => res.json())
       .then((data: Data[]) => {
-        console.log(JSON.stringify(data))
-
         const formattedData = data.map(data => {
           const formattedMetrics =
             formatDataWithEmptyDateTime(data.category.metrics, data.label, startDate, endDate) || [];
-          console.log('hhhh ', formattedMetrics);
           return {
             label: data.label,
             category: {
@@ -58,19 +52,14 @@ export default function MetricsPage() {
             }
           }
         })
-
         setData(formattedData);
       })
   }, [date])
 
-  const wut = (a) => {
-    console.log(a)
-  }
-
   return (
     <main className="p-4 md:p-10 mx-auto max-w-7xl">
       <DateRangePicker
-      className='my-5'
+        className='my-5'
         value={date}
         onValueChange={setDate}
         color="rose"

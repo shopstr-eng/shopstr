@@ -66,7 +66,7 @@ const Keys = () => {
         JSON.stringify(["wss://relay.damus.io", "wss://nos.lol"]),
       );
 
-      router.push("/marketplace");
+      router.push("/");
     }
   };
 

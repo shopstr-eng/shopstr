@@ -3,7 +3,7 @@ import axios from "axios";
 import { withRouter, NextRouter } from "next/router";
 import { nip19 } from "nostr-tools";
 import * as CryptoJS from "crypto-js";
-import { validateNPubKey, validateNSecKey } from "./nostr-helpers";
+import { validateNPubKey, validateNSecKey } from "../nostr-helpers";
 import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
 
 const LoginPage = ({ router }: { router: NextRouter }) => {
@@ -35,7 +35,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
           JSON.stringify(["wss://relay.damus.io", "wss://nos.lol"]),
         );
 
-        router.push("/marketplace");
+        router.push("/");
       }
     } else {
       setErrorMessage(
@@ -61,7 +61,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
         JSON.stringify(["wss://relay.damus.io", "wss://nos.lol"]),
       );
       alert("Signed in as " + npub);
-      router.push("/marketplace");
+      router.push("/");
     } catch (error) {
       alert("Extension sign in failed");
     }
@@ -71,12 +71,6 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
     setValidPublicKey(validateNPubKey(publicKey));
     setValidPrivateKey(validateNSecKey(privateKey));
   }, [publicKey, privateKey]);
-
-  useEffect(() => {
-    let signinMethod = localStorage.getItem("signIn");
-    if (signinMethod === "extension" || signinMethod === "nsec")
-      router.push("/marketplace");
-  }, []);
 
   return (
     <div className="flex flex-row justify-center items-center min-h-screen">

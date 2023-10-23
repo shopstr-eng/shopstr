@@ -31,7 +31,7 @@ const DisplayEvents = ({
       // is product sub reaches eose then we can sort the product data
       let sortedProductData = [
         ...productDataContext.productData.sort(
-          (a, b) => b.created_at - a.created_at
+          (a, b) => b.created_at - a.created_at,
         ),
       ]; // sorts most recently created to least recently created
       setProductData(sortedProductData);
@@ -55,7 +55,7 @@ const DisplayEvents = ({
     if (productData && !isLoading) {
       if (focusedPubkey) {
         filteredData = filteredData.filter(
-          (event) => event.pubkey === focusedPubkey
+          (event) => event.pubkey === focusedPubkey,
         );
       }
       if (selectedCategory !== "" && typeof selectedCategory !== "undefined") {
@@ -76,7 +76,7 @@ const DisplayEvents = ({
             .map((tagArray) => tagArray[1]);
           // check if the selected category is within event categories
           return eventLocation.some((location) =>
-            location.includes(selectedLocation)
+            location.includes(selectedLocation),
           );
         });
       }
