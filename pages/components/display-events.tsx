@@ -1,12 +1,13 @@
 import { useState, useEffect, useContext, useMemo } from "react";
 import DisplayProduct from "./display-product";
-import { Select, SelectItem } from "@nextui-org/react";
+import { Select, SelectItem, Input } from "@nextui-org/react";
 import { nip19 } from "nostr-tools";
 import { DeleteListing, NostrEvent } from "../nostr-helpers";
 import { ProductContext } from "../context";
 import { ProfileAvatar } from "./avatar";
 import { CATEGORIES } from "./STATIC-VARIABLES";
 import LocationDropdown from "./location-dropdown";
+import { MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 
 const DisplayEvents = ({
   focusedPubkey,
@@ -21,8 +22,9 @@ const DisplayEvents = ({
   const [isLoading, setIsLoading] = useState(true);
   const imageUrlRegExp = /(https?:\/\/.*\.(?:png|jpg|jpeg|gif))/i;
   const productDataContext = useContext(ProductContext);
-  const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedCategories, setSelectedCategories] = useState(new Set<string>([]));
   const [selectedLocation, setSelectedLocation] = useState("");
+  const [selectedSearch, setSelectedSearch] = useState("");
 
   useEffect(() => {
     if (!productDataContext) return;
@@ -58,36 +60,51 @@ const DisplayEvents = ({
           (event) => event.pubkey === focusedPubkey,
         );
       }
-      if (selectedCategory !== "" && typeof selectedCategory !== "undefined") {
-        filteredData = filteredData.filter((event) => {
-          // project the 'tags' 2D array to an array of categories
-          const eventCategories = event.tags
-            .filter((tagArray) => tagArray[0] === "t")
-            .map((tagArray) => tagArray[1]);
-          // check if the selected category is within event categories
-          return eventCategories.includes(selectedCategory);
+      filteredData = filteredData.filter((event) => {
+        // project the 'tags' 2D array to an array of categories
+        const eventCategories = event.tags
+          .filter((tagArray) => tagArray[0] === "t")
+          .map((tagArray) => tagArray[1]);
+
+        return selectedCategories.size === 0 || Array.from(selectedCategories).some((selectedCategory) => {
+          const re = new RegExp(selectedCategory, 'gi');
+          return eventCategories.some((category) => {
+            const match = category.match(re);
+            return match && match.length > 0;
+          });
         });
-      }
-      if (selectedLocation !== "" && typeof selectedLocation !== "undefined") {
-        filteredData = filteredData.filter((event) => {
-          // project the 'tags' 2D array to an array of categories
-          const eventLocation = event.tags
-            .filter((tagArray) => tagArray[0] === "location")
-            .map((tagArray) => tagArray[1]);
-          // check if the selected category is within event categories
-          return eventLocation.some((location) =>
-            location.includes(selectedLocation),
-          );
+      });
+      filteredData = filteredData.filter((event) => {
+        const eventLocation = event.tags
+          .filter((tagArray) => tagArray[0] === "location")
+          .map((tagArray) => tagArray[1]);
+
+        return !selectedLocation || eventLocation.some((location: string) => {
+          const re = new RegExp(selectedLocation, 'gi');
+          const match = location.match(re);
+          return match && match.length > 0;
         });
-      }
+      });
+      filteredData = filteredData.filter((event) => {
+        const eventTitle = event.tags
+          .filter((tagArray) => tagArray[0] === "title")
+          .map((tagArray) => tagArray[1]);
+
+        return !selectedSearch || eventTitle.some((title: string) => {
+          const re = new RegExp(selectedSearch, 'gi');
+          const match = title.match(re);
+          return match && match.length > 0;
+        });
+      });
     }
     setFilteredProductData(filteredData);
   }, [
     productData,
     isLoading,
     focusedPubkey,
-    selectedCategory,
+    selectedCategories,
     selectedLocation,
+    selectedSearch,
     deletedProducts,
   ]);
 
@@ -103,26 +120,43 @@ const DisplayEvents = ({
   return (
     <div>
       <div className="flex space-x-2">
-        <Select
-          autoFocus
+        <Input
           className="mt-2"
-          placeholder="Select category"
-          value={selectedCategory}
+          isClearable
+          label="Listings"
+          placeholder="Type to search..."
+          startContent={
+            <MagnifyingGlassIcon height={"1em"} />
+          }
           onChange={(event) => {
-            const index = event.target.value;
-            const selectedVal = CATEGORIES[index];
-            setSelectedCategory(selectedVal);
+            const value = event.target.value;
+            setSelectedSearch(value);
+          }}>
+        </Input>
+        <Select
+          className="mt-2"
+          label="Categories"
+          placeholder="All"
+          selectedKeys={selectedCategories}
+          onChange={(event) => {
+            if (event.target.value === '') {
+              setSelectedCategories(new Set([]));
+            } else {
+              setSelectedCategories(new Set(event.target.value.split(",")));
+            }
           }}
+          selectionMode="multiple"
         >
           {CATEGORIES.map((category, index) => (
-            <SelectItem value={category} key={index}>
+            <SelectItem value={category} key={category}>
               {category}
             </SelectItem>
           ))}
         </Select>
         <LocationDropdown
           className="mt-2"
-          placeholder="Select location"
+          placeholder="All"
+          label="Location"
           value={selectedLocation}
           onChange={(event) => {
             setSelectedLocation(event.target.value);
