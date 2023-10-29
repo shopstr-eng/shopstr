@@ -2,7 +2,36 @@ import React, { useMemo, useRef, useEffect, useState } from "react";
 import { Select, SelectItem, SelectSection, Avatar } from "@nextui-org/react";
 import locations from "../../public/locationSelection.json";
 
+export const locationAvatar = (location: string) => {
+  const getLocationMap = () => {
+    let countries = locations.countries.map((country) => [
+      country.country,
+      country,
+    ]);
+    let states = locations.states.map((state) => [state.state, state]);
+    return new Map([...countries, ...states]);
+  };
+  const locationMap = getLocationMap();
+  return locationMap.get(location) ? (
+    <Avatar
+      alt={location}
+      className="w-6 h-6"
+      src={`https://flagcdn.com/16x12/${locationMap.get(location)
+        ?.iso3166}.png`}
+    />
+  ) : null;
+};
+
 const LocationDropdown = ({ value, ...props }) => {
+  const locationMap = useMemo(() => {
+    let countries = locations.countries.map((country) => [
+      country.country,
+      country,
+    ]);
+    let states = locations.states.map((state) => [state.state, state]);
+    return new Map([...countries, ...states]);
+  }, []);
+
   const locationOptions = useMemo(() => {
     const headingClasses =
       "flex w-full sticky top-1 z-20 py-1.5 px-2 bg-default-100 shadow-small rounded-small";
@@ -14,7 +43,7 @@ const LocationDropdown = ({ value, ...props }) => {
           heading: headingClasses,
         }}
       >
-        {locations.countries.map((country) => {
+        {locations.countries.map((country, index) => {
           return (
             <SelectItem
               key={country.country}
@@ -40,7 +69,7 @@ const LocationDropdown = ({ value, ...props }) => {
           heading: headingClasses,
         }}
       >
-        {locations.states.map((state) => {
+        {locations.states.map((state, index) => {
           return (
             <SelectItem
               key={state.state}
@@ -61,24 +90,8 @@ const LocationDropdown = ({ value, ...props }) => {
     return [stateOptions, countryOptions];
   }, []);
 
-  const locationMap = useMemo(() => {
-    let countries = locations.countries.map((country) => [
-      country.country,
-      country,
-    ]);
-    let states = locations.states.map((state) => [state.state, state]);
-    return new Map([...countries, ...states]);
-  }, []);
-
-  let startContent = locationMap.get(value) ? (
-    <Avatar
-      alt={value}
-      className="w-6 h-6"
-      src={`https://flagcdn.com/16x12/${locationMap.get(value)?.iso3166}.png`}
-    />
-  ) : null;
   return (
-    <Select startContent={startContent} {...props}>
+    <Select startContent={locationAvatar(value)} {...props}>
       {locationOptions}
     </Select>
   );

@@ -13,11 +13,6 @@ import {
   SelectItem,
   Chip,
   Image,
-  Dropdown,
-  DropdownTrigger,
-  DropdownMenu,
-  DropdownItem,
-  DropdownSection,
 } from "@nextui-org/react";
 import { TrashIcon } from "@heroicons/react/24/outline";
 import Carousal from "@itseasy21/react-elastic-carousel";
@@ -31,6 +26,7 @@ import {
 import { finishEvent } from "nostr-tools";
 import { CATEGORIES, SHIPPING_OPTIONS } from "./STATIC-VARIABLES";
 import LocationDropdown from "./location-dropdown";
+import ConfirmActionDropdown from "./confirm-action-dropdown";
 
 interface ProductFormProps {
   handleModalToggle: () => void;
@@ -196,12 +192,12 @@ export default function NewForm({
 
         const privkey = getPrivKeyWithPassphrase(passphrase);
         response = await nostrBuildUploadImage(imageFile, (e) =>
-          finishEvent(e, privkey),
+          finishEvent(e, privkey)
         );
       } else if (signIn === "extension") {
         response = await nostrBuildUploadImage(
           imageFile,
-          async (e) => await window.nostr.signEvent(e),
+          async (e) => await window.nostr.signEvent(e)
         );
       }
 
@@ -213,25 +209,6 @@ export default function NewForm({
     } catch (e) {
       if (e instanceof Error) alert("Failed to upload image! " + e.message);
     }
-  };
-
-  const confirmActionDropdown = (children, header, label, func) => {
-    return (
-      <Dropdown backdrop="blur">
-        <DropdownTrigger>{children}</DropdownTrigger>
-        <DropdownMenu variant="faded" aria-label="Static Actions">
-          <DropdownSection title={header} showDivider={true}></DropdownSection>
-          <DropdownItem
-            key="delete"
-            className="text-danger"
-            color="danger"
-            onClick={func}
-          >
-            {label}
-          </DropdownItem>
-        </DropdownMenu>
-      </Dropdown>
-    );
   };
 
   return (
@@ -298,21 +275,24 @@ export default function NewForm({
                 images.map((image) => (
                   <div className="">
                     <div className="flex flex-row-reverse ">
-                      {confirmActionDropdown(
-                        <Button
-                          isIconOnly
-                          color="danger"
-                          aria-label="Trash"
-                          radius="full"
-                          className="z-20 top-12 right-3 bg-gradient-to-tr from-blue-950 to-red-950 text-white"
-                          variant="bordered"
+                      {
+                        <ConfirmActionDropdown
+                          header="Are you sure you want to delete this image?"
+                          label="Delete Image"
+                          func={deleteImage(image)}
                         >
-                          <TrashIcon style={{ padding: 4 }} />
-                        </Button>,
-                        "Are you sure you want to delete this iamge?",
-                        "Delete Image",
-                        deleteImage(image),
-                      )}
+                          <Button
+                            isIconOnly
+                            color="danger"
+                            aria-label="Trash"
+                            radius="full"
+                            className="z-20 top-12 right-3 bg-gradient-to-tr from-blue-950 to-red-950 text-white"
+                            variant="bordered"
+                          >
+                            <TrashIcon style={{ padding: 4 }} />
+                          </Button>
+                        </ConfirmActionDropdown>
+                      }
                     </div>
                     <Image
                       alt="Product Image"
@@ -618,14 +598,18 @@ export default function NewForm({
           </ModalBody>
 
           <ModalFooter>
-            {confirmActionDropdown(
-              <Button color="danger" variant="light">
-                Clear
-              </Button>,
-              "Are you sure you want to clear this form? You will lose all current progress.",
-              "Clear Form",
-              clear,
-            )}
+            <ConfirmActionDropdown
+              children={
+                <Button color="danger" variant="light">
+                  Clear
+                </Button>
+              }
+              header={
+                "Are you sure you want to clear this form? You will lose all current progress."
+              }
+              label={"Clear Form"}
+              func={clear}
+            />
 
             <Button
               className={buttonClassName}

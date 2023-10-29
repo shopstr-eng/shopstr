@@ -21,6 +21,13 @@ export const CATEGORIES = [
   "Miscellaneous",
 ];
 
+export type ShippingOptions =
+  | "N/A"
+  | "Free"
+  | "Pickup"
+  | "Free/Pickup"
+  | "Added Cost";
+
 export const SHIPPING_OPTIONS = [
   "N/A",
   "Free", // free shipping you are going to ship it
