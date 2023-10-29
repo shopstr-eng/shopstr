@@ -48,8 +48,7 @@ const SellerView = () => {
 
   return (
     <div className="">
-      <div className="flex flex-col absolute z-20 w-[99vw] max-w-[100%] px-3 bg-white pb-2">
-        <Navbar />
+      <div className="top-[40px] flex flex-col absolute z-20 w-[99vw] max-w-[100%] px-3 bg-white pb-2">
         <div className="flex-row flex gap-2 pb-3">
           <Input
             className="mt-2"

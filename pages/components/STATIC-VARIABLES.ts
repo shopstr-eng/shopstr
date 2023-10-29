@@ -21,7 +21,7 @@ export const CATEGORIES = [
   "Miscellaneous",
 ];
 
-export type ShippingOptions =
+export type ShippingOptionsType =
   | "N/A"
   | "Free"
   | "Pickup"

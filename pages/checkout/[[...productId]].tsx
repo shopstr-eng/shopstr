@@ -42,11 +42,11 @@ const Checkout = () => {
 
   return (
     <div>
-      <DisplayProduct
+      {/* <DisplayProduct
         tags={product}
         eventId={productIdString}
         pubkey={pubkey}
-      />
+      /> */}
     </div>
   );
 };
