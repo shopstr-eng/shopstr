@@ -11,7 +11,7 @@ import {
   ProductContext,
   ProductContextInterface,
 } from "./context";
-import type { NostrEvent } from "../nostr-helpers";
+import { decryptNpub, NostrEvent } from "./nostr-helpers";
 
 function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
@@ -51,6 +51,13 @@ function App({ Component, pageProps }: AppProps) {
           ? JSON.parse(localStorage.getItem("relays"))
           : [],
       );
+      setPubkeyProfilesToFetch(
+        new Set(
+          typeof localStorage.getItem("npub") == "string"
+            ? [decryptNpub(localStorage.getItem("npub"))]
+            : []
+        ) as Set<string>
+      ); // fetches your profile if you are logged in
     }
   }, []);
 
@@ -100,6 +107,13 @@ function App({ Component, pageProps }: AppProps) {
 
     profileSub.on("event", (event) => {
       setProfileMap((profileMap) => {
+        if (
+          profileMap.has(event.pubkey) &&
+          profileMap.get(event.pubkey).created_at > event.created_at
+        ) {
+          // if profile already exists and is newer than the one we just fetched, don't update
+          return profileMap;
+        }
         let newProfileMap = new Map(profileMap);
         newProfileMap.set(event.pubkey, {
           pubkey: event.pubkey,
