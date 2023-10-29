@@ -13,35 +13,28 @@ import {
   ModalBody,
   ModalFooter,
   Button,
-  Textarea,
-  Input,
-  Select,
-  SelectItem,
   Chip,
   Divider,
-  Image,
-  Dropdown,
-  DropdownTrigger,
-  DropdownMenu,
-  DropdownItem,
-  DropdownSection,
 } from "@nextui-org/react";
 import ImageCarousel from "./image-carousel";
 import { ProfileAvatar } from "./avatar";
 import CompactCategories from "./compact-categories";
 import { locationAvatar } from "./location-dropdown";
 import { DisplayCostBreakdown } from "./display-monetary-info";
+import { nip19 } from "nostr-tools";
 
 interface ProductFormProps {
   productData: any;
   handleModalToggle: () => void;
   showModal: boolean;
+  handleSendMessage: (pubkeyToOpenChatWith: string) => void;
 }
 
 export default function DisplayProductModal({
   productData,
   showModal,
   handleModalToggle,
+  handleSendMessage,
 }: ProductFormProps) {
   const {
     createdAt,
@@ -64,6 +57,8 @@ export default function DisplayProductModal({
     const timeString = d.toLocaleString().split(",")[1].trim();
     return [dateString, timeString];
   };
+
+  if (!showModal) return null;
   return (
     <Modal
       //   backdrop="blur"
@@ -113,12 +108,13 @@ export default function DisplayProductModal({
         <ModalFooter>
           <div className="flex flex-wrap gap-2 justify-between w-full">
             <Button
+              onClick={() => {
+                console.log(productData.pubkey);
+                handleSendMessage(productData.pubkey);
+              }}
               type="submit"
               startContent={
-                <EnvelopeIcon
-                  className="w-6 h-6 hover:text-yellow-500"
-                  // onClick={() => handleSendMessage(pubkey)}
-                />
+                <EnvelopeIcon className="w-6 h-6 hover:text-yellow-500" />
               }
             >
               Message
@@ -126,11 +122,9 @@ export default function DisplayProductModal({
 
             <Button
               type="submit"
+              onClick={() => router.push(`/checkout/${productData.id}`)}
               startContent={
-                <BoltIcon
-                  className="w-6 h-6 hover:text-yellow-500"
-                  // onClick={() => handleCheckout(eventId, pubkey, totalCost, currency)}
-                />
+                <BoltIcon className="w-6 h-6 hover:text-yellow-500" />
               }
             >
               Checkout: {totalCost} {currency}

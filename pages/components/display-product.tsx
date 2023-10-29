@@ -495,7 +495,9 @@ const DisplayProduct = ({
         {signIn && decryptedNpub != pubkey && (
           <EnvelopeIcon
             className="w-6 h-6 hover:text-yellow-500"
-            onClick={() => handleSendMessage(pubkey)}
+            onClick={() => {
+              handleSendMessage(pubkey);
+            }}
           />
         )}
       </div>

@@ -6,6 +6,7 @@ import { ProductContext } from "../context";
 import ProductCard, { TOTALPRODUCTCARDWIDTH } from "./product-card";
 import DisplayProductModal from "./display-product-modal";
 import { set } from "react-hook-form";
+import { useRouter } from "next/router";
 
 const DisplayEvents = ({
   focusedPubkey,
@@ -26,6 +27,7 @@ const DisplayEvents = ({
   const productDataContext = useContext(ProductContext);
   const [focusedProduct, setFocusedProduct] = useState(""); // product being viewed in modal
   const [showModal, setShowModal] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     if (!productDataContext) return;
@@ -47,6 +49,14 @@ const DisplayEvents = ({
     const d = new Date(timestamp * 1000);
     const dateString = d.toLocaleString();
     return dateString;
+  };
+
+  const handleSendMessage = (pubkeyToOpenChatWith: string) => {
+    setShowModal(false);
+    router.push({
+      pathname: "/direct-messages",
+      query: { pk: nip19.npubEncode(pubkeyToOpenChatWith) },
+    });
   };
 
   /** FILTERS PRODUCT DATA ON CATEGORY, LOCATION, FOCUSED PUBKEY (SELLER) **/
@@ -155,7 +165,7 @@ const DisplayEvents = ({
   return (
     <>
       <div className="h-full">
-        <div className="h-36">{/*spacer div*/}</div>
+        <div className="h-16">{/*spacer div*/}</div>
         {/* DISPLAYS PRODUCT LISTINGS HERE */}
         {filteredProductData.length != 0 ? (
           <div className="flex flex-row flex-wrap my-2 justify-evenly overflow-y-scroll overflow-x-hidden h-[90%] max-w-full">
@@ -171,17 +181,7 @@ const DisplayEvents = ({
                 // <div
                 //   key={event.sig + "-" + index}
                 //   className="p-4 mb-4 mx-2 bg-gray-100 rounded-md shadow-lg"
-                // >s
-                //   <div className="flex justify-between items-center text-gray-600 text-xs md:text-sm">
-                //     <ProfileAvatar
-                //       pubkey={event.pubkey}
-                //       npub={npub}
-                //       clickNPubkey={clickNPubkey}
-                //     />
-                //     <span className="text-gray-400 ml-2 text-xs md:text-sm">
-                //       {displayDate(event.created_at)}
-                //     </span>
-                //   </div>
+                // >
                 //   <div className="mt-2 text-gray-800 text-sm md:text-base whitespace-pre-wrap break-words">
                 //     {event.kind == 30402 ? (
                 //       <DisplayProduct
@@ -219,6 +219,7 @@ const DisplayEvents = ({
         productData={focusedProduct}
         showModal={showModal}
         handleModalToggle={handleToggleModal}
+        handleSendMessage={handleSendMessage}
       />
     </>
   );
