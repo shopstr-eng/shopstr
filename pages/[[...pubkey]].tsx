@@ -38,7 +38,7 @@ const SellerView = () => {
   };
 
   return (
-    <div>
+    <div className="flex flex-col">
       {focusedPubkey ? (
         <div
           className="flex flex-row items-center w-fit pr-2 align-middle text-yellow-500 hover:bg-purple-700 rounded-md cursor-pointer"
@@ -57,16 +57,11 @@ const SellerView = () => {
           {nip19.npubEncode(focusedPubkey)}
         </div>
       ) : undefined}
-      <DisplayEvents
-        focusedPubkey={focusedPubkey}
-        clickNPubkey={(npubkey) => {
-          routeToShop(npubkey);
-        }}
-      />
-      <div className="flex flex-row justify-between">
+      <DisplayEvents focusedPubkey={focusedPubkey} />
+      <div className="flex flex-row justify-between h-fit absolute w-[99vw] bottom-0 bg-white py-[20px] z-20">
         <Button
           type="button"
-          className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600"
+          className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 min-w-fit w-[20%] "
           onClick={() => {
             if (localStorage.getItem("signIn")) {
               let usersNPubkey = localStorage.getItem("npub");
@@ -79,7 +74,7 @@ const SellerView = () => {
           View Your Listings
         </Button>
         <Button
-          className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600"
+          className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 min-w-fit w-[20%]"
           onClick={handleModalToggle}
         >
           Add New Listing
