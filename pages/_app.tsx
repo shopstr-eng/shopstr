@@ -26,7 +26,7 @@ function App({ Component, pageProps }: AppProps) {
     {
       productData: [],
       isLoading: true,
-    },
+    }
   );
   const [profileContext, setProfileContext] = useState<ProfileContextInterface>(
     {
@@ -40,7 +40,7 @@ function App({ Component, pageProps }: AppProps) {
           return newPubkeyProfilesToFetch;
         });
       },
-    },
+    }
   );
 
   useEffect(() => {
@@ -49,7 +49,7 @@ function App({ Component, pageProps }: AppProps) {
       setRelays(
         localStorage.getItem("relays")
           ? JSON.parse(localStorage.getItem("relays"))
-          : [],
+          : []
       );
       setPubkeyProfilesToFetch(
         new Set(
@@ -139,7 +139,6 @@ function App({ Component, pageProps }: AppProps) {
     <ProfileMapContext.Provider value={profileContext}>
       <ProductContext.Provider value={productContext}>
         <div className="xl:w-full h-full px-2 md:py-4 md:px-8">
-          {isSignInPage || isKeyPage ? null : <Navbar />}
           <Component {...pageProps} />
         </div>
       </ProductContext.Provider>

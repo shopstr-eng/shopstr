@@ -4,12 +4,21 @@ import { useRouter } from "next/router";
 import { ArrowUturnLeftIcon } from "@heroicons/react/24/outline";
 import { nip19, SimplePool } from "nostr-tools";
 import ProductForm from "./components/product-form";
-import { Button } from "@nextui-org/react";
+import { Button, Select, SelectItem, Input } from "@nextui-org/react";
+import Navbar from "./components/navbar";
+import { CATEGORIES } from "./components/STATIC-VARIABLES";
+import LocationDropdown from "./components/location-dropdown";
+import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 
 const SellerView = () => {
   const router = useRouter();
   const [focusedPubkey, setfocusedPubkey] = useState(""); // pubkey of shop being viewed
   const [showModal, setShowModal] = useState(false);
+  const [selectedCategories, setSelectedCategories] = useState(
+    new Set<string>([])
+  );
+  const [selectedLocation, setSelectedLocation] = useState("");
+  const [selectedSearch, setSelectedSearch] = useState("");
 
   // Update focusedPubkey when pubkey in url changes
   useEffect(() => {
@@ -38,27 +47,82 @@ const SellerView = () => {
   };
 
   return (
-    <div className="flex flex-col">
-      {focusedPubkey ? (
-        <div
-          className="flex flex-row items-center w-fit pr-2 align-middle text-yellow-500 hover:bg-purple-700 rounded-md cursor-pointer"
-          onClick={() => {
-            routeToShop("");
-          }}
-        >
-          <ArrowUturnLeftIcon
-            className="w-5 h-5 text-purple-500 hover:text-purple-700 pr-1"
+    <div className="">
+      <div className="flex flex-col absolute z-20 w-[99vw] max-w-[100%] px-3 bg-white pb-2">
+        <Navbar />
+        <div className="flex-row flex gap-2 pb-3">
+          <Input
+            className="mt-2"
+            isClearable
+            label="Listings"
+            placeholder="Type to search..."
+            startContent={<MagnifyingGlassIcon height={"1em"} />}
+            onChange={(event) => {
+              const value = event.target.value;
+              setSelectedSearch(value);
+            }}
+          ></Input>
+          <Select
+            className="mt-2"
+            label="Categories"
+            placeholder="All"
+            selectedKeys={selectedCategories}
+            onChange={(event) => {
+              if (event.target.value === "") {
+                setSelectedCategories(new Set([]));
+              } else {
+                setSelectedCategories(new Set(event.target.value.split(",")));
+              }
+            }}
+            selectionMode="multiple"
+          >
+            {CATEGORIES.map((category, index) => (
+              <SelectItem value={category} key={category}>
+                {category}
+              </SelectItem>
+            ))}
+          </Select>
+          <LocationDropdown
+            className="mt-2"
+            placeholder="All"
+            label="Location"
+            value={selectedLocation}
+            onChange={(event) => {
+              setSelectedLocation(event.target.value);
+            }}
+          />
+        </div>
+        {focusedPubkey ? (
+          <div
+            className="flex flex-row w-fit px-3 align-middle text-yellow-500 hover:bg-purple-700 rounded-md cursor-pointer"
             onClick={() => {
               routeToShop("");
             }}
           >
-            Go Back
-          </ArrowUturnLeftIcon>
-          {nip19.npubEncode(focusedPubkey)}
-        </div>
-      ) : undefined}
-      <DisplayEvents focusedPubkey={focusedPubkey} />
-      <div className="flex flex-row justify-between h-fit absolute w-[99vw] bottom-0 bg-white py-[20px] z-20">
+            <div>
+              <ArrowUturnLeftIcon
+                className="w-5 h-5 text-purple-500 hover:text-purple-700 pr-1"
+                onClick={() => {
+                  routeToShop("");
+                }}
+              >
+                Go Back
+              </ArrowUturnLeftIcon>
+            </div>
+
+            <span className="max-w-full overflow-hidden overflow-ellipsis whitespace-nowrap">
+              {nip19.npubEncode(focusedPubkey)}
+            </span>
+          </div>
+        ) : undefined}
+      </div>
+      <DisplayEvents
+        focusedPubkey={focusedPubkey}
+        selectedCategories={selectedCategories}
+        selectedLocation={selectedLocation}
+        selectedSearch={selectedSearch}
+      />
+      <div className="flex flex-row justify-between h-fit absolute w-[99vw] bottom-[0px] bg-white py-[20px] z-20">
         <Button
           type="button"
           className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 min-w-fit w-[20%] "
