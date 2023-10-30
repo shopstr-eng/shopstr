@@ -1,5 +1,6 @@
 import type { Config } from 'tailwindcss';
 import { nextui } from '@nextui-org/react';
+import colors from "tailwindcss/colors";
 
 export default {
   content: [
@@ -12,6 +13,25 @@ export default {
   theme: {
     transparent: 'transparent',
     current: 'currentColor',
+    screens: {
+      sm: { min: "0px", max: "675px" },
+      // => @media (min-width: 500px) { ... }
+
+      md: { min: "676px", max: "1000px" },
+      // => @media (min-width: 1000px) { ... }
+
+      lg: { min: "1001px", max: "1500px" },
+      // => @media (min-width: 1500px) { ... }
+
+      xl: { min: "1501px", max: "2000px" },
+      // => @media (min-width: 2000px) { ... }
+
+      "2xl": { min: "2001px" },
+      // => @media (min-width: 2500px) { ... }
+    },
+    colors: {
+      ...colors,
+    },
     extend: {
       colors: {
         backgroundImage: {

@@ -100,7 +100,7 @@ export default function MetricsPage() {
           Year to Date
         </DateRangePickerItem>
       </DateRangePicker>
-      <Grid numItemsSm={2} numItemsLg={3} className="gap-6">
+      <Grid numItems={3} numItemsSm={1} className="gap-6">
         {data.map((item) => (
           <Card key={item.category.title}>
             <Title>{item.category.title}</Title>

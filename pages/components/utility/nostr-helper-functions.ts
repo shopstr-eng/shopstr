@@ -241,8 +241,10 @@ export const getLocalStorageData = () => {
 
   if (typeof window !== "undefined") {
     const npub = localStorage.getItem("npub");
-    const { data } = nip19.decode(npub);
-    decryptedNpub = data;
+    if (npub) {
+      const { data } = nip19.decode(npub);
+      decryptedNpub = data;
+    }
     encryptedPrivateKey = localStorage.getItem("encryptedPrivateKey");
     signIn = localStorage.getItem("signIn");
     const storedRelays = localStorage.getItem("relays");

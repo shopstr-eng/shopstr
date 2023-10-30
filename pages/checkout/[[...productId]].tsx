@@ -1,24 +1,31 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
-import DisplayProduct from "../components/display-product";
 import { SimplePool } from "nostr-tools";
+import parseTags, {
+  ProductData,
+} from "../components/utility/product-parser-functions";
+import CheckoutPage from "../components/checkout-page";
+import { getLocalStorageData } from "../components/utility/nostr-helper-functions";
 
 const Checkout = () => {
   const router = useRouter();
-  const { productId } = router.query;
-  console.log(productId[0]);
-
   const [relays, setRelays] = useState([]);
+  const [productData, setProductData] = useState<ProductData | undefined>(
+    undefined,
+  );
 
-  const productIdString = productId[0];
-  const [product, setProduct] = useState([]);
-  const [pubkey, setPubkey] = useState("");
+  const { productId } = router.query;
+  const productIdString = productId ? productId[0] : "";
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const storedRelays = localStorage.getItem("relays");
-      setRelays(storedRelays ? JSON.parse(storedRelays) : []);
+    if (!productId) {
+      router.push("/"); // if there isn't a productId, redirect to home page
     }
+  }, []);
+
+  useEffect(() => {
+    let { relays } = getLocalStorageData();
+    setRelays(relays ? relays : ["wss://relay.damus.io", "wss://nos.lol"]);
   }, []);
 
   useEffect(() => {
@@ -26,29 +33,18 @@ const Checkout = () => {
 
     let subParams: { ids: string[]; kinds: number[] } = {
       ids: [productIdString],
-      // kinds: [30018],
       kinds: [30402],
     };
 
     let productSub = pool.sub(relays, [subParams]);
 
     productSub.on("event", (event) => {
-      // const data = JSON.parse(event.content);
-      // setProduct(data);
-      setProduct(event.tags);
-      setPubkey(event.pubkey);
+      const productData = parseTags(event);
+      setProductData(productData);
     });
   }, [relays]);
 
-  return (
-    <div>
-      <DisplayProduct
-        tags={product}
-        eventId={productIdString}
-        pubkey={pubkey}
-      />
-    </div>
-  );
+  return <CheckoutPage productData={productData} />;
 };
 
 export default Checkout;

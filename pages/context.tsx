@@ -11,10 +11,10 @@ export const ProfileMapContext = createContext({
 } as ProfileContextInterface);
 
 export interface ProductContextInterface {
-  productData: any;
+  productEvents: any;
   isLoading: boolean;
 }
 export const ProductContext = createContext({
-  productData: {},
+  productEvents: {},
   isLoading: true,
 } as ProductContextInterface);

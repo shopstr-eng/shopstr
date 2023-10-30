@@ -3,7 +3,10 @@ import axios from "axios";
 import { withRouter, NextRouter } from "next/router";
 import { nip19 } from "nostr-tools";
 import * as CryptoJS from "crypto-js";
-import { validateNPubKey, validateNSecKey } from "../nostr-helpers";
+import {
+  validateNPubKey,
+  validateNSecKey,
+} from "../components/utility/nostr-helper-functions";
 import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
 
 const LoginPage = ({ router }: { router: NextRouter }) => {
@@ -73,7 +76,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
   }, [publicKey, privateKey]);
 
   return (
-    <div className="flex flex-row justify-center items-center min-h-screen">
+    <div className="flex flex-row justify-center items-center max-h-screen">
       <Card>
         <CardBody>
           <div className="flex flex-row items-center justify-center mb-4">

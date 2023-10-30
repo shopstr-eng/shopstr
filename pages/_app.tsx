@@ -1,9 +1,9 @@
 import "tailwindcss/tailwind.css";
 import type { AppProps } from "next/app";
 import "../styles/globals.css";
-import { useRouter } from "next/router";
 import Navbar from "./components/navbar";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/router";
 import { SimplePool } from "nostr-tools";
 import {
   ProfileMapContext,
@@ -11,7 +11,10 @@ import {
   ProductContext,
   ProductContextInterface,
 } from "./context";
-import type { NostrEvent } from "../nostr-helpers";
+import {
+  decryptNpub,
+  NostrEvent,
+} from "./components/utility/nostr-helper-functions";
 
 function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
@@ -24,7 +27,7 @@ function App({ Component, pageProps }: AppProps) {
   >(new Set());
   const [productContext, setProductContext] = useState<ProductContextInterface>(
     {
-      productData: [],
+      productEvents: [],
       isLoading: true,
     },
   );
@@ -47,10 +50,17 @@ function App({ Component, pageProps }: AppProps) {
     // Perform localStorage action
     if (window !== undefined) {
       setRelays(
-        localStorage.getItem("relays")
-          ? JSON.parse(localStorage.getItem("relays"))
+        localStorage.getItem("relays") !== null
+          ? JSON.parse(localStorage.getItem("relays") as string)
           : [],
       );
+      setPubkeyProfilesToFetch(
+        new Set(
+          typeof localStorage.getItem("npub") == "string"
+            ? [decryptNpub(localStorage.getItem("npub") as string)]
+            : [],
+        ) as Set<string>,
+      ); // fetches your profile if you are logged in
     }
   }, []);
 
@@ -71,16 +81,15 @@ function App({ Component, pageProps }: AppProps) {
           return newPubkeyProfilesToFetch;
         });
         return {
-          productData: productArray,
+          productEvents: productArray,
           isLoading: productContext.isLoading,
         };
       });
     });
     productsSub.on("eose", () => {
-      console.log("ProductSub eose reached");
       setProductContext((productContext) => {
         return {
-          productData: productContext.productData,
+          productEvents: productContext.productEvents,
           isLoading: false,
         };
       });
@@ -100,6 +109,13 @@ function App({ Component, pageProps }: AppProps) {
 
     profileSub.on("event", (event) => {
       setProfileMap((profileMap) => {
+        if (
+          profileMap.has(event.pubkey) &&
+          profileMap.get(event.pubkey).created_at > event.created_at
+        ) {
+          // if profile already exists and is newer than the one we just fetched, don't update
+          return profileMap;
+        }
         let newProfileMap = new Map(profileMap);
         newProfileMap.set(event.pubkey, {
           pubkey: event.pubkey,
@@ -124,8 +140,11 @@ function App({ Component, pageProps }: AppProps) {
   return (
     <ProfileMapContext.Provider value={profileContext}>
       <ProductContext.Provider value={productContext}>
-        <div className="xl:w-full h-full px-2 md:py-4 md:px-8">
+        <div className="">
           {isSignInPage || isKeyPage ? null : <Navbar />}
+          <div className="h-20">
+            {/*spacer div needed so pages can account for navbar height*/}
+          </div>
           <Component {...pageProps} />
         </div>
       </ProductContext.Provider>

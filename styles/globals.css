@@ -8,7 +8,7 @@
 
 /* Chrome, Edge, and Safari */
 *::-webkit-scrollbar {
-  width: 15px;
+  width: 5px;
 }
 
 *::-webkit-scrollbar-track {
@@ -16,8 +16,8 @@
 }
 
 *::-webkit-scrollbar-thumb {
-  border-radius: 14px;
-  border: 3px solid;
+  border-radius: 2px;
+  border: 1px solid;
 }
 
 @tailwind components;
