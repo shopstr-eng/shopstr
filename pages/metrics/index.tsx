@@ -1,6 +1,8 @@
 'use client';
 
-import { Card, Metric, Text, Title, Flex, Grid, DateRangePicker, DateRangePickerValue, LineChart, DateRangePickerItem } from '@tremor/react';
+import { Card, Metric, Text, Title, Flex, Grid,
+  DateRangePicker, DateRangePickerValue, LineChart, DateRangePickerItem,
+  Callout } from '@tremor/react';
 import { formatDataWithEmptyDateTime } from '@/utils/metrics';
 import { DateTime } from 'luxon';
 import { useState, useEffect } from 'react';
@@ -58,6 +60,10 @@ export default function MetricsPage() {
 
   return (
     <main className="p-4 md:p-10 mx-auto max-w-7xl">
+      <Callout title='Work In Progress - Analytics' color='purple'>
+        This is a global metrics of all of Shopstr.
+        We are working on a personalized Analytics page for every Shopstr merchant!
+       </Callout>
       <DateRangePicker
         className='my-5'
         value={date}
