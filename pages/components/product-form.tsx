@@ -278,9 +278,9 @@ export default function NewForm({
                     <div className="flex flex-row-reverse ">
                       {
                         <ConfirmActionDropdown
-                          header="Are you sure you want to delete this image?"
-                          label="Delete Image"
-                          func={deleteImage(image)}
+                          helpText="Are you sure you want to delete this image?"
+                          buttonLabel="Delete Image"
+                          onConfirm={deleteImage(image)}
                         >
                           <Button
                             isIconOnly
@@ -600,17 +600,16 @@ export default function NewForm({
 
           <ModalFooter>
             <ConfirmActionDropdown
-              children={
-                <Button color="danger" variant="light">
-                  Clear
-                </Button>
-              }
-              header={
+              helpText={
                 "Are you sure you want to clear this form? You will lose all current progress."
               }
-              label={"Clear Form"}
-              func={clear}
-            />
+              buttonLabel={"Clear Form"}
+              onConfirm={clear}
+            >
+              <Button color="danger" variant="light">
+                Clear
+              </Button>
+            </ConfirmActionDropdown>
 
             <Button
               className={buttonClassName}

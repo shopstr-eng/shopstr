@@ -232,9 +232,9 @@ export default function CheckoutCard({
       <RequestPassphraseModal
         passphrase={passphrase}
         onPassphraseChange={setPassphrase}
-        startCheckoutProcess={startCheckoutProcess}
         isOpen={requestPassphrase}
-        setRequestPassphrase={setRequestPassphrase}
+        setIsOpen={setRequestPassphrase}
+        actionOnSubmit={startCheckoutProcess}
       />
     </>
   );
