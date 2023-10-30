@@ -71,7 +71,7 @@ const Keys = () => {
   };
 
   return (
-    <div className="flex flex-row justify-center items-center min-h-screen">
+    <div className="flex flex-row justify-center items-center max-h-screen">
       <Card>
         <CardBody>
           <div className="flex flex-row items-center justify-center mb-4">
