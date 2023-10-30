@@ -2,23 +2,29 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
 import DisplayProduct from "../components/display-product";
 import { SimplePool } from "nostr-tools";
+import parseTags, {
+  ProductData,
+} from "../components/utility/product-parser-functions";
+import { json } from "stream/consumers";
+import CheckoutPage from "../components/checkout-page";
+import { getLocalStorageData } from "../nostr-helpers";
 
 const Checkout = () => {
   const router = useRouter();
   const { productId } = router.query;
+  if (!productId) return null;
   console.log(productId[0]);
 
   const [relays, setRelays] = useState([]);
 
   const productIdString = productId[0];
-  const [product, setProduct] = useState([]);
-  const [pubkey, setPubkey] = useState("");
+  const [productData, setProductData] = useState<ProductData | undefined>(
+    undefined
+  );
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const storedRelays = localStorage.getItem("relays");
-      setRelays(storedRelays ? JSON.parse(storedRelays) : []);
-    }
+    let { relays } = getLocalStorageData();
+    setRelays(relays ? relays : ["wss://relay.damus.io", "wss://nos.lol"]);
   }, []);
 
   useEffect(() => {
@@ -35,20 +41,13 @@ const Checkout = () => {
     productSub.on("event", (event) => {
       // const data = JSON.parse(event.content);
       // setProduct(data);
-      setProduct(event.tags);
-      setPubkey(event.pubkey);
+      const productData = parseTags(event);
+      console.log(productData);
+      setProductData(productData);
     });
   }, [relays]);
 
-  return (
-    <div>
-      {/* <DisplayProduct
-        tags={product}
-        eventId={productIdString}
-        pubkey={pubkey}
-      /> */}
-    </div>
-  );
+  return <CheckoutPage productData={productData} />;
 };
 
 export default Checkout;

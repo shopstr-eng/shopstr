@@ -138,7 +138,7 @@ function App({ Component, pageProps }: AppProps) {
   return (
     <ProfileMapContext.Provider value={profileContext}>
       <ProductContext.Provider value={productContext}>
-        <div className="xl:w-full h-full px-2 md:py-4 md:px-8">
+        <div className="">
           <Navbar />
           <div className="h-20">
             {/*spacer div needed so pages can account for navbar height*/}

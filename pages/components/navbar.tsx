@@ -23,7 +23,7 @@ const Navbar = () => {
   }, []);
 
   return (
-    <div className="flex flex-col absolute z-20 w-full px-3 bg-white pb-2">
+    <div className="flex flex-col absolute z-20 px-3 w-full bg-white pb-2">
       <div className="flex flex-row justify-between h-[40px]">
         <h1
           className="text-3xl font-bold text-purple-500 hover:text-purple-700 cursor-pointer"
