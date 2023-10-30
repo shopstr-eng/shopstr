@@ -667,26 +667,28 @@ const DirectMessages = () => {
       </h2>
       <div className="my-2 overflow-y-scroll max-h-[70vh] bg-white rounded-md border-2">
         {messages.map((message, index) => (
-          <div
-            key={index}
-            className={`my-2 flex ${message.sender === decryptedNpub
-              ? "justify-end"
-              : message.sender === currentChat
-                ? "justify-start"
-                : ""
-              }`}
-          >
-            <p
-              className={`inline-block p-3 rounded-lg max-w-[100vh] break-words ${message.sender === decryptedNpub
-                ? "bg-purple-200"
-                : "bg-gray-300"
-                }`}
-            >
-              {message.sender === decryptedNpub &&
-                message.plaintext.includes("cashuA") ? (
-                <i>Payment sent!</i>
-              ) : (
-                message.plaintext
+           <div
+             key={index}
+             className={`my-2 flex ${
+               message.sender === decryptedNpub
+                 ? "justify-end"
+                 : message.sender === currentChat
+                 ? "justify-start"
+                 : ""
+             }`}
+           >
+             <p
+               className={`inline-block p-3 rounded-lg max-w-[100vh] break-words ${
+                 message.sender === decryptedNpub
+                   ? "bg-purple-200"
+                   : "bg-gray-300"
+               }`}
+             >
+               {message.sender === decryptedNpub &&
+               message.plaintext.includes("cashuA") ? (
+                 <i>Payment sent!</i>
+               ) : (
+                 message.plaintext
               )}
             </p>
           </div>
