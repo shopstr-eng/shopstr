@@ -446,7 +446,7 @@ const DirectMessages = () => {
           })}
         </div>
         <Button
-          className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600"
+          className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 mx-3"
           onClick={handleToggleModal}
         >
           Start New Chat

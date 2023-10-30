@@ -3,6 +3,7 @@ import type { AppProps } from "next/app";
 import "../styles/globals.css";
 import Navbar from "./components/navbar";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/router";
 import { SimplePool } from "nostr-tools";
 import {
   ProfileMapContext,
@@ -16,6 +17,9 @@ import {
 } from "./components/utility/nostr-helper-functions";
 
 function App({ Component, pageProps }: AppProps) {
+  const router = useRouter();
+  const isSignInPage = router.pathname === "/sign-in";
+  const isKeyPage = router.pathname === "/keys";
   const [relays, setRelays] = useState([]);
   const [profileMap, setProfileMap] = useState(new Map());
   const [pubkeyProfilesToFetch, setPubkeyProfilesToFetch] = useState<
@@ -137,7 +141,7 @@ function App({ Component, pageProps }: AppProps) {
     <ProfileMapContext.Provider value={profileContext}>
       <ProductContext.Provider value={productContext}>
         <div className="">
-          <Navbar />
+          {isSignInPage || isKeyPage ? null : <Navbar />}
           <div className="h-20">
             {/*spacer div needed so pages can account for navbar height*/}
           </div>
