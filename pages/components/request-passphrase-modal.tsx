@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef } from "react";
 import {
   Modal,
   ModalContent,
@@ -9,8 +9,6 @@ import {
   Button,
 } from "@nextui-org/react";
 import { getNsecWithPassphrase } from "../nostr-helpers";
-import { on } from "events";
-import ConfirmActionDropdown from "./confirm-action-dropdown";
 import { SHOPSTRBUTTONCLASSNAMES } from "./STATIC-VARIABLES";
 import { useRouter } from "next/router";
 
@@ -20,6 +18,12 @@ export default function RequestPassphraseModal({
   onPassphraseChange,
   startCheckoutProcess,
   setRequestPassphrase,
+}: {
+  passphrase: string;
+  isOpen: boolean;
+  onPassphraseChange: (passphrase: string) => void;
+  startCheckoutProcess: () => void;
+  setRequestPassphrase: (value: boolean) => void;
 }) {
   const router = useRouter();
   const passphraseInputRef = useRef(null);

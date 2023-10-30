@@ -1,3 +1,4 @@
+// TODO remember to deprecate this component as it is not needed after product listing ui updates
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import {
   BoltIcon,

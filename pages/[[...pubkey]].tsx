@@ -2,10 +2,9 @@ import React, { useEffect, useState } from "react";
 import DisplayEvents from "./components/display-events";
 import { useRouter } from "next/router";
 import { ArrowUturnLeftIcon } from "@heroicons/react/24/outline";
-import { nip19, SimplePool } from "nostr-tools";
+import { nip19 } from "nostr-tools";
 import ProductForm from "./components/product-form";
 import { Button, Select, SelectItem, Input } from "@nextui-org/react";
-import Navbar from "./components/navbar";
 import {
   CATEGORIES,
   SHOPSTRBUTTONCLASSNAMES,
@@ -28,11 +27,11 @@ const SellerView = () => {
     let focusedPubkeys = router.query.pubkey;
     if (focusedPubkeys && typeof focusedPubkeys[0] === "string") {
       const { data } = nip19.decode(focusedPubkeys[0]);
-      setfocusedPubkey(data); // router.query.pubkey returns array of pubkeys
+      setfocusedPubkey(data as string); // router.query.pubkey returns array of pubkeys
     }
   }, [router.query.pubkey]);
 
-  const routeToShop = (npubkey) => {
+  const routeToShop = (npubkey: string) => {
     npubkey = encodeURIComponent(npubkey);
     if (npubkey === "") {
       // handles case where we pass in empty string to clear focusedPubkey
@@ -78,7 +77,7 @@ const SellerView = () => {
             }}
             selectionMode="multiple"
           >
-            {CATEGORIES.map((category, index) => (
+            {CATEGORIES.map((category) => (
               <SelectItem value={category} key={category}>
                 {category}
               </SelectItem>
@@ -129,8 +128,11 @@ const SellerView = () => {
           type="button"
           className={SHOPSTRBUTTONCLASSNAMES + " w-[20%] "}
           onClick={() => {
-            if (localStorage.getItem("signIn")) {
-              let usersNPubkey = localStorage.getItem("npub");
+            if (
+              localStorage.getItem("signIn") &&
+              localStorage.getItem("npub") != null
+            ) {
+              let usersNPubkey = localStorage.getItem("npub") as string;
               routeToShop(usersNPubkey);
             } else {
               alert("You must be signed in to view your listings!");

@@ -1,7 +1,6 @@
 import "tailwindcss/tailwind.css";
 import type { AppProps } from "next/app";
 import "../styles/globals.css";
-import { useRouter } from "next/router";
 import Navbar from "./components/navbar";
 import { useState, useEffect } from "react";
 import { SimplePool } from "nostr-tools";
@@ -14,9 +13,6 @@ import {
 import { decryptNpub, NostrEvent } from "./nostr-helpers";
 
 function App({ Component, pageProps }: AppProps) {
-  const router = useRouter();
-  const isSignInPage = router.pathname === "/sign-in";
-  const isKeyPage = router.pathname === "/keys";
   const [relays, setRelays] = useState([]);
   const [profileMap, setProfileMap] = useState(new Map());
   const [pubkeyProfilesToFetch, setPubkeyProfilesToFetch] = useState<
@@ -47,14 +43,14 @@ function App({ Component, pageProps }: AppProps) {
     // Perform localStorage action
     if (window !== undefined) {
       setRelays(
-        localStorage.getItem("relays")
-          ? JSON.parse(localStorage.getItem("relays"))
+        localStorage.getItem("relays") !== null
+          ? JSON.parse(localStorage.getItem("relays") as string)
           : []
       );
       setPubkeyProfilesToFetch(
         new Set(
           typeof localStorage.getItem("npub") == "string"
-            ? [decryptNpub(localStorage.getItem("npub"))]
+            ? [decryptNpub(localStorage.getItem("npub") as string)]
             : []
         ) as Set<string>
       ); // fetches your profile if you are logged in
