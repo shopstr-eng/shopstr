@@ -130,7 +130,7 @@ const DisplayEvents = ({
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
     let { signIn } = getLocalStorageData();
     if (!signIn) {
-      alert("Please sign in to send a message");
+      alert("You must be signed in to send a message!");
       return;
     }
     setShowModal(false);
@@ -143,7 +143,7 @@ const DisplayEvents = ({
   const handleCheckout = (productId: string) => {
     let { signIn } = getLocalStorageData();
     if (!signIn) {
-      alert("Please sign in to send checkout");
+      alert("You must be signed in to checkout!");
       return;
     }
     setShowModal(false);
