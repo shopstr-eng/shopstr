@@ -90,14 +90,11 @@ const DisplayEvents = ({
       );
       filteredProductData = filteredProductData.filter(
         (productData: ProductData) => {
-          return (
-            !selectedSearch ||
-            [productData.title].some((title: string) => {
-              const re = new RegExp(selectedSearch, "gi");
-              const match = title.match(re);
-              return match && match.length > 0;
-            })
-          );
+          if (!selectedSearch) return true; // nothing in search bar
+          if (!productData.title) return true; // product has no title
+          const re = new RegExp(selectedSearch, "gi");
+          const match = productData.title.match(re);
+          return match && match.length > 0;
         }
       );
     }
@@ -113,7 +110,6 @@ const DisplayEvents = ({
   ]);
 
   const handleDelete = async (productId: string, passphrase: string) => {
-    console.log("DELETION CLICKED");
     try {
       await DeleteListing([productId], passphrase);
       setDeletedProducts((deletedProducts) => [...deletedProducts, productId]);
@@ -178,7 +174,7 @@ const DisplayEvents = ({
         </div>
         {/* DISPLAYS PRODUCT LISTINGS HERE */}
         {filteredProductData.length != 0 ? (
-          <div className="flex flex-row flex-wrap my-2 justify-evenly overflow-y-hidden overflow-x-hidden h-[90%] max-w-full">
+          <div className="flex flex-row flex-wrap my-2 justify-evenly overflow-y-scroll overflow-x-hidden h-[90%] max-w-full">
             {filteredProductData.map((productData: ProductData, index) => {
               return (
                 <ProductCard
