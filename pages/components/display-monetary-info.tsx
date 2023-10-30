@@ -1,20 +1,11 @@
 import React from "react";
-import { ShippingOptions } from "./STATIC-VARIABLES";
+import { ShippingOptionsType } from "./STATIC-VARIABLES";
 
 type ProductMonetaryInfo = {
-  shippingType?: ShippingOptions;
+  shippingType?: ShippingOptionsType;
   shippingCost?: number;
   price: number;
   currency: string;
-};
-
-export const calculateTotalCost = (
-  productMonetaryInfo: ProductMonetaryInfo
-) => {
-  const { price, shippingCost } = productMonetaryInfo;
-  let total = price;
-  total += shippingCost ? shippingCost : 0;
-  return total;
 };
 
 export default function CompactPriceDisplay({
@@ -66,12 +57,21 @@ export function DisplayCostBreakdown({
         </p>
       )}
 
-      {totalCost ? (
+      {totalCost && (
         <p>
           <strong className="font-semibold">Total Cost:</strong> {totalCost}{" "}
           {currency}
         </p>
-      ) : undefined}
+      )}
     </div>
   );
 }
+
+export const calculateTotalCost = (
+  productMonetaryInfo: ProductMonetaryInfo
+) => {
+  const { price, shippingCost } = productMonetaryInfo;
+  let total = price;
+  total += shippingCost ? shippingCost : 0;
+  return total;
+};

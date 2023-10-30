@@ -1,11 +1,5 @@
-import React, { useMemo, useRef, useEffect, useState } from "react";
-import { useForm, Controller } from "react-hook-form";
-import {
-  BoltIcon,
-  ClipboardIcon,
-  TrashIcon,
-  EnvelopeIcon,
-} from "@heroicons/react/24/outline";
+import React from "react";
+import { BoltIcon, EnvelopeIcon } from "@heroicons/react/24/outline";
 import {
   Modal,
   ModalContent,
@@ -21,7 +15,6 @@ import { ProfileAvatar } from "./avatar";
 import CompactCategories from "./compact-categories";
 import { locationAvatar } from "./location-dropdown";
 import { DisplayCostBreakdown } from "./display-monetary-info";
-import { nip19 } from "nostr-tools";
 import { SHOPSTRBUTTONCLASSNAMES } from "./STATIC-VARIABLES";
 
 interface ProductFormProps {
@@ -42,17 +35,13 @@ export default function DisplayProductModal({
   const {
     createdAt,
     title,
-    summary,
-    publishedAt,
     images,
     categories,
     location,
-    price,
     currency,
-    shippingType,
-    shippingCost,
     totalCost,
   } = productData;
+
   const displayDate = (timestamp: number): [string, string] => {
     if (timestamp == 0 || !timestamp) return ["", ""];
     const d = new Date(timestamp * 1000);
@@ -61,10 +50,10 @@ export default function DisplayProductModal({
     return [dateString, timeString];
   };
 
-  if (!showModal) return null;
+  if (!showModal) return null; // needed to prevent TreeWalker error upon redirect while modal open
   return (
     <Modal
-      //   backdrop="blur"
+      backdrop="blur"
       isOpen={showModal}
       onClose={handleModalToggle}
       classNames={{

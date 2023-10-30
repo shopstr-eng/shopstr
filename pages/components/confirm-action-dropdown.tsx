@@ -1,3 +1,4 @@
+// TODO Fix this function to be more react like where children shouldn't be a prop, func should be renamed to something like "onConfirm", and the modal should be a child of this component instead of a sibling
 import React from "react";
 import {
   Dropdown,

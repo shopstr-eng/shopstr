@@ -1,14 +1,11 @@
 import React, { ReactNode, useEffect, useState } from "react";
 import { Card, CardBody, Divider, Chip, CardFooter } from "@nextui-org/react";
 import { ProfileAvatar } from "./avatar";
-import { NostrEvent } from "../nostr-helpers";
 import { locationAvatar } from "./location-dropdown";
 import CompactCategories from "./compact-categories";
 import ImageCarousel from "./image-carousel";
-import CompactPriceDisplay, {
-  DisplayCostBreakdown,
-} from "./display-monetary-info";
-import { ProductData, parseTags } from "./utility/product-parser-functions";
+import CompactPriceDisplay from "./display-monetary-info";
+import { ProductData } from "./utility/product-parser-functions";
 
 const cardWidth = 380;
 const cardxMargin = 2.5;
@@ -28,21 +25,7 @@ export default function ProductCard({
   footerContent?: ReactNode;
 }) {
   if (!productData) return null;
-  const {
-    id,
-    pubkey,
-    title,
-    summary,
-    publishedAt,
-    images,
-    categories,
-    location,
-    price,
-    currency,
-    shippingType,
-    shippingCost,
-    totalCost,
-  } = productData;
+  const { id, pubkey, title, images, categories, location } = productData;
 
   if (isCheckout)
     return (

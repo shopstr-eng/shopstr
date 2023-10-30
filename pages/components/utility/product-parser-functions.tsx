@@ -1,6 +1,7 @@
 import React from "react";
 import { ShippingOptionsType } from "../STATIC-VARIABLES";
 import { calculateTotalCost } from "../display-monetary-info";
+import { NostrEvent } from "@/pages/nostr-helpers";
 
 export type ProductData = {
   id: string;
@@ -19,7 +20,7 @@ export type ProductData = {
   totalCost: number;
 };
 
-export const parseTags = (productEvent) => {
+export const parseTags = (productEvent: NostrEvent) => {
   let parsedData: ProductData = {};
   parsedData.pubkey = productEvent.pubkey;
   parsedData.id = productEvent.id;

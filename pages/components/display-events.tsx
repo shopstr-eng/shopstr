@@ -1,5 +1,4 @@
 import { useState, useEffect, useContext, useMemo } from "react";
-import DisplayProduct from "./display-product";
 import { nip19 } from "nostr-tools";
 import {
   DeleteListing,
@@ -9,9 +8,7 @@ import {
 import { ProductContext } from "../context";
 import ProductCard, { TOTALPRODUCTCARDWIDTH } from "./product-card";
 import DisplayProductModal from "./display-product-modal";
-import { set } from "react-hook-form";
 import { useRouter } from "next/router";
-import { parse } from "path";
 import parseTags, { ProductData } from "./utility/product-parser-functions";
 
 const DisplayEvents = ({
@@ -26,10 +23,11 @@ const DisplayEvents = ({
   selectedSearch: string;
 }) => {
   const [productEvents, setProductEvents] = useState<NostrEvent[]>([]);
-  const [filteredProductData, setFilteredProductData] = useState([]);
+  const [filteredProductData, setFilteredProductData] = useState<ProductData[]>(
+    []
+  );
   const [deletedProducts, setDeletedProducts] = useState<string[]>([]); // list of product ids that have been deleted
   const [isLoading, setIsLoading] = useState(true);
-  const imageUrlRegExp = /(https?:\/\/.*\.(?:png|jpg|jpeg|gif))/i;
   const productEventContext = useContext(ProductContext);
   const [focusedProduct, setFocusedProduct] = useState(""); // product being viewed in modal
   const [showModal, setShowModal] = useState(false);
@@ -50,12 +48,6 @@ const DisplayEvents = ({
     }
     setProductEvents(productEventContext.productEvents);
   }, [productEventContext]);
-
-  const displayDate = (timestamp: number): string => {
-    const d = new Date(timestamp * 1000);
-    const dateString = d.toLocaleString();
-    return dateString;
-  };
 
   /** FILTERS PRODUCT DATA ON CATEGORY, LOCATION, FOCUSED PUBKEY (SELLER) **/
   useEffect(() => {
@@ -177,7 +169,9 @@ const DisplayEvents = ({
   return (
     <>
       <div className="h-full">
-        <div className="h-16">{/*spacer div*/}</div>
+        <div className="h-16">
+          {/*spacer div needed to account for the header (Navbar and categories}*/}
+        </div>
         {/* DISPLAYS PRODUCT LISTINGS HERE */}
         {filteredProductData.length != 0 ? (
           <div className="flex flex-row flex-wrap my-2 justify-evenly overflow-y-scroll overflow-x-hidden h-[90%] max-w-full">
@@ -190,30 +184,6 @@ const DisplayEvents = ({
                   handleDelete={handleDelete}
                   onProductClick={onProductClick}
                 />
-                // <div
-                //   key={event.sig + "-" + index}
-                //   className="p-4 mb-4 mx-2 bg-gray-100 rounded-md shadow-lg"
-                // >
-                //   <div className="mt-2 text-gray-800 text-sm md:text-base whitespace-pre-wrap break-words">
-                //     {event.kind == 30402 ? (
-                //       <DisplayProduct
-                //         tags={event.tags}
-                //         eventId={event.id}
-                //         pubkey={event.pubkey}
-                //         handleDelete={handleDelete}
-                //       />
-                //     ) : event.content.indexOf(imageUrlRegExp) ? (
-                //       <div>
-                //         <p>{event.content.replace(imageUrlRegExp, "")}</p>
-                //         <img src={event.content.match(imageUrlRegExp)?.[0]} />
-                //       </div>
-                //     ) : (
-                //       <div>
-                //         <p>{event.content}</p>
-                //       </div>
-                //     )}
-                //   </div>
-                // </div>
               );
             })}
             {getSpacerCardsNeeded()}
@@ -225,7 +195,9 @@ const DisplayEvents = ({
             </p>
           </div>
         )}
-        <div className="h-20">{/*spacer div*/}</div>
+        <div className="h-20">
+          {/*spacer div needed to account for the footer buttons*/}
+        </div>
       </div>
       <DisplayProductModal
         productData={focusedProduct}

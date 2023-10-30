@@ -1,37 +1,25 @@
-import React, {
-  useMemo,
-  useState,
-  useRef,
-  useEffect,
-  useCallback,
-} from "react";
-import { withRouter, NextRouter, useRouter } from "next/router";
+//TODO: QOL Make on clipboard of the lnurl invoice, instead of alerting make a checkmark animation or something else
+//TODO: perhaps see if we can abstract away some payment logic into reusable functions
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/router";
 import {
   Card,
   CardHeader,
   CardBody,
   CardFooter,
   Divider,
-  Link,
   Image,
-  Button,
 } from "@nextui-org/react";
 import { SimplePool } from "nostr-tools";
 import axios from "axios";
 import RequestPassphraseModal from "./request-passphrase-modal";
-import { set } from "react-hook-form";
 import { ClipboardIcon } from "@heroicons/react/24/outline";
-
-import requestMint from "../api/cashu/request-mint";
 import { CashuMint, CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
-import * as CryptoJS from "crypto-js";
 import {
   getLocalStorageData,
   getPrivKeyWithPassphrase,
-  getPubKey,
 } from "../nostr-helpers";
 import { ProductData } from "./utility/product-parser-functions";
-import { SHOPSTRBUTTONCLASSNAMES } from "./STATIC-VARIABLES";
 import { DisplayCostBreakdown } from "./display-monetary-info";
 
 export default function CheckoutCard({
@@ -39,25 +27,10 @@ export default function CheckoutCard({
 }: {
   productData: ProductData;
 }) {
-  const {
-    pubkey,
-    createdAt,
-    title,
-    summary,
-    publishedAt,
-    images,
-    categories,
-    location,
-    price,
-    currency,
-    shippingType,
-    shippingCost,
-    totalCost,
-  } = productData;
-  const pubkeyOfProductBeingSold = pubkey;
   const router = useRouter();
-  const { signIn, encryptedPrivateKey, decryptedNpub, relays } =
-    getLocalStorageData();
+  const { pubkey, currency, totalCost } = productData;
+  const pubkeyOfProductBeingSold = pubkey;
+  const { signIn, decryptedNpub, relays } = getLocalStorageData();
 
   const [requestPassphrase, setRequestPassphrase] = useState(
     signIn === "extension" ? false : true
@@ -93,7 +66,7 @@ export default function CheckoutCard({
         const numSats = (newPrice / btcSpotPrice) * 100000000;
         newPrice = Math.round(numSats);
       } catch (err) {
-        console.log(err);
+        console.error("ERROR", err);
       }
     }
 
@@ -103,10 +76,8 @@ export default function CheckoutCard({
 
     const QRCode = require("qrcode");
 
-    console.log(pr);
     QRCode.toDataURL(pr)
       .then((url) => {
-        console.log(url);
         setQrCodeUrl(url);
       })
       .catch((err) => {
@@ -115,7 +86,7 @@ export default function CheckoutCard({
 
     invoiceHasBeenPaid(wallet, newPrice, hash);
   };
-  console.log("QR CODE URL: ", qrCodeUrl);
+
   /** CHECKS WHETHER INVOICE HAS BEEN PAID */
   async function invoiceHasBeenPaid(
     wallet: object,
@@ -199,7 +170,6 @@ export default function CheckoutCard({
 
   const handleCopyInvoice = () => {
     navigator.clipboard.writeText(invoice);
-    // navigator.clipboard.writeText(invoiceString);
     alert("Invoice copied to clipboard!");
   };
 
@@ -239,15 +209,6 @@ export default function CheckoutCard({
                   </div>
                 </>
               ) : (
-                // <div>
-                //   <p>Password is required...</p>
-                //   <Button
-                //     onClick={() => setRequestPassphrase(true)}
-                //     className={"w-full " + SHOPSTRBUTTONCLASSNAMES}
-                //   >
-                //     Enter Passphrase
-                //   </Button>
-                // </div>
                 <div>
                   <p>Waiting for Cashu mint to create a lightning invoice...</p>
                 </div>
