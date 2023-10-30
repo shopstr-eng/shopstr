@@ -6,37 +6,22 @@ import { locationAvatar } from "./location-dropdown";
 import CompactCategories from "./compact-categories";
 import ImageCarousel from "./image-carousel";
 import CompactPriceDisplay from "./display-monetary-info";
-import { ProductData, parseTags } from "./utility/product-parser-functions";
+import { ProductData, parseTags } from "./utility/productData-parser-functions";
 
 const cardWidth = 380;
 const cardxMargin = 2.5;
 export const TOTALPRODUCTCARDWIDTH = cardWidth + cardxMargin * 2 + 10;
 
 export default function ProductCard({
-  product,
+  productData,
   handleDelete,
   onProductClick,
 }: {
-  product: NostrEvent;
+  productData: ProductData;
   handleDelete: (productId: string, passphrase: string) => void;
   onProductClick: (productId: any) => void;
 }) {
-  const [productData, setProductData] = useState<ProductData>({
-    id: "",
-    pubkey: "",
-    createdAt: 0,
-    title: "",
-    summary: "",
-    publishedAt: "",
-    images: [],
-    categories: [],
-    location: "",
-    price: 0,
-    currency: "",
-    shippingType: undefined,
-    shippingCost: undefined,
-    totalCost: 0,
-  });
+  if (!productData) return null;
   const {
     title,
     summary,
@@ -50,11 +35,6 @@ export default function ProductCard({
     shippingCost,
     totalCost,
   } = productData;
-
-  useEffect(() => {
-    const parsedTags = parseTags(product);
-    setProductData((prevState) => ({ ...prevState, ...parsedTags }));
-  }, []);
 
   const cardHoverStyle = "hover:shadow-lg hover:shadow-purple-300";
   return (
@@ -70,7 +50,7 @@ export default function ProductCard({
         }}
       >
         <div className="flex justify-between z-10 w-full">
-          <ProfileAvatar pubkey={product.pubkey} className="w-4/6" />
+          <ProfileAvatar pubkey={productData.pubkey} className="w-4/6" />
           <div className="flex flex-col justify-center ">
             <CompactCategories categories={categories} />
           </div>

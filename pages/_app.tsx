@@ -24,7 +24,7 @@ function App({ Component, pageProps }: AppProps) {
   >(new Set());
   const [productContext, setProductContext] = useState<ProductContextInterface>(
     {
-      productData: [],
+      productEvents: [],
       isLoading: true,
     }
   );
@@ -78,7 +78,7 @@ function App({ Component, pageProps }: AppProps) {
           return newPubkeyProfilesToFetch;
         });
         return {
-          productData: productArray,
+          productEvents: productArray,
           isLoading: productContext.isLoading,
         };
       });
@@ -87,7 +87,7 @@ function App({ Component, pageProps }: AppProps) {
       console.log("ProductSub eose reached");
       setProductContext((productContext) => {
         return {
-          productData: productContext.productData,
+          productEvents: productContext.productEvents,
           isLoading: false,
         };
       });

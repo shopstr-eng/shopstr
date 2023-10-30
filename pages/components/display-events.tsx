@@ -7,6 +7,8 @@ import ProductCard, { TOTALPRODUCTCARDWIDTH } from "./product-card";
 import DisplayProductModal from "./display-product-modal";
 import { set } from "react-hook-form";
 import { useRouter } from "next/router";
+import { parse } from "path";
+import parseTags, { ProductData } from "./utility/product-parser-functions";
 
 const DisplayEvents = ({
   focusedPubkey,
@@ -19,31 +21,31 @@ const DisplayEvents = ({
   selectedLocation: string;
   selectedSearch: string;
 }) => {
-  const [productData, setProductData] = useState<NostrEvent[]>([]);
+  const [productEvents, setProductEvents] = useState<NostrEvent[]>([]);
   const [filteredProductData, setFilteredProductData] = useState([]);
   const [deletedProducts, setDeletedProducts] = useState<string[]>([]); // list of product ids that have been deleted
   const [isLoading, setIsLoading] = useState(true);
   const imageUrlRegExp = /(https?:\/\/.*\.(?:png|jpg|jpeg|gif))/i;
-  const productDataContext = useContext(ProductContext);
+  const productEventContext = useContext(ProductContext);
   const [focusedProduct, setFocusedProduct] = useState(""); // product being viewed in modal
   const [showModal, setShowModal] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
-    if (!productDataContext) return;
-    setIsLoading(productDataContext.isLoading);
-    if (!productDataContext.isLoading && productDataContext.productData) {
+    if (!productEventContext) return;
+    setIsLoading(productEventContext.isLoading);
+    if (!productEventContext.isLoading && productEventContext.productEvents) {
       // is product sub reaches eose then we can sort the product data
-      let sortedProductData = [
-        ...productDataContext.productData.sort(
+      let sortedProductEvents = [
+        ...productEventContext.productEvents.sort(
           (a, b) => b.created_at - a.created_at
         ),
       ]; // sorts most recently created to least recently created
-      setProductData(sortedProductData);
+      setProductEvents(sortedProductEvents);
       return;
     }
-    setProductData(productDataContext.productData);
-  }, [productDataContext]);
+    setProductEvents(productEventContext.productEvents);
+  }, [productEventContext]);
 
   const displayDate = (timestamp: number): string => {
     const d = new Date(timestamp * 1000);
@@ -51,75 +53,58 @@ const DisplayEvents = ({
     return dateString;
   };
 
-  const handleSendMessage = (pubkeyToOpenChatWith: string) => {
-    setShowModal(false);
-    router.push({
-      pathname: "/direct-messages",
-      query: { pk: nip19.npubEncode(pubkeyToOpenChatWith) },
-    });
-  };
-
   /** FILTERS PRODUCT DATA ON CATEGORY, LOCATION, FOCUSED PUBKEY (SELLER) **/
   useEffect(() => {
-    let filteredData = productData.filter((event) => {
+    let filteredEvents = productEvents.filter((event) => {
       // gets rid of products that were deleted
       return !deletedProducts.includes(event.id);
     });
+    let filteredProductData = filteredEvents.map((event) => {
+      return parseTags(event);
+    });
 
-    if (productData && !isLoading) {
+    if (productEvents && !isLoading && filteredProductData) {
       if (focusedPubkey) {
-        filteredData = filteredData.filter(
-          (event) => event.pubkey === focusedPubkey
+        filteredProductData = filteredProductData.filter(
+          (productData: ProductData) => productData.pubkey === focusedPubkey
         );
       }
-      filteredData = filteredData.filter((event) => {
-        // project the 'tags' 2D array to an array of categories
-        const eventCategories = event.tags
-          .filter((tagArray) => tagArray[0] === "t")
-          .map((tagArray) => tagArray[1]);
-
-        return (
-          selectedCategories.size === 0 ||
-          Array.from(selectedCategories).some((selectedCategory) => {
-            const re = new RegExp(selectedCategory, "gi");
-            return eventCategories.some((category) => {
-              const match = category.match(re);
+      filteredProductData = filteredProductData.filter(
+        (productData: ProductData) => {
+          if (!productData.categories) return false;
+          return (
+            selectedCategories.size === 0 ||
+            Array.from(selectedCategories).some((selectedCategory) => {
+              const re = new RegExp(selectedCategory, "gi");
+              return productData.categories.some((category) => {
+                const match = category.match(re);
+                return match && match.length > 0;
+              });
+            })
+          );
+        }
+      );
+      filteredProductData = filteredProductData.filter(
+        (productData: ProductData) => {
+          return !selectedLocation || productData.location === selectedLocation;
+        }
+      );
+      filteredProductData = filteredProductData.filter(
+        (productData: ProductData) => {
+          return (
+            !selectedSearch ||
+            [productData.title].some((title: string) => {
+              const re = new RegExp(selectedSearch, "gi");
+              const match = title.match(re);
               return match && match.length > 0;
-            });
-          })
-        );
-      });
-      filteredData = filteredData.filter((event) => {
-        const eventLocation = event.tags
-          .filter((tagArray) => tagArray[0] === "location")
-          .map((tagArray) => tagArray[1]);
-        return (
-          !selectedLocation ||
-          eventLocation.some((location: string) => {
-            const re = new RegExp(selectedLocation, "gi");
-            const match = location.match(re);
-            return match && match.length > 0;
-          })
-        );
-      });
-      filteredData = filteredData.filter((event) => {
-        const eventTitle = event.tags
-          .filter((tagArray) => tagArray[0] === "title")
-          .map((tagArray) => tagArray[1]);
-
-        return (
-          !selectedSearch ||
-          eventTitle.some((title: string) => {
-            const re = new RegExp(selectedSearch, "gi");
-            const match = title.match(re);
-            return match && match.length > 0;
-          })
-        );
-      });
+            })
+          );
+        }
+      );
     }
-    setFilteredProductData(filteredData);
+    setFilteredProductData(filteredProductData);
   }, [
-    productData,
+    productEvents,
     isLoading,
     focusedPubkey,
     selectedCategories,
@@ -146,6 +131,19 @@ const DisplayEvents = ({
     setShowModal(true);
   };
 
+  const handleSendMessage = (pubkeyToOpenChatWith: string) => {
+    setShowModal(false);
+    router.push({
+      pathname: "/direct-messages",
+      query: { pk: nip19.npubEncode(pubkeyToOpenChatWith) },
+    });
+  };
+
+  const handleCheckout = (productId: string) => {
+    setShowModal(false);
+    router.push(`/checkout/${productId}`);
+  };
+
   const getSpacerCardsNeeded = () => {
     const cardsOnEachRow = Math.floor(screen.width / TOTALPRODUCTCARDWIDTH);
     const spacerCardsNeeded =
@@ -169,12 +167,12 @@ const DisplayEvents = ({
         {/* DISPLAYS PRODUCT LISTINGS HERE */}
         {filteredProductData.length != 0 ? (
           <div className="flex flex-row flex-wrap my-2 justify-evenly overflow-y-scroll overflow-x-hidden h-[90%] max-w-full">
-            {filteredProductData.map((event, index) => {
-              let npub = nip19.npubEncode(event.pubkey);
+            {filteredProductData.map((productData: ProductData, index) => {
+              let npub = nip19.npubEncode(productData.pubkey);
               return (
                 <ProductCard
-                  key={event.sig + "-" + index}
-                  product={event}
+                  key={productData.id + "-" + index}
+                  productData={productData}
                   handleDelete={handleDelete}
                   onProductClick={onProductClick}
                 />
@@ -220,6 +218,7 @@ const DisplayEvents = ({
         showModal={showModal}
         handleModalToggle={handleToggleModal}
         handleSendMessage={handleSendMessage}
+        handleCheckout={handleCheckout}
       />
     </>
   );
