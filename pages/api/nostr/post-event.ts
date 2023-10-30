@@ -4,8 +4,6 @@ import {
   finishEvent, // this assigns the pubkey, calculates the event id and signs the event in a single step
   nip04,
 } from "nostr-tools";
-import repo from '../../../utils/repo';
-import { DateTime } from "luxon";
 
 export interface PostEventRequest {
   pubkey: string;
