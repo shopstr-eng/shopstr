@@ -22,12 +22,14 @@ import CompactCategories from "./compact-categories";
 import { locationAvatar } from "./location-dropdown";
 import { DisplayCostBreakdown } from "./display-monetary-info";
 import { nip19 } from "nostr-tools";
+import { SHOPSTRBUTTONCLASSNAMES } from "./STATIC-VARIABLES";
 
 interface ProductFormProps {
   productData: any;
   handleModalToggle: () => void;
   showModal: boolean;
   handleSendMessage: (pubkeyToOpenChatWith: string) => void;
+  handleCheckout: (productId: string) => void;
 }
 
 export default function DisplayProductModal({
@@ -35,6 +37,7 @@ export default function DisplayProductModal({
   showModal,
   handleModalToggle,
   handleSendMessage,
+  handleCheckout,
 }: ProductFormProps) {
   const {
     createdAt,
@@ -109,10 +112,10 @@ export default function DisplayProductModal({
           <div className="flex flex-wrap gap-2 justify-between w-full">
             <Button
               onClick={() => {
-                console.log(productData.pubkey);
                 handleSendMessage(productData.pubkey);
               }}
               type="submit"
+              className={SHOPSTRBUTTONCLASSNAMES}
               startContent={
                 <EnvelopeIcon className="w-6 h-6 hover:text-yellow-500" />
               }
@@ -122,7 +125,8 @@ export default function DisplayProductModal({
 
             <Button
               type="submit"
-              onClick={() => router.push(`/checkout/${productData.id}`)}
+              onClick={() => handleCheckout(productData.id)}
+              className={SHOPSTRBUTTONCLASSNAMES}
               startContent={
                 <BoltIcon className="w-6 h-6 hover:text-yellow-500" />
               }

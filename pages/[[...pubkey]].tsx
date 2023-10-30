@@ -6,7 +6,10 @@ import { nip19, SimplePool } from "nostr-tools";
 import ProductForm from "./components/product-form";
 import { Button, Select, SelectItem, Input } from "@nextui-org/react";
 import Navbar from "./components/navbar";
-import { CATEGORIES } from "./components/STATIC-VARIABLES";
+import {
+  CATEGORIES,
+  SHOPSTRBUTTONCLASSNAMES,
+} from "./components/STATIC-VARIABLES";
 import LocationDropdown from "./components/location-dropdown";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 
@@ -124,7 +127,7 @@ const SellerView = () => {
       <div className="flex flex-row justify-between h-fit absolute w-[99vw] bottom-[0px] bg-white py-[20px] z-20">
         <Button
           type="button"
-          className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 min-w-fit w-[20%] "
+          className={SHOPSTRBUTTONCLASSNAMES + " w-[20%] "}
           onClick={() => {
             if (localStorage.getItem("signIn")) {
               let usersNPubkey = localStorage.getItem("npub");
@@ -137,7 +140,7 @@ const SellerView = () => {
           View Your Listings
         </Button>
         <Button
-          className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 min-w-fit w-[20%]"
+          className={SHOPSTRBUTTONCLASSNAMES + " w-[20%]"}
           onClick={handleModalToggle}
         >
           Add New Listing

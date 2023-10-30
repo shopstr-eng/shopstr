@@ -19,7 +19,7 @@ export default function ImageCarousel({
 
   const displayImages = () => {
     let className = "flex items-center justify-center " + classname + "";
-    if (images.length == 0)
+    if (!images || images.length == 0)
       return [
         <div className={className} key={"image" + 0}>
           <img
@@ -38,9 +38,9 @@ export default function ImageCarousel({
   };
   return (
     <Carousel
-      showArrows={images.length > 1}
+      showArrows={images && images.length > 1}
       showStatus={false}
-      showIndicators={images.length > 1}
+      showIndicators={images && images.length > 1}
       showThumbs={showThumbs}
       renderArrowPrev={(onClickHandler, hasPrev, label) =>
         hasPrev && (
