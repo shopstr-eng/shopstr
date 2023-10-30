@@ -193,12 +193,12 @@ export default function NewForm({
 
         const privkey = getPrivKeyWithPassphrase(passphrase);
         response = await nostrBuildUploadImage(imageFile, (e) =>
-          finishEvent(e, privkey)
+          finishEvent(e, privkey),
         );
       } else if (signIn === "extension") {
         response = await nostrBuildUploadImage(
           imageFile,
-          async (e) => await window.nostr.signEvent(e)
+          async (e) => await window.nostr.signEvent(e),
         );
       }
 

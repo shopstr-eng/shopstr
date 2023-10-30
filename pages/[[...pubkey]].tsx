@@ -17,7 +17,7 @@ const SellerView = () => {
   const [focusedPubkey, setfocusedPubkey] = useState(""); // pubkey of shop being viewed
   const [showModal, setShowModal] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState(
-    new Set<string>([])
+    new Set<string>([]),
   );
   const [selectedLocation, setSelectedLocation] = useState("");
   const [selectedSearch, setSelectedSearch] = useState("");
@@ -30,6 +30,15 @@ const SellerView = () => {
       setfocusedPubkey(data as string); // router.query.pubkey returns array of pubkeys
     }
   }, [router.query.pubkey]);
+
+  useEffect(() => {
+    if (!localStorage.getItem("relays")) {
+      localStorage.setItem(
+        "relays",
+        JSON.stringify(["wss://relay.damus.io", "wss://nos.lol"]),
+      );
+    }
+  }, []);
 
   const routeToShop = (npubkey: string) => {
     npubkey = encodeURIComponent(npubkey);

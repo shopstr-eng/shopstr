@@ -33,7 +33,7 @@ export default function CheckoutCard({
   const { signIn, decryptedNpub, relays } = getLocalStorageData();
 
   const [requestPassphrase, setRequestPassphrase] = useState(
-    signIn === "extension" ? false : true
+    signIn === "extension" ? false : true,
   ); // state that controls the request passphrase modal
   const [passphrase, setPassphrase] = useState("");
 
@@ -54,13 +54,13 @@ export default function CheckoutCard({
   const handlePayment = async (newPrice: number, currency: string) => {
     const wallet = new CashuWallet(
       new CashuMint(
-        "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"
-      )
+        "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC",
+      ),
     );
     if (currency === "USD") {
       try {
         const res = await axios.get(
-          "https://api.coinbase.com/v2/prices/BTC-USD/spot"
+          "https://api.coinbase.com/v2/prices/BTC-USD/spot",
         );
         const btcSpotPrice = Number(res.data.data.amount);
         const numSats = (newPrice / btcSpotPrice) * 100000000;
@@ -91,7 +91,7 @@ export default function CheckoutCard({
   async function invoiceHasBeenPaid(
     wallet: object,
     newPrice: number,
-    hash: string
+    hash: string,
   ) {
     let encoded;
 
@@ -134,7 +134,7 @@ export default function CheckoutCard({
         tags: [["p", pubkeyOfProductBeingSold]],
         content: await window.nostr.nip04.encrypt(
           pubkeyOfProductBeingSold,
-          token
+          token,
         ),
       };
 
@@ -198,7 +198,7 @@ export default function CheckoutCard({
                       {invoice.length > 30
                         ? `${invoice.substring(0, 10)}...${invoice.substring(
                             invoice.length - 10,
-                            invoice.length
+                            invoice.length,
                           )}`
                         : invoice}
                     </p>

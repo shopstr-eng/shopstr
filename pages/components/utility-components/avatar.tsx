@@ -25,10 +25,10 @@ export const ProfileAvatar = ({
     setPfp(
       profile && profile.content.picture
         ? profile.content.picture
-        : `https://robohash.idena.io/${pubkey}`
+        : `https://robohash.idena.io/${pubkey}`,
     );
     setDisplayName(
-      profile && profile.content.name ? profile.content.name : npub
+      profile && profile.content.name ? profile.content.name : npub,
     );
   }, [profileContext]);
 

@@ -68,7 +68,7 @@ export function DisplayCostBreakdown({
 }
 
 export const calculateTotalCost = (
-  productMonetaryInfo: ProductMonetaryInfo
+  productMonetaryInfo: ProductMonetaryInfo,
 ) => {
   const { price, shippingCost } = productMonetaryInfo;
   let total = price;

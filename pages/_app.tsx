@@ -29,7 +29,7 @@ function App({ Component, pageProps }: AppProps) {
     {
       productEvents: [],
       isLoading: true,
-    }
+    },
   );
   const [profileContext, setProfileContext] = useState<ProfileContextInterface>(
     {
@@ -43,7 +43,7 @@ function App({ Component, pageProps }: AppProps) {
           return newPubkeyProfilesToFetch;
         });
       },
-    }
+    },
   );
 
   useEffect(() => {
@@ -52,14 +52,14 @@ function App({ Component, pageProps }: AppProps) {
       setRelays(
         localStorage.getItem("relays") !== null
           ? JSON.parse(localStorage.getItem("relays") as string)
-          : []
+          : [],
       );
       setPubkeyProfilesToFetch(
         new Set(
           typeof localStorage.getItem("npub") == "string"
             ? [decryptNpub(localStorage.getItem("npub") as string)]
-            : []
-        ) as Set<string>
+            : [],
+        ) as Set<string>,
       ); // fetches your profile if you are logged in
     }
   }, []);

@@ -11,7 +11,7 @@ const Checkout = () => {
   const router = useRouter();
   const [relays, setRelays] = useState([]);
   const [productData, setProductData] = useState<ProductData | undefined>(
-    undefined
+    undefined,
   );
 
   const { productId } = router.query;

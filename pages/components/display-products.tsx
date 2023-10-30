@@ -26,7 +26,7 @@ const DisplayEvents = ({
 }) => {
   const [productEvents, setProductEvents] = useState<NostrEvent[]>([]);
   const [filteredProductData, setFilteredProductData] = useState<ProductData[]>(
-    []
+    [],
   );
   const [deletedProducts, setDeletedProducts] = useState<string[]>([]); // list of product ids that have been deleted
   const [isLoading, setIsLoading] = useState(true);
@@ -43,7 +43,7 @@ const DisplayEvents = ({
       // is product sub reaches eose then we can sort the product data
       let sortedProductEvents = [
         ...productEventContext.productEvents.sort(
-          (a, b) => b.created_at - a.created_at
+          (a, b) => b.created_at - a.created_at,
         ),
       ]; // sorts most recently created to least recently created
       setProductEvents(sortedProductEvents);
@@ -65,7 +65,7 @@ const DisplayEvents = ({
     if (productEvents && !isLoading && filteredProductData) {
       if (focusedPubkey) {
         filteredProductData = filteredProductData.filter(
-          (productData: ProductData) => productData.pubkey === focusedPubkey
+          (productData: ProductData) => productData.pubkey === focusedPubkey,
         );
       }
       filteredProductData = filteredProductData.filter(
@@ -81,12 +81,12 @@ const DisplayEvents = ({
               });
             })
           );
-        }
+        },
       );
       filteredProductData = filteredProductData.filter(
         (productData: ProductData) => {
           return !selectedLocation || productData.location === selectedLocation;
-        }
+        },
       );
       filteredProductData = filteredProductData.filter(
         (productData: ProductData) => {
@@ -95,7 +95,7 @@ const DisplayEvents = ({
           const re = new RegExp(selectedSearch, "gi");
           const match = productData.title.match(re);
           return match && match.length > 0;
-        }
+        },
       );
     }
     setFilteredProductData(filteredProductData);

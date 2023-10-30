@@ -6,7 +6,7 @@ const CompactCategories = ({ categories }: { categories: string[] }) => {
   const [isOpen, setIsOpen] = React.useState(false);
 
   const validCategories = categories.filter((category) =>
-    CATEGORIES.includes(category)
+    CATEGORIES.includes(category),
   );
   const categoryChips = validCategories.map((category, index) => {
     return <Chip key={index}>{category}</Chip>;

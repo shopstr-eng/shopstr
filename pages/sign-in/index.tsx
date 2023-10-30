@@ -26,7 +26,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
 
         let encryptedPrivateKey = CryptoJS.AES.encrypt(
           privateKey,
-          passphrase
+          passphrase,
         ).toString();
 
         localStorage.setItem("encryptedPrivateKey", encryptedPrivateKey);
@@ -35,14 +35,14 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
 
         localStorage.setItem(
           "relays",
-          JSON.stringify(["wss://relay.damus.io", "wss://nos.lol"])
+          JSON.stringify(["wss://relay.damus.io", "wss://nos.lol"]),
         );
 
         router.push("/");
       }
     } else {
       setErrorMessage(
-        "The public and/or private keys inputted were not valid. Generate a new key pair or try again."
+        "The public and/or private keys inputted were not valid. Generate a new key pair or try again.",
       );
     }
   };
@@ -61,7 +61,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
       localStorage.setItem("signIn", "extension");
       localStorage.setItem(
         "relays",
-        JSON.stringify(["wss://relay.damus.io", "wss://nos.lol"])
+        JSON.stringify(["wss://relay.damus.io", "wss://nos.lol"]),
       );
       alert("Signed in as " + npub);
       router.push("/");
