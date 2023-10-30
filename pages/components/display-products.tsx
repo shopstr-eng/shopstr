@@ -176,7 +176,7 @@ const DisplayEvents = ({
         </div>
         {/* DISPLAYS PRODUCT LISTINGS HERE */}
         {filteredProductData.length != 0 ? (
-          <div className="flex flex-row flex-wrap my-2 justify-evenly overflow-y-scroll overflow-x-hidden h-[90%] max-w-full">
+          <div className="flex flex-row flex-wrap my-2 justify-evenly overflow-y-hidden overflow-x-hidden h-[90%] max-w-full">
             {filteredProductData.map((productData: ProductData, index) => {
               let npub = nip19.npubEncode(productData.pubkey);
               return (

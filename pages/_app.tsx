@@ -83,7 +83,6 @@ function App({ Component, pageProps }: AppProps) {
       });
     });
     productsSub.on("eose", () => {
-      console.log("ProductSub eose reached");
       setProductContext((productContext) => {
         return {
           productEvents: productContext.productEvents,
