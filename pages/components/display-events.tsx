@@ -1,7 +1,11 @@
 import { useState, useEffect, useContext, useMemo } from "react";
 import DisplayProduct from "./display-product";
 import { nip19 } from "nostr-tools";
-import { DeleteListing, NostrEvent } from "../nostr-helpers";
+import {
+  DeleteListing,
+  NostrEvent,
+  getLocalStorageData,
+} from "../nostr-helpers";
 import { ProductContext } from "../context";
 import ProductCard, { TOTALPRODUCTCARDWIDTH } from "./product-card";
 import DisplayProductModal from "./display-product-modal";
@@ -132,6 +136,11 @@ const DisplayEvents = ({
   };
 
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
+    let { signIn } = getLocalStorageData();
+    if (!signIn) {
+      alert("Please sign in to send a message");
+      return;
+    }
     setShowModal(false);
     router.push({
       pathname: "/direct-messages",
@@ -140,6 +149,11 @@ const DisplayEvents = ({
   };
 
   const handleCheckout = (productId: string) => {
+    let { signIn } = getLocalStorageData();
+    if (!signIn) {
+      alert("Please sign in to send checkout");
+      return;
+    }
     setShowModal(false);
     router.push(`/checkout/${productId}`);
   };

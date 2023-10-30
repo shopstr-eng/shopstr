@@ -15,7 +15,7 @@ export const ProfileAvatar = ({
   const [pfp, setPfp] = useState("");
   const [displayName, setDisplayName] = useState("");
   const profileContext = useContext(ProfileMapContext);
-  const npub = nip19.npubEncode(pubkey);
+  const npub = pubkey ? nip19.npubEncode(pubkey) : "";
   const routeToShop = (npubkey: string) => {
     router.push(npubkey);
   };
