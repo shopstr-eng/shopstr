@@ -8,24 +8,30 @@ import {
   DropdownSection,
 } from "@nextui-org/react";
 
+type ConfirmActionDropdownProps = {
+  helpText: string;
+  buttonLabel: string;
+  onConfirm: () => void;
+  children: React.ReactNode;
+};
 export default function ConfirmActionDropdown({
+  helpText,
+  buttonLabel,
+  onConfirm,
   children,
-  header,
-  label,
-  func,
-}) {
+}: ConfirmActionDropdownProps) {
   return (
-    <Dropdown backdrop="blur">
+    <Dropdown>
       <DropdownTrigger>{children}</DropdownTrigger>
       <DropdownMenu variant="faded" aria-label="Static Actions">
-        <DropdownSection title={header} showDivider={true}></DropdownSection>
+        <DropdownSection title={helpText} showDivider={true}></DropdownSection>
         <DropdownItem
           key="delete"
           className="text-danger"
           color="danger"
-          onClick={func}
+          onClick={onConfirm}
         >
-          {label}
+          {buttonLabel}
         </DropdownItem>
       </DropdownMenu>
     </Dropdown>

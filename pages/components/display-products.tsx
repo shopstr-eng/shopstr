@@ -34,6 +34,7 @@ const DisplayEvents = ({
   const [focusedProduct, setFocusedProduct] = useState(""); // product being viewed in modal
   const [showModal, setShowModal] = useState(false);
   const router = useRouter();
+  const [passphrase, setPassphrase] = useState(""); // NEEDED FOR DELETE LISTING
 
   useEffect(() => {
     if (!productEventContext) return;
@@ -112,6 +113,7 @@ const DisplayEvents = ({
   ]);
 
   const handleDelete = async (productId: string, passphrase: string) => {
+    console.log("DELETION CLICKED");
     try {
       await DeleteListing([productId], passphrase);
       setDeletedProducts((deletedProducts) => [...deletedProducts, productId]);
@@ -178,12 +180,10 @@ const DisplayEvents = ({
         {filteredProductData.length != 0 ? (
           <div className="flex flex-row flex-wrap my-2 justify-evenly overflow-y-hidden overflow-x-hidden h-[90%] max-w-full">
             {filteredProductData.map((productData: ProductData, index) => {
-              let npub = nip19.npubEncode(productData.pubkey);
               return (
                 <ProductCard
                   key={productData.id + "-" + index}
                   productData={productData}
-                  handleDelete={handleDelete}
                   onProductClick={onProductClick}
                 />
               );
@@ -207,6 +207,7 @@ const DisplayEvents = ({
         handleModalToggle={handleToggleModal}
         handleSendMessage={handleSendMessage}
         handleCheckout={handleCheckout}
+        handleDelete={handleDelete}
       />
     </>
   );

@@ -14,16 +14,16 @@ import { useRouter } from "next/router";
 
 export default function RequestPassphraseModal({
   passphrase,
-  isOpen,
   onPassphraseChange,
-  startCheckoutProcess,
-  setRequestPassphrase,
+  isOpen,
+  setIsOpen,
+  actionOnSubmit,
 }: {
   passphrase: string;
-  isOpen: boolean;
   onPassphraseChange: (passphrase: string) => void;
-  startCheckoutProcess: () => void;
-  setRequestPassphrase: (value: boolean) => void;
+  isOpen: boolean;
+  setIsOpen: (value: boolean) => void;
+  actionOnSubmit: () => void;
 }) {
   const router = useRouter();
   const passphraseInputRef = useRef(null);
@@ -51,7 +51,7 @@ export default function RequestPassphraseModal({
     <Modal
       backdrop="blur"
       isOpen={isOpen}
-      onClose={() => setRequestPassphrase(false)}
+      onClose={() => setIsOpen(false)}
       classNames={{
         body: "py-6",
         backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -99,8 +99,8 @@ export default function RequestPassphraseModal({
                 e.preventDefault();
                 passphraseInputRef.current.focus();
               } else if (!isButtonDisabled) {
-                setRequestPassphrase(false);
-                startCheckoutProcess(); // submits the passphrase validated by isButtonDisabled
+                setIsOpen(false);
+                actionOnSubmit(); // submits the passphrase validated by isButtonDisabled
               }
             }}
           >
