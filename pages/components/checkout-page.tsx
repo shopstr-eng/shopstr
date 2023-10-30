@@ -1,7 +1,7 @@
 import React from "react";
 import { ProductData } from "./utility/product-parser-functions";
 import { Divider } from "@nextui-org/react";
-import ProductCard from "./product-card";
+import ProductCard from "./utility-components/product-card";
 import CheckoutCard from "./checkout-card";
 
 export default function CheckoutPage({

@@ -10,12 +10,12 @@ import {
   Chip,
   Divider,
 } from "@nextui-org/react";
-import ImageCarousel from "./image-carousel";
-import { ProfileAvatar } from "./avatar";
-import CompactCategories from "./compact-categories";
-import { locationAvatar } from "./location-dropdown";
-import { DisplayCostBreakdown } from "./display-monetary-info";
-import { SHOPSTRBUTTONCLASSNAMES } from "./STATIC-VARIABLES";
+import ImageCarousel from "./utility-components/image-carousel";
+import { ProfileAvatar } from "./utility-components/avatar";
+import CompactCategories from "./utility-components/compact-categories";
+import { locationAvatar } from "./utility-components/location-dropdown";
+import { DisplayCostBreakdown } from "./utility-components/display-monetary-info";
+import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
 
 interface ProductFormProps {
   productData: any;
