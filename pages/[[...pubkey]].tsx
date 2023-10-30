@@ -38,7 +38,7 @@ const SellerView = () => {
         JSON.stringify(["wss://relay.damus.io", "wss://nos.lol"]),
       );
     }
-  }, []);
+  });
 
   const routeToShop = (npubkey: string) => {
     npubkey = encodeURIComponent(npubkey);
