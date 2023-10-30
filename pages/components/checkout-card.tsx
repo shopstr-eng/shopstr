@@ -210,7 +210,7 @@ export default function CheckoutCard({
                 </>
               ) : (
                 <div>
-                  <p>Waiting for Cashu mint to create a lightning invoice...</p>
+                  <p>Waiting for lightning invoice...</p>
                 </div>
               )}
             </div>
