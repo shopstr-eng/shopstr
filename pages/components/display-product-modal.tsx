@@ -66,7 +66,6 @@ export default function DisplayProductModal({
       alert("You must be signed in!");
       return;
     }
-    console.log("signIn", signIn);
     if (signIn === "extension") {
       finalizeDeleteListingProcess();
     } else if (signIn === "nsec") {
