@@ -1,6 +1,6 @@
 import { Avatar } from "@nextui-org/react";
 import { useContext, useEffect, useState } from "react";
-import { ProfileMapContext } from "../context";
+import { ProfileMapContext } from "../../context";
 import { useRouter } from "next/router";
 import { nip19 } from "nostr-tools";
 

@@ -12,15 +12,15 @@ import {
 } from "@nextui-org/react";
 import { SimplePool } from "nostr-tools";
 import axios from "axios";
-import RequestPassphraseModal from "./request-passphrase-modal";
+import RequestPassphraseModal from "./utility-components/request-passphrase-modal";
 import { ClipboardIcon } from "@heroicons/react/24/outline";
 import { CashuMint, CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
 import {
   getLocalStorageData,
   getPrivKeyWithPassphrase,
-} from "../nostr-helpers";
+} from "./utility/nostr-helper-functions";
 import { ProductData } from "./utility/product-parser-functions";
-import { DisplayCostBreakdown } from "./display-monetary-info";
+import { DisplayCostBreakdown } from "./utility-components/display-monetary-info";
 
 export default function CheckoutCard({
   productData,

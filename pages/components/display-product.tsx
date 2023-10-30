@@ -31,7 +31,7 @@ import {
   getNsecWithPassphrase,
   getPrivKeyWithPassphrase,
   getPubKey,
-} from "../nostr-helpers";
+} from "./utility/nostr-helper-functions";
 
 // Define a type for product data
 interface ProductData {

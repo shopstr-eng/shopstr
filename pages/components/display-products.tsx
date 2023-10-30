@@ -4,9 +4,11 @@ import {
   DeleteListing,
   NostrEvent,
   getLocalStorageData,
-} from "../nostr-helpers";
+} from "./utility/nostr-helper-functions";
 import { ProductContext } from "../context";
-import ProductCard, { TOTALPRODUCTCARDWIDTH } from "./product-card";
+import ProductCard, {
+  TOTALPRODUCTCARDWIDTH,
+} from "./utility-components/product-card";
 import DisplayProductModal from "./display-product-modal";
 import { useRouter } from "next/router";
 import parseTags, { ProductData } from "./utility/product-parser-functions";

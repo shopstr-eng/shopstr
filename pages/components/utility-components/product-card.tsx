@@ -5,7 +5,7 @@ import { locationAvatar } from "./location-dropdown";
 import CompactCategories from "./compact-categories";
 import ImageCarousel from "./image-carousel";
 import CompactPriceDisplay from "./display-monetary-info";
-import { ProductData } from "./utility/product-parser-functions";
+import { ProductData } from "../utility/product-parser-functions";
 
 const cardWidth = 380;
 const cardxMargin = 2.5;

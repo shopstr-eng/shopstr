@@ -23,11 +23,11 @@ import {
   getNsecWithPassphrase,
   getPrivKeyWithPassphrase,
   nostrBuildUploadImage,
-} from "../nostr-helpers";
+} from "./utility/nostr-helper-functions";
 import { finishEvent } from "nostr-tools";
-import { CATEGORIES, SHIPPING_OPTIONS } from "./STATIC-VARIABLES";
-import LocationDropdown from "./location-dropdown";
-import ConfirmActionDropdown from "./confirm-action-dropdown";
+import { CATEGORIES, SHIPPING_OPTIONS } from "./utility/STATIC-VARIABLES";
+import LocationDropdown from "./utility-components/location-dropdown";
+import ConfirmActionDropdown from "./utility-components/confirm-action-dropdown";
 
 interface ProductFormProps {
   handleModalToggle: () => void;

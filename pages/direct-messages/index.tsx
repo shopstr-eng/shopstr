@@ -27,8 +27,8 @@ import {
   decryptNpub,
   getNsecWithPassphrase,
   getPrivKeyWithPassphrase,
-} from "../nostr-helpers";
-import { ProfileAvatar } from "../components/avatar";
+} from "../components/utility/nostr-helper-functions";
+import { ProfileAvatar } from "../components/utility-components/avatar";
 import { ProfileMapContext } from "../context";
 
 const DirectMessages = () => {

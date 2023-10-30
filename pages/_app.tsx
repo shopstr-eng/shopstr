@@ -10,7 +10,10 @@ import {
   ProductContext,
   ProductContextInterface,
 } from "./context";
-import { decryptNpub, NostrEvent } from "./nostr-helpers";
+import {
+  decryptNpub,
+  NostrEvent,
+} from "./components/utility/nostr-helper-functions";
 
 function App({ Component, pageProps }: AppProps) {
   const [relays, setRelays] = useState([]);

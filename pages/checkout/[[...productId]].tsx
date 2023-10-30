@@ -5,7 +5,7 @@ import parseTags, {
   ProductData,
 } from "../components/utility/product-parser-functions";
 import CheckoutPage from "../components/checkout-page";
-import { getLocalStorageData } from "../nostr-helpers";
+import { getLocalStorageData } from "../components/utility/nostr-helper-functions";
 
 const Checkout = () => {
   const router = useRouter();

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import DisplayEvents from "./components/display-events";
+import DisplayEvents from "./components/display-products";
 import { useRouter } from "next/router";
 import { ArrowUturnLeftIcon } from "@heroicons/react/24/outline";
 import { nip19 } from "nostr-tools";
@@ -8,8 +8,8 @@ import { Button, Select, SelectItem, Input } from "@nextui-org/react";
 import {
   CATEGORIES,
   SHOPSTRBUTTONCLASSNAMES,
-} from "./components/STATIC-VARIABLES";
-import LocationDropdown from "./components/location-dropdown";
+} from "./components/utility/STATIC-VARIABLES";
+import LocationDropdown from "./components/utility-components/location-dropdown";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 
 const SellerView = () => {
