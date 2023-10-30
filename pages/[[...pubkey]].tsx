@@ -123,17 +123,17 @@ const SellerView = () => {
         selectedLocation={selectedLocation}
         selectedSearch={selectedSearch}
       />
-      <div className="flex flex-row justify-between h-fit absolute w-[99vw] bottom-[0px] bg-white py-[20px] z-20">
+      <div className="flex flex-row justify-between h-fit absolute w-[99vw] bottom-[0px] bg-white py-[15px] z-20 px-3">
         <Button
           type="button"
-          className={SHOPSTRBUTTONCLASSNAMES + " w-[20%] "}
+          className={SHOPSTRBUTTONCLASSNAMES + " w-[20%]"}
           onClick={() => {
             if (
               localStorage.getItem("signIn") &&
               localStorage.getItem("npub") != null
             ) {
-              let usersNPubkey = localStorage.getItem("npub") as string;
-              routeToShop(usersNPubkey);
+              let usersNPub = localStorage.getItem("npub") as string;
+              routeToShop(usersNPub);
             } else {
               alert("You must be signed in to view your listings!");
             }
