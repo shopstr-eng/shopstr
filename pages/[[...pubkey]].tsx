@@ -31,15 +31,6 @@ const SellerView = () => {
     }
   }, [router.query.pubkey]);
 
-  useEffect(() => {
-    if (!localStorage.getItem("relays")) {
-      localStorage.setItem(
-        "relays",
-        JSON.stringify(["wss://relay.damus.io", "wss://nos.lol"]),
-      );
-    }
-  });
-
   const routeToShop = (npubkey: string) => {
     npubkey = encodeURIComponent(npubkey);
     if (npubkey === "") {

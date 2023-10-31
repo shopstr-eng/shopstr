@@ -49,11 +49,15 @@ function App({ Component, pageProps }: AppProps) {
   useEffect(() => {
     // Perform localStorage action
     if (window !== undefined) {
-      setRelays(
-        localStorage.getItem("relays") !== null
-          ? JSON.parse(localStorage.getItem("relays") as string)
-          : [],
-      );
+      if (localStorage.getItem("relays") !== null) {
+        setRelays(JSON.parse(localStorage.getItem("relays") as string));
+      } else {
+        localStorage.setItem(
+          "relays",
+          JSON.stringify(["wss://relay.damus.io", "wss://nos.lol"]),
+        );
+        setRelays(JSON.parse(localStorage.getItem("relays") as string));
+      }
       setPubkeyProfilesToFetch(
         new Set(
           typeof localStorage.getItem("npub") == "string"
