@@ -88,6 +88,13 @@ const Relays = () => {
 
   return (
     <div>
+      {relays.length === 0 && (
+        <div className="mt-8 flex items-center justify-center">
+          <p className="text-xl break-words text-center">
+            No relays added . . .
+          </p>
+        </div>
+      )}
       <div className="mt-8 mb-8 overflow-y-scroll max-h-96 bg-white rounded-md">
         {relays.map((relay) => (
           <div
@@ -102,12 +109,14 @@ const Relays = () => {
           </div>
         ))}
       </div>
-      <Button
-        className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 mx-3"
-        onClick={handleToggleModal}
-      >
-        Add New Relay
-      </Button>
+      <div className="flex flex-row justify-between h-fit absolute w-[99vw] bottom-[0px] bg-white py-[15px] z-20 px-3">
+        <Button
+          className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 mx-3"
+          onClick={handleToggleModal}
+        >
+          Add New Relay
+        </Button>
+      </div>
       <Modal
         backdrop="blur"
         isOpen={showModal}

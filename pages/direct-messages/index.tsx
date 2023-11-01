@@ -445,12 +445,14 @@ const DirectMessages = () => {
             );
           })}
         </div>
-        <Button
-          className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 mx-3"
-          onClick={handleToggleModal}
-        >
-          Start New Chat
-        </Button>
+        <div className="flex flex-row justify-between h-fit absolute w-[99vw] bottom-[0px] bg-white py-[15px] z-20 px-3">
+          <Button
+            className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 mx-3"
+            onClick={handleToggleModal}
+          >
+            Start New Chat
+          </Button>
+        </div>
         <Modal
           backdrop="blur"
           isOpen={showModal}
