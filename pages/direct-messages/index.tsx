@@ -653,12 +653,7 @@ const DirectMessages = () => {
                   : "bg-gray-300"
               }`}
             >
-              {message.sender === decryptedNpub &&
-              message.plaintext.includes("cashuA") ? (
-                <i>Payment sent!</i>
-              ) : (
-                message.plaintext
-              )}
+              {message.plaintext}
             </p>
           </div>
         ))}
