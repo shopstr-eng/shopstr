@@ -1,4 +1,3 @@
-//TODO: QOL Make on clipboard of the lnurl invoice, instead of alerting make a checkmark animation or something else
 //TODO: perhaps see if we can abstract away some payment logic into reusable functions
 import React, { useContext, useState, useEffect } from "react";
 import { ProfileMapContext } from "../context";
@@ -13,7 +12,7 @@ import {
 } from "@nextui-org/react";
 import { SimplePool } from "nostr-tools";
 import axios from "axios";
-import { ClipboardIcon } from "@heroicons/react/24/outline";
+import { CheckIcon, ClipboardIcon } from "@heroicons/react/24/outline";
 import { CashuMint, CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
 import { getLocalStorageData } from "./utility/nostr-helper-functions";
 import { nip19 } from "nostr-tools";
@@ -33,6 +32,7 @@ export default function CheckoutCard({
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [invoice, setInvoice] = useState("");
+  const [copiedToClipboard, setCopiedToClipboard] = useState(false);
 
   const [name, setName] = useState("");
   const profileContext = useContext(ProfileMapContext);
@@ -178,7 +178,11 @@ export default function CheckoutCard({
 
   const handleCopyInvoice = () => {
     navigator.clipboard.writeText(invoice);
-    alert("Invoice copied to clipboard!");
+    setCopiedToClipboard(true);
+    // after 2 seconds, set copiedToClipboard back to false
+    setTimeout(() => {
+      setCopiedToClipboard(false);
+    }, 2000);
   };
 
   return (
@@ -212,7 +216,10 @@ export default function CheckoutCard({
                     </p>
                     <ClipboardIcon
                       onClick={handleCopyInvoice}
-                      className="w-4 h-4 cursor-pointer ml-2"
+                      className={`w-4 h-4 cursor-pointer ml-2 ${copiedToClipboard ? 'hidden' : ''}`}
+                    />
+                    <CheckIcon
+                      className={`w-4 h-4 cursor-pointer ml-2 ${copiedToClipboard ? '' : 'hidden'}`}
                     />
                   </div>
                 </>
