@@ -57,7 +57,7 @@ const Navbar = () => {
             onClick={() => router.push("/relays")}
           />
           {!signIn && (
-            <ArrowRightOnRectangleIcon
+            <ArrowLeftOnRectangleIcon
               className="w-6 h-6 hover:text-purple-700 cursor-pointer"
               onClick={() => {
                 router.push("/sign-in");
@@ -65,7 +65,7 @@ const Navbar = () => {
             />
           )}
           {signIn && (
-            <ArrowLeftOnRectangleIcon
+            <ArrowRightOnRectangleIcon
               className="w-6 h-6 hover:text-purple-700 cursor-pointer"
               onClick={() => {
                 localStorage.removeItem("npub");
