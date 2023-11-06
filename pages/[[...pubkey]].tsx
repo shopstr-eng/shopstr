@@ -54,7 +54,7 @@ const SellerView = () => {
       <Head>
         <title>Shopstr</title>
         <meta property="og:title" content="Shopstr" />
-        <meta property="og:description" content="Buy and sell anythng, anywhere, anytime." />
+        <meta property="og:description" content="Buy and sell anything, anywhere, anytime." />
         <meta property="og:image" content="/shopstr.png" />
         <meta property="og:url" content="https://shopstr.store" />
       </Head>
