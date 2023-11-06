@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import DisplayEvents from "./components/display-products";
+import Head from 'next/head';
 import { useRouter } from "next/router";
 import { ArrowUturnLeftIcon } from "@heroicons/react/24/outline";
 import { nip19 } from "nostr-tools";
@@ -50,6 +51,13 @@ const SellerView = () => {
 
   return (
     <div className="">
+      <Head>
+        <title>Shopstr</title>
+        <meta property="og:title" content="Shopstr" />
+        <meta property="og:description" content="Buy and sell anythng, anywhere, anytime." />
+        <meta property="og:image" content="/shopstr.png" />
+        <meta property="og:url" content="https://shopstr.store" />
+      </Head>
       <div className="top-[40px] flex flex-col absolute z-20 w-[99vw] max-w-[100%] px-3 bg-white pb-2">
         <div className="flex-row flex gap-2 pb-3">
           <Input
