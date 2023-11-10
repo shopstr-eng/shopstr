@@ -216,10 +216,14 @@ export default function CheckoutCard({
                     </p>
                     <ClipboardIcon
                       onClick={handleCopyInvoice}
-                      className={`w-4 h-4 cursor-pointer ml-2 ${copiedToClipboard ? 'hidden' : ''}`}
+                      className={`w-4 h-4 cursor-pointer ml-2 ${
+                        copiedToClipboard ? "hidden" : ""
+                      }`}
                     />
                     <CheckIcon
-                      className={`w-4 h-4 cursor-pointer ml-2 ${copiedToClipboard ? '' : 'hidden'}`}
+                      className={`w-4 h-4 cursor-pointer ml-2 ${
+                        copiedToClipboard ? "" : "hidden"
+                      }`}
                     />
                   </div>
                 </>

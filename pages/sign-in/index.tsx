@@ -3,9 +3,7 @@ import axios from "axios";
 import { withRouter, NextRouter } from "next/router";
 import { nip19, getPublicKey } from "nostr-tools";
 import * as CryptoJS from "crypto-js";
-import {
-  validateNSecKey,
-} from "../components/utility/nostr-helper-functions";
+import { validateNSecKey } from "../components/utility/nostr-helper-functions";
 import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
 
 const LoginPage = ({ router }: { router: NextRouter }) => {
@@ -19,9 +17,9 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
       if (passphrase === "" || passphrase === null) {
         alert("No passphrase provided!");
       } else {
-        let { data: sk } = nip19.decode(privateKey)
-        let pk = await getPublicKey(sk)
-        let npub = nip19.npubEncode(pk)
+        let { data: sk } = nip19.decode(privateKey);
+        let pk = await getPublicKey(sk);
+        let npub = nip19.npubEncode(pk);
         localStorage.setItem("npub", npub);
 
         let encryptedPrivateKey = CryptoJS.AES.encrypt(
