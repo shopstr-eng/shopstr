@@ -1,28 +1,28 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { withRouter, NextRouter } from "next/router";
-import { nip19 } from "nostr-tools";
+import { nip19, getPublicKey } from "nostr-tools";
 import * as CryptoJS from "crypto-js";
 import {
-  validateNPubKey,
   validateNSecKey,
 } from "../components/utility/nostr-helper-functions";
 import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
 
 const LoginPage = ({ router }: { router: NextRouter }) => {
-  const [publicKey, setPublicKey] = useState<string>("");
   const [privateKey, setPrivateKey] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string>("");
-  const [validPublicKey, setValidPublicKey] = useState<boolean>(false);
   const [validPrivateKey, setValidPrivateKey] = useState<boolean>(false);
   const [passphrase, setPassphrase] = useState<string>("");
 
-  const handleSignIn = () => {
-    if (validPublicKey && validPrivateKey) {
+  const handleSignIn = async () => {
+    if (validPrivateKey) {
       if (passphrase === "" || passphrase === null) {
         alert("No passphrase provided!");
       } else {
-        localStorage.setItem("npub", publicKey);
+        let { data: sk } = nip19.decode(privateKey)
+        let pk = await getPublicKey(sk)
+        let npub = nip19.npubEncode(pk)
+        localStorage.setItem("npub", npub);
 
         let encryptedPrivateKey = CryptoJS.AES.encrypt(
           privateKey,
@@ -38,11 +38,12 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
           JSON.stringify(["wss://relay.damus.io", "wss://nos.lol"]),
         );
 
+        alert("Signed in as " + npub + ".");
         router.push("/");
       }
     } else {
       setErrorMessage(
-        "The public and/or private keys inputted were not valid. Generate a new key pair or try again.",
+        "The private key inputted was not valid! Generate a new key pair or try again.",
       );
     }
   };
@@ -54,26 +55,24 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
   const startExtensionLogin = async () => {
     try {
       // @ts-ignore
-      var pubkey = await window.nostr.getPublicKey();
-      let npub = nip19.npubEncode(pubkey);
-      setPublicKey(npub);
+      var pk = await window.nostr.getPublicKey();
+      let npub = nip19.npubEncode(pk);
       localStorage.setItem("npub", npub);
       localStorage.setItem("signIn", "extension");
       localStorage.setItem(
         "relays",
         JSON.stringify(["wss://relay.damus.io", "wss://nos.lol"]),
       );
-      alert("Signed in as " + npub);
+      alert("Signed in as " + npub + ".");
       router.push("/");
     } catch (error) {
-      alert("Extension sign in failed");
+      alert("Extension sign in failed!");
     }
   };
 
   useEffect(() => {
-    setValidPublicKey(validateNPubKey(publicKey));
     setValidPrivateKey(validateNSecKey(privateKey));
-  }, [publicKey, privateKey]);
+  }, [privateKey]);
 
   return (
     <div className="flex flex-row justify-center items-center max-h-screen">
@@ -96,18 +95,6 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
               {errorMessage}
             </div>
           )}
-          <div className="flex flex-col mb-4">
-            <label className="text-xl">Public Key:</label>
-            <Input
-              color={validPublicKey ? "success" : "error"}
-              type="text"
-              width="100%"
-              size="large"
-              value={publicKey}
-              placeholder="npub..."
-              onChange={(e) => setPublicKey(e.target.value)}
-            />
-          </div>
           <div className="flex flex-col mb-4">
             <label className="text-xl">Private Key:</label>
             <Input
@@ -149,7 +136,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
             <Button
               className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600"
               onClick={handleSignIn}
-              disabled={!validPublicKey || !validPrivateKey} // Disable the button only if both key strings are invalid or the button has already been clicked
+              disabled={!validPrivateKey} // Disable the button only if both key strings are invalid or the button has already been clicked
             >
               Sign In
             </Button>
