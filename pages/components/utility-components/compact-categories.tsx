@@ -5,13 +5,13 @@ import { Chip, Tooltip } from "@nextui-org/react";
 const CompactCategories = ({ categories }: { categories: string[] }) => {
   const [isOpen, setIsOpen] = React.useState(false);
 
-  const validCategories = categories.filter((category) =>
+  const validCategories = categories?.filter((category) =>
     CATEGORIES.includes(category),
   );
-  const categoryChips = validCategories.map((category, index) => {
+  const categoryChips = validCategories?.map((category, index) => {
     return <Chip key={index}>{category}</Chip>;
   });
-  if (validCategories.length === 0) return null;
+  if (validCategories?.length === 0) return null;
   return (
     <>
       {categoryChips && (
