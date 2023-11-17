@@ -14,7 +14,7 @@ import ImageCarousel from "./utility-components/image-carousel";
 import { ProfileAvatar } from "./utility-components/avatar";
 import CompactCategories from "./utility-components/compact-categories";
 import { locationAvatar } from "./utility-components/location-dropdown";
-import { DisplayCostBreakdown } from "./utility-components/display-monetary-info";
+import { DisplayCostBreakdown, formatWithCommas } from "./utility-components/display-monetary-info";
 import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
 import RequestPassphraseModal from "./utility-components/request-passphrase-modal";
 import ConfirmActionDropdown from "./utility-components/confirm-action-dropdown";
@@ -82,6 +82,10 @@ export default function DisplayProductModal({
   };
 
   if (!showModal) return null; // needed to prevent TreeWalker error upon redirect while modal open
+
+  // Format the totalCost with commas
+  const formattedTotalCost = formatWithCommas(totalCost, currency);
+  
   return (
     <>
       <Modal
@@ -173,7 +177,7 @@ export default function DisplayProductModal({
                     <BoltIcon className="w-6 h-6 hover:text-yellow-500" />
                   }
                 >
-                  Checkout: {totalCost} {currency}
+                  Checkout: {formattedTotalCost}
                 </Button>
               )}
             </div>

@@ -44,23 +44,27 @@ export function DisplayCostBreakdown({
   monetaryInfo: ProductMonetaryInfo;
 }) {
   const { shippingType, shippingCost, price, currency } = monetaryInfo;
+
+  const formattedPrice = formatWithCommas(price, currency);
+  const formattedShippingCost = shippingCost ? formatWithCommas(shippingCost, currency) : `0 ${currency}`;
   const totalCost = calculateTotalCost(monetaryInfo);
+  const formattedTotalCost = formatWithCommas(totalCost, currency);
+  
   return (
     <div>
       <p>
-        <strong className="font-semibold">Price:</strong> {price} {currency}
+        <strong className="font-semibold">Price:</strong> {formattedPrice}
       </p>
       {shippingType && (
         <p>
           <strong className="font-semibold">Shipping:</strong>
-          {` ${shippingType} - ${shippingCost} ${currency}`}
+          {` ${shippingType} - ${formattedShippingCost}`}
         </p>
       )}
 
-      {totalCost && (
+      {totalCost !== undefined && (
         <p>
-          <strong className="font-semibold">Total Cost:</strong> {totalCost}{" "}
-          {currency}
+          <strong className="font-semibold">Total Cost:</strong> {formattedTotalCost}
         </p>
       )}
     </div>
@@ -75,3 +79,18 @@ export const calculateTotalCost = (
   total += shippingCost ? shippingCost : 0;
   return total;
 };
+
+export function formatWithCommas(amount: number, currency: string) {
+  if (amount === 0) {
+    // If the amount is 0, directly return "0" followed by the currency
+    return `0 ${currency}`;
+  }
+  const [integerPart, fractionalPart] = amount.toString().split('.');
+  // Add commas to the integer part
+  const integerWithCommas = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  // Concatenate the fractional part if it exists
+  const formattedAmount = fractionalPart 
+    ? `${integerWithCommas}.${fractionalPart}`
+    : integerWithCommas;
+  return `${formattedAmount} ${currency}`;
+}
