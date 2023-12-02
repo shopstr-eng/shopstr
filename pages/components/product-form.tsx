@@ -287,7 +287,7 @@ export default function NewForm({
                             color="danger"
                             aria-label="Trash"
                             radius="full"
-                            className="z-20 top-12 right-3 bg-gradient-to-tr from-blue-950 to-red-950 text-white"
+                            className="right-3 top-12 z-20 bg-gradient-to-tr from-blue-950 to-red-950 text-white"
                             variant="bordered"
                           >
                             <TrashIcon style={{ padding: 4 }} />
@@ -304,7 +304,7 @@ export default function NewForm({
                   </div>
                 ))
               ) : (
-                <div className="flex items-center justify-center w-full h-full">
+                <div className="flex h-full w-full items-center justify-center">
                   <Image
                     alt="Product Image"
                     className="object-cover"
@@ -393,7 +393,7 @@ export default function NewForm({
                           return (
                             <div className="flex items-center">
                               <select
-                                className="outline-none border-0 bg-transparent text-default-400 text-small"
+                                className="border-0 bg-transparent text-small text-default-400 outline-none"
                                 key={"currency"}
                                 id="currency"
                                 name="currency"
@@ -512,7 +512,7 @@ export default function NewForm({
                       endContent={
                         <div className="flex items-center">
                           <select
-                            className="outline-none border-0 bg-transparent text-default-400 text-small"
+                            className="border-0 bg-transparent text-small text-default-400 outline-none"
                             key={"currency"}
                             id="currency"
                             name="currency"

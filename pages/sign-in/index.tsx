@@ -73,10 +73,10 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
   }, [privateKey]);
 
   return (
-    <div className="flex flex-row justify-center items-center max-h-screen">
+    <div className="flex max-h-screen flex-row items-center justify-center">
       <Card>
         <CardBody>
-          <div className="flex flex-row items-center justify-center mb-4">
+          <div className="mb-4 flex flex-row items-center justify-center">
             <Image
               alt="Shopstr logo"
               height={50}
@@ -84,16 +84,16 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
               src="/shopstr.png"
               width={50}
             />
-            <h1 className="text-3xl font-bold text-center text-purple-500">
+            <h1 className="text-center text-3xl font-bold text-purple-500">
               Shopstr
             </h1>
           </div>
           {errorMessage && (
-            <div className="bg-red-500 text-white py-2 px-4 rounded mb-4">
+            <div className="mb-4 rounded bg-red-500 px-4 py-2 text-white">
               {errorMessage}
             </div>
           )}
-          <div className="flex flex-col mb-4">
+          <div className="mb-4 flex flex-col">
             <label className="text-xl">Private Key:</label>
             <Input
               color={validPrivateKey ? "success" : "error"}
@@ -105,7 +105,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
               onChange={(e) => setPrivateKey(e.target.value)}
             />
           </div>
-          <div className="flex flex-col mb-4">
+          <div className="mb-4 flex flex-col">
             <label className="text-xl">
               Encryption Passphrase:<span className="text-red-500">*</span>
             </label>
@@ -120,19 +120,19 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
           </div>
           <div className="flex flex-row justify-between space-x-2">
             <Button
-              className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600"
+              className="bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 text-white shadow-lg"
               onClick={handleGenerateKeys}
             >
               Create Account
             </Button>
             <Button
-              className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600"
+              className="bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 text-white shadow-lg"
               onClick={startExtensionLogin}
             >
               Extension Sign In
             </Button>
             <Button
-              className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600"
+              className="bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 text-white shadow-lg"
               onClick={handleSignIn}
               disabled={!validPrivateKey} // Disable the button only if both key strings are invalid or the button has already been clicked
             >

@@ -29,14 +29,14 @@ export default function ProductCard({
 
   if (isCheckout)
     return (
-      <Card className={"bg-gray-100 my-3 rounded-lg mx-[2.5px] w-[100%]"}>
+      <Card className={"mx-[2.5px] my-3 w-[100%] rounded-lg bg-gray-100"}>
         <CardBody
           className={"cursor-pointer "}
           onClick={() => {
             onProductClick && onProductClick(productData);
           }}
         >
-          <div className="flex justify-between z-10 w-full">
+          <div className="z-10 flex w-full justify-between">
             <ProfileAvatar pubkey={pubkey} className="w-4/6" />
             <div className="flex flex-col justify-center ">
               <CompactCategories categories={categories} />
@@ -48,7 +48,7 @@ export default function ProductCard({
               classname="w-full h-[300px]"
               showThumbs={false}
             />
-            <div className="flex flex-row justify-between mt-3">
+            <div className="mt-3 flex flex-row justify-between">
               <Chip key={location} startContent={locationAvatar(location)}>
                 {location}
               </Chip>
@@ -56,11 +56,11 @@ export default function ProductCard({
             </div>
           </div>
           <Divider />
-          <div className="w-full flex flex-col items-center mt-5 ">
-            <h2 className="text-2xl font-bold mb-4">{title}</h2>
+          <div className="mt-5 flex w-full flex-col items-center ">
+            <h2 className="mb-4 text-2xl font-bold">{title}</h2>
           </div>
           <Divider />
-          <span className="font-semibold text-xl">Summary: </span>
+          <span className="text-xl font-semibold">Summary: </span>
           {productData.summary}
         </CardBody>
         {footerContent && <CardFooter>{footerContent}</CardFooter>}
@@ -72,7 +72,7 @@ export default function ProductCard({
   return (
     <Card
       className={
-        "bg-gray-100 my-3 rounded-lg mx-[2.5px] w-[385px] " + cardHoverStyle
+        "mx-[2.5px] my-3 w-[385px] rounded-lg bg-gray-100 " + cardHoverStyle
       }
     >
       <CardBody
@@ -81,7 +81,7 @@ export default function ProductCard({
           onProductClick && onProductClick(productData);
         }}
       >
-        <div className="flex justify-between z-10 w-full">
+        <div className="z-10 flex w-full justify-between">
           <ProfileAvatar pubkey={pubkey} className="w-4/6" />
           <div className="flex flex-col justify-center ">
             <CompactCategories categories={categories} />
@@ -93,7 +93,7 @@ export default function ProductCard({
             classname="w-full h-[300px]"
             showThumbs={false}
           />
-          <div className="flex flex-row justify-between mt-3">
+          <div className="mt-3 flex flex-row justify-between">
             <Chip key={location} startContent={locationAvatar(location)}>
               {location}
             </Chip>
@@ -101,8 +101,8 @@ export default function ProductCard({
           </div>
         </div>
         <Divider />
-        <div className="w-full flex flex-col items-center mt-5 ">
-          <h2 className="text-2xl font-bold mb-4">{title}</h2>
+        <div className="mt-5 flex w-full flex-col items-center ">
+          <h2 className="mb-4 text-2xl font-bold">{title}</h2>
         </div>
       </CardBody>
       {footerContent && <CardFooter>{footerContent}</CardFooter>}

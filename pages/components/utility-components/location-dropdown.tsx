@@ -15,7 +15,7 @@ export const locationAvatar = (location: string) => {
   return locationMap.get(location) ? (
     <Avatar
       alt={location}
-      className="w-6 h-6"
+      className="h-6 w-6"
       src={`https://flagcdn.com/16x12/${locationMap.get(location)
         ?.iso3166}.png`}
     />
@@ -50,7 +50,7 @@ const LocationDropdown = ({ value, ...props }) => {
               startContent={
                 <Avatar
                   alt={country.country}
-                  className="w-6 h-6"
+                  className="h-6 w-6"
                   src={`https://flagcdn.com/16x12/${country.iso3166}.png`}
                 />
               }
@@ -76,7 +76,7 @@ const LocationDropdown = ({ value, ...props }) => {
               startContent={
                 <Avatar
                   alt={state.state}
-                  className="w-6 h-6"
+                  className="h-6 w-6"
                   src={`https://flagcdn.com/16x12/${state.iso3166}.png`}
                 />
               }

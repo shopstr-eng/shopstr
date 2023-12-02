@@ -188,8 +188,8 @@ export default function CheckoutCard({
   return (
     <>
       <Card className="max-w-[700px]">
-        <CardHeader className="flex gap-3 justify-center">
-          <span className="font-bold text-xl">Pay with Lightning</span>
+        <CardHeader className="flex justify-center gap-3">
+          <span className="text-xl font-bold">Pay with Lightning</span>
         </CardHeader>
         <Divider />
         <CardBody className="flex flex-col items-center">
@@ -216,12 +216,12 @@ export default function CheckoutCard({
                     </p>
                     <ClipboardIcon
                       onClick={handleCopyInvoice}
-                      className={`w-4 h-4 cursor-pointer ml-2 ${
+                      className={`ml-2 h-4 w-4 cursor-pointer ${
                         copiedToClipboard ? "hidden" : ""
                       }`}
                     />
                     <CheckIcon
-                      className={`w-4 h-4 cursor-pointer ml-2 ${
+                      className={`ml-2 h-4 w-4 cursor-pointer ${
                         copiedToClipboard ? "" : "hidden"
                       }`}
                     />
@@ -235,7 +235,7 @@ export default function CheckoutCard({
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center">
-              <h3 className="text-center text-lg leading-6 font-medium text-gray-900 mt-3">
+              <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
                 Payment confirmed!
               </h3>
               <Image

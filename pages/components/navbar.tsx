@@ -23,42 +23,42 @@ const Navbar = () => {
   }, []);
 
   return (
-    <div className="flex flex-col absolute z-20 px-3 w-full bg-white pb-2">
-      <div className="flex flex-row justify-between h-[40px]">
+    <div className="absolute z-20 flex w-full flex-col bg-white px-3 pb-2">
+      <div className="flex h-[40px] flex-row justify-between">
         <h1
-          className="text-3xl font-bold text-purple-500 hover:text-purple-700 cursor-pointer"
+          className="cursor-pointer text-3xl font-bold text-purple-500 hover:text-purple-700"
           onClick={() => router.push("/")}
         >
           Shopstr
         </h1>
-        <div className="flex space-x-2 mt-2">
+        <div className="mt-2 flex space-x-2">
           <HomeIcon
-            className={`w-6 h-6 hover:text-purple-700 cursor-pointer ${
+            className={`h-6 w-6 cursor-pointer hover:text-purple-700 ${
               router.pathname === "/" ? "text-purple-500" : ""
             }`}
             onClick={() => router.push("/")}
           />
           <EnvelopeOpenIcon
-            className={`w-6 h-6 hover:text-purple-700 cursor-pointer ${
+            className={`h-6 w-6 cursor-pointer hover:text-purple-700 ${
               router.pathname === "/direct-messages" ? "text-purple-500" : ""
             }`}
             onClick={() => router.push("/direct-messages")}
           />
           <WalletIcon
-            className={`w-6 h-6 hover:text-purple-700 cursor-pointer ${
+            className={`h-6 w-6 cursor-pointer hover:text-purple-700 ${
               router.pathname === "/wallet" ? "text-purple-500" : ""
             }`}
             onClick={() => router.push("/wallet")}
           />
           <GlobeAltIcon
-            className={`w-6 h-6 hover:text-purple-700 cursor-pointer ${
+            className={`h-6 w-6 cursor-pointer hover:text-purple-700 ${
               router.pathname === "/relays" ? "text-purple-500" : ""
             }`}
             onClick={() => router.push("/relays")}
           />
           {!signIn && (
             <ArrowLeftOnRectangleIcon
-              className="w-6 h-6 hover:text-purple-700 cursor-pointer"
+              className="h-6 w-6 cursor-pointer hover:text-purple-700"
               onClick={() => {
                 router.push("/sign-in");
               }}
@@ -66,7 +66,7 @@ const Navbar = () => {
           )}
           {signIn && (
             <ArrowRightOnRectangleIcon
-              className="w-6 h-6 hover:text-purple-700 cursor-pointer"
+              className="h-6 w-6 cursor-pointer hover:text-purple-700"
               onClick={() => {
                 localStorage.removeItem("npub");
                 localStorage.removeItem("signIn");

@@ -174,7 +174,7 @@ const DisplayEvents = ({
         </div>
         {/* DISPLAYS PRODUCT LISTINGS HERE */}
         {filteredProductData.length != 0 ? (
-          <div className="flex flex-row flex-wrap my-2 justify-evenly overflow-y-hidden overflow-x-hidden h-[90%] max-w-full">
+          <div className="my-2 flex h-[90%] max-w-full flex-row flex-wrap justify-evenly overflow-x-hidden overflow-y-hidden">
             {filteredProductData.map((productData: ProductData, index) => {
               return (
                 <ProductCard
@@ -188,7 +188,7 @@ const DisplayEvents = ({
           </div>
         ) : (
           <div className="mt-8 flex items-center justify-center">
-            <p className="text-xl break-words text-center">
+            <p className="break-words text-center text-xl">
               No listings found . . .
             </p>
           </div>

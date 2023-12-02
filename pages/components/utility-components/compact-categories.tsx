@@ -17,7 +17,7 @@ const CompactCategories = ({ categories }: { categories: string[] }) => {
       {categoryChips && (
         <Tooltip
           content={
-            <div className="flex flex-col gap-2 w-fit ml-auto">
+            <div className="ml-auto flex w-fit flex-col gap-2">
               {categoryChips}
             </div>
           }
