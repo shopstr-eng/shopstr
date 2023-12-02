@@ -24,14 +24,14 @@ export default function ImageCarousel({
         <div className={className} key={"image" + 0}>
           <img
             src="/no-image-placeholder.png"
-            className="object-contain w-full h-full"
+            className="h-full w-full object-contain"
           />
         </div>,
       ];
     return images.map((image, index) => {
       return (
         <div className={className} key={"image" + index}>
-          <img src={image} className="object-contain w-full h-full" />
+          <img src={image} className="h-full w-full object-contain" />
         </div>
       );
     });
@@ -52,7 +52,7 @@ export default function ImageCarousel({
             }}
             title={label}
           >
-            <ChevronLeftIcon className="w-7 h-7" />
+            <ChevronLeftIcon className="h-7 w-7" />
           </button>
         )
       }
@@ -66,7 +66,7 @@ export default function ImageCarousel({
             }}
             title={label}
           >
-            <ChevronRightIcon className="w-7 h-7" />
+            <ChevronRightIcon className="h-7 w-7" />
           </button>
         )
       }

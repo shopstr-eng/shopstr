@@ -90,28 +90,28 @@ const Relays = () => {
     <div>
       {relays.length === 0 && (
         <div className="mt-8 flex items-center justify-center">
-          <p className="text-xl break-words text-center">
+          <p className="break-words text-center text-xl">
             No relays added . . .
           </p>
         </div>
       )}
-      <div className="mt-8 mb-8 overflow-y-scroll max-h-96 bg-white rounded-md">
+      <div className="mb-8 mt-8 max-h-96 overflow-y-scroll rounded-md bg-white">
         {relays.map((relay) => (
           <div
             key={relay}
-            className="flex justify-between items-center mb-2 border-2"
+            className="mb-2 flex items-center justify-between border-2"
           >
             <div className="max-w-xsm truncate">{relay}</div>
             <MinusCircleIcon
               onClick={() => deleteRelay(relay)}
-              className="w-5 h-5 text-red-500 hover:text-yellow-700 cursor-pointer"
+              className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
             />
           </div>
         ))}
       </div>
-      <div className="flex flex-row justify-between h-fit absolute w-[99vw] bottom-[0px] bg-white py-[15px] z-20 px-3">
+      <div className="absolute bottom-[0px] z-20 flex h-fit w-[99vw] flex-row justify-between bg-white px-3 py-[15px]">
         <Button
-          className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 mx-3"
+          className="mx-3 bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 text-white shadow-lg"
           onClick={handleToggleModal}
         >
           Add New Relay
@@ -187,7 +187,7 @@ const Relays = () => {
               )}
 
               <Button
-                className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600"
+                className="bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 text-white shadow-lg"
                 type="submit"
               >
                 Add Relay

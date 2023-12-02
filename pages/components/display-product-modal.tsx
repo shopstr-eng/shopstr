@@ -14,7 +14,10 @@ import ImageCarousel from "./utility-components/image-carousel";
 import { ProfileAvatar } from "./utility-components/avatar";
 import CompactCategories from "./utility-components/compact-categories";
 import { locationAvatar } from "./utility-components/location-dropdown";
-import { DisplayCostBreakdown, formatWithCommas } from "./utility-components/display-monetary-info";
+import {
+  DisplayCostBreakdown,
+  formatWithCommas,
+} from "./utility-components/display-monetary-info";
 import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
 import RequestPassphraseModal from "./utility-components/request-passphrase-modal";
 import ConfirmActionDropdown from "./utility-components/confirm-action-dropdown";
@@ -85,7 +88,7 @@ export default function DisplayProductModal({
 
   // Format the totalCost with commas
   const formattedTotalCost = formatWithCommas(totalCost, currency);
-  
+
   return (
     <>
       <Modal
@@ -114,7 +117,7 @@ export default function DisplayProductModal({
               />
             ) : null}
             <Divider />
-            <div className="w-full h-fit gap-2 flex flex-row justify-between items-center flex-wrap">
+            <div className="flex h-fit w-full flex-row flex-wrap items-center justify-between gap-2">
               <ProfileAvatar pubkey={productData.pubkey} className="w-1/3" />
               <Chip key={location} startContent={locationAvatar(location)}>
                 {location}
@@ -126,15 +129,15 @@ export default function DisplayProductModal({
               </div>
             </div>
             <Divider />
-            <span className="font-semibold text-xl">Summary: </span>
+            <span className="text-xl font-semibold">Summary: </span>
             {productData.summary}
             <Divider />
-            <span className="font-semibold text-xl">Price Breakdown: </span>
+            <span className="text-xl font-semibold">Price Breakdown: </span>
             <DisplayCostBreakdown monetaryInfo={productData} />
           </ModalBody>
 
           <ModalFooter>
-            <div className="flex flex-wrap gap-2 justify-evenly w-full">
+            <div className="flex w-full flex-wrap justify-evenly gap-2">
               {decryptedNpub !== pubkey && (
                 <Button
                   onClick={() => {
@@ -143,7 +146,7 @@ export default function DisplayProductModal({
                   type="submit"
                   className={SHOPSTRBUTTONCLASSNAMES}
                   startContent={
-                    <EnvelopeIcon className="w-6 h-6 hover:text-yellow-500" />
+                    <EnvelopeIcon className="h-6 w-6 hover:text-yellow-500" />
                   }
                 >
                   Message
@@ -160,7 +163,7 @@ export default function DisplayProductModal({
                     color="danger"
                     className="px-20"
                     startContent={
-                      <TrashIcon className="w-6 h-6 hover:text-yellow-500" />
+                      <TrashIcon className="h-6 w-6 hover:text-yellow-500" />
                     }
                     isLoading={deleteLoading}
                   >
@@ -174,7 +177,7 @@ export default function DisplayProductModal({
                   onClick={() => handleCheckout(productData.id)}
                   className={SHOPSTRBUTTONCLASSNAMES}
                   startContent={
-                    <BoltIcon className="w-6 h-6 hover:text-yellow-500" />
+                    <BoltIcon className="h-6 w-6 hover:text-yellow-500" />
                   }
                 >
                   Checkout: {formattedTotalCost}

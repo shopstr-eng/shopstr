@@ -416,18 +416,18 @@ const DirectMessages = () => {
       <div>
         {chats.length === 0 && (
           <div className="mt-8 flex items-center justify-center">
-            <p className="text-xl break-words text-center">
+            <p className="break-words text-center text-xl">
               No messages . . . yet!
             </p>
           </div>
         )}
-        <div className="mt-8 mb-8 overflow-y-scroll max-h-[70vh] bg-white rounded-md">
+        <div className="mb-8 mt-8 max-h-[70vh] overflow-y-scroll rounded-md bg-white">
           {chats.map((chat) => {
             const pubkey = decryptNpub(chat);
             return (
               <div
                 key={chat}
-                className="flex justify-between items-center mb-2 border-2"
+                className="mb-2 flex items-center justify-between border-2"
               >
                 <ProfileAvatar
                   pubkey={pubkey}
@@ -439,15 +439,15 @@ const DirectMessages = () => {
                 <button onClick={() => signInCheck(chat)}>Enter Chat</button>
                 <MinusCircleIcon
                   onClick={() => deleteChat(chat)}
-                  className="w-5 h-5 text-red-500 hover:text-yellow-700 cursor-pointer"
+                  className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
                 />
               </div>
             );
           })}
         </div>
-        <div className="flex flex-row justify-between h-fit absolute w-[99vw] bottom-[0px] bg-white py-[15px] z-20 px-3">
+        <div className="absolute bottom-[0px] z-20 flex h-fit w-[99vw] flex-row justify-between bg-white px-3 py-[15px]">
           <Button
-            className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 mx-3"
+            className="mx-3 bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 text-white shadow-lg"
             onClick={handleToggleModal}
           >
             Start New Chat
@@ -627,14 +627,14 @@ const DirectMessages = () => {
 
   return (
     <div>
-      <h2 className="flex flex-row items-center w-fit pr-2 mt-2 align-middle text-yellow-500 hover:bg-purple-600 rounded-md cursor-pointer">
+      <h2 className="mt-2 flex w-fit cursor-pointer flex-row items-center rounded-md pr-2 align-middle text-yellow-500 hover:bg-purple-600">
         <ArrowUturnLeftIcon
-          className="w-5 h-5 text-purple-500 hover:text-purple-700"
+          className="h-5 w-5 text-purple-500 hover:text-purple-700"
           onClick={handleGoBack}
         />
         {currentChat}
       </h2>
-      <div className="my-2 overflow-y-scroll max-h-[70vh] bg-white rounded-md border-2">
+      <div className="my-2 max-h-[70vh] overflow-y-scroll rounded-md border-2 bg-white">
         {messages.map((message, index) => (
           <div
             key={index}
@@ -642,12 +642,12 @@ const DirectMessages = () => {
               message.sender === decryptedNpub
                 ? "justify-end"
                 : message.sender === currentChat
-                ? "justify-start"
-                : ""
+                  ? "justify-start"
+                  : ""
             }`}
           >
             <p
-              className={`inline-block p-3 rounded-lg max-w-[100vh] break-words ${
+              className={`inline-block max-w-[100vh] break-words rounded-lg p-3 ${
                 message.sender === decryptedNpub
                   ? "bg-purple-200"
                   : "bg-gray-300"
@@ -670,7 +670,7 @@ const DirectMessages = () => {
         />
         <Button
           type="submit"
-          className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600"
+          className="bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 text-white shadow-lg"
         >
           Send
         </Button>

@@ -27,7 +27,7 @@ export default function CheckoutPage({
 
   const checkoutDisplay = () => {
     return (
-      <div className="flex flex-col w-full items-center">
+      <div className="flex w-full flex-col items-center">
         <Divider />
         <CheckoutCard productData={productData} />
       </div>
@@ -35,7 +35,7 @@ export default function CheckoutPage({
   };
   return (
     <div className="flex w-full items-center justify-center">
-      <div className="flex flex-col w-[50%] sm:w-full ">
+      <div className="flex w-[50%] flex-col sm:w-full ">
         <ProductCard
           productData={productData}
           isCheckout
