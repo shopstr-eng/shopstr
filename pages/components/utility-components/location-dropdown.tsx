@@ -34,7 +34,7 @@ const LocationDropdown = ({ value, ...props }) => {
 
   const locationOptions = useMemo(() => {
     const headingClasses =
-      "flex w-full sticky top-1 z-20 py-1.5 px-2 bg-default-100 shadow-small rounded-small";
+      "flex w-full sticky top-1 z-20 py-1.5 px-2 dark:bg-main-dark-bg bg-main-light-bg shadow-small rounded-small";
 
     let countryOptions = (
       <SelectSection
@@ -47,6 +47,9 @@ const LocationDropdown = ({ value, ...props }) => {
           return (
             <SelectItem
               key={country.country}
+              classNames={{
+                wrapper: "dark:bg-main-dark-bg bg-main-dark-bg",
+              }}
               startContent={
                 <Avatar
                   alt={country.country}

@@ -29,7 +29,7 @@ export default function ProductCard({
 
   if (isCheckout)
     return (
-      <Card className={"mx-[2.5px] my-3 w-[100%] rounded-lg bg-gray-100"}>
+      <Card className={" mx-[2.5px] my-3 w-[100%] rounded-lg"}>
         <CardBody
           className={"cursor-pointer "}
           onClick={() => {
@@ -72,7 +72,8 @@ export default function ProductCard({
   return (
     <Card
       className={
-        "mx-[2.5px] my-3 w-[385px] rounded-lg bg-gray-100 " + cardHoverStyle
+        "dark:bg-accent-dark-bg bg-accent-light-bg mx-[2.5px] my-3 w-[385px] rounded-lg " +
+        cardHoverStyle
       }
     >
       <CardBody
