@@ -1,4 +1,3 @@
-import React, { useContext } from "react";
 import * as CryptoJS from "crypto-js";
 import { nip19, nip98, SimplePool } from "nostr-tools";
 import { ProductFormValues } from "../api/post-event";

@@ -12,6 +12,7 @@ import {
   Input,
   Select,
   SelectItem,
+  SelectSection,
   Chip,
   Image,
 } from "@nextui-org/react";
@@ -26,8 +27,8 @@ import {
 } from "./utility/nostr-helper-functions";
 import { finishEvent } from "nostr-tools";
 import { CATEGORIES, SHIPPING_OPTIONS } from "./utility/STATIC-VARIABLES";
-import LocationDropdown from "./utility-components/location-dropdown";
-import ConfirmActionDropdown from "./utility-components/confirm-action-dropdown";
+import LocationDropdown from "./utility-components/dropdowns/location-dropdown";
+import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 
 interface ProductFormProps {
   handleModalToggle: () => void;
@@ -229,7 +230,7 @@ export default function NewForm({
       size="2xl"
     >
       <ModalContent>
-        <ModalHeader className="flex flex-col gap-1">
+        <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
           Add New Product Listing
         </ModalHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
@@ -252,6 +253,7 @@ export default function NewForm({
                 let errorMessage: string = error?.message ? error.message : "";
                 return (
                   <Input
+                    className="text-light-text dark:text-dark-text"
                     autoFocus
                     variant="bordered"
                     fullWidth={true}
@@ -273,8 +275,8 @@ export default function NewForm({
               pagination={false}
             >
               {images.length > 0 ? (
-                images.map((image) => (
-                  <div className="">
+                images.map((image, index) => (
+                  <div key={index}>
                     <div className="flex flex-row-reverse ">
                       {
                         <ConfirmActionDropdown
@@ -338,6 +340,7 @@ export default function NewForm({
                 let errorMessage: string = error?.message ? error.message : "";
                 return (
                   <Textarea
+                    className="text-light-text dark:text-dark-text"
                     variant="bordered"
                     fullWidth={true}
                     placeholder="Description"
@@ -367,6 +370,7 @@ export default function NewForm({
                 let errorMessage: string = error?.message ? error.message : "";
                 return (
                   <Input
+                    className="text-light-text dark:text-dark-text"
                     type="number"
                     autoFocus
                     variant="flat"
@@ -458,6 +462,7 @@ export default function NewForm({
                 let errorMessage: string = error?.message ? error.message : "";
                 return (
                   <Select
+                    className="text-light-text dark:text-dark-text"
                     autoFocus
                     variant="bordered"
                     aria-label="Shipping Option"
@@ -470,9 +475,11 @@ export default function NewForm({
                     onBlur={onBlur} // notify when input is touched/blur
                     selectedKeys={[value]}
                   >
-                    {SHIPPING_OPTIONS.map((option) => (
-                      <SelectItem key={option}>{option}</SelectItem>
-                    ))}
+                    <SelectSection className="text-light-text dark:text-dark-text">
+                      {SHIPPING_OPTIONS.map((option) => (
+                        <SelectItem key={option}>{option}</SelectItem>
+                      ))}
+                    </SelectSection>
                   </Select>
                 );
               }}
@@ -576,11 +583,13 @@ export default function NewForm({
                       );
                     }}
                   >
-                    {CATEGORIES.map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {category}
-                      </SelectItem>
-                    ))}
+                    <SelectSection className="text-light-text dark:text-dark-text">
+                      {CATEGORIES.map((category) => (
+                        <SelectItem key={category} value={category}>
+                          {category}
+                        </SelectItem>
+                      ))}
+                    </SelectSection>
                   </Select>
                 );
               }}

@@ -21,7 +21,6 @@ import {
   DropdownItem,
   DropdownSection,
 } from "@nextui-org/react";
-import * as CryptoJS from "crypto-js";
 import { useRouter } from "next/router";
 import {
   decryptNpub,
@@ -30,6 +29,7 @@ import {
 } from "../components/utility/nostr-helper-functions";
 import { ProfileAvatar } from "../components/utility-components/avatar";
 import { ProfileMapContext } from "../context";
+import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
 
 const DirectMessages = () => {
   const router = useRouter();
@@ -225,7 +225,7 @@ const DirectMessages = () => {
       const { data } = nip19.decode(chats);
       profileContext.addPubkeyToFetch([data as string]);
     }
-  }, [chats]);
+  }, [chats, profileContext]);
 
   const {
     handleSubmit,
@@ -416,18 +416,18 @@ const DirectMessages = () => {
       <div>
         {chats.length === 0 && (
           <div className="mt-8 flex items-center justify-center">
-            <p className="break-words text-center text-xl">
+            <p className="break-words text-center text-xl dark:text-dark-text">
               No messages . . . yet!
             </p>
           </div>
         )}
-        <div className="mb-8 mt-8 max-h-[70vh] overflow-y-scroll rounded-md bg-white">
+        <div className="mb-8 mt-8 max-h-[70vh] overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
           {chats.map((chat) => {
             const pubkey = decryptNpub(chat);
             return (
               <div
                 key={chat}
-                className="mb-2 flex items-center justify-between border-2"
+                className="mx-3 mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg"
               >
                 <ProfileAvatar
                   pubkey={pubkey}
@@ -436,7 +436,12 @@ const DirectMessages = () => {
                     console.log("npub clicked in dms");
                   }}
                 />
-                <button onClick={() => signInCheck(chat)}>Enter Chat</button>
+                <button
+                  onClick={() => signInCheck(chat)}
+                  className="text-light-text dark:text-dark-text"
+                >
+                  Enter Chat
+                </button>
                 <MinusCircleIcon
                   onClick={() => deleteChat(chat)}
                   className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
@@ -445,9 +450,10 @@ const DirectMessages = () => {
             );
           })}
         </div>
-        <div className="absolute bottom-[0px] z-20 flex h-fit w-[99vw] flex-row justify-between bg-white px-3 py-[15px]">
+        <div className="absolute bottom-[0px] z-20 flex h-fit w-[99vw] flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
           <Button
-            className="mx-3 bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 text-white shadow-lg"
+            // className="mx-3 bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 shadow-lg"
+            className={SHOPSTRBUTTONCLASSNAMES}
             onClick={handleToggleModal}
           >
             Start New Chat
@@ -469,7 +475,7 @@ const DirectMessages = () => {
           size="2xl"
         >
           <ModalContent>
-            <ModalHeader className="flex flex-col gap-1">
+            <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
               Start New Chat
             </ModalHeader>
             <form onSubmit={handleSubmit(onSubmit)}>
@@ -496,6 +502,7 @@ const DirectMessages = () => {
                       : "";
                     return (
                       <Textarea
+                        className="text-light-text dark:text-dark-text"
                         variant="bordered"
                         fullWidth={true}
                         placeholder="npub..."
@@ -511,6 +518,7 @@ const DirectMessages = () => {
                 />
                 {signIn === "nsec" && (
                   <Input
+                    className="text-light-text dark:text-dark-text"
                     autoFocus
                     ref={passphraseInputRef}
                     variant="flat"
@@ -523,17 +531,16 @@ const DirectMessages = () => {
               </ModalBody>
 
               <ModalFooter>
-                {confirmActionDropdown(
-                  <Button color="danger" variant="light">
-                    Cancel
-                  </Button>,
-                  "Are you sure you want to cancel?",
-                  "Cancel",
-                  handleToggleModal,
-                )}
+                <Button
+                  color="danger"
+                  variant="light"
+                  onClick={handleToggleModal}
+                >
+                  Cancel
+                </Button>
 
                 <Button
-                  className={buttonClassName}
+                  className={SHOPSTRBUTTONCLASSNAMES}
                   type="submit"
                   onClick={(e) => {
                     if (
@@ -627,14 +634,14 @@ const DirectMessages = () => {
 
   return (
     <div>
-      <h2 className="mt-2 flex w-fit cursor-pointer flex-row items-center rounded-md pr-2 align-middle text-yellow-500 hover:bg-purple-600">
+      <h2 className="mt-2 flex w-fit cursor-pointer flex-row items-center rounded-md pr-2 align-middle text-shopstr-purple hover:bg-shopstr-yellow dark:text-shopstr-yellow hover:dark:bg-shopstr-purple">
         <ArrowUturnLeftIcon
           className="h-5 w-5 text-purple-500 hover:text-purple-700"
           onClick={handleGoBack}
         />
         {currentChat}
       </h2>
-      <div className="my-2 max-h-[70vh] overflow-y-scroll rounded-md border-2 bg-white">
+      <div className="my-2 max-h-[70vh] overflow-y-scroll rounded-md border-2 border-light-fg bg-light-fg dark:border-dark-fg dark:bg-dark-fg">
         {messages.map((message, index) => (
           <div
             key={index}
@@ -661,6 +668,7 @@ const DirectMessages = () => {
       </div>
       <form className="flex items-center space-x-2" onSubmit={handleSend}>
         <Input
+          className="text-light-text dark:text-dark-text"
           type="text"
           width="100%"
           size="large"
@@ -668,10 +676,7 @@ const DirectMessages = () => {
           placeholder="Type your message..."
           onChange={handleChange}
         />
-        <Button
-          type="submit"
-          className="bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 text-white shadow-lg"
-        >
+        <Button type="submit" className={SHOPSTRBUTTONCLASSNAMES}>
           Send
         </Button>
       </form>

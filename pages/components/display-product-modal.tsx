@@ -13,14 +13,14 @@ import {
 import ImageCarousel from "./utility-components/image-carousel";
 import { ProfileAvatar } from "./utility-components/avatar";
 import CompactCategories from "./utility-components/compact-categories";
-import { locationAvatar } from "./utility-components/location-dropdown";
+import { locationAvatar } from "./utility-components/dropdowns/location-dropdown";
 import {
   DisplayCostBreakdown,
   formatWithCommas,
 } from "./utility-components/display-monetary-info";
 import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
 import RequestPassphraseModal from "./utility-components/request-passphrase-modal";
-import ConfirmActionDropdown from "./utility-components/confirm-action-dropdown";
+import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 import { getLocalStorageData } from "./utility/nostr-helper-functions";
 
 interface ProductFormProps {
@@ -95,7 +95,7 @@ export default function DisplayProductModal({
         backdrop="blur"
         isOpen={showModal}
         onClose={handleModalToggle}
-        // className="bg-accent-light-bg dark:bg-accent-dark-bg text-black dark:text-white"
+        // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
         classNames={{
           body: "py-6",
           backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -107,8 +107,10 @@ export default function DisplayProductModal({
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="flex flex-col gap-1">{title} </ModalHeader>
-          <ModalBody>
+          <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+            {title}{" "}
+          </ModalHeader>
+          <ModalBody className="text-light-text dark:text-dark-text">
             {images ? (
               <ImageCarousel
                 images={images}

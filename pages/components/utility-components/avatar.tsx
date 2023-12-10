@@ -46,7 +46,7 @@ export const ProfileAvatar = ({
         }}
       />
       <span
-        className="cursor-pointer truncate rounded-md hover:text-purple-600"
+        className="cursor-pointer truncate rounded-md text-light-text hover:text-purple-600 dark:text-dark-text"
         onClick={(e) => {
           routeToShop(npub);
           e.stopPropagation();

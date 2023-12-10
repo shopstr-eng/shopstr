@@ -34,13 +34,18 @@ module.exports = {
       // => @media (min-width: 2500px) { ... }
     },
     colors: {
-      "main-dark-bg": "#212121",
-      "accent-dark-bg": "#4d4c4e",
-      "main-light-bg": "#e8e8e8",
-      "accent-light-bg": "#f5f5f5",
+      "dark-bg": "#212121",
+      "dark-fg": "#4d4c4e", // dark foreground
+      "light-bg": "#e8e8e8",
+      "light-fg": "#f5f5f5",
       "shopstr-purple": "#5c6ac4",
-      "main-dark-text": "#e8e8e8",
-      "accent-dark-text": "#5c6ac4",
+      "shopstr-purple-light": "#818cf8",
+      "shopstr-yellow": "#fbbf24",
+      "shopstr-yellow-light": "#fcd34d",
+      "dark-text": "#e8e8e8",
+      "accent-dark-text": "#fbbf24", // shopstr yellow
+      "light-text": "#212121",
+      "accent-light-text": "#5c6ac4",
       ...colors,
     },
   },
