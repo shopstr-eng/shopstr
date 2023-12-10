@@ -168,7 +168,7 @@ const DisplayEvents = ({
 
   return (
     <>
-      <div className="h-full">
+      <div className="dark:bg-main-dark-bg bg-main-light-bg h-full">
         <div className="h-16">
           {/*spacer div needed to account for the header (Navbar and categories}*/}
         </div>

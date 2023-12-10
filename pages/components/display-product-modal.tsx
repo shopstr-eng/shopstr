@@ -95,10 +95,10 @@ export default function DisplayProductModal({
         backdrop="blur"
         isOpen={showModal}
         onClose={handleModalToggle}
+        // className="bg-accent-light-bg dark:bg-accent-dark-bg text-black dark:text-white"
         classNames={{
           body: "py-6",
           backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-          // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
           header: "border-b-[1px] border-[#292f46]",
           footer: "border-t-[1px] border-[#292f46]",
           closeButton: "hover:bg-black/5 active:bg-white/10",

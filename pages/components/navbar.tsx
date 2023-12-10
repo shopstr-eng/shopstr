@@ -6,10 +6,35 @@ import {
   GlobeAltIcon,
   ArrowRightOnRectangleIcon,
   ArrowLeftOnRectangleIcon,
+  MoonIcon,
+  SunIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 
-const Navbar = () => {
+type NavbarProps = {
+  darkMode: boolean;
+  handleDarkModeToggle: (darkMode: boolean) => void;
+};
+
+const DarkModeToggle = ({ darkMode, handleDarkModeToggle }: NavbarProps) => {
+  return (
+    <div>
+      {darkMode ? (
+        <MoonIcon
+          className="dark:text-main-dark-text dark:hover:text-accent-dark-text h-6 w-6 cursor-pointer hover:text-purple-700"
+          onClick={() => handleDarkModeToggle(false)}
+        />
+      ) : (
+        <SunIcon
+          className="dark:text-main-dark-text dark:hover:text-accent-dark-text h-6 w-6 cursor-pointer hover:text-purple-700"
+          onClick={() => handleDarkModeToggle(true)}
+        />
+      )}
+    </div>
+  );
+};
+
+const Navbar = ({ darkMode, handleDarkModeToggle }: NavbarProps) => {
   const router = useRouter();
   const [signIn, setSignIn] = useState("");
 
@@ -23,42 +48,46 @@ const Navbar = () => {
   }, []);
 
   return (
-    <div className="absolute z-20 flex w-full flex-col bg-white px-3 pb-2">
+    <div className="dark:bg-main-dark-bg bg-main-light-bg absolute z-20 flex w-full flex-col px-3 pb-2">
       <div className="flex h-[40px] flex-row justify-between">
         <h1
-          className="cursor-pointer text-3xl font-bold text-purple-500 hover:text-purple-700"
+          className="text-shopstr-purple cursor-pointer text-3xl font-bold hover:text-purple-700"
           onClick={() => router.push("/")}
         >
           Shopstr
         </h1>
         <div className="mt-2 flex space-x-2">
+          <DarkModeToggle
+            darkMode={darkMode}
+            handleDarkModeToggle={handleDarkModeToggle}
+          />
           <HomeIcon
-            className={`h-6 w-6 cursor-pointer hover:text-purple-700 ${
+            className={`dark:text-main-dark-text dark:hover:text-accent-dark-text h-6 w-6 cursor-pointer hover:text-purple-700 ${
               router.pathname === "/" ? "text-purple-500" : ""
             }`}
             onClick={() => router.push("/")}
           />
           <EnvelopeOpenIcon
-            className={`h-6 w-6 cursor-pointer hover:text-purple-700 ${
+            className={`dark:text-main-dark-text dark:hover:text-accent-dark-text h-6 w-6 cursor-pointer hover:text-purple-700 ${
               router.pathname === "/direct-messages" ? "text-purple-500" : ""
             }`}
             onClick={() => router.push("/direct-messages")}
           />
           <WalletIcon
-            className={`h-6 w-6 cursor-pointer hover:text-purple-700 ${
+            className={`dark:text-main-dark-text dark:hover:text-accent-dark-text h-6 w-6 cursor-pointer hover:text-purple-700 ${
               router.pathname === "/wallet" ? "text-purple-500" : ""
             }`}
             onClick={() => router.push("/wallet")}
           />
           <GlobeAltIcon
-            className={`h-6 w-6 cursor-pointer hover:text-purple-700 ${
+            className={`dark:text-main-dark-text dark:hover:text-accent-dark-text h-6 w-6 cursor-pointer hover:text-purple-700 ${
               router.pathname === "/relays" ? "text-purple-500" : ""
             }`}
             onClick={() => router.push("/relays")}
           />
           {!signIn && (
             <ArrowLeftOnRectangleIcon
-              className="h-6 w-6 cursor-pointer hover:text-purple-700"
+              className="dark:text-main-dark-text dark:hover:text-accent-dark-text h-6 w-6 cursor-pointer hover:text-purple-700"
               onClick={() => {
                 router.push("/sign-in");
               }}
@@ -66,7 +95,7 @@ const Navbar = () => {
           )}
           {signIn && (
             <ArrowRightOnRectangleIcon
-              className="h-6 w-6 cursor-pointer hover:text-purple-700"
+              className="dark:text-main-dark-text dark:hover:text-accent-dark-text h-6 w-6 cursor-pointer hover:text-purple-700"
               onClick={() => {
                 localStorage.removeItem("npub");
                 localStorage.removeItem("signIn");
