@@ -30,6 +30,7 @@ import {
 import { ProfileAvatar } from "../components/utility-components/avatar";
 import { ProfileMapContext } from "../context";
 import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
+import RequestPassphraseModal from "../components/utility-components/request-passphrase-modal";
 
 const DirectMessages = () => {
   const router = useRouter();
@@ -45,7 +46,7 @@ const DirectMessages = () => {
   const [showModal, setShowModal] = useState(false);
   const [message, setMessage] = useState("");
 
-  const [enterPassphrase, setEnterPassphrase] = useState(null);
+  const [enterPassphrase, setEnterPassphrase] = useState(false);
   const [passphrase, setPassphrase] = useState("");
 
   const [thisChat, setThisChat] = useState("");
@@ -559,75 +560,13 @@ const DirectMessages = () => {
             </form>
           </ModalContent>
         </Modal>
-        <Modal
-          backdrop="blur"
+        <RequestPassphraseModal
+          passphrase={passphrase}
+          onPassphraseChange={setPassphrase}
           isOpen={enterPassphrase}
-          onClose={() => handleEnterPassphrase("")}
-          classNames={{
-            body: "py-6",
-            backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-            // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
-            header: "border-b-[1px] border-[#292f46]",
-            footer: "border-t-[1px] border-[#292f46]",
-            closeButton: "hover:bg-black/5 active:bg-white/10",
-          }}
-          scrollBehavior={"outside"}
-          size="2xl"
-        >
-          <ModalContent>
-            <ModalHeader className="flex flex-col gap-1">
-              Enter Passphrase
-            </ModalHeader>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSubmitPassphrase();
-              }}
-            >
-              <ModalBody>
-                {signIn === "nsec" && (
-                  <Input
-                    autoFocus
-                    ref={passphraseInputRef}
-                    variant="flat"
-                    label="Passphrase"
-                    labelPlacement="inside"
-                    onChange={(e) => setPassphrase(e.target.value)}
-                    value={passphrase}
-                  />
-                )}
-              </ModalBody>
-
-              <ModalFooter>
-                {confirmActionDropdown(
-                  <Button color="danger" variant="light">
-                    Cancel
-                  </Button>,
-                  "Are you sure you want to cancel?",
-                  "Cancel",
-                  cancel,
-                )}
-
-                <Button
-                  className={buttonClassName}
-                  type="submit"
-                  onClick={(e) => {
-                    if (
-                      isButtonDisabled &&
-                      signIn === "nsec" &&
-                      passphraseInputRef.current
-                    ) {
-                      e.preventDefault();
-                      passphraseInputRef.current.focus();
-                    }
-                  }}
-                >
-                  Submit
-                </Button>
-              </ModalFooter>
-            </form>
-          </ModalContent>
-        </Modal>
+          setIsOpen={setEnterPassphrase}
+          actionOnSubmit={handleSubmitPassphrase}
+        />
       </div>
     );
   }

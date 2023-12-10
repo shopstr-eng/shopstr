@@ -54,7 +54,6 @@ const Navbar = () => {
           Shopstr
         </h1>
         <div className="mt-2 flex space-x-2">
-          <DarkModeToggle />
           <HomeIcon
             className={`h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
               router.pathname === "/" ? "text-purple-500" : ""
@@ -79,6 +78,7 @@ const Navbar = () => {
             }`}
             onClick={() => router.push("/relays")}
           />
+          <DarkModeToggle />
           {!signIn && (
             <ArrowLeftOnRectangleIcon
               className="h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"

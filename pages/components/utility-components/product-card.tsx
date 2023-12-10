@@ -29,7 +29,7 @@ export default function ProductCard({
 
   if (isCheckout)
     return (
-      <Card className={" mx-[2.5px] my-3 w-[100%] rounded-lg"}>
+      <Card className={"mx-[2.5px] my-3 w-[100%] rounded-lg"}>
         <CardBody
           className={"cursor-pointer "}
           onClick={() => {
@@ -67,7 +67,8 @@ export default function ProductCard({
       </Card>
     );
 
-  const cardHoverStyle = "hover:shadow-lg hover:shadow-purple-300";
+  const cardHoverStyle =
+    "hover:shadow-lg hover:shadow-shopstr-purple dark:hover:shadow-shopstr-yellow";
 
   return (
     <Card

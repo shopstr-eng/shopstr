@@ -38,14 +38,14 @@ module.exports = {
       "dark-fg": "#4d4c4e", // dark foreground
       "light-bg": "#e8e8e8",
       "light-fg": "#f5f5f5",
-      "shopstr-purple": "#5c6ac4",
+      "shopstr-purple": "#a655f7",
       "shopstr-purple-light": "#818cf8",
-      "shopstr-yellow": "#fbbf24",
+      "shopstr-yellow": "#fef08a",
       "shopstr-yellow-light": "#fcd34d",
       "dark-text": "#e8e8e8",
-      "accent-dark-text": "#fbbf24", // shopstr yellow
+      "accent-dark-text": "#fef08a", // shopstr yellow
       "light-text": "#212121",
-      "accent-light-text": "#5c6ac4",
+      "accent-light-text": "#a655f7", // shopstr purple
       ...colors,
     },
   },
