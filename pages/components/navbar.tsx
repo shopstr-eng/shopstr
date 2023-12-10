@@ -10,31 +10,28 @@ import {
   SunIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
+import { useTheme } from "next-themes";
 
-type NavbarProps = {
-  darkMode: boolean;
-  handleDarkModeToggle: (darkMode: boolean) => void;
-};
-
-const DarkModeToggle = ({ darkMode, handleDarkModeToggle }: NavbarProps) => {
+const DarkModeToggle = () => {
+  const { theme, setTheme } = useTheme();
   return (
     <div>
-      {darkMode ? (
+      {theme === "dark" ? (
         <MoonIcon
-          className="dark:text-main-dark-text dark:hover:text-accent-dark-text h-6 w-6 cursor-pointer hover:text-purple-700"
-          onClick={() => handleDarkModeToggle(false)}
+          className="h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+          onClick={() => setTheme("light")}
         />
       ) : (
         <SunIcon
-          className="dark:text-main-dark-text dark:hover:text-accent-dark-text h-6 w-6 cursor-pointer hover:text-purple-700"
-          onClick={() => handleDarkModeToggle(true)}
+          className="h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+          onClick={() => setTheme("dark")}
         />
       )}
     </div>
   );
 };
 
-const Navbar = ({ darkMode, handleDarkModeToggle }: NavbarProps) => {
+const Navbar = () => {
   const router = useRouter();
   const [signIn, setSignIn] = useState("");
 
@@ -48,46 +45,43 @@ const Navbar = ({ darkMode, handleDarkModeToggle }: NavbarProps) => {
   }, []);
 
   return (
-    <div className="dark:bg-main-dark-bg bg-main-light-bg absolute z-20 flex w-full flex-col px-3 pb-2">
+    <div className="absolute z-20 flex w-full flex-col bg-light-bg px-3 pb-2 dark:bg-dark-bg">
       <div className="flex h-[40px] flex-row justify-between">
         <h1
-          className="text-shopstr-purple cursor-pointer text-3xl font-bold hover:text-purple-700"
+          className="cursor-pointer text-3xl font-bold text-shopstr-purple hover:text-purple-700 dark:text-shopstr-yellow"
           onClick={() => router.push("/")}
         >
           Shopstr
         </h1>
         <div className="mt-2 flex space-x-2">
-          <DarkModeToggle
-            darkMode={darkMode}
-            handleDarkModeToggle={handleDarkModeToggle}
-          />
+          <DarkModeToggle />
           <HomeIcon
-            className={`dark:text-main-dark-text dark:hover:text-accent-dark-text h-6 w-6 cursor-pointer hover:text-purple-700 ${
+            className={`h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
               router.pathname === "/" ? "text-purple-500" : ""
             }`}
             onClick={() => router.push("/")}
           />
           <EnvelopeOpenIcon
-            className={`dark:text-main-dark-text dark:hover:text-accent-dark-text h-6 w-6 cursor-pointer hover:text-purple-700 ${
+            className={`h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
               router.pathname === "/direct-messages" ? "text-purple-500" : ""
             }`}
             onClick={() => router.push("/direct-messages")}
           />
           <WalletIcon
-            className={`dark:text-main-dark-text dark:hover:text-accent-dark-text h-6 w-6 cursor-pointer hover:text-purple-700 ${
+            className={`h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
               router.pathname === "/wallet" ? "text-purple-500" : ""
             }`}
             onClick={() => router.push("/wallet")}
           />
           <GlobeAltIcon
-            className={`dark:text-main-dark-text dark:hover:text-accent-dark-text h-6 w-6 cursor-pointer hover:text-purple-700 ${
+            className={`h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
               router.pathname === "/relays" ? "text-purple-500" : ""
             }`}
             onClick={() => router.push("/relays")}
           />
           {!signIn && (
             <ArrowLeftOnRectangleIcon
-              className="dark:text-main-dark-text dark:hover:text-accent-dark-text h-6 w-6 cursor-pointer hover:text-purple-700"
+              className="h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
               onClick={() => {
                 router.push("/sign-in");
               }}
@@ -95,7 +89,7 @@ const Navbar = ({ darkMode, handleDarkModeToggle }: NavbarProps) => {
           )}
           {signIn && (
             <ArrowRightOnRectangleIcon
-              className="dark:text-main-dark-text dark:hover:text-accent-dark-text h-6 w-6 cursor-pointer hover:text-purple-700"
+              className="h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
               onClick={() => {
                 localStorage.removeItem("npub");
                 localStorage.removeItem("signIn");

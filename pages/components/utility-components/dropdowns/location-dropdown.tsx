@@ -1,6 +1,6 @@
-import React, { useMemo, useRef, useEffect, useState } from "react";
+import React, { useMemo } from "react";
 import { Select, SelectItem, SelectSection, Avatar } from "@nextui-org/react";
-import locations from "../../../public/locationSelection.json";
+import locations from "../../../../public/locationSelection.json";
 
 export const locationAvatar = (location: string) => {
   const getLocationMap = () => {
@@ -34,7 +34,7 @@ const LocationDropdown = ({ value, ...props }) => {
 
   const locationOptions = useMemo(() => {
     const headingClasses =
-      "flex w-full sticky top-1 z-20 py-1.5 px-2 dark:bg-main-dark-bg bg-main-light-bg shadow-small rounded-small";
+      "flex w-full sticky top-1 z-20 py-1.5 px-2 dark:bg-dark-bg bg-light-bg shadow-small rounded-small";
 
     let countryOptions = (
       <SelectSection
@@ -48,15 +48,15 @@ const LocationDropdown = ({ value, ...props }) => {
             <SelectItem
               key={country.country}
               classNames={{
-                wrapper: "dark:bg-main-dark-bg bg-main-dark-bg",
+                wrapper: "dark:bg-dark-bg bg-dark-bg",
               }}
-              startContent={
-                <Avatar
-                  alt={country.country}
-                  className="h-6 w-6"
-                  src={`https://flagcdn.com/16x12/${country.iso3166}.png`}
-                />
-              }
+              // startContent={
+              //   <Avatar
+              //     alt={country.country}
+              //     className="h-6 w-6"
+              //     src={`https://flagcdn.com/16x12/${country.iso3166}.png`}
+              //   />
+              // }
             >
               {country.country}
             </SelectItem>
@@ -71,18 +71,19 @@ const LocationDropdown = ({ value, ...props }) => {
         classNames={{
           heading: headingClasses,
         }}
+        className="text-light-text dark:text-dark-text"
       >
         {locations.states.map((state, index) => {
           return (
             <SelectItem
               key={state.state}
-              startContent={
-                <Avatar
-                  alt={state.state}
-                  className="h-6 w-6"
-                  src={`https://flagcdn.com/16x12/${state.iso3166}.png`}
-                />
-              }
+              // startContent={
+              //   <Avatar
+              //     alt={state.state}
+              //     className="h-6 w-6"
+              //     src={`https://flagcdn.com/16x12/${state.iso3166}.png`}
+              //   />
+              // }
             >
               {state.state}
             </SelectItem>
@@ -94,7 +95,11 @@ const LocationDropdown = ({ value, ...props }) => {
   }, []);
 
   return (
-    <Select startContent={locationAvatar(value)} {...props}>
+    <Select
+      startContent={locationAvatar(value)}
+      {...props}
+      className="mt-2 text-light-text dark:text-dark-text"
+    >
       {locationOptions}
     </Select>
   );

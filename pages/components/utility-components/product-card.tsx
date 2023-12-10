@@ -1,7 +1,7 @@
 import React, { ReactNode, useEffect, useState } from "react";
 import { Card, CardBody, Divider, Chip, CardFooter } from "@nextui-org/react";
 import { ProfileAvatar } from "./avatar";
-import { locationAvatar } from "./location-dropdown";
+import { locationAvatar } from "./dropdowns/location-dropdown";
 import CompactCategories from "./compact-categories";
 import ImageCarousel from "./image-carousel";
 import CompactPriceDisplay from "./display-monetary-info";
@@ -72,7 +72,7 @@ export default function ProductCard({
   return (
     <Card
       className={
-        "dark:bg-accent-dark-bg bg-accent-light-bg mx-[2.5px] my-3 w-[385px] rounded-lg " +
+        "mx-[2.5px] my-3 w-[385px] rounded-lg bg-light-fg dark:bg-dark-fg " +
         cardHoverStyle
       }
     >
