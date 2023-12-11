@@ -48,7 +48,7 @@ const Navbar = () => {
     <div className="absolute z-20 flex w-full flex-col bg-light-bg px-3 pb-2 dark:bg-dark-bg">
       <div className="flex h-[40px] flex-row justify-between">
         <h1
-          className="cursor-pointer text-3xl font-bold text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow"
+          className="cursor-pointer text-3xl font-bold text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light"
           onClick={() => router.push("/")}
         >
           Shopstr

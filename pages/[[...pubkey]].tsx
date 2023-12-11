@@ -130,7 +130,7 @@ const SellerView = () => {
         </div>
         {focusedPubkey ? (
           <div
-            className="flex w-fit cursor-pointer flex-row rounded-md px-3 align-middle text-shopstr-purple hover:bg-shopstr-yellow dark:text-shopstr-yellow hover:dark:bg-shopstr-purple"
+            className="flex w-fit cursor-pointer flex-row rounded-md px-3 align-middle text-shopstr-purple hover:bg-shopstr-yellow dark:text-shopstr-yellow-light hover:dark:bg-shopstr-purple"
             onClick={() => {
               routeToShop("");
             }}
