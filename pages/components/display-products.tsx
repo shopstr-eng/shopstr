@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext, useMemo } from "react";
+import { useState, useEffect, useContext } from "react";
 import { nip19 } from "nostr-tools";
 import {
   DeleteListing,
@@ -168,7 +168,7 @@ const DisplayEvents = ({
 
   return (
     <>
-      <div className="h-full">
+      <div className="h-full bg-light-bg dark:bg-dark-bg">
         <div className="h-16">
           {/*spacer div needed to account for the header (Navbar and categories}*/}
         </div>
@@ -188,7 +188,7 @@ const DisplayEvents = ({
           </div>
         ) : (
           <div className="mt-8 flex items-center justify-center">
-            <p className="break-words text-center text-xl">
+            <p className="break-words text-center text-xl text-light-text dark:text-dark-text">
               No listings found . . .
             </p>
           </div>

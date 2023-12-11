@@ -84,7 +84,7 @@ export const calculateTotalCost = (
 };
 
 export function formatWithCommas(amount: number, currency: string) {
-  if (amount === 0) {
+  if (!amount || amount === 0) {
     // If the amount is 0, directly return "0" followed by the currency
     return `0 ${currency}`;
   }

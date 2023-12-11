@@ -1,4 +1,3 @@
-import React from "react";
 import { ShippingOptionsType } from "./STATIC-VARIABLES";
 import { calculateTotalCost } from "../utility-components/display-monetary-info";
 import { NostrEvent } from "@/pages/components/utility/nostr-helper-functions";

@@ -16,12 +16,12 @@ import {
   DropdownSection,
 } from "@nextui-org/react";
 import { relayInit } from "nostr-tools";
+import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
 
 const Relays = () => {
   const [relays, setRelays] = useState([]);
   // make initial state equal to proprietary relay
   const [showModal, setShowModal] = useState(false);
-  const [addNewRelayText, setAddNewRelayText] = useState("");
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -40,25 +40,6 @@ const Relays = () => {
     control,
     reset,
   } = useForm();
-
-  const confirmActionDropdown = (children, header, label, func) => {
-    return (
-      <Dropdown backdrop="blur">
-        <DropdownTrigger>{children}</DropdownTrigger>
-        <DropdownMenu variant="faded" aria-label="Static Actions">
-          <DropdownSection title={header} showDivider={true}></DropdownSection>
-          <DropdownItem
-            key="delete"
-            className="text-danger"
-            color="danger"
-            onClick={func}
-          >
-            {label}
-          </DropdownItem>
-        </DropdownMenu>
-      </Dropdown>
-    );
-  };
 
   const onSubmit = async (data) => {
     let relay = data["relay"];
@@ -95,13 +76,15 @@ const Relays = () => {
           </p>
         </div>
       )}
-      <div className="mb-8 mt-8 max-h-96 overflow-y-scroll rounded-md bg-white">
+      <div className="mb-8 mt-8 max-h-96 overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
         {relays.map((relay) => (
           <div
             key={relay}
-            className="mb-2 flex items-center justify-between border-2"
+            className="mx-3 mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg"
           >
-            <div className="max-w-xsm truncate">{relay}</div>
+            <div className="max-w-xsm truncate text-light-text dark:text-dark-text">
+              {relay}
+            </div>
             <MinusCircleIcon
               onClick={() => deleteRelay(relay)}
               className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
@@ -109,11 +92,8 @@ const Relays = () => {
           </div>
         ))}
       </div>
-      <div className="absolute bottom-[0px] z-20 flex h-fit w-[99vw] flex-row justify-between bg-white px-3 py-[15px]">
-        <Button
-          className="mx-3 bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 text-white shadow-lg"
-          onClick={handleToggleModal}
-        >
+      <div className="absolute bottom-[0px] z-20 flex h-fit w-[99vw] flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+        <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={handleToggleModal}>
           Add New Relay
         </Button>
       </div>
@@ -133,7 +113,7 @@ const Relays = () => {
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="flex flex-col gap-1">
+          <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
             Add New Relay
           </ModalHeader>
           <form onSubmit={handleSubmit(onSubmit)}>
@@ -161,6 +141,7 @@ const Relays = () => {
                     : "";
                   return (
                     <Textarea
+                      className="text-light-text dark:text-dark-text"
                       variant="bordered"
                       fullWidth={true}
                       placeholder="wss://..."
@@ -177,19 +158,15 @@ const Relays = () => {
             </ModalBody>
 
             <ModalFooter>
-              {confirmActionDropdown(
-                <Button color="danger" variant="light">
-                  Cancel
-                </Button>,
-                "Are you sure you want to cancel?",
-                "Cancel",
-                handleToggleModal,
-              )}
-
               <Button
-                className="bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 text-white shadow-lg"
-                type="submit"
+                color="danger"
+                variant="light"
+                onClick={handleToggleModal}
               >
+                Cancel
+              </Button>
+
+              <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
                 Add Relay
               </Button>
             </ModalFooter>

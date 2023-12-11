@@ -37,4 +37,4 @@ export const SHIPPING_OPTIONS = [
 ];
 
 export const SHOPSTRBUTTONCLASSNAMES =
-  "text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 min-w-fit ";
+  "text-dark-text dark:text-light-text shadow-lg bg-gradient-to-tr from-shopstr-purple via-shopstr-purple-light to-shopstr-purple min-w-fit dark:from-shopstr-yellow dark:via-shopstr-yellow-light dark:to-shopstr-yellow";

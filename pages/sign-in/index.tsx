@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
 import { withRouter, NextRouter } from "next/router";
 import { nip19, getPublicKey } from "nostr-tools";
 import * as CryptoJS from "crypto-js";
 import { validateNSecKey } from "../components/utility/nostr-helper-functions";
 import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
+import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
 
 const LoginPage = ({ router }: { router: NextRouter }) => {
   const [privateKey, setPrivateKey] = useState<string>("");
@@ -84,12 +84,17 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
               src="/shopstr.png"
               width={50}
             />
-            <h1 className="text-center text-3xl font-bold text-purple-500">
+            <h1
+              onClick={() => {
+                router.push("/");
+              }}
+              className="cursor-pointer text-center text-3xl font-bold text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light"
+            >
               Shopstr
             </h1>
           </div>
           {errorMessage && (
-            <div className="mb-4 rounded bg-red-500 px-4 py-2 text-white">
+            <div className="mb-4 rounded bg-red-500 px-4 py-2 text-light-text dark:text-dark-text">
               {errorMessage}
             </div>
           )}
@@ -120,19 +125,19 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
           </div>
           <div className="flex flex-row justify-between space-x-2">
             <Button
-              className="bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 text-white shadow-lg"
+              className={SHOPSTRBUTTONCLASSNAMES}
               onClick={handleGenerateKeys}
             >
               Create Account
             </Button>
             <Button
-              className="bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 text-white shadow-lg"
+              className={SHOPSTRBUTTONCLASSNAMES}
               onClick={startExtensionLogin}
             >
               Extension Sign In
             </Button>
             <Button
-              className="bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 text-white shadow-lg"
+              className={SHOPSTRBUTTONCLASSNAMES}
               onClick={handleSignIn}
               disabled={!validPrivateKey} // Disable the button only if both key strings are invalid or the button has already been clicked
             >

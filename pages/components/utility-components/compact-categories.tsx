@@ -5,21 +5,22 @@ import { Chip, Tooltip } from "@nextui-org/react";
 const CompactCategories = ({ categories }: { categories: string[] }) => {
   const [isOpen, setIsOpen] = React.useState(false);
 
-  const validCategories = categories?.filter((category) =>
-    CATEGORIES.includes(category),
-  );
+  const validCategories = categories
+    ?.filter((category) => CATEGORIES.includes(category))
+    .sort((a, b) => b.length - a.length); // sort by longest to shortest to avoid styling bugs of categories jumping around
+
   const categoryChips = validCategories?.map((category, index) => {
     return <Chip key={index}>{category}</Chip>;
   });
+
   if (validCategories?.length === 0) return null;
+
   return (
     <>
       {categoryChips && (
         <Tooltip
           content={
-            <div className="ml-auto flex w-fit flex-col gap-2">
-              {categoryChips}
-            </div>
+            <div className="flex w-fit flex-col gap-2">{categoryChips}</div>
           }
           isOpen={isOpen}
           onOpenChange={(open) => setIsOpen(open)}
@@ -30,14 +31,14 @@ const CompactCategories = ({ categories }: { categories: string[] }) => {
               exit: {
                 opacity: 0,
                 transition: {
-                  duration: 0.1,
+                  duration: 0.075,
                   ease: "easeIn",
                 },
               },
               enter: {
                 opacity: 1,
                 transition: {
-                  duration: 0.15,
+                  duration: 0.1,
                   ease: "easeOut",
                 },
               },
@@ -49,7 +50,7 @@ const CompactCategories = ({ categories }: { categories: string[] }) => {
           }}
         >
           <div
-            className="w-fit"
+            className="z-0  w-fit"
             onClick={() => {
               setIsOpen(true);
             }}

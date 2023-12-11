@@ -5,12 +5,18 @@ import { useRouter } from "next/router";
 import { ArrowUturnLeftIcon } from "@heroicons/react/24/outline";
 import { nip19 } from "nostr-tools";
 import ProductForm from "./components/product-form";
-import { Button, Select, SelectItem, Input } from "@nextui-org/react";
+import {
+  Button,
+  Select,
+  SelectItem,
+  SelectSection,
+  Input,
+} from "@nextui-org/react";
 import {
   CATEGORIES,
   SHOPSTRBUTTONCLASSNAMES,
 } from "./components/utility/STATIC-VARIABLES";
-import LocationDropdown from "./components/utility-components/location-dropdown";
+import LocationDropdown from "./components/utility-components/dropdowns/location-dropdown";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 
 const SellerView = () => {
@@ -77,8 +83,8 @@ const SellerView = () => {
         />
         <meta name="twitter:image" content="/shopstr.png" />
       </Head>
-      <div className="top-[40px] flex flex-col absolute z-20 w-[99vw] max-w-[100%] px-3 bg-white pb-2">
-        <div className="flex-row flex gap-2 pb-3">
+      <div className="absolute top-[40px] z-20 flex w-[99vw] max-w-[100%] flex-col bg-light-bg px-3 pb-2 dark:bg-dark-bg">
+        <div className="flex flex-row gap-2 pb-3">
           <Input
             className="mt-2"
             isClearable
@@ -91,7 +97,7 @@ const SellerView = () => {
             }}
           ></Input>
           <Select
-            className="mt-2"
+            className="mt-2 text-light-text dark:text-dark-text"
             label="Categories"
             placeholder="All"
             selectedKeys={selectedCategories}
@@ -104,11 +110,13 @@ const SellerView = () => {
             }}
             selectionMode="multiple"
           >
-            {CATEGORIES.map((category) => (
-              <SelectItem value={category} key={category}>
-                {category}
-              </SelectItem>
-            ))}
+            <SelectSection className="text-light-text dark:text-dark-text">
+              {CATEGORIES.map((category) => (
+                <SelectItem value={category} key={category}>
+                  {category}
+                </SelectItem>
+              ))}
+            </SelectSection>
           </Select>
           <LocationDropdown
             className="mt-2"
@@ -122,14 +130,14 @@ const SellerView = () => {
         </div>
         {focusedPubkey ? (
           <div
-            className="flex flex-row w-fit px-3 align-middle text-yellow-500 hover:bg-purple-700 rounded-md cursor-pointer"
+            className="flex w-fit cursor-pointer flex-row rounded-md px-3 align-middle text-shopstr-purple hover:bg-shopstr-yellow dark:text-shopstr-yellow-light hover:dark:bg-shopstr-purple"
             onClick={() => {
               routeToShop("");
             }}
           >
             <div>
               <ArrowUturnLeftIcon
-                className="w-5 h-5 text-purple-500 hover:text-purple-700 pr-1"
+                className="h-5 w-5 pr-1 text-shopstr-purple-light dark:text-shopstr-yellow-light hover:text-purple-700"
                 onClick={() => {
                   routeToShop("");
                 }}
@@ -150,7 +158,7 @@ const SellerView = () => {
         selectedLocation={selectedLocation}
         selectedSearch={selectedSearch}
       />
-      <div className="flex flex-row justify-between h-fit absolute w-[99vw] bottom-[0px] bg-white py-[15px] z-20 px-3">
+      <div className="absolute bottom-[0px] z-20 flex h-fit w-[99vw] flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
         <Button
           type="button"
           className={SHOPSTRBUTTONCLASSNAMES + " w-[20%]"}

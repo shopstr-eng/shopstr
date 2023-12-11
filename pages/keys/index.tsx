@@ -8,6 +8,7 @@ import {
   InformationCircleIcon,
 } from "@heroicons/react/24/outline";
 import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
+import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
 
 const Keys = () => {
   const router = useRouter();
@@ -82,7 +83,7 @@ const Keys = () => {
               src="/shopstr.png"
               width={50}
             />
-            <h1 className="text-center text-3xl font-bold text-purple-500">
+            <h1 className="cursor-pointer text-center text-3xl font-bold text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light">
               Shopstr
             </h1>
           </div>
@@ -90,7 +91,7 @@ const Keys = () => {
             <label className="text-xl">Public Key:</label>
             {publicKey && (
               <div
-                className="border-color-yellow-500 overflow-hidden overflow-ellipsis whitespace-nowrap rounded-md border-b-2 border-l-2 border-purple-500 bg-white px-1 text-xl"
+                className="border-color-yellow-500 overflow-hidden overflow-ellipsis whitespace-nowrap rounded-md border-b-2 border-l-2 border-shopstr-purple bg-light-bg px-1 text-xl dark:border-shopstr-yellow dark:bg-dark-bg"
                 onClick={handleCopyPubkey}
               >
                 {publicKey}
@@ -100,7 +101,7 @@ const Keys = () => {
           <div className="mb-4 flex flex-col">
             <label className="text-xl">Private Key:</label>
             {privateKey && (
-              <div className="flex items-center justify-between rounded-md border-b-2 border-l-2 border-purple-500 bg-white text-xl">
+              <div className="flex items-center justify-between rounded-md border-b-2 border-l-2 border-shopstr-purple bg-light-bg text-xl dark:border-shopstr-yellow dark:bg-dark-bg">
                 <div
                   className="overflow-hidden overflow-ellipsis whitespace-nowrap px-1"
                   onClick={handleCopyPrivkey}
@@ -139,10 +140,7 @@ const Keys = () => {
             />
           </div>
           <div className="flex justify-center">
-            <Button
-              className="bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 text-white shadow-lg"
-              onClick={handleSignIn}
-            >
+            <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={handleSignIn}>
               Sign In
             </Button>
           </div>

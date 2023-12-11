@@ -15,6 +15,8 @@ import {
   decryptNpub,
   NostrEvent,
 } from "./components/utility/nostr-helper-functions";
+import { NextUIProvider } from "@nextui-org/react";
+import { ThemeProvider as NextThemesProvider } from "next-themes";
 
 function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
@@ -129,7 +131,7 @@ function App({ Component, pageProps }: AppProps) {
         return newProfileMap;
       });
     });
-  }, [pubkeyProfilesToFetch, productContext.isLoading]);
+  }, [pubkeyProfilesToFetch, productContext.isLoading, relays]);
 
   /** UPON PROFILEMAP UPDATE, SET PROFILE CONTEXT **/
   useEffect(() => {
@@ -144,13 +146,20 @@ function App({ Component, pageProps }: AppProps) {
   return (
     <ProfileMapContext.Provider value={profileContext}>
       <ProductContext.Provider value={productContext}>
-        <div className="">
-          {isSignInPage || isKeyPage ? null : <Navbar />}
-          <div className="h-20">
-            {/*spacer div needed so pages can account for navbar height*/}
-          </div>
-          <Component {...pageProps} />
-        </div>
+        <NextUIProvider>
+          <NextThemesProvider
+            attribute="class"
+            forcedTheme={Component.theme || undefined}
+          >
+            <div className="h-[100vh] bg-light-bg dark:bg-dark-bg">
+              {isSignInPage || isKeyPage ? null : <Navbar />}
+              <div className="h-20">
+                {/*spacer div needed so pages can account for navbar height*/}
+              </div>
+              <Component {...pageProps} />
+            </div>
+          </NextThemesProvider>
+        </NextUIProvider>
       </ProductContext.Provider>
     </ProfileMapContext.Provider>
   );
