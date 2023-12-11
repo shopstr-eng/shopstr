@@ -34,7 +34,7 @@ export default function CheckoutPage({
     );
   };
   return (
-    <div className="dark:bg-dark-bg bg-light-bg flex w-full items-center justify-center">
+    <div className="flex w-full items-center justify-center bg-light-bg dark:bg-dark-bg">
       <div className="flex w-[50%] flex-col sm:w-full ">
         <ProductCard
           productData={productData}
