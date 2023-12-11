@@ -137,7 +137,7 @@ const SellerView = () => {
           >
             <div>
               <ArrowUturnLeftIcon
-                className="h-5 w-5 pr-1 text-purple-500 hover:text-purple-700"
+                className="h-5 w-5 pr-1 text-shopstr-purple-light dark:text-shopstr-yellow-light hover:text-purple-700"
                 onClick={() => {
                   routeToShop("");
                 }}

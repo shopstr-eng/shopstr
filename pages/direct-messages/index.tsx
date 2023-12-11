@@ -573,9 +573,9 @@ const DirectMessages = () => {
 
   return (
     <div>
-      <h2 className="mt-2 flex w-fit cursor-pointer flex-row items-center rounded-md pr-2 align-middle text-shopstr-purple hover:bg-shopstr-yellow dark:text-shopstr-yellow-light hover:dark:bg-shopstr-purple">
+      <h2 className="mt-2 flex w-fit cursor-pointer flex-row items-center rounded-md pr-2 align-middle text-shopstr-purple-light hover:bg-shopstr-yellow dark:text-shopstr-yellow-light hover:dark:bg-shopstr-purple">
         <ArrowUturnLeftIcon
-          className="h-5 w-5 text-purple-500 hover:text-purple-700"
+          className="h-5 w-5 text-shopstr-purple-light dark:text-shopstr-yellow-light hover:text-purple-700"
           onClick={handleGoBack}
         />
         {currentChat}

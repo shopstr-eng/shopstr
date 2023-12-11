@@ -2,7 +2,7 @@ import Link from "next/link";
 
 const Wallet = () => {
   const mintUrl =
-    "https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV";
+    "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC";
 
   const handleCopyInvoice = () => {
     navigator.clipboard.writeText(mintUrl);
@@ -16,14 +16,14 @@ const Wallet = () => {
         Bitcoin on
         <Link
           href="https://wallet.nutstash.app/"
-          className="text-accent-light-text hover:text-purple-700 dark:text-accent-dark-text"
+          className="text-accent-light-text hover:text-purple-700 dark:text-accent-dark-text hover:dark:text-yellow-700"
         >
           {" "}
           Nutstash{" "}
         </Link>
         using
         <span
-          className="text-accent-light-text hover:text-purple-700 dark:text-accent-dark-text"
+          className="text-accent-light-text hover:text-purple-700 dark:text-accent-dark-text hover:dark:text-yellow-700"
           onClick={handleCopyInvoice}
         >
           {" "}
