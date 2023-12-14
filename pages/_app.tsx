@@ -22,6 +22,7 @@ function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
   const isSignInPage = router.pathname === "/sign-in";
   const isKeyPage = router.pathname === "/keys";
+  const [npub, setNpub] = useState("");
   const [relays, setRelays] = useState([]);
   const [profileMap, setProfileMap] = useState(new Map());
   const [pubkeyProfilesToFetch, setPubkeyProfilesToFetch] = useState<
@@ -67,8 +68,47 @@ function App({ Component, pageProps }: AppProps) {
             : [],
         ) as Set<string>,
       ); // fetches your profile if you are logged in
+      if (localStorage.getItem("npub") !== null)
+        setNpub(localStorage.getItem("npub"));
     }
   }, []);
+
+  /** FETCH USER RELAYS **/
+  useEffect(() => {
+    if (npub) {
+      const pool = new SimplePool();
+      let subParams: { kinds: number[]; authors?: string[] } = {
+        kinds: [3, 10002],
+        authors: [decryptNpub(npub)],
+      };
+      let relaySub = pool.sub(relays, [subParams]);
+      let relaysWithWriteTrueSet = new Set();
+      relaySub.on("event", (event) => {
+        if (event.kind === 3) {
+          const relayObject = JSON.parse(event.content);
+          for (const [key, value] of Object.entries(relayObject)) {
+            if (value.write === true) {
+              relaysWithWriteTrueSet.add(key);
+            }
+          }
+        } else if (event.kind === 10002) {
+          event.tags.forEach((tag) => {
+            if (tag[1] && (tag.length < 3 || tag[2] === "write")) {
+              relaysWithWriteTrueSet.add(tag[1]);
+            }
+          });
+        }
+        // Update the relays state variable to include unique values from relaysWithWriteTrueSet
+        setRelays((prevRelays) => {
+          const updatedRelaysSet = new Set([
+            ...prevRelays,
+            ...relaysWithWriteTrueSet,
+          ]);
+          return Array.from(updatedRelaysSet);
+        });
+      });
+    }
+  }, [npub]);
 
   /** FETCH ALL PRODUCTS **/
   useEffect(() => {
