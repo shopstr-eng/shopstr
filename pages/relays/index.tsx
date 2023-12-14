@@ -71,7 +71,7 @@ const Relays = () => {
     <div>
       {relays.length === 0 && (
         <div className="mt-8 flex items-center justify-center">
-          <p className="break-words text-center text-xl">
+          <p className="break-words text-center text-xl dark:text-dark-text">
             No relays added . . .
           </p>
         </div>

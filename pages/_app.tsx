@@ -107,6 +107,7 @@ function App({ Component, pageProps }: AppProps) {
           return Array.from(updatedRelaysSet);
         });
       });
+      localStorage.setItem("relays", JSON.stringify(relays));
     }
   }, [npub]);
 
