@@ -18,6 +18,7 @@ import {
 } from "@nextui-org/react";
 import { TrashIcon } from "@heroicons/react/24/outline";
 import Carousal from "@itseasy21/react-elastic-carousel";
+import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
 
 import {
   PostListing,
@@ -149,10 +150,8 @@ export default function NewForm({
 
   const buttonClassName = useMemo(() => {
     const disabledStyle = " from-gray-300 to-gray-400 cursor-not-allowed";
-    const enabledStyle = " from-purple-600 via-purple-500 to-purple-600";
-    const className =
-      "text-white shadow-lg bg-gradient-to-tr" +
-      (isButtonDisabled ? disabledStyle : enabledStyle);
+    const enabledStyle = SHOPSTRBUTTONCLASSNAMES;
+    const className = isButtonDisabled ? disabledStyle : enabledStyle;
     return className;
   }, [isButtonDisabled]);
 
@@ -634,6 +633,7 @@ export default function NewForm({
             {signIn === "nsec" && (
               <Input
                 autoFocus
+                className="text-light-text dark:text-dark-text"
                 ref={passphraseInputRef}
                 variant="flat"
                 label="Passphrase"
