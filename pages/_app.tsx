@@ -60,6 +60,9 @@ function App({ Component, pageProps }: AppProps) {
         );
         setRelays(JSON.parse(localStorage.getItem("relays") as string));
       }
+      if (localStorage.getItem("mints") === null) {
+        localStorage.setItem("mints", JSON.stringify(["https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"]));
+      }
       setPubkeyProfilesToFetch(
         new Set(
           typeof localStorage.getItem("npub") == "string"
