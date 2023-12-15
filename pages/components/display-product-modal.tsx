@@ -1,5 +1,10 @@
 import React from "react";
-import { BoltIcon, EnvelopeIcon, TrashIcon } from "@heroicons/react/24/outline";
+import {
+  BoltIcon,
+  EnvelopeIcon,
+  PencilSquareIcon,
+  TrashIcon,
+} from "@heroicons/react/24/outline";
 import {
   Modal,
   ModalContent,
@@ -10,6 +15,7 @@ import {
   Chip,
   Divider,
 } from "@nextui-org/react";
+import ProductForm from "./product-form";
 import ImageCarousel from "./utility-components/image-carousel";
 import { ProfileAvatar } from "./utility-components/avatar";
 import CompactCategories from "./utility-components/compact-categories";
@@ -23,7 +29,7 @@ import RequestPassphraseModal from "./utility-components/request-passphrase-moda
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 import { getLocalStorageData } from "./utility/nostr-helper-functions";
 
-interface ProductFormProps {
+interface ProductModalProps {
   productData: any;
   handleModalToggle: () => void;
   showModal: boolean;
@@ -39,7 +45,7 @@ export default function DisplayProductModal({
   handleSendMessage,
   handleCheckout,
   handleDelete,
-}: ProductFormProps) {
+}: ProductModalProps) {
   const {
     pubkey,
     createdAt,
@@ -55,6 +61,7 @@ export default function DisplayProductModal({
   const [passphrase, setPassphrase] = React.useState("");
   const [requestPassphrase, setRequestPassphrase] = React.useState(false);
   const [deleteLoading, setDeleteLoading] = React.useState(false);
+  const [showProductForm, setShowProductForm] = React.useState(false);
 
   const displayDate = (timestamp: number): [string, string] => {
     if (timestamp == 0 || !timestamp) return ["", ""];
@@ -64,9 +71,13 @@ export default function DisplayProductModal({
     return [dateString, timeString];
   };
 
+  const handleEditToggle = () => {
+    setShowProductForm(!showProductForm);
+  };
+
   const beginDeleteListingProcess = () => {
     if (!signIn) {
-      alert("You must be signed in!");
+      alert("You must be signed in to delete a listing!");
       return;
     }
     if (signIn === "extension") {
@@ -142,50 +153,60 @@ export default function DisplayProductModal({
 
           <ModalFooter>
             <div className="flex w-full flex-wrap justify-evenly gap-2">
-              {decryptedNpub !== pubkey && (
-                <Button
-                  onClick={() => {
-                    handleSendMessage(productData.pubkey);
-                  }}
-                  type="submit"
-                  className={SHOPSTRBUTTONCLASSNAMES}
-                  startContent={
-                    <EnvelopeIcon className="h-6 w-6 hover:text-yellow-500" />
-                  }
-                >
-                  Message
-                </Button>
-              )}
-
-              {decryptedNpub == pubkey && (
-                <ConfirmActionDropdown
-                  helpText="Are you sure you want to delete this listing?"
-                  buttonLabel="Delete Listing"
-                  onConfirm={beginDeleteListingProcess}
-                >
+              {decryptedNpub === pubkey && (
+                <>
                   <Button
-                    color="danger"
-                    className="px-20"
+                    type="submit"
+                    className={SHOPSTRBUTTONCLASSNAMES}
                     startContent={
-                      <TrashIcon className="h-6 w-6 hover:text-yellow-500" />
+                      <PencilSquareIcon className="h-6 w-6 hover:text-yellow-500" />
                     }
-                    isLoading={deleteLoading}
+                    onClick={handleEditToggle}
                   >
-                    Delete Listing
+                    Edit Listing
                   </Button>
-                </ConfirmActionDropdown>
+                  <ConfirmActionDropdown
+                    helpText="Are you sure you want to delete this listing?"
+                    buttonLabel="Delete Listing"
+                    onConfirm={beginDeleteListingProcess}
+                  >
+                    <Button
+                      className="min-w-fit bg-gradient-to-tr from-red-600 via-red-500 to-red-600 text-white shadow-lg"
+                      startContent={
+                        <TrashIcon className="h-6 w-6 hover:text-yellow-500" />
+                      }
+                      isLoading={deleteLoading}
+                    >
+                      Delete Listing
+                    </Button>
+                  </ConfirmActionDropdown>
+                </>
               )}
               {decryptedNpub !== pubkey && (
-                <Button
-                  type="submit"
-                  onClick={() => handleCheckout(productData.id)}
-                  className={SHOPSTRBUTTONCLASSNAMES}
-                  startContent={
-                    <BoltIcon className="h-6 w-6 hover:text-yellow-500" />
-                  }
-                >
-                  Checkout: {formattedTotalCost}
-                </Button>
+                <>
+                  <Button
+                    onClick={() => {
+                      handleSendMessage(productData.pubkey);
+                    }}
+                    type="submit"
+                    className={SHOPSTRBUTTONCLASSNAMES}
+                    startContent={
+                      <EnvelopeIcon className="h-6 w-6 hover:text-yellow-500" />
+                    }
+                  >
+                    Message
+                  </Button>
+                  <Button
+                    type="submit"
+                    onClick={() => handleCheckout(productData.id)}
+                    className={SHOPSTRBUTTONCLASSNAMES}
+                    startContent={
+                      <BoltIcon className="h-6 w-6 hover:text-yellow-500" />
+                    }
+                  >
+                    Checkout: {formattedTotalCost}
+                  </Button>
+                </>
               )}
             </div>
           </ModalFooter>
@@ -197,6 +218,13 @@ export default function DisplayProductModal({
         isOpen={requestPassphrase}
         setIsOpen={setRequestPassphrase}
         actionOnSubmit={finalizeDeleteListingProcess}
+      />
+      <ProductForm
+        showModal={showProductForm}
+        handleModalToggle={handleEditToggle}
+        oldValues={productData}
+        handleDelete={handleDelete}
+        handleProductModalToggle={handleModalToggle}
       />
     </>
   );
