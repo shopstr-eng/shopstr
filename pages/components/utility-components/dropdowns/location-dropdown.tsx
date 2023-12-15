@@ -42,6 +42,7 @@ const LocationDropdown = ({ value, ...props }) => {
         classNames={{
           heading: headingClasses,
         }}
+        className="text-light-text dark:text-dark-text"
       >
         {locations.countries.map((country, index) => {
           return (
