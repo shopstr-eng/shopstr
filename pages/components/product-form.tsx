@@ -18,6 +18,7 @@ import {
 } from "@nextui-org/react";
 import { TrashIcon } from "@heroicons/react/24/outline";
 import Carousal from "@itseasy21/react-elastic-carousel";
+import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
 
 import {
   PostListing,
@@ -33,16 +34,23 @@ import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action
 interface ProductFormProps {
   handleModalToggle: () => void;
   showModal: boolean;
+  // edit props
+  oldValues?: object;
+  handleDelete?: (productId: string, passphrase: string) => void;
+  handleProductModalToggle?: () => void;
 }
 
 export default function NewForm({
   showModal,
   handleModalToggle,
+  oldValues,
+  handleDelete,
+  handleProductModalToggle,
 }: ProductFormProps) {
   const [passphrase, setPassphrase] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [signIn, setSignIn] = useState("");
-
+  const [isEdit, setIsEdit] = useState(false);
   const {
     handleSubmit,
     formState: { errors },
@@ -50,14 +58,46 @@ export default function NewForm({
     reset,
     watch,
   } = useForm({
-    defaultValues: {
-      Currency: "SATS",
-      "Shipping Option": "N/A",
-    },
+    defaultValues: oldValues
+      ? {
+          "Product Name": oldValues.title,
+          Description: oldValues.summary,
+          Price: String(oldValues.price),
+          Currency: oldValues.currency,
+          Location: oldValues.location,
+          "Shipping Option": oldValues.shippingType,
+          "Shipping Cost": oldValues.shippingCost,
+          Category: oldValues.categories.join(","),
+        }
+      : {
+          Currency: "SATS",
+          "Shipping Option": "N/A",
+        },
   });
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const signIn = localStorage.getItem("signIn");
+      setSignIn(signIn);
+    }
+  }, []);
+
+  useEffect(() => {
+    setImages(oldValues?.images || []);
+    setIsEdit(oldValues ? true : false);
+  }, [showModal]);
+
   const onSubmit = async (data) => {
+    const encoder = new TextEncoder();
+    const dataEncoded = encoder.encode(data["Product Name"]);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", dataEncoded);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+
     let tags = [
+      ["d", oldValues?.d || "Shopstr ID: " + hashHex],
       ["title", data["Product Name"]],
       ["summary", data["Description"]],
       ["price", data["Price"], data["Currency"]],
@@ -77,17 +117,14 @@ export default function NewForm({
     data["Category"].split(",").forEach((category) => {
       tags.push(["t", category]);
     });
-
     await PostListing(tags, passphrase);
+    if (isEdit) {
+      await handleDelete(oldValues.id, passphrase);
+      handleProductModalToggle();
+    }
+
     clear();
   };
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const signIn = localStorage.getItem("signIn");
-      setSignIn(signIn);
-    }
-  }, []);
 
   const clear = () => {
     handleModalToggle();
@@ -113,10 +150,8 @@ export default function NewForm({
 
   const buttonClassName = useMemo(() => {
     const disabledStyle = " from-gray-300 to-gray-400 cursor-not-allowed";
-    const enabledStyle = " from-purple-600 via-purple-500 to-purple-600";
-    const className =
-      "text-white shadow-lg bg-gradient-to-tr" +
-      (isButtonDisabled ? disabledStyle : enabledStyle);
+    const enabledStyle = SHOPSTRBUTTONCLASSNAMES;
+    const className = isButtonDisabled ? disabledStyle : enabledStyle;
     return className;
   }, [isButtonDisabled]);
 
@@ -541,7 +576,7 @@ export default function NewForm({
               name="Category"
               control={control}
               rules={{
-                required: "A Category is required.",
+                required: "A category is required.",
               }}
               render={({
                 field: { onChange, onBlur, value },
@@ -564,6 +599,7 @@ export default function NewForm({
                     onChange={onChange} // send value to hook form
                     onBlur={onBlur} // notify when input is touched/blur
                     value={value}
+                    defaultSelectedKeys={value ? value.split(",") : ""}
                     classNames={{
                       base: "mt-4",
                       trigger: "min-h-unit-12 py-2",
@@ -597,6 +633,7 @@ export default function NewForm({
             {signIn === "nsec" && (
               <Input
                 autoFocus
+                className="text-light-text dark:text-dark-text"
                 ref={passphraseInputRef}
                 variant="flat"
                 label="Passphrase"
@@ -634,7 +671,7 @@ export default function NewForm({
                 }
               }}
             >
-              List Product
+              {isEdit ? "Edit Product" : "List Product"}
             </Button>
           </ModalFooter>
         </form>
