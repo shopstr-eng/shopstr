@@ -131,8 +131,10 @@ export default function DisplayProductModal({
               </div>
             </div>
             <Divider />
-            <span className="text-xl font-semibold">Summary: </span>
-            {productData.summary}
+            <div className="overflow-hidden break-words">
+              <span className="text-xl font-semibold">Summary: </span>
+              {productData.summary}
+            </div>
             <Divider />
             <span className="text-xl font-semibold">Price Breakdown: </span>
             <DisplayCostBreakdown monetaryInfo={productData} />
