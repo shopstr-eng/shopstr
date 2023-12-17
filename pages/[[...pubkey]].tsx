@@ -86,7 +86,7 @@ const SellerView = () => {
       <div className="absolute top-[40px] z-20 flex w-[99vw] max-w-[100%] flex-col bg-light-bg px-3 pb-2 dark:bg-dark-bg">
         <div className="flex flex-row gap-2 pb-3">
           <Input
-            className="mt-2"
+            className="mt-2 text-light-text dark:text-dark-text"
             isClearable
             label="Listings"
             placeholder="Type to search..."
