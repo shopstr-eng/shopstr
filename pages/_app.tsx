@@ -17,6 +17,7 @@ import {
 } from "./components/utility/nostr-helper-functions";
 import { NextUIProvider } from "@nextui-org/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
+import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
 
 function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
@@ -48,6 +49,13 @@ function App({ Component, pageProps }: AppProps) {
     },
   );
 
+  // const mintTest = new CashuWallet(
+  //   new CashuMint(
+  //     "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC",
+  //   ),
+  // );
+  // console.log(mintTest.requestMint(1))
+  
   useEffect(() => {
     // Perform localStorage action
     if (window !== undefined) {

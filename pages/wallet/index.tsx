@@ -44,7 +44,7 @@ const Mints = () => {
 
   const onSubmit = async (data) => {
     let mint = data["mint"];
-    await addRelay(mint);
+    await addMint(mint);
   };
 
   const handleToggleModal = () => {
@@ -58,10 +58,10 @@ const Mints = () => {
         newMint,
       ),
     );
-    if (mintTest) {
+    if (mintTest.requestMint(1)) {
       setMints([...mints, newMint]);
       handleToggleModal();
-    } catch {
+    } else {
       alert(`Mint ${newMint} was not valid!`);
     }
   };
