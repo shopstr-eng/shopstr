@@ -36,11 +36,14 @@ const Checkout = () => {
       kinds: [30402],
     };
 
-    let productSub = pool.sub(relays, [subParams]);
-
-    productSub.on("event", (event) => {
-      const productData = parseTags(event);
-      setProductData(productData);
+    let h = pool.subscribeMany(relays, [subParams], {
+      onevent(event) {
+        const productData = parseTags(event);
+        setProductData(productData);
+      },
+      oneose() {
+        h.close();
+      },
     });
   }, [relays]);
 
