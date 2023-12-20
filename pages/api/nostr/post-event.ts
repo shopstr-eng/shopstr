@@ -46,6 +46,7 @@ const parseRequestBody = (body: string) => {
       // console.log("Missing or invalid property: tags");
       throw new Error("Invalid request data: missing or invalid property");
     }
+  }
   if (!parsedBody.content || typeof parsedBody.content !== "string") {
     // if (!parsePostProductRequest(parsedBody.content)) {
     // console.log("Missing or invalid property: content");
