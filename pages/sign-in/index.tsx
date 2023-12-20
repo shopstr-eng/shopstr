@@ -59,7 +59,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
       localStorage.setItem("signIn", "extension");
       localStorage.setItem(
         "relays",
-        JSON.stringify(["wss://relay.damus.io", "wss://nos.lol"]),
+        JSON.stringify(["wss://relay.damus.io", "wss://nos.lol", "wss://nostr.mutinywallet.com"]),
       );
       alert("Signed in as " + npub + ".");
       router.push("/");

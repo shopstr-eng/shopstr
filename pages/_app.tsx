@@ -56,7 +56,7 @@ function App({ Component, pageProps }: AppProps) {
       } else {
         localStorage.setItem(
           "relays",
-          JSON.stringify(["wss://relay.damus.io", "wss://nos.lol", , "wss://nostr.mutinywallet.com"]),
+          JSON.stringify(["wss://relay.damus.io", "wss://nos.lol", "wss://nostr.mutinywallet.com"]),
         );
         setRelays(JSON.parse(localStorage.getItem("relays") as string));
       }
