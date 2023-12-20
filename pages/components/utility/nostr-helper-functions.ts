@@ -2,6 +2,7 @@ import * as CryptoJS from "crypto-js";
 import { nip19, nip98, SimplePool } from "nostr-tools";
 import { ProductFormValues } from "../api/post-event";
 import axios from "axios";
+import { bytesToHex } from '@noble/hashes/utils'
 
 export async function PostListing(
   values: ProductFormValues,
@@ -210,7 +211,7 @@ export function getNsecWithPassphrase(passphrase: string) {
 
 export function getPrivKeyWithPassphrase(passphrase: string) {
   let { data } = nip19.decode(getNsecWithPassphrase(passphrase));
-  return data;
+  return bytesToHex(data);
 }
 
 export const getLocalStorageData = () => {
