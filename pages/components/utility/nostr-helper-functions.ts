@@ -28,7 +28,7 @@ export async function PostListing(
 
     const pool = new SimplePool();
 
-    await pool.publish(relays, signedEvent);
+    await Promise.any(pool.publish(relays, signedEvent));
   } else {
     axios({
       method: "POST",
@@ -66,7 +66,7 @@ export async function DeleteListing(
     const signedEvent = await window.nostr.signEvent(deletionEvent);
     const pool = new SimplePool();
 
-    await pool.publish(relays, signedEvent);
+    await Promise.any(pool.publish(relays, signedEvent));
   } else {
     axios({
       method: "POST",

@@ -25,7 +25,15 @@ const Checkout = () => {
 
   useEffect(() => {
     let { relays } = getLocalStorageData();
-    setRelays(relays ? relays : ["wss://relay.damus.io", "wss://nos.lol", , "wss://nostr.mutinywallet.com"]);
+    setRelays(
+      relays
+        ? relays
+        : [
+            "wss://relay.damus.io",
+            "wss://nos.lol",
+            "wss://nostr.mutinywallet.com",
+          ],
+    );
   }, []);
 
   useEffect(() => {
@@ -36,11 +44,14 @@ const Checkout = () => {
       kinds: [30402],
     };
 
-    let productSub = pool.sub(relays, [subParams]);
-
-    productSub.on("event", (event) => {
-      const productData = parseTags(event);
-      setProductData(productData);
+    let h = pool.subscribeMany(relays, [subParams], {
+      onevent(event) {
+        const productData = parseTags(event);
+        setProductData(productData);
+      },
+      oneose() {
+        h.close();
+      },
     });
   }, [relays]);
 

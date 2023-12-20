@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import {
   SimplePool,
-  finishEvent, // this assigns the pubkey, calculates the event id and signs the event in a single step
+  finalizeEvent, // this assigns the pubkey, calculates the event id and signs the event in a single step
   nip04,
 } from "nostr-tools";
 
@@ -21,35 +21,39 @@ export type ProductFormValues = ProductFormValue[];
 const parseRequestBody = (body: string) => {
   const parsedBody = typeof body === "string" ? JSON.parse(body) : body;
   if (!parsedBody.pubkey || typeof parsedBody.pubkey !== "string") {
-    console.log("Missing or invalid property: publicKey");
+    // console.log("Missing or invalid property: publicKey");
     throw new Error("Invalid request data: missing or invalid property");
   }
   if (!parsedBody.privkey || typeof parsedBody.privkey !== "string") {
-    console.log("Missing or invalid property: privateKey");
+    // console.log("Missing or invalid property: privateKey");
     throw new Error("Invalid request data: missing or invalid property");
   }
   if (!parsedBody.created_at || typeof parsedBody.created_at !== "number") {
-    console.log("Missing or invalid property: created_at");
+    // console.log("Missing or invalid property: created_at");
     throw new Error("Invalid request data: missing or invalid property");
   }
   if (!parsedBody.kind || typeof parsedBody.kind !== "number") {
-    console.log("Missing or invalid property: kind");
+    // console.log("Missing or invalid property: kind");
     throw new Error("Invalid request data: missing or invalid property");
   }
-  if (!parsedBody.tags || !Array.isArray(parsedBody.tags)) {
+  if (parsedBody.kind === 30402 && (!parsedBody.tags || !Array.isArray(parsedBody.tags))) {
     if (!parseProductFormValues(parsedBody.tags)) {
-      console.log("Missing or invalid property: tags");
+      // console.log("Missing or invalid property: tags");
       throw new Error("Invalid request data: missing or invalid property");
     }
-  }
+  } else if (parsedBody.kind === 4 && (!parsedBody.tags || !Array.isArray(parsedBody.tags))) {
+    if (!parseNip04Values(parsedBody.tags)) {
+      // console.log("Missing or invalid property: tags");
+      throw new Error("Invalid request data: missing or invalid property");
+    }
   if (!parsedBody.content || typeof parsedBody.content !== "string") {
     // if (!parsePostProductRequest(parsedBody.content)) {
-    console.log("Missing or invalid property: content");
+    // console.log("Missing or invalid property: content");
     throw new Error("Invalid request data: missing or invalid property");
     // }
   }
   if (!parsedBody.relays || typeof parsedBody.relays !== "object") {
-    console.log("Missing or invalid property: relays");
+    // console.log("Missing or invalid property: relays");
     throw new Error("Invalid request data: missing or invalid property");
   }
   return parsedBody;
@@ -76,6 +80,24 @@ const parseProductFormValues = (body: ProductFormValues): ProductFormValues => {
   }
   return parsedBody;
 };
+
+  const parseNip04Values = (body: ProductFormValues): ProductFormValues => {
+    const expectedKeys = [
+      "p"
+    ];
+    const parsedBody = typeof body === "string" ? JSON.parse(body) : body;
+    for (const key of expectedKeys) {
+      const matchingPair = parsedBody.find(([k]) => k === key);
+      if (
+        !matchingPair ||
+        !Array.isArray(matchingPair) ||
+        matchingPair[1] === undefined
+      ) {
+        throw new Error(`Missing or invalid property: ${key}`);
+      }
+    }
+    return parsedBody;
+  };
 
 const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
   if (req.method !== "POST") {
@@ -109,24 +131,14 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
       event.content.stall_id = event.pubkey; // using users public key as stall id
       const productId = event.content.id;
       event.content = JSON.stringify(event.content);
-      signedEvent = finishEvent(event, privkey);
+      signedEvent = finalizeEvent(event, privkey);
     }
 
     if (signedEvent.sig === undefined) {
       // if signed by extension, don't sign again
-      signedEvent = finishEvent(signedEvent, privkey);
+      signedEvent = finalizeEvent(signedEvent, privkey);
     }
-    // let sub = pool.sub(relays, [
-    //   {
-    //     kinds: [kind],
-    //     authors: [event.pubkey],
-    //   },
-    // ]);
-
-    // sub.on('event', (event) => {
-    //   console.log('got event:', event);
-    // });
-    await pool.publish(relays, signedEvent);
+    await Promise.any(pool.publish(relays, signedEvent));
 
     return res.status(200).json({});
   } catch (error) {

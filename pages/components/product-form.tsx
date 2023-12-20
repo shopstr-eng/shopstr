@@ -26,7 +26,7 @@ import {
   getPrivKeyWithPassphrase,
   nostrBuildUploadImage,
 } from "./utility/nostr-helper-functions";
-import { finishEvent } from "nostr-tools";
+import { finalizeEvent } from "nostr-tools";
 import { CATEGORIES, SHIPPING_OPTIONS } from "./utility/STATIC-VARIABLES";
 import LocationDropdown from "./utility-components/dropdowns/location-dropdown";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
@@ -229,7 +229,7 @@ export default function NewForm({
 
         const privkey = getPrivKeyWithPassphrase(passphrase);
         response = await nostrBuildUploadImage(imageFile, (e) =>
-          finishEvent(e, privkey),
+          finalizeEvent(e, privkey),
         );
       } else if (signIn === "extension") {
         response = await nostrBuildUploadImage(

@@ -109,45 +109,48 @@ const DirectMessages = () => {
         kinds: [4],
       };
 
-      let newNip04Sub = pool.sub(relays, [subParams]);
+      let h = pool.subscribeMany(relays, [subParams], {
+        onevent(event) {
+          let tagPubkey = event.tags[0][1];
+          let incomingPubkey = event.pubkey;
 
-      newNip04Sub.on("event", (event) => {
-        let tagPubkey = event.tags[0][1];
-        let incomingPubkey = event.pubkey;
-
-        if (decryptedNpub === tagPubkey) {
-          if (!validNpub.test(incomingPubkey)) {
-            if (!chats.includes(incomingPubkey)) {
-              setChats((chats) => {
-                return Array.from(
-                  new Set([...chats, nip19.npubEncode(incomingPubkey)]),
-                );
-              });
+          if (decryptedNpub === tagPubkey) {
+            if (!validNpub.test(incomingPubkey)) {
+              if (!chats.includes(incomingPubkey)) {
+                setChats((chats) => {
+                  return Array.from(
+                    new Set([...chats, nip19.npubEncode(incomingPubkey)]),
+                  );
+                });
+              }
+            } else {
+              if (!chats.includes(incomingPubkey)) {
+                setChats((chats) => {
+                  return Array.from(new Set([...chats, incomingPubkey]));
+                });
+              }
             }
-          } else {
-            if (!chats.includes(incomingPubkey)) {
-              setChats((chats) => {
-                return Array.from(new Set([...chats, incomingPubkey]));
-              });
+          } else if (decryptedNpub === incomingPubkey) {
+            if (!validNpub.test(tagPubkey)) {
+              if (!chats.includes(tagPubkey)) {
+                setChats((chats) => {
+                  return Array.from(
+                    new Set([...chats, nip19.npubEncode(tagPubkey)]),
+                  );
+                });
+              }
+            } else {
+              if (!chats.includes(tagPubkey)) {
+                setChats((chats) => {
+                  return Array.from(new Set([...chats, tagPubkey]));
+                });
+              }
             }
           }
-        } else if (decryptedNpub === incomingPubkey) {
-          if (!validNpub.test(tagPubkey)) {
-            if (!chats.includes(tagPubkey)) {
-              setChats((chats) => {
-                return Array.from(
-                  new Set([...chats, nip19.npubEncode(tagPubkey)]),
-                );
-              });
-            }
-          } else {
-            if (!chats.includes(tagPubkey)) {
-              setChats((chats) => {
-                return Array.from(new Set([...chats, tagPubkey]));
-              });
-            }
-          }
-        }
+        },
+        oneose() {
+          h.close();
+        },
       });
     }
   }, [relays, signIn]);
@@ -165,53 +168,57 @@ const DirectMessages = () => {
 
       subParams["authors"] = [decryptedNpub, chatPubkey];
 
-      let nip04Sub = pool.sub(relays, [subParams]);
+      let h = pool.subscribeMany(relays, [subParams], {
+        onevent: async (event) => {
+          let sender = event.pubkey;
 
-      nip04Sub.on("event", async (event) => {
-        let sender = event.pubkey;
+          let tagPubkey = event.tags[0][1];
 
-        let tagPubkey = event.tags[0][1];
+          let plaintext;
+          if (
+            (decryptedNpub === sender && tagPubkey === chatPubkey) ||
+            (chatPubkey === sender && tagPubkey === decryptedNpub)
+          ) {
+            if (signIn === "extension") {
+              plaintext = await window.nostr.nip04.decrypt(
+                chatPubkey,
+                event.content,
+              );
+            } else {
+              let sk2 = getPrivKeyWithPassphrase(passphrase);
+              plaintext = await nip04.decrypt(sk2, chatPubkey, event.content);
+            }
+          }
+          let created_at = event.created_at;
 
-        let plaintext;
-        if (
-          (decryptedNpub === sender && tagPubkey === chatPubkey) ||
-          (chatPubkey === sender && tagPubkey === decryptedNpub)
-        ) {
-          if (signIn === "extension") {
-            plaintext = await window.nostr.nip04.decrypt(
-              chatPubkey,
-              event.content,
+          if (plaintext != undefined) {
+            // Get an array of all existing event IDs
+            let existingEventIds = messages.map((message) => message.eventId);
+            // Only add this message if its eventId is not already in existingEventIds
+            if (!existingEventIds.includes(event.id)) {
+              setMessages((prevMessages) => [
+                ...prevMessages,
+                {
+                  plaintext: plaintext,
+                  createdAt: created_at,
+                  sender: sender,
+                  eventId: event.id,
+                },
+              ]);
+            }
+            // Sort the messages with each state update
+            setMessages((prevMessages) =>
+              prevMessages.sort((a, b) => a.createdAt - b.createdAt),
             );
-          } else {
-            let sk2 = getPrivKeyWithPassphrase(passphrase);
-            plaintext = await nip04.decrypt(sk2, chatPubkey, event.content);
           }
-        }
-        let created_at = event.created_at;
-
-        if (plaintext != undefined) {
-          // Get an array of all existing event IDs
-          let existingEventIds = messages.map((message) => message.eventId);
-          // Only add this message if its eventId is not already in existingEventIds
-          if (!existingEventIds.includes(event.id)) {
-            setMessages((prevMessages) => [
-              ...prevMessages,
-              {
-                plaintext: plaintext,
-                createdAt: created_at,
-                sender: sender,
-                eventId: event.id,
-              },
-            ]);
-          }
-          // Sort the messages with each state update
-          setMessages((prevMessages) =>
-            prevMessages.sort((a, b) => a.createdAt - b.createdAt),
-          );
-        }
+        },
+        oneose() {
+          h.close();
+        },
       });
     }
   }, [currentChat]);
+  
   const profileContext = useContext(ProfileMapContext);
   useEffect(() => {
     localStorage.setItem("chats", JSON.stringify(chats));
@@ -342,14 +349,7 @@ const DirectMessages = () => {
 
         // const relays = JSON.parse(storedRelays);
 
-        await pool.publish(relays, signedEvent);
-
-        let events = await pool.list(relays, [
-          { kinds: [0, signedEvent.kind] },
-        ]);
-        let postedEvent = await pool.get(relays, {
-          ids: [signedEvent.id],
-        });
+        await Promise.any(pool.publish(relays, signedEvent));
       } else {
         let privkey = getPrivKeyWithPassphrase(passphrase);
         // request passphrase in popup or form and pass to api

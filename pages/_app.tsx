@@ -56,7 +56,12 @@ function App({ Component, pageProps }: AppProps) {
       } else {
         localStorage.setItem(
           "relays",
-          JSON.stringify(["wss://relay.damus.io", "wss://nos.lol", , "wss://nostr.mutinywallet.com"]),
+          JSON.stringify([
+            "wss://relay.damus.io",
+            "wss://nos.lol",
+            ,
+            "wss://nostr.mutinywallet.com",
+          ]),
         );
         setRelays(JSON.parse(localStorage.getItem("relays") as string));
       }
@@ -76,29 +81,33 @@ function App({ Component, pageProps }: AppProps) {
     let subParams: { kinds: number[]; authors?: string[] } = {
       kinds: [30402],
     };
-    let productsSub = pool.sub(relays, [subParams]);
+
     let productArray: NostrEvent[] = [];
-    productsSub.on("event", (event) => {
-      setProductContext((productContext) => {
-        productArray.push(event);
-        setPubkeyProfilesToFetch((pubkeyProfilesToFetch) => {
-          let newPubkeyProfilesToFetch = new Set(pubkeyProfilesToFetch);
-          newPubkeyProfilesToFetch.add(event.pubkey);
-          return newPubkeyProfilesToFetch;
+
+    let h = pool.subscribeMany(relays, [subParams], {
+      onevent(event) {
+        setProductContext((productContext) => {
+          productArray.push(event);
+          setPubkeyProfilesToFetch((pubkeyProfilesToFetch) => {
+            let newPubkeyProfilesToFetch = new Set(pubkeyProfilesToFetch);
+            newPubkeyProfilesToFetch.add(event.pubkey);
+            return newPubkeyProfilesToFetch;
+          });
+          return {
+            productEvents: productArray,
+            isLoading: productContext.isLoading,
+          };
         });
-        return {
-          productEvents: productArray,
-          isLoading: productContext.isLoading,
-        };
-      });
-    });
-    productsSub.on("eose", () => {
-      setProductContext((productContext) => {
-        return {
-          productEvents: productContext.productEvents,
-          isLoading: false,
-        };
-      });
+      },
+      oneose() {
+        setProductContext((productContext) => {
+          return {
+            productEvents: productContext.productEvents,
+            isLoading: false,
+          };
+        });
+        h.close();
+      },
     });
   }, [relays]);
 
@@ -111,25 +120,28 @@ function App({ Component, pageProps }: AppProps) {
       authors: Array.from(pubkeyProfilesToFetch),
     };
 
-    let profileSub = pool.sub(relays, [profileSubParams]);
-
-    profileSub.on("event", (event) => {
-      setProfileMap((profileMap) => {
-        if (
-          profileMap.has(event.pubkey) &&
-          profileMap.get(event.pubkey).created_at > event.created_at
-        ) {
-          // if profile already exists and is newer than the one we just fetched, don't update
-          return profileMap;
-        }
-        let newProfileMap = new Map(profileMap);
-        newProfileMap.set(event.pubkey, {
-          pubkey: event.pubkey,
-          created_at: event.created_at,
-          content: JSON.parse(event.content),
+    let h = pool.subscribeMany(relays, [profileSubParams], {
+      onevent(event) {
+        setProfileMap((profileMap) => {
+          if (
+            profileMap.has(event.pubkey) &&
+            profileMap.get(event.pubkey).created_at > event.created_at
+          ) {
+            // if profile already exists and is newer than the one we just fetched, don't update
+            return profileMap;
+          }
+          let newProfileMap = new Map(profileMap);
+          newProfileMap.set(event.pubkey, {
+            pubkey: event.pubkey,
+            created_at: event.created_at,
+            content: JSON.parse(event.content),
+          });
+          return newProfileMap;
         });
-        return newProfileMap;
-      });
+      },
+      oneose() {
+        h.close();
+      },
     });
   }, [pubkeyProfilesToFetch, productContext.isLoading, relays]);
 
