@@ -2,7 +2,7 @@ import * as CryptoJS from "crypto-js";
 import { nip19, nip98, SimplePool } from "nostr-tools";
 import { ProductFormValues } from "../api/post-event";
 import axios from "axios";
-import { bytesToHex } from '@noble/hashes/utils'
+import { bytesToHex } from "@noble/hashes/utils";
 
 export async function PostListing(
   values: ProductFormValues,

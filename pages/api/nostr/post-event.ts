@@ -36,12 +36,18 @@ const parseRequestBody = (body: string) => {
     // console.log("Missing or invalid property: kind");
     throw new Error("Invalid request data: missing or invalid property");
   }
-  if (parsedBody.kind === 30402 && (!parsedBody.tags || !Array.isArray(parsedBody.tags))) {
+  if (
+    parsedBody.kind === 30402 &&
+    (!parsedBody.tags || !Array.isArray(parsedBody.tags))
+  ) {
     if (!parseProductFormValues(parsedBody.tags)) {
       // console.log("Missing or invalid property: tags");
       throw new Error("Invalid request data: missing or invalid property");
     }
-  } else if (parsedBody.kind === 4 && (!parsedBody.tags || !Array.isArray(parsedBody.tags))) {
+  } else if (
+    parsedBody.kind === 4 &&
+    (!parsedBody.tags || !Array.isArray(parsedBody.tags))
+  ) {
     if (!parseNip04Values(parsedBody.tags)) {
       // console.log("Missing or invalid property: tags");
       throw new Error("Invalid request data: missing or invalid property");
@@ -82,23 +88,21 @@ const parseProductFormValues = (body: ProductFormValues): ProductFormValues => {
   return parsedBody;
 };
 
-  const parseNip04Values = (body: ProductFormValues): ProductFormValues => {
-    const expectedKeys = [
-      "p"
-    ];
-    const parsedBody = typeof body === "string" ? JSON.parse(body) : body;
-    for (const key of expectedKeys) {
-      const matchingPair = parsedBody.find(([k]) => k === key);
-      if (
-        !matchingPair ||
-        !Array.isArray(matchingPair) ||
-        matchingPair[1] === undefined
-      ) {
-        throw new Error(`Missing or invalid property: ${key}`);
-      }
+const parseNip04Values = (body: ProductFormValues): ProductFormValues => {
+  const expectedKeys = ["p"];
+  const parsedBody = typeof body === "string" ? JSON.parse(body) : body;
+  for (const key of expectedKeys) {
+    const matchingPair = parsedBody.find(([k]) => k === key);
+    if (
+      !matchingPair ||
+      !Array.isArray(matchingPair) ||
+      matchingPair[1] === undefined
+    ) {
+      throw new Error(`Missing or invalid property: ${key}`);
     }
-    return parsedBody;
-  };
+  }
+  return parsedBody;
+};
 
 const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
   if (req.method !== "POST") {

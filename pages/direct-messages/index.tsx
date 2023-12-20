@@ -148,9 +148,9 @@ const DirectMessages = () => {
             }
           }
         },
-        oneose() {
-          h.close();
-        },
+        // oneose() {
+        //   h.close();
+        // },
       });
     }
   }, [relays, signIn]);
@@ -212,13 +212,13 @@ const DirectMessages = () => {
             );
           }
         },
-        oneose() {
-          h.close();
-        },
+        // oneose() {
+        //   h.close();
+        // },
       });
     }
   }, [currentChat]);
-  
+
   const profileContext = useContext(ProfileMapContext);
   useEffect(() => {
     localStorage.setItem("chats", JSON.stringify(chats));
