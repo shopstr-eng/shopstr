@@ -57,6 +57,7 @@ function App({ Component, pageProps }: AppProps) {
         // Filter out any null values from the parsed relays
         const filteredRelays = parsedRelays.filter((relay: string | null) => relay !== null);
         setRelays(filteredRelays);
+        localStorage.setItem("relays", JSON.stringify(filteredRelays));
       } else {
         const defaultRelays = ["wss://relay.damus.io", "wss://nos.lol", "wss://nostr.mutinywallet.com"];
         localStorage.setItem("relays", JSON.stringify(defaultRelays));
