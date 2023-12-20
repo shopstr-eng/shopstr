@@ -51,14 +51,16 @@ function App({ Component, pageProps }: AppProps) {
   useEffect(() => {
     // Perform localStorage action
     if (window !== undefined) {
-      if (localStorage.getItem("relays") !== null) {
-        setRelays(JSON.parse(localStorage.getItem("relays") as string));
+      const storedRelays = localStorage.getItem("relays");
+      if (storedRelays !== null) {
+        const parsedRelays = JSON.parse(storedRelays as string);
+        // Filter out any null values from the parsed relays
+        const filteredRelays = parsedRelays.filter((relay: string | null) => relay !== null);
+        setRelays(filteredRelays);
       } else {
-        localStorage.setItem(
-          "relays",
-          JSON.stringify(["wss://relay.damus.io", "wss://nos.lol", "wss://nostr.mutinywallet.com"]),
-        );
-        setRelays(JSON.parse(localStorage.getItem("relays") as string));
+        const defaultRelays = ["wss://relay.damus.io", "wss://nos.lol", "wss://nostr.mutinywallet.com"];
+        localStorage.setItem("relays", JSON.stringify(defaultRelays));
+        setRelays(defaultRelays);
       }
       setPubkeyProfilesToFetch(
         new Set(
