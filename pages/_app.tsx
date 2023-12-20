@@ -135,11 +135,19 @@ function App({ Component, pageProps }: AppProps) {
             return profileMap;
           }
           let newProfileMap = new Map(profileMap);
-          newProfileMap.set(event.pubkey, {
-            pubkey: event.pubkey,
-            created_at: event.created_at,
-            content: JSON.parse(event.content),
-          });
+          try {
+            // Try to parse the content of the event
+            const content = JSON.parse(event.content);
+            newProfileMap.set(event.pubkey, {
+              pubkey: event.pubkey,
+              created_at: event.created_at,
+              content: content,
+            });
+          } catch (error) {
+            // If JSON.parse fails, simply skip setting this event
+            console.error(`Failed to parse JSON for event pubkey: ${event.pubkey}`, error);
+          }
+          // Return the updated or unchanged map
           return newProfileMap;
         });
       },
