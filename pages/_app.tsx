@@ -145,7 +145,7 @@ function App({ Component, pageProps }: AppProps) {
             });
           } catch (error) {
             // If JSON.parse fails, simply skip setting this event
-            console.error(`Failed to parse JSON for event pubkey: ${event.pubkey}`, error);
+            console.error(`Failed to parse profile data for pubkey: ${event.pubkey}`, error);
           }
           // Return the updated or unchanged map
           return newProfileMap;
