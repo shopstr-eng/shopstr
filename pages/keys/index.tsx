@@ -64,7 +64,11 @@ const Keys = () => {
 
       localStorage.setItem(
         "relays",
-        JSON.stringify(["wss://relay.damus.io", "wss://nos.lol", , "wss://nostr.mutinywallet.com"]),
+        JSON.stringify([
+          "wss://relay.damus.io",
+          "wss://nos.lol",
+          "wss://nostr.mutinywallet.com",
+        ]),
       );
 
       router.push("/");

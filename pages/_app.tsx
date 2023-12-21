@@ -59,14 +59,23 @@ function App({ Component, pageProps }: AppProps) {
   useEffect(() => {
     // Perform localStorage action
     if (window !== undefined) {
-      if (localStorage.getItem("relays") !== null) {
-        setRelays(JSON.parse(localStorage.getItem("relays") as string));
-      } else {
-        localStorage.setItem(
-          "relays",
-          JSON.stringify(["wss://relay.damus.io", "wss://nos.lol", , "wss://nostr.mutinywallet.com"]),
+      const storedRelays = localStorage.getItem("relays");
+      if (storedRelays !== null) {
+        const parsedRelays = JSON.parse(storedRelays as string);
+        // Filter out any null values from the parsed relays
+        const filteredRelays = parsedRelays.filter(
+          (relay: string | null) => relay !== null,
         );
-        setRelays(JSON.parse(localStorage.getItem("relays") as string));
+        setRelays(filteredRelays);
+        localStorage.setItem("relays", JSON.stringify(filteredRelays));
+      } else {
+        const defaultRelays = [
+          "wss://relay.damus.io",
+          "wss://nos.lol",
+          "wss://nostr.mutinywallet.com",
+        ];
+        localStorage.setItem("relays", JSON.stringify(defaultRelays));
+        setRelays(defaultRelays);
       }
       if (localStorage.getItem("mints") === null) {
         localStorage.setItem("mints", JSON.stringify(["https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"]));
@@ -87,29 +96,33 @@ function App({ Component, pageProps }: AppProps) {
     let subParams: { kinds: number[]; authors?: string[] } = {
       kinds: [30402],
     };
-    let productsSub = pool.sub(relays, [subParams]);
+
     let productArray: NostrEvent[] = [];
-    productsSub.on("event", (event) => {
-      setProductContext((productContext) => {
-        productArray.push(event);
-        setPubkeyProfilesToFetch((pubkeyProfilesToFetch) => {
-          let newPubkeyProfilesToFetch = new Set(pubkeyProfilesToFetch);
-          newPubkeyProfilesToFetch.add(event.pubkey);
-          return newPubkeyProfilesToFetch;
+
+    let h = pool.subscribeMany(relays, [subParams], {
+      onevent(event) {
+        setProductContext((productContext) => {
+          productArray.push(event);
+          setPubkeyProfilesToFetch((pubkeyProfilesToFetch) => {
+            let newPubkeyProfilesToFetch = new Set(pubkeyProfilesToFetch);
+            newPubkeyProfilesToFetch.add(event.pubkey);
+            return newPubkeyProfilesToFetch;
+          });
+          return {
+            productEvents: productArray,
+            isLoading: productContext.isLoading,
+          };
         });
-        return {
-          productEvents: productArray,
-          isLoading: productContext.isLoading,
-        };
-      });
-    });
-    productsSub.on("eose", () => {
-      setProductContext((productContext) => {
-        return {
-          productEvents: productContext.productEvents,
-          isLoading: false,
-        };
-      });
+      },
+      oneose() {
+        setProductContext((productContext) => {
+          return {
+            productEvents: productContext.productEvents,
+            isLoading: false,
+          };
+        });
+        // h.close();
+      },
     });
   }, [relays]);
 
@@ -122,25 +135,36 @@ function App({ Component, pageProps }: AppProps) {
       authors: Array.from(pubkeyProfilesToFetch),
     };
 
-    let profileSub = pool.sub(relays, [profileSubParams]);
-
-    profileSub.on("event", (event) => {
-      setProfileMap((profileMap) => {
-        if (
-          profileMap.has(event.pubkey) &&
-          profileMap.get(event.pubkey).created_at > event.created_at
-        ) {
-          // if profile already exists and is newer than the one we just fetched, don't update
-          return profileMap;
-        }
-        let newProfileMap = new Map(profileMap);
-        newProfileMap.set(event.pubkey, {
-          pubkey: event.pubkey,
-          created_at: event.created_at,
-          content: JSON.parse(event.content),
+    let h = pool.subscribeMany(relays, [profileSubParams], {
+      onevent(event) {
+        setProfileMap((profileMap) => {
+          if (
+            profileMap.has(event.pubkey) &&
+            profileMap.get(event.pubkey).created_at > event.created_at
+          ) {
+            // if profile already exists and is newer than the one we just fetched, don't update
+            return profileMap;
+          }
+          let newProfileMap = new Map(profileMap);
+          try {
+            // Try to parse the content of the event
+            const content = JSON.parse(event.content);
+            newProfileMap.set(event.pubkey, {
+              pubkey: event.pubkey,
+              created_at: event.created_at,
+              content: content,
+            });
+          } catch (error) {
+            // If JSON.parse fails, simply skip setting this event
+            console.error(`Failed to parse profile data for pubkey: ${event.pubkey}`, error);
+          }
+          // Return the updated or unchanged map
+          return newProfileMap;
         });
-        return newProfileMap;
-      });
+      },
+      // oneose() {
+      //   h.close();
+      // },
     });
   }, [pubkeyProfilesToFetch, productContext.isLoading, relays]);
 

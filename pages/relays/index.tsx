@@ -15,7 +15,7 @@ import {
   DropdownItem,
   DropdownSection,
 } from "@nextui-org/react";
-import { relayInit } from "nostr-tools";
+import { relayConnect } from "nostr-tools";
 import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
 
 const Relays = () => {
@@ -52,9 +52,8 @@ const Relays = () => {
   };
 
   const addRelay = async (newRelay: string) => {
-    const relayTest = relayInit(newRelay);
     try {
-      await relayTest.connect();
+      const relayTest = await relayConnect(newRelay);
       setRelays([...relays, newRelay]);
       relayTest.close();
       handleToggleModal();

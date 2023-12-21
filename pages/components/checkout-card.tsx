@@ -10,7 +10,6 @@ import {
   Divider,
   Image,
 } from "@nextui-org/react";
-import { SimplePool } from "nostr-tools";
 import axios from "axios";
 import { CheckIcon, ClipboardIcon } from "@heroicons/react/24/outline";
 import { CashuMint, CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
