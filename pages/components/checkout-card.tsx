@@ -26,7 +26,7 @@ export default function CheckoutCard({
   const router = useRouter();
   const { pubkey, currency, totalCost } = productData;
   const pubkeyOfProductBeingSold = pubkey;
-  const { decryptedNpub, relays } = getLocalStorageData();
+  const { decryptedNpub, relays, mints } = getLocalStorageData();
 
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
@@ -72,11 +72,7 @@ export default function CheckoutCard({
   }, [profileContext]);
 
   const handlePayment = async (newPrice: number, currency: string) => {
-    const wallet = new CashuWallet(
-      new CashuMint(
-        "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC",
-      ),
-    );
+    const wallet = new CashuWallet(new CashuMint(mints[0]));
     if (currency === "USD") {
       try {
         const res = await axios.get(
@@ -123,7 +119,7 @@ export default function CheckoutCard({
         encoded = getEncodedToken({
           token: [
             {
-              mint: "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC",
+              mint: mints[0],
               proofs,
             },
           ],

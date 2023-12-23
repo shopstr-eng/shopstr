@@ -17,6 +17,7 @@ import {
 } from "./components/utility/nostr-helper-functions";
 import { NextUIProvider } from "@nextui-org/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
+import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
 
 function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
@@ -68,6 +69,13 @@ function App({ Component, pageProps }: AppProps) {
         ];
         localStorage.setItem("relays", JSON.stringify(defaultRelays));
         setRelays(defaultRelays);
+      }
+      const storedMints = localStorage.getItem("mints");
+      if (storedMints === null) {
+        const defaultMint = [
+          "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC",
+        ];
+        localStorage.setItem("mints", JSON.stringify(defaultMint));
       }
       setPubkeyProfilesToFetch(
         new Set(
@@ -145,7 +153,10 @@ function App({ Component, pageProps }: AppProps) {
             });
           } catch (error) {
             // If JSON.parse fails, simply skip setting this event
-            console.error(`Failed to parse profile data for pubkey: ${event.pubkey}`, error);
+            console.error(
+              `Failed to parse profile data for pubkey: ${event.pubkey}`,
+              error,
+            );
           }
           // Return the updated or unchanged map
           return newProfileMap;

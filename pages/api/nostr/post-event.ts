@@ -10,22 +10,41 @@ export type ProductFormValues = ProductFormValue[];
 
 const parseRequestBody = (body: string) => {
   const parsedBody = typeof body === "string" ? JSON.parse(body) : body;
-  
+
   if (!parsedBody.pubkey || typeof parsedBody.pubkey !== "string") {
     throw new Error("Invalid request data: missing or invalid property pk");
   }
-  
+
   // Convert privkey from object to Uint8Array if necessary
-  if (typeof parsedBody.privkey === 'object' && !Array.isArray(parsedBody.privkey) && parsedBody.privkey !== null) {
-    const keys = Object.keys(parsedBody.privkey).map(Number).sort((a, b) => a - b);
-    if (keys.length === 0 || keys[0] !== 0 || keys[keys.length - 1] !== keys.length - 1) {
-      throw new Error("Invalid request data: privkey object must have consecutive numeric keys starting with 0");
+  if (
+    typeof parsedBody.privkey === "object" &&
+    !Array.isArray(parsedBody.privkey) &&
+    parsedBody.privkey !== null
+  ) {
+    const keys = Object.keys(parsedBody.privkey)
+      .map(Number)
+      .sort((a, b) => a - b);
+    if (
+      keys.length === 0 ||
+      keys[0] !== 0 ||
+      keys[keys.length - 1] !== keys.length - 1
+    ) {
+      throw new Error(
+        "Invalid request data: privkey object must have consecutive numeric keys starting with 0",
+      );
     }
     const uint8Array = new Uint8Array(keys.length);
     for (const key of keys) {
       const value = parsedBody.privkey[key];
-      if (typeof value !== 'number' || value < 0 || value > 255 || !Number.isInteger(value)) {
-        throw new Error("Invalid request data: privkey values must be integers in the range 0-255");
+      if (
+        typeof value !== "number" ||
+        value < 0 ||
+        value > 255 ||
+        !Number.isInteger(value)
+      ) {
+        throw new Error(
+          "Invalid request data: privkey values must be integers in the range 0-255",
+        );
       }
       uint8Array[key] = value;
     }
@@ -33,15 +52,17 @@ const parseRequestBody = (body: string) => {
   } else {
     throw new Error("Invalid request data: missing or invalid property sk");
   }
-  
+
   if (!parsedBody.created_at || typeof parsedBody.created_at !== "number") {
-    throw new Error("Invalid request data: missing or invalid property created_at");
+    throw new Error(
+      "Invalid request data: missing or invalid property created_at",
+    );
   }
-  
+
   if (!parsedBody.kind || typeof parsedBody.kind !== "number") {
     throw new Error("Invalid request data: missing or invalid property kind");
   }
-  
+
   if (
     parsedBody.kind === 30402 &&
     (!parsedBody.tags || !Array.isArray(parsedBody.tags))
@@ -57,15 +78,17 @@ const parseRequestBody = (body: string) => {
       throw new Error("Invalid request data: missing or invalid property tags");
     }
   }
-  
+
   if (!parsedBody.content || typeof parsedBody.content !== "string") {
-    throw new Error("Invalid request data: missing or invalid property content");
+    throw new Error(
+      "Invalid request data: missing or invalid property content",
+    );
   }
-  
+
   if (!parsedBody.relays || typeof parsedBody.relays !== "object") {
     throw new Error("Invalid request data: missing or invalid property relays");
   }
-  
+
   return parsedBody;
 };
 

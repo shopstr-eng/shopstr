@@ -218,6 +218,7 @@ export const getLocalStorageData = () => {
   let encryptedPrivateKey;
   let decryptedNpub;
   let relays;
+  let mints;
 
   if (typeof window !== "undefined") {
     const npub = localStorage.getItem("npub");
@@ -229,8 +230,10 @@ export const getLocalStorageData = () => {
     signIn = localStorage.getItem("signIn");
     const storedRelays = localStorage.getItem("relays");
     relays = storedRelays ? JSON.parse(storedRelays) : [];
+    const storedMints = localStorage.getItem("mints");
+    mints = storedMints ? JSON.parse(storedMints) : [];
   }
-  return { signIn, encryptedPrivateKey, decryptedNpub, relays };
+  return { signIn, encryptedPrivateKey, decryptedNpub, relays, mints };
 };
 
 export const decryptNpub = (nPub: string) => {
