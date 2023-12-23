@@ -48,13 +48,6 @@ function App({ Component, pageProps }: AppProps) {
       },
     },
   );
-
-  // const mintTest = new CashuWallet(
-  //   new CashuMint(
-  //     "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC",
-  //   ),
-  // );
-  // console.log(mintTest.requestMint(1))
   
   useEffect(() => {
     // Perform localStorage action
@@ -77,8 +70,10 @@ function App({ Component, pageProps }: AppProps) {
         localStorage.setItem("relays", JSON.stringify(defaultRelays));
         setRelays(defaultRelays);
       }
-      if (localStorage.getItem("mints") === null) {
-        localStorage.setItem("mints", JSON.stringify(["https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"]));
+      const storedMints = localStorage.getItem("mints");
+      if (storedMints === null) {
+        const defaultMint = ["https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"]
+        localStorage.setItem("mints", JSON.stringify(defaultMint));
       }
       setPubkeyProfilesToFetch(
         new Set(

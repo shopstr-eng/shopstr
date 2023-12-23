@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import {
   HomeIcon,
   EnvelopeOpenIcon,
-  WalletIcon,
+  BuildingLibraryIcon,
   GlobeAltIcon,
   ArrowRightOnRectangleIcon,
   ArrowLeftOnRectangleIcon,
@@ -56,25 +56,25 @@ const Navbar = () => {
         <div className="mt-2 flex space-x-2">
           <HomeIcon
             className={`h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
-              router.pathname === "/" ? "text-purple-500" : ""
+              router.pathname === "/" ? "text-shopstr-purple-light dark:text-shopstr-yellow-light" : ""
             }`}
             onClick={() => router.push("/")}
           />
           <EnvelopeOpenIcon
             className={`h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
-              router.pathname === "/direct-messages" ? "text-purple-500" : ""
+              router.pathname === "/direct-messages" ? "text-shopstr-purple-light dark:text-shopstr-yellow-light" : ""
             }`}
             onClick={() => router.push("/direct-messages")}
           />
-          <WalletIcon
+          <BuildingLibraryIcon
             className={`h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
-              router.pathname === "/wallet" ? "text-purple-500" : ""
+              router.pathname === "/mints" ? "text-shopstr-purple-light dark:text-shopstr-yellow-light" : ""
             }`}
-            onClick={() => router.push("/wallet")}
+            onClick={() => router.push("/mints")}
           />
           <GlobeAltIcon
             className={`h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
-              router.pathname === "/relays" ? "text-purple-500" : ""
+              router.pathname === "/relays" ? "text-shopstr-purple-light dark:text-shopstr-yellow-light" : ""
             }`}
             onClick={() => router.push("/relays")}
           />

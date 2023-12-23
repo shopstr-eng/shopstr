@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
-import { MinusCircleIcon } from "@heroicons/react/24/outline";
+import { MinusCircleIcon, InformationCircleIcon } from "@heroicons/react/24/outline";
 import {
   Modal,
   ModalContent,
@@ -26,7 +26,7 @@ const Mints = () => {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const storedMintss = localStorage.getItem("mints");
+      const storedMints = localStorage.getItem("mints");
       setMints(storedMints ? JSON.parse(storedMints) : []);
     }
   }, []);
@@ -44,7 +44,7 @@ const Mints = () => {
 
   const onSubmit = async (data) => {
     let mint = data["mint"];
-    await addMint(mint);
+    await replaceMint(mint);
   };
 
   const handleToggleModal = () => {
@@ -52,17 +52,20 @@ const Mints = () => {
     setShowModal(!showModal);
   };
 
-  const addMint = async (newMint: string) => {
-    const mintTest = new CashuWallet(
-      new CashuMint(
-        newMint,
-      ),
-    );
-    if (mintTest.requestMint(1)) {
-      setMints([...mints, newMint]);
-      handleToggleModal();
-    } else {
-      alert(`Mint ${newMint} was not valid!`);
+  const replaceMint = async (newMint: string) => {
+    try {
+      // Perform a fetch request to the specified mint URL
+      const response = await fetch(newMint + "/keys");
+      // Check if the response status is in the range of 200-299
+      if (response.ok) {
+        setMints([newMint]);
+        handleToggleModal();
+      } else {
+        alert(`Failed to add mint!. Could not fetch keys from ${newMint}/keys.`);
+      }
+    } catch {
+      // If the fetch fails, alert the user
+      alert(`Failed to add mint!. Could not fetch keys from ${newMint}/keys.`);
     }
   };
 
@@ -100,9 +103,17 @@ const Mints = () => {
           </div>
         ))}
       </div>
+      {mints.length > 0 && (
+        <div className="my-4 flex items-center justify-center text-center">
+          <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
+          <p className="ml-2 text-sm text-light-text dark:text-dark-text">
+            Copy and paste the above mint URL into your preferred Cashu wallet to redeem your tokens!
+          </p>
+        </div>
+      )}
       <div className="absolute bottom-[0px] z-20 flex h-fit w-[99vw] flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
         <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={handleToggleModal}>
-          Add New Mint
+          Change Mint
         </Button>
       </div>
       <Modal
@@ -122,7 +133,7 @@ const Mints = () => {
       >
         <ModalContent>
           <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
-            Add New Mint
+            Change Mint
           </ModalHeader>
           <form onSubmit={handleSubmit(onSubmit)}>
             <ModalBody>
@@ -175,35 +186,13 @@ const Mints = () => {
               </Button>
 
               <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
-                Add Mint
+                Change Mint
               </Button>
             </ModalFooter>
           </form>
         </ModalContent>
       </Modal>
     </div>
-    // <div className="m-[20vh] flex h-max items-center justify-center">
-    //   <p className="max-w-[48vh] break-words text-center text-3xl text-light-text dark:text-dark-text">
-    //     A native wallet is coming soon! For now, you can claim your tokens for
-    //     Bitcoin on
-    //     <Link
-    //       href="https://wallet.nutstash.app/"
-    //       className="text-accent-light-text hover:text-purple-700 dark:text-accent-dark-text hover:dark:text-yellow-700"
-    //     >
-    //       {" "}
-    //       Nutstash{" "}
-    //     </Link>
-    //     using
-    //     <span
-    //       className="text-accent-light-text hover:text-purple-700 dark:text-accent-dark-text hover:dark:text-yellow-700"
-    //       onClick={handleCopyInvoice}
-    //     >
-    //       {" "}
-    //       {mintUrl}{" "}
-    //     </span>
-    //     as the mint URL.
-    //   </p>
-    // </div>
   );
 };
 export default Mints;

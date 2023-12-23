@@ -28,6 +28,8 @@ export default function CheckoutCard({
   const pubkeyOfProductBeingSold = pubkey;
   const { decryptedNpub, relays, mints } = getLocalStorageData();
 
+  console.log(mints[0])
+
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [invoice, setInvoice] = useState("");
