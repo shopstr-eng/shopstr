@@ -101,10 +101,10 @@ const Mints = () => {
             <div className="max-w-xsm truncate text-light-text dark:text-dark-text">
               {mint}
             </div>
-            <MinusCircleIcon
+            {/* <MinusCircleIcon
               onClick={() => deleteMint(mint)}
               className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
-            />
+            /> */}
           </div>
         ))}
       </div>
