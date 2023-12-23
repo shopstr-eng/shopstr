@@ -56,25 +56,33 @@ const Navbar = () => {
         <div className="mt-2 flex space-x-2">
           <HomeIcon
             className={`h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
-              router.pathname === "/" ? "text-shopstr-purple-light dark:text-shopstr-yellow-light" : ""
+              router.pathname === "/"
+                ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
+                : ""
             }`}
             onClick={() => router.push("/")}
           />
           <EnvelopeOpenIcon
             className={`h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
-              router.pathname === "/direct-messages" ? "text-shopstr-purple-light dark:text-shopstr-yellow-light" : ""
+              router.pathname === "/direct-messages"
+                ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
+                : ""
             }`}
             onClick={() => router.push("/direct-messages")}
           />
           <BuildingLibraryIcon
             className={`h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
-              router.pathname === "/mints" ? "text-shopstr-purple-light dark:text-shopstr-yellow-light" : ""
+              router.pathname === "/mints"
+                ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
+                : ""
             }`}
             onClick={() => router.push("/mints")}
           />
           <GlobeAltIcon
             className={`h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
-              router.pathname === "/relays" ? "text-shopstr-purple-light dark:text-shopstr-yellow-light" : ""
+              router.pathname === "/relays"
+                ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
+                : ""
             }`}
             onClick={() => router.push("/relays")}
           />

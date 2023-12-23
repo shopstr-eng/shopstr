@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
-import { MinusCircleIcon, InformationCircleIcon } from "@heroicons/react/24/outline";
+import {
+  MinusCircleIcon,
+  InformationCircleIcon,
+} from "@heroicons/react/24/outline";
 import {
   Modal,
   ModalContent,
@@ -61,7 +64,9 @@ const Mints = () => {
         setMints([newMint]);
         handleToggleModal();
       } else {
-        alert(`Failed to add mint!. Could not fetch keys from ${newMint}/keys.`);
+        alert(
+          `Failed to add mint!. Could not fetch keys from ${newMint}/keys.`,
+        );
       }
     } catch {
       // If the fetch fails, alert the user
@@ -107,7 +112,8 @@ const Mints = () => {
         <div className="my-4 flex items-center justify-center text-center">
           <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
           <p className="ml-2 text-sm text-light-text dark:text-dark-text">
-            Copy and paste the above mint URL into your preferred Cashu wallet to redeem your tokens!
+            Copy and paste the above mint URL into your preferred Cashu wallet
+            to redeem your tokens!
           </p>
         </div>
       )}

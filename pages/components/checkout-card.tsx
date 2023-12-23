@@ -28,8 +28,6 @@ export default function CheckoutCard({
   const pubkeyOfProductBeingSold = pubkey;
   const { decryptedNpub, relays, mints } = getLocalStorageData();
 
-  console.log(mints[0])
-
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [invoice, setInvoice] = useState("");
@@ -74,11 +72,7 @@ export default function CheckoutCard({
   }, [profileContext]);
 
   const handlePayment = async (newPrice: number, currency: string) => {
-    const wallet = new CashuWallet(
-      new CashuMint(
-        mints[0],
-      ),
-    );
+    const wallet = new CashuWallet(new CashuMint(mints[0]));
     if (currency === "USD") {
       try {
         const res = await axios.get(

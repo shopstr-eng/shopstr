@@ -48,7 +48,7 @@ function App({ Component, pageProps }: AppProps) {
       },
     },
   );
-  
+
   useEffect(() => {
     // Perform localStorage action
     if (window !== undefined) {
@@ -72,7 +72,9 @@ function App({ Component, pageProps }: AppProps) {
       }
       const storedMints = localStorage.getItem("mints");
       if (storedMints === null) {
-        const defaultMint = ["https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"]
+        const defaultMint = [
+          "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC",
+        ];
         localStorage.setItem("mints", JSON.stringify(defaultMint));
       }
       setPubkeyProfilesToFetch(
@@ -151,7 +153,10 @@ function App({ Component, pageProps }: AppProps) {
             });
           } catch (error) {
             // If JSON.parse fails, simply skip setting this event
-            console.error(`Failed to parse profile data for pubkey: ${event.pubkey}`, error);
+            console.error(
+              `Failed to parse profile data for pubkey: ${event.pubkey}`,
+              error,
+            );
           }
           // Return the updated or unchanged map
           return newProfileMap;
