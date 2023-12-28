@@ -25,6 +25,7 @@ import {
   getNsecWithPassphrase,
   getPrivKeyWithPassphrase,
   nostrBuildUploadImage,
+  getLocalStorageData,
 } from "./utility/nostr-helper-functions";
 import { finalizeEvent } from "nostr-tools";
 import { CATEGORIES, SHIPPING_OPTIONS } from "./utility/STATIC-VARIABLES";
@@ -50,6 +51,7 @@ export default function NewForm({
   const [passphrase, setPassphrase] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [signIn, setSignIn] = useState("");
+  const [pubkey, setPubkey] = useState("");
   const [isEdit, setIsEdit] = useState(false);
   const {
     handleSubmit,
@@ -79,6 +81,8 @@ export default function NewForm({
     if (typeof window !== "undefined") {
       const signIn = localStorage.getItem("signIn");
       setSignIn(signIn);
+      const { decryptedNpub } = getLocalStorageData();
+      setPubkey(decryptedNpub);
     }
   }, []);
 
@@ -97,7 +101,9 @@ export default function NewForm({
       .join("");
 
     let tags = [
-      ["d", oldValues?.d || "Shopstr ID: " + hashHex],
+      ["d", oldValues?.d || hashHex],
+      ["alt", "Classified listing: " + data["Product Name"]],
+      ["client", "Shopstr", "31990:" + pubkey + ":" + (oldValues?.d || hashHex), "wss://relay.damus.io"],
       ["title", data["Product Name"]],
       ["summary", data["Description"]],
       ["price", data["Price"], data["Currency"]],
