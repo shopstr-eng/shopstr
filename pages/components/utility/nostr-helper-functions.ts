@@ -11,6 +11,8 @@ export async function PostListing(
     getLocalStorageData();
   const summary = values.find(([key]) => key === "summary")?.[1] || "";
 
+  const dValue = values.find(([key]) => key === "d")?.[1] || undefined;
+
   const created_at = Math.floor(Date.now() / 1000);
   // Add "published_at" key
   const updatedValues = [...values, ["published_at", String(created_at)]];
@@ -24,11 +26,41 @@ export async function PostListing(
       content: summary,
     };
 
+    const recEvent = {
+      kind: 31989,
+      tags: [
+        ["d", "30402"],
+        [
+          "a",
+          "31990:" + decryptedNpub + ":" + dValue,
+          "wss://relay.damus.io",
+          "web",
+        ],
+      ],
+      content: "",
+      created_at: Math.floor(Date.now() / 1000),
+    };
+
+    const handlerEvent = {
+      kind: 31990,
+      tags: [
+        ["d", dValue],
+        ["k", "30402"],
+        ["web", "https://shopstr.store/<bech-32>", "npub"],
+      ],
+      content: "",
+      created_at: Math.floor(Date.now() / 1000),
+    };
+
     const signedEvent = await window.nostr.signEvent(event);
+    const signedRecEvent = await window.nostr.signEvent(recEvent);
+    const signedHandlerEvent = await window.nostr.signEvent(handlerEvent);
 
     const pool = new SimplePool();
 
     await Promise.any(pool.publish(relays, signedEvent));
+    await Promise.any(pool.publish(relays, signedRecEvent));
+    await Promise.any(pool.publish(relays, signedHandlerEvent));
   } else {
     axios({
       method: "POST",

@@ -144,6 +144,8 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
     delete event.relays;
     const pool = new SimplePool();
     let signedEvent = { ...event }; // using this as the editable event object which is either signed already or needs to be signed and posted to a relay
+    let signedRecEvent;
+    let signedHandlerEvent;
 
     // if (kind === 1 || kind === 5 #deletion event) { do nothing and just sign event
     if (kind === 4) {
@@ -163,6 +165,40 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
       const productId = event.content.id;
       event.content = JSON.stringify(event.content);
       signedEvent = finalizeEvent(event, privkey);
+    } else if (kind === 30402) {
+      const dValue = event.tags.find(([key]) => key === "d")?.[1] || undefined;
+
+      const recommendationEvent = {
+        kind: 31989,
+        pubkey: event.pubkey,
+        tags: [
+          ["d", "30402"],
+          [
+            "a",
+            "31990:" + event.pubkey + ":" + dValue,
+            "wss://relay.damus.io",
+            "web",
+          ],
+        ],
+        content: "",
+        created_at: Math.floor(Date.now() / 1000),
+      };
+
+      signedRecEvent = finalizeEvent(recommendationEvent, privkey);
+
+      const handlerEvent = {
+        kind: 31990,
+        pubkey: event.pubkey,
+        tags: [
+          ["d", dValue],
+          ["k", "30402"],
+          ["web", "https://shopstr.store/<bech-32>", "npub"],
+        ],
+        content: "",
+        created_at: Math.floor(Date.now() / 1000),
+      };
+
+      signedHandlerEvent = finalizeEvent(handlerEvent, privkey);
     }
 
     if (signedEvent.sig === undefined) {
@@ -170,6 +206,8 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
       signedEvent = finalizeEvent(signedEvent, privkey);
     }
     await Promise.any(pool.publish(relays, signedEvent));
+    await Promise.any(pool.publish(relays, signedRecEvent));
+    await Promise.any(pool.publish(relays, signedHandlerEvent));
 
     return res.status(200).json({});
   } catch (error) {

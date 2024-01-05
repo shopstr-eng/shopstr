@@ -103,7 +103,12 @@ export default function NewForm({
     let tags = [
       ["d", oldValues?.d || hashHex],
       ["alt", "Classified listing: " + data["Product Name"]],
-      ["client", "Shopstr", "31990:" + pubkey + ":" + (oldValues?.d || hashHex), "wss://relay.damus.io"],
+      [
+        "client",
+        "Shopstr",
+        "31990:" + pubkey + ":" + (oldValues?.d || hashHex),
+        "wss://relay.damus.io",
+      ],
       ["title", data["Product Name"]],
       ["summary", data["Description"]],
       ["price", data["Price"], data["Currency"]],
