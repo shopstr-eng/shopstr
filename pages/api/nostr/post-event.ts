@@ -166,16 +166,7 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
       event.content = JSON.stringify(event.content);
       signedEvent = finalizeEvent(event, privkey);
     } else if (kind === 30402) {
-      // Initialize the dValue
-      let dValue: string;
-      // Find the tag with the key "d" and assign its value to dValue
-      const dTag = event.tags.find(([key]) => key === "d");
-      if (dTag) {
-        dValue = dTag[1];
-      } else {
-        // Handle the error if no such tag exists
-        throw new Error('No "d" key found in the tags');
-      }
+      const dValue = event.tags.find(([key]) => key === "d")?.[1] || undefined;
 
       const recommendationEvent = {
         kind: 31989,
