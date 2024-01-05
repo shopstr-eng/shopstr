@@ -185,6 +185,7 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
       };
 
       signedRecEvent = finalizeEvent(recommendationEvent, privkey);
+      await Promise.any(pool.publish(relays, signedRecEvent));
 
       const handlerEvent = {
         kind: 31990,
@@ -199,6 +200,7 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
       };
 
       signedHandlerEvent = finalizeEvent(handlerEvent, privkey);
+      await Promise.any(pool.publish(relays, signedHandlerEvent));
     }
 
     if (signedEvent.sig === undefined) {
@@ -206,8 +208,6 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
       signedEvent = finalizeEvent(signedEvent, privkey);
     }
     await Promise.any(pool.publish(relays, signedEvent));
-    await Promise.any(pool.publish(relays, signedRecEvent));
-    await Promise.any(pool.publish(relays, signedHandlerEvent));
 
     return res.status(200).json({});
   } catch (error) {
