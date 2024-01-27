@@ -268,8 +268,8 @@ export const getLocalStorageData = () => {
   return { signIn, encryptedPrivateKey, decryptedNpub, relays, mints };
 };
 
-export const decryptNpub = (nPub: string) => {
-  const { data } = nip19.decode(nPub);
+export const decryptNpub = (npub: string) => {
+  const { data } = nip19.decode(npub);
   return data;
 };
 

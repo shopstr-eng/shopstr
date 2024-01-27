@@ -4,12 +4,16 @@ import "../styles/globals.css";
 import Navbar from "./components/navbar";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
-import { SimplePool } from "nostr-tools";
+import { SimplePool, nip19 } from "nostr-tools";
 import {
   ProfileMapContext,
   ProfileContextInterface,
   ProductContext,
   ProductContextInterface,
+  ChatContext,
+  ChatContextInterface,
+  MessageContext,
+  MessageContextInterface,
 } from "./context";
 import {
   decryptNpub,
@@ -46,6 +50,16 @@ function App({ Component, pageProps }: AppProps) {
           return newPubkeyProfilesToFetch;
         });
       },
+    },
+  );
+  const [chatContext, setChatContext] = useState<ChatContextInterface>({
+    chatPubkeys: [],
+    isLoading: true,
+  });
+  const [messageContext, setMessageContext] = useState<MessageContextInterface>(
+    {
+      messages: [],
+      isLoading: true,
     },
   );
 
@@ -177,6 +191,117 @@ function App({ Component, pageProps }: AppProps) {
       };
     });
   }, [profileMap]);
+
+  /** FETCH ALL CHATS AND CORRESPONDING MESSAGES **/
+  useEffect(() => {
+    const pool = new SimplePool();
+    let subParams: { kinds: number[]; authors?: string[] } = {
+      kinds: [4],
+    };
+
+    const validNpub = /^npub[a-zA-Z0-9]{59}$/;
+
+    let chats: string[] = [];
+    let messages: NostrEvent[] = [];
+
+    let decryptedNpub = decryptNpub(localStorage.getItem("npub"));
+
+    let h = pool.subscribeMany(relays, [subParams], {
+      onevent(event) {
+        let tagPubkey = event.tags[0][1];
+        let incomingPubkey = event.pubkey;
+
+        if (decryptedNpub === tagPubkey) {
+          if (!validNpub.test(incomingPubkey)) {
+            if (!chats.includes(incomingPubkey)) {
+              setChatContext((chatContext) => {
+                chats.push(nip19.npubEncode(incomingPubkey));
+                return {
+                  chatPubkeys: chats,
+                  isLoading: chatContext.isLoading,
+                };
+              });
+              setMessageContext((messageContext) => {
+                messages.push(event);
+                return {
+                  messages: messages,
+                  isLoading: messageContext.isLoading,
+                };
+              });
+            }
+          } else {
+            if (!chats.includes(incomingPubkey)) {
+              setChatContext((chatContext) => {
+                chats.push(incomingPubkey);
+                return {
+                  chatPubkeys: chats,
+                  isLoading: chatContext.isLoading,
+                };
+              });
+              setMessageContext((messageContext) => {
+                messages.push(event);
+                return {
+                  messages: messages,
+                  isLoading: messageContext.isLoading,
+                };
+              });
+            }
+          }
+        } else if (decryptedNpub === incomingPubkey) {
+          if (!validNpub.test(tagPubkey)) {
+            if (!chats.includes(tagPubkey)) {
+              setChatContext((chatContext) => {
+                chats.push(nip19.npubEncode(tagPubkey));
+                return {
+                  chatPubkeys: chats,
+                  isLoading: chatContext.isLoading,
+                };
+              });
+              setMessageContext((messageContext) => {
+                messages.push(event);
+                return {
+                  messages: messages,
+                  isLoading: messageContext.isLoading,
+                };
+              });
+            }
+          } else {
+            if (!chats.includes(tagPubkey)) {
+              setChatContext((chatContext) => {
+                chats.push(tagPubkey);
+                return {
+                  chatPubkeys: chats,
+                  isLoading: chatContext.isLoading,
+                };
+              });
+              setMessageContext((messageContext) => {
+                messages.push(event);
+                return {
+                  messages: messages,
+                  isLoading: messageContext.isLoading,
+                };
+              });
+            }
+          }
+        }
+      },
+      oneose() {
+        setChatContext((chatContext) => {
+          return {
+            chatPubkeys: chatContext.chatPubkeys,
+            isLoading: false,
+          };
+        });
+        setMessageContext((messageContext) => {
+          return {
+            messages: messageContext.messages,
+            isLoading: false,
+          };
+        });
+        // h.close();
+      },
+    });
+  }, [relays]);
 
   return (
     <ProfileMapContext.Provider value={profileContext}>
