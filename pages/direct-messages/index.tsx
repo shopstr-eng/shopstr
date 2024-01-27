@@ -154,8 +154,8 @@ const DirectMessages = () => {
           }
         }
       }
-    }
-    
+    };
+
     setMessages([]);
 
     if (currentChat) {
