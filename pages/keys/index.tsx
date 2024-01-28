@@ -8,6 +8,7 @@ import {
   InformationCircleIcon,
 } from "@heroicons/react/24/outline";
 import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
+import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
 
 const Keys = () => {
   const router = useRouter();
@@ -63,7 +64,11 @@ const Keys = () => {
 
       localStorage.setItem(
         "relays",
-        JSON.stringify(["wss://relay.damus.io", "wss://nos.lol"]),
+        JSON.stringify([
+          "wss://relay.damus.io",
+          "wss://nos.lol",
+          "wss://nostr.mutinywallet.com",
+        ]),
       );
 
       router.push("/");
@@ -71,10 +76,10 @@ const Keys = () => {
   };
 
   return (
-    <div className="flex flex-row justify-center items-center max-h-screen">
+    <div className="flex max-h-screen flex-row items-center justify-center">
       <Card>
         <CardBody>
-          <div className="flex flex-row items-center justify-center mb-4">
+          <div className="mb-4 flex flex-row items-center justify-center">
             <Image
               alt="Shopstr logo"
               height={50}
@@ -82,41 +87,41 @@ const Keys = () => {
               src="/shopstr.png"
               width={50}
             />
-            <h1 className="text-3xl font-bold text-center text-purple-500">
+            <h1 className="cursor-pointer text-center text-3xl font-bold text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light">
               Shopstr
             </h1>
           </div>
-          <div className="flex flex-col mb-4">
+          <div className="mb-4 flex flex-col">
             <label className="text-xl">Public Key:</label>
             {publicKey && (
               <div
-                className="border-b-2 border-l-2 border-purple-500 border-color-yellow-500 bg-white rounded-md text-xl overflow-hidden whitespace-nowrap overflow-ellipsis px-1"
+                className="border-color-yellow-500 overflow-hidden overflow-ellipsis whitespace-nowrap rounded-md border-b-2 border-l-2 border-shopstr-purple bg-light-bg px-1 text-xl dark:border-shopstr-yellow dark:bg-dark-bg"
                 onClick={handleCopyPubkey}
               >
                 {publicKey}
               </div>
             )}
           </div>
-          <div className="flex flex-col mb-4">
+          <div className="mb-4 flex flex-col">
             <label className="text-xl">Private Key:</label>
             {privateKey && (
-              <div className="border-b-2 border-l-2 border-purple-500 bg-white rounded-md text-xl flex justify-between items-center">
+              <div className="flex items-center justify-between rounded-md border-b-2 border-l-2 border-shopstr-purple bg-light-bg text-xl dark:border-shopstr-yellow dark:bg-dark-bg">
                 <div
-                  className="overflow-hidden whitespace-nowrap overflow-ellipsis px-1"
+                  className="overflow-hidden overflow-ellipsis whitespace-nowrap px-1"
                   onClick={handleCopyPrivkey}
                 >
                   {viewState === "shown" ? privateKey : "* * * * *"}
                 </div>
                 {viewState === "shown" ? (
                   <EyeSlashIcon
-                    className="w-6 h-6 hover:text-purple-700 flex-shrink-0 px-1"
+                    className="h-6 w-6 flex-shrink-0 px-1 hover:text-purple-700"
                     onClick={() => {
                       setViewState("hidden");
                     }}
                   />
                 ) : (
                   <EyeIcon
-                    className="w-6 h-6 hover:text-purple-700 flex-shrink-0 px-1"
+                    className="h-6 w-6 flex-shrink-0 px-1 hover:text-purple-700"
                     onClick={() => {
                       setViewState("shown");
                     }}
@@ -125,7 +130,7 @@ const Keys = () => {
               </div>
             )}
           </div>
-          <div className="flex flex-col mb-4">
+          <div className="mb-4 flex flex-col">
             <label className="text-xl">
               Encryption Passphrase:<span className="text-red-500">*</span>
             </label>
@@ -139,10 +144,7 @@ const Keys = () => {
             />
           </div>
           <div className="flex justify-center">
-            <Button
-              className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600"
-              onClick={handleSignIn}
-            >
+            <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={handleSignIn}>
               Sign In
             </Button>
           </div>

@@ -1,6 +1,10 @@
+import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
-import { MinusCircleIcon } from "@heroicons/react/24/outline";
+import {
+  MinusCircleIcon,
+  InformationCircleIcon,
+} from "@heroicons/react/24/outline";
 import {
   Modal,
   ModalContent,
@@ -15,24 +19,24 @@ import {
   DropdownItem,
   DropdownSection,
 } from "@nextui-org/react";
-import { relayConnect } from "nostr-tools";
 import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
+import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
 
-const Relays = () => {
-  const [relays, setRelays] = useState([]);
-  // make initial state equal to proprietary relay
+const Mints = () => {
+  const [mints, setMints] = useState([]);
+  const [mintUrl, setMintUrl] = useState("");
   const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const storedRelays = localStorage.getItem("relays");
-      setRelays(storedRelays ? JSON.parse(storedRelays) : []);
+      const storedMints = localStorage.getItem("mints");
+      setMints(storedMints ? JSON.parse(storedMints) : []);
     }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("relays", JSON.stringify(relays));
-  }, [relays]);
+    localStorage.setItem("mints", JSON.stringify(mints));
+  }, [mints]);
 
   const {
     handleSubmit,
@@ -42,8 +46,8 @@ const Relays = () => {
   } = useForm();
 
   const onSubmit = async (data) => {
-    let relay = data["relay"];
-    await addRelay(relay);
+    let mint = data["mint"];
+    await replaceMint(mint);
   };
 
   const handleToggleModal = () => {
@@ -51,49 +55,71 @@ const Relays = () => {
     setShowModal(!showModal);
   };
 
-  const addRelay = async (newRelay: string) => {
+  const replaceMint = async (newMint: string) => {
     try {
-      const relayTest = await relayConnect(newRelay);
-      setRelays([...relays, newRelay]);
-      relayTest.close();
-      handleToggleModal();
+      // Perform a fetch request to the specified mint URL
+      const response = await fetch(newMint + "/keys");
+      // Check if the response status is in the range of 200-299
+      if (response.ok) {
+        setMints([newMint]);
+        handleToggleModal();
+      } else {
+        alert(
+          `Failed to add mint!. Could not fetch keys from ${newMint}/keys.`,
+        );
+      }
     } catch {
-      alert(`Relay ${newRelay} was unable to connect!`);
+      // If the fetch fails, alert the user
+      alert(`Failed to add mint!. Could not fetch keys from ${newMint}/keys.`);
     }
   };
 
-  const deleteRelay = (relayToDelete) => {
-    setRelays(relays.filter((relay) => relay !== relayToDelete));
+  const deleteMint = (mintToDelete) => {
+    setMints(mints.filter((mint) => mint !== mintToDelete));
+  };
+
+  const handleCopyInvoice = () => {
+    navigator.clipboard.writeText(mintUrl);
+    alert("Mint URL copied to clipboard!");
   };
 
   return (
     <div>
-      {relays.length === 0 && (
+      {mints.length === 0 && (
         <div className="mt-8 flex items-center justify-center">
           <p className="break-words text-center text-xl dark:text-dark-text">
-            No relays added . . .
+            No mints added . . .
           </p>
         </div>
       )}
       <div className="mb-8 mt-8 max-h-96 overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
-        {relays.map((relay) => (
+        {mints.map((mint) => (
           <div
-            key={relay}
+            key={mint}
             className="mx-3 mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg"
           >
             <div className="max-w-xsm truncate text-light-text dark:text-dark-text">
-              {relay}
+              {mint}
             </div>
-            <MinusCircleIcon
-              onClick={() => deleteRelay(relay)}
+            {/* <MinusCircleIcon
+              onClick={() => deleteMint(mint)}
               className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
-            />
+            /> */}
           </div>
         ))}
       </div>
+      {mints.length > 0 && (
+        <div className="my-4 flex items-center justify-center text-center">
+          <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
+          <p className="ml-2 text-sm text-light-text dark:text-dark-text">
+            Copy and paste the above mint URL into your preferred Cashu wallet
+            to redeem your tokens!
+          </p>
+        </div>
+      )}
       <div className="absolute bottom-[0px] z-20 flex h-fit w-[99vw] flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
         <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={handleToggleModal}>
-          Add New Relay
+          Change Mint
         </Button>
       </div>
       <Modal
@@ -113,22 +139,22 @@ const Relays = () => {
       >
         <ModalContent>
           <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
-            Add New Relay
+            Change Mint
           </ModalHeader>
           <form onSubmit={handleSubmit(onSubmit)}>
             <ModalBody>
               <Controller
-                name="relay"
+                name="mint"
                 control={control}
                 rules={{
-                  required: "A relay URL is required.",
+                  required: "A mint URL is required.",
                   maxLength: {
                     value: 300,
                     message: "This input exceed maxLength of 300.",
                   },
                   validate: (value) =>
-                    /^(wss:\/\/|ws:\/\/)/.test(value) ||
-                    "Invalid relay URL, must start with wss:// or ws://.",
+                    /^(https:\/\/|http:\/\/)/.test(value) ||
+                    "Invalid mint URL, must start with https:// or http://.",
                 }}
                 render={({
                   field: { onChange, onBlur, value },
@@ -143,7 +169,7 @@ const Relays = () => {
                       className="text-light-text dark:text-dark-text"
                       variant="bordered"
                       fullWidth={true}
-                      placeholder="wss://..."
+                      placeholder="https://..."
                       isInvalid={isErrored}
                       errorMessage={errorMessage}
                       // controller props
@@ -166,7 +192,7 @@ const Relays = () => {
               </Button>
 
               <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
-                Add Relay
+                Change Mint
               </Button>
             </ModalFooter>
           </form>
@@ -175,5 +201,4 @@ const Relays = () => {
     </div>
   );
 };
-
-export default Relays;
+export default Mints;

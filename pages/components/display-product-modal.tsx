@@ -1,5 +1,10 @@
 import React from "react";
-import { BoltIcon, EnvelopeIcon, TrashIcon } from "@heroicons/react/24/outline";
+import {
+  BoltIcon,
+  EnvelopeIcon,
+  PencilSquareIcon,
+  TrashIcon,
+} from "@heroicons/react/24/outline";
 import {
   Modal,
   ModalContent,
@@ -10,17 +15,21 @@ import {
   Chip,
   Divider,
 } from "@nextui-org/react";
+import ProductForm from "./product-form";
 import ImageCarousel from "./utility-components/image-carousel";
 import { ProfileAvatar } from "./utility-components/avatar";
 import CompactCategories from "./utility-components/compact-categories";
-import { locationAvatar } from "./utility-components/location-dropdown";
-import { DisplayCostBreakdown } from "./utility-components/display-monetary-info";
+import { locationAvatar } from "./utility-components/dropdowns/location-dropdown";
+import {
+  DisplayCostBreakdown,
+  formatWithCommas,
+} from "./utility-components/display-monetary-info";
 import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
 import RequestPassphraseModal from "./utility-components/request-passphrase-modal";
-import ConfirmActionDropdown from "./utility-components/confirm-action-dropdown";
+import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 import { getLocalStorageData } from "./utility/nostr-helper-functions";
 
-interface ProductFormProps {
+interface ProductModalProps {
   productData: any;
   handleModalToggle: () => void;
   showModal: boolean;
@@ -36,7 +45,7 @@ export default function DisplayProductModal({
   handleSendMessage,
   handleCheckout,
   handleDelete,
-}: ProductFormProps) {
+}: ProductModalProps) {
   const {
     pubkey,
     createdAt,
@@ -52,6 +61,7 @@ export default function DisplayProductModal({
   const [passphrase, setPassphrase] = React.useState("");
   const [requestPassphrase, setRequestPassphrase] = React.useState(false);
   const [deleteLoading, setDeleteLoading] = React.useState(false);
+  const [showProductForm, setShowProductForm] = React.useState(false);
 
   const displayDate = (timestamp: number): [string, string] => {
     if (timestamp == 0 || !timestamp) return ["", ""];
@@ -61,9 +71,13 @@ export default function DisplayProductModal({
     return [dateString, timeString];
   };
 
+  const handleEditToggle = () => {
+    setShowProductForm(!showProductForm);
+  };
+
   const beginDeleteListingProcess = () => {
     if (!signIn) {
-      alert("You must be signed in!");
+      alert("You must be signed in to delete a listing!");
       return;
     }
     if (signIn === "extension") {
@@ -82,16 +96,20 @@ export default function DisplayProductModal({
   };
 
   if (!showModal) return null; // needed to prevent TreeWalker error upon redirect while modal open
+
+  // Format the totalCost with commas
+  const formattedTotalCost = formatWithCommas(totalCost, currency);
+
   return (
     <>
       <Modal
         backdrop="blur"
         isOpen={showModal}
         onClose={handleModalToggle}
+        // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
         classNames={{
           body: "py-6",
           backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-          // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
           header: "border-b-[1px] border-[#292f46]",
           footer: "border-t-[1px] border-[#292f46]",
           closeButton: "hover:bg-black/5 active:bg-white/10",
@@ -100,8 +118,10 @@ export default function DisplayProductModal({
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="flex flex-col gap-1">{title} </ModalHeader>
-          <ModalBody>
+          <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+            {title}{" "}
+          </ModalHeader>
+          <ModalBody className="text-light-text dark:text-dark-text">
             {images ? (
               <ImageCarousel
                 images={images}
@@ -110,7 +130,7 @@ export default function DisplayProductModal({
               />
             ) : null}
             <Divider />
-            <div className="w-full h-fit gap-2 flex flex-row justify-between items-center flex-wrap">
+            <div className="flex h-fit w-full flex-row flex-wrap items-center justify-between gap-2">
               <ProfileAvatar pubkey={productData.pubkey} className="w-1/3" />
               <Chip key={location} startContent={locationAvatar(location)}>
                 {location}
@@ -122,59 +142,71 @@ export default function DisplayProductModal({
               </div>
             </div>
             <Divider />
-            <span className="font-semibold text-xl">Summary: </span>
-            {productData.summary}
+            <div className="overflow-hidden break-words">
+              <span className="text-xl font-semibold">Summary: </span>
+              {productData.summary}
+            </div>
             <Divider />
-            <span className="font-semibold text-xl">Price Breakdown: </span>
+            <span className="text-xl font-semibold">Price Breakdown: </span>
             <DisplayCostBreakdown monetaryInfo={productData} />
           </ModalBody>
 
           <ModalFooter>
-            <div className="flex flex-wrap gap-2 justify-evenly w-full">
-              {decryptedNpub !== pubkey && (
-                <Button
-                  onClick={() => {
-                    handleSendMessage(productData.pubkey);
-                  }}
-                  type="submit"
-                  className={SHOPSTRBUTTONCLASSNAMES}
-                  startContent={
-                    <EnvelopeIcon className="w-6 h-6 hover:text-yellow-500" />
-                  }
-                >
-                  Message
-                </Button>
-              )}
-
-              {decryptedNpub == pubkey && (
-                <ConfirmActionDropdown
-                  helpText="Are you sure you want to delete this listing?"
-                  buttonLabel="Delete Listing"
-                  onConfirm={beginDeleteListingProcess}
-                >
+            <div className="flex w-full flex-wrap justify-evenly gap-2">
+              {decryptedNpub === pubkey && (
+                <>
                   <Button
-                    color="danger"
-                    className="px-20"
+                    type="submit"
+                    className={SHOPSTRBUTTONCLASSNAMES}
                     startContent={
-                      <TrashIcon className="w-6 h-6 hover:text-yellow-500" />
+                      <PencilSquareIcon className="h-6 w-6 hover:text-yellow-500" />
                     }
-                    isLoading={deleteLoading}
+                    onClick={handleEditToggle}
                   >
-                    Delete Listing
+                    Edit Listing
                   </Button>
-                </ConfirmActionDropdown>
+                  <ConfirmActionDropdown
+                    helpText="Are you sure you want to delete this listing?"
+                    buttonLabel="Delete Listing"
+                    onConfirm={beginDeleteListingProcess}
+                  >
+                    <Button
+                      className="min-w-fit bg-gradient-to-tr from-red-600 via-red-500 to-red-600 text-white shadow-lg"
+                      startContent={
+                        <TrashIcon className="h-6 w-6 hover:text-yellow-500" />
+                      }
+                      isLoading={deleteLoading}
+                    >
+                      Delete Listing
+                    </Button>
+                  </ConfirmActionDropdown>
+                </>
               )}
               {decryptedNpub !== pubkey && (
-                <Button
-                  type="submit"
-                  onClick={() => handleCheckout(productData.id)}
-                  className={SHOPSTRBUTTONCLASSNAMES}
-                  startContent={
-                    <BoltIcon className="w-6 h-6 hover:text-yellow-500" />
-                  }
-                >
-                  Checkout: {totalCost} {currency}
-                </Button>
+                <>
+                  <Button
+                    onClick={() => {
+                      handleSendMessage(productData.pubkey);
+                    }}
+                    type="submit"
+                    className={SHOPSTRBUTTONCLASSNAMES}
+                    startContent={
+                      <EnvelopeIcon className="h-6 w-6 hover:text-yellow-500" />
+                    }
+                  >
+                    Message
+                  </Button>
+                  <Button
+                    type="submit"
+                    onClick={() => handleCheckout(productData.id)}
+                    className={SHOPSTRBUTTONCLASSNAMES}
+                    startContent={
+                      <BoltIcon className="h-6 w-6 hover:text-yellow-500" />
+                    }
+                  >
+                    Checkout: {formattedTotalCost}
+                  </Button>
+                </>
               )}
             </div>
           </ModalFooter>
@@ -186,6 +218,13 @@ export default function DisplayProductModal({
         isOpen={requestPassphrase}
         setIsOpen={setRequestPassphrase}
         actionOnSubmit={finalizeDeleteListingProcess}
+      />
+      <ProductForm
+        showModal={showProductForm}
+        handleModalToggle={handleEditToggle}
+        oldValues={productData}
+        handleDelete={handleDelete}
+        handleProductModalToggle={handleModalToggle}
       />
     </>
   );

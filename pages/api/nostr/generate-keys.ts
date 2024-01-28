@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { nip19, generatePrivateKey, getPublicKey } from "nostr-tools";
+import { nip19, generateSecretKey, getPublicKey } from "nostr-tools";
 
 const generateKeys = async (req: NextApiRequest, res: NextApiResponse) => {
   if (req.method !== "GET") {
@@ -7,7 +7,7 @@ const generateKeys = async (req: NextApiRequest, res: NextApiResponse) => {
   }
 
   try {
-    const sk = await generatePrivateKey(); // `sk` is a hex string
+    const sk = await generateSecretKey(); // `sk` is a hex string
     const nsec = await nip19.nsecEncode(sk);
 
     const pk = await getPublicKey(sk); // `pk` is a hex string

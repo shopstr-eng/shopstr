@@ -2,12 +2,34 @@ import React, { useState, useEffect } from "react";
 import {
   HomeIcon,
   EnvelopeOpenIcon,
-  WalletIcon,
+  BuildingLibraryIcon,
   GlobeAltIcon,
   ArrowRightOnRectangleIcon,
   ArrowLeftOnRectangleIcon,
+  MoonIcon,
+  SunIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
+import { useTheme } from "next-themes";
+
+const DarkModeToggle = () => {
+  const { theme, setTheme } = useTheme();
+  return (
+    <div>
+      {theme === "dark" ? (
+        <MoonIcon
+          className="h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+          onClick={() => setTheme("light")}
+        />
+      ) : (
+        <SunIcon
+          className="h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+          onClick={() => setTheme("dark")}
+        />
+      )}
+    </div>
+  );
+};
 
 const Navbar = () => {
   const router = useRouter();
@@ -23,50 +45,59 @@ const Navbar = () => {
   }, []);
 
   return (
-    <div className="flex flex-col absolute z-20 px-3 w-full bg-white pb-2">
-      <div className="flex flex-row justify-between h-[40px]">
+    <div className="absolute z-20 flex w-full flex-col bg-light-bg px-3 pb-2 dark:bg-dark-bg">
+      <div className="flex h-[40px] flex-row justify-between">
         <h1
-          className="text-3xl font-bold text-purple-500 hover:text-purple-700 cursor-pointer"
+          className="cursor-pointer text-3xl font-bold text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light"
           onClick={() => router.push("/")}
         >
           Shopstr
         </h1>
-        <div className="flex space-x-2 mt-2">
+        <div className="mt-2 flex space-x-2">
           <HomeIcon
-            className={`w-6 h-6 hover:text-purple-700 cursor-pointer ${
-              router.pathname === "/" ? "text-purple-500" : ""
+            className={`h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
+              router.pathname === "/"
+                ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
+                : ""
             }`}
             onClick={() => router.push("/")}
           />
           <EnvelopeOpenIcon
-            className={`w-6 h-6 hover:text-purple-700 cursor-pointer ${
-              router.pathname === "/direct-messages" ? "text-purple-500" : ""
+            className={`h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
+              router.pathname === "/direct-messages"
+                ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
+                : ""
             }`}
             onClick={() => router.push("/direct-messages")}
           />
-          <WalletIcon
-            className={`w-6 h-6 hover:text-purple-700 cursor-pointer ${
-              router.pathname === "/wallet" ? "text-purple-500" : ""
+          <BuildingLibraryIcon
+            className={`h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
+              router.pathname === "/mints"
+                ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
+                : ""
             }`}
-            onClick={() => router.push("/wallet")}
+            onClick={() => router.push("/mints")}
           />
           <GlobeAltIcon
-            className={`w-6 h-6 hover:text-purple-700 cursor-pointer ${
-              router.pathname === "/relays" ? "text-purple-500" : ""
+            className={`h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
+              router.pathname === "/relays"
+                ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
+                : ""
             }`}
             onClick={() => router.push("/relays")}
           />
+          <DarkModeToggle />
           {!signIn && (
-            <ArrowRightOnRectangleIcon
-              className="w-6 h-6 hover:text-purple-700 cursor-pointer"
+            <ArrowLeftOnRectangleIcon
+              className="h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
               onClick={() => {
                 router.push("/sign-in");
               }}
             />
           )}
           {signIn && (
-            <ArrowLeftOnRectangleIcon
-              className="w-6 h-6 hover:text-purple-700 cursor-pointer"
+            <ArrowRightOnRectangleIcon
+              className="h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
               onClick={() => {
                 localStorage.removeItem("npub");
                 localStorage.removeItem("signIn");

@@ -12,36 +12,47 @@ import {
   Input,
   Select,
   SelectItem,
+  SelectSection,
   Chip,
   Image,
 } from "@nextui-org/react";
 import { TrashIcon } from "@heroicons/react/24/outline";
 import Carousal from "@itseasy21/react-elastic-carousel";
+import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
 
 import {
   PostListing,
   getNsecWithPassphrase,
   getPrivKeyWithPassphrase,
   nostrBuildUploadImage,
+  getLocalStorageData,
 } from "./utility/nostr-helper-functions";
-import { finishEvent } from "nostr-tools";
+import { finalizeEvent } from "nostr-tools";
 import { CATEGORIES, SHIPPING_OPTIONS } from "./utility/STATIC-VARIABLES";
-import LocationDropdown from "./utility-components/location-dropdown";
-import ConfirmActionDropdown from "./utility-components/confirm-action-dropdown";
+import LocationDropdown from "./utility-components/dropdowns/location-dropdown";
+import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 
 interface ProductFormProps {
   handleModalToggle: () => void;
   showModal: boolean;
+  // edit props
+  oldValues?: object;
+  handleDelete?: (productId: string, passphrase: string) => void;
+  handleProductModalToggle?: () => void;
 }
 
 export default function NewForm({
   showModal,
   handleModalToggle,
+  oldValues,
+  handleDelete,
+  handleProductModalToggle,
 }: ProductFormProps) {
   const [passphrase, setPassphrase] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [signIn, setSignIn] = useState("");
-
+  const [pubkey, setPubkey] = useState("");
+  const [isEdit, setIsEdit] = useState(false);
   const {
     handleSubmit,
     formState: { errors },
@@ -49,14 +60,55 @@ export default function NewForm({
     reset,
     watch,
   } = useForm({
-    defaultValues: {
-      Currency: "SATS",
-      "Shipping Option": "N/A",
-    },
+    defaultValues: oldValues
+      ? {
+          "Product Name": oldValues.title,
+          Description: oldValues.summary,
+          Price: String(oldValues.price),
+          Currency: oldValues.currency,
+          Location: oldValues.location,
+          "Shipping Option": oldValues.shippingType,
+          "Shipping Cost": oldValues.shippingCost,
+          Category: oldValues.categories.join(","),
+        }
+      : {
+          Currency: "SATS",
+          "Shipping Option": "N/A",
+        },
   });
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const signIn = localStorage.getItem("signIn");
+      setSignIn(signIn);
+      const { decryptedNpub } = getLocalStorageData();
+      setPubkey(decryptedNpub);
+    }
+  }, []);
+
+  useEffect(() => {
+    setImages(oldValues?.images || []);
+    setIsEdit(oldValues ? true : false);
+  }, [showModal]);
+
   const onSubmit = async (data) => {
+    const encoder = new TextEncoder();
+    const dataEncoded = encoder.encode(data["Product Name"]);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", dataEncoded);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+
     let tags = [
+      ["d", oldValues?.d || hashHex],
+      ["alt", "Classified listing: " + data["Product Name"]],
+      [
+        "client",
+        "Shopstr",
+        "31990:" + pubkey + ":" + (oldValues?.d || hashHex),
+        "wss://relay.damus.io",
+      ],
       ["title", data["Product Name"]],
       ["summary", data["Description"]],
       ["price", data["Price"], data["Currency"]],
@@ -76,17 +128,14 @@ export default function NewForm({
     data["Category"].split(",").forEach((category) => {
       tags.push(["t", category]);
     });
-
     await PostListing(tags, passphrase);
+    if (isEdit) {
+      await handleDelete(oldValues.id, passphrase);
+      handleProductModalToggle();
+    }
+
     clear();
   };
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const signIn = localStorage.getItem("signIn");
-      setSignIn(signIn);
-    }
-  }, []);
 
   const clear = () => {
     handleModalToggle();
@@ -112,10 +161,8 @@ export default function NewForm({
 
   const buttonClassName = useMemo(() => {
     const disabledStyle = " from-gray-300 to-gray-400 cursor-not-allowed";
-    const enabledStyle = " from-purple-600 via-purple-500 to-purple-600";
-    const className =
-      "text-white shadow-lg bg-gradient-to-tr" +
-      (isButtonDisabled ? disabledStyle : enabledStyle);
+    const enabledStyle = SHOPSTRBUTTONCLASSNAMES;
+    const className = isButtonDisabled ? disabledStyle : enabledStyle;
     return className;
   }, [isButtonDisabled]);
 
@@ -193,7 +240,7 @@ export default function NewForm({
 
         const privkey = getPrivKeyWithPassphrase(passphrase);
         response = await nostrBuildUploadImage(imageFile, (e) =>
-          finishEvent(e, privkey),
+          finalizeEvent(e, privkey),
         );
       } else if (signIn === "extension") {
         response = await nostrBuildUploadImage(
@@ -229,7 +276,7 @@ export default function NewForm({
       size="2xl"
     >
       <ModalContent>
-        <ModalHeader className="flex flex-col gap-1">
+        <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
           Add New Product Listing
         </ModalHeader>
         <form onSubmit={handleSubmit(onSubmit)}>
@@ -252,6 +299,7 @@ export default function NewForm({
                 let errorMessage: string = error?.message ? error.message : "";
                 return (
                   <Input
+                    className="text-light-text dark:text-dark-text"
                     autoFocus
                     variant="bordered"
                     fullWidth={true}
@@ -273,8 +321,8 @@ export default function NewForm({
               pagination={false}
             >
               {images.length > 0 ? (
-                images.map((image) => (
-                  <div className="">
+                images.map((image, index) => (
+                  <div key={index}>
                     <div className="flex flex-row-reverse ">
                       {
                         <ConfirmActionDropdown
@@ -287,7 +335,7 @@ export default function NewForm({
                             color="danger"
                             aria-label="Trash"
                             radius="full"
-                            className="z-20 top-12 right-3 bg-gradient-to-tr from-blue-950 to-red-950 text-white"
+                            className="right-3 top-12 z-20 bg-gradient-to-tr from-blue-950 to-red-950 text-white"
                             variant="bordered"
                           >
                             <TrashIcon style={{ padding: 4 }} />
@@ -304,7 +352,7 @@ export default function NewForm({
                   </div>
                 ))
               ) : (
-                <div className="flex items-center justify-center w-full h-full">
+                <div className="flex h-full w-full items-center justify-center">
                   <Image
                     alt="Product Image"
                     className="object-cover"
@@ -338,6 +386,7 @@ export default function NewForm({
                 let errorMessage: string = error?.message ? error.message : "";
                 return (
                   <Textarea
+                    className="text-light-text dark:text-dark-text"
                     variant="bordered"
                     fullWidth={true}
                     placeholder="Description"
@@ -367,6 +416,7 @@ export default function NewForm({
                 let errorMessage: string = error?.message ? error.message : "";
                 return (
                   <Input
+                    className="text-light-text dark:text-dark-text"
                     type="number"
                     autoFocus
                     variant="flat"
@@ -393,7 +443,7 @@ export default function NewForm({
                           return (
                             <div className="flex items-center">
                               <select
-                                className="outline-none border-0 bg-transparent text-default-400 text-small"
+                                className="border-0 bg-transparent text-small text-default-400 outline-none"
                                 key={"currency"}
                                 id="currency"
                                 name="currency"
@@ -458,6 +508,7 @@ export default function NewForm({
                 let errorMessage: string = error?.message ? error.message : "";
                 return (
                   <Select
+                    className="text-light-text dark:text-dark-text"
                     autoFocus
                     variant="bordered"
                     aria-label="Shipping Option"
@@ -470,9 +521,11 @@ export default function NewForm({
                     onBlur={onBlur} // notify when input is touched/blur
                     selectedKeys={[value]}
                   >
-                    {SHIPPING_OPTIONS.map((option) => (
-                      <SelectItem key={option}>{option}</SelectItem>
-                    ))}
+                    <SelectSection className="text-light-text dark:text-dark-text">
+                      {SHIPPING_OPTIONS.map((option) => (
+                        <SelectItem key={option}>{option}</SelectItem>
+                      ))}
+                    </SelectSection>
                   </Select>
                 );
               }}
@@ -512,7 +565,7 @@ export default function NewForm({
                       endContent={
                         <div className="flex items-center">
                           <select
-                            className="outline-none border-0 bg-transparent text-default-400 text-small"
+                            className="border-0 bg-transparent text-small text-default-400 outline-none"
                             key={"currency"}
                             id="currency"
                             name="currency"
@@ -534,7 +587,7 @@ export default function NewForm({
               name="Category"
               control={control}
               rules={{
-                required: "A Category is required.",
+                required: "A category is required.",
               }}
               render={({
                 field: { onChange, onBlur, value },
@@ -557,6 +610,7 @@ export default function NewForm({
                     onChange={onChange} // send value to hook form
                     onBlur={onBlur} // notify when input is touched/blur
                     value={value}
+                    defaultSelectedKeys={value ? value.split(",") : ""}
                     classNames={{
                       base: "mt-4",
                       trigger: "min-h-unit-12 py-2",
@@ -576,11 +630,13 @@ export default function NewForm({
                       );
                     }}
                   >
-                    {CATEGORIES.map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {category}
-                      </SelectItem>
-                    ))}
+                    <SelectSection className="text-light-text dark:text-dark-text">
+                      {CATEGORIES.map((category) => (
+                        <SelectItem key={category} value={category}>
+                          {category}
+                        </SelectItem>
+                      ))}
+                    </SelectSection>
                   </Select>
                 );
               }}
@@ -588,6 +644,7 @@ export default function NewForm({
             {signIn === "nsec" && (
               <Input
                 autoFocus
+                className="text-light-text dark:text-dark-text"
                 ref={passphraseInputRef}
                 variant="flat"
                 label="Passphrase"
@@ -625,7 +682,7 @@ export default function NewForm({
                 }
               }}
             >
-              List Product
+              {isEdit ? "Edit Product" : "List Product"}
             </Button>
           </ModalFooter>
         </form>

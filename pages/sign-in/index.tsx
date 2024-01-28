@@ -1,28 +1,26 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
 import { withRouter, NextRouter } from "next/router";
-import { nip19 } from "nostr-tools";
+import { nip19, getPublicKey } from "nostr-tools";
 import * as CryptoJS from "crypto-js";
-import {
-  validateNPubKey,
-  validateNSecKey,
-} from "../components/utility/nostr-helper-functions";
+import { validateNSecKey } from "../components/utility/nostr-helper-functions";
 import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
+import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
 
 const LoginPage = ({ router }: { router: NextRouter }) => {
-  const [publicKey, setPublicKey] = useState<string>("");
   const [privateKey, setPrivateKey] = useState<string>("");
   const [errorMessage, setErrorMessage] = useState<string>("");
-  const [validPublicKey, setValidPublicKey] = useState<boolean>(false);
   const [validPrivateKey, setValidPrivateKey] = useState<boolean>(false);
   const [passphrase, setPassphrase] = useState<string>("");
 
-  const handleSignIn = () => {
-    if (validPublicKey && validPrivateKey) {
+  const handleSignIn = async () => {
+    if (validPrivateKey) {
       if (passphrase === "" || passphrase === null) {
         alert("No passphrase provided!");
       } else {
-        localStorage.setItem("npub", publicKey);
+        let { data: sk } = nip19.decode(privateKey);
+        let pk = await getPublicKey(sk);
+        let npub = nip19.npubEncode(pk);
+        localStorage.setItem("npub", npub);
 
         let encryptedPrivateKey = CryptoJS.AES.encrypt(
           privateKey,
@@ -35,14 +33,19 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
 
         localStorage.setItem(
           "relays",
-          JSON.stringify(["wss://relay.damus.io", "wss://nos.lol"]),
+          JSON.stringify([
+            "wss://relay.damus.io",
+            "wss://nos.lol",
+            "wss://nostr.mutinywallet.com",
+          ]),
         );
 
+        alert("Signed in as " + npub + ".");
         router.push("/");
       }
     } else {
       setErrorMessage(
-        "The public and/or private keys inputted were not valid. Generate a new key pair or try again.",
+        "The private key inputted was not valid! Generate a new key pair or try again.",
       );
     }
   };
@@ -54,32 +57,34 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
   const startExtensionLogin = async () => {
     try {
       // @ts-ignore
-      var pubkey = await window.nostr.getPublicKey();
-      let npub = nip19.npubEncode(pubkey);
-      setPublicKey(npub);
+      var pk = await window.nostr.getPublicKey();
+      let npub = nip19.npubEncode(pk);
       localStorage.setItem("npub", npub);
       localStorage.setItem("signIn", "extension");
       localStorage.setItem(
         "relays",
-        JSON.stringify(["wss://relay.damus.io", "wss://nos.lol"]),
+        JSON.stringify([
+          "wss://relay.damus.io",
+          "wss://nos.lol",
+          "wss://nostr.mutinywallet.com",
+        ]),
       );
-      alert("Signed in as " + npub);
+      alert("Signed in as " + npub + ".");
       router.push("/");
     } catch (error) {
-      alert("Extension sign in failed");
+      alert("Extension sign in failed!");
     }
   };
 
   useEffect(() => {
-    setValidPublicKey(validateNPubKey(publicKey));
     setValidPrivateKey(validateNSecKey(privateKey));
-  }, [publicKey, privateKey]);
+  }, [privateKey]);
 
   return (
-    <div className="flex flex-row justify-center items-center max-h-screen">
+    <div className="flex max-h-screen flex-row items-center justify-center">
       <Card>
         <CardBody>
-          <div className="flex flex-row items-center justify-center mb-4">
+          <div className="mb-4 flex flex-row items-center justify-center">
             <Image
               alt="Shopstr logo"
               height={50}
@@ -87,28 +92,21 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
               src="/shopstr.png"
               width={50}
             />
-            <h1 className="text-3xl font-bold text-center text-purple-500">
+            <h1
+              onClick={() => {
+                router.push("/");
+              }}
+              className="cursor-pointer text-center text-3xl font-bold text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light"
+            >
               Shopstr
             </h1>
           </div>
           {errorMessage && (
-            <div className="bg-red-500 text-white py-2 px-4 rounded mb-4">
+            <div className="mb-4 rounded bg-red-500 px-4 py-2 text-light-text dark:text-dark-text">
               {errorMessage}
             </div>
           )}
-          <div className="flex flex-col mb-4">
-            <label className="text-xl">Public Key:</label>
-            <Input
-              color={validPublicKey ? "success" : "error"}
-              type="text"
-              width="100%"
-              size="large"
-              value={publicKey}
-              placeholder="npub..."
-              onChange={(e) => setPublicKey(e.target.value)}
-            />
-          </div>
-          <div className="flex flex-col mb-4">
+          <div className="mb-4 flex flex-col">
             <label className="text-xl">Private Key:</label>
             <Input
               color={validPrivateKey ? "success" : "error"}
@@ -120,7 +118,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
               onChange={(e) => setPrivateKey(e.target.value)}
             />
           </div>
-          <div className="flex flex-col mb-4">
+          <div className="mb-4 flex flex-col">
             <label className="text-xl">
               Encryption Passphrase:<span className="text-red-500">*</span>
             </label>
@@ -135,21 +133,21 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
           </div>
           <div className="flex flex-row justify-between space-x-2">
             <Button
-              className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600"
+              className={SHOPSTRBUTTONCLASSNAMES}
               onClick={handleGenerateKeys}
             >
               Create Account
             </Button>
             <Button
-              className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600"
+              className={SHOPSTRBUTTONCLASSNAMES}
               onClick={startExtensionLogin}
             >
               Extension Sign In
             </Button>
             <Button
-              className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600"
+              className={SHOPSTRBUTTONCLASSNAMES}
               onClick={handleSignIn}
-              disabled={!validPublicKey || !validPrivateKey} // Disable the button only if both key strings are invalid or the button has already been clicked
+              disabled={!validPrivateKey} // Disable the button only if both key strings are invalid or the button has already been clicked
             >
               Sign In
             </Button>

@@ -65,11 +65,12 @@ export default function RequestPassphraseModal({
       isDismissable={false}
     >
       <ModalContent>
-        <ModalHeader className="flex flex-col gap-1">
+        <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
           Enter Passphrase
         </ModalHeader>
         <ModalBody>
           <Input
+            className="text-light-text dark:text-dark-text"
             autoFocus
             ref={passphraseInputRef}
             variant="flat"

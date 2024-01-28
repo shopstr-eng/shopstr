@@ -15,6 +15,9 @@ import {
   decryptNpub,
   NostrEvent,
 } from "./components/utility/nostr-helper-functions";
+import { NextUIProvider } from "@nextui-org/react";
+import { ThemeProvider as NextThemesProvider } from "next-themes";
+import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
 
 function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
@@ -49,11 +52,31 @@ function App({ Component, pageProps }: AppProps) {
   useEffect(() => {
     // Perform localStorage action
     if (window !== undefined) {
-      setRelays(
-        localStorage.getItem("relays") !== null
-          ? JSON.parse(localStorage.getItem("relays") as string)
-          : [],
-      );
+      const storedRelays = localStorage.getItem("relays");
+      if (storedRelays !== null) {
+        const parsedRelays = JSON.parse(storedRelays as string);
+        // Filter out any null values from the parsed relays
+        const filteredRelays = parsedRelays.filter(
+          (relay: string | null) => relay !== null,
+        );
+        setRelays(filteredRelays);
+        localStorage.setItem("relays", JSON.stringify(filteredRelays));
+      } else {
+        const defaultRelays = [
+          "wss://relay.damus.io",
+          "wss://nos.lol",
+          "wss://nostr.mutinywallet.com",
+        ];
+        localStorage.setItem("relays", JSON.stringify(defaultRelays));
+        setRelays(defaultRelays);
+      }
+      const storedMints = localStorage.getItem("mints");
+      if (storedMints === null) {
+        const defaultMint = [
+          "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC",
+        ];
+        localStorage.setItem("mints", JSON.stringify(defaultMint));
+      }
       setPubkeyProfilesToFetch(
         new Set(
           typeof localStorage.getItem("npub") == "string"
@@ -70,29 +93,33 @@ function App({ Component, pageProps }: AppProps) {
     let subParams: { kinds: number[]; authors?: string[] } = {
       kinds: [30402],
     };
-    let productsSub = pool.sub(relays, [subParams]);
+
     let productArray: NostrEvent[] = [];
-    productsSub.on("event", (event) => {
-      setProductContext((productContext) => {
-        productArray.push(event);
-        setPubkeyProfilesToFetch((pubkeyProfilesToFetch) => {
-          let newPubkeyProfilesToFetch = new Set(pubkeyProfilesToFetch);
-          newPubkeyProfilesToFetch.add(event.pubkey);
-          return newPubkeyProfilesToFetch;
+
+    let h = pool.subscribeMany(relays, [subParams], {
+      onevent(event) {
+        setProductContext((productContext) => {
+          productArray.push(event);
+          setPubkeyProfilesToFetch((pubkeyProfilesToFetch) => {
+            let newPubkeyProfilesToFetch = new Set(pubkeyProfilesToFetch);
+            newPubkeyProfilesToFetch.add(event.pubkey);
+            return newPubkeyProfilesToFetch;
+          });
+          return {
+            productEvents: productArray,
+            isLoading: productContext.isLoading,
+          };
         });
-        return {
-          productEvents: productArray,
-          isLoading: productContext.isLoading,
-        };
-      });
-    });
-    productsSub.on("eose", () => {
-      setProductContext((productContext) => {
-        return {
-          productEvents: productContext.productEvents,
-          isLoading: false,
-        };
-      });
+      },
+      oneose() {
+        setProductContext((productContext) => {
+          return {
+            productEvents: productContext.productEvents,
+            isLoading: false,
+          };
+        });
+        // h.close();
+      },
     });
   }, [relays]);
 
@@ -105,27 +132,41 @@ function App({ Component, pageProps }: AppProps) {
       authors: Array.from(pubkeyProfilesToFetch),
     };
 
-    let profileSub = pool.sub(relays, [profileSubParams]);
-
-    profileSub.on("event", (event) => {
-      setProfileMap((profileMap) => {
-        if (
-          profileMap.has(event.pubkey) &&
-          profileMap.get(event.pubkey).created_at > event.created_at
-        ) {
-          // if profile already exists and is newer than the one we just fetched, don't update
-          return profileMap;
-        }
-        let newProfileMap = new Map(profileMap);
-        newProfileMap.set(event.pubkey, {
-          pubkey: event.pubkey,
-          created_at: event.created_at,
-          content: JSON.parse(event.content),
+    let h = pool.subscribeMany(relays, [profileSubParams], {
+      onevent(event) {
+        setProfileMap((profileMap) => {
+          if (
+            profileMap.has(event.pubkey) &&
+            profileMap.get(event.pubkey).created_at > event.created_at
+          ) {
+            // if profile already exists and is newer than the one we just fetched, don't update
+            return profileMap;
+          }
+          let newProfileMap = new Map(profileMap);
+          try {
+            // Try to parse the content of the event
+            const content = JSON.parse(event.content);
+            newProfileMap.set(event.pubkey, {
+              pubkey: event.pubkey,
+              created_at: event.created_at,
+              content: content,
+            });
+          } catch (error) {
+            // If JSON.parse fails, simply skip setting this event
+            console.error(
+              `Failed to parse profile data for pubkey: ${event.pubkey}`,
+              error,
+            );
+          }
+          // Return the updated or unchanged map
+          return newProfileMap;
         });
-        return newProfileMap;
-      });
+      },
+      // oneose() {
+      //   h.close();
+      // },
     });
-  }, [pubkeyProfilesToFetch, productContext.isLoading]);
+  }, [pubkeyProfilesToFetch, productContext.isLoading, relays]);
 
   /** UPON PROFILEMAP UPDATE, SET PROFILE CONTEXT **/
   useEffect(() => {
@@ -140,13 +181,20 @@ function App({ Component, pageProps }: AppProps) {
   return (
     <ProfileMapContext.Provider value={profileContext}>
       <ProductContext.Provider value={productContext}>
-        <div className="">
-          {isSignInPage || isKeyPage ? null : <Navbar />}
-          <div className="h-20">
-            {/*spacer div needed so pages can account for navbar height*/}
-          </div>
-          <Component {...pageProps} />
-        </div>
+        <NextUIProvider>
+          <NextThemesProvider
+            attribute="class"
+            forcedTheme={Component.theme || undefined}
+          >
+            <div className="h-[100vh] bg-light-bg dark:bg-dark-bg">
+              {isSignInPage || isKeyPage ? null : <Navbar />}
+              <div className="h-20">
+                {/*spacer div needed so pages can account for navbar height*/}
+              </div>
+              <Component {...pageProps} />
+            </div>
+          </NextThemesProvider>
+        </NextUIProvider>
       </ProductContext.Provider>
     </ProfileMapContext.Provider>
   );

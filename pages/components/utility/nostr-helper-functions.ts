@@ -1,4 +1,3 @@
-import React, { useContext } from "react";
 import * as CryptoJS from "crypto-js";
 import { nip19, nip98, SimplePool } from "nostr-tools";
 import { ProductFormValues } from "../api/post-event";
@@ -12,6 +11,8 @@ export async function PostListing(
   const { signIn, encryptedPrivateKey, decryptedNpub, relays } =
     getLocalStorageData();
   const summary = values.find(([key]) => key === "summary")?.[1] || "";
+
+  const dValue = values.find(([key]) => key === "d")?.[1] || undefined;
 
   const created_at = Math.floor(Date.now() / 1000);
   // Add "published_at" key
@@ -27,14 +28,42 @@ export async function PostListing(
       content: summary,
     };
 
+    const recEvent = {
+      kind: 31989,
+      tags: [
+        ["d", "30402"],
+        [
+          "a",
+          "31990:" + decryptedNpub + ":" + dValue,
+          "wss://relay.damus.io",
+          "web",
+        ],
+      ],
+      content: "",
+      created_at: Math.floor(Date.now() / 1000),
+    };
+
+    const handlerEvent = {
+      kind: 31990,
+      tags: [
+        ["d", dValue],
+        ["k", "30402"],
+        ["web", "https://shopstr.store/<bech-32>", "npub"],
+      ],
+      content: "",
+      created_at: Math.floor(Date.now() / 1000),
+    };
+
     const signedEvent = await window.nostr.signEvent(event);
+    const signedRecEvent = await window.nostr.signEvent(recEvent);
+    const signedHandlerEvent = await window.nostr.signEvent(handlerEvent);
 
 
     const pool = new SimplePool();
 
-    await pool.publish(relays, signedEvent);
-
-    eventId = signedEvent.id;
+    await Promise.any(pool.publish(relays, signedEvent));
+    await Promise.any(pool.publish(relays, signedRecEvent));
+    await Promise.any(pool.publish(relays, signedHandlerEvent));
   } else {
     const res = await axios({
       method: "POST",
@@ -86,7 +115,7 @@ export async function DeleteListing(
     const signedEvent = await window.nostr.signEvent(deletionEvent);
     const pool = new SimplePool();
 
-    await pool.publish(relays, signedEvent);
+    await Promise.any(pool.publish(relays, signedEvent));
   } else {
     axios({
       method: "POST",
@@ -238,6 +267,7 @@ export const getLocalStorageData = () => {
   let encryptedPrivateKey;
   let decryptedNpub;
   let relays;
+  let mints;
 
   if (typeof window !== "undefined") {
     const npub = localStorage.getItem("npub");
@@ -249,8 +279,10 @@ export const getLocalStorageData = () => {
     signIn = localStorage.getItem("signIn");
     const storedRelays = localStorage.getItem("relays");
     relays = storedRelays ? JSON.parse(storedRelays) : [];
+    const storedMints = localStorage.getItem("mints");
+    mints = storedMints ? JSON.parse(storedMints) : [];
   }
-  return { signIn, encryptedPrivateKey, decryptedNpub, relays };
+  return { signIn, encryptedPrivateKey, decryptedNpub, relays, mints };
 };
 
 export const decryptNpub = (nPub: string) => {

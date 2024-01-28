@@ -1,6 +1,6 @@
-//TODO: QOL Make on clipboard of the lnurl invoice, instead of alerting make a checkmark animation or something else
 //TODO: perhaps see if we can abstract away some payment logic into reusable functions
-import React, { useState, useEffect } from "react";
+import React, { useContext, useState, useEffect } from "react";
+import { ProfileMapContext } from "../context";
 import { useRouter } from "next/router";
 import {
   Card,
@@ -10,15 +10,11 @@ import {
   Divider,
   Image,
 } from "@nextui-org/react";
-import { SimplePool } from "nostr-tools";
 import axios from "axios";
-import RequestPassphraseModal from "./utility-components/request-passphrase-modal";
-import { ClipboardIcon } from "@heroicons/react/24/outline";
+import { CheckIcon, ClipboardIcon } from "@heroicons/react/24/outline";
 import { CashuMint, CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
-import {
-  getLocalStorageData,
-  getPrivKeyWithPassphrase,
-} from "./utility/nostr-helper-functions";
+import { getLocalStorageData } from "./utility/nostr-helper-functions";
+import { nip19 } from "nostr-tools";
 import { ProductData } from "./utility/product-parser-functions";
 import { DisplayCostBreakdown } from "./utility-components/display-monetary-info";
 
@@ -30,33 +26,53 @@ export default function CheckoutCard({
   const router = useRouter();
   const { pubkey, currency, totalCost } = productData;
   const pubkeyOfProductBeingSold = pubkey;
-  const { signIn, decryptedNpub, relays } = getLocalStorageData();
-
-  const [requestPassphrase, setRequestPassphrase] = useState(
-    signIn === "extension" ? false : true,
-  ); // state that controls the request passphrase modal
-  const [passphrase, setPassphrase] = useState("");
+  const { decryptedNpub, relays, mints } = getLocalStorageData();
 
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [invoice, setInvoice] = useState("");
+  const [copiedToClipboard, setCopiedToClipboard] = useState(false);
+
+  const [name, setName] = useState("");
+  const profileContext = useContext(ProfileMapContext);
+
+  const [randomNpub, setRandomNpub] = useState<string>("");
+  const [randomNsec, setRandomNsec] = useState<string>("");
 
   useEffect(() => {
-    if (signIn === "extension") {
-      handlePayment(totalCost, currency);
-    }
+    axios({
+      method: "GET",
+      url: "/api/nostr/generate-keys",
+    })
+      .then((response) => {
+        setRandomNpub(response.data.npub);
+        setRandomNsec(response.data.nsec);
+      })
+      .catch((error) => {
+        console.error(error);
+      });
   }, []);
 
-  const startCheckoutProcess = () => {
-    handlePayment(totalCost, currency); // Generates the QR code and starts the checkout process
-  };
+  useEffect(() => {
+    if (randomNsec !== "") {
+      handlePayment(totalCost, currency);
+    }
+  }, [randomNsec]);
+
+  useEffect(() => {
+    const profileMap = profileContext.profileData;
+    const profile = profileMap.has(decryptedNpub)
+      ? profileMap.get(decryptedNpub)
+      : undefined;
+    setName(
+      profile && profile.content.name
+        ? profile.content.name
+        : nip19.npubEncode(decryptedNpub),
+    );
+  }, [profileContext]);
 
   const handlePayment = async (newPrice: number, currency: string) => {
-    const wallet = new CashuWallet(
-      new CashuMint(
-        "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC",
-      ),
-    );
+    const wallet = new CashuWallet(new CashuMint(mints[0]));
     if (currency === "USD") {
       try {
         const res = await axios.get(
@@ -109,7 +125,7 @@ export default function CheckoutCard({
         encoded = getEncodedToken({
           token: [
             {
-              mint: "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC",
+              mint: mints[0],
               proofs,
             },
           ],
@@ -149,57 +165,48 @@ export default function CheckoutCard({
   }
 
   const sendTokens = async (token: string) => {
-    if (signIn === "extension") {
-      const event = {
+    const { title } = productData;
+    const decryptedRandomNpub = nip19.decode(randomNpub);
+    const decryptedRandomNsec = nip19.decode(randomNsec);
+    const paymentMessage =
+      "This is a Cashu token payment from " +
+      name +
+      " for your " +
+      title +
+      " listing on Shopstr: " +
+      token;
+    axios({
+      method: "POST",
+      url: "/api/nostr/post-event",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      data: {
+        pubkey: decryptedRandomNpub.data,
+        privkey: decryptedRandomNsec.data,
         created_at: Math.floor(Date.now() / 1000),
         kind: 4,
         tags: [["p", pubkeyOfProductBeingSold]],
-        content: await window.nostr.nip04.encrypt(
-          pubkeyOfProductBeingSold,
-          token,
-        ),
-      };
-
-      const signedEvent = await window.nostr.signEvent(event);
-
-      const pool = new SimplePool();
-
-      await pool.publish(relays, signedEvent);
-
-      let events = await pool.list(relays, [{ kinds: [0, signedEvent.kind] }]); // TODO kind 0 contains profile information
-      let postedEvent = await pool.get(relays, {
-        ids: [signedEvent.id],
-      });
-    } else {
-      axios({
-        method: "POST",
-        url: "/api/nostr/post-event",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        data: {
-          pubkey: decryptedNpub,
-          privkey: getPrivKeyWithPassphrase(passphrase),
-          created_at: Math.floor(Date.now() / 1000),
-          kind: 4,
-          tags: [["p", pubkeyOfProductBeingSold]],
-          content: token,
-          relays: relays,
-        },
-      });
-    }
+        content: paymentMessage,
+        relays: relays,
+      },
+    });
   };
 
   const handleCopyInvoice = () => {
     navigator.clipboard.writeText(invoice);
-    alert("Invoice copied to clipboard!");
+    setCopiedToClipboard(true);
+    // after 2 seconds, set copiedToClipboard back to false
+    setTimeout(() => {
+      setCopiedToClipboard(false);
+    }, 2000);
   };
 
   return (
     <>
       <Card className="max-w-[700px]">
-        <CardHeader className="flex gap-3 justify-center">
-          <span className="font-bold text-xl">Pay with Lightning</span>
+        <CardHeader className="flex justify-center gap-3">
+          <span className="text-xl font-bold">Pay with Lightning</span>
         </CardHeader>
         <Divider />
         <CardBody className="flex flex-col items-center">
@@ -226,7 +233,14 @@ export default function CheckoutCard({
                     </p>
                     <ClipboardIcon
                       onClick={handleCopyInvoice}
-                      className="w-4 h-4 cursor-pointer ml-2"
+                      className={`ml-2 h-4 w-4 cursor-pointer ${
+                        copiedToClipboard ? "hidden" : ""
+                      }`}
+                    />
+                    <CheckIcon
+                      className={`ml-2 h-4 w-4 cursor-pointer ${
+                        copiedToClipboard ? "" : "hidden"
+                      }`}
                     />
                   </div>
                 </>
@@ -238,7 +252,7 @@ export default function CheckoutCard({
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center">
-              <h3 className="text-center text-lg leading-6 font-medium text-gray-900 mt-3">
+              <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
                 Payment confirmed!
               </h3>
               <Image
@@ -251,13 +265,6 @@ export default function CheckoutCard({
           )}
         </CardFooter>
       </Card>
-      <RequestPassphraseModal
-        passphrase={passphrase}
-        onPassphraseChange={setPassphrase}
-        isOpen={requestPassphrase}
-        setIsOpen={setRequestPassphrase}
-        actionOnSubmit={startCheckoutProcess}
-      />
     </>
   );
 }

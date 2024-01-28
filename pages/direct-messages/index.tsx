@@ -21,7 +21,6 @@ import {
   DropdownItem,
   DropdownSection,
 } from "@nextui-org/react";
-import * as CryptoJS from "crypto-js";
 import { useRouter } from "next/router";
 import {
   decryptNpub,
@@ -30,6 +29,8 @@ import {
 } from "../components/utility/nostr-helper-functions";
 import { ProfileAvatar } from "../components/utility-components/avatar";
 import { ProfileMapContext } from "../context";
+import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
+import RequestPassphraseModal from "../components/utility-components/request-passphrase-modal";
 
 const DirectMessages = () => {
   const router = useRouter();
@@ -45,7 +46,7 @@ const DirectMessages = () => {
   const [showModal, setShowModal] = useState(false);
   const [message, setMessage] = useState("");
 
-  const [enterPassphrase, setEnterPassphrase] = useState(null);
+  const [enterPassphrase, setEnterPassphrase] = useState(false);
   const [passphrase, setPassphrase] = useState("");
 
   const [thisChat, setThisChat] = useState("");
@@ -108,45 +109,48 @@ const DirectMessages = () => {
         kinds: [4],
       };
 
-      let newNip04Sub = pool.sub(relays, [subParams]);
+      let h = pool.subscribeMany(relays, [subParams], {
+        onevent(event) {
+          let tagPubkey = event.tags[0][1];
+          let incomingPubkey = event.pubkey;
 
-      newNip04Sub.on("event", (event) => {
-        let tagPubkey = event.tags[0][1];
-        let incomingPubkey = event.pubkey;
-
-        if (decryptedNpub === tagPubkey) {
-          if (!validNpub.test(incomingPubkey)) {
-            if (!chats.includes(incomingPubkey)) {
-              setChats((chats) => {
-                return Array.from(
-                  new Set([...chats, nip19.npubEncode(incomingPubkey)]),
-                );
-              });
+          if (decryptedNpub === tagPubkey) {
+            if (!validNpub.test(incomingPubkey)) {
+              if (!chats.includes(incomingPubkey)) {
+                setChats((chats) => {
+                  return Array.from(
+                    new Set([...chats, nip19.npubEncode(incomingPubkey)]),
+                  );
+                });
+              }
+            } else {
+              if (!chats.includes(incomingPubkey)) {
+                setChats((chats) => {
+                  return Array.from(new Set([...chats, incomingPubkey]));
+                });
+              }
             }
-          } else {
-            if (!chats.includes(incomingPubkey)) {
-              setChats((chats) => {
-                return Array.from(new Set([...chats, incomingPubkey]));
-              });
+          } else if (decryptedNpub === incomingPubkey) {
+            if (!validNpub.test(tagPubkey)) {
+              if (!chats.includes(tagPubkey)) {
+                setChats((chats) => {
+                  return Array.from(
+                    new Set([...chats, nip19.npubEncode(tagPubkey)]),
+                  );
+                });
+              }
+            } else {
+              if (!chats.includes(tagPubkey)) {
+                setChats((chats) => {
+                  return Array.from(new Set([...chats, tagPubkey]));
+                });
+              }
             }
           }
-        } else if (decryptedNpub === incomingPubkey) {
-          if (!validNpub.test(tagPubkey)) {
-            if (!chats.includes(tagPubkey)) {
-              setChats((chats) => {
-                return Array.from(
-                  new Set([...chats, nip19.npubEncode(tagPubkey)]),
-                );
-              });
-            }
-          } else {
-            if (!chats.includes(tagPubkey)) {
-              setChats((chats) => {
-                return Array.from(new Set([...chats, tagPubkey]));
-              });
-            }
-          }
-        }
+        },
+        // oneose() {
+        //   h.close();
+        // },
       });
     }
   }, [relays, signIn]);
@@ -164,53 +168,57 @@ const DirectMessages = () => {
 
       subParams["authors"] = [decryptedNpub, chatPubkey];
 
-      let nip04Sub = pool.sub(relays, [subParams]);
+      let h = pool.subscribeMany(relays, [subParams], {
+        onevent: async (event) => {
+          let sender = event.pubkey;
 
-      nip04Sub.on("event", async (event) => {
-        let sender = event.pubkey;
+          let tagPubkey = event.tags[0][1];
 
-        let tagPubkey = event.tags[0][1];
+          let plaintext;
+          if (
+            (decryptedNpub === sender && tagPubkey === chatPubkey) ||
+            (chatPubkey === sender && tagPubkey === decryptedNpub)
+          ) {
+            if (signIn === "extension") {
+              plaintext = await window.nostr.nip04.decrypt(
+                chatPubkey,
+                event.content,
+              );
+            } else {
+              let sk2 = getPrivKeyWithPassphrase(passphrase);
+              plaintext = await nip04.decrypt(sk2, chatPubkey, event.content);
+            }
+          }
+          let created_at = event.created_at;
 
-        let plaintext;
-        if (
-          (decryptedNpub === sender && tagPubkey === chatPubkey) ||
-          (chatPubkey === sender && tagPubkey === decryptedNpub)
-        ) {
-          if (signIn === "extension") {
-            plaintext = await window.nostr.nip04.decrypt(
-              chatPubkey,
-              event.content,
+          if (plaintext != undefined) {
+            // Get an array of all existing event IDs
+            let existingEventIds = messages.map((message) => message.eventId);
+            // Only add this message if its eventId is not already in existingEventIds
+            if (!existingEventIds.includes(event.id)) {
+              setMessages((prevMessages) => [
+                ...prevMessages,
+                {
+                  plaintext: plaintext,
+                  createdAt: created_at,
+                  sender: sender,
+                  eventId: event.id,
+                },
+              ]);
+            }
+            // Sort the messages with each state update
+            setMessages((prevMessages) =>
+              prevMessages.sort((a, b) => a.createdAt - b.createdAt),
             );
-          } else {
-            let sk2 = getPrivKeyWithPassphrase(passphrase);
-            plaintext = await nip04.decrypt(sk2, chatPubkey, event.content);
           }
-        }
-        let created_at = event.created_at;
-
-        if (plaintext != undefined) {
-          // Get an array of all existing event IDs
-          let existingEventIds = messages.map((message) => message.eventId);
-          // Only add this message if its eventId is not already in existingEventIds
-          if (!existingEventIds.includes(event.id)) {
-            setMessages((prevMessages) => [
-              ...prevMessages,
-              {
-                plaintext: plaintext,
-                createdAt: created_at,
-                sender: sender,
-                eventId: event.id,
-              },
-            ]);
-          }
-          // Sort the messages with each state update
-          setMessages((prevMessages) =>
-            prevMessages.sort((a, b) => a.createdAt - b.createdAt),
-          );
-        }
+        },
+        // oneose() {
+        //   h.close();
+        // },
       });
     }
   }, [currentChat]);
+
   const profileContext = useContext(ProfileMapContext);
   useEffect(() => {
     localStorage.setItem("chats", JSON.stringify(chats));
@@ -225,7 +233,7 @@ const DirectMessages = () => {
       const { data } = nip19.decode(chats);
       profileContext.addPubkeyToFetch([data as string]);
     }
-  }, [chats]);
+  }, [chats, profileContext]);
 
   const {
     handleSubmit,
@@ -358,14 +366,7 @@ const DirectMessages = () => {
 
         // const relays = JSON.parse(storedRelays);
 
-        await pool.publish(relays, signedEvent);
-
-        let events = await pool.list(relays, [
-          { kinds: [0, signedEvent.kind] },
-        ]);
-        let postedEvent = await pool.get(relays, {
-          ids: [signedEvent.id],
-        });
+        await Promise.any(pool.publish(relays, signedEvent));
       } else {
         let privkey = getPrivKeyWithPassphrase(passphrase);
         // request passphrase in popup or form and pass to api
@@ -449,18 +450,18 @@ const DirectMessages = () => {
       <div>
         {chats.length === 0 && (
           <div className="mt-8 flex items-center justify-center">
-            <p className="text-xl break-words text-center">
+            <p className="break-words text-center text-xl dark:text-dark-text">
               No messages . . . yet!
             </p>
           </div>
         )}
-        <div className="mt-8 mb-8 overflow-y-scroll max-h-[70vh] bg-white rounded-md">
+        <div className="mb-8 mt-8 max-h-[70vh] overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
           {chats.map((chat) => {
             const pubkey = decryptNpub(chat);
             return (
               <div
                 key={chat}
-                className="flex justify-between items-center mb-2 border-2"
+                className="mx-3 mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg"
               >
                 <ProfileAvatar
                   pubkey={pubkey}
@@ -469,21 +470,29 @@ const DirectMessages = () => {
                     console.log("npub clicked in dms");
                   }}
                 />
-                <button onClick={() => signInCheck(chat)}>Enter Chat</button>
+                <button
+                  onClick={() => signInCheck(chat)}
+                  className="text-light-text dark:text-dark-text"
+                >
+                  Enter Chat
+                </button>
                 <MinusCircleIcon
                   onClick={() => deleteChat(chat)}
-                  className="w-5 h-5 text-red-500 hover:text-yellow-700 cursor-pointer"
+                  className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
                 />
               </div>
             );
           })}
         </div>
-        <Button
-          className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 mx-3"
-          onClick={handleToggleModal}
-        >
-          Start New Chat
-        </Button>
+        <div className="absolute bottom-[0px] z-20 flex h-fit w-[99vw] flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+          <Button
+            // className="mx-3 bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 shadow-lg"
+            className={SHOPSTRBUTTONCLASSNAMES}
+            onClick={handleToggleModal}
+          >
+            Start New Chat
+          </Button>
+        </div>
         <Modal
           backdrop="blur"
           isOpen={showModal}
@@ -500,7 +509,7 @@ const DirectMessages = () => {
           size="2xl"
         >
           <ModalContent>
-            <ModalHeader className="flex flex-col gap-1">
+            <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
               Start New Chat
             </ModalHeader>
             <form onSubmit={handleSubmit(onSubmit)}>
@@ -527,6 +536,7 @@ const DirectMessages = () => {
                       : "";
                     return (
                       <Textarea
+                        className="text-light-text dark:text-dark-text"
                         variant="bordered"
                         fullWidth={true}
                         placeholder="npub..."
@@ -542,6 +552,7 @@ const DirectMessages = () => {
                 />
                 {signIn === "nsec" && (
                   <Input
+                    className="text-light-text dark:text-dark-text"
                     autoFocus
                     ref={passphraseInputRef}
                     variant="flat"
@@ -554,17 +565,16 @@ const DirectMessages = () => {
               </ModalBody>
 
               <ModalFooter>
-                {confirmActionDropdown(
-                  <Button color="danger" variant="light">
-                    Cancel
-                  </Button>,
-                  "Are you sure you want to cancel?",
-                  "Cancel",
-                  handleToggleModal,
-                )}
+                <Button
+                  color="danger"
+                  variant="light"
+                  onClick={handleToggleModal}
+                >
+                  Cancel
+                </Button>
 
                 <Button
-                  className={buttonClassName}
+                  className={SHOPSTRBUTTONCLASSNAMES}
                   type="submit"
                   onClick={(e) => {
                     if (
@@ -583,113 +593,46 @@ const DirectMessages = () => {
             </form>
           </ModalContent>
         </Modal>
-        <Modal
-          backdrop="blur"
+        <RequestPassphraseModal
+          passphrase={passphrase}
+          onPassphraseChange={setPassphrase}
           isOpen={enterPassphrase}
-          onClose={() => handleEnterPassphrase("")}
-          classNames={{
-            body: "py-6",
-            backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-            // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
-            header: "border-b-[1px] border-[#292f46]",
-            footer: "border-t-[1px] border-[#292f46]",
-            closeButton: "hover:bg-black/5 active:bg-white/10",
-          }}
-          scrollBehavior={"outside"}
-          size="2xl"
-        >
-          <ModalContent>
-            <ModalHeader className="flex flex-col gap-1">
-              Enter Passphrase
-            </ModalHeader>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSubmitPassphrase();
-              }}
-            >
-              <ModalBody>
-                {signIn === "nsec" && (
-                  <Input
-                    autoFocus
-                    ref={passphraseInputRef}
-                    variant="flat"
-                    label="Passphrase"
-                    labelPlacement="inside"
-                    onChange={(e) => setPassphrase(e.target.value)}
-                    value={passphrase}
-                  />
-                )}
-              </ModalBody>
-
-              <ModalFooter>
-                {confirmActionDropdown(
-                  <Button color="danger" variant="light">
-                    Cancel
-                  </Button>,
-                  "Are you sure you want to cancel?",
-                  "Cancel",
-                  cancel,
-                )}
-
-                <Button
-                  className={buttonClassName}
-                  type="submit"
-                  onClick={(e) => {
-                    if (
-                      isButtonDisabled &&
-                      signIn === "nsec" &&
-                      passphraseInputRef.current
-                    ) {
-                      e.preventDefault();
-                      passphraseInputRef.current.focus();
-                    }
-                  }}
-                >
-                  Submit
-                </Button>
-              </ModalFooter>
-            </form>
-          </ModalContent>
-        </Modal>
+          setIsOpen={setEnterPassphrase}
+          actionOnSubmit={handleSubmitPassphrase}
+        />
       </div>
     );
   }
 
   return (
     <div>
-      <h2 className="flex flex-row items-center w-fit pr-2 mt-2 align-middle text-yellow-500 hover:bg-purple-600 rounded-md cursor-pointer">
+      <h2 className="mt-2 flex w-fit cursor-pointer flex-row items-center rounded-md pr-2 align-middle text-shopstr-purple-light hover:bg-shopstr-yellow dark:text-shopstr-yellow-light hover:dark:bg-shopstr-purple">
         <ArrowUturnLeftIcon
-          className="w-5 h-5 text-purple-500 hover:text-purple-700"
+          className="h-5 w-5 text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light"
           onClick={handleGoBack}
         />
         {currentChat}
       </h2>
-      <div className="my-2 overflow-y-scroll max-h-[70vh] bg-white rounded-md border-2">
+      <div className="my-2 max-h-[70vh] overflow-y-scroll rounded-md border-2 border-light-fg bg-light-fg dark:border-dark-fg dark:bg-dark-fg">
         {messages.map((message, index) => (
-           <div
-             key={index}
-             className={`my-2 flex ${
-               message.sender === decryptedNpub
-                 ? "justify-end"
-                 : message.sender === currentChat
-                 ? "justify-start"
-                 : ""
-             }`}
-           >
-             <p
-               className={`inline-block p-3 rounded-lg max-w-[100vh] break-words ${
-                 message.sender === decryptedNpub
-                   ? "bg-purple-200"
-                   : "bg-gray-300"
-               }`}
-             >
-               {message.sender === decryptedNpub &&
-               message.plaintext.includes("cashuA") ? (
-                 <i>Payment sent!</i>
-               ) : (
-                 message.plaintext
-              )}
+          <div
+            key={index}
+            className={`my-2 flex ${
+              message.sender === decryptedNpub
+                ? "justify-end"
+                : message.sender === currentChat
+                  ? "justify-start"
+                  : ""
+            }`}
+          >
+            <p
+              className={`inline-block max-w-[100vh] break-words rounded-lg p-3 ${
+                message.sender === decryptedNpub
+                  ? "bg-purple-200"
+                  : "bg-gray-300"
+              }`}
+            >
+              {message.plaintext}
             </p>
           </div>
         ))}
@@ -697,6 +640,7 @@ const DirectMessages = () => {
       </div>
       <form className="flex items-center space-x-2" onSubmit={handleSend}>
         <Input
+          className="text-light-text dark:text-dark-text"
           type="text"
           width="100%"
           size="large"
@@ -704,10 +648,7 @@ const DirectMessages = () => {
           placeholder="Type your message..."
           onChange={handleChange}
         />
-        <Button
-          type="submit"
-          className="text-white shadow-lg bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600"
-        >
+        <Button type="submit" className={SHOPSTRBUTTONCLASSNAMES}>
           Send
         </Button>
       </form>

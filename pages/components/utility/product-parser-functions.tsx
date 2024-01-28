@@ -1,4 +1,3 @@
-import React from "react";
 import { ShippingOptionsType } from "./STATIC-VARIABLES";
 import { calculateTotalCost } from "../utility-components/display-monetary-info";
 import { NostrEvent } from "@/pages/components/utility/nostr-helper-functions";
@@ -18,6 +17,7 @@ export type ProductData = {
   shippingType?: ShippingOptionsType;
   shippingCost?: number;
   totalCost: number;
+  d?: string;
 };
 
 export const parseTags = (productEvent: NostrEvent) => {
@@ -76,6 +76,9 @@ export const parseTags = (productEvent: NostrEvent) => {
           parsedData.shippingCost = 0;
           break;
         }
+        break;
+      case "d":
+        parsedData.d = values[0];
         break;
       default:
         return;
