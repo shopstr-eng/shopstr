@@ -11,6 +11,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import { useTheme } from "next-themes";
+import { getLocalStorageData } from "./utility/nostr-helper-functions";
 
 const DarkModeToggle = () => {
   const { theme, setTheme } = useTheme();
@@ -37,10 +38,8 @@ const Navbar = () => {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const signInType = localStorage.getItem("signIn");
-      if (signInType) {
-        setSignIn(signInType);
-      }
+      const signInType = getLocalStorageData().signIn;
+      setSignIn(signInType ? signInType : "");
     }
   }, []);
 

@@ -17,6 +17,7 @@ import {
 } from "./context";
 import {
   decryptNpub,
+  getLocalStorageData,
   NostrEvent,
 } from "./components/utility/nostr-helper-functions";
 import { NextUIProvider } from "@nextui-org/react";
@@ -64,40 +65,11 @@ function App({ Component, pageProps }: AppProps) {
   );
 
   useEffect(() => {
-    // Perform localStorage action
     if (window !== undefined) {
-      const storedRelays = localStorage.getItem("relays");
-      if (storedRelays !== null) {
-        const parsedRelays = JSON.parse(storedRelays as string);
-        // Filter out any null values from the parsed relays
-        const filteredRelays = parsedRelays.filter(
-          (relay: string | null) => relay !== null,
-        );
-        setRelays(filteredRelays);
-        localStorage.setItem("relays", JSON.stringify(filteredRelays));
-      } else {
-        const defaultRelays = [
-          "wss://relay.damus.io",
-          "wss://nos.lol",
-          "wss://nostr.mutinywallet.com",
-        ];
-        localStorage.setItem("relays", JSON.stringify(defaultRelays));
-        setRelays(defaultRelays);
-      }
-      const storedMints = localStorage.getItem("mints");
-      if (storedMints === null) {
-        const defaultMint = [
-          "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC",
-        ];
-        localStorage.setItem("mints", JSON.stringify(defaultMint));
-      }
-      setPubkeyProfilesToFetch(
-        new Set(
-          typeof localStorage.getItem("npub") == "string"
-            ? [decryptNpub(localStorage.getItem("npub") as string)]
-            : [],
-        ) as Set<string>,
-      ); // fetches your profile if you are logged in
+      let { signIn, encryptedPrivateKey, decryptedNpub, relays, mints } =
+        getLocalStorageData();
+      setRelays(relays);
+      setPubkeyProfilesToFetch(new Set([decryptedNpub]) as Set<string>); // fetches your profile if you are logged in
     }
   }, []);
 
@@ -204,7 +176,7 @@ function App({ Component, pageProps }: AppProps) {
     let chats: string[] = [];
     let messages: NostrEvent[] = [];
 
-    let decryptedNpub = decryptNpub(localStorage.getItem("npub"));
+    let decryptedNpub = getLocalStorageData().decryptedNpub;
 
     let h = pool.subscribeMany(relays, [subParams], {
       onevent(event) {

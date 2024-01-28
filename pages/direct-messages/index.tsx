@@ -24,6 +24,7 @@ import {
 import { useRouter } from "next/router";
 import {
   decryptNpub,
+  getLocalStorageData,
   getNsecWithPassphrase,
   getPrivKeyWithPassphrase,
 } from "../components/utility/nostr-helper-functions";
@@ -59,16 +60,15 @@ const DirectMessages = () => {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const signInType = localStorage.getItem("signIn");
-      if (signInType) {
-        setSignIn(signInType);
-        const npub = localStorage.getItem("npub");
-        const { data } = nip19.decode(npub);
-        setDecryptedNpub(data);
-        const encrypted = localStorage.getItem("encryptedPrivateKey");
-        setEncryptedPrivateKey(encrypted);
-        const storedRelays = localStorage.getItem("relays");
-        setRelays(storedRelays ? JSON.parse(storedRelays) : []);
+      let { signIn, encryptedPrivateKey, decryptedNpub, relays, mints } =
+        getLocalStorageData();
+      if (signIn && encryptedPrivateKey && decryptedNpub && relays) {
+        setSignIn(signIn);
+        setDecryptedNpub(decryptedNpub as string);
+        setEncryptedPrivateKey(encryptedPrivateKey);
+        setRelays(relays);
+      } else {
+        console.log("direct-messages useEffect error: missing local storage");
       }
     }
   }, []);

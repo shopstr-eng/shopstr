@@ -224,12 +224,6 @@ async function generateNostrEventId(msg) {
   return hash;
 }
 
-export function getPubKey() {
-  const npub = localStorage.getItem("npub");
-  const { data } = nip19.decode(npub);
-  return data;
-}
-
 export function getNsecWithPassphrase(passphrase: string) {
   if (!passphrase) return undefined;
   const { encryptedPrivateKey } = getLocalStorageData();
@@ -258,12 +252,35 @@ export const getLocalStorageData = () => {
       const { data } = nip19.decode(npub);
       decryptedNpub = data;
     }
+
     encryptedPrivateKey = localStorage.getItem("encryptedPrivateKey");
+
     signIn = localStorage.getItem("signIn");
-    const storedRelays = localStorage.getItem("relays");
-    relays = storedRelays ? JSON.parse(storedRelays) : [];
-    const storedMints = localStorage.getItem("mints");
-    mints = storedMints ? JSON.parse(storedMints) : [];
+
+    relays = localStorage.getItem("relays")
+      ? JSON.parse(localStorage.getItem("relays") as string).filter(
+          // Filter out any null values from the parsed relays
+          (relay: string | null) => relay !== null,
+        )
+      : null;
+
+    if (relays === null) {
+      relays = [
+        "wss://relay.damus.io",
+        "wss://nos.lol",
+        "wss://nostr.mutinywallet.com",
+      ];
+      localStorage.setItem("relays", JSON.stringify(relays));
+    }
+
+    mints = localStorage.getItem("mints")
+      ? JSON.parse(localStorage.getItem("mints") as string)
+      : null;
+
+    if (mints === null) {
+      mints = ["https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"];
+      localStorage.setItem("mints", JSON.stringify(mints));
+    }
   }
   return { signIn, encryptedPrivateKey, decryptedNpub, relays, mints };
 };

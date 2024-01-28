@@ -79,10 +79,9 @@ export default function NewForm({
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const signIn = localStorage.getItem("signIn");
-      setSignIn(signIn);
-      const { decryptedNpub } = getLocalStorageData();
-      setPubkey(decryptedNpub);
+      let { signIn, decryptedNpub } = getLocalStorageData();
+      setSignIn(signIn as string);
+      setPubkey(decryptedNpub as string);
     }
   }, []);
 
