@@ -243,7 +243,7 @@ async function generateNostrEventId(msg) {
 
 export function getPubKey() {
   const npub = localStorage.getItem("npub");
-  if (!npub) return false;
+  if (!npub) return null;
   const { data } = nip19.decode(npub);
   return data;
 }

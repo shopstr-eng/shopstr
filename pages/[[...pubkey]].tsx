@@ -40,13 +40,6 @@ const SellerView = () => {
   }, [router.query.pubkey]);
 
   useEffect(() => {
-    if (!localStorage.getItem("relays")) {
-      localStorage.setItem(
-        "relays",
-        JSON.stringify(["wss://relay.damus.io", "wss://nos.lol"]),
-      );
-    }
-
     const loggedIn = getPubKey();
     if (loggedIn) {
       fetch('/api/metrics/post-shopper', {
