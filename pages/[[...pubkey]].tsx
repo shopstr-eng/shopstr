@@ -38,7 +38,6 @@ const SellerView = () => {
       setfocusedPubkey(data as string); // router.query.pubkey returns array of pubkeys
     }
   }, [router.query.pubkey]);
-
   const routeToShop = (npubkey: string) => {
     npubkey = encodeURIComponent(npubkey);
     if (npubkey === "") {

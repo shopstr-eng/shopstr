@@ -178,7 +178,7 @@ const DisplayEvents = ({
             {filteredProductData.map((productData: ProductData, index) => {
               return (
                 <ProductCard
-                  key={productData.id + "-" + index}
+                  uniqueKey={productData.id + "-" + index}
                   productData={productData}
                   onProductClick={onProductClick}
                 />

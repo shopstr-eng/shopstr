@@ -6,35 +6,42 @@ import {
   GlobeAltIcon,
   ArrowRightOnRectangleIcon,
   ArrowLeftOnRectangleIcon,
-  MoonIcon,
   SunIcon,
+  MoonIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import { useTheme } from "next-themes";
 import { getLocalStorageData } from "./utility/nostr-helper-functions";
 
-const DarkModeToggle = () => {
-  const { theme, setTheme } = useTheme();
-  return (
-    <div>
-      {theme === "dark" ? (
-        <MoonIcon
-          className="h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-          onClick={() => setTheme("light")}
-        />
-      ) : (
-        <SunIcon
-          className="h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-          onClick={() => setTheme("dark")}
-        />
-      )}
-    </div>
-  );
+const useLoaded = () => {
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => setLoaded(true), []);
+  return loaded;
 };
 
 const Navbar = () => {
   const router = useRouter();
   const [signIn, setSignIn] = useState("");
+
+  const DarkModeToggle = () => {
+    const { theme, setTheme } = useTheme();
+
+    return (
+      <div>
+        {useLoaded() && theme === "dark" ? (
+          <MoonIcon
+            className="h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+            onClick={() => setTheme("light")}
+          />
+        ) : (
+          <SunIcon
+            className="h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+            onClick={() => setTheme("dark")}
+          />
+        )}
+      </div>
+    );
+  };
 
   useEffect(() => {
     if (typeof window !== "undefined") {
