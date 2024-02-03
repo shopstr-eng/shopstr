@@ -2,12 +2,12 @@ import { createContext } from "react";
 
 export interface ProfileContextInterface {
   profileData: Map<string, any>;
-  addPubkeyToFetch: (pubkey: [string]) => void;
+  mergeProfileMaps: (profileMap: Map<string, any>) => void;
 }
 
 export const ProfileMapContext = createContext({
   profileData: new Map(),
-  addPubkeyToFetch: (pubkey: [string]) => {},
+  mergeProfileMaps: (profileMap: Map<string, any>) => {},
 } as ProfileContextInterface);
 
 export interface ProductContextInterface {

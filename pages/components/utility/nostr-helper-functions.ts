@@ -239,7 +239,15 @@ export function getPrivKeyWithPassphrase(passphrase: string) {
   return data;
 }
 
-export const getLocalStorageData = () => {
+export interface LocalStorageInterface {
+  signIn: string;
+  encryptedPrivateKey: string;
+  decryptedNpub: string;
+  relays: string[];
+  mints: string[];
+}
+
+export const getLocalStorageData = (): LocalStorageInterface => {
   let signIn;
   let encryptedPrivateKey;
   let decryptedNpub;
@@ -262,7 +270,7 @@ export const getLocalStorageData = () => {
           // Filter out any null values from the parsed relays
           (relay: string | null) => relay !== null,
         )
-      : null;
+      : [];
 
     if (relays === null) {
       relays = [
@@ -282,7 +290,13 @@ export const getLocalStorageData = () => {
       localStorage.setItem("mints", JSON.stringify(mints));
     }
   }
-  return { signIn, encryptedPrivateKey, decryptedNpub, relays, mints };
+  return {
+    signIn: signIn as string,
+    encryptedPrivateKey: encryptedPrivateKey as string,
+    decryptedNpub: decryptedNpub as string,
+    relays,
+    mints,
+  };
 };
 
 export const decryptNpub = (npub: string) => {

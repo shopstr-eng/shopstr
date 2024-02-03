@@ -18,37 +18,33 @@ import {
 import {
   decryptNpub,
   getLocalStorageData,
+  LocalStorageInterface,
   NostrEvent,
 } from "./components/utility/nostr-helper-functions";
 import { NextUIProvider } from "@nextui-org/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
+import { fetchAllPosts, fetchProfile } from "./api/nostr/fetch-service";
 
 function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
   const isSignInPage = router.pathname === "/sign-in";
   const isKeyPage = router.pathname === "/keys";
-  const [relays, setRelays] = useState([]);
-  const [profileMap, setProfileMap] = useState(new Map());
-  const [pubkeyProfilesToFetch, setPubkeyProfilesToFetch] = useState<
-    Set<string>
-  >(new Set());
+  const [localStorageValues, setLocalStorageValues] =
+    useState<LocalStorageInterface>(getLocalStorageData());
   const [productContext, setProductContext] = useState<ProductContextInterface>(
     {
       productEvents: [],
       isLoading: true,
     },
   );
+  const [profileMap, setProfileMap] = useState(new Map());
   const [profileContext, setProfileContext] = useState<ProfileContextInterface>(
     {
       profileData: new Map(),
-      addPubkeyToFetch: (pubkeys: [string]) => {
-        setPubkeyProfilesToFetch((pubkeyProfilesToFetch) => {
-          let newPubkeyProfilesToFetch = new Set(pubkeyProfilesToFetch);
-          pubkeys.forEach((pubkey) => {
-            newPubkeyProfilesToFetch.add(pubkey);
-          });
-          return newPubkeyProfilesToFetch;
+      mergeProfileMaps: (newProfileMap: Map<string, any>) => {
+        setProfileMap((profileMap) => {
+          return new Map([...profileMap, ...newProfileMap]);
         });
       },
     },
@@ -64,216 +60,150 @@ function App({ Component, pageProps }: AppProps) {
     },
   );
 
+  /** FETCH initial PRODUCTS and PROFILES **/
   useEffect(() => {
-    if (window !== undefined) {
-      let { signIn, encryptedPrivateKey, decryptedNpub, relays, mints } =
-        getLocalStorageData();
-      setRelays(relays);
-      setPubkeyProfilesToFetch(new Set([decryptedNpub]) as Set<string>); // fetches your profile if you are logged in
+    const relays = localStorageValues.relays;
+    async function fetchData() {
+      try {
+        let websocketSubscribers = [];
+        let { productsWebsocketSub, profileArray } = await fetchAllPosts(
+          relays,
+          setProductContext,
+        );
+        websocketSubscribers.push(productsWebsocketSub);
+        let { decryptedNpub } = getLocalStorageData();
+        let { profileMap } = await fetchProfile(relays, [
+          decryptedNpub as string,
+          ...profileArray,
+        ]);
+        profileContext.mergeProfileMaps(profileMap);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      }
     }
-  }, []);
-
-  /** FETCH ALL PRODUCTS **/
-  useEffect(() => {
-    const pool = new SimplePool();
-    let subParams: { kinds: number[]; authors?: string[] } = {
-      kinds: [30402],
-    };
-
-    let productArray: NostrEvent[] = [];
-
-    let h = pool.subscribeMany(relays, [subParams], {
-      onevent(event) {
-        setProductContext((productContext) => {
-          productArray.push(event);
-          setPubkeyProfilesToFetch((pubkeyProfilesToFetch) => {
-            let newPubkeyProfilesToFetch = new Set(pubkeyProfilesToFetch);
-            newPubkeyProfilesToFetch.add(event.pubkey);
-            return newPubkeyProfilesToFetch;
-          });
-          return {
-            productEvents: productArray,
-            isLoading: productContext.isLoading,
-          };
-        });
-      },
-      oneose() {
-        setProductContext((productContext) => {
-          return {
-            productEvents: productContext.productEvents,
-            isLoading: false,
-          };
-        });
-        // h.close();
-      },
-    });
-  }, [relays]);
-
-  /** FETCH ALL PROFILES AFTER FETCH PRODUCTS DONE AND FOR EVERY NEW PRODUCT EVENT **/
-  useEffect(() => {
-    if (productContext.isLoading) return;
-    const pool = new SimplePool();
-    let profileSubParams: { kinds: number[]; authors?: string[] } = {
-      kinds: [0],
-      authors: Array.from(pubkeyProfilesToFetch),
-    };
-
-    let h = pool.subscribeMany(relays, [profileSubParams], {
-      onevent(event) {
-        setProfileMap((profileMap) => {
-          if (
-            profileMap.has(event.pubkey) &&
-            profileMap.get(event.pubkey).created_at > event.created_at
-          ) {
-            // if profile already exists and is newer than the one we just fetched, don't update
-            return profileMap;
-          }
-          let newProfileMap = new Map(profileMap);
-          try {
-            // Try to parse the content of the event
-            const content = JSON.parse(event.content);
-            newProfileMap.set(event.pubkey, {
-              pubkey: event.pubkey,
-              created_at: event.created_at,
-              content: content,
-            });
-          } catch (error) {
-            // If JSON.parse fails, simply skip setting this event
-            console.error(
-              `Failed to parse profile data for pubkey: ${event.pubkey}`,
-              error,
-            );
-          }
-          // Return the updated or unchanged map
-          return newProfileMap;
-        });
-      },
-      // oneose() {
-      //   h.close();
-      // },
-    });
-  }, [pubkeyProfilesToFetch, productContext.isLoading, relays]);
+    if (relays) fetchData(); // Call the async function immediately
+  }, [localStorageValues.relays]);
 
   /** UPON PROFILEMAP UPDATE, SET PROFILE CONTEXT **/
   useEffect(() => {
-    setProfileContext((profileContext) => {
+    setProfileContext((profileContext: ProfileContextInterface) => {
       return {
         profileData: profileMap,
-        addPubkeyToFetch: profileContext.addPubkeyToFetch,
+        mergeProfileMaps: profileContext.mergeProfileMaps,
       };
     });
   }, [profileMap]);
 
-  /** FETCH ALL CHATS AND CORRESPONDING MESSAGES **/
-  useEffect(() => {
-    const pool = new SimplePool();
-    let subParams: { kinds: number[]; authors?: string[] } = {
-      kinds: [4],
-    };
+  // /** FETCH ALL CHATS AND CORRESPONDING MESSAGES **/
+  // useEffect(() => {
+  //   const pool = new SimplePool();
+  //   let subParams: { kinds: number[]; authors?: string[] } = {
+  //     kinds: [4],
+  //   };
 
-    const validNpub = /^npub[a-zA-Z0-9]{59}$/;
+  //   const validNpub = /^npub[a-zA-Z0-9]{59}$/;
 
-    let chats: string[] = [];
-    let messages: NostrEvent[] = [];
+  //   let chats: string[] = [];
+  //   let messages: NostrEvent[] = [];
 
-    let decryptedNpub = getLocalStorageData().decryptedNpub;
+  //   let decryptedNpub = getLocalStorageData().decryptedNpub;
 
-    let h = pool.subscribeMany(relays, [subParams], {
-      onevent(event) {
-        let tagPubkey = event.tags[0][1];
-        let incomingPubkey = event.pubkey;
+  //   let h = pool.subscribeMany(relays, [subParams], {
+  //     onevent(event) {
+  //       let tagPubkey = event.tags[0][1];
+  //       let incomingPubkey = event.pubkey;
 
-        if (decryptedNpub === tagPubkey) {
-          if (!validNpub.test(incomingPubkey)) {
-            if (!chats.includes(incomingPubkey)) {
-              setChatContext((chatContext) => {
-                chats.push(nip19.npubEncode(incomingPubkey));
-                return {
-                  chatPubkeys: chats,
-                  isLoading: chatContext.isLoading,
-                };
-              });
-              setMessageContext((messageContext) => {
-                messages.push(event);
-                return {
-                  messages: messages,
-                  isLoading: messageContext.isLoading,
-                };
-              });
-            }
-          } else {
-            if (!chats.includes(incomingPubkey)) {
-              setChatContext((chatContext) => {
-                chats.push(incomingPubkey);
-                return {
-                  chatPubkeys: chats,
-                  isLoading: chatContext.isLoading,
-                };
-              });
-              setMessageContext((messageContext) => {
-                messages.push(event);
-                return {
-                  messages: messages,
-                  isLoading: messageContext.isLoading,
-                };
-              });
-            }
-          }
-        } else if (decryptedNpub === incomingPubkey) {
-          if (!validNpub.test(tagPubkey)) {
-            if (!chats.includes(tagPubkey)) {
-              setChatContext((chatContext) => {
-                chats.push(nip19.npubEncode(tagPubkey));
-                return {
-                  chatPubkeys: chats,
-                  isLoading: chatContext.isLoading,
-                };
-              });
-              setMessageContext((messageContext) => {
-                messages.push(event);
-                return {
-                  messages: messages,
-                  isLoading: messageContext.isLoading,
-                };
-              });
-            }
-          } else {
-            if (!chats.includes(tagPubkey)) {
-              setChatContext((chatContext) => {
-                chats.push(tagPubkey);
-                return {
-                  chatPubkeys: chats,
-                  isLoading: chatContext.isLoading,
-                };
-              });
-              setMessageContext((messageContext) => {
-                messages.push(event);
-                return {
-                  messages: messages,
-                  isLoading: messageContext.isLoading,
-                };
-              });
-            }
-          }
-        }
-      },
-      oneose() {
-        setChatContext((chatContext) => {
-          return {
-            chatPubkeys: chatContext.chatPubkeys,
-            isLoading: false,
-          };
-        });
-        setMessageContext((messageContext) => {
-          return {
-            messages: messageContext.messages,
-            isLoading: false,
-          };
-        });
-        // h.close();
-      },
-    });
-  }, [relays]);
+  //       if (decryptedNpub === tagPubkey) {
+  //         if (!validNpub.test(incomingPubkey)) {
+  //           if (!chats.includes(incomingPubkey)) {
+  //             setChatContext((chatContext) => {
+  //               chats.push(nip19.npubEncode(incomingPubkey));
+  //               return {
+  //                 chatPubkeys: chats,
+  //                 isLoading: chatContext.isLoading,
+  //               };
+  //             });
+  //             setMessageContext((messageContext) => {
+  //               messages.push(event);
+  //               return {
+  //                 messages: messages,
+  //                 isLoading: messageContext.isLoading,
+  //               };
+  //             });
+  //           }
+  //         } else {
+  //           if (!chats.includes(incomingPubkey)) {
+  //             setChatContext((chatContext) => {
+  //               chats.push(incomingPubkey);
+  //               return {
+  //                 chatPubkeys: chats,
+  //                 isLoading: chatContext.isLoading,
+  //               };
+  //             });
+  //             setMessageContext((messageContext) => {
+  //               messages.push(event);
+  //               return {
+  //                 messages: messages,
+  //                 isLoading: messageContext.isLoading,
+  //               };
+  //             });
+  //           }
+  //         }
+  //       } else if (decryptedNpub === incomingPubkey) {
+  //         if (!validNpub.test(tagPubkey)) {
+  //           if (!chats.includes(tagPubkey)) {
+  //             setChatContext((chatContext) => {
+  //               chats.push(nip19.npubEncode(tagPubkey));
+  //               return {
+  //                 chatPubkeys: chats,
+  //                 isLoading: chatContext.isLoading,
+  //               };
+  //             });
+  //             setMessageContext((messageContext) => {
+  //               messages.push(event);
+  //               return {
+  //                 messages: messages,
+  //                 isLoading: messageContext.isLoading,
+  //               };
+  //             });
+  //           }
+  //         } else {
+  //           if (!chats.includes(tagPubkey)) {
+  //             setChatContext((chatContext) => {
+  //               chats.push(tagPubkey);
+  //               return {
+  //                 chatPubkeys: chats,
+  //                 isLoading: chatContext.isLoading,
+  //               };
+  //             });
+  //             setMessageContext((messageContext) => {
+  //               messages.push(event);
+  //               return {
+  //                 messages: messages,
+  //                 isLoading: messageContext.isLoading,
+  //               };
+  //             });
+  //           }
+  //         }
+  //       }
+  //     },
+  //     oneose() {
+  //       setChatContext((chatContext) => {
+  //         return {
+  //           chatPubkeys: chatContext.chatPubkeys,
+  //           isLoading: false,
+  //         };
+  //       });
+  //       setMessageContext((messageContext) => {
+  //         return {
+  //           messages: messageContext.messages,
+  //           isLoading: false,
+  //         };
+  //       });
+  //       // h.close();
+  //     },
+  //   });
+  // }, [relays]);
 
   return (
     <ProfileMapContext.Provider value={profileContext}>

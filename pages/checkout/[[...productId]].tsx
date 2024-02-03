@@ -41,9 +41,9 @@ const Checkout = () => {
         const productData = parseTags(event);
         setProductData(productData);
       },
-      // oneose() {
-      //   h.close();
-      // },
+      oneose() {
+        h.close();
+      },
     });
   }, [relays]);
 
