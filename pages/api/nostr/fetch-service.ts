@@ -7,7 +7,10 @@ const POSTQUERYLIMIT = 200;
 export const fetchAllPosts = async (
   relays: string[],
   setProductContext: (value: ProductContextInterface) => void,
-): Promise<{ productsWebsocketSub: SubCloser; profileArray: string[] }> => {
+): Promise<{
+  productsWebsocketSub: SubCloser;
+  profileSetFromProducts: Set<string>;
+}> => {
   return new Promise(function (resolve, reject) {
     try {
       const pool = new SimplePool();
@@ -17,12 +20,12 @@ export const fetchAllPosts = async (
       };
 
       let productArray: NostrEvent[] = [];
-      let profileSet: Set<string> = new Set();
+      let profileSetFromProducts: Set<string> = new Set();
 
       let h = pool.subscribeMany(relays, [subParams], {
         onevent(event) {
           productArray.push(event);
-          profileSet.add(event.pubkey);
+          profileSetFromProducts.add(event.pubkey);
         },
         oneose() {
           setProductContext({
@@ -35,7 +38,7 @@ export const fetchAllPosts = async (
       const returnCall = () => {
         resolve({
           productsWebsocketSub: h,
-          profileArray: Array.from(profileSet),
+          profileSetFromProducts,
         });
       };
     } catch (error) {
@@ -113,7 +116,7 @@ export const fetchAllIncomingChats = async (
 
       let h = pool.subscribeMany(relays, [subParams], {
         onevent(event) {
-          console.log("incoming chat event: ", event);
+          // console.log("incoming chat event: ", event);
           let incomingPubkey = event.pubkey;
           if (!chatsMap.has(incomingPubkey))
             chatsMap.set(incomingPubkey, [event]);
@@ -150,7 +153,7 @@ export const fetchAllOutgoingChats = async (
 
       let h = pool.subscribeMany(relays, [subParams], {
         onevent(event: NostrEvent) {
-          console.log("outgoing chat event: ", event);
+          // console.log("outgoing chat event: ", event);
           let tagsMap: Map<string, string> = new Map(event.tags);
           let receipientPubkey = tagsMap.get("p") ? tagsMap.get("p") : null; // pubkey you sent the message to
           if (typeof receipientPubkey !== "string")
@@ -181,16 +184,20 @@ export const fetchChatsAndMessages = async (
   decryptedNpub: string,
 ): Promise<{
   chatsMap: Map<string, any>;
+  profileSetFromChats: Set<string>;
 }> => {
   return new Promise(async function (resolve, reject) {
     try {
       const incomingChats = await fetchAllIncomingChats(relays, decryptedNpub);
       const outgoingChats = await fetchAllOutgoingChats(relays, decryptedNpub);
       let chatsMap = new Map();
+      let profileSetFromChats: Set<string> = new Set();
       incomingChats.chatsMap.forEach((value, key) => {
         chatsMap.set(key, value);
+        profileSetFromChats.add(key);
       });
       outgoingChats.chatsMap.forEach((value, key) => {
+        profileSetFromChats.add(key);
         if (chatsMap.has(key)) {
           chatsMap.get(key).push(...value);
         } else {
@@ -203,7 +210,7 @@ export const fetchChatsAndMessages = async (
         value.sort((a, b) => a.created_at - b.created_at);
       });
 
-      resolve({ chatsMap });
+      resolve({ chatsMap, profileSetFromChats });
     } catch (error) {
       reject(error);
     }

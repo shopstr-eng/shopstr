@@ -1,183 +1,61 @@
 import { useMemo, useState, useEffect, useRef, useContext } from "react";
 import { useForm, Controller } from "react-hook-form";
 import axios from "axios";
-import { nip04, nip19, SimplePool } from "nostr-tools";
+import { nip19, SimplePool } from "nostr-tools";
 import {
-  ArrowUturnLeftIcon,
-  MinusCircleIcon,
-} from "@heroicons/react/24/outline";
-import {
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-  Button,
-  Textarea,
-  Input,
   Dropdown,
   DropdownTrigger,
   DropdownMenu,
   DropdownItem,
   DropdownSection,
+  Button,
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  Input,
+  ModalFooter,
 } from "@nextui-org/react";
 import { useRouter } from "next/router";
 import {
+  LocalStorageInterface,
   decryptNpub,
   getLocalStorageData,
   getNsecWithPassphrase,
   getPrivKeyWithPassphrase,
 } from "../components/utility/nostr-helper-functions";
 import { ProfileAvatar } from "../components/utility-components/avatar";
-import { ProfileMapContext, ChatContext, MessageContext } from "../context";
+import { ProfileMapContext, ChatsContext } from "../context";
 import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
 import RequestPassphraseModal from "../components/utility-components/request-passphrase-modal";
+import { MinusCircleIcon } from "@heroicons/react/24/outline";
 
 const DirectMessages = () => {
-  const router = useRouter();
-
-  const [decryptedNpub, setDecryptedNpub] = useState("");
-  const [encryptedPrivateKey, setEncryptedPrivateKey] = useState("");
-  const [signIn, setSignIn] = useState("");
-  const [relays, setRelays] = useState([]);
-
-  const [chats, setChats] = useState([]);
-  const [messages, setMessages] = useState([]);
+  const [chatsMap, setChatsMap] = useState(new Map());
   const [currentChat, setCurrentChat] = useState(false);
-  const [showModal, setShowModal] = useState(false);
-  const [message, setMessage] = useState("");
-
-  const [enterPassphrase, setEnterPassphrase] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [localStorageValues, setLocalStorageValues] =
+    useState<LocalStorageInterface>(getLocalStorageData());
   const [passphrase, setPassphrase] = useState("");
-
-  const [thisChat, setThisChat] = useState("");
+  const [enterPassphrase, setEnterPassphrase] = useState(false);
+  const [showModal, setShowModal] = useState(false);
 
   const bottomDivRef = useRef();
 
-  useEffect(() => {
-    bottomDivRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  // useEffect(() => {
+  //   bottomDivRef.current?.scrollIntoView({ behavior: "smooth" });
+  // }, [messages]);
+
+  const chatsContext = useContext(ChatsContext);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      let { signIn, encryptedPrivateKey, decryptedNpub, relays, mints } =
-        getLocalStorageData();
-      if (signIn && encryptedPrivateKey && decryptedNpub && relays) {
-        setSignIn(signIn);
-        setDecryptedNpub(decryptedNpub as string);
-        setEncryptedPrivateKey(encryptedPrivateKey);
-        setRelays(relays);
-      } else {
-        console.log("direct-messages useEffect error: missing local storage");
-      }
+    if (!chatsContext) return;
+    setIsLoading(chatsContext.isLoading);
+    if (!chatsContext.isLoading && chatsContext.chats) {
+      setChatsMap(chatsContext.chats);
+      return;
     }
-  }, []);
-
-  const chatContext = useContext(ChatContext);
-  useEffect(() => {
-    if (chatContext && signIn != "") {
-      const passedPubkey = router.query.pk ? router.query.pk : null;
-      if (passedPubkey) {
-        if (signIn === "nsec") {
-          let passedPubkeyStr = passedPubkey.toString();
-          setThisChat(passedPubkeyStr);
-          if (!chats.includes(passedPubkeyStr)) {
-            let newChats = Array.from(new Set([...chats, passedPubkeyStr]));
-            setChats(newChats);
-          }
-          setEnterPassphrase(true);
-          if (getNsecWithPassphrase(passphrase)) {
-            let newChats = Array.from(new Set([...chats, passedPubkeyStr]));
-            setChats(newChats);
-          }
-        } else {
-          let passedPubkeyStr = passedPubkey.toString();
-          setThisChat(passedPubkeyStr);
-          if (!chats.includes(passedPubkeyStr)) {
-            let newChats = Array.from(new Set([...chats, passedPubkeyStr]));
-            setChats(newChats);
-          }
-          let newChats = Array.from(new Set([...chats, passedPubkeyStr]));
-          setChats(newChats);
-        }
-      }
-
-      setChats(chatContext.chatPubkeys);
-    }
-  }, [chatContext, signIn]);
-
-  const messageContext = useContext(MessageContext);
-  useEffect(() => {
-    const decryptAndSetMessages = async () => {
-      let { data: chatPubkey } = nip19.decode(currentChat);
-
-      // Filter messages that match the given conditions
-      if (messageContext.messages.length > 1) {
-        for (const event of messageContext.messages) {
-          let sender = event.pubkey;
-          let tagPubkey = event.tags[0][1];
-          if (
-            (decryptedNpub === sender && tagPubkey === chatPubkey) ||
-            (chatPubkey === sender && tagPubkey === decryptedNpub)
-          ) {
-            let plaintext;
-            if (signIn === "extension") {
-              plaintext = await window.nostr.nip04.decrypt(
-                chatPubkey,
-                event.content,
-              );
-            } else {
-              let sk2 = getPrivKeyWithPassphrase(passphrase);
-              plaintext = await nip04.decrypt(sk2, chatPubkey, event.content);
-            }
-            let created_at = event.created_at;
-            if (plaintext != undefined) {
-              // Get an array of all existing event IDs
-              let existingEventIds = messages.map((message) => message.eventId);
-              // Only add this message if its eventId is not already in existingEventIds
-              if (!existingEventIds.includes(event.id)) {
-                setMessages((prevMessages) => [
-                  ...prevMessages,
-                  {
-                    plaintext: plaintext,
-                    createdAt: created_at,
-                    sender: sender,
-                    eventId: event.id,
-                  },
-                ]);
-              }
-              // Sort the messages with each state update
-              setMessages((prevMessages) =>
-                prevMessages.sort((a, b) => a.createdAt - b.createdAt),
-              );
-            }
-          }
-        }
-      }
-    };
-
-    setMessages([]);
-
-    if (currentChat) {
-      decryptAndSetMessages();
-    }
-  }, [currentChat]);
-
-  const profileContext = useContext(ProfileMapContext);
-  useEffect(() => {
-    localStorage.setItem("chats", JSON.stringify(chats));
-    if (Array.isArray(chats) && chats.length > 0) {
-      // HERE WE MUST TURN THESE NPUB KEYS INTO PUB KEYS BEFORE FETCHING THEIR PROFILE INFORMATION
-      const pubkeyChats = chats.map((chat) => {
-        const { data } = nip19.decode(chat);
-        return data;
-      }) as [string];
-      profileContext.addPubkeyToFetch(pubkeyChats);
-    } else if (typeof chats == "string") {
-      const { data } = nip19.decode(chats);
-      profileContext.addPubkeyToFetch([data as string]);
-    }
-  }, [chats, profileContext]);
+  }, [chatsContext]);
 
   const {
     handleSubmit,
@@ -187,7 +65,7 @@ const DirectMessages = () => {
   } = useForm();
 
   const isButtonDisabled = useMemo(() => {
-    if (signIn === "extension") return false; // extension can upload without passphrase
+    if (localStorageValues.signIn === "extension") return false; // extension can upload without passphrase
     if (passphrase === "") return true; // nsec needs passphrase
     try {
       let nsec = getNsecWithPassphrase(passphrase);
@@ -196,7 +74,7 @@ const DirectMessages = () => {
       return true; // invalid passphrase
     }
     return false;
-  }, [signIn, passphrase]);
+  }, [localStorageValues.signIn, passphrase]);
 
   const buttonClassName = useMemo(() => {
     const disabledStyle = " from-gray-300 to-gray-400 cursor-not-allowed";
@@ -239,7 +117,7 @@ const DirectMessages = () => {
   };
 
   const handleToggleModal = () => {
-    if (signIn) {
+    if (localStorageValues.signIn) {
       reset();
       setPassphrase("");
       setShowModal(!showModal);
@@ -254,7 +132,7 @@ const DirectMessages = () => {
   };
 
   const handleEnterNewChat = (newNpub: string) => {
-    if (signIn != "extension") {
+    if (localStorageValues.signIn != "extension") {
       if (!chats.includes(newNpub)) {
         let newChats = Array.from(new Set([...chats, newNpub]));
         setChats(newChats);
@@ -278,7 +156,7 @@ const DirectMessages = () => {
   const handleSend = async (e) => {
     e.preventDefault();
     if (message.trim() !== "") {
-      if (signIn === "extension") {
+      if (localStorageValues.signIn === "extension") {
         const { data } = nip19.decode(currentChat);
         const event = {
           created_at: Math.floor(Date.now() / 1000),
@@ -331,7 +209,7 @@ const DirectMessages = () => {
   };
 
   const signInCheck = (chat: string) => {
-    if (signIn != "extension") {
+    if (localStorageValues.signIn != "extension") {
       handleEnterPassphrase(chat);
     } else {
       setCurrentChat(chat);
@@ -359,7 +237,7 @@ const DirectMessages = () => {
   if (!currentChat) {
     return (
       <div>
-        {chats.length === 0 && (
+        {chatsMap.size === 0 && (
           <div className="mt-8 flex items-center justify-center">
             <p className="break-words text-center text-xl dark:text-dark-text">
               No messages . . . yet!
@@ -367,28 +245,26 @@ const DirectMessages = () => {
           </div>
         )}
         <div className="mb-8 mt-8 max-h-[70vh] overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
-          {chats.map((chat) => {
-            const pubkey = decryptNpub(chat);
+          {Array.from(chatsMap.entries()).map(([pubkeyOfChat, messages]) => {
             return (
               <div
-                key={chat}
+                key={pubkeyOfChat}
                 className="mx-3 mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg"
               >
                 <ProfileAvatar
-                  pubkey={pubkey}
-                  npub={chat}
+                  pubkey={pubkeyOfChat}
                   clickNPubkey={() => {
                     console.log("npub clicked in dms");
                   }}
                 />
                 <button
-                  onClick={() => signInCheck(chat)}
+                  onClick={() => signInCheck(pubkeyOfChat)}
                   className="text-light-text dark:text-dark-text"
                 >
                   Enter Chat
                 </button>
                 <MinusCircleIcon
-                  onClick={() => deleteChat(chat)}
+                  onClick={() => deleteChat(pubkeyOfChat)}
                   className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
                 />
               </div>
@@ -461,7 +337,7 @@ const DirectMessages = () => {
                     );
                   }}
                 />
-                {signIn === "nsec" && (
+                {localStorageValues.signIn === "nsec" && (
                   <Input
                     className="text-light-text dark:text-dark-text"
                     autoFocus
@@ -490,7 +366,7 @@ const DirectMessages = () => {
                   onClick={(e) => {
                     if (
                       isButtonDisabled &&
-                      signIn === "nsec" &&
+                      localStorageValues.signIn === "nsec" &&
                       passphraseInputRef.current
                     ) {
                       e.preventDefault();

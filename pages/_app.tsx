@@ -62,27 +62,27 @@ function App({ Component, pageProps }: AppProps) {
   /** FETCH initial PRODUCTS and PROFILES **/
   useEffect(() => {
     const relays = localStorageValues.relays;
+    const decryptedNpub = localStorageValues.decryptedNpub;
     async function fetchData() {
       try {
-        let websocketSubscribers = [];
-        let { productsWebsocketSub, profileArray } = await fetchAllPosts(
+        // let websocketSubscribers = [];
+        // websocketSubscribers.push(productsWebsocketSub);
+        let { productsWebsocketSub, profileSetFromProducts } =
+          await fetchAllPosts(relays, setProductContext);
+        let { chatsMap, profileSetFromChats } = await fetchChatsAndMessages(
           relays,
-          setProductContext,
+          decryptedNpub,
         );
-        websocketSubscribers.push(productsWebsocketSub);
-        let { decryptedNpub } = getLocalStorageData();
-        let { profileMap } = await fetchProfile(relays, [
-          decryptedNpub as string,
-          ...profileArray,
-        ]);
-        profileContext.mergeProfileMaps(profileMap);
-
-        let chatMap = await fetchChatsAndMessages(relays, decryptedNpub);
-        console.log(chatMap);
         setChatsContext({
-          chats: chatMap,
+          chats: chatsMap,
           isLoading: false,
         });
+        let { profileMap } = await fetchProfile(relays, [
+          decryptedNpub as string,
+          ...profileSetFromProducts,
+          ...profileSetFromChats,
+        ]);
+        profileContext.mergeProfileMaps(profileMap);
       } catch (error) {
         console.error("Error fetching data:", error);
       }
