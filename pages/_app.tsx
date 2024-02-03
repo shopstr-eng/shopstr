@@ -14,6 +14,7 @@ import {
   ChatContextInterface,
   MessageContext,
   MessageContextInterface,
+  ChatsContext,
 } from "./context";
 import {
   decryptNpub,
@@ -24,7 +25,11 @@ import {
 import { NextUIProvider } from "@nextui-org/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
-import { fetchAllPosts, fetchProfile } from "./api/nostr/fetch-service";
+import {
+  fetchAllPosts,
+  fetchChatsAndMessages,
+  fetchProfile,
+} from "./api/nostr/fetch-service";
 
 function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
@@ -49,16 +54,10 @@ function App({ Component, pageProps }: AppProps) {
       },
     },
   );
-  const [chatContext, setChatContext] = useState<ChatContextInterface>({
-    chatPubkeys: [],
+  const [chatsContext, setChatsContext] = useState<ChatContextInterface>({
+    chatPubkeys: new Map(),
     isLoading: true,
   });
-  const [messageContext, setMessageContext] = useState<MessageContextInterface>(
-    {
-      messages: [],
-      isLoading: true,
-    },
-  );
 
   /** FETCH initial PRODUCTS and PROFILES **/
   useEffect(() => {
@@ -77,6 +76,13 @@ function App({ Component, pageProps }: AppProps) {
           ...profileArray,
         ]);
         profileContext.mergeProfileMaps(profileMap);
+
+        let chatMap = await fetchChatsAndMessages(relays, decryptedNpub);
+        console.log(chatMap);
+        setChatsContext({
+          chats: chatMap,
+          isLoading: false,
+        });
       } catch (error) {
         console.error("Error fetching data:", error);
       }
@@ -94,136 +100,27 @@ function App({ Component, pageProps }: AppProps) {
     });
   }, [profileMap]);
 
-  // /** FETCH ALL CHATS AND CORRESPONDING MESSAGES **/
-  // useEffect(() => {
-  //   const pool = new SimplePool();
-  //   let subParams: { kinds: number[]; authors?: string[] } = {
-  //     kinds: [4],
-  //   };
-
-  //   const validNpub = /^npub[a-zA-Z0-9]{59}$/;
-
-  //   let chats: string[] = [];
-  //   let messages: NostrEvent[] = [];
-
-  //   let decryptedNpub = getLocalStorageData().decryptedNpub;
-
-  //   let h = pool.subscribeMany(relays, [subParams], {
-  //     onevent(event) {
-  //       let tagPubkey = event.tags[0][1];
-  //       let incomingPubkey = event.pubkey;
-
-  //       if (decryptedNpub === tagPubkey) {
-  //         if (!validNpub.test(incomingPubkey)) {
-  //           if (!chats.includes(incomingPubkey)) {
-  //             setChatContext((chatContext) => {
-  //               chats.push(nip19.npubEncode(incomingPubkey));
-  //               return {
-  //                 chatPubkeys: chats,
-  //                 isLoading: chatContext.isLoading,
-  //               };
-  //             });
-  //             setMessageContext((messageContext) => {
-  //               messages.push(event);
-  //               return {
-  //                 messages: messages,
-  //                 isLoading: messageContext.isLoading,
-  //               };
-  //             });
-  //           }
-  //         } else {
-  //           if (!chats.includes(incomingPubkey)) {
-  //             setChatContext((chatContext) => {
-  //               chats.push(incomingPubkey);
-  //               return {
-  //                 chatPubkeys: chats,
-  //                 isLoading: chatContext.isLoading,
-  //               };
-  //             });
-  //             setMessageContext((messageContext) => {
-  //               messages.push(event);
-  //               return {
-  //                 messages: messages,
-  //                 isLoading: messageContext.isLoading,
-  //               };
-  //             });
-  //           }
-  //         }
-  //       } else if (decryptedNpub === incomingPubkey) {
-  //         if (!validNpub.test(tagPubkey)) {
-  //           if (!chats.includes(tagPubkey)) {
-  //             setChatContext((chatContext) => {
-  //               chats.push(nip19.npubEncode(tagPubkey));
-  //               return {
-  //                 chatPubkeys: chats,
-  //                 isLoading: chatContext.isLoading,
-  //               };
-  //             });
-  //             setMessageContext((messageContext) => {
-  //               messages.push(event);
-  //               return {
-  //                 messages: messages,
-  //                 isLoading: messageContext.isLoading,
-  //               };
-  //             });
-  //           }
-  //         } else {
-  //           if (!chats.includes(tagPubkey)) {
-  //             setChatContext((chatContext) => {
-  //               chats.push(tagPubkey);
-  //               return {
-  //                 chatPubkeys: chats,
-  //                 isLoading: chatContext.isLoading,
-  //               };
-  //             });
-  //             setMessageContext((messageContext) => {
-  //               messages.push(event);
-  //               return {
-  //                 messages: messages,
-  //                 isLoading: messageContext.isLoading,
-  //               };
-  //             });
-  //           }
-  //         }
-  //       }
-  //     },
-  //     oneose() {
-  //       setChatContext((chatContext) => {
-  //         return {
-  //           chatPubkeys: chatContext.chatPubkeys,
-  //           isLoading: false,
-  //         };
-  //       });
-  //       setMessageContext((messageContext) => {
-  //         return {
-  //           messages: messageContext.messages,
-  //           isLoading: false,
-  //         };
-  //       });
-  //       // h.close();
-  //     },
-  //   });
-  // }, [relays]);
-
   return (
-    <ProfileMapContext.Provider value={profileContext}>
-      <ProductContext.Provider value={productContext}>
-        <NextUIProvider>
-          <NextThemesProvider
-            attribute="class"
-            forcedTheme={Component.theme || undefined}
-          >
-            <div className="h-[100vh] bg-light-bg dark:bg-dark-bg">
-              {isSignInPage || isKeyPage ? null : <Navbar />}
-              <div className="h-20">
-                {/*spacer div needed so pages can account for navbar height*/}
+    <ProductContext.Provider value={productContext}>
+      <ProfileMapContext.Provider value={profileContext}>
+        <ChatsContext.Provider value={chatsContext}>
+          <NextUIProvider>
+            <NextThemesProvider
+              attribute="class"
+              forcedTheme={Component.theme || undefined}
+            >
+              <div className="h-[100vh] bg-light-bg dark:bg-dark-bg">
+                {isSignInPage || isKeyPage ? null : <Navbar />}
+                <div className="h-20">
+                  {/*spacer div needed so pages can account for navbar height*/}
+                </div>
+                <Component {...pageProps} />
               </div>
-              <Component {...pageProps} />
-            </div>
-          </NextThemesProvider>
-        </NextUIProvider>
-      </ProductContext.Provider>
-    </ProfileMapContext.Provider>
+            </NextThemesProvider>
+          </NextUIProvider>
+        </ChatsContext.Provider>
+      </ProfileMapContext.Provider>
+    </ProductContext.Provider>
   );
 }
 

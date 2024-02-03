@@ -20,22 +20,12 @@ export const ProductContext = createContext({
   isLoading: true,
 } as ProductContextInterface);
 
-export interface ChatContextInterface {
-  chatPubkeys: string[];
+export interface ChatsContextInterface {
+  chats: Map<string, any>;
   isLoading: boolean;
 }
 
-export const ChatContext = createContext({
-  chatPubkeys: [],
+export const ChatsContext = createContext({
+  chats: new Map(),
   isLoading: true,
-} as ChatContextInterface);
-
-export interface MessageContextInterface {
-  chatPubkeys: any;
-  isLoading: boolean;
-}
-
-export const MessageContext = createContext({
-  messages: {},
-  isLoading: true,
-} as MessageContextInterface);
+} as ChatsContextInterface);
