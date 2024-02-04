@@ -36,7 +36,6 @@ const DirectMessages = () => {
   const chatsContext = useContext(ChatsContext);
 
   const [chatsMap, setChatsMap] = useState(new Map()); // Map<chatPubkey, chat>
-  const [chats, setChats] = useState([]);
   const [currentChatPubkey, setCurrentChatPubkey] = useState("");
   const [showStartNewChatModal, setShowStartNewChatModal] = useState(false);
   const [message, setMessage] = useState("");
@@ -202,7 +201,10 @@ const DirectMessages = () => {
   };
 
   const deleteChat = (chatToDelete) => {
-    setChats(chats.filter((chat) => chat !== chatToDelete));
+    // TODO store deleted chats in local storage and only load undeleted chats or prioritze undeleted chats. also maybe add a deleted chats section
+    let newChatMap = new Map(chatsMap);
+    newChatMap.delete(chatToDelete);
+    setChatsMap(newChatMap);
   };
 
   if (!currentChatPubkey) {
@@ -245,11 +247,14 @@ const DirectMessages = () => {
                       Enter Chat
                     </button>
                   </div>
-                  <div className="col-span-1 flex justify-end">
-                    <MinusCircleIcon
-                      onClick={() => deleteChat(pubkeyOfChat)}
-                      className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
-                    />
+                  <div
+                    className="col-span-1 flex justify-end"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteChat(pubkeyOfChat);
+                    }}
+                  >
+                    <MinusCircleIcon className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700" />
                   </div>
                 </div>
               );
