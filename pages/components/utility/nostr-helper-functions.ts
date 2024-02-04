@@ -1,5 +1,5 @@
 import * as CryptoJS from "crypto-js";
-import { nip19, nip98, SimplePool } from "nostr-tools";
+import { finalizeEvent, nip04, nip19, nip98, SimplePool } from "nostr-tools";
 import { ProductFormValues } from "../api/post-event";
 import axios from "axios";
 
@@ -108,6 +108,111 @@ export async function DeleteListing(
       },
       data: {
         ...deletionEvent,
+        relays: relays,
+      },
+    });
+  }
+}
+
+interface EncryptedMessageEvent {
+  pubkey: string;
+  created_at: number;
+  content: string;
+  kind: number;
+  tags: string[][];
+}
+
+export async function constructEncryptedMessageEvent(
+  senderPubkey: string,
+  message: string,
+  recipientPubkey: string,
+  passphrase?: string,
+): Promise<EncryptedMessageEvent> {
+  let encryptedContent = "";
+  let signInMethod = getLocalStorageData().signIn;
+  if (signInMethod === "extension") {
+    encryptedContent = await window.nostr.nip04.encrypt(
+      recipientPubkey,
+      message,
+    );
+  } else if (signInMethod === "nsec") {
+    if (!passphrase) {
+      throw new Error("Passphrase is required");
+    }
+    let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
+    encryptedContent = await nip04.encrypt(
+      senderPrivkey,
+      recipientPubkey,
+      message,
+    );
+  }
+  let encryptedMessageEvent = {
+    pubkey: senderPubkey,
+    created_at: Math.floor(Date.now() / 1000),
+    content: encryptedContent,
+    kind: 4,
+    tags: [["p", recipientPubkey]],
+  };
+  return encryptedMessageEvent;
+}
+
+export async function sendEncryptedMessage(
+  encryptedMessageEvent: EncryptedMessageEvent,
+  passphrase?: string,
+) {
+  const { signIn, relays } = getLocalStorageData();
+  let signedEvent;
+  if (signIn === "extension") {
+    signedEvent = await window.nostr.signEvent(encryptedMessageEvent);
+  } else {
+    if (!passphrase) throw new Error("Passphrase is required");
+    let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
+    signedEvent = finalizeEvent(encryptedMessageEvent, senderPrivkey);
+  }
+  const pool = new SimplePool();
+  await Promise.any(pool.publish(relays, signedEvent));
+}
+
+export async function sendDirectMessage(
+  recipient: string,
+  message: string,
+  passphrase: string,
+) {
+  const { signIn, decryptedNpub, relays } = getLocalStorageData();
+  const created_at = Math.floor(Date.now() / 1000);
+
+  if (signIn === "extension") {
+    const event = {
+      created_at: created_at,
+      kind: 30018,
+      tags: [
+        ["d", recipient],
+        ["d", decryptedNpub],
+      ],
+      content: message,
+    };
+
+    const signedEvent = await window.nostr.signEvent(event);
+    const pool = new SimplePool();
+
+    await Promise.any(pool.publish(relays, signedEvent));
+  } else {
+    axios({
+      method: "POST",
+      url: "/api/nostr/post-event",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      data: {
+        pubkey: decryptedNpub,
+        privkey: getPrivKeyWithPassphrase(passphrase),
+        created_at: created_at,
+        kind: 30018,
+        tags: [
+          ["d", recipient],
+          ["d", decryptedNpub],
+        ],
+        content: message,
         relays: relays,
       },
     });

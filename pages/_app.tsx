@@ -4,16 +4,12 @@ import "../styles/globals.css";
 import Navbar from "./components/navbar";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
-import { SimplePool, nip19 } from "nostr-tools";
 import {
   ProfileMapContext,
   ProfileContextInterface,
   ProductContext,
   ProductContextInterface,
-  ChatContext,
-  ChatContextInterface,
-  MessageContext,
-  MessageContextInterface,
+  ChatsContextInterface,
   ChatsContext,
 } from "./context";
 import {
@@ -30,6 +26,7 @@ import {
   fetchChatsAndMessages,
   fetchProfile,
 } from "./api/nostr/fetch-service";
+import { set } from "react-hook-form";
 
 function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
@@ -54,8 +51,8 @@ function App({ Component, pageProps }: AppProps) {
       },
     },
   );
-  const [chatsContext, setChatsContext] = useState<ChatContextInterface>({
-    chatPubkeys: new Map(),
+  const [chatsContext, setChatsContext] = useState<ChatsContextInterface>({
+    chats: new Map(),
     isLoading: true,
   });
 
@@ -67,21 +64,37 @@ function App({ Component, pageProps }: AppProps) {
       try {
         // let websocketSubscribers = [];
         // websocketSubscribers.push(productsWebsocketSub);
+        let pubkeysToFetchProfilesFor = [];
         let { productsWebsocketSub, profileSetFromProducts } =
           await fetchAllPosts(relays, setProductContext);
-        let { chatsMap, profileSetFromChats } = await fetchChatsAndMessages(
+        pubkeysToFetchProfilesFor = [...profileSetFromProducts];
+
+        if (decryptedNpub) {
+          let { chatsMap, profileSetFromChats } = await fetchChatsAndMessages(
+            relays,
+            decryptedNpub,
+          );
+          setChatsContext({
+            chats: chatsMap,
+            isLoading: false,
+          });
+          pubkeysToFetchProfilesFor = [
+            decryptedNpub as string,
+            ...pubkeysToFetchProfilesFor,
+            ...profileSetFromChats,
+          ];
+        } else {
+          // when user is not signed in they have no chats, flip is loading to false
+          setChatsContext({
+            chats: new Map(),
+            isLoading: false,
+          });
+        }
+
+        let { profileMap } = await fetchProfile(
           relays,
-          decryptedNpub,
+          pubkeysToFetchProfilesFor,
         );
-        setChatsContext({
-          chats: chatsMap,
-          isLoading: false,
-        });
-        let { profileMap } = await fetchProfile(relays, [
-          decryptedNpub as string,
-          ...profileSetFromProducts,
-          ...profileSetFromChats,
-        ]);
         profileContext.mergeProfileMaps(profileMap);
       } catch (error) {
         console.error("Error fetching data:", error);

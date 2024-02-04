@@ -1,13 +1,7 @@
 import { useMemo, useState, useEffect, useRef, useContext, use } from "react";
 import { useForm, Controller } from "react-hook-form";
-import axios from "axios";
-import { nip04, nip19, SimplePool } from "nostr-tools";
+import { nip04 } from "nostr-tools";
 import {
-  Dropdown,
-  DropdownTrigger,
-  DropdownMenu,
-  DropdownItem,
-  DropdownSection,
   Button,
   Modal,
   ModalContent,
@@ -20,10 +14,12 @@ import {
 import { useRouter } from "next/router";
 import {
   LocalStorageInterface,
+  constructEncryptedMessageEvent,
   decryptNpub,
   getLocalStorageData,
   getNsecWithPassphrase,
   getPrivKeyWithPassphrase,
+  sendEncryptedMessage,
   validPassphrase,
 } from "../components/utility/nostr-helper-functions";
 import { ProfileAvatar } from "../components/utility-components/avatar";
@@ -34,23 +30,22 @@ import {
   ArrowUturnLeftIcon,
   MinusCircleIcon,
 } from "@heroicons/react/24/outline";
-import { encrypt } from "nostr-tools/lib/types/nip04";
 
 const DirectMessages = () => {
   const router = useRouter();
   const chatsContext = useContext(ChatsContext);
 
-  const [chatsMap, setChatsMap] = useState(new Map());
+  const [chatsMap, setChatsMap] = useState(new Map()); // Map<chatPubkey, chat>
   const [chats, setChats] = useState([]);
-  const [currentChat, setCurrentChat] = useState("");
-  const [showModal, setShowModal] = useState(false);
+  const [currentChatPubkey, setCurrentChatPubkey] = useState("");
+  const [showStartNewChatModal, setShowStartNewChatModal] = useState(false);
   const [message, setMessage] = useState("");
 
   const [enterPassphrase, setEnterPassphrase] = useState(false);
   const [passphrase, setPassphrase] = useState("");
 
-  const [thisChat, setThisChat] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
+  const [isChatsLoading, setIsChatsLoading] = useState(true);
+  const [isSendingDMLoading, setIsSendingDMLoading] = useState(false);
   const [localStorageValues, setLocalStorageValues] =
     useState<LocalStorageInterface>(getLocalStorageData());
 
@@ -62,8 +57,10 @@ const DirectMessages = () => {
 
   useEffect(() => {
     async function loadChats() {
-      if (!chatsContext) return;
-      setIsLoading(chatsContext.isLoading);
+      if (!chatsContext) {
+        setIsChatsLoading(false);
+        return;
+      }
       if (
         localStorageValues.signIn === "nsec" &&
         !validPassphrase(passphrase)
@@ -72,8 +69,8 @@ const DirectMessages = () => {
       } else if (!chatsContext.isLoading && chatsContext.chats) {
         // comes here only if signIn is extension or its nsec and passphrase is valid
         let decryptedChats = await decryptChats();
-        console.log("decryptedChats", decryptedChats);
         setChatsMap(decryptedChats);
+        setIsChatsLoading(chatsContext.isLoading);
         return;
       }
     }
@@ -121,7 +118,7 @@ const DirectMessages = () => {
     handleSubmit,
     formState: { errors },
     control,
-    reset,
+    reset: resetStartNewChatModalInput,
   } = useForm();
 
   const isButtonDisabled = useMemo(() => {
@@ -147,150 +144,89 @@ const DirectMessages = () => {
 
   const passphraseInputRef = useRef(null);
 
-  const onSubmit = async (data) => {
+  const onSubmitStartNewChatModal = async (data) => {
     let npub = data["npub"];
-    await handleEnterNewChat(npub);
-  };
-
-  const cancel = () => {
-    setEnterPassphrase(false);
-    setPassphrase("");
-  };
-
-  const handleToggleModal = () => {
-    if (localStorageValues.signIn) {
-      reset();
-      setPassphrase("");
-      setShowModal(!showModal);
-    } else {
-      alert("You must be signed in to start a chat!");
+    let decryptedNpub = decryptNpub(npub);
+    if (!Array.from(chatsMap.keys()).includes(decryptedNpub)) {
+      let newChatsMap = new Map(chatsMap);
+      newChatsMap.set(decryptedNpub, []);
+      setChatsMap(newChatsMap);
     }
+    setCurrentChatPubkey(decryptedNpub as string);
+    setShowStartNewChatModal(false);
+    resetStartNewChatModalInput();
+  };
+
+  const onClickStartNewChat = () => {
+    if (!localStorageValues.signIn)
+      alert("You must be signed in to start a chat!");
+    setShowStartNewChatModal(true);
   };
 
   const handleGoBack = () => {
-    setCurrentChat("");
+    setCurrentChatPubkey("");
     router.push("/direct-messages");
   };
 
-  const handleEnterNewChat = (newNpub: string) => {
-    if (localStorageValues.signIn != "extension") {
-      if (!chats.includes(newNpub)) {
-        let newChats = Array.from(new Set([...chats, newNpub]));
-        setChats(newChats);
-      }
-      setCurrentChat(newNpub);
-      setShowModal(!showModal);
-    } else {
-      if (!chats.includes(newNpub)) {
-        let newChats = Array.from(new Set([...chats, newNpub]));
-        setChats(newChats);
-      }
-      setCurrentChat(newNpub);
-      setShowModal(!showModal);
-    }
-  };
-
-  const handleChange = (e) => {
-    setMessage(e.target.value);
-  };
-
-  console.log("localStorageValues.signIn", localStorageValues.signIn);
-  const handleSend = async (e) => {
-    e.preventDefault();
-    if (message.trim() !== "") {
-      if (localStorageValues.signIn === "extension") {
-        const { data } = nip19.decode(currentChat);
-        const event = {
-          created_at: Math.floor(Date.now() / 1000),
-          kind: 4,
-          tags: [["p", data]],
-          content: await window.nostr.nip04.encrypt(data, message),
-        };
-
-        const signedEvent = await window.nostr.signEvent(event);
-
-        const pool = new SimplePool();
-
-        // const relays = JSON.parse(storedRelays);
-
-        await Promise.any(pool.publish(relays, signedEvent));
-      } else {
-        let privkey = getPrivKeyWithPassphrase(passphrase);
-        // request passphrase in popup or form and pass to api
-
-        let { data: chatPubkey } = nip19.decode(currentChat);
-
-        axios({
-          method: "POST",
-          url: "/api/nostr/post-event",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          data: {
-            pubkey: decryptedNpub,
-            privkey: privkey,
-            created_at: Math.floor(Date.now() / 1000),
-            kind: 4,
-            tags: [["p", chatPubkey]],
-            content: message,
-            relays: relays,
-          },
-        });
-      }
+  const handleSendMessage = async () => {
+    setIsSendingDMLoading(true);
+    try {
+      let encryptedMessageEvent = await constructEncryptedMessageEvent(
+        localStorageValues.decryptedNpub,
+        message,
+        currentChatPubkey,
+        passphrase,
+      );
+      await sendEncryptedMessage(encryptedMessageEvent, passphrase);
+      // push message to chatsMap
+      let updatedCurrentChat = chatsMap.get(currentChatPubkey);
+      let unEncryptedMessageEvent = {
+        ...encryptedMessageEvent,
+        content: message,
+      };
+      updatedCurrentChat.push(unEncryptedMessageEvent);
+      let newChatsMap = new Map(chatsMap);
+      newChatsMap.set(currentChatPubkey, updatedCurrentChat);
+      setChatsMap(newChatsMap);
       setMessage("");
-    }
-  };
-
-  const handlePassphraseChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-  ) => {
-    const { name, value } = e.target;
-    if (name === "passphrase") {
-      setPassphrase(value);
+      setIsSendingDMLoading(false);
+    } catch (e) {
+      console.log("handleSendMessage errored", e);
+      alert("Error sending message.");
+      setIsSendingDMLoading(false);
     }
   };
 
   const handleClickChat = (chat: string) => {
-    setCurrentChat(chat);
-  };
-
-  const handleEnterPassphrase = (chat: string) => {
-    setEnterPassphrase(true);
-    setThisChat(chat);
-  };
-
-  const handleSubmitPassphrase = () => {
-    if (getNsecWithPassphrase(passphrase)) {
-      setEnterPassphrase(false);
-      setCurrentChat(thisChat);
-    } else {
-      alert("Invalid passphrase!");
-    }
+    setCurrentChatPubkey(chat);
   };
 
   const deleteChat = (chatToDelete) => {
     setChats(chats.filter((chat) => chat !== chatToDelete));
   };
 
-  if (!currentChat) {
+  if (!currentChatPubkey) {
     return (
       <div>
         {chatsMap.size === 0 ? (
           <div className="mt-8 flex items-center justify-center">
-            <p
-              className="break-words text-center text-xl dark:text-dark-text"
-              suppressHydrationWarning
-            >
-              {isClient && localStorageValues.decryptedNpub ? (
-                <>
-                  No messages . . . yet!
-                  <br></br>
-                  If you've just logged in, try to reload the page
-                </>
-              ) : (
-                <>You must be signed in to see your chats!</>
-              )}
-            </p>
+            {isChatsLoading ? (
+              <p className="text-center text-xl dark:text-dark-text">
+                Loading . . .
+              </p>
+            ) : (
+              <p className="break-words text-center text-xl dark:text-dark-text">
+                {isClient && localStorageValues.decryptedNpub ? (
+                  <>
+                    No messages . . . yet!
+                    <br></br>
+                    If you've just logged in, try to reload the page
+                  </>
+                ) : (
+                  <>You must be signed in to see your chats!</>
+                )}
+              </p>
+            )}
           </div>
         ) : (
           <div className="mb-8 h-[75vh] overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
@@ -324,15 +260,18 @@ const DirectMessages = () => {
           <Button
             // className="mx-3 bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 shadow-lg"
             className={SHOPSTRBUTTONCLASSNAMES}
-            onClick={handleToggleModal}
+            onClick={onClickStartNewChat}
           >
             Start New Chat
           </Button>
         </div>
         <Modal
           backdrop="blur"
-          isOpen={showModal}
-          onClose={handleToggleModal}
+          isOpen={showStartNewChatModal}
+          onClose={() => {
+            setShowStartNewChatModal(false);
+            resetStartNewChatModalInput();
+          }}
           classNames={{
             body: "py-6",
             backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -348,7 +287,7 @@ const DirectMessages = () => {
             <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
               Start New Chat
             </ModalHeader>
-            <form onSubmit={handleSubmit(onSubmit)}>
+            <form onSubmit={handleSubmit(onSubmitStartNewChatModal)}>
               <ModalBody>
                 <Controller
                   name="npub"
@@ -389,14 +328,6 @@ const DirectMessages = () => {
               </ModalBody>
 
               <ModalFooter>
-                <Button
-                  color="danger"
-                  variant="light"
-                  onClick={handleToggleModal}
-                >
-                  Cancel
-                </Button>
-
                 <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
                   Enter Chat
                 </Button>
@@ -409,7 +340,6 @@ const DirectMessages = () => {
           setCorrectPassphrase={setPassphrase}
           isOpen={enterPassphrase}
           setIsOpen={setEnterPassphrase}
-          actionOnSubmit={handleSubmitPassphrase}
         />
       </div>
     );
@@ -421,17 +351,17 @@ const DirectMessages = () => {
         onClick={handleGoBack}
       >
         <ArrowUturnLeftIcon className="h-5 w-5 text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light" />
-        {currentChat}
+        {currentChatPubkey}
       </h2>
       <div className="my-2 max-h-[70vh] overflow-y-scroll rounded-md border-2 border-light-fg bg-light-fg dark:border-dark-fg dark:bg-dark-fg">
-        {chatsMap.get(currentChat).map((messageEvent, index) => {
+        {chatsMap.get(currentChatPubkey).map((messageEvent, index) => {
           return (
             <div
               key={index}
               className={`my-2 flex ${
                 messageEvent.pubkey === localStorageValues.decryptedNpub
                   ? "justify-end"
-                  : messageEvent.pubkey === currentChat
+                  : messageEvent.pubkey === currentChatPubkey
                     ? "justify-start"
                     : ""
               }`}
@@ -450,7 +380,7 @@ const DirectMessages = () => {
         })}
         <div ref={bottomDivRef} />
       </div>
-      <form className="flex items-center space-x-2" onSubmit={handleSend}>
+      <div className="flex items-center space-x-2">
         <Input
           className="text-light-text dark:text-dark-text"
           type="text"
@@ -458,12 +388,19 @@ const DirectMessages = () => {
           size="large"
           value={message}
           placeholder="Type your message..."
-          onChange={handleChange}
+          onChange={(e) => {
+            setMessage(e.target.value);
+          }}
         />
-        <Button type="submit" className={SHOPSTRBUTTONCLASSNAMES}>
+        <Button
+          className={SHOPSTRBUTTONCLASSNAMES}
+          isDisabled={message === "" || isSendingDMLoading}
+          isLoading={isSendingDMLoading}
+          onClick={handleSendMessage}
+        >
           Send
         </Button>
-      </form>
+      </div>
     </div>
   );
 };

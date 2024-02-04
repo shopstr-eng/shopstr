@@ -212,7 +212,9 @@ export const fetchChatsAndMessages = async (
 
       resolve({ chatsMap, profileSetFromChats });
     } catch (error) {
-      reject(error);
+      console.log("Failed to fetchChatsAndMessages: ", error);
+      alert("Failed to fetchChatsAndMessages: " + error);
+      throw new Error("Failed to fetchChatsAndMessages: " + error);
     }
   });
 };

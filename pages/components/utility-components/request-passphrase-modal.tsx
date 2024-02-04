@@ -20,13 +20,11 @@ export default function RequestPassphraseModal({
   setCorrectPassphrase,
   isOpen,
   setIsOpen,
-  actionOnSubmit,
 }: {
   passphrase: string;
   setCorrectPassphrase: (passphrase: string) => void;
   isOpen: boolean;
   setIsOpen: (value: boolean) => void;
-  actionOnSubmit: () => void;
 }) {
   const [passphraseInput, setPassphraseInput] = useState(passphrase); // passphrase to be entered by user
   const router = useRouter();
