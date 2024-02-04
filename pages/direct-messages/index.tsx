@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useRef, useContext } from "react";
 import { useForm, Controller } from "react-hook-form";
 import axios from "axios";
-import { nip19, SimplePool } from "nostr-tools";
+import { nip04, nip19, SimplePool } from "nostr-tools";
 import {
   Dropdown,
   DropdownTrigger,
@@ -15,6 +15,7 @@ import {
   ModalBody,
   Input,
   ModalFooter,
+  Textarea,
 } from "@nextui-org/react";
 import { useRouter } from "next/router";
 import {
@@ -23,22 +24,34 @@ import {
   getLocalStorageData,
   getNsecWithPassphrase,
   getPrivKeyWithPassphrase,
+  validPassphrase,
 } from "../components/utility/nostr-helper-functions";
 import { ProfileAvatar } from "../components/utility-components/avatar";
 import { ProfileMapContext, ChatsContext } from "../context";
 import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
 import RequestPassphraseModal from "../components/utility-components/request-passphrase-modal";
-import { MinusCircleIcon } from "@heroicons/react/24/outline";
+import {
+  ArrowUturnLeftIcon,
+  MinusCircleIcon,
+} from "@heroicons/react/24/outline";
+import { encrypt } from "nostr-tools/lib/types/nip04";
 
 const DirectMessages = () => {
+  const router = useRouter();
+
   const [chatsMap, setChatsMap] = useState(new Map());
-  const [currentChat, setCurrentChat] = useState(false);
+  const [chats, setChats] = useState([]);
+  const [currentChat, setCurrentChat] = useState("");
+  const [showModal, setShowModal] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const [enterPassphrase, setEnterPassphrase] = useState(false);
+  const [passphrase, setPassphrase] = useState("");
+
+  const [thisChat, setThisChat] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [localStorageValues, setLocalStorageValues] =
     useState<LocalStorageInterface>(getLocalStorageData());
-  const [passphrase, setPassphrase] = useState("");
-  const [enterPassphrase, setEnterPassphrase] = useState(false);
-  const [showModal, setShowModal] = useState(false);
 
   const bottomDivRef = useRef();
 
@@ -48,15 +61,55 @@ const DirectMessages = () => {
 
   const chatsContext = useContext(ChatsContext);
 
-  useEffect(() => {
-    if (!chatsContext) return;
-    setIsLoading(chatsContext.isLoading);
-    if (!chatsContext.isLoading && chatsContext.chats) {
-      setChatsMap(chatsContext.chats);
-      return;
+  const decryptChats = async () => {
+    let decryptedChats = new Map();
+    for (let [chatPubkey, chat] of chatsContext.chats) {
+      let decryptedChat = [];
+      for (let messageEvent of chat) {
+        try {
+          let plaintext = "";
+          if (localStorageValues.signIn === "extension") {
+            plaintext = await window.nostr.nip04.decrypt(
+              chatPubkey,
+              messageEvent.content,
+            );
+          } else {
+            let sk2 = getPrivKeyWithPassphrase(passphrase);
+            plaintext = await nip04.decrypt(
+              sk2,
+              chatPubkey,
+              messageEvent.content,
+            );
+          }
+          decryptedChat.push({ ...messageEvent, content: plaintext });
+        } catch (e) {
+          console.log(e, "Error decrypting message.", messageEvent);
+        }
+      }
+      decryptedChats.set(chatPubkey, decryptedChat);
     }
-  }, [chatsContext]);
 
+    return decryptedChats;
+  };
+
+  useEffect(() => {
+    async function loadChats() {
+      if (!chatsContext) return;
+      setIsLoading(chatsContext.isLoading);
+      if (
+        localStorageValues.signIn === "nsec" &&
+        !validPassphrase(passphrase)
+      ) {
+        setEnterPassphrase(true); // prompt for passphrase when chatsContext is loaded
+      } else if (!chatsContext.isLoading && chatsContext.chats) {
+        // comes here only if signIn is extension or its nsec and passphrase is valid
+        let decryptedChats = await decryptChats();
+        setChatsMap(decryptedChats);
+        return;
+      }
+    }
+    loadChats();
+  }, [chatsContext, passphrase]);
   const {
     handleSubmit,
     formState: { errors },
@@ -87,25 +140,6 @@ const DirectMessages = () => {
 
   const passphraseInputRef = useRef(null);
 
-  const confirmActionDropdown = (children, header, label, func) => {
-    return (
-      <Dropdown backdrop="blur">
-        <DropdownTrigger>{children}</DropdownTrigger>
-        <DropdownMenu variant="faded" aria-label="Static Actions">
-          <DropdownSection title={header} showDivider={true}></DropdownSection>
-          <DropdownItem
-            key="delete"
-            className="text-danger"
-            color="danger"
-            onClick={func}
-          >
-            {label}
-          </DropdownItem>
-        </DropdownMenu>
-      </Dropdown>
-    );
-  };
-
   const onSubmit = async (data) => {
     let npub = data["npub"];
     await handleEnterNewChat(npub);
@@ -127,7 +161,7 @@ const DirectMessages = () => {
   };
 
   const handleGoBack = () => {
-    setCurrentChat(false);
+    setCurrentChat("");
     router.push("/direct-messages");
   };
 
@@ -208,12 +242,8 @@ const DirectMessages = () => {
     }
   };
 
-  const signInCheck = (chat: string) => {
-    if (localStorageValues.signIn != "extension") {
-      handleEnterPassphrase(chat);
-    } else {
-      setCurrentChat(chat);
-    }
+  const handleClickChat = (chat: string) => {
+    setCurrentChat(chat);
   };
 
   const handleEnterPassphrase = (chat: string) => {
@@ -251,14 +281,9 @@ const DirectMessages = () => {
                 key={pubkeyOfChat}
                 className="mx-3 mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg"
               >
-                <ProfileAvatar
-                  pubkey={pubkeyOfChat}
-                  clickNPubkey={() => {
-                    console.log("npub clicked in dms");
-                  }}
-                />
+                <ProfileAvatar pubkey={pubkeyOfChat} />
                 <button
-                  onClick={() => signInCheck(pubkeyOfChat)}
+                  onClick={() => handleClickChat(pubkeyOfChat)}
                   className="text-light-text dark:text-dark-text"
                 >
                   Enter Chat
@@ -337,18 +362,6 @@ const DirectMessages = () => {
                     );
                   }}
                 />
-                {localStorageValues.signIn === "nsec" && (
-                  <Input
-                    className="text-light-text dark:text-dark-text"
-                    autoFocus
-                    ref={passphraseInputRef}
-                    variant="flat"
-                    label="Passphrase"
-                    labelPlacement="inside"
-                    onChange={(e) => setPassphrase(e.target.value)}
-                    value={passphrase}
-                  />
-                )}
               </ModalBody>
 
               <ModalFooter>
@@ -360,20 +373,7 @@ const DirectMessages = () => {
                   Cancel
                 </Button>
 
-                <Button
-                  className={SHOPSTRBUTTONCLASSNAMES}
-                  type="submit"
-                  onClick={(e) => {
-                    if (
-                      isButtonDisabled &&
-                      localStorageValues.signIn === "nsec" &&
-                      passphraseInputRef.current
-                    ) {
-                      e.preventDefault();
-                      passphraseInputRef.current.focus();
-                    }
-                  }}
-                >
+                <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
                   Enter Chat
                 </Button>
               </ModalFooter>
@@ -382,7 +382,7 @@ const DirectMessages = () => {
         </Modal>
         <RequestPassphraseModal
           passphrase={passphrase}
-          onPassphraseChange={setPassphrase}
+          setCorrectPassphrase={setPassphrase}
           isOpen={enterPassphrase}
           setIsOpen={setEnterPassphrase}
           actionOnSubmit={handleSubmitPassphrase}
@@ -390,39 +390,40 @@ const DirectMessages = () => {
       </div>
     );
   }
-
   return (
     <div>
-      <h2 className="mt-2 flex w-fit cursor-pointer flex-row items-center rounded-md pr-2 align-middle text-shopstr-purple-light hover:bg-shopstr-yellow dark:text-shopstr-yellow-light hover:dark:bg-shopstr-purple">
-        <ArrowUturnLeftIcon
-          className="h-5 w-5 text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light"
-          onClick={handleGoBack}
-        />
+      <h2
+        className="mt-2 flex w-fit cursor-pointer flex-row items-center rounded-md pr-2 align-middle text-shopstr-purple-light hover:bg-shopstr-yellow dark:text-shopstr-yellow-light hover:dark:bg-shopstr-purple"
+        onClick={handleGoBack}
+      >
+        <ArrowUturnLeftIcon className="h-5 w-5 text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light" />
         {currentChat}
       </h2>
       <div className="my-2 max-h-[70vh] overflow-y-scroll rounded-md border-2 border-light-fg bg-light-fg dark:border-dark-fg dark:bg-dark-fg">
-        {messages.map((message, index) => (
-          <div
-            key={index}
-            className={`my-2 flex ${
-              message.sender === decryptedNpub
-                ? "justify-end"
-                : message.sender === currentChat
-                  ? "justify-start"
-                  : ""
-            }`}
-          >
-            <p
-              className={`inline-block max-w-[100vh] break-words rounded-lg p-3 ${
-                message.sender === decryptedNpub
-                  ? "bg-purple-200"
-                  : "bg-gray-300"
+        {chatsMap.get(currentChat).map((messageEvent, index) => {
+          return (
+            <div
+              key={index}
+              className={`my-2 flex ${
+                messageEvent.pubkey === localStorageValues.decryptedNpub
+                  ? "justify-end"
+                  : messageEvent.pubkey === currentChat
+                    ? "justify-start"
+                    : ""
               }`}
             >
-              {message.plaintext}
-            </p>
-          </div>
-        ))}
+              <p
+                className={`inline-block max-w-[100vh] break-words rounded-lg p-3 ${
+                  messageEvent.pubkey === localStorageValues.decryptedNpub
+                    ? "bg-purple-200"
+                    : "bg-gray-300"
+                }`}
+              >
+                {messageEvent.content}
+              </p>
+            </div>
+          );
+        })}
         <div ref={bottomDivRef} />
       </div>
       <form className="flex items-center space-x-2" onSubmit={handleSend}>

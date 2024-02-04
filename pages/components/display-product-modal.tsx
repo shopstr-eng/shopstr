@@ -214,7 +214,7 @@ export default function DisplayProductModal({
       </Modal>
       <RequestPassphraseModal
         passphrase={passphrase}
-        onPassphraseChange={setPassphrase}
+        setCorrectPassphrase={setPassphrase}
         isOpen={requestPassphrase}
         setIsOpen={setRequestPassphrase}
         actionOnSubmit={finalizeDeleteListingProcess}

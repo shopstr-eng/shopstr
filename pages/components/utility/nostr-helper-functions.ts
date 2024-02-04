@@ -224,6 +224,16 @@ async function generateNostrEventId(msg) {
   return hash;
 }
 
+export function validPassphrase(passphrase: string) {
+  try {
+    let nsec = getNsecWithPassphrase(passphrase);
+    if (!nsec) return false; // invalid passphrase
+  } catch (e) {
+    return false; // invalid passphrase
+  }
+  return true; // valid passphrase
+}
+
 export function getNsecWithPassphrase(passphrase: string) {
   if (!passphrase) return undefined;
   const { encryptedPrivateKey } = getLocalStorageData();
@@ -240,7 +250,7 @@ export function getPrivKeyWithPassphrase(passphrase: string) {
 }
 
 export interface LocalStorageInterface {
-  signIn: string;
+  signIn: string; // extension or nsec
   encryptedPrivateKey: string;
   decryptedNpub: string;
   relays: string[];
