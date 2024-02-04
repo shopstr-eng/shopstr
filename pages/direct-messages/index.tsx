@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef, useContext } from "react";
+import { useMemo, useState, useEffect, useRef, useContext, use } from "react";
 import { useForm, Controller } from "react-hook-form";
 import axios from "axios";
 import { nip04, nip19, SimplePool } from "nostr-tools";
@@ -38,6 +38,7 @@ import { encrypt } from "nostr-tools/lib/types/nip04";
 
 const DirectMessages = () => {
   const router = useRouter();
+  const chatsContext = useContext(ChatsContext);
 
   const [chatsMap, setChatsMap] = useState(new Map());
   const [chats, setChats] = useState([]);
@@ -53,13 +54,37 @@ const DirectMessages = () => {
   const [localStorageValues, setLocalStorageValues] =
     useState<LocalStorageInterface>(getLocalStorageData());
 
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    async function loadChats() {
+      if (!chatsContext) return;
+      setIsLoading(chatsContext.isLoading);
+      if (
+        localStorageValues.signIn === "nsec" &&
+        !validPassphrase(passphrase)
+      ) {
+        setEnterPassphrase(true); // prompt for passphrase when chatsContext is loaded
+      } else if (!chatsContext.isLoading && chatsContext.chats) {
+        // comes here only if signIn is extension or its nsec and passphrase is valid
+        let decryptedChats = await decryptChats();
+        console.log("decryptedChats", decryptedChats);
+        setChatsMap(decryptedChats);
+        return;
+      }
+    }
+    loadChats();
+  }, [chatsContext, passphrase]);
+
   const bottomDivRef = useRef();
 
   // useEffect(() => {
   //   bottomDivRef.current?.scrollIntoView({ behavior: "smooth" });
   // }, [messages]);
-
-  const chatsContext = useContext(ChatsContext);
 
   const decryptChats = async () => {
     let decryptedChats = new Map();
@@ -92,24 +117,6 @@ const DirectMessages = () => {
     return decryptedChats;
   };
 
-  useEffect(() => {
-    async function loadChats() {
-      if (!chatsContext) return;
-      setIsLoading(chatsContext.isLoading);
-      if (
-        localStorageValues.signIn === "nsec" &&
-        !validPassphrase(passphrase)
-      ) {
-        setEnterPassphrase(true); // prompt for passphrase when chatsContext is loaded
-      } else if (!chatsContext.isLoading && chatsContext.chats) {
-        // comes here only if signIn is extension or its nsec and passphrase is valid
-        let decryptedChats = await decryptChats();
-        setChatsMap(decryptedChats);
-        return;
-      }
-    }
-    loadChats();
-  }, [chatsContext, passphrase]);
   const {
     handleSubmit,
     formState: { errors },
@@ -187,6 +194,7 @@ const DirectMessages = () => {
     setMessage(e.target.value);
   };
 
+  console.log("localStorageValues.signIn", localStorageValues.signIn);
   const handleSend = async (e) => {
     e.preventDefault();
     if (message.trim() !== "") {
@@ -267,35 +275,51 @@ const DirectMessages = () => {
   if (!currentChat) {
     return (
       <div>
-        {chatsMap.size === 0 && (
+        {chatsMap.size === 0 ? (
           <div className="mt-8 flex items-center justify-center">
-            <p className="break-words text-center text-xl dark:text-dark-text">
-              No messages . . . yet!
+            <p
+              className="break-words text-center text-xl dark:text-dark-text"
+              suppressHydrationWarning
+            >
+              {isClient && localStorageValues.decryptedNpub ? (
+                <>
+                  No messages . . . yet!
+                  <br></br>
+                  If you've just logged in, try to reload the page
+                </>
+              ) : (
+                <>You must be signed in to see your chats!</>
+              )}
             </p>
           </div>
-        )}
-        <div className="mb-8 mt-8 max-h-[70vh] overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
-          {Array.from(chatsMap.entries()).map(([pubkeyOfChat, messages]) => {
-            return (
-              <div
-                key={pubkeyOfChat}
-                className="mx-3 mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg"
-              >
-                <ProfileAvatar pubkey={pubkeyOfChat} />
-                <button
+        ) : (
+          <div className="mb-8 h-[75vh] overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
+            {Array.from(chatsMap.entries()).map(([pubkeyOfChat, messages]) => {
+              return (
+                <div
+                  key={pubkeyOfChat}
+                  className="mx-3 mb-2 grid cursor-pointer grid-cols-5 items-center gap-4 rounded-md border-2 border-light-fg px-3 py-2 hover:opacity-70 dark:border-dark-fg"
                   onClick={() => handleClickChat(pubkeyOfChat)}
-                  className="text-light-text dark:text-dark-text"
                 >
-                  Enter Chat
-                </button>
-                <MinusCircleIcon
-                  onClick={() => deleteChat(pubkeyOfChat)}
-                  className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
-                />
-              </div>
-            );
-          })}
-        </div>
+                  <div className="col-span-3 overflow-clip">
+                    <ProfileAvatar pubkey={pubkeyOfChat} />
+                  </div>
+                  <div className="col-span-1 flex justify-end">
+                    <button className=" text-light-text dark:text-dark-text">
+                      Enter Chat
+                    </button>
+                  </div>
+                  <div className="col-span-1 flex justify-end">
+                    <MinusCircleIcon
+                      onClick={() => deleteChat(pubkeyOfChat)}
+                      className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
         <div className="absolute bottom-[0px] z-20 flex h-fit w-[99vw] flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
           <Button
             // className="mx-3 bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 shadow-lg"
