@@ -25,15 +25,7 @@ const Checkout = () => {
 
   useEffect(() => {
     let { relays } = getLocalStorageData();
-    setRelays(
-      relays
-        ? relays
-        : [
-            "wss://relay.damus.io",
-            "wss://nos.lol",
-            "wss://nostr.mutinywallet.com",
-          ],
-    );
+    setRelays(relays);
   }, []);
 
   useEffect(() => {
@@ -49,9 +41,9 @@ const Checkout = () => {
         const productData = parseTags(event);
         setProductData(productData);
       },
-      // oneose() {
-      //   h.close();
-      // },
+      oneose() {
+        h.close();
+      },
     });
   }, [relays]);
 

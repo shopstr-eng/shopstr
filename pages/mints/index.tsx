@@ -21,6 +21,7 @@ import {
 } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
 import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
+import { getLocalStorageData } from "../components/utility/nostr-helper-functions";
 
 const Mints = () => {
   const [mints, setMints] = useState([]);
@@ -29,8 +30,7 @@ const Mints = () => {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const storedMints = localStorage.getItem("mints");
-      setMints(storedMints ? JSON.parse(storedMints) : []);
+      setMints(getLocalStorageData().mints);
     }
   }, []);
 

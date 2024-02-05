@@ -4,199 +4,154 @@ import "../styles/globals.css";
 import Navbar from "./components/navbar";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
-import { SimplePool } from "nostr-tools";
 import {
   ProfileMapContext,
   ProfileContextInterface,
   ProductContext,
   ProductContextInterface,
+  ChatsContextInterface,
+  ChatsContext,
 } from "./context";
 import {
   decryptNpub,
+  getLocalStorageData,
+  LocalStorageInterface,
   NostrEvent,
 } from "./components/utility/nostr-helper-functions";
 import { NextUIProvider } from "@nextui-org/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
+import {
+  fetchAllPosts,
+  fetchChatsAndMessages,
+  fetchProfile,
+} from "./api/nostr/fetch-service";
+import { set } from "react-hook-form";
 
 function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
   const isSignInPage = router.pathname === "/sign-in";
   const isKeyPage = router.pathname === "/keys";
-  const [relays, setRelays] = useState([]);
-  const [profileMap, setProfileMap] = useState(new Map());
-  const [pubkeyProfilesToFetch, setPubkeyProfilesToFetch] = useState<
-    Set<string>
-  >(new Set());
+  const [localStorageValues, setLocalStorageValues] =
+    useState<LocalStorageInterface>(getLocalStorageData());
   const [productContext, setProductContext] = useState<ProductContextInterface>(
     {
       productEvents: [],
       isLoading: true,
+      addProductEvent: (productEvent: any) => {
+        setProductContext((productContext) => {
+          let productEvents = [
+            ...productContext.productEvents,
+            { ...productEvent, from: "context" },
+          ];
+          return {
+            productEvents: productEvents,
+            isLoading: false,
+            addProductEvent: productContext.addProductEvent,
+          };
+        });
+      },
     },
   );
+  const [profileMap, setProfileMap] = useState(new Map());
   const [profileContext, setProfileContext] = useState<ProfileContextInterface>(
     {
       profileData: new Map(),
-      addPubkeyToFetch: (pubkeys: [string]) => {
-        setPubkeyProfilesToFetch((pubkeyProfilesToFetch) => {
-          let newPubkeyProfilesToFetch = new Set(pubkeyProfilesToFetch);
-          pubkeys.forEach((pubkey) => {
-            newPubkeyProfilesToFetch.add(pubkey);
-          });
-          return newPubkeyProfilesToFetch;
+      mergeProfileMaps: (newProfileMap: Map<string, any>) => {
+        setProfileMap((profileMap) => {
+          return new Map([...profileMap, ...newProfileMap]);
         });
       },
     },
   );
+  const [chatsContext, setChatsContext] = useState<ChatsContextInterface>({
+    chats: new Map(),
+    isLoading: true,
+  });
 
+  /** FETCH initial PRODUCTS and PROFILES **/
   useEffect(() => {
-    // Perform localStorage action
-    if (window !== undefined) {
-      const storedRelays = localStorage.getItem("relays");
-      if (storedRelays !== null) {
-        const parsedRelays = JSON.parse(storedRelays as string);
-        // Filter out any null values from the parsed relays
-        const filteredRelays = parsedRelays.filter(
-          (relay: string | null) => relay !== null,
-        );
-        setRelays(filteredRelays);
-        localStorage.setItem("relays", JSON.stringify(filteredRelays));
-      } else {
-        const defaultRelays = [
-          "wss://relay.damus.io",
-          "wss://nos.lol",
-          "wss://nostr.mutinywallet.com",
-        ];
-        localStorage.setItem("relays", JSON.stringify(defaultRelays));
-        setRelays(defaultRelays);
-      }
-      const storedMints = localStorage.getItem("mints");
-      if (storedMints === null) {
-        const defaultMint = [
-          "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC",
-        ];
-        localStorage.setItem("mints", JSON.stringify(defaultMint));
-      }
-      setPubkeyProfilesToFetch(
-        new Set(
-          typeof localStorage.getItem("npub") == "string"
-            ? [decryptNpub(localStorage.getItem("npub") as string)]
-            : [],
-        ) as Set<string>,
-      ); // fetches your profile if you are logged in
-    }
-  }, []);
-
-  /** FETCH ALL PRODUCTS **/
-  useEffect(() => {
-    const pool = new SimplePool();
-    let subParams: { kinds: number[]; authors?: string[] } = {
-      kinds: [30402],
-    };
-
-    let productArray: NostrEvent[] = [];
-
-    let h = pool.subscribeMany(relays, [subParams], {
-      onevent(event) {
-        setProductContext((productContext) => {
-          productArray.push(event);
-          setPubkeyProfilesToFetch((pubkeyProfilesToFetch) => {
-            let newPubkeyProfilesToFetch = new Set(pubkeyProfilesToFetch);
-            newPubkeyProfilesToFetch.add(event.pubkey);
-            return newPubkeyProfilesToFetch;
-          });
-          return {
-            productEvents: productArray,
-            isLoading: productContext.isLoading,
-          };
+    const relays = localStorageValues.relays;
+    const decryptedNpub = localStorageValues.decryptedNpub;
+    async function fetchData() {
+      try {
+        // let websocketSubscribers = [];
+        // websocketSubscribers.push(productsWebsocketSub);
+        let pubkeysToFetchProfilesFor = [];
+        let { productsWebsocketSub, profileSetFromProducts, productArray } =
+          await fetchAllPosts(relays, setProductContext);
+        setProductContext({
+          productEvents: productArray,
+          isLoading: false,
+          addProductEvent: productContext.addProductEvent,
         });
-      },
-      oneose() {
-        setProductContext((productContext) => {
-          return {
-            productEvents: productContext.productEvents,
+        pubkeysToFetchProfilesFor = [...profileSetFromProducts];
+
+        if (decryptedNpub) {
+          let { chatsMap, profileSetFromChats } = await fetchChatsAndMessages(
+            relays,
+            decryptedNpub,
+          );
+          setChatsContext({
+            chats: chatsMap,
             isLoading: false,
-          };
-        });
-        // h.close();
-      },
-    });
-  }, [relays]);
+          });
+          pubkeysToFetchProfilesFor = [
+            decryptedNpub as string,
+            ...pubkeysToFetchProfilesFor,
+            ...profileSetFromChats,
+          ];
+        } else {
+          // when user is not signed in they have no chats, flip is loading to false
+          setChatsContext({
+            chats: new Map(),
+            isLoading: false,
+          });
+        }
 
-  /** FETCH ALL PROFILES AFTER FETCH PRODUCTS DONE AND FOR EVERY NEW PRODUCT EVENT **/
-  useEffect(() => {
-    if (productContext.isLoading) return;
-    const pool = new SimplePool();
-    let profileSubParams: { kinds: number[]; authors?: string[] } = {
-      kinds: [0],
-      authors: Array.from(pubkeyProfilesToFetch),
-    };
-
-    let h = pool.subscribeMany(relays, [profileSubParams], {
-      onevent(event) {
-        setProfileMap((profileMap) => {
-          if (
-            profileMap.has(event.pubkey) &&
-            profileMap.get(event.pubkey).created_at > event.created_at
-          ) {
-            // if profile already exists and is newer than the one we just fetched, don't update
-            return profileMap;
-          }
-          let newProfileMap = new Map(profileMap);
-          try {
-            // Try to parse the content of the event
-            const content = JSON.parse(event.content);
-            newProfileMap.set(event.pubkey, {
-              pubkey: event.pubkey,
-              created_at: event.created_at,
-              content: content,
-            });
-          } catch (error) {
-            // If JSON.parse fails, simply skip setting this event
-            console.error(
-              `Failed to parse profile data for pubkey: ${event.pubkey}`,
-              error,
-            );
-          }
-          // Return the updated or unchanged map
-          return newProfileMap;
-        });
-      },
-      // oneose() {
-      //   h.close();
-      // },
-    });
-  }, [pubkeyProfilesToFetch, productContext.isLoading, relays]);
+        let { profileMap } = await fetchProfile(
+          relays,
+          pubkeysToFetchProfilesFor,
+        );
+        profileContext.mergeProfileMaps(profileMap);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      }
+    }
+    if (relays) fetchData(); // Call the async function immediately
+  }, [localStorageValues.relays]);
 
   /** UPON PROFILEMAP UPDATE, SET PROFILE CONTEXT **/
   useEffect(() => {
-    setProfileContext((profileContext) => {
+    setProfileContext((profileContext: ProfileContextInterface) => {
       return {
         profileData: profileMap,
-        addPubkeyToFetch: profileContext.addPubkeyToFetch,
+        mergeProfileMaps: profileContext.mergeProfileMaps,
       };
     });
   }, [profileMap]);
 
   return (
-    <ProfileMapContext.Provider value={profileContext}>
-      <ProductContext.Provider value={productContext}>
-        <NextUIProvider>
-          <NextThemesProvider
-            attribute="class"
-            forcedTheme={Component.theme || undefined}
-          >
-            <div className="h-[100vh] bg-light-bg dark:bg-dark-bg">
-              {isSignInPage || isKeyPage ? null : <Navbar />}
-              <div className="h-20">
-                {/*spacer div needed so pages can account for navbar height*/}
+    <ProductContext.Provider value={productContext}>
+      <ProfileMapContext.Provider value={profileContext}>
+        <ChatsContext.Provider value={chatsContext}>
+          <NextUIProvider>
+            <NextThemesProvider
+              attribute="class"
+              forcedTheme={Component.theme || undefined}
+            >
+              <div className="h-[100vh] bg-light-bg dark:bg-dark-bg">
+                {isSignInPage || isKeyPage ? null : <Navbar />}
+                <div className="h-20">
+                  {/*spacer div needed so pages can account for navbar height*/}
+                </div>
+                <Component {...pageProps} />
               </div>
-              <Component {...pageProps} />
-            </div>
-          </NextThemesProvider>
-        </NextUIProvider>
-      </ProductContext.Provider>
-    </ProfileMapContext.Provider>
+            </NextThemesProvider>
+          </NextUIProvider>
+        </ChatsContext.Provider>
+      </ProfileMapContext.Provider>
+    </ProductContext.Provider>
   );
 }
 
