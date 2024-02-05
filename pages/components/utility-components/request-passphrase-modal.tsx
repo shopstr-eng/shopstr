@@ -58,7 +58,7 @@ export default function RequestPassphraseModal({
 
   const onCancel = () => {
     setIsOpen(false);
-    router.push("/");
+    router.push("/home");
   };
 
   return (
