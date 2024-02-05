@@ -30,6 +30,7 @@ import {
   ArrowUturnLeftIcon,
   MinusCircleIcon,
 } from "@heroicons/react/24/outline";
+import ShopstrSpinner from "../components/utility-components/shopstr-spinner";
 
 const DirectMessages = () => {
   const router = useRouter();
@@ -213,16 +214,19 @@ const DirectMessages = () => {
         {chatsMap.size === 0 ? (
           <div className="mt-8 flex items-center justify-center">
             {isChatsLoading ? (
-              <p className="text-center text-xl dark:text-dark-text">
-                Loading . . .
-              </p>
+              <div className="mt-8 flex items-center justify-center">
+                <ShopstrSpinner />
+              </div>
             ) : (
-              <p className="break-words text-center text-xl dark:text-dark-text">
+              <p className="break-words text-center text-2xl dark:text-dark-text">
                 {isClient && localStorageValues.decryptedNpub ? (
                   <>
                     No messages . . . yet!
                     <br></br>
-                    If you've just logged in, try to reload the page
+                    <br></br>
+                    Just logged in?
+                    <br></br>
+                    Try reloading the page!
                   </>
                 ) : (
                   <>You must be signed in to see your chats!</>
@@ -231,7 +235,7 @@ const DirectMessages = () => {
             )}
           </div>
         ) : (
-          <div className="mb-8 h-[75vh] overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
+          <div className="h-[85vh] overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
             {Array.from(chatsMap.entries()).map(([pubkeyOfChat, messages]) => {
               return (
                 <div

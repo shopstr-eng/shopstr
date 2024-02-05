@@ -51,11 +51,16 @@ export default function RequestPassphraseModal({
     }
   };
 
+  const onCancel = () => {
+    setIsOpen(false);
+    router.push("/");
+  };
+
   return (
     <Modal
       backdrop="blur"
       isOpen={isOpen}
-      onClose={() => setIsOpen(false)}
+      onClose={onCancel}
       classNames={{
         body: "py-6",
         backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -86,13 +91,7 @@ export default function RequestPassphraseModal({
         </ModalBody>
 
         <ModalFooter>
-          <Button
-            color="danger"
-            variant="light"
-            onClick={() => {
-              router.push("/");
-            }}
-          >
+          <Button color="danger" variant="light" onClick={onCancel}>
             Cancel
           </Button>
 
