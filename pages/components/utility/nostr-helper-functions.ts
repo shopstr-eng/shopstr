@@ -1,5 +1,5 @@
 import * as CryptoJS from "crypto-js";
-import { nip19, nip98, SimplePool } from "nostr-tools";
+import { finalizeEvent, nip04, nip19, nip98, SimplePool } from "nostr-tools";
 import { ProductFormValues } from "../api/post-event";
 import axios from "axios";
 
@@ -61,6 +61,7 @@ export async function PostListing(
     await Promise.any(pool.publish(relays, signedEvent));
     await Promise.any(pool.publish(relays, signedRecEvent));
     await Promise.any(pool.publish(relays, signedHandlerEvent));
+    return signedEvent;
   } else {
     axios({
       method: "POST",
@@ -79,6 +80,13 @@ export async function PostListing(
         relays: relays,
       },
     });
+    return {
+      pubkey: decryptedNpub,
+      created_at: created_at,
+      kind: 30402,
+      tags: updatedValues,
+      content: summary,
+    };
   }
 }
 
@@ -108,6 +116,111 @@ export async function DeleteListing(
       },
       data: {
         ...deletionEvent,
+        relays: relays,
+      },
+    });
+  }
+}
+
+interface EncryptedMessageEvent {
+  pubkey: string;
+  created_at: number;
+  content: string;
+  kind: number;
+  tags: string[][];
+}
+
+export async function constructEncryptedMessageEvent(
+  senderPubkey: string,
+  message: string,
+  recipientPubkey: string,
+  passphrase?: string,
+): Promise<EncryptedMessageEvent> {
+  let encryptedContent = "";
+  let signInMethod = getLocalStorageData().signIn;
+  if (signInMethod === "extension") {
+    encryptedContent = await window.nostr.nip04.encrypt(
+      recipientPubkey,
+      message,
+    );
+  } else if (signInMethod === "nsec") {
+    if (!passphrase) {
+      throw new Error("Passphrase is required");
+    }
+    let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
+    encryptedContent = await nip04.encrypt(
+      senderPrivkey,
+      recipientPubkey,
+      message,
+    );
+  }
+  let encryptedMessageEvent = {
+    pubkey: senderPubkey,
+    created_at: Math.floor(Date.now() / 1000),
+    content: encryptedContent,
+    kind: 4,
+    tags: [["p", recipientPubkey]],
+  };
+  return encryptedMessageEvent;
+}
+
+export async function sendEncryptedMessage(
+  encryptedMessageEvent: EncryptedMessageEvent,
+  passphrase?: string,
+) {
+  const { signIn, relays } = getLocalStorageData();
+  let signedEvent;
+  if (signIn === "extension") {
+    signedEvent = await window.nostr.signEvent(encryptedMessageEvent);
+  } else {
+    if (!passphrase) throw new Error("Passphrase is required");
+    let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
+    signedEvent = finalizeEvent(encryptedMessageEvent, senderPrivkey);
+  }
+  const pool = new SimplePool();
+  await Promise.any(pool.publish(relays, signedEvent));
+}
+
+export async function sendDirectMessage(
+  recipient: string,
+  message: string,
+  passphrase: string,
+) {
+  const { signIn, decryptedNpub, relays } = getLocalStorageData();
+  const created_at = Math.floor(Date.now() / 1000);
+
+  if (signIn === "extension") {
+    const event = {
+      created_at: created_at,
+      kind: 30018,
+      tags: [
+        ["d", recipient],
+        ["d", decryptedNpub],
+      ],
+      content: message,
+    };
+
+    const signedEvent = await window.nostr.signEvent(event);
+    const pool = new SimplePool();
+
+    await Promise.any(pool.publish(relays, signedEvent));
+  } else {
+    axios({
+      method: "POST",
+      url: "/api/nostr/post-event",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      data: {
+        pubkey: decryptedNpub,
+        privkey: getPrivKeyWithPassphrase(passphrase),
+        created_at: created_at,
+        kind: 30018,
+        tags: [
+          ["d", recipient],
+          ["d", decryptedNpub],
+        ],
+        content: message,
         relays: relays,
       },
     });
@@ -224,10 +337,14 @@ async function generateNostrEventId(msg) {
   return hash;
 }
 
-export function getPubKey() {
-  const npub = localStorage.getItem("npub");
-  const { data } = nip19.decode(npub);
-  return data;
+export function validPassphrase(passphrase: string) {
+  try {
+    let nsec = getNsecWithPassphrase(passphrase);
+    if (!nsec) return false; // invalid passphrase
+  } catch (e) {
+    return false; // invalid passphrase
+  }
+  return true; // valid passphrase
 }
 
 export function getNsecWithPassphrase(passphrase: string) {
@@ -245,7 +362,15 @@ export function getPrivKeyWithPassphrase(passphrase: string) {
   return data;
 }
 
-export const getLocalStorageData = () => {
+export interface LocalStorageInterface {
+  signIn: string; // extension or nsec
+  encryptedPrivateKey: string;
+  decryptedNpub: string;
+  relays: string[];
+  mints: string[];
+}
+
+export const getLocalStorageData = (): LocalStorageInterface => {
   let signIn;
   let encryptedPrivateKey;
   let decryptedNpub;
@@ -258,18 +383,47 @@ export const getLocalStorageData = () => {
       const { data } = nip19.decode(npub);
       decryptedNpub = data;
     }
+
     encryptedPrivateKey = localStorage.getItem("encryptedPrivateKey");
+
     signIn = localStorage.getItem("signIn");
-    const storedRelays = localStorage.getItem("relays");
-    relays = storedRelays ? JSON.parse(storedRelays) : [];
-    const storedMints = localStorage.getItem("mints");
-    mints = storedMints ? JSON.parse(storedMints) : [];
+
+    relays = localStorage.getItem("relays")
+      ? JSON.parse(localStorage.getItem("relays") as string).filter(
+          // Filter out any null values from the parsed relays
+          (relay: string | null) => relay !== null,
+        )
+      : [];
+
+    if (relays === null) {
+      relays = [
+        "wss://relay.damus.io",
+        "wss://nos.lol",
+        "wss://nostr.mutinywallet.com",
+      ];
+      localStorage.setItem("relays", JSON.stringify(relays));
+    }
+
+    mints = localStorage.getItem("mints")
+      ? JSON.parse(localStorage.getItem("mints") as string)
+      : null;
+
+    if (mints === null) {
+      mints = ["https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"];
+      localStorage.setItem("mints", JSON.stringify(mints));
+    }
   }
-  return { signIn, encryptedPrivateKey, decryptedNpub, relays, mints };
+  return {
+    signIn: signIn as string,
+    encryptedPrivateKey: encryptedPrivateKey as string,
+    decryptedNpub: decryptedNpub as string,
+    relays,
+    mints,
+  };
 };
 
-export const decryptNpub = (nPub: string) => {
-  const { data } = nip19.decode(nPub);
+export const decryptNpub = (npub: string) => {
+  const { data } = nip19.decode(npub);
   return data;
 };
 

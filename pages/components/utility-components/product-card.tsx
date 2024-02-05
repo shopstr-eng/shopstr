@@ -17,16 +17,17 @@ export default function ProductCard({
   onProductClick,
   isCheckout,
   footerContent,
+  uniqueKey,
 }: {
   productData: ProductData;
   handleDelete?: (productId: string, passphrase: string) => void;
   onProductClick?: (productId: any) => void;
   isCheckout?: boolean;
   footerContent?: ReactNode;
+  uniqueKey?: string;
 }) {
   if (!productData) return null;
   const { id, pubkey, title, images, categories, location } = productData;
-
   if (isCheckout)
     return (
       <Card className={"mx-[2.5px] my-3 w-[100%] rounded-lg"}>
@@ -76,6 +77,7 @@ export default function ProductCard({
         "mx-[2.5px] my-3 w-[385px] rounded-lg bg-light-fg dark:bg-dark-fg " +
         cardHoverStyle
       }
+      key={uniqueKey}
     >
       <CardBody
         className={"cursor-pointer "}

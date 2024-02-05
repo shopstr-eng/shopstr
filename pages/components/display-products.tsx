@@ -12,6 +12,8 @@ import ProductCard, {
 import DisplayProductModal from "./display-product-modal";
 import { useRouter } from "next/router";
 import parseTags, { ProductData } from "./utility/product-parser-functions";
+import { Spinner } from "@nextui-org/react";
+import ShopstrSpinner from "./utility-components/shopstr-spinner";
 
 const DisplayEvents = ({
   focusedPubkey,
@@ -29,7 +31,7 @@ const DisplayEvents = ({
     [],
   );
   const [deletedProducts, setDeletedProducts] = useState<string[]>([]); // list of product ids that have been deleted
-  const [isLoading, setIsLoading] = useState(true);
+  const [isProductsLoading, setIsProductLoading] = useState(true);
   const productEventContext = useContext(ProductContext);
   const [focusedProduct, setFocusedProduct] = useState(""); // product being viewed in modal
   const [showModal, setShowModal] = useState(false);
@@ -38,7 +40,6 @@ const DisplayEvents = ({
 
   useEffect(() => {
     if (!productEventContext) return;
-    setIsLoading(productEventContext.isLoading);
     if (!productEventContext.isLoading && productEventContext.productEvents) {
       // is product sub reaches eose then we can sort the product data
       let sortedProductEvents = [
@@ -49,11 +50,11 @@ const DisplayEvents = ({
       setProductEvents(sortedProductEvents);
       return;
     }
-    setProductEvents(productEventContext.productEvents);
   }, [productEventContext]);
 
   /** FILTERS PRODUCT DATA ON CATEGORY, LOCATION, FOCUSED PUBKEY (SELLER) **/
   useEffect(() => {
+    setIsProductLoading(true);
     let filteredEvents = productEvents.filter((event) => {
       // gets rid of products that were deleted
       return !deletedProducts.includes(event.id);
@@ -62,7 +63,7 @@ const DisplayEvents = ({
       return parseTags(event);
     });
 
-    if (productEvents && !isLoading && filteredProductData) {
+    if (productEvents && !isProductsLoading && filteredProductData) {
       if (focusedPubkey) {
         filteredProductData = filteredProductData.filter(
           (productData: ProductData) => productData.pubkey === focusedPubkey,
@@ -99,15 +100,25 @@ const DisplayEvents = ({
       );
     }
     setFilteredProductData(filteredProductData);
+
+    setIsProductLoading(false);
   }, [
     productEvents,
-    isLoading,
-    focusedPubkey,
     selectedCategories,
     selectedLocation,
     selectedSearch,
+    focusedPubkey,
     deletedProducts,
   ]);
+
+  const isThereAFilter = () => {
+    return (
+      selectedCategories.size > 0 ||
+      selectedLocation ||
+      selectedSearch.length > 0 ||
+      focusedPubkey
+    );
+  };
 
   const handleDelete = async (productId: string, passphrase: string) => {
     try {
@@ -173,24 +184,31 @@ const DisplayEvents = ({
           {/*spacer div needed to account for the header (Navbar and categories}*/}
         </div>
         {/* DISPLAYS PRODUCT LISTINGS HERE */}
-        {filteredProductData.length != 0 ? (
+        {isProductsLoading || filteredProductData.length === 0 ? (
+          isThereAFilter() ? (
+            <div className="mt-8 flex items-center justify-center">
+              <h1 className="text-2xl text-light-text dark:text-dark-text">
+                No products found
+              </h1>
+            </div>
+          ) : (
+            <div className="mt-8 flex items-center justify-center">
+              <ShopstrSpinner />
+            </div>
+          )
+        ) : (
           <div className="my-2 flex h-[90%] max-w-full flex-row flex-wrap justify-evenly overflow-x-hidden overflow-y-hidden">
             {filteredProductData.map((productData: ProductData, index) => {
               return (
                 <ProductCard
                   key={productData.id + "-" + index}
+                  uniqueKey={productData.id + "-" + index}
                   productData={productData}
                   onProductClick={onProductClick}
                 />
               );
             })}
             {getSpacerCardsNeeded()}
-          </div>
-        ) : (
-          <div className="mt-8 flex items-center justify-center">
-            <p className="break-words text-center text-xl text-light-text dark:text-dark-text">
-              No listings found . . .
-            </p>
           </div>
         )}
         <div className="h-20">
