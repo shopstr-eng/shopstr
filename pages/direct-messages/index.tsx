@@ -76,7 +76,6 @@ const DirectMessages = () => {
       } else if (!chatsContext.isLoading && chatsContext.chats) {
         // comes here only if signIn is extension or its nsec and passphrase is valid
         let decryptedChats = await decryptChats();
-        console.log(decryptedChats, "decryptedChats");
         setChatsMap((prevChatMap) => {
           let newChatMap = new Map(prevChatMap);
           decryptedChats.forEach(([chatPubkey, chat]) => {

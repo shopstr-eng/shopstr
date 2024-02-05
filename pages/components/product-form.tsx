@@ -1,6 +1,6 @@
 // TODO componentarize file uploader
-import React, { useMemo, useRef, useEffect, useState } from "react";
-import { useForm, Controller } from "react-hook-form";
+import React, { useMemo, useRef, useEffect, useState, useContext } from "react";
+import { useForm, Controller, set } from "react-hook-form";
 import {
   Modal,
   ModalContent,
@@ -31,6 +31,7 @@ import { finalizeEvent } from "nostr-tools";
 import { CATEGORIES, SHIPPING_OPTIONS } from "./utility/STATIC-VARIABLES";
 import LocationDropdown from "./utility-components/dropdowns/location-dropdown";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
+import { ProductContext } from "../context";
 
 interface ProductFormProps {
   handleModalToggle: () => void;
@@ -53,6 +54,9 @@ export default function NewForm({
   const [signIn, setSignIn] = useState("");
   const [pubkey, setPubkey] = useState("");
   const [isEdit, setIsEdit] = useState(false);
+  const [isPostingOrUpdatingProduct, setIsPostingOrUpdatingProduct] =
+    useState(false);
+  const productEventContext = useContext(ProductContext);
   const {
     handleSubmit,
     formState: { errors },
@@ -91,6 +95,7 @@ export default function NewForm({
   }, [showModal]);
 
   const onSubmit = async (data) => {
+    setIsPostingOrUpdatingProduct(true);
     const encoder = new TextEncoder();
     const dataEncoded = encoder.encode(data["Product Name"]);
     const hashBuffer = await crypto.subtle.digest("SHA-256", dataEncoded);
@@ -127,13 +132,19 @@ export default function NewForm({
     data["Category"].split(",").forEach((category) => {
       tags.push(["t", category]);
     });
-    await PostListing(tags, passphrase);
+    let newListing = await PostListing(tags, passphrase);
     if (isEdit) {
-      await handleDelete(oldValues.id, passphrase);
-      handleProductModalToggle();
+      if (handleDelete) {
+        await handleDelete(oldValues.id, passphrase);
+      }
+      if (handleProductModalToggle) {
+        handleProductModalToggle();
+      }
     }
 
     clear();
+    productEventContext.addProductEvent(newListing);
+    setIsPostingOrUpdatingProduct(false);
   };
 
   const clear = () => {
@@ -680,6 +691,8 @@ export default function NewForm({
                   passphraseInputRef.current.focus();
                 }
               }}
+              isDisabled={isPostingOrUpdatingProduct || isButtonDisabled}
+              isLoading={isPostingOrUpdatingProduct}
             >
               {isEdit ? "Edit Product" : "List Product"}
             </Button>

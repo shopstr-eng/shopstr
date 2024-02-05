@@ -38,6 +38,19 @@ function App({ Component, pageProps }: AppProps) {
     {
       productEvents: [],
       isLoading: true,
+      addProductEvent: (productEvent: any) => {
+        setProductContext((productContext) => {
+          let productEvents = [
+            ...productContext.productEvents,
+            { ...productEvent, from: "context" },
+          ];
+          return {
+            productEvents: productEvents,
+            isLoading: false,
+            addProductEvent: productContext.addProductEvent,
+          };
+        });
+      },
     },
   );
   const [profileMap, setProfileMap] = useState(new Map());
@@ -65,8 +78,13 @@ function App({ Component, pageProps }: AppProps) {
         // let websocketSubscribers = [];
         // websocketSubscribers.push(productsWebsocketSub);
         let pubkeysToFetchProfilesFor = [];
-        let { productsWebsocketSub, profileSetFromProducts } =
+        let { productsWebsocketSub, profileSetFromProducts, productArray } =
           await fetchAllPosts(relays, setProductContext);
+        setProductContext({
+          productEvents: productArray,
+          isLoading: false,
+          addProductEvent: productContext.addProductEvent,
+        });
         pubkeysToFetchProfilesFor = [...profileSetFromProducts];
 
         if (decryptedNpub) {

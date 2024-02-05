@@ -13,11 +13,13 @@ export const ProfileMapContext = createContext({
 export interface ProductContextInterface {
   productEvents: any;
   isLoading: boolean;
+  addProductEvent: (productEvent: any) => void;
 }
 
 export const ProductContext = createContext({
   productEvents: {},
   isLoading: true,
+  addProductEvent: (productEvent: any) => {},
 } as ProductContextInterface);
 
 export interface ChatsContextInterface {

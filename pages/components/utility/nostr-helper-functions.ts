@@ -61,6 +61,7 @@ export async function PostListing(
     await Promise.any(pool.publish(relays, signedEvent));
     await Promise.any(pool.publish(relays, signedRecEvent));
     await Promise.any(pool.publish(relays, signedHandlerEvent));
+    return signedEvent;
   } else {
     axios({
       method: "POST",
@@ -79,6 +80,13 @@ export async function PostListing(
         relays: relays,
       },
     });
+    return {
+      pubkey: decryptedNpub,
+      created_at: created_at,
+      kind: 30402,
+      tags: updatedValues,
+      content: summary,
+    };
   }
 }
 

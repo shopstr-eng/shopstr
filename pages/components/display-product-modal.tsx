@@ -157,6 +157,7 @@ export default function DisplayProductModal({
                       <PencilSquareIcon className="h-6 w-6 hover:text-yellow-500" />
                     }
                     onClick={handleEditToggle}
+                    isDisabled={deleteLoading}
                   >
                     Edit Listing
                   </Button>
@@ -170,6 +171,7 @@ export default function DisplayProductModal({
                       startContent={
                         <TrashIcon className="h-6 w-6 hover:text-yellow-500" />
                       }
+                      isDisabled={deleteLoading}
                       isLoading={deleteLoading}
                     >
                       Delete Listing

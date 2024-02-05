@@ -10,6 +10,7 @@ export const fetchAllPosts = async (
 ): Promise<{
   productsWebsocketSub: SubCloser;
   profileSetFromProducts: Set<string>;
+  productArray: NostrEvent[];
 }> => {
   return new Promise(function (resolve, reject) {
     try {
@@ -28,10 +29,7 @@ export const fetchAllPosts = async (
           profileSetFromProducts.add(event.pubkey);
         },
         oneose() {
-          setProductContext({
-            productEvents: productArray,
-            isLoading: false,
-          });
+          h.close();
           returnCall();
         },
       });
@@ -39,6 +37,7 @@ export const fetchAllPosts = async (
         resolve({
           productsWebsocketSub: h,
           profileSetFromProducts,
+          productArray,
         });
       };
     } catch (error) {
