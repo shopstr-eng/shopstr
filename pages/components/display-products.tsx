@@ -54,6 +54,7 @@ const DisplayEvents = ({
 
   /** FILTERS PRODUCT DATA ON CATEGORY, LOCATION, FOCUSED PUBKEY (SELLER) **/
   useEffect(() => {
+    setIsProductLoading(true);
     let filteredEvents = productEvents.filter((event) => {
       // gets rid of products that were deleted
       return !deletedProducts.includes(event.id);
@@ -100,13 +101,21 @@ const DisplayEvents = ({
     }
     setFilteredProductData(filteredProductData);
     setIsProductLoading(false);
-  }, [productEvents, selectedCategories, selectedLocation, selectedSearch]);
+  }, [
+    productEvents,
+    selectedCategories,
+    selectedLocation,
+    selectedSearch,
+    focusedPubkey,
+    deletedProducts,
+  ]);
 
   const isThereAFilter = () => {
     return (
       selectedCategories.size > 0 ||
       selectedLocation ||
-      selectedSearch.length > 0
+      selectedSearch.length > 0 ||
+      focusedPubkey
     );
   };
 

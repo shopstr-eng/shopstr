@@ -57,6 +57,13 @@ const DirectMessages = () => {
 
   useEffect(() => {
     async function loadChats() {
+      if (
+        localStorageValues.signIn === "nsec" &&
+        !validPassphrase(passphrase)
+      ) {
+        setEnterPassphrase(true); // prompt for passphrase when chatsContext is loaded
+        return;
+      }
       if (!chatsContext) {
         setIsChatsLoading(false);
         return;
@@ -69,12 +76,23 @@ const DirectMessages = () => {
       } else if (!chatsContext.isLoading && chatsContext.chats) {
         // comes here only if signIn is extension or its nsec and passphrase is valid
         let decryptedChats = await decryptChats();
-        setChatsMap(decryptedChats);
+        console.log(decryptedChats, "decryptedChats");
+        setChatsMap((prevChatMap) => {
+          let newChatMap = new Map(prevChatMap);
+          decryptedChats.forEach(([chatPubkey, chat]) => {
+            newChatMap.set(chatPubkey, chat);
+          });
+          return newChatMap;
+        });
         setIsChatsLoading(chatsContext.isLoading);
         return;
       }
     }
     loadChats();
+    const passedNPubkey = router.query.pk ? router.query.pk : null;
+    if (passedNPubkey) {
+      onSubmitStartNewChatModal(passedNPubkey as string);
+    }
   }, [chatsContext, passphrase]);
 
   const bottomDivRef = useRef();
@@ -83,10 +101,12 @@ const DirectMessages = () => {
   //   bottomDivRef.current?.scrollIntoView({ behavior: "smooth" });
   // }, [messages]);
 
-  const decryptChats = async () => {
-    let decryptedChats = new Map();
+  const decryptChats: () => Promise<
+    (string | MessageEvent<any>[])[][]
+  > = async () => {
+    let decryptedChats = []; //  entry: [chatPubkey, chat]
     for (let [chatPubkey, chat] of chatsContext.chats) {
-      let decryptedChat = [];
+      let decryptedChat: MessageEvent[] = [];
       for (let messageEvent of chat) {
         try {
           let plaintext = "";
@@ -108,7 +128,7 @@ const DirectMessages = () => {
           console.log(e, "Error decrypting message.", messageEvent);
         }
       }
-      decryptedChats.set(chatPubkey, decryptedChat);
+      decryptedChats.push([chatPubkey, decryptedChat]);
     }
 
     return decryptedChats;
@@ -121,31 +141,7 @@ const DirectMessages = () => {
     reset: resetStartNewChatModalInput,
   } = useForm();
 
-  const isButtonDisabled = useMemo(() => {
-    if (localStorageValues.signIn === "extension") return false; // extension can upload without passphrase
-    if (passphrase === "") return true; // nsec needs passphrase
-    try {
-      let nsec = getNsecWithPassphrase(passphrase);
-      if (!nsec) return true; // invalid passphrase
-    } catch (e) {
-      return true; // invalid passphrase
-    }
-    return false;
-  }, [localStorageValues.signIn, passphrase]);
-
-  const buttonClassName = useMemo(() => {
-    const disabledStyle = " from-gray-300 to-gray-400 cursor-not-allowed";
-    const enabledStyle = " from-purple-600 via-purple-500 to-purple-600";
-    const className =
-      "text-white shadow-lg bg-gradient-to-tr" +
-      (isButtonDisabled ? disabledStyle : enabledStyle);
-    return className;
-  }, [isButtonDisabled]);
-
-  const passphraseInputRef = useRef(null);
-
-  const onSubmitStartNewChatModal = async (data) => {
-    let npub = data["npub"];
+  const onSubmitStartNewChatModal = async (npub: string) => {
     let decryptedNpub = decryptNpub(npub);
     if (!Array.from(chatsMap.keys()).includes(decryptedNpub)) {
       let newChatsMap = new Map(chatsMap);
@@ -158,8 +154,10 @@ const DirectMessages = () => {
   };
 
   const onClickStartNewChat = () => {
-    if (!localStorageValues.signIn)
+    if (!localStorageValues.signIn) {
       alert("You must be signed in to start a chat!");
+      return;
+    }
     setShowStartNewChatModal(true);
   };
 
@@ -208,209 +206,219 @@ const DirectMessages = () => {
     setChatsMap(newChatMap);
   };
 
-  if (!currentChatPubkey) {
-    return (
-      <div>
-        {chatsMap.size === 0 ? (
-          <div className="mt-8 flex items-center justify-center">
-            {isChatsLoading ? (
-              <div className="mt-8 flex items-center justify-center">
-                <ShopstrSpinner />
-              </div>
-            ) : (
-              <p className="break-words text-center text-2xl dark:text-dark-text">
-                {isClient && localStorageValues.decryptedNpub ? (
-                  <>
-                    No messages . . . yet!
-                    <br></br>
-                    <br></br>
-                    Just logged in?
-                    <br></br>
-                    Try reloading the page!
-                  </>
-                ) : (
-                  <>You must be signed in to see your chats!</>
-                )}
-              </p>
-            )}
-          </div>
-        ) : (
-          <div className="h-[85vh] overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
-            {Array.from(chatsMap.entries()).map(([pubkeyOfChat, messages]) => {
-              return (
-                <div
-                  key={pubkeyOfChat}
-                  className="mx-3 mb-2 grid cursor-pointer grid-cols-5 items-center gap-4 rounded-md border-2 border-light-fg px-3 py-2 hover:opacity-70 dark:border-dark-fg"
-                  onClick={() => handleClickChat(pubkeyOfChat)}
-                >
-                  <div className="col-span-3 overflow-clip">
-                    <ProfileAvatar pubkey={pubkeyOfChat} />
-                  </div>
-                  <div className="col-span-1 flex justify-end">
-                    <button className=" text-light-text dark:text-dark-text">
-                      Enter Chat
-                    </button>
-                  </div>
-                  <div
-                    className="col-span-1 flex justify-end"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteChat(pubkeyOfChat);
-                    }}
-                  >
-                    <MinusCircleIcon className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700" />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-        <div className="absolute bottom-[0px] z-20 flex h-fit w-[99vw] flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
-          <Button
-            // className="mx-3 bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 shadow-lg"
-            className={SHOPSTRBUTTONCLASSNAMES}
-            onClick={onClickStartNewChat}
-          >
-            Start New Chat
-          </Button>
-        </div>
-        <Modal
-          backdrop="blur"
-          isOpen={showStartNewChatModal}
-          onClose={() => {
-            setShowStartNewChatModal(false);
-            resetStartNewChatModalInput();
-          }}
-          classNames={{
-            body: "py-6",
-            backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-            // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
-            header: "border-b-[1px] border-[#292f46]",
-            footer: "border-t-[1px] border-[#292f46]",
-            closeButton: "hover:bg-black/5 active:bg-white/10",
-          }}
-          scrollBehavior={"outside"}
-          size="2xl"
-        >
-          <ModalContent>
-            <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
-              Start New Chat
-            </ModalHeader>
-            <form onSubmit={handleSubmit(onSubmitStartNewChatModal)}>
-              <ModalBody>
-                <Controller
-                  name="npub"
-                  control={control}
-                  rules={{
-                    required: "An npub is required.",
-                    maxLength: {
-                      value: 300,
-                      message: "This input exceed maxLength of 300.",
-                    },
-                    validate: (value) =>
-                      /^npub[a-zA-Z0-9]{59}$/.test(value) || "Invalid npub.",
-                  }}
-                  render={({
-                    field: { onChange, onBlur, value },
-                    fieldState: { error },
-                  }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
-                      ? error.message
-                      : "";
-                    return (
-                      <Textarea
-                        className="text-light-text dark:text-dark-text"
-                        variant="bordered"
-                        fullWidth={true}
-                        placeholder="npub..."
-                        isInvalid={isErrored}
-                        errorMessage={errorMessage}
-                        // controller props
-                        onChange={onChange} // send value to hook form
-                        onBlur={onBlur} // notify when input is touched/blur
-                        value={value}
-                      />
-                    );
-                  }}
-                />
-              </ModalBody>
-
-              <ModalFooter>
-                <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
-                  Enter Chat
-                </Button>
-              </ModalFooter>
-            </form>
-          </ModalContent>
-        </Modal>
-        <RequestPassphraseModal
-          passphrase={passphrase}
-          setCorrectPassphrase={setPassphrase}
-          isOpen={enterPassphrase}
-          setIsOpen={setEnterPassphrase}
-        />
-      </div>
-    );
-  }
   return (
-    <div>
-      <h2
-        className="mt-2 flex w-fit cursor-pointer flex-row items-center rounded-md pr-2 align-middle text-shopstr-purple-light hover:bg-shopstr-yellow dark:text-shopstr-yellow-light hover:dark:bg-shopstr-purple"
-        onClick={handleGoBack}
-      >
-        <ArrowUturnLeftIcon className="h-5 w-5 text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light" />
-        {currentChatPubkey}
-      </h2>
-      <div className="my-2 max-h-[70vh] overflow-y-scroll rounded-md border-2 border-light-fg bg-light-fg dark:border-dark-fg dark:bg-dark-fg">
-        {chatsMap.get(currentChatPubkey).map((messageEvent, index) => {
-          return (
-            <div
-              key={index}
-              className={`my-2 flex ${
-                messageEvent.pubkey === localStorageValues.decryptedNpub
-                  ? "justify-end"
-                  : messageEvent.pubkey === currentChatPubkey
-                    ? "justify-start"
-                    : ""
-              }`}
-            >
-              <p
-                className={`inline-block max-w-[100vh] break-words rounded-lg p-3 ${
-                  messageEvent.pubkey === localStorageValues.decryptedNpub
-                    ? "bg-purple-200"
-                    : "bg-gray-300"
-                }`}
-              >
-                {messageEvent.content}
-              </p>
+    <>
+      {!currentChatPubkey ? (
+        <div>
+          {chatsMap.size === 0 ? (
+            <div className="mt-8 flex items-center justify-center">
+              {isChatsLoading ? (
+                <div className="mt-8 flex items-center justify-center">
+                  <ShopstrSpinner />
+                </div>
+              ) : (
+                <p className="break-words text-center text-2xl dark:text-dark-text">
+                  {isClient && localStorageValues.decryptedNpub ? (
+                    <>
+                      No messages . . . yet!
+                      <br></br>
+                      <br></br>
+                      Just logged in?
+                      <br></br>
+                      Try reloading the page!
+                    </>
+                  ) : (
+                    <>You must be signed in to see your chats!</>
+                  )}
+                </p>
+              )}
             </div>
-          );
-        })}
-        <div ref={bottomDivRef} />
-      </div>
-      <div className="flex items-center space-x-2">
-        <Input
-          className="text-light-text dark:text-dark-text"
-          type="text"
-          width="100%"
-          size="large"
-          value={message}
-          placeholder="Type your message..."
-          onChange={(e) => {
-            setMessage(e.target.value);
-          }}
-        />
-        <Button
-          className={SHOPSTRBUTTONCLASSNAMES}
-          isDisabled={message === "" || isSendingDMLoading}
-          isLoading={isSendingDMLoading}
-          onClick={handleSendMessage}
-        >
-          Send
-        </Button>
-      </div>
-    </div>
+          ) : (
+            <div className="h-[85vh] overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
+              {chatsMap &&
+                Array.from(chatsMap.entries()).map(
+                  ([pubkeyOfChat, messages]) => {
+                    return (
+                      <div
+                        key={pubkeyOfChat}
+                        className="mx-3 mb-2 grid cursor-pointer grid-cols-5 items-center gap-4 rounded-md border-2 border-light-fg px-3 py-2 hover:opacity-70 dark:border-dark-fg"
+                        onClick={() => handleClickChat(pubkeyOfChat)}
+                      >
+                        <div className="col-span-3 overflow-clip">
+                          <ProfileAvatar pubkey={pubkeyOfChat} />
+                        </div>
+                        <div className="col-span-1 flex justify-end">
+                          <button className=" text-light-text dark:text-dark-text">
+                            Enter Chat
+                          </button>
+                        </div>
+                        <div
+                          className="col-span-1 flex justify-end"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteChat(pubkeyOfChat);
+                          }}
+                        >
+                          <MinusCircleIcon className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700" />
+                        </div>
+                      </div>
+                    );
+                  },
+                )}
+            </div>
+          )}
+          <div className="absolute bottom-[0px] z-20 flex h-fit w-[99vw] flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+            <Button
+              // className="mx-3 bg-gradient-to-tr from-purple-600 via-purple-500 to-purple-600 shadow-lg"
+              className={SHOPSTRBUTTONCLASSNAMES}
+              onClick={onClickStartNewChat}
+            >
+              Start New Chat
+            </Button>
+          </div>
+          <Modal
+            backdrop="blur"
+            isOpen={showStartNewChatModal}
+            onClose={() => {
+              setShowStartNewChatModal(false);
+              resetStartNewChatModalInput();
+            }}
+            classNames={{
+              body: "py-6",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
+            }}
+            scrollBehavior={"outside"}
+            size="2xl"
+          >
+            <ModalContent>
+              <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+                Start New Chat
+              </ModalHeader>
+              <form
+                onSubmit={handleSubmit((data) => {
+                  onSubmitStartNewChatModal(data["npub"]);
+                })}
+              >
+                <ModalBody>
+                  <Controller
+                    name="npub"
+                    control={control}
+                    rules={{
+                      required: "An npub is required.",
+                      maxLength: {
+                        value: 300,
+                        message: "This input exceed maxLength of 300.",
+                      },
+                      validate: (value) =>
+                        /^npub[a-zA-Z0-9]{59}$/.test(value) || "Invalid npub.",
+                    }}
+                    render={({
+                      field: { onChange, onBlur, value },
+                      fieldState: { error },
+                    }) => {
+                      let isErrored = error !== undefined;
+                      let errorMessage: string = error?.message
+                        ? error.message
+                        : "";
+                      return (
+                        <Textarea
+                          className="text-light-text dark:text-dark-text"
+                          variant="bordered"
+                          fullWidth={true}
+                          placeholder="npub..."
+                          isInvalid={isErrored}
+                          errorMessage={errorMessage}
+                          // controller props
+                          onChange={onChange} // send value to hook form
+                          onBlur={onBlur} // notify when input is touched/blur
+                          value={value}
+                        />
+                      );
+                    }}
+                  />
+                </ModalBody>
+
+                <ModalFooter>
+                  <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                    Enter Chat
+                  </Button>
+                </ModalFooter>
+              </form>
+            </ModalContent>
+          </Modal>
+        </div>
+      ) : (
+        <div>
+          <h2
+            className="mt-2 flex w-fit cursor-pointer flex-row items-center rounded-md pr-2 align-middle text-shopstr-purple-light hover:bg-shopstr-yellow dark:text-shopstr-yellow-light hover:dark:bg-shopstr-purple"
+            onClick={handleGoBack}
+          >
+            <ArrowUturnLeftIcon className="h-5 w-5 text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light" />
+            {currentChatPubkey}
+          </h2>
+          <div className="my-2 max-h-[70vh] overflow-y-scroll rounded-md border-2 border-light-fg bg-light-fg dark:border-dark-fg dark:bg-dark-fg">
+            {chatsMap &&
+              chatsMap.get(currentChatPubkey) &&
+              chatsMap.get(currentChatPubkey).map((messageEvent, index) => {
+                return (
+                  <div
+                    key={index}
+                    className={`my-2 flex ${
+                      messageEvent.pubkey === localStorageValues.decryptedNpub
+                        ? "justify-end"
+                        : messageEvent.pubkey === currentChatPubkey
+                          ? "justify-start"
+                          : ""
+                    }`}
+                  >
+                    <p
+                      className={`inline-block max-w-[100vh] break-words rounded-lg p-3 ${
+                        messageEvent.pubkey === localStorageValues.decryptedNpub
+                          ? "bg-purple-200"
+                          : "bg-gray-300"
+                      }`}
+                    >
+                      {messageEvent.content}
+                    </p>
+                  </div>
+                );
+              })}
+            <div ref={bottomDivRef} />
+          </div>
+          <div className="flex items-center space-x-2">
+            <Input
+              className="text-light-text dark:text-dark-text"
+              type="text"
+              width="100%"
+              size="large"
+              value={message}
+              placeholder="Type your message..."
+              onChange={(e) => {
+                setMessage(e.target.value);
+              }}
+            />
+            <Button
+              className={SHOPSTRBUTTONCLASSNAMES}
+              isDisabled={message === "" || isSendingDMLoading}
+              isLoading={isSendingDMLoading}
+              onClick={handleSendMessage}
+            >
+              Send
+            </Button>
+          </div>
+        </div>
+      )}
+      <RequestPassphraseModal
+        passphrase={passphrase}
+        setCorrectPassphrase={setPassphrase}
+        isOpen={enterPassphrase}
+        setIsOpen={setEnterPassphrase}
+      />
+    </>
   );
 };
 
