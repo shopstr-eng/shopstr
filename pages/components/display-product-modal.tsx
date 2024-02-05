@@ -76,10 +76,6 @@ export default function DisplayProductModal({
   };
 
   const beginDeleteListingProcess = () => {
-    if (!signIn) {
-      alert("You must be signed in to delete a listing!");
-      return;
-    }
     if (signIn === "extension") {
       finalizeDeleteListingProcess();
     } else if (signIn === "nsec") {
@@ -91,7 +87,6 @@ export default function DisplayProductModal({
     setDeleteLoading(true);
     await handleDelete(productData.id, passphrase); // delete listing
     setDeleteLoading(false);
-    setRequestPassphrase(false); // close modal
     handleModalToggle(); // closes product detail modal
   };
 
