@@ -41,7 +41,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
         );
 
         alert("Signed in as " + npub + ".");
-        router.push("/");
+        router.push("/home");
       }
     } else {
       setErrorMessage(
@@ -70,7 +70,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
         ]),
       );
       alert("Signed in as " + npub + ".");
-      router.push("/");
+      router.push("/home");
     } catch (error) {
       alert("Extension sign in failed!");
     }
@@ -94,7 +94,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
             />
             <h1
               onClick={() => {
-                router.push("/");
+                router.push("/home");
               }}
               className="cursor-pointer text-center text-3xl font-bold text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light"
             >

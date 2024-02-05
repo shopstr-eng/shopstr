@@ -16,8 +16,9 @@ export const locationAvatar = (location: string) => {
     <Avatar
       alt={location}
       className="h-6 w-6"
-      src={`https://flagcdn.com/16x12/${locationMap.get(location)
-        ?.iso3166}.png`}
+      src={`https://flagcdn.com/16x12/${
+        locationMap.get(location)?.iso3166
+      }.png`}
     />
   ) : null;
 };

@@ -86,7 +86,7 @@ export default function RequestPassphraseModal({
             color="danger"
             variant="light"
             onClick={() => {
-              router.push("/");
+              router.push("/home");
             }}
           >
             Cancel

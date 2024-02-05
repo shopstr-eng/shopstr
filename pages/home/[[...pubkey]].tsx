@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
-import DisplayEvents from "./components/display-products";
+import DisplayEvents from "../components/display-products";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { ArrowUturnLeftIcon } from "@heroicons/react/24/outline";
 import { nip19 } from "nostr-tools";
-import ProductForm from "./components/product-form";
+import ProductForm from "../components/product-form";
 import {
   Button,
   Select,
@@ -15,8 +15,8 @@ import {
 import {
   CATEGORIES,
   SHOPSTRBUTTONCLASSNAMES,
-} from "./components/utility/STATIC-VARIABLES";
-import LocationDropdown from "./components/utility-components/dropdowns/location-dropdown";
+} from "../components/utility/STATIC-VARIABLES";
+import LocationDropdown from "../components/utility-components/dropdowns/location-dropdown";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 
 const SellerView = () => {
@@ -44,7 +44,7 @@ const SellerView = () => {
       // handles case where we pass in empty string to clear focusedPubkey
       setfocusedPubkey("");
     }
-    router.push("/" + npubkey);
+    router.push("/home/" + npubkey);
   };
 
   const handleModalToggle = () => {

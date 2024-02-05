@@ -49,18 +49,18 @@ const Navbar = () => {
       <div className="flex h-[40px] flex-row justify-between">
         <h1
           className="cursor-pointer text-3xl font-bold text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light"
-          onClick={() => router.push("/")}
+          onClick={() => router.push("/home")}
         >
           Shopstr
         </h1>
         <div className="mt-2 flex space-x-2">
           <HomeIcon
             className={`h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
-              router.pathname === "/"
+              router.pathname === "/home"
                 ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
                 : ""
             }`}
-            onClick={() => router.push("/")}
+            onClick={() => router.push("/home")}
           />
           <EnvelopeOpenIcon
             className={`h-6 w-6 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
@@ -102,7 +102,7 @@ const Navbar = () => {
                 localStorage.removeItem("npub");
                 localStorage.removeItem("signIn");
                 localStorage.removeItem("encryptedPrivateKey");
-                router.push("/");
+                router.push("/home");
                 let successStr = "Signed out!";
                 alert(successStr);
                 router.reload();

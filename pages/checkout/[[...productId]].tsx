@@ -19,7 +19,7 @@ const Checkout = () => {
 
   useEffect(() => {
     if (!productId) {
-      router.push("/"); // if there isn't a productId, redirect to home page
+      router.push("/home"); // if there isn't a productId, redirect to home page
     }
   }, []);
 

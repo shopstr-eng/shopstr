@@ -71,7 +71,7 @@ const Keys = () => {
         ]),
       );
 
-      router.push("/");
+      router.push("/home");
     }
   };
 
