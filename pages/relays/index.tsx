@@ -17,6 +17,7 @@ import {
 } from "@nextui-org/react";
 import { relayConnect } from "nostr-tools";
 import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
+import { getLocalStorageData } from "../components/utility/nostr-helper-functions";
 
 const Relays = () => {
   const [relays, setRelays] = useState([]);
@@ -25,8 +26,7 @@ const Relays = () => {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const storedRelays = localStorage.getItem("relays");
-      setRelays(storedRelays ? JSON.parse(storedRelays) : []);
+      setRelays(getLocalStorageData().relays);
     }
   }, []);
 

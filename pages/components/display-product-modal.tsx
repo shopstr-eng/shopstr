@@ -76,10 +76,6 @@ export default function DisplayProductModal({
   };
 
   const beginDeleteListingProcess = () => {
-    if (!signIn) {
-      alert("You must be signed in to delete a listing!");
-      return;
-    }
     if (signIn === "extension") {
       finalizeDeleteListingProcess();
     } else if (signIn === "nsec") {
@@ -91,7 +87,6 @@ export default function DisplayProductModal({
     setDeleteLoading(true);
     await handleDelete(productData.id, passphrase); // delete listing
     setDeleteLoading(false);
-    setRequestPassphrase(false); // close modal
     handleModalToggle(); // closes product detail modal
   };
 
@@ -162,6 +157,7 @@ export default function DisplayProductModal({
                       <PencilSquareIcon className="h-6 w-6 hover:text-yellow-500" />
                     }
                     onClick={handleEditToggle}
+                    isDisabled={deleteLoading}
                   >
                     Edit Listing
                   </Button>
@@ -175,6 +171,7 @@ export default function DisplayProductModal({
                       startContent={
                         <TrashIcon className="h-6 w-6 hover:text-yellow-500" />
                       }
+                      isDisabled={deleteLoading}
                       isLoading={deleteLoading}
                     >
                       Delete Listing
@@ -214,7 +211,7 @@ export default function DisplayProductModal({
       </Modal>
       <RequestPassphraseModal
         passphrase={passphrase}
-        onPassphraseChange={setPassphrase}
+        setCorrectPassphrase={setPassphrase}
         isOpen={requestPassphrase}
         setIsOpen={setRequestPassphrase}
         actionOnSubmit={finalizeDeleteListingProcess}

@@ -38,6 +38,7 @@ const LocationDropdown = ({ value, ...props }) => {
 
     let countryOptions = (
       <SelectSection
+        key={"countryOptions"}
         title="Countries"
         classNames={{
           heading: headingClasses,
@@ -68,6 +69,7 @@ const LocationDropdown = ({ value, ...props }) => {
 
     let stateOptions = (
       <SelectSection
+        key={"stateOptions"}
         title="U.S. States"
         classNames={{
           heading: headingClasses,

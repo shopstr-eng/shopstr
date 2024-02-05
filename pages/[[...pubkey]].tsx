@@ -18,6 +18,7 @@ import {
 } from "./components/utility/STATIC-VARIABLES";
 import LocationDropdown from "./components/utility-components/dropdowns/location-dropdown";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import { getLocalStorageData } from "./components/utility/nostr-helper-functions";
 
 const SellerView = () => {
   const router = useRouter();
@@ -37,7 +38,6 @@ const SellerView = () => {
       setfocusedPubkey(data as string); // router.query.pubkey returns array of pubkeys
     }
   }, [router.query.pubkey]);
-
   const routeToShop = (npubkey: string) => {
     npubkey = encodeURIComponent(npubkey);
     if (npubkey === "") {
@@ -48,7 +48,7 @@ const SellerView = () => {
   };
 
   const handleModalToggle = () => {
-    if (localStorage.getItem("signIn")) {
+    if (getLocalStorageData().signIn) {
       setShowModal(!showModal);
     } else {
       alert("You must be signed in to add a listing!");

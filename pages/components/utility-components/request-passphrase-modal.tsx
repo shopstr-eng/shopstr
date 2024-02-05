@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   Modal,
   ModalContent,
@@ -8,35 +8,32 @@ import {
   Input,
   Button,
 } from "@nextui-org/react";
-import { getNsecWithPassphrase } from "../utility/nostr-helper-functions";
+import {
+  getNsecWithPassphrase,
+  validPassphrase,
+} from "../utility/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { useRouter } from "next/router";
 
 export default function RequestPassphraseModal({
   passphrase,
-  onPassphraseChange,
+  setCorrectPassphrase,
   isOpen,
   setIsOpen,
   actionOnSubmit,
 }: {
   passphrase: string;
-  onPassphraseChange: (passphrase: string) => void;
+  setCorrectPassphrase: (passphrase: string) => void;
   isOpen: boolean;
   setIsOpen: (value: boolean) => void;
-  actionOnSubmit: () => void;
+  actionOnSubmit?: () => void; // callback function to be called after getting correct passphrase (delete listing)
 }) {
+  const [passphraseInput, setPassphraseInput] = useState(passphrase); // passphrase to be entered by user
   const router = useRouter();
   const passphraseInputRef = useRef(null);
   const isButtonDisabled = useMemo(() => {
-    if (passphrase === "") return true; // nsec needs passphrase
-    try {
-      let nsec = getNsecWithPassphrase(passphrase);
-      if (!nsec) return true; // invalid passphrase
-    } catch (e) {
-      return true; // invalid passphrase
-    }
-    return false;
-  }, [passphrase]);
+    return !validPassphrase(passphraseInput);
+  }, [passphraseInput]);
 
   const buttonClassName = useMemo(() => {
     const disabledStyle = " from-gray-300 to-gray-400 cursor-not-allowed";
@@ -47,11 +44,28 @@ export default function RequestPassphraseModal({
     return className;
   }, [isButtonDisabled]);
 
+  const onSubmit = () => {
+    if (isButtonDisabled && passphraseInputRef.current) {
+      passphraseInputRef.current.focus();
+    } else if (!isButtonDisabled) {
+      setIsOpen(false);
+      setCorrectPassphrase(passphraseInput);
+      if (actionOnSubmit) {
+        actionOnSubmit();
+      }
+    }
+  };
+
+  const onCancel = () => {
+    setIsOpen(false);
+    router.push("/");
+  };
+
   return (
     <Modal
       backdrop="blur"
       isOpen={isOpen}
-      onClose={() => setIsOpen(false)}
+      onClose={onCancel}
       classNames={{
         body: "py-6",
         backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -76,35 +90,17 @@ export default function RequestPassphraseModal({
             variant="flat"
             label="Passphrase"
             labelPlacement="inside"
-            onChange={(e) => onPassphraseChange(e.target.value)}
-            value={passphrase}
+            onChange={(e) => setPassphraseInput(e.target.value)}
+            value={passphraseInput}
           />
         </ModalBody>
 
         <ModalFooter>
-          <Button
-            color="danger"
-            variant="light"
-            onClick={() => {
-              router.push("/");
-            }}
-          >
+          <Button color="danger" variant="light" onClick={onCancel}>
             Cancel
           </Button>
 
-          <Button
-            className={buttonClassName}
-            type="submit"
-            onClick={(e) => {
-              if (isButtonDisabled && passphraseInputRef.current) {
-                e.preventDefault();
-                passphraseInputRef.current.focus();
-              } else if (!isButtonDisabled) {
-                setIsOpen(false);
-                actionOnSubmit(); // submits the passphrase validated by isButtonDisabled
-              }
-            }}
-          >
+          <Button className={buttonClassName} type="submit" onClick={onSubmit}>
             Submit
           </Button>
         </ModalFooter>
