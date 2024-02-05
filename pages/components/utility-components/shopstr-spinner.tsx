@@ -10,7 +10,7 @@ export default function ShopstrSpinner() {
       {theme === "dark" ? (
         <Spinner size={"lg"} color="warning" />
       ) : (
-        <Spinner size={"lg"} color="primary" />
+        <Spinner size={"lg"} color="secondary" />
       )}
     </>
   );
