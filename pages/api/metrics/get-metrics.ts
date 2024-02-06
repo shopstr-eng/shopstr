@@ -96,18 +96,27 @@ export default async function GetMetrics(req: NextApiRequest, res: NextApiRespon
     GROUP BY period
     ORDER BY period DESC;`)
 
+  const ordersMetricsPromise = repo?.raw<{ rows: Metrics[] }>(`
+    SELECT time_bucket('${bucket}', date_time, '${tz}') AS period, cast(count(id) AS INTEGER) AS "${label}"
+    FROM transactions
+    WHERE date_time BETWEEN '${start}' AND '${end}'
+    GROUP BY period
+    ORDER BY period DESC;`)
+
   const [
     salesMetrics,
     shoppersMetrics,
     listingsMetrics,
     inquiriesMetrics,
     invoicesMetrics,
+    ordersMetrics
   ] = await Promise.allSettled([
     salesMetricsPromise,
     shoppersMetricsPromise,
     listingsMetricsPromise,
     inquiriesMetricsPromise,
-    invoicesMetricsPromise
+    invoicesMetricsPromise,
+    ordersMetricsPromise
   ]);
 
   console.log(salesMetrics)
@@ -115,6 +124,7 @@ export default async function GetMetrics(req: NextApiRequest, res: NextApiRespon
   console.log(listingsMetrics)
   console.log(inquiriesMetrics)
   console.log(invoicesMetrics)
+  console.log(ordersMetrics)
 
   let salesData: Data | null = null;
   if (salesMetrics.status === 'fulfilled' && salesMetrics.value) {
@@ -182,12 +192,26 @@ export default async function GetMetrics(req: NextApiRequest, res: NextApiRespon
       }
     }
   }
+  let ordersData: Data | null = null;
+  if (ordersMetrics.status === 'fulfilled' && ordersMetrics.value) {
+    ordersData = {
+      label,
+      category: {
+        title: 'Total Orders',
+        subtitle: 'Orders Over Time',
+        total: ordersMetrics.value.rows.reduce((prev, curr) => prev + curr[label], 0),
+        symbol: '',
+        metrics: ordersMetrics.value.rows
+      }
+    }
+  }
 
   return res.status(200).json([
     salesData,
     shoppersData,
     listingsData,
     inquiriesData,
-    invoicesData
+    invoicesData,
+    ordersData
   ].filter(n => n))
 }
