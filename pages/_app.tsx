@@ -13,20 +13,19 @@ import {
   ChatsContext,
 } from "./context";
 import {
-  decryptNpub,
   getLocalStorageData,
   LocalStorageInterface,
-  NostrEvent,
 } from "./components/utility/nostr-helper-functions";
 import { NextUIProvider } from "@nextui-org/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
-import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
 import {
+  didXMinutesElapseSinceLastFetch,
   fetchAllPosts,
+  fetchAllProductsFromCache,
+  fetchAllProfilesFromCache,
   fetchChatsAndMessages,
   fetchProfile,
 } from "./api/nostr/fetch-service";
-import { set } from "react-hook-form";
 
 function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
@@ -68,25 +67,34 @@ function App({ Component, pageProps }: AppProps) {
     chats: new Map(),
     isLoading: true,
   });
-
   /** FETCH initial PRODUCTS and PROFILES **/
   useEffect(() => {
     const relays = localStorageValues.relays;
     const decryptedNpub = localStorageValues.decryptedNpub;
     async function fetchData() {
       try {
-        // let websocketSubscribers = [];
-        // websocketSubscribers.push(productsWebsocketSub);
-        let pubkeysToFetchProfilesFor = [];
-        let { productsWebsocketSub, profileSetFromProducts, productArray } =
-          await fetchAllPosts(relays, setProductContext);
-        setProductContext({
-          productEvents: productArray,
-          isLoading: false,
-          addProductEvent: productContext.addProductEvent,
-        });
-        pubkeysToFetchProfilesFor = [...profileSetFromProducts];
-
+        let pubkeysToFetchProfilesFor: string[] = [];
+        if (await didXMinutesElapseSinceLastFetch("products", 10)) {
+          let { productsWebsocketSub, profileSetFromProducts, productArray } =
+            await fetchAllPosts(relays, setProductContext);
+          setProductContext({
+            productEvents: productArray,
+            isLoading: false,
+            addProductEvent: productContext.addProductEvent,
+          });
+          pubkeysToFetchProfilesFor = [...profileSetFromProducts];
+        } else {
+          let productArray = await fetchAllProductsFromCache();
+          setProductContext({
+            productEvents: productArray,
+            isLoading: false,
+            addProductEvent: productContext.addProductEvent,
+          });
+        }
+        if (!(await didXMinutesElapseSinceLastFetch("profiles", 10))) {
+          let profileMap = await fetchAllProfilesFromCache();
+          setProfileMap(profileMap);
+        }
         if (decryptedNpub) {
           let { chatsMap, profileSetFromChats } = await fetchChatsAndMessages(
             relays,
@@ -108,12 +116,13 @@ function App({ Component, pageProps }: AppProps) {
             isLoading: false,
           });
         }
-
-        let { profileMap } = await fetchProfile(
-          relays,
-          pubkeysToFetchProfilesFor,
-        );
-        profileContext.mergeProfileMaps(profileMap);
+        if (await didXMinutesElapseSinceLastFetch("profiles", 10)) {
+          let { profileMap } = await fetchProfile(
+            relays,
+            pubkeysToFetchProfilesFor,
+          );
+          profileContext.mergeProfileMaps(profileMap);
+        }
       } catch (error) {
         console.error("Error fetching data:", error);
       }
