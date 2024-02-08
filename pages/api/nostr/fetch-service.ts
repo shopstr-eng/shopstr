@@ -45,7 +45,6 @@ export const didXMinutesElapseSinceLastFetch = async (
 };
 
 const addProductsToCache = async (productsArray: NostrEvent[]) => {
-  console.log("addProductsToCache: ", productsArray.length);
   productsArray.forEach(async (product) => {
     await products.put({ id: product.id, product });
   });
@@ -58,6 +57,13 @@ const addProfilesToCache = async (profileMap: Map<string, any>) => {
     await profiles.put({ id: pubkey, profile });
   });
   await lastFetchedTime.put({ itemType: "profiles", time: Date.now() });
+};
+
+const addChatsToCache = async (chatsMap: Map<string, any>) => {
+  Array.from(chatsMap.entries()).forEach(async ([pubkey, chat]) => {
+    await chats.put({ id: pubkey, messages: chat });
+  });
+  await lastFetchedTime.put({ itemType: "chats", time: Date.now() });
 };
 
 export const fetchAllProductsFromCache = async () => {
@@ -73,6 +79,14 @@ export const fetchAllProfilesFromCache = async () => {
     productMap.set(id, profile);
   });
   return productMap;
+};
+export const fetchAllChatsFromCache = async () => {
+  let cache = await chats.toArray();
+  let chatsMap = new Map();
+  cache.forEach(({ id, messages }) => {
+    chatsMap.set(id, messages);
+  });
+  return chatsMap;
 };
 
 export const fetchAllPosts = async (
@@ -283,6 +297,7 @@ export const fetchChatsAndMessages = async (
       });
 
       resolve({ chatsMap, profileSetFromChats });
+      await addChatsToCache(chatsMap);
     } catch (error) {
       console.log("Failed to fetchChatsAndMessages: ", error);
       alert("Failed to fetchChatsAndMessages: " + error);

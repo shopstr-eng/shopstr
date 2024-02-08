@@ -20,6 +20,7 @@ import { NextUIProvider } from "@nextui-org/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import {
   didXMinutesElapseSinceLastFetch,
+  fetchAllChatsFromCache,
   fetchAllPosts,
   fetchAllProductsFromCache,
   fetchAllProfilesFromCache,
@@ -96,19 +97,27 @@ function App({ Component, pageProps }: AppProps) {
           setProfileMap(profileMap);
         }
         if (decryptedNpub) {
-          let { chatsMap, profileSetFromChats } = await fetchChatsAndMessages(
-            relays,
-            decryptedNpub,
-          );
-          setChatsContext({
-            chats: chatsMap,
-            isLoading: false,
-          });
-          pubkeysToFetchProfilesFor = [
-            decryptedNpub as string,
-            ...pubkeysToFetchProfilesFor,
-            ...profileSetFromChats,
-          ];
+          if (!(await didXMinutesElapseSinceLastFetch("chats", 3))) {
+            let chatsMapFromCache = await fetchAllChatsFromCache();
+            setChatsContext({
+              chats: chatsMapFromCache,
+              isLoading: false,
+            });
+          } else {
+            let { chatsMap, profileSetFromChats } = await fetchChatsAndMessages(
+              relays,
+              decryptedNpub,
+            );
+            setChatsContext({
+              chats: chatsMap,
+              isLoading: false,
+            });
+            pubkeysToFetchProfilesFor = [
+              decryptedNpub as string,
+              ...pubkeysToFetchProfilesFor,
+              ...profileSetFromChats,
+            ];
+          }
         } else {
           // when user is not signed in they have no chats, flip is loading to false
           setChatsContext({
@@ -129,7 +138,6 @@ function App({ Component, pageProps }: AppProps) {
     }
     if (relays) fetchData(); // Call the async function immediately
   }, [localStorageValues.relays]);
-
   /** UPON PROFILEMAP UPDATE, SET PROFILE CONTEXT **/
   useEffect(() => {
     setProfileContext((profileContext: ProfileContextInterface) => {
