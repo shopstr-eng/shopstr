@@ -20,6 +20,8 @@
     "axios": "^1.6.0",
     "crypto-js": "^4.2.0",
     "dotenv": "^16.3.1",
+    "dexie": "^3.2.4",
+    "dexie-react-hooks": "^1.1.7",
     "eslint": "8.38.0",
     "eslint-config-next": "13.3.0",
     "fast-geoip": "^1.1.88",
