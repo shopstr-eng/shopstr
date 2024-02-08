@@ -36,7 +36,7 @@ export default function LandingPage() {
       </Head>
       <div className="flex flex-1 flex-col items-center justify-center bg-light-bg px-20 text-center dark:bg-dark-bg">
         <div className="flex-none">
-          <Image src="/shopstr.png" alt="Shopstr Logo" width={64} height={64} />
+          <Image src="/shopstr.png" alt="Shopstr Logo" width={128} height={128} />
         </div>
         <div className="text-6xl text-shopstr-purple-light dark:text-shopstr-yellow-light">
           <div>Buy and sell</div>
