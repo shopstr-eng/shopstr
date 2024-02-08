@@ -17,6 +17,8 @@
     "autoprefixer": "10.4.14",
     "axios": "^1.6.0",
     "crypto-js": "^4.2.0",
+    "dexie": "^3.2.4",
+    "dexie-react-hooks": "^1.1.7",
     "eslint": "8.38.0",
     "eslint-config-next": "13.3.0",
     "framer-motion": "^10.16.4",
