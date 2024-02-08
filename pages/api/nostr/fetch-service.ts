@@ -1,8 +1,93 @@
 import { NostrEvent } from "@/pages/components/utility/nostr-helper-functions";
 import { ProductContextInterface } from "@/pages/context";
 import { SimplePool, nip19 } from "nostr-tools";
+import Dexie from "dexie";
 
 const POSTQUERYLIMIT = 200;
+
+type ItemType = "products" | "profiles" | "chats";
+
+const db = new Dexie("ItemsFetchedFromRelays");
+
+db.version(1).stores({
+  products: "id, product", // product: {id, product}
+  profiles: "id, profile", // profile: {pubkey, created_at, content}
+  chats: "id, messages", // messages: {pubkey, messages: [message1, message2, ...]}
+  lastFetchedTime: "itemType, time", // item: {products, profiles, chats} time: timestamp
+});
+
+db.open().catch(function (e) {
+  console.error("Open failed: " + e.stack);
+});
+
+const { products, profiles, chats, lastFetchedTime } = db;
+
+db.open().catch(function (e) {
+  console.error("Open failed: " + e.stack);
+});
+
+/**
+ * returns the minutes lapsed since last fetch 60000ms = 1 minute
+ */
+export const getMinutesSinceLastFetch = async (itemType: ItemType) => {
+  let lastFetchTime = await lastFetchedTime.get({ itemType });
+  if (!lastFetchTime) lastFetchTime = { itemType, time: 0 };
+  let timelapsedInMinutes = (Date.now() - lastFetchTime.time) / 60000;
+  return timelapsedInMinutes;
+};
+
+export const didXMinutesElapseSinceLastFetch = async (
+  itemType: ItemType,
+  minutes: number,
+) => {
+  let timelapsedInMinutes = await getMinutesSinceLastFetch(itemType);
+  return timelapsedInMinutes > minutes;
+};
+
+const addProductsToCache = async (productsArray: NostrEvent[]) => {
+  productsArray.forEach(async (product) => {
+    await products.put({ id: product.id, product });
+  });
+  await lastFetchedTime.put({ itemType: "products", time: Date.now() });
+};
+
+const addProfilesToCache = async (profileMap: Map<string, any>) => {
+  Array.from(profileMap.entries()).forEach(async ([pubkey, profile]) => {
+    if (profile === null) return;
+    await profiles.put({ id: pubkey, profile });
+  });
+  await lastFetchedTime.put({ itemType: "profiles", time: Date.now() });
+};
+
+const addChatsToCache = async (chatsMap: Map<string, any>) => {
+  Array.from(chatsMap.entries()).forEach(async ([pubkey, chat]) => {
+    await chats.put({ id: pubkey, messages: chat });
+  });
+  await lastFetchedTime.put({ itemType: "chats", time: Date.now() });
+};
+
+export const fetchAllProductsFromCache = async () => {
+  let productsMap = await products.toArray();
+  let productsArray = productsMap.map((product) => product.product);
+  return productsArray;
+};
+
+export const fetchAllProfilesFromCache = async () => {
+  let cache = await profiles.toArray();
+  let productMap = new Map();
+  cache.forEach(({ id, profile }) => {
+    productMap.set(id, profile);
+  });
+  return productMap;
+};
+export const fetchAllChatsFromCache = async () => {
+  let cache = await chats.toArray();
+  let chatsMap = new Map();
+  cache.forEach(({ id, messages }) => {
+    chatsMap.set(id, messages);
+  });
+  return chatsMap;
+};
 
 export const fetchAllPosts = async (
   relays: string[],
@@ -39,6 +124,7 @@ export const fetchAllPosts = async (
           profileSetFromProducts,
           productArray,
         });
+        addProductsToCache(productArray);
       };
     } catch (error) {
       reject(error);
@@ -89,6 +175,7 @@ export const fetchProfile = async (
         oneose() {
           h.close();
           resolve({ profileMap });
+          addProfilesToCache(profileMap);
         },
       });
     } catch (error) {
@@ -210,6 +297,7 @@ export const fetchChatsAndMessages = async (
       });
 
       resolve({ chatsMap, profileSetFromChats });
+      await addChatsToCache(chatsMap);
     } catch (error) {
       console.log("Failed to fetchChatsAndMessages: ", error);
       alert("Failed to fetchChatsAndMessages: " + error);
