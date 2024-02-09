@@ -17,7 +17,6 @@ export async function PostListing(
   // Add "published_at" key
   const updatedValues = [...values, ["published_at", String(created_at)]];
 
-  let eventId;
   if (signIn === "extension") {
     const event = {
       created_at: created_at,
@@ -57,7 +56,6 @@ export async function PostListing(
     const signedRecEvent = await window.nostr.signEvent(recEvent);
     const signedHandlerEvent = await window.nostr.signEvent(handlerEvent);
 
-
     const pool = new SimplePool();
 
     await Promise.any(pool.publish(relays, signedEvent));
@@ -82,8 +80,19 @@ export async function PostListing(
         relays: relays,
       },
     });
-    eventId = res.data.id;
+    return {
+      id: res.data.id,
+      pubkey: decryptedNpub,
+      created_at: created_at,
+      kind: 30402,
+      tags: updatedValues,
+      content: summary,
+    };
   }
+}
+
+export async function PostListingMetric(id, tags) {
+  const { decryptedNpub, relays } = getLocalStorageData();
   axios({
     method: "POST",
     url: "/api/metrics/post-listing",
@@ -91,19 +100,12 @@ export async function PostListing(
       "Content-Type": "application/json",
     },
     data: {
-      listing_id: eventId,
-      merchant_id: getPubKey(),
-      merchant_location: values.find(([key]: [key: string]) => key === "location")?.[1] || "",
+      listing_id: id,
+      merchant_id: decryptedNpub,
+      merchant_location: tags.find(([key]: [key: string]) => key === "location")?.[1] || "",
       relays,
     }
   });
-  return {
-    pubkey: decryptedNpub,
-    created_at: created_at,
-    kind: 30402,
-    tags: updatedValues,
-    content: summary,
-  };
 }
 
 export async function DeleteListing(
@@ -376,12 +378,14 @@ export function getNsecWithPassphrase(passphrase: string) {
   let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
     CryptoJS.enc.Utf8,
   );
+  console.log('wtf ', nsec)
   // returns undefined or "" thanks to the toString method
   return nsec;
 }
 
 export function getPrivKeyWithPassphrase(passphrase: string) {
   let { data } = nip19.decode(getNsecWithPassphrase(passphrase));
+  console.log('aaaaa ', data)
   return data;
 }
 
