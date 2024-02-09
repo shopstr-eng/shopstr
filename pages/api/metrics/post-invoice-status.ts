@@ -37,7 +37,7 @@ const UpdateInvoice = async (req: NextApiRequest, res: NextApiResponse) => {
     await wallet.requestTokens(total, hash);
   } catch (error: any) {
     console.error(error);
-    if (error.message === 'Tokens already issued for this invoice.') {
+    if (error.message.includes('quote already issued')) {
       console.log('invoice has been paid')
       await repo()('transactions').insert({
         id: uuid(),
