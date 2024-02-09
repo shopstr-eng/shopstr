@@ -157,7 +157,7 @@ function App({ Component, pageProps }: AppProps) {
               attribute="class"
               forcedTheme={Component.theme || undefined}
             >
-              <div className="h-[100vh] bg-light-bg dark:bg-dark-bg">
+              <div className="min-h-screen bg-light-bg dark:bg-dark-bg">
                 {isSignInPage || isKeyPage ? null : <Navbar />}
                 <div className="h-20">
                   {/*spacer div needed so pages can account for navbar height*/}

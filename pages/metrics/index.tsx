@@ -59,7 +59,7 @@ export default function MetricsPage() {
   }, [date])
 
   return (
-    <main className="p-4 md:p-10 mx-auto max-w-7xl">
+    <main className="p-4 md:p-10 mx-auto max-w-8xl">
       <Callout title='Work In Progress - Analytics' color='purple'>
         This is a global metrics of all of Shopstr.
         We are working on a personalized Analytics page for every Shopstr merchant!

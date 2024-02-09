@@ -8,20 +8,26 @@ const config: { [key: string]: Knex.Config } = {
     client: 'pg',
     connection: {
       connectionString: process.env['DATABASE_URL'],
-      ssl: { rejectUnauthorized: false, },
     },
     migrations: {
       tableName: 'knex_migrations'
+    },
+    pool: {
+      min: 0,
+      max: 1,
     }
   },
   production: {
     client: 'pg',
     connection: {
       connectionString: process.env['DATABASE_URL'],
-      ssl: { rejectUnauthorized: false, },
     },
     migrations: {
       tableName: 'knex_migrations'
+    },
+    pool: {
+      min: 0,
+      max: 1,
     }
   }
 };

@@ -7,8 +7,11 @@ export const repo = () => {
     client: 'pg',
     connection: {
       connectionString: process.env['DATABASE_URL'],
-      ssl: { rejectUnauthorized: false, },
     },
+    pool: {
+      min: 0,
+      max: 1,
+    }
   });
   return _repo;
 }
