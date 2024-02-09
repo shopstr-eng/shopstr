@@ -389,20 +389,23 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     signIn = localStorage.getItem("signIn");
 
     relays = localStorage.getItem("relays")
-      ? JSON.parse(localStorage.getItem("relays") as string).filter(
-          // Filter out any null values from the parsed relays
-          (relay: string | null) => relay !== null,
-        )
-      : [];
 
-    if (relays === null) {
-      relays = [
-        "wss://relay.damus.io",
-        "wss://nos.lol",
-        "wss://nostr.mutinywallet.com",
-      ];
-      localStorage.setItem("relays", JSON.stringify(relays));
+    const defaultRelays = [
+      "wss://relay.damus.io",
+      "wss://nos.lol",
+      "wss://nostr.mutinywallet.com",
+    ];
+
+    if (!relays) {
+      relays = defaultRelays
+    } else {
+      try {
+        relays = (JSON.parse(relays) as string[]).filter(r => r);
+      } catch {
+        relays = defaultRelays
+      }
     }
+    localStorage.setItem("relays", JSON.stringify(relays));
 
     mints = localStorage.getItem("mints")
       ? JSON.parse(localStorage.getItem("mints") as string)
