@@ -378,14 +378,12 @@ export function getNsecWithPassphrase(passphrase: string) {
   let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
     CryptoJS.enc.Utf8,
   );
-  console.log('wtf ', nsec)
   // returns undefined or "" thanks to the toString method
   return nsec;
 }
 
 export function getPrivKeyWithPassphrase(passphrase: string) {
   let { data } = nip19.decode(getNsecWithPassphrase(passphrase));
-  console.log('aaaaa ', data)
   return data;
 }
 
