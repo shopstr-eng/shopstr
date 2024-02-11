@@ -209,7 +209,7 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
     }
     await Promise.any(pool.publish(relays, signedEvent));
 
-    return res.status(200).json({});
+    return res.status(200).json({ id: signedEvent.id });
   } catch (error) {
     console.error(error);
     return res.status(500).json({});

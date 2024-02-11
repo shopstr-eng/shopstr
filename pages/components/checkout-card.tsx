@@ -86,7 +86,12 @@ export default function CheckoutCard({
       }
     }
 
-    const { pr, hash } = await wallet.requestMint(newPrice);
+    const invoiceMinted = await axios.post("/api/cashu/request-mint", {
+      total: newPrice,
+      currency,
+    });
+
+    const { id, pr, hash } = invoiceMinted.data;
 
     setInvoice(pr);
 
@@ -100,14 +105,15 @@ export default function CheckoutCard({
         console.error("ERROR", err);
       });
 
-    invoiceHasBeenPaid(wallet, newPrice, hash);
+    invoiceHasBeenPaid(wallet, newPrice, hash, id);
   };
 
   /** CHECKS WHETHER INVOICE HAS BEEN PAID */
   async function invoiceHasBeenPaid(
-    wallet: object,
+    wallet: CashuWallet,
     newPrice: number,
     hash: string,
+    metricsInvoiceId: string,
   ) {
     let encoded;
 
@@ -127,6 +133,7 @@ export default function CheckoutCard({
 
         if (encoded) {
           sendTokens(encoded);
+          captureInvoicePaidmetric(metricsInvoiceId);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           setTimeout(() => {
@@ -141,6 +148,21 @@ export default function CheckoutCard({
       }
     }
   }
+
+  const captureInvoicePaidmetric = async (metricsInvoiceId: string) => {
+    await axios({
+      method: "POST",
+      url: "/api/metrics/post-invoice-status",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      data: {
+        id: metricsInvoiceId,
+        listing_id: productData.id,
+        merchant_location: location,
+      },
+    });
+  };
 
   const sendTokens = async (token: string) => {
     const { title } = productData;

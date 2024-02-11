@@ -5,6 +5,7 @@ import { useRouter } from "next/router";
 import { ArrowUturnLeftIcon } from "@heroicons/react/24/outline";
 import { nip19 } from "nostr-tools";
 import ProductForm from "./components/product-form";
+import { getLocalStorageData } from "../pages/components/utility/nostr-helper-functions";
 import {
   Button,
   Select,
@@ -18,7 +19,6 @@ import {
 } from "./components/utility/STATIC-VARIABLES";
 import LocationDropdown from "./components/utility-components/dropdowns/location-dropdown";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-import { getLocalStorageData } from "./components/utility/nostr-helper-functions";
 
 const SellerView = () => {
   const router = useRouter();
@@ -38,6 +38,22 @@ const SellerView = () => {
       setfocusedPubkey(data as string); // router.query.pubkey returns array of pubkeys
     }
   }, [router.query.pubkey]);
+
+  useEffect(() => {
+    const loggedIn = getLocalStorageData().decryptedNpub;
+    if (loggedIn) {
+      fetch("/api/metrics/post-shopper", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: loggedIn,
+        }),
+      });
+    }
+  });
+
   const routeToShop = (npubkey: string) => {
     npubkey = encodeURIComponent(npubkey);
     if (npubkey === "") {

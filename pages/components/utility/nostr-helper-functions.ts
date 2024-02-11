@@ -63,7 +63,7 @@ export async function PostListing(
     await Promise.any(pool.publish(relays, signedHandlerEvent));
     return signedEvent;
   } else {
-    axios({
+    const res = await axios({
       method: "POST",
       url: "/api/nostr/post-event",
       headers: {
@@ -81,6 +81,7 @@ export async function PostListing(
       },
     });
     return {
+      id: res.data.id,
       pubkey: decryptedNpub,
       created_at: created_at,
       kind: 30402,
@@ -88,6 +89,24 @@ export async function PostListing(
       content: summary,
     };
   }
+}
+
+export async function capturePostListingMetric(id, tags) {
+  const { decryptedNpub, relays } = getLocalStorageData();
+  axios({
+    method: "POST",
+    url: "/api/metrics/post-listing",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    data: {
+      listing_id: id,
+      merchant_id: decryptedNpub,
+      merchant_location:
+        tags.find(([key]: [key: string]) => key === "location")?.[1] || "",
+      relays,
+    },
+  });
 }
 
 export async function DeleteListing(
@@ -337,6 +356,13 @@ async function generateNostrEventId(msg) {
   return hash;
 }
 
+export function getPubKey() {
+  const npub = localStorage.getItem("npub");
+  if (!npub) return null;
+  const { data } = nip19.decode(npub);
+  return data;
+}
+
 export function validPassphrase(passphrase: string) {
   try {
     let nsec = getNsecWithPassphrase(passphrase);
@@ -388,7 +414,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
 
     signIn = localStorage.getItem("signIn");
 
-    relays = localStorage.getItem("relays")
+    relays = localStorage.getItem("relays");
 
     const defaultRelays = [
       "wss://relay.damus.io",
@@ -397,12 +423,12 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     ];
 
     if (!relays) {
-      relays = defaultRelays
+      relays = defaultRelays;
     } else {
       try {
-        relays = (JSON.parse(relays) as string[]).filter(r => r);
+        relays = (JSON.parse(relays) as string[]).filter((r) => r);
       } catch {
-        relays = defaultRelays
+        relays = defaultRelays;
       }
     }
     localStorage.setItem("relays", JSON.stringify(relays));
