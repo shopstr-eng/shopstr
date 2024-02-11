@@ -144,6 +144,7 @@ export default function MetricsPage() {
               className="mt-4 h-80"
               data={item.category.metrics}
               categories={[item.label]}
+              suppressHydrationWarning
               index="period"
               colors={["indigo", "fuchsia"]}
               valueFormatter={
