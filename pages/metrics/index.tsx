@@ -1,5 +1,3 @@
-'use client';
-
 import { Card, Metric, Text, Title, Flex, Grid,
   DateRangePicker, DateRangePickerValue, LineChart, DateRangePickerItem,
   Callout } from '@tremor/react';
