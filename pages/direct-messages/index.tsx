@@ -187,21 +187,21 @@ const DirectMessages = () => {
       newChatsMap.set(currentChatPubkey, updatedCurrentChat);
       setChatsMap(newChatsMap);
       if (updatedCurrentChat.length <= 1) {
-          // only logs if this is the first msg, aka an iniquiry
-          axios({
-            method: "POST",
-            url: "/api/metrics/post-inquiry",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            data: {
-              customer_id: localStorageValues.decryptedNpub,
-              merchant_id: currentChatPubkey,
-              // listing_id: 'TODO'
-              // relays: relays,
-            }
-          });
-        }
+        // only logs if this is the first msg, aka an iniquiry
+        axios({
+          method: "POST",
+          url: "/api/metrics/post-inquiry",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          data: {
+            customer_id: localStorageValues.decryptedNpub,
+            merchant_id: currentChatPubkey,
+            // listing_id: 'TODO'
+            // relays: relays,
+          },
+        });
+      }
       setMessage("");
       setIsSendingDMLoading(false);
     } catch (e) {
