@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Card,
   Metric,
@@ -81,6 +83,7 @@ export default function MetricsPage() {
         value={date}
         onValueChange={setDate}
         color="rose"
+        suppressHydrationWarning
       >
         <DateRangePickerItem
           key="today"
