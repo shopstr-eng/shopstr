@@ -26,7 +26,7 @@ import {
   getPrivKeyWithPassphrase,
   nostrBuildUploadImage,
   getLocalStorageData,
-  PostListingMetric,
+  capturePostListingMetric,
 } from "./utility/nostr-helper-functions";
 import { finalizeEvent } from "nostr-tools";
 import { CATEGORIES, SHIPPING_OPTIONS } from "./utility/STATIC-VARIABLES";
@@ -135,7 +135,7 @@ export default function NewForm({
     });
     let newListing = await PostListing(tags, passphrase);
 
-    PostListingMetric(newListing.id, tags);
+    capturePostListingMetric(newListing.id, tags);
 
     if (isEdit) {
       if (handleDelete) {

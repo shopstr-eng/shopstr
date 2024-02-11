@@ -86,10 +86,10 @@ export default function CheckoutCard({
       }
     }
 
-    const invoiceMinted = await axios.post('/api/cashu/request-mint', {
+    const invoiceMinted = await axios.post("/api/cashu/request-mint", {
       total: newPrice,
       currency,
-    })
+    });
 
     const { id, pr, hash } = invoiceMinted.data;
 
@@ -133,7 +133,7 @@ export default function CheckoutCard({
 
         if (encoded) {
           sendTokens(encoded);
-          sendInvoicePaid(metricsInvoiceId);
+          captureInvoicePaidmetric(metricsInvoiceId);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           setTimeout(() => {
@@ -149,7 +149,7 @@ export default function CheckoutCard({
     }
   }
 
-  const sendInvoicePaid = async (metricsInvoiceId: string) => {
+  const captureInvoicePaidmetric = async (metricsInvoiceId: string) => {
     await axios({
       method: "POST",
       url: "/api/metrics/post-invoice-status",
@@ -162,7 +162,7 @@ export default function CheckoutCard({
         merchant_location: location,
       },
     });
-  }
+  };
 
   const sendTokens = async (token: string) => {
     const { title } = productData;

@@ -91,7 +91,7 @@ export async function PostListing(
   }
 }
 
-export async function PostListingMetric(id, tags) {
+export async function capturePostListingMetric(id, tags) {
   const { decryptedNpub, relays } = getLocalStorageData();
   axios({
     method: "POST",
@@ -102,9 +102,10 @@ export async function PostListingMetric(id, tags) {
     data: {
       listing_id: id,
       merchant_id: decryptedNpub,
-      merchant_location: tags.find(([key]: [key: string]) => key === "location")?.[1] || "",
+      merchant_location:
+        tags.find(([key]: [key: string]) => key === "location")?.[1] || "",
       relays,
-    }
+    },
   });
 }
 
@@ -413,7 +414,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
 
     signIn = localStorage.getItem("signIn");
 
-    relays = localStorage.getItem("relays")
+    relays = localStorage.getItem("relays");
 
     const defaultRelays = [
       "wss://relay.damus.io",
@@ -422,12 +423,12 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     ];
 
     if (!relays) {
-      relays = defaultRelays
+      relays = defaultRelays;
     } else {
       try {
-        relays = (JSON.parse(relays) as string[]).filter(r => r);
+        relays = (JSON.parse(relays) as string[]).filter((r) => r);
       } catch {
-        relays = defaultRelays
+        relays = defaultRelays;
       }
     }
     localStorage.setItem("relays", JSON.stringify(relays));
