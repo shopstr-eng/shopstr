@@ -26,13 +26,13 @@ import {
   getPrivKeyWithPassphrase,
   nostrBuildUploadImage,
   getLocalStorageData,
-  capturePostListingMetric,
 } from "./utility/nostr-helper-functions";
 import { finalizeEvent } from "nostr-tools";
 import { CATEGORIES, SHIPPING_OPTIONS } from "./utility/STATIC-VARIABLES";
 import LocationDropdown from "./utility-components/dropdowns/location-dropdown";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 import { ProductContext } from "../context";
+import { capturePostListingMetric } from "./utility/metrics-helper-functions";
 
 interface ProductFormProps {
   handleModalToggle: () => void;

@@ -35,7 +35,7 @@ interface ProductModalProps {
   showModal: boolean;
   handleSendMessage: (pubkeyToOpenChatWith: string) => void;
   handleCheckout: (productId: string) => void;
-  handleDelete: (productId: string, passphrase: string) => void;
+  handleDelete: (productId: string, passphrase?: string) => void;
 }
 
 export default function DisplayProductModal({
@@ -58,7 +58,6 @@ export default function DisplayProductModal({
   } = productData;
   const { signIn, decryptedNpub } = getLocalStorageData();
 
-  const [passphrase, setPassphrase] = React.useState("");
   const [requestPassphrase, setRequestPassphrase] = React.useState(false);
   const [deleteLoading, setDeleteLoading] = React.useState(false);
   const [showProductForm, setShowProductForm] = React.useState(false);
@@ -82,7 +81,7 @@ export default function DisplayProductModal({
       setRequestPassphrase(true);
     }
   };
-  const finalizeDeleteListingProcess = async () => {
+  const finalizeDeleteListingProcess = async (passphrase?: string) => {
     // only used for when signIn === "nsec"
     setDeleteLoading(true);
     await handleDelete(productData.id, passphrase); // delete listing
@@ -210,8 +209,6 @@ export default function DisplayProductModal({
         </ModalContent>
       </Modal>
       <RequestPassphraseModal
-        passphrase={passphrase}
-        setCorrectPassphrase={setPassphrase}
         isOpen={requestPassphrase}
         setIsOpen={setRequestPassphrase}
         actionOnSubmit={finalizeDeleteListingProcess}

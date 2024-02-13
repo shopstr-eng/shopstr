@@ -22,13 +22,15 @@ export default function RequestPassphraseModal({
   setIsOpen,
   actionOnSubmit,
 }: {
-  passphrase: string;
-  setCorrectPassphrase: (passphrase: string) => void;
+  passphrase?: string;
+  setCorrectPassphrase?: (passphrase: string) => void;
   isOpen: boolean;
   setIsOpen: (value: boolean) => void;
-  actionOnSubmit?: () => void; // callback function to be called after getting correct passphrase (delete listing)
+  actionOnSubmit?: (passphrase: string) => void; // callback function to be called after getting correct passphrase (delete listing)
 }) {
-  const [passphraseInput, setPassphraseInput] = useState(passphrase); // passphrase to be entered by user
+  const [passphraseInput, setPassphraseInput] = useState(
+    passphrase ? passphrase : "",
+  ); // passphrase to be entered by user
   const router = useRouter();
   const passphraseInputRef = useRef(null);
   const isButtonDisabled = useMemo(() => {
@@ -49,9 +51,11 @@ export default function RequestPassphraseModal({
       passphraseInputRef.current.focus();
     } else if (!isButtonDisabled) {
       setIsOpen(false);
-      setCorrectPassphrase(passphraseInput);
+      if (setCorrectPassphrase) {
+        setCorrectPassphrase(passphraseInput);
+      }
       if (actionOnSubmit) {
-        actionOnSubmit();
+        actionOnSubmit(passphraseInput);
       }
     }
   };

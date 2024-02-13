@@ -138,6 +138,7 @@ function App({ Component, pageProps }: AppProps) {
     }
     if (relays) fetchData(); // Call the async function immediately
   }, [localStorageValues.relays]);
+
   /** UPON PROFILEMAP UPDATE, SET PROFILE CONTEXT **/
   useEffect(() => {
     setProfileContext((profileContext: ProfileContextInterface) => {

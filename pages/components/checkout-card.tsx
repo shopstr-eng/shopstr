@@ -17,6 +17,7 @@ import { getLocalStorageData } from "./utility/nostr-helper-functions";
 import { nip19 } from "nostr-tools";
 import { ProductData } from "./utility/product-parser-functions";
 import { DisplayCostBreakdown } from "./utility-components/display-monetary-info";
+import { captureInvoicePaidmetric } from "./utility/metrics-helper-functions";
 
 export default function CheckoutCard({
   productData,
@@ -134,7 +135,7 @@ export default function CheckoutCard({
 
         if (encoded) {
           sendTokens(encoded);
-          captureInvoicePaidmetric(metricsInvoiceId);
+          captureInvoicePaidmetric(metricsInvoiceId, productData.id);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           setTimeout(() => {
@@ -149,21 +150,6 @@ export default function CheckoutCard({
       }
     }
   }
-
-  const captureInvoicePaidmetric = async (metricsInvoiceId: string) => {
-    await axios({
-      method: "POST",
-      url: "/api/metrics/post-invoice-status",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      data: {
-        id: metricsInvoiceId,
-        listing_id: productData.id,
-        merchant_location: location,
-      },
-    });
-  };
 
   const sendTokens = async (token: string) => {
     const { title } = productData;
