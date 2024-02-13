@@ -91,56 +91,6 @@ export async function PostListing(
   }
 }
 
-export async function capturePostListingMetric(id, tags) {
-  const { decryptedNpub, relays } = getLocalStorageData();
-  axios({
-    method: "POST",
-    url: "/api/metrics/post-listing",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    data: {
-      listing_id: id,
-      merchant_id: decryptedNpub,
-      merchant_location:
-        tags.find(([key]: [key: string]) => key === "location")?.[1] || "",
-      relays,
-    },
-  });
-}
-
-export async function DeleteListing(
-  event_ids_to_delete: ProductFormValues,
-  passphrase: string,
-) {
-  const { signIn, decryptedNpub, relays } = getLocalStorageData();
-  let deletionEvent = await createNostrDeleteEvent(
-    event_ids_to_delete,
-    decryptedNpub,
-    "user deletion request",
-    signIn == "extension" ? undefined : getPrivKeyWithPassphrase(passphrase),
-  );
-
-  if (signIn === "extension") {
-    const signedEvent = await window.nostr.signEvent(deletionEvent);
-    const pool = new SimplePool();
-
-    await Promise.any(pool.publish(relays, signedEvent));
-  } else {
-    axios({
-      method: "POST",
-      url: "/api/nostr/post-event",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      data: {
-        ...deletionEvent,
-        relays: relays,
-      },
-    });
-  }
-}
-
 interface EncryptedMessageEvent {
   pubkey: string;
   created_at: number;
@@ -200,50 +150,21 @@ export async function sendEncryptedMessage(
   await Promise.any(pool.publish(relays, signedEvent));
 }
 
-export async function sendDirectMessage(
-  recipient: string,
-  message: string,
-  passphrase: string,
+export async function finalizeAndSendNostrEvent(
+  nostrEvent: NostrEvent,
+  passphrase?: string,
 ) {
-  const { signIn, decryptedNpub, relays } = getLocalStorageData();
-  const created_at = Math.floor(Date.now() / 1000);
-
+  const { signIn, relays } = getLocalStorageData();
+  let signedEvent;
   if (signIn === "extension") {
-    const event = {
-      created_at: created_at,
-      kind: 30018,
-      tags: [
-        ["d", recipient],
-        ["d", decryptedNpub],
-      ],
-      content: message,
-    };
-
-    const signedEvent = await window.nostr.signEvent(event);
-    const pool = new SimplePool();
-
-    await Promise.any(pool.publish(relays, signedEvent));
+    signedEvent = await window.nostr.signEvent(nostrEvent);
   } else {
-    axios({
-      method: "POST",
-      url: "/api/nostr/post-event",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      data: {
-        pubkey: decryptedNpub,
-        privkey: getPrivKeyWithPassphrase(passphrase),
-        created_at: created_at,
-        kind: 30018,
-        tags: [
-          ["d", recipient],
-          ["d", decryptedNpub],
-        ],
-        content: message,
-        relays: relays,
-      },
-    });
+    if (!passphrase) throw new Error("Passphrase is required");
+    let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
+    signedEvent = finalizeEvent(nostrEvent, senderPrivkey);
   }
+  const pool = new SimplePool();
+  await Promise.any(pool.publish(relays, signedEvent));
 }
 
 type NostrBuildResponse = {
@@ -341,7 +262,7 @@ function sha256Hex(string) {
   });
 }
 
-async function generateNostrEventId(msg) {
+export async function generateNostrEventId(msg) {
   const digest = [
     0,
     msg.pubkey,
@@ -354,13 +275,6 @@ async function generateNostrEventId(msg) {
   const hash = await sha256Hex(digest_str);
 
   return hash;
-}
-
-export function getPubKey() {
-  const npub = localStorage.getItem("npub");
-  if (!npub) return null;
-  const { data } = nip19.decode(npub);
-  return data;
 }
 
 export function validPassphrase(passphrase: string) {
@@ -455,32 +369,6 @@ export const decryptNpub = (npub: string) => {
   const { data } = nip19.decode(npub);
   return data;
 };
-
-export async function createNostrDeleteEvent(
-  event_ids: [string],
-  pubkey: string,
-  content: string,
-  privkey: String,
-) {
-  let msg = {
-    kind: 5, // NIP-X - Deletion
-    content: content, // Deletion Reason
-    tags: [],
-  };
-
-  for (let event_id of event_ids) {
-    msg.tags.push(["e", event_id]);
-  }
-
-  // set msg fields
-  msg.created_at = Math.floor(new Date().getTime() / 1000);
-  msg.pubkey = pubkey;
-  if (privkey) msg.privkey = privkey;
-
-  // Generate event id
-  msg.id = await generateNostrEventId(msg);
-  return msg;
-}
 
 export function nostrExtensionLoaded() {
   if (!window.nostr) {

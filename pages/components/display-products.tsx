@@ -1,7 +1,6 @@
 import { useState, useEffect, useContext } from "react";
 import { nip19 } from "nostr-tools";
 import {
-  DeleteListing,
   NostrEvent,
   getLocalStorageData,
 } from "./utility/nostr-helper-functions";
@@ -14,6 +13,7 @@ import { useRouter } from "next/router";
 import parseTags, { ProductData } from "./utility/product-parser-functions";
 import { Spinner } from "@nextui-org/react";
 import ShopstrSpinner from "./utility-components/shopstr-spinner";
+import { DeleteListing } from "../api/nostr/crud-service";
 
 const DisplayEvents = ({
   focusedPubkey,
