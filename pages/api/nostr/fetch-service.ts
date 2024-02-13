@@ -66,6 +66,10 @@ const addChatsToCache = async (chatsMap: Map<string, any>) => {
   await lastFetchedTime.put({ itemType: "chats", time: Date.now() });
 };
 
+export const removeProductFromCache = async (productIds: string[]) => {
+  await products.bulkDelete(productIds);
+};
+
 export const fetchAllProductsFromCache = async () => {
   let productsMap = await products.toArray();
   let productsArray = productsMap.map((product) => product.product);

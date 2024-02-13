@@ -4,6 +4,7 @@ import {
   generateNostrEventId,
   getLocalStorageData,
 } from "@/pages/components/utility/nostr-helper-functions";
+import { removeProductFromCache } from "./fetch-service";
 
 export async function DeleteListing(
   event_ids_to_delete: string[],
@@ -16,7 +17,8 @@ export async function DeleteListing(
     "user deletion request",
   );
 
-  finalizeAndSendNostrEvent(deletionEvent, passphrase);
+  await finalizeAndSendNostrEvent(deletionEvent, passphrase);
+  await removeProductFromCache(event_ids_to_delete);
 }
 
 export async function createNostrDeleteEvent(
