@@ -4,8 +4,8 @@
   "description": "Buy and sell anything, anywhere, anytime.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#FEF08A",
-  "theme_color": "#FEF08A",
+  "background_color": "#212121",
+  "theme_color": "#212121",
   "orientation": "any",
   "icons": [
     {
