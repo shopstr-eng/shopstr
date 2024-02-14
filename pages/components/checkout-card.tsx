@@ -87,6 +87,7 @@ export default function CheckoutCard({
     }
 
     const invoiceMinted = await axios.post("/api/cashu/request-mint", {
+      mintUrl: mints[0],
       total: newPrice,
       currency,
     });

@@ -4,19 +4,15 @@ import { DateTime } from "luxon";
 import { v4 as uuid } from "uuid";
 import repo from "../../../utils/repo";
 
-const wallet = new CashuWallet(
-  new CashuMint(
-    "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC",
-  ),
-);
-
 const requestMint = async (req: NextApiRequest, res: NextApiResponse) => {
   if (req.method !== "POST") {
     return res.status(405).json({});
   }
 
   try {
-    const { total, currency } = req.body;
+    const { mintUrl, total, currency } = req.body;
+
+    const wallet = new CashuWallet(new CashuMint(mintUrl));
 
     const { pr, hash } = await wallet.requestMint(total);
 
