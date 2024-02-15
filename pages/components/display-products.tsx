@@ -36,7 +36,6 @@ const DisplayEvents = ({
   const [focusedProduct, setFocusedProduct] = useState(""); // product being viewed in modal
   const [showModal, setShowModal] = useState(false);
   const router = useRouter();
-  const [passphrase, setPassphrase] = useState(""); // NEEDED FOR DELETE LISTING
 
   useEffect(() => {
     if (!productEventContext) return;
@@ -55,11 +54,7 @@ const DisplayEvents = ({
   /** FILTERS PRODUCT DATA ON CATEGORY, LOCATION, FOCUSED PUBKEY (SELLER) **/
   useEffect(() => {
     setIsProductLoading(true);
-    let filteredEvents = productEvents.filter((event) => {
-      // gets rid of products that were deleted
-      return !deletedProducts.includes(event.id);
-    });
-    let filteredProductData = filteredEvents.map((event) => {
+    let filteredProductData = productEvents.map((event) => {
       return parseTags(event);
     });
 
@@ -120,7 +115,7 @@ const DisplayEvents = ({
     );
   };
 
-  const handleDelete = async (productId: string, passphrase: string) => {
+  const handleDelete = async (productId: string, passphrase?: string) => {
     try {
       await DeleteListing([productId], passphrase);
       setDeletedProducts((deletedProducts) => [...deletedProducts, productId]);
@@ -199,14 +194,16 @@ const DisplayEvents = ({
         ) : (
           <div className="my-2 flex h-[90%] max-w-full flex-row flex-wrap justify-evenly overflow-x-hidden overflow-y-hidden">
             {filteredProductData.map((productData: ProductData, index) => {
-              return (
-                <ProductCard
-                  key={productData.id + "-" + index}
-                  uniqueKey={productData.id + "-" + index}
-                  productData={productData}
-                  onProductClick={onProductClick}
-                />
-              );
+              if (!deletedProducts.includes(productData.id)) {
+                return (
+                  <ProductCard
+                    key={productData.id + "-" + index}
+                    uniqueKey={productData.id + "-" + index}
+                    productData={productData}
+                    onProductClick={onProductClick}
+                  />
+                );
+              }
             })}
             {getSpacerCardsNeeded()}
           </div>
