@@ -15,6 +15,7 @@ import {
 import {
   getLocalStorageData,
   LocalStorageInterface,
+  NostrEvent,
 } from "./components/utility/nostr-helper-functions";
 import { NextUIProvider } from "@nextui-org/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
@@ -68,6 +69,17 @@ function App({ Component, pageProps }: AppProps) {
     chats: new Map(),
     isLoading: true,
   });
+
+  const editProductContext = (
+    productEvents: NostrEvent[],
+    isLoading: boolean,
+  ) => {
+    setProductContext({
+      productEvents: productEvents,
+      isLoading: isLoading,
+      addProductEvent: productContext.addProductEvent,
+    });
+  };
   /** FETCH initial PRODUCTS and PROFILES **/
   useEffect(() => {
     const relays = localStorageValues.relays;
@@ -75,23 +87,11 @@ function App({ Component, pageProps }: AppProps) {
     async function fetchData() {
       try {
         let pubkeysToFetchProfilesFor: string[] = [];
-        if (await didXMinutesElapseSinceLastFetch("products", 10)) {
-          let { productsWebsocketSub, profileSetFromProducts, productArray } =
-            await fetchAllPosts(relays, setProductContext);
-          setProductContext({
-            productEvents: productArray,
-            isLoading: false,
-            addProductEvent: productContext.addProductEvent,
-          });
-          pubkeysToFetchProfilesFor = [...profileSetFromProducts];
-        } else {
-          let productArray = await fetchAllProductsFromCache();
-          setProductContext({
-            productEvents: productArray,
-            isLoading: false,
-            addProductEvent: productContext.addProductEvent,
-          });
-        }
+        let { profileSetFromProducts } = await fetchAllPosts(
+          relays,
+          editProductContext,
+        );
+        pubkeysToFetchProfilesFor = [...profileSetFromProducts];
         if (!(await didXMinutesElapseSinceLastFetch("profiles", 10))) {
           let profileMap = await fetchAllProfilesFromCache();
           setProfileMap(profileMap);

@@ -14,7 +14,7 @@ export async function DeleteListing(
   let deletionEvent = await createNostrDeleteEvent(
     event_ids_to_delete,
     decryptedNpub,
-    "user deletion request",
+    "user deletion request from Shopstr.store",
   );
 
   await finalizeAndSendNostrEvent(deletionEvent, passphrase);

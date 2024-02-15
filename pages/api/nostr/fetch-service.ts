@@ -16,15 +16,13 @@ db.version(1).stores({
   lastFetchedTime: "itemType, time", // item: {products, profiles, chats} time: timestamp
 });
 
+let indexedDBWorking = true;
 db.open().catch(function (e) {
   console.error("Open failed: " + e.stack);
+  indexedDBWorking = false;
 });
 
 const { products, profiles, chats, lastFetchedTime } = db;
-
-db.open().catch(function (e) {
-  console.error("Open failed: " + e.stack);
-});
 
 /**
  * returns the minutes lapsed since last fetch 60000ms = 1 minute
@@ -95,26 +93,40 @@ export const fetchAllChatsFromCache = async () => {
 
 export const fetchAllPosts = async (
   relays: string[],
-  setProductContext: (value: ProductContextInterface) => void,
+  editProductContext: (productEvents: NostrEvent[], isLoading: boolean) => void,
 ): Promise<{
-  productsWebsocketSub: SubCloser;
   profileSetFromProducts: Set<string>;
-  productArray: NostrEvent[];
 }> => {
-  return new Promise(function (resolve, reject) {
+  return new Promise(async function (resolve, reject) {
     try {
+      let deletedProductsInCacheSet: Set<any> = new Set(); // used to remove deleted items from cache
+      if (indexedDBWorking) {
+        let productArrayFromCache = await fetchAllProductsFromCache();
+        deletedProductsInCacheSet = new Set(
+          productArrayFromCache.map((product) => product.id),
+        );
+        editProductContext(productArrayFromCache, false);
+      }
+
       const pool = new SimplePool();
       let subParams: { kinds: number[]; authors?: string[]; limit: number } = {
         kinds: [30402],
         limit: POSTQUERYLIMIT,
       };
 
-      let productArray: NostrEvent[] = [];
+      let productArrayFromRelay: NostrEvent[] = [];
       let profileSetFromProducts: Set<string> = new Set();
 
       let h = pool.subscribeMany(relays, [subParams], {
         onevent(event) {
-          productArray.push(event);
+          productArrayFromRelay.push(event);
+          if (
+            deletedProductsInCacheSet &&
+            event.id in deletedProductsInCacheSet
+          ) {
+            deletedProductsInCacheSet.delete(event.id);
+          }
+          products.put({ id: event.id, product: event });
           profileSetFromProducts.add(event.pubkey);
         },
         oneose() {
@@ -124,13 +136,13 @@ export const fetchAllPosts = async (
       });
       const returnCall = () => {
         resolve({
-          productsWebsocketSub: h,
           profileSetFromProducts,
-          productArray,
         });
-        addProductsToCache(productArray);
+        editProductContext(productArrayFromRelay, false);
+        removeProductFromCache(Array.from(deletedProductsInCacheSet));
       };
     } catch (error) {
+      console.log("fetchAllPosts error", error);
       reject(error);
     }
   });
