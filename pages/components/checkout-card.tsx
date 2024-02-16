@@ -3,6 +3,7 @@ import React, { useContext, useState, useEffect } from "react";
 import { ProfileMapContext } from "../context";
 import { useRouter } from "next/router";
 import {
+  Button,
   Card,
   CardHeader,
   CardBody,
@@ -17,6 +18,7 @@ import { getLocalStorageData } from "./utility/nostr-helper-functions";
 import { nip19 } from "nostr-tools";
 import { ProductData } from "./utility/product-parser-functions";
 import { DisplayCostBreakdown } from "./utility-components/display-monetary-info";
+import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
 
 export default function CheckoutCard({
   productData,
@@ -27,6 +29,8 @@ export default function CheckoutCard({
   const { pubkey, currency, totalCost } = productData;
   const pubkeyOfProductBeingSold = pubkey;
   const { decryptedNpub, relays, mints } = getLocalStorageData();
+
+  const [paymentCard, setPaymentCard] = useState(false);
 
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
@@ -52,12 +56,6 @@ export default function CheckoutCard({
         console.error(error);
       });
   }, []);
-
-  useEffect(() => {
-    if (randomNsec !== "") {
-      handlePayment(totalCost, currency);
-    }
-  }, [randomNsec]);
 
   useEffect(() => {
     const profileMap = profileContext.profileData;
@@ -205,67 +203,76 @@ export default function CheckoutCard({
 
   return (
     <>
-      <Card className="max-w-[700px]">
-        <CardHeader className="flex justify-center gap-3">
-          <span className="text-xl font-bold">Pay with Lightning</span>
-        </CardHeader>
-        <Divider />
-        <CardBody className="flex flex-col items-center">
-          <DisplayCostBreakdown monetaryInfo={productData} />
-        </CardBody>
-        <CardFooter className="flex flex-col items-center">
-          {!paymentConfirmed ? (
-            <div className="flex flex-col items-center justify-center">
-              {qrCodeUrl ? (
-                <>
-                  <Image
-                    alt="Lightning invoice"
-                    className="object-cover"
-                    src={qrCodeUrl}
-                  />
-                  <div className="flex items-center justify-center">
-                    <p className="text-center">
-                      {invoice.length > 30
-                        ? `${invoice.substring(0, 10)}...${invoice.substring(
-                            invoice.length - 10,
-                            invoice.length,
-                          )}`
-                        : invoice}
-                    </p>
-                    <ClipboardIcon
-                      onClick={handleCopyInvoice}
-                      className={`ml-2 h-4 w-4 cursor-pointer ${
-                        copiedToClipboard ? "hidden" : ""
-                      }`}
+      {!paymentCard && (
+        <center>
+          <Button className={SHOPSTRBUTTONCLASSNAMES + " mt-3"} onClick={() => {if (randomNsec !== "") {handlePayment(totalCost, currency);} setPaymentCard(true);}}>
+            Pay Now
+          </Button>
+        </center>
+      )}
+      {paymentCard && (
+        <Card className="mt-3 max-w-[700px]">
+          <CardHeader className="flex justify-center gap-3">
+            <span className="text-xl font-bold">Lightning Invoice</span>
+          </CardHeader>
+          <Divider />
+          <CardBody className="flex flex-col items-center">
+            <DisplayCostBreakdown monetaryInfo={productData} />
+          </CardBody>
+          <CardFooter className="flex flex-col items-center">
+            {!paymentConfirmed ? (
+              <div className="flex flex-col items-center justify-center">
+                {qrCodeUrl ? (
+                  <>
+                    <Image
+                      alt="Lightning invoice"
+                      className="object-cover"
+                      src={qrCodeUrl}
                     />
-                    <CheckIcon
-                      className={`ml-2 h-4 w-4 cursor-pointer ${
-                        copiedToClipboard ? "" : "hidden"
-                      }`}
-                    />
+                    <div className="flex items-center justify-center">
+                      <p className="text-center">
+                        {invoice.length > 30
+                          ? `${invoice.substring(0, 10)}...${invoice.substring(
+                              invoice.length - 10,
+                              invoice.length,
+                            )}`
+                          : invoice}
+                      </p>
+                      <ClipboardIcon
+                        onClick={handleCopyInvoice}
+                        className={`ml-2 h-4 w-4 cursor-pointer ${
+                          copiedToClipboard ? "hidden" : ""
+                        }`}
+                      />
+                      <CheckIcon
+                        className={`ml-2 h-4 w-4 cursor-pointer ${
+                          copiedToClipboard ? "" : "hidden"
+                        }`}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <p>Waiting for lightning invoice...</p>
                   </div>
-                </>
-              ) : (
-                <div>
-                  <p>Waiting for lightning invoice...</p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center">
-              <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
-                Payment confirmed!
-              </h3>
-              <Image
-                alt="Payment Confirmed"
-                className="object-cover"
-                src="../payment-confirmed.gif"
-                width={350}
-              />
-            </div>
-          )}
-        </CardFooter>
-      </Card>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center">
+                <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
+                  Payment confirmed!
+                </h3>
+                <Image
+                  alt="Payment Confirmed"
+                  className="object-cover"
+                  src="../payment-confirmed.gif"
+                  width={350}
+                />
+              </div>
+            )}
+          </CardFooter>
+        </Card>
+      )}
     </>
   );
 }
