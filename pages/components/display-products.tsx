@@ -9,6 +9,7 @@ import { useRouter } from "next/router";
 import parseTags, { ProductData } from "./utility/product-parser-functions";
 import ShopstrSpinner from "./utility-components/shopstr-spinner";
 import { DeleteListing } from "../api/nostr/crud-service";
+import { removeProductFromCache } from "../api/nostr/cache-service";
 
 const DisplayEvents = ({
   focusedPubkey,
@@ -22,7 +23,6 @@ const DisplayEvents = ({
   selectedSearch: string;
 }) => {
   const [productEvents, setProductEvents] = useState<ProductData[]>([]);
-  const [deletedProducts, setDeletedProducts] = useState<string[]>([]); // list of product ids that have been deleted
   const [isProductsLoading, setIsProductLoading] = useState(true);
   const productEventContext = useContext(ProductContext);
   const profileMapContext = useContext(ProfileMapContext);
@@ -61,7 +61,7 @@ const DisplayEvents = ({
   const handleDelete = async (productId: string, passphrase?: string) => {
     try {
       await DeleteListing([productId], passphrase);
-      setDeletedProducts((deletedProducts) => [...deletedProducts, productId]);
+      productEventContext.removeDeletedProductEvent(productId);
     } catch (e) {
       console.log(e);
     }
@@ -131,7 +131,6 @@ const DisplayEvents = ({
   };
 
   const displayProductCard = (productData: ProductData, index: number) => {
-    if (deletedProducts.includes(productData.id)) return;
     if (focusedPubkey && productData.pubkey !== focusedPubkey) return;
     if (!productSatisfiesAllFilters(productData)) return;
     return (

@@ -14,12 +14,14 @@ export interface ProductContextInterface {
   productEvents: any;
   isLoading: boolean;
   addNewlyCreatedProductEvent: (productEvent: any) => void;
+  removeDeletedProductEvent: (productId: string) => void;
 }
 
 export const ProductContext = createContext({
   productEvents: {},
   isLoading: true,
   addNewlyCreatedProductEvent: (productEvent: any) => {},
+  removeDeletedProductEvent: (productId: string) => {},
 } as ProductContextInterface);
 
 export interface ChatsContextInterface {

@@ -37,15 +37,27 @@ function App({ Component, pageProps }: AppProps) {
       isLoading: true,
       addNewlyCreatedProductEvent: (productEvent: any) => {
         setProductContext((productContext) => {
-          let productEvents = [
-            ...productContext.productEvents,
-            { ...productEvent, from: "context" },
-          ];
+          let productEvents = [...productContext.productEvents, productEvent];
           return {
             productEvents: productEvents,
             isLoading: false,
             addNewlyCreatedProductEvent:
               productContext.addNewlyCreatedProductEvent,
+            removeDeletedProductEvent: productContext.removeDeletedProductEvent,
+          };
+        });
+      },
+      removeDeletedProductEvent: (productId: string) => {
+        setProductContext((productContext) => {
+          let productEvents = [...productContext.productEvents].filter(
+            (event) => event.id !== productId,
+          );
+          return {
+            productEvents: productEvents,
+            isLoading: false,
+            addNewlyCreatedProductEvent:
+              productContext.addNewlyCreatedProductEvent,
+            removeDeletedProductEvent: productContext.removeDeletedProductEvent,
           };
         });
       },
@@ -71,6 +83,7 @@ function App({ Component, pageProps }: AppProps) {
       productEvents: productEvents,
       isLoading: isLoading,
       addNewlyCreatedProductEvent: productContext.addNewlyCreatedProductEvent,
+      removeDeletedProductEvent: productContext.removeDeletedProductEvent,
     });
   };
 
