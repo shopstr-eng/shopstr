@@ -1,95 +1,15 @@
-import { NostrEvent } from "@/pages/components/utility/nostr-helper-functions";
-import { ProductContextInterface } from "@/pages/context";
-import { SimplePool, nip19 } from "nostr-tools";
-import Dexie from "dexie";
+import { Nostr, SimplePool } from "nostr-tools";
+import {
+  addChatsToCache,
+  addProductToCache,
+  addProfilesToCache,
+  fetchAllProductsFromCache,
+  fetchProfileDataFromCache,
+  removeProductFromCache,
+} from "./cache-service";
+import { NostrEvent } from "@/pages/types";
 
 const POSTQUERYLIMIT = 200;
-
-type ItemType = "products" | "profiles" | "chats";
-
-const db = new Dexie("ItemsFetchedFromRelays");
-
-db.version(1).stores({
-  products: "id, product", // product: {id, product}
-  profiles: "id, profile", // profile: {pubkey, created_at, content}
-  chats: "id, messages", // messages: {pubkey, messages: [message1, message2, ...]}
-  lastFetchedTime: "itemType, time", // item: {products, profiles, chats} time: timestamp
-});
-
-let indexedDBWorking = true;
-db.open().catch(function (e) {
-  console.error("Open failed: " + e.stack);
-  indexedDBWorking = false;
-});
-
-const { products, profiles, chats, lastFetchedTime } = db;
-
-/**
- * returns the minutes lapsed since last fetch 60000ms = 1 minute
- */
-export const getMinutesSinceLastFetch = async (itemType: ItemType) => {
-  let lastFetchTime = await lastFetchedTime.get({ itemType });
-  if (!lastFetchTime) lastFetchTime = { itemType, time: 0 };
-  let timelapsedInMinutes = (Date.now() - lastFetchTime.time) / 60000;
-  return timelapsedInMinutes;
-};
-
-export const didXMinutesElapseSinceLastFetch = async (
-  itemType: ItemType,
-  minutes: number,
-) => {
-  let timelapsedInMinutes = await getMinutesSinceLastFetch(itemType);
-  return timelapsedInMinutes > minutes;
-};
-
-const addProductsToCache = async (productsArray: NostrEvent[]) => {
-  productsArray.forEach(async (product) => {
-    await products.put({ id: product.id, product });
-  });
-  await lastFetchedTime.put({ itemType: "products", time: Date.now() });
-};
-
-const addProfilesToCache = async (profileMap: Map<string, any>) => {
-  Array.from(profileMap.entries()).forEach(async ([pubkey, profile]) => {
-    if (profile === null) return;
-    await profiles.put({ id: pubkey, profile });
-  });
-  await lastFetchedTime.put({ itemType: "profiles", time: Date.now() });
-};
-
-const addChatsToCache = async (chatsMap: Map<string, any>) => {
-  Array.from(chatsMap.entries()).forEach(async ([pubkey, chat]) => {
-    await chats.put({ id: pubkey, messages: chat });
-  });
-  await lastFetchedTime.put({ itemType: "chats", time: Date.now() });
-};
-
-export const removeProductFromCache = async (productIds: string[]) => {
-  await products.bulkDelete(productIds);
-};
-
-export const fetchAllProductsFromCache = async () => {
-  let productsMap = await products.toArray();
-  let productsArray = productsMap.map((product) => product.product);
-  return productsArray;
-};
-
-export const fetchAllProfilesFromCache = async () => {
-  let cache = await profiles.toArray();
-  let productMap = new Map();
-  cache.forEach(({ id, profile }) => {
-    productMap.set(id, profile);
-  });
-  return productMap;
-};
-export const fetchAllChatsFromCache = async () => {
-  let cache = await chats.toArray();
-  let chatsMap = new Map();
-  cache.forEach(({ id, messages }) => {
-    chatsMap.set(id, messages);
-  });
-  return chatsMap;
-};
 
 export const fetchAllPosts = async (
   relays: string[],
@@ -100,12 +20,14 @@ export const fetchAllPosts = async (
   return new Promise(async function (resolve, reject) {
     try {
       let deletedProductsInCacheSet: Set<any> = new Set(); // used to remove deleted items from cache
-      if (indexedDBWorking) {
+      try {
         let productArrayFromCache = await fetchAllProductsFromCache();
         deletedProductsInCacheSet = new Set(
-          productArrayFromCache.map((product) => product.id),
+          productArrayFromCache.map((product: NostrEvent) => product.id),
         );
         editProductContext(productArrayFromCache, false);
+      } catch (error) {
+        console.log("Error: ", error);
       }
 
       const pool = new SimplePool();
@@ -126,7 +48,7 @@ export const fetchAllPosts = async (
           ) {
             deletedProductsInCacheSet.delete(event.id);
           }
-          products.put({ id: event.id, product: event });
+          addProductToCache(event);
           profileSetFromProducts.add(event.pubkey);
         },
         oneose() {
@@ -151,11 +73,22 @@ export const fetchAllPosts = async (
 export const fetchProfile = async (
   relays: string[],
   pubkeyProfilesToFetch: string[],
+  editProfileContext: (
+    productEvents: Map<any, any>,
+    isLoading: boolean,
+  ) => void,
 ): Promise<{
   profileMap: Map<string, any>;
 }> => {
-  return new Promise(function (resolve, reject) {
+  return new Promise(async function (resolve, reject) {
     try {
+      try {
+        let profileData = await fetchProfileDataFromCache();
+        editProfileContext(profileData, false);
+      } catch (error) {
+        console.log("Error: ", error);
+      }
+
       const pool = new SimplePool();
       let subParams: { kinds: number[]; authors?: string[] } = {
         kinds: [0],
@@ -288,6 +221,8 @@ export const fetchChatsAndMessages = async (
   chatsMap: Map<string, any>;
   profileSetFromChats: Set<string>;
 }> => {
+  if (!decryptedNpub)
+    return { chatsMap: new Map(), profileSetFromChats: new Set() };
   return new Promise(async function (resolve, reject) {
     try {
       const incomingChats = await fetchAllIncomingChats(relays, decryptedNpub);

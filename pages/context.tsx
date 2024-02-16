@@ -2,24 +2,24 @@ import { createContext } from "react";
 
 export interface ProfileContextInterface {
   profileData: Map<string, any>;
-  mergeProfileMaps: (profileMap: Map<string, any>) => void;
+  isLoading: boolean;
 }
 
 export const ProfileMapContext = createContext({
   profileData: new Map(),
-  mergeProfileMaps: (profileMap: Map<string, any>) => {},
+  isLoading: true,
 } as ProfileContextInterface);
 
 export interface ProductContextInterface {
   productEvents: any;
   isLoading: boolean;
-  addProductEvent: (productEvent: any) => void;
+  addNewlyCreatedProductEvent: (productEvent: any) => void;
 }
 
 export const ProductContext = createContext({
   productEvents: {},
   isLoading: true,
-  addProductEvent: (productEvent: any) => {},
+  addNewlyCreatedProductEvent: (productEvent: any) => {},
 } as ProductContextInterface);
 
 export interface ChatsContextInterface {

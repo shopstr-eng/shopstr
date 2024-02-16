@@ -1,7 +1,8 @@
 import * as CryptoJS from "crypto-js";
 import { finalizeEvent, nip04, nip19, nip98, SimplePool } from "nostr-tools";
-import { ProductFormValues } from "../api/post-event";
 import axios from "axios";
+import { NostrEvent } from "@/pages/types";
+import { ProductFormValues } from "@/pages/api/nostr/post-event";
 
 export async function PostListing(
   values: ProductFormValues,
@@ -195,16 +196,6 @@ type NostrBuildResponse = {
       };
     },
   ];
-};
-
-export type NostrEvent = {
-  id: string;
-  pubkey: string;
-  created_at: number;
-  kind: number;
-  tags: Tag[];
-  content: string;
-  sig: string;
 };
 
 export type DraftNostrEvent = Omit<NostrEvent, "pubkey" | "id" | "sig">;

@@ -33,6 +33,7 @@ import LocationDropdown from "./utility-components/dropdowns/location-dropdown";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 import { ProductContext } from "../context";
 import { capturePostListingMetric } from "./utility/metrics-helper-functions";
+import { addProductToCache } from "../api/nostr/cache-service";
 
 interface ProductFormProps {
   handleModalToggle: () => void;
@@ -74,7 +75,7 @@ export default function NewForm({
           Location: oldValues.location,
           "Shipping Option": oldValues.shippingType,
           "Shipping Cost": oldValues.shippingCost,
-          Category: oldValues.categories.join(","),
+          Category: oldValues.categories ? oldValues.categories.join(",") : "",
         }
       : {
           Currency: "SATS",
@@ -147,7 +148,8 @@ export default function NewForm({
     }
 
     clear();
-    productEventContext.addProductEvent(newListing);
+    productEventContext.addNewlyCreatedProductEvent(newListing);
+    addProductToCache(newListing);
     setIsPostingOrUpdatingProduct(false);
   };
 

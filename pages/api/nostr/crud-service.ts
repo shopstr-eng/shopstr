@@ -1,14 +1,14 @@
 import {
-  NostrEvent,
   finalizeAndSendNostrEvent,
   generateNostrEventId,
   getLocalStorageData,
 } from "@/pages/components/utility/nostr-helper-functions";
-import { removeProductFromCache } from "./fetch-service";
+import { NostrEvent } from "@/pages/types";
+import { removeProductFromCache } from "./cache-service";
 
 export async function DeleteListing(
   event_ids_to_delete: string[],
-  passphrase: string,
+  passphrase?: string,
 ) {
   const { decryptedNpub } = getLocalStorageData();
   let deletionEvent = await createNostrDeleteEvent(
