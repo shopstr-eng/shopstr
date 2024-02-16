@@ -214,12 +214,13 @@ export default function DisplayProductModal({
         setIsOpen={setRequestPassphrase}
         actionOnSubmit={finalizeDeleteListingProcess}
       />
-      {decryptedNpub !== pubkey && (
+      {decryptedNpub === pubkey && (
         <ProductForm
           showModal={showProductForm}
           handleModalToggle={handleEditToggle}
           oldValues={productData}
           handleDelete={handleDelete}
+          onSubmitCallback={handleModalToggle}
         />
       )}
     </>

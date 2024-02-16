@@ -41,7 +41,7 @@ interface ProductFormProps {
   // edit props
   oldValues?: object;
   handleDelete?: (productId: string, passphrase: string) => void;
-  handleProductModalToggle?: () => void;
+  onSubmitCallback?: () => void;
 }
 
 export default function NewForm({
@@ -49,7 +49,7 @@ export default function NewForm({
   handleModalToggle,
   oldValues,
   handleDelete,
-  handleProductModalToggle,
+  onSubmitCallback,
 }: ProductFormProps) {
   const [passphrase, setPassphrase] = useState("");
   const [images, setImages] = useState<string[]>([]);
@@ -142,15 +142,15 @@ export default function NewForm({
       if (handleDelete) {
         await handleDelete(oldValues.id, passphrase);
       }
-      if (handleProductModalToggle) {
-        handleProductModalToggle();
-      }
     }
 
     clear();
     productEventContext.addNewlyCreatedProductEvent(newListing);
     addProductToCache(newListing);
     setIsPostingOrUpdatingProduct(false);
+    if (onSubmitCallback) {
+      onSubmitCallback();
+    }
   };
 
   const clear = () => {
