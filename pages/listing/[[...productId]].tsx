@@ -18,7 +18,7 @@ const Listing = () => {
   useEffect(() => {
     if (router.isReady) {
       const { productId } = router.query;
-      const productIdString = product ? productId[0] : "";
+      const productIdString = productId ? productId[0] : "";
       setProductIdString(productIdString);
       if (!productIdString) {
         router.push("/"); // if there isn't a productId, redirect to home page
