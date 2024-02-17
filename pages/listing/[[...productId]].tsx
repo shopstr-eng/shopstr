@@ -14,11 +14,10 @@ const Listing = () => {
     undefined,
   );
 
-  const { productId } = router.query;
-  const productIdString = productId ? productId[0] : "";
+  const productIdString = router.asPath.split("/").pop() || ""; // Extract productId from the actual URL
 
   useEffect(() => {
-    if (!productId) {
+    if (!productIdString) {
       router.push("/"); // if there isn't a productId, redirect to home page
     }
   }, []);
@@ -45,7 +44,7 @@ const Listing = () => {
         h.close();
       },
     });
-  }, [relays]);
+  }, [relays, router.asPath]);
 
   return <ListingPage productData={productData} />;
 };
