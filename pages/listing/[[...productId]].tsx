@@ -48,7 +48,7 @@ const Listing = () => {
     });
   }, [relays]);
 
-  const imageUrl = productData.images?.length
+  const imageUrl = productData?.images?.length
     ? productData.images[0]
     : "/shopstr.png";
 
@@ -56,25 +56,25 @@ const Listing = () => {
     <div className="">
       <Head>
         <title>Shopstr</title>
-        <meta name="description" content={productData.title} />
+        <meta name="description" content={productData?.title} />
 
         <meta
           property="og:url"
-          content={`https://shopstr.store/listing/${productData.id}`}
+          content={`https://shopstr.store/listing/${productData?.id}`}
         />
         <meta property="og:type" content="website" />
         <meta property="og:title" content="Shopstr" />
-        <meta property="og:description" content={productData.title} />
+        <meta property="og:description" content={productData?.title} />
         <meta property="og:image" content={imageUrl} />
 
         <meta name="twitter:card" content="summary_large_image" />
         <meta property="twitter:domain" content="shopstr.store" />
         <meta
           property="twitter:url"
-          content={`https://shopstr.store/listing/${productData.id}`}
+          content={`https://shopstr.store/listing/${productData?.id}`}
         />
         <meta name="twitter:title" content="Shopstr" />
-        <meta name="twitter:description" content={productData.title} />
+        <meta name="twitter:description" content={productData?.title} />
         <meta name="twitter:image" content={imageUrl} />
       </Head>
       <ListingPage productData={productData} />;
