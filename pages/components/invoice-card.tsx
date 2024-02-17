@@ -71,11 +71,7 @@ export default function InvoiceCard({
     const profile = profileMap.has(decryptedNpub)
       ? profileMap.get(decryptedNpub)
       : undefined;
-    setName(
-      profile && profile.content.name
-        ? profile.content.name
-        : npub,
-    );
+    setName(profile && profile.content.name ? profile.content.name : npub);
   }, [profileContext]);
 
   const handlePayment = async (newPrice: number, currency: string) => {
