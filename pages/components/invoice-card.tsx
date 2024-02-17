@@ -39,7 +39,7 @@ export default function InvoiceCard({
   const pubkeyOfProductBeingSold = pubkey;
   const { npub, decryptedNpub, relays, mints } = getLocalStorageData();
 
-  const [paymentCard, setPaymentCard] = useState(false);
+  const [showInvoiceCard, setShowInvoiceCard] = useState(false);
 
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
@@ -71,16 +71,11 @@ export default function InvoiceCard({
     const profile = profileMap.has(decryptedNpub)
       ? profileMap.get(decryptedNpub)
       : undefined;
-    if (typeof window !== "undefined") {
-      let { signIn } = getLocalStorageData();
-      if (signIn) {
-        setName(
-          profile && profile.content.name
-            ? profile.content.name
-            : npub,
-        );
-      }
-    }
+    setName(
+      profile && profile.content.name
+        ? profile.content.name
+        : npub,
+    );
   }, [profileContext]);
 
   const handlePayment = async (newPrice: number, currency: string) => {
@@ -216,7 +211,7 @@ export default function InvoiceCard({
 
   return (
     <>
-      {!paymentCard && (
+      {!showInvoiceCard && (
         <>
           <Button
             type="submit"
@@ -242,7 +237,7 @@ export default function InvoiceCard({
               if (randomNsec !== "") {
                 handlePayment(totalCost, currency);
               }
-              setPaymentCard(true);
+              setShowInvoiceCard(true);
             }}
             startContent={
               <BoltIcon className="h-6 w-6 hover:text-yellow-500" />
@@ -252,7 +247,7 @@ export default function InvoiceCard({
           </Button>
         </>
       )}
-      {paymentCard && (
+      {showInvoiceCard && (
         <Card className="mt-3 max-w-[700px]">
           <CardHeader className="flex justify-center gap-3">
             <span className="text-xl font-bold">Lightning Invoice</span>

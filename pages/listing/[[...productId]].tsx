@@ -13,19 +13,20 @@ const Listing = () => {
   const [productData, setProductData] = useState<ProductData | undefined>(
     undefined,
   );
-
-  const productIdString = router.asPath.split("/").pop() || ""; // Extract productId from the actual URL
+  const [productIdString, setProductIdString] = useState("");
 
   useEffect(() => {
-    if (!productIdString) {
-      router.push("/"); // if there isn't a productId, redirect to home page
+    if (router.isReady) {
+      const { productId } = router.query;
+      const productIdString = product ? productId[0] : "";
+      setProductIdString(productIdString);
+      if (!productIdString) {
+        router.push("/"); // if there isn't a productId, redirect to home page
+      }
+      let { relays } = getLocalStorageData();
+      setRelays(relays);
     }
-  }, []);
-
-  useEffect(() => {
-    let { relays } = getLocalStorageData();
-    setRelays(relays);
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     const pool = new SimplePool();
@@ -44,7 +45,7 @@ const Listing = () => {
         h.close();
       },
     });
-  }, [relays, router.asPath]);
+  }, [relays]);
 
   return <ListingPage productData={productData} />;
 };

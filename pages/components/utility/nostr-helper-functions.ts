@@ -296,6 +296,7 @@ export function getPrivKeyWithPassphrase(passphrase: string) {
 export interface LocalStorageInterface {
   signIn: string; // extension or nsec
   encryptedPrivateKey: string;
+  npub: string;
   decryptedNpub: string;
   relays: string[];
   mints: string[];
