@@ -89,14 +89,9 @@ const DisplayEvents = ({
     });
   };
 
-  const handleCheckout = (productId: string) => {
-    let { signIn } = getLocalStorageData();
-    if (!signIn) {
-      alert("You must be signed in to checkout!");
-      return;
-    }
+  const handleReviewAndPurchase = (productId: string) => {
     setShowModal(false);
-    router.push(`/checkout/${productId}`);
+    router.push(`/listing/${productId}`);
   };
 
   const productSatisfiesCategoryFilter = (productData: ProductData) => {
@@ -180,7 +175,7 @@ const DisplayEvents = ({
         showModal={showModal}
         handleModalToggle={handleToggleModal}
         handleSendMessage={handleSendMessage}
-        handleCheckout={handleCheckout}
+        handleReviewAndPurchase={handleReviewAndPurchase}
         handleDelete={handleDelete}
       />
     </>

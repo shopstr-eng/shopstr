@@ -3,6 +3,7 @@ import {
   BoltIcon,
   EnvelopeIcon,
   PencilSquareIcon,
+  ShareIcon,
   TrashIcon,
 } from "@heroicons/react/24/outline";
 import {
@@ -20,10 +21,7 @@ import ImageCarousel from "./utility-components/image-carousel";
 import { ProfileAvatar } from "./utility-components/avatar";
 import CompactCategories from "./utility-components/compact-categories";
 import { locationAvatar } from "./utility-components/dropdowns/location-dropdown";
-import {
-  DisplayCostBreakdown,
-  formatWithCommas,
-} from "./utility-components/display-monetary-info";
+import { DisplayCostBreakdown } from "./utility-components/display-monetary-info";
 import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
 import RequestPassphraseModal from "./utility-components/request-passphrase-modal";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
@@ -43,7 +41,7 @@ export default function DisplayProductModal({
   showModal,
   handleModalToggle,
   handleSendMessage,
-  handleCheckout,
+  handleReviewAndPurchase,
   handleDelete,
 }: ProductModalProps) {
   const {
@@ -70,6 +68,25 @@ export default function DisplayProductModal({
     return [dateString, timeString];
   };
 
+  const handleShare = async () => {
+    // The content you want to share
+    const shareData = {
+      title: title,
+      url: `${window.location.origin}/listing/${productData.id}`,
+    };
+    // Check if the Web Share API is available
+    if (navigator.share) {
+      // Use the share API
+      await navigator.share(shareData);
+    } else {
+      // Fallback for browsers that do not support the Web Share API
+      navigator.clipboard.writeText(
+        `${window.location.origin}/listing/${productData.id}`,
+      );
+      alert("Listing URL copied to clipboard!");
+    }
+  };
+
   const handleEditToggle = () => {
     setShowProductForm(!showProductForm);
   };
@@ -90,9 +107,6 @@ export default function DisplayProductModal({
   };
 
   if (!showModal) return null; // needed to prevent TreeWalker error upon redirect while modal open
-
-  // Format the totalCost with commas
-  const formattedTotalCost = formatWithCommas(totalCost, currency);
 
   return (
     <>
@@ -141,13 +155,20 @@ export default function DisplayProductModal({
               <span className="text-xl font-semibold">Summary: </span>
               {productData.summary}
             </div>
-            <Divider />
-            <span className="text-xl font-semibold">Price Breakdown: </span>
-            <DisplayCostBreakdown monetaryInfo={productData} />
           </ModalBody>
 
           <ModalFooter>
             <div className="flex w-full flex-wrap justify-evenly gap-2">
+              <Button
+                type="submit"
+                className={SHOPSTRBUTTONCLASSNAMES}
+                startContent={
+                  <ShareIcon className="h-6 w-6 hover:text-yellow-500" />
+                }
+                onClick={handleShare}
+              >
+                Share
+              </Button>
               {decryptedNpub === pubkey && (
                 <>
                   <Button
@@ -195,13 +216,13 @@ export default function DisplayProductModal({
                   </Button>
                   <Button
                     type="submit"
-                    onClick={() => handleCheckout(productData.id)}
+                    onClick={() => handleReviewAndPurchase(productData.id)}
                     className={SHOPSTRBUTTONCLASSNAMES}
                     startContent={
                       <BoltIcon className="h-6 w-6 hover:text-yellow-500" />
                     }
                   >
-                    Checkout: {formattedTotalCost}
+                    Review & Purchase
                   </Button>
                 </>
               )}

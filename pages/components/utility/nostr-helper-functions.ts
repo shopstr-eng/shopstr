@@ -296,6 +296,7 @@ export function getPrivKeyWithPassphrase(passphrase: string) {
 export interface LocalStorageInterface {
   signIn: string; // extension or nsec
   encryptedPrivateKey: string;
+  npub: string;
   decryptedNpub: string;
   relays: string[];
   mints: string[];
@@ -304,12 +305,13 @@ export interface LocalStorageInterface {
 export const getLocalStorageData = (): LocalStorageInterface => {
   let signIn;
   let encryptedPrivateKey;
+  let npub;
   let decryptedNpub;
   let relays;
   let mints;
 
   if (typeof window !== "undefined") {
-    const npub = localStorage.getItem("npub");
+    npub = localStorage.getItem("npub");
     if (npub) {
       const { data } = nip19.decode(npub);
       decryptedNpub = data;
@@ -350,6 +352,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
   return {
     signIn: signIn as string,
     encryptedPrivateKey: encryptedPrivateKey as string,
+    npub: npub as string,
     decryptedNpub: decryptedNpub as string,
     relays,
     mints,

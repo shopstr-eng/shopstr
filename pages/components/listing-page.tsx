@@ -2,9 +2,9 @@ import React from "react";
 import { ProductData } from "./utility/product-parser-functions";
 import { Divider } from "@nextui-org/react";
 import ProductCard from "./utility-components/product-card";
-import CheckoutCard from "./checkout-card";
+import InvoiceCard from "./invoice-card";
 
-export default function CheckoutPage({
+export default function ListingPage({
   productData,
 }: {
   productData: ProductData;
@@ -25,11 +25,11 @@ export default function CheckoutPage({
     totalCost,
   } = productData;
 
-  const checkoutDisplay = () => {
+  const invoiceDisplay = () => {
     return (
       <div className="flex w-full flex-col items-center">
         <Divider />
-        <CheckoutCard productData={productData} />
+        <InvoiceCard productData={productData} />
       </div>
     );
   };
@@ -38,8 +38,8 @@ export default function CheckoutPage({
       <div className="flex w-[50%] flex-col sm:w-full ">
         <ProductCard
           productData={productData}
-          isCheckout
-          footerContent={checkoutDisplay()}
+          isReview
+          footerContent={invoiceDisplay()}
         />
       </div>
     </div>

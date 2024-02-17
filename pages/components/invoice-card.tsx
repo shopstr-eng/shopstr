@@ -3,6 +3,7 @@ import React, { useContext, useState, useEffect } from "react";
 import { ProfileMapContext } from "../context";
 import { useRouter } from "next/router";
 import {
+  Button,
   Card,
   CardHeader,
   CardBody,
@@ -11,15 +12,24 @@ import {
   Image,
 } from "@nextui-org/react";
 import axios from "axios";
-import { CheckIcon, ClipboardIcon } from "@heroicons/react/24/outline";
+import {
+  BoltIcon,
+  CheckIcon,
+  ClipboardIcon,
+  EnvelopeIcon,
+} from "@heroicons/react/24/outline";
 import { CashuMint, CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
 import { getLocalStorageData } from "./utility/nostr-helper-functions";
 import { nip19 } from "nostr-tools";
 import { ProductData } from "./utility/product-parser-functions";
-import { DisplayCostBreakdown } from "./utility-components/display-monetary-info";
+import {
+  DisplayCostBreakdown,
+  formatWithCommas,
+} from "./utility-components/display-monetary-info";
+import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
 import { captureInvoicePaidmetric } from "./utility/metrics-helper-functions";
 
-export default function CheckoutCard({
+export default function InvoiceCard({
   productData,
 }: {
   productData: ProductData;
@@ -27,7 +37,9 @@ export default function CheckoutCard({
   const router = useRouter();
   const { pubkey, currency, totalCost } = productData;
   const pubkeyOfProductBeingSold = pubkey;
-  const { decryptedNpub, relays, mints } = getLocalStorageData();
+  const { npub, decryptedNpub, relays, mints } = getLocalStorageData();
+
+  const [showInvoiceCard, setShowInvoiceCard] = useState(false);
 
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
@@ -55,21 +67,11 @@ export default function CheckoutCard({
   }, []);
 
   useEffect(() => {
-    if (randomNsec !== "") {
-      handlePayment(totalCost, currency);
-    }
-  }, [randomNsec]);
-
-  useEffect(() => {
     const profileMap = profileContext.profileData;
     const profile = profileMap.has(decryptedNpub)
       ? profileMap.get(decryptedNpub)
       : undefined;
-    setName(
-      profile && profile.content.name
-        ? profile.content.name
-        : nip19.npubEncode(decryptedNpub),
-    );
+    setName(profile && profile.content.name ? profile.content.name : npub);
   }, [profileContext]);
 
   const handlePayment = async (newPrice: number, currency: string) => {
@@ -189,69 +191,121 @@ export default function CheckoutCard({
     }, 2000);
   };
 
+  const handleSendMessage = (pubkeyToOpenChatWith: string) => {
+    let { signIn } = getLocalStorageData();
+    if (!signIn) {
+      alert("You must be signed in to send a message!");
+      return;
+    }
+    router.push({
+      pathname: "/direct-messages",
+      query: { pk: nip19.npubEncode(pubkeyToOpenChatWith) },
+    });
+  };
+
+  const formattedTotalCost = formatWithCommas(totalCost, currency);
+
   return (
     <>
-      <Card className="max-w-[700px]">
-        <CardHeader className="flex justify-center gap-3">
-          <span className="text-xl font-bold">Pay with Lightning</span>
-        </CardHeader>
-        <Divider />
-        <CardBody className="flex flex-col items-center">
-          <DisplayCostBreakdown monetaryInfo={productData} />
-        </CardBody>
-        <CardFooter className="flex flex-col items-center">
-          {!paymentConfirmed ? (
-            <div className="flex flex-col items-center justify-center">
-              {qrCodeUrl ? (
-                <>
-                  <Image
-                    alt="Lightning invoice"
-                    className="object-cover"
-                    src={qrCodeUrl}
-                  />
-                  <div className="flex items-center justify-center">
-                    <p className="text-center">
-                      {invoice.length > 30
-                        ? `${invoice.substring(0, 10)}...${invoice.substring(
-                            invoice.length - 10,
-                            invoice.length,
-                          )}`
-                        : invoice}
-                    </p>
-                    <ClipboardIcon
-                      onClick={handleCopyInvoice}
-                      className={`ml-2 h-4 w-4 cursor-pointer ${
-                        copiedToClipboard ? "hidden" : ""
-                      }`}
+      {!showInvoiceCard && (
+        <>
+          <Button
+            type="submit"
+            className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
+            onClick={() => {
+              handleSendMessage(pubkeyOfProductBeingSold);
+            }}
+            startContent={
+              <EnvelopeIcon className="h-6 w-6 hover:text-yellow-500" />
+            }
+          >
+            Message
+          </Button>
+          <Button
+            type="submit"
+            className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
+            onClick={() => {
+              let { signIn } = getLocalStorageData();
+              if (!signIn) {
+                alert("You must be signed in to purchase!");
+                return;
+              }
+              if (randomNsec !== "") {
+                handlePayment(totalCost, currency);
+              }
+              setShowInvoiceCard(true);
+            }}
+            startContent={
+              <BoltIcon className="h-6 w-6 hover:text-yellow-500" />
+            }
+          >
+            Purchase: {formattedTotalCost}
+          </Button>
+        </>
+      )}
+      {showInvoiceCard && (
+        <Card className="mt-3 max-w-[700px]">
+          <CardHeader className="flex justify-center gap-3">
+            <span className="text-xl font-bold">Lightning Invoice</span>
+          </CardHeader>
+          <Divider />
+          <CardBody className="flex flex-col items-center">
+            <DisplayCostBreakdown monetaryInfo={productData} />
+          </CardBody>
+          <CardFooter className="flex flex-col items-center">
+            {!paymentConfirmed ? (
+              <div className="flex flex-col items-center justify-center">
+                {qrCodeUrl ? (
+                  <>
+                    <Image
+                      alt="Lightning invoice"
+                      className="object-cover"
+                      src={qrCodeUrl}
                     />
-                    <CheckIcon
-                      className={`ml-2 h-4 w-4 cursor-pointer ${
-                        copiedToClipboard ? "" : "hidden"
-                      }`}
-                    />
+                    <div className="flex items-center justify-center">
+                      <p className="text-center">
+                        {invoice.length > 30
+                          ? `${invoice.substring(0, 10)}...${invoice.substring(
+                              invoice.length - 10,
+                              invoice.length,
+                            )}`
+                          : invoice}
+                      </p>
+                      <ClipboardIcon
+                        onClick={handleCopyInvoice}
+                        className={`ml-2 h-4 w-4 cursor-pointer ${
+                          copiedToClipboard ? "hidden" : ""
+                        }`}
+                      />
+                      <CheckIcon
+                        className={`ml-2 h-4 w-4 cursor-pointer ${
+                          copiedToClipboard ? "" : "hidden"
+                        }`}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <p>Waiting for lightning invoice...</p>
                   </div>
-                </>
-              ) : (
-                <div>
-                  <p>Waiting for lightning invoice...</p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center">
-              <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
-                Payment confirmed!
-              </h3>
-              <Image
-                alt="Payment Confirmed"
-                className="object-cover"
-                src="../payment-confirmed.gif"
-                width={350}
-              />
-            </div>
-          )}
-        </CardFooter>
-      </Card>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center">
+                <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
+                  Payment confirmed!
+                </h3>
+                <Image
+                  alt="Payment Confirmed"
+                  className="object-cover"
+                  src="../payment-confirmed.gif"
+                  width={350}
+                />
+              </div>
+            )}
+          </CardFooter>
+        </Card>
+      )}
     </>
   );
 }
