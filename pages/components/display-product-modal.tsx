@@ -32,8 +32,8 @@ interface ProductModalProps {
   handleModalToggle: () => void;
   showModal: boolean;
   handleSendMessage: (pubkeyToOpenChatWith: string) => void;
-  handleReview: (productId: string) => void;
-  handleDelete: (productId: string, passphrase: string) => void;
+  handleCheckout: (productId: string) => void;
+  handleDelete: (productId: string, passphrase?: string) => void;
 }
 
 export default function DisplayProductModal({
@@ -56,7 +56,6 @@ export default function DisplayProductModal({
   } = productData;
   const { signIn, decryptedNpub } = getLocalStorageData();
 
-  const [passphrase, setPassphrase] = React.useState("");
   const [requestPassphrase, setRequestPassphrase] = React.useState(false);
   const [deleteLoading, setDeleteLoading] = React.useState(false);
   const [showProductForm, setShowProductForm] = React.useState(false);
@@ -99,12 +98,12 @@ export default function DisplayProductModal({
       setRequestPassphrase(true);
     }
   };
-  const finalizeDeleteListingProcess = async () => {
+  const finalizeDeleteListingProcess = async (passphrase?: string) => {
     // only used for when signIn === "nsec"
     setDeleteLoading(true);
+    handleModalToggle(); // closes product detail modal
     await handleDelete(productData.id, passphrase); // delete listing
     setDeleteLoading(false);
-    handleModalToggle(); // closes product detail modal
   };
 
   if (!showModal) return null; // needed to prevent TreeWalker error upon redirect while modal open
@@ -123,6 +122,7 @@ export default function DisplayProductModal({
           footer: "border-t-[1px] border-[#292f46]",
           closeButton: "hover:bg-black/5 active:bg-white/10",
         }}
+        isDismissable={false}
         scrollBehavior={"outside"}
         size="2xl"
       >
@@ -231,19 +231,19 @@ export default function DisplayProductModal({
         </ModalContent>
       </Modal>
       <RequestPassphraseModal
-        passphrase={passphrase}
-        setCorrectPassphrase={setPassphrase}
         isOpen={requestPassphrase}
         setIsOpen={setRequestPassphrase}
         actionOnSubmit={finalizeDeleteListingProcess}
       />
-      <ProductForm
-        showModal={showProductForm}
-        handleModalToggle={handleEditToggle}
-        oldValues={productData}
-        handleDelete={handleDelete}
-        handleProductModalToggle={handleModalToggle}
-      />
+      {decryptedNpub === pubkey && (
+        <ProductForm
+          showModal={showProductForm}
+          handleModalToggle={handleEditToggle}
+          oldValues={productData}
+          handleDelete={handleDelete}
+          onSubmitCallback={handleModalToggle}
+        />
+      )}
     </>
   );
 }

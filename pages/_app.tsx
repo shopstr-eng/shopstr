@@ -19,14 +19,11 @@ import {
 import { NextUIProvider } from "@nextui-org/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import {
-  didXMinutesElapseSinceLastFetch,
-  fetchAllChatsFromCache,
   fetchAllPosts,
-  fetchAllProductsFromCache,
-  fetchAllProfilesFromCache,
   fetchChatsAndMessages,
   fetchProfile,
 } from "./api/nostr/fetch-service";
+import { NostrEvent } from "./types";
 
 function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
@@ -38,36 +35,64 @@ function App({ Component, pageProps }: AppProps) {
     {
       productEvents: [],
       isLoading: true,
-      addProductEvent: (productEvent: any) => {
+      addNewlyCreatedProductEvent: (productEvent: any) => {
         setProductContext((productContext) => {
-          let productEvents = [
-            ...productContext.productEvents,
-            { ...productEvent, from: "context" },
-          ];
+          let productEvents = [...productContext.productEvents, productEvent];
           return {
             productEvents: productEvents,
             isLoading: false,
-            addProductEvent: productContext.addProductEvent,
+            addNewlyCreatedProductEvent:
+              productContext.addNewlyCreatedProductEvent,
+            removeDeletedProductEvent: productContext.removeDeletedProductEvent,
+          };
+        });
+      },
+      removeDeletedProductEvent: (productId: string) => {
+        setProductContext((productContext) => {
+          let productEvents = [...productContext.productEvents].filter(
+            (event) => event.id !== productId,
+          );
+          return {
+            productEvents: productEvents,
+            isLoading: false,
+            addNewlyCreatedProductEvent:
+              productContext.addNewlyCreatedProductEvent,
+            removeDeletedProductEvent: productContext.removeDeletedProductEvent,
           };
         });
       },
     },
   );
-  const [profileMap, setProfileMap] = useState(new Map());
   const [profileContext, setProfileContext] = useState<ProfileContextInterface>(
     {
       profileData: new Map(),
-      mergeProfileMaps: (newProfileMap: Map<string, any>) => {
-        setProfileMap((profileMap) => {
-          return new Map([...profileMap, ...newProfileMap]);
-        });
-      },
+      isLoading: true,
     },
   );
+
   const [chatsContext, setChatsContext] = useState<ChatsContextInterface>({
     chats: new Map(),
     isLoading: true,
   });
+
+  const editProductContext = (
+    productEvents: NostrEvent[],
+    isLoading: boolean,
+  ) => {
+    setProductContext({
+      productEvents: productEvents,
+      isLoading: isLoading,
+      addNewlyCreatedProductEvent: productContext.addNewlyCreatedProductEvent,
+      removeDeletedProductEvent: productContext.removeDeletedProductEvent,
+    });
+  };
+
+  const editProfileContext = (
+    profileData: Map<string, any>,
+    isLoading: boolean,
+  ) => {
+    setProfileContext({ profileData, isLoading });
+  };
   /** FETCH initial PRODUCTS and PROFILES **/
   useEffect(() => {
     const relays = localStorageValues.relays;
@@ -75,78 +100,35 @@ function App({ Component, pageProps }: AppProps) {
     async function fetchData() {
       try {
         let pubkeysToFetchProfilesFor: string[] = [];
-        if (await didXMinutesElapseSinceLastFetch("products", 10)) {
-          let { productsWebsocketSub, profileSetFromProducts, productArray } =
-            await fetchAllPosts(relays, setProductContext);
-          setProductContext({
-            productEvents: productArray,
-            isLoading: false,
-            addProductEvent: productContext.addProductEvent,
-          });
-          pubkeysToFetchProfilesFor = [...profileSetFromProducts];
-        } else {
-          let productArray = await fetchAllProductsFromCache();
-          setProductContext({
-            productEvents: productArray,
-            isLoading: false,
-            addProductEvent: productContext.addProductEvent,
-          });
-        }
-        if (!(await didXMinutesElapseSinceLastFetch("profiles", 10))) {
-          let profileMap = await fetchAllProfilesFromCache();
-          setProfileMap(profileMap);
-        }
-        if (decryptedNpub) {
-          if (!(await didXMinutesElapseSinceLastFetch("chats", 3))) {
-            let chatsMapFromCache = await fetchAllChatsFromCache();
-            setChatsContext({
-              chats: chatsMapFromCache,
-              isLoading: false,
-            });
-          } else {
-            let { chatsMap, profileSetFromChats } = await fetchChatsAndMessages(
-              relays,
-              decryptedNpub,
-            );
-            setChatsContext({
-              chats: chatsMap,
-              isLoading: false,
-            });
-            pubkeysToFetchProfilesFor = [
-              decryptedNpub as string,
-              ...pubkeysToFetchProfilesFor,
-              ...profileSetFromChats,
-            ];
-          }
-        } else {
-          // when user is not signed in they have no chats, flip is loading to false
-          setChatsContext({
-            chats: new Map(),
-            isLoading: false,
-          });
-        }
-        if (await didXMinutesElapseSinceLastFetch("profiles", 10)) {
-          let { profileMap } = await fetchProfile(
-            relays,
-            pubkeysToFetchProfilesFor,
-          );
-          profileContext.mergeProfileMaps(profileMap);
-        }
+        let { profileSetFromProducts } = await fetchAllPosts(
+          relays,
+          editProductContext,
+        );
+        pubkeysToFetchProfilesFor = [...profileSetFromProducts];
+        let { chatsMap, profileSetFromChats } = await fetchChatsAndMessages(
+          relays,
+          decryptedNpub,
+        );
+        setChatsContext({
+          chats: chatsMap,
+          isLoading: false,
+        });
+        pubkeysToFetchProfilesFor = [
+          decryptedNpub as string,
+          ...pubkeysToFetchProfilesFor,
+          ...profileSetFromChats,
+        ];
+        let { profileMap } = await fetchProfile(
+          relays,
+          pubkeysToFetchProfilesFor,
+          editProfileContext,
+        );
       } catch (error) {
         console.error("Error fetching data:", error);
       }
     }
     if (relays) fetchData(); // Call the async function immediately
   }, [localStorageValues.relays]);
-  /** UPON PROFILEMAP UPDATE, SET PROFILE CONTEXT **/
-  useEffect(() => {
-    setProfileContext((profileContext: ProfileContextInterface) => {
-      return {
-        profileData: profileMap,
-        mergeProfileMaps: profileContext.mergeProfileMaps,
-      };
-    });
-  }, [profileMap]);
 
   return (
     <ProductContext.Provider value={productContext}>

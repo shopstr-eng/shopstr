@@ -1,116 +1,54 @@
-import { NostrEvent } from "@/pages/components/utility/nostr-helper-functions";
-import { ProductContextInterface } from "@/pages/context";
-import { SimplePool, nip19 } from "nostr-tools";
-import Dexie from "dexie";
+import { Nostr, SimplePool } from "nostr-tools";
+import {
+  addChatsToCache,
+  addProductToCache,
+  addProfilesToCache,
+  fetchAllProductsFromCache,
+  fetchProfileDataFromCache,
+  removeProductFromCache,
+} from "./cache-service";
+import { NostrEvent } from "@/pages/types";
 
 const POSTQUERYLIMIT = 200;
 
-type ItemType = "products" | "profiles" | "chats";
-
-const db = new Dexie("ItemsFetchedFromRelays");
-
-db.version(1).stores({
-  products: "id, product", // product: {id, product}
-  profiles: "id, profile", // profile: {pubkey, created_at, content}
-  chats: "id, messages", // messages: {pubkey, messages: [message1, message2, ...]}
-  lastFetchedTime: "itemType, time", // item: {products, profiles, chats} time: timestamp
-});
-
-db.open().catch(function (e) {
-  console.error("Open failed: " + e.stack);
-});
-
-const { products, profiles, chats, lastFetchedTime } = db;
-
-db.open().catch(function (e) {
-  console.error("Open failed: " + e.stack);
-});
-
-/**
- * returns the minutes lapsed since last fetch 60000ms = 1 minute
- */
-export const getMinutesSinceLastFetch = async (itemType: ItemType) => {
-  let lastFetchTime = await lastFetchedTime.get({ itemType });
-  if (!lastFetchTime) lastFetchTime = { itemType, time: 0 };
-  let timelapsedInMinutes = (Date.now() - lastFetchTime.time) / 60000;
-  return timelapsedInMinutes;
-};
-
-export const didXMinutesElapseSinceLastFetch = async (
-  itemType: ItemType,
-  minutes: number,
-) => {
-  let timelapsedInMinutes = await getMinutesSinceLastFetch(itemType);
-  return timelapsedInMinutes > minutes;
-};
-
-const addProductsToCache = async (productsArray: NostrEvent[]) => {
-  productsArray.forEach(async (product) => {
-    await products.put({ id: product.id, product });
-  });
-  await lastFetchedTime.put({ itemType: "products", time: Date.now() });
-};
-
-const addProfilesToCache = async (profileMap: Map<string, any>) => {
-  Array.from(profileMap.entries()).forEach(async ([pubkey, profile]) => {
-    if (profile === null) return;
-    await profiles.put({ id: pubkey, profile });
-  });
-  await lastFetchedTime.put({ itemType: "profiles", time: Date.now() });
-};
-
-const addChatsToCache = async (chatsMap: Map<string, any>) => {
-  Array.from(chatsMap.entries()).forEach(async ([pubkey, chat]) => {
-    await chats.put({ id: pubkey, messages: chat });
-  });
-  await lastFetchedTime.put({ itemType: "chats", time: Date.now() });
-};
-
-export const fetchAllProductsFromCache = async () => {
-  let productsMap = await products.toArray();
-  let productsArray = productsMap.map((product) => product.product);
-  return productsArray;
-};
-
-export const fetchAllProfilesFromCache = async () => {
-  let cache = await profiles.toArray();
-  let productMap = new Map();
-  cache.forEach(({ id, profile }) => {
-    productMap.set(id, profile);
-  });
-  return productMap;
-};
-export const fetchAllChatsFromCache = async () => {
-  let cache = await chats.toArray();
-  let chatsMap = new Map();
-  cache.forEach(({ id, messages }) => {
-    chatsMap.set(id, messages);
-  });
-  return chatsMap;
-};
-
 export const fetchAllPosts = async (
   relays: string[],
-  setProductContext: (value: ProductContextInterface) => void,
+  editProductContext: (productEvents: NostrEvent[], isLoading: boolean) => void,
 ): Promise<{
-  productsWebsocketSub: SubCloser;
   profileSetFromProducts: Set<string>;
-  productArray: NostrEvent[];
 }> => {
-  return new Promise(function (resolve, reject) {
+  return new Promise(async function (resolve, reject) {
     try {
+      let deletedProductsInCacheSet: Set<any> = new Set(); // used to remove deleted items from cache
+      try {
+        let productArrayFromCache = await fetchAllProductsFromCache();
+        deletedProductsInCacheSet = new Set(
+          productArrayFromCache.map((product: NostrEvent) => product.id),
+        );
+        editProductContext(productArrayFromCache, false);
+      } catch (error) {
+        console.log("Error: ", error);
+      }
+
       const pool = new SimplePool();
       let subParams: { kinds: number[]; authors?: string[]; limit: number } = {
         kinds: [30402],
         limit: POSTQUERYLIMIT,
       };
 
-      let productArray: NostrEvent[] = [];
+      let productArrayFromRelay: NostrEvent[] = [];
       let profileSetFromProducts: Set<string> = new Set();
 
       let h = pool.subscribeMany(relays, [subParams], {
         onevent(event) {
-          productArray.push(event);
+          productArrayFromRelay.push(event);
+          if (
+            deletedProductsInCacheSet &&
+            event.id in deletedProductsInCacheSet
+          ) {
+            deletedProductsInCacheSet.delete(event.id);
+          }
+          addProductToCache(event);
           profileSetFromProducts.add(event.pubkey);
         },
         oneose() {
@@ -120,13 +58,13 @@ export const fetchAllPosts = async (
       });
       const returnCall = () => {
         resolve({
-          productsWebsocketSub: h,
           profileSetFromProducts,
-          productArray,
         });
-        addProductsToCache(productArray);
+        editProductContext(productArrayFromRelay, false);
+        removeProductFromCache(Array.from(deletedProductsInCacheSet));
       };
     } catch (error) {
+      console.log("fetchAllPosts error", error);
       reject(error);
     }
   });
@@ -135,11 +73,22 @@ export const fetchAllPosts = async (
 export const fetchProfile = async (
   relays: string[],
   pubkeyProfilesToFetch: string[],
+  editProfileContext: (
+    productEvents: Map<any, any>,
+    isLoading: boolean,
+  ) => void,
 ): Promise<{
   profileMap: Map<string, any>;
 }> => {
-  return new Promise(function (resolve, reject) {
+  return new Promise(async function (resolve, reject) {
     try {
+      try {
+        let profileData = await fetchProfileDataFromCache();
+        editProfileContext(profileData, false);
+      } catch (error) {
+        console.log("Error: ", error);
+      }
+
       const pool = new SimplePool();
       let subParams: { kinds: number[]; authors?: string[] } = {
         kinds: [0],
@@ -272,6 +221,8 @@ export const fetchChatsAndMessages = async (
   chatsMap: Map<string, any>;
   profileSetFromChats: Set<string>;
 }> => {
+  if (!decryptedNpub)
+    return { chatsMap: new Map(), profileSetFromChats: new Set() };
   return new Promise(async function (resolve, reject) {
     try {
       const incomingChats = await fetchAllIncomingChats(relays, decryptedNpub);

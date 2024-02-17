@@ -26,13 +26,14 @@ import {
   getPrivKeyWithPassphrase,
   nostrBuildUploadImage,
   getLocalStorageData,
-  capturePostListingMetric,
 } from "./utility/nostr-helper-functions";
 import { finalizeEvent } from "nostr-tools";
 import { CATEGORIES, SHIPPING_OPTIONS } from "./utility/STATIC-VARIABLES";
 import LocationDropdown from "./utility-components/dropdowns/location-dropdown";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 import { ProductContext } from "../context";
+import { capturePostListingMetric } from "./utility/metrics-helper-functions";
+import { addProductToCache } from "../api/nostr/cache-service";
 
 interface ProductFormProps {
   handleModalToggle: () => void;
@@ -40,7 +41,7 @@ interface ProductFormProps {
   // edit props
   oldValues?: object;
   handleDelete?: (productId: string, passphrase: string) => void;
-  handleProductModalToggle?: () => void;
+  onSubmitCallback?: () => void;
 }
 
 export default function NewForm({
@@ -48,7 +49,7 @@ export default function NewForm({
   handleModalToggle,
   oldValues,
   handleDelete,
-  handleProductModalToggle,
+  onSubmitCallback,
 }: ProductFormProps) {
   const [passphrase, setPassphrase] = useState("");
   const [images, setImages] = useState<string[]>([]);
@@ -74,7 +75,7 @@ export default function NewForm({
           Location: oldValues.location,
           "Shipping Option": oldValues.shippingType,
           "Shipping Cost": oldValues.shippingCost,
-          Category: oldValues.categories.join(","),
+          Category: oldValues.categories ? oldValues.categories.join(",") : "",
         }
       : {
           Currency: "SATS",
@@ -141,14 +142,15 @@ export default function NewForm({
       if (handleDelete) {
         await handleDelete(oldValues.id, passphrase);
       }
-      if (handleProductModalToggle) {
-        handleProductModalToggle();
-      }
     }
 
     clear();
-    productEventContext.addProductEvent(newListing);
+    productEventContext.addNewlyCreatedProductEvent(newListing);
+    addProductToCache(newListing);
     setIsPostingOrUpdatingProduct(false);
+    if (onSubmitCallback) {
+      onSubmitCallback();
+    }
   };
 
   const clear = () => {

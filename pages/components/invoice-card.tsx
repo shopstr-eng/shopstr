@@ -27,6 +27,7 @@ import {
   formatWithCommas,
 } from "./utility-components/display-monetary-info";
 import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
+import { captureInvoicePaidmetric } from "./utility/metrics-helper-functions";
 
 export default function InvoiceCard({
   productData,
@@ -145,7 +146,7 @@ export default function InvoiceCard({
 
         if (encoded) {
           sendTokens(encoded);
-          captureInvoicePaidmetric(metricsInvoiceId);
+          captureInvoicePaidmetric(metricsInvoiceId, productData.id);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           setTimeout(() => {
@@ -160,21 +161,6 @@ export default function InvoiceCard({
       }
     }
   }
-
-  const captureInvoicePaidmetric = async (metricsInvoiceId: string) => {
-    await axios({
-      method: "POST",
-      url: "/api/metrics/post-invoice-status",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      data: {
-        id: metricsInvoiceId,
-        listing_id: productData.id,
-        merchant_location: location,
-      },
-    });
-  };
 
   const sendTokens = async (token: string) => {
     const { title } = productData;
