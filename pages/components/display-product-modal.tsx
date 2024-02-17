@@ -41,7 +41,7 @@ export default function DisplayProductModal({
   showModal,
   handleModalToggle,
   handleSendMessage,
-  handleReview,
+  handleReviewAndPurchase,
   handleDelete,
 }: ProductModalProps) {
   const {
@@ -72,7 +72,7 @@ export default function DisplayProductModal({
     // The content you want to share
     const shareData = {
       title: title,
-      url: `https://shopstr.store/listing/${productData.id}`,
+      url: `${window.location.href}/listing/${productData.id}`,
     };
     // Check if the Web Share API is available
     if (navigator.share) {
@@ -81,7 +81,7 @@ export default function DisplayProductModal({
     } else {
       // Fallback for browsers that do not support the Web Share API
       navigator.clipboard.writeText(
-        `https://shopstr.store/listing/${productData.id}`,
+        `${window.location.href}/listing/${productData.id}`,
       );
       alert("Listing URL copied to clipboard!");
     }
@@ -216,7 +216,7 @@ export default function DisplayProductModal({
                   </Button>
                   <Button
                     type="submit"
-                    onClick={() => handleReview(productData.id)}
+                    onClick={() => handleReviewAndPurchase(productData.id)}
                     className={SHOPSTRBUTTONCLASSNAMES}
                     startContent={
                       <BoltIcon className="h-6 w-6 hover:text-yellow-500" />

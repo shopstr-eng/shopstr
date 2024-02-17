@@ -89,7 +89,7 @@ const DisplayEvents = ({
     });
   };
 
-  const handleReview = (productId: string) => {
+  const handleReviewAndPurchase = (productId: string) => {
     setShowModal(false);
     router.push(`/listing/${productId}`);
   };
@@ -175,7 +175,7 @@ const DisplayEvents = ({
         showModal={showModal}
         handleModalToggle={handleToggleModal}
         handleSendMessage={handleSendMessage}
-        handleReview={handleReview}
+        handleReviewAndPurchase={handleReviewAndPurchase}
         handleDelete={handleDelete}
       />
     </>
