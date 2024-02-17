@@ -4,7 +4,9 @@ import { ProfileAvatar } from "./avatar";
 import { locationAvatar } from "./dropdowns/location-dropdown";
 import CompactCategories from "./compact-categories";
 import ImageCarousel from "./image-carousel";
-import CompactPriceDisplay from "./display-monetary-info";
+import CompactPriceDisplay, {
+  DisplayCostBreakdown,
+} from "./display-monetary-info";
 import { ProductData } from "../utility/product-parser-functions";
 
 const cardWidth = 380;
@@ -15,20 +17,20 @@ export default function ProductCard({
   productData,
   handleDelete,
   onProductClick,
-  isCheckout,
+  isReview,
   footerContent,
   uniqueKey,
 }: {
   productData: ProductData;
   handleDelete?: (productId: string, passphrase: string) => void;
   onProductClick?: (productId: any) => void;
-  isCheckout?: boolean;
+  isReview?: boolean;
   footerContent?: ReactNode;
   uniqueKey?: string;
 }) {
   if (!productData) return null;
   const { id, pubkey, title, images, categories, location } = productData;
-  if (isCheckout)
+  if (isReview)
     return (
       <Card className={"mx-[2.5px] my-3 w-[100%] rounded-lg"}>
         <CardBody
@@ -61,8 +63,11 @@ export default function ProductCard({
             <h2 className="mb-4 text-2xl font-bold">{title}</h2>
           </div>
           <Divider />
-          <span className="text-xl font-semibold">Summary: </span>
+          <span className="mt-4 text-xl font-semibold">Summary: </span>
           {productData.summary}
+          <Divider className="mt-4" />
+          <span className="mt-4 text-xl font-semibold">Cost Breakdown: </span>
+          <DisplayCostBreakdown monetaryInfo={productData} />
         </CardBody>
         {footerContent && <CardFooter>{footerContent}</CardFooter>}
       </Card>

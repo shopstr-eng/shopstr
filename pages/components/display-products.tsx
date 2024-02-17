@@ -151,14 +151,9 @@ const DisplayEvents = ({
     });
   };
 
-  const handleCheckout = (productId: string) => {
-    let { signIn } = getLocalStorageData();
-    if (!signIn) {
-      alert("You must be signed in to checkout!");
-      return;
-    }
+  const handleReview = (productId: string) => {
     setShowModal(false);
-    router.push(`/checkout/${productId}`);
+    router.push(`/listing/${productId}`);
   };
 
   const getSpacerCardsNeeded = () => {
@@ -220,7 +215,7 @@ const DisplayEvents = ({
         showModal={showModal}
         handleModalToggle={handleToggleModal}
         handleSendMessage={handleSendMessage}
-        handleCheckout={handleCheckout}
+        handleReview={handleReview}
         handleDelete={handleDelete}
       />
     </>

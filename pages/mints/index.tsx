@@ -78,7 +78,7 @@ const Mints = () => {
     setMints(mints.filter((mint) => mint !== mintToDelete));
   };
 
-  const handleCopyInvoice = () => {
+  const handleCopyMint = () => {
     navigator.clipboard.writeText(mintUrl);
     alert("Mint URL copied to clipboard!");
   };

@@ -12,15 +12,23 @@ import {
   Image,
 } from "@nextui-org/react";
 import axios from "axios";
-import { CheckIcon, ClipboardIcon } from "@heroicons/react/24/outline";
+import {
+  BoltIcon,
+  CheckIcon,
+  ClipboardIcon,
+  EnvelopeIcon,
+} from "@heroicons/react/24/outline";
 import { CashuMint, CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
 import { getLocalStorageData } from "./utility/nostr-helper-functions";
 import { nip19 } from "nostr-tools";
 import { ProductData } from "./utility/product-parser-functions";
-import { DisplayCostBreakdown } from "./utility-components/display-monetary-info";
+import {
+  DisplayCostBreakdown,
+  formatWithCommas,
+} from "./utility-components/display-monetary-info";
 import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
 
-export default function CheckoutCard({
+export default function InvoiceCard({
   productData,
 }: {
   productData: ProductData;
@@ -62,11 +70,16 @@ export default function CheckoutCard({
     const profile = profileMap.has(decryptedNpub)
       ? profileMap.get(decryptedNpub)
       : undefined;
-    setName(
-      profile && profile.content.name
-        ? profile.content.name
-        : nip19.npubEncode(decryptedNpub),
-    );
+    if (typeof window !== "undefined") {
+      let { signIn } = getLocalStorageData();
+      if (signIn) {
+        setName(
+          profile && profile.content.name
+            ? profile.content.name
+            : nip19.npubEncode(decryptedNpub),
+        );
+      }
+    }
   }, [profileContext]);
 
   const handlePayment = async (newPrice: number, currency: string) => {
@@ -201,14 +214,57 @@ export default function CheckoutCard({
     }, 2000);
   };
 
+  const handleSendMessage = (pubkeyToOpenChatWith: string) => {
+    let { signIn } = getLocalStorageData();
+    if (!signIn) {
+      alert("You must be signed in to send a message!");
+      return;
+    }
+    router.push({
+      pathname: "/direct-messages",
+      query: { pk: nip19.npubEncode(pubkeyToOpenChatWith) },
+    });
+  };
+
+  const formattedTotalCost = formatWithCommas(totalCost, currency);
+
   return (
     <>
       {!paymentCard && (
-        <center>
-          <Button className={SHOPSTRBUTTONCLASSNAMES + " mt-3"} onClick={() => {if (randomNsec !== "") {handlePayment(totalCost, currency);} setPaymentCard(true);}}>
-            Pay Now
+        <>
+          <Button
+            type="submit"
+            className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
+            onClick={() => {
+              handleSendMessage(pubkeyOfProductBeingSold);
+            }}
+            startContent={
+              <EnvelopeIcon className="h-6 w-6 hover:text-yellow-500" />
+            }
+          >
+            Message
           </Button>
-        </center>
+          <Button
+            type="submit"
+            className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
+            onClick={() => {
+              let { signIn } = getLocalStorageData();
+              if (!signIn) {
+                alert("You must be signed in to purchase!");
+                return;
+              }
+              if (randomNsec !== "") {
+                handlePayment(totalCost, currency);
+              }
+              setPaymentCard(true);
+            }}
+            startContent={
+              <BoltIcon className="h-6 w-6 hover:text-yellow-500" />
+            }
+          >
+            Purchase: {formattedTotalCost}
+          </Button>
+        </>
       )}
       {paymentCard && (
         <Card className="mt-3 max-w-[700px]">

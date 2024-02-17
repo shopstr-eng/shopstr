@@ -4,10 +4,10 @@ import { SimplePool } from "nostr-tools";
 import parseTags, {
   ProductData,
 } from "../components/utility/product-parser-functions";
-import CheckoutPage from "../components/checkout-page";
+import ListingPage from "../components/listing-page";
 import { getLocalStorageData } from "../components/utility/nostr-helper-functions";
 
-const Checkout = () => {
+const Listing = () => {
   const router = useRouter();
   const [relays, setRelays] = useState([]);
   const [productData, setProductData] = useState<ProductData | undefined>(
@@ -47,7 +47,7 @@ const Checkout = () => {
     });
   }, [relays]);
 
-  return <CheckoutPage productData={productData} />;
+  return <ListingPage productData={productData} />;
 };
 
-export default Checkout;
+export default Listing;
