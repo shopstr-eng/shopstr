@@ -37,7 +37,7 @@ export default function InvoiceCard({
   const router = useRouter();
   const { pubkey, currency, totalCost } = productData;
   const pubkeyOfProductBeingSold = pubkey;
-  const { decryptedNpub, relays, mints } = getLocalStorageData();
+  const { npub, decryptedNpub, relays, mints } = getLocalStorageData();
 
   const [paymentCard, setPaymentCard] = useState(false);
 
@@ -77,7 +77,7 @@ export default function InvoiceCard({
         setName(
           profile && profile.content.name
             ? profile.content.name
-            : nip19.npubEncode(decryptedNpub),
+            : npub,
         );
       }
     }
