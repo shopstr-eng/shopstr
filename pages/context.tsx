@@ -24,12 +24,16 @@ export const ProductContext = createContext({
   removeDeletedProductEvent: (productId: string) => {},
 } as ProductContextInterface);
 
+export interface ChatsMap extends Map<string, any> {
+  [key: string]: any;
+}
+
 export interface ChatsContextInterface {
-  chats: Map<string, any>;
+  chatsMap: ChatsMap;
   isLoading: boolean;
 }
 
 export const ChatsContext = createContext({
-  chats: new Map(),
+  chatsMap: new Map(),
   isLoading: true,
 } as ChatsContextInterface);

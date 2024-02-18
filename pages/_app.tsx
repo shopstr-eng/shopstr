@@ -71,7 +71,7 @@ function App({ Component, pageProps }: AppProps) {
   );
 
   const [chatsContext, setChatsContext] = useState<ChatsContextInterface>({
-    chats: new Map(),
+    chatsMap: new Map(),
     isLoading: true,
   });
 
@@ -110,7 +110,7 @@ function App({ Component, pageProps }: AppProps) {
           decryptedNpub,
         );
         setChatsContext({
-          chats: chatsMap,
+          chatsMap: chatsMap,
           isLoading: false,
         });
         pubkeysToFetchProfilesFor = [

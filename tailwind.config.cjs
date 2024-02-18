@@ -105,22 +105,22 @@ module.exports = {
         "tremor-metric": ["1.875rem", { lineHeight: "2.25rem" }],
       },
     },
-    screens: {
-      sm: { min: "0px", max: "675px" },
-      // => @media (min-width: 500px) { ... }
+    // screens: {
+    //   sm: { min: "0px", max: "675px" },
+    //   // => @media (min-width: 500px) { ... }
 
-      md: { min: "676px", max: "1000px" },
-      // => @media (min-width: 1000px) { ... }
+    //   md: { min: "676px", max: "1000px" },
+    //   // => @media (min-width: 1000px) { ... }
 
-      lg: { min: "1001px", max: "1500px" },
-      // => @media (min-width: 1500px) { ... }
+    //   lg: { min: "1001px", max: "1500px" },
+    //   // => @media (min-width: 1500px) { ... }
 
-      xl: { min: "1501px", max: "2000px" },
-      // => @media (min-width: 2000px) { ... }
+    //   xl: { min: "1501px", max: "2000px" },
+    //   // => @media (min-width: 2000px) { ... }
 
-      "2xl": { min: "2001px" },
-      // => @media (min-width: 2500px) { ... }
-    },
+    //   "2xl": { min: "2001px" },
+    //   // => @media (min-width: 2500px) { ... }
+    // },
     colors: {
       "dark-bg": "#212121",
       "dark-fg": "#4d4c4e", // dark foreground
