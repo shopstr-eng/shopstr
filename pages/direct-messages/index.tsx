@@ -70,25 +70,33 @@ const DirectMessages = () => {
       } else if (!chatsContext.isLoading && chatsContext.chatsMap) {
         // comes here only if signIn is extension or its nsec and passphrase is valid
         let decryptedChats = await getDecryptedChatsFromContext();
+        const passedNPubkey = router.query.pk ? router.query.pk : null;
+        if (passedNPubkey) {
+          let decryptedNpub = decryptNpub(passedNPubkey as string) as string;
+          if (!decryptedChats.has(decryptedNpub)) {
+            decryptedChats.set(decryptedNpub as string, []);
+          }
+          enterChat(passedNPubkey as string);
+        }
         setChatsMap(decryptedChats);
-        let sortedChatsByLastMessage = Array.from(
-          decryptedChats.entries(),
-        ).sort((a, b) => {
-          let aLastMessage = a[1][a[1].length - 1].created_at;
-          let bLastMessage = b[1][b[1].length - 1].created_at;
-          return bLastMessage - aLastMessage;
-        });
-        setSortedChatsByLastMessage(sortedChatsByLastMessage);
         setIsChatsLoading(chatsContext.isLoading);
         return;
       }
     }
     loadChats();
-    const passedNPubkey = router.query.pk ? router.query.pk : null;
-    if (passedNPubkey) {
-      enterChat(passedNPubkey as string);
-    }
   }, [chatsContext, passphrase]);
+
+  useEffect(() => {
+    let sortedChatsByLastMessage = Array.from(chatsMap.entries()).sort(
+      (a, b) => {
+        if (a[1].length === 0) return -1;
+        let aLastMessage = a[1][a[1].length - 1].created_at;
+        let bLastMessage = b[1][b[1].length - 1].created_at;
+        return bLastMessage - aLastMessage;
+      },
+    );
+    setSortedChatsByLastMessage(sortedChatsByLastMessage);
+  }, [chatsMap]);
 
   const getDecryptedChatsFromContext: () => Promise<
     Map<string, any[]>
@@ -124,13 +132,8 @@ const DirectMessages = () => {
   };
 
   const enterChat = (npub: string) => {
-    let decryptedNpub = decryptNpub(npub);
-    if (!Array.from(chatsMap.keys()).includes(decryptedNpub)) {
-      let newChatsMap = new Map(chatsMap);
-      newChatsMap.set(decryptedNpub, []);
-      setChatsMap(newChatsMap);
-    }
-    setCurrentChatPubkey(decryptedNpub as string);
+    let pubkey = decryptNpub(npub);
+    setCurrentChatPubkey(pubkey as string);
   };
 
   const goBackFromChatRoom = () => {

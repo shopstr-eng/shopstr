@@ -29,11 +29,13 @@ export const ChatButton = ({
       <div className="flex w-1/2 flex-col">
         <ProfileDisplayName pubkey={pubkeyOfChat} />
         <span className="truncate text-light-text dark:text-dark-text">
-          {lastMessage.content}
+          {lastMessage ? lastMessage.content : "No messages yet"}
         </span>
       </div>
       <div className="flex flex-shrink-0 flex-grow flex-row-reverse text-right text-light-text dark:text-dark-text">
-        {timeSinceMessageDisplayText(lastMessage.created_at).short}
+        {lastMessage
+          ? timeSinceMessageDisplayText(lastMessage.created_at).short
+          : ""}
       </div>
     </div>
   );
