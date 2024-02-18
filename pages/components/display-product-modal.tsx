@@ -18,7 +18,7 @@ import {
 } from "@nextui-org/react";
 import ProductForm from "./product-form";
 import ImageCarousel from "./utility-components/image-carousel";
-import { ProfileAvatar } from "./utility-components/avatar";
+import { ProfileAvatar } from "./utility-components/profile/avatar";
 import CompactCategories from "./utility-components/compact-categories";
 import { locationAvatar } from "./utility-components/dropdowns/location-dropdown";
 import { DisplayCostBreakdown } from "./utility-components/display-monetary-info";
@@ -32,7 +32,7 @@ interface ProductModalProps {
   handleModalToggle: () => void;
   showModal: boolean;
   handleSendMessage: (pubkeyToOpenChatWith: string) => void;
-  handleCheckout: (productId: string) => void;
+  handleReviewAndPurchase: (productId: string) => void;
   handleDelete: (productId: string, passphrase?: string) => void;
 }
 
@@ -140,7 +140,11 @@ export default function DisplayProductModal({
             ) : null}
             <Divider />
             <div className="flex h-fit w-full flex-row flex-wrap items-center justify-between gap-2">
-              <ProfileAvatar pubkey={productData.pubkey} className="w-1/3" />
+              <ProfileAvatar
+                pubkey={productData.pubkey}
+                className="w-1/3"
+                includeDisplayName
+              />
               <Chip key={location} startContent={locationAvatar(location)}>
                 {location}
               </Chip>
