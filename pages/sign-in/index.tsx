@@ -110,7 +110,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
             <label className="text-xl">Private Key:</label>
             <Input
               color={validPrivateKey ? "success" : "error"}
-              type="text"
+              type="password"
               width="100%"
               size="large"
               value={privateKey}
