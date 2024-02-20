@@ -35,7 +35,7 @@ export default function ListingPage({
   };
   return (
     <div className="flex w-full items-center justify-center bg-light-bg dark:bg-dark-bg">
-      <div className="flex w-[50%] flex-col sm:w-full ">
+      <div className="flex w-full flex-col md:w-[50%] ">
         <ProductCard
           productData={productData}
           isReview
