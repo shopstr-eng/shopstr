@@ -11,6 +11,7 @@ import {
   ProductContextInterface,
   ChatsContextInterface,
   ChatsContext,
+  ChatsMap,
 } from "./context";
 import {
   getLocalStorageData,
@@ -93,6 +94,12 @@ function App({ Component, pageProps }: AppProps) {
   ) => {
     setProfileContext({ profileData, isLoading });
   };
+
+  const editChatContext = (chatsMap: ChatsMap, isLoading: boolean) => {
+    console.log("editChatContext", chatsMap, isLoading);
+    setChatsContext({ chatsMap, isLoading });
+  };
+
   /** FETCH initial PRODUCTS and PROFILES **/
   useEffect(() => {
     const relays = localStorageValues.relays;
@@ -105,14 +112,11 @@ function App({ Component, pageProps }: AppProps) {
           editProductContext,
         );
         pubkeysToFetchProfilesFor = [...profileSetFromProducts];
-        let { chatsMap, profileSetFromChats } = await fetchChatsAndMessages(
+        let { profileSetFromChats } = await fetchChatsAndMessages(
           relays,
           decryptedNpub,
+          editChatContext,
         );
-        setChatsContext({
-          chatsMap: chatsMap,
-          isLoading: false,
-        });
         pubkeysToFetchProfilesFor = [
           decryptedNpub as string,
           ...pubkeysToFetchProfilesFor,

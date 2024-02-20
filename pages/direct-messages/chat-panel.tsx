@@ -8,7 +8,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { getLocalStorageData } from "../components/utility/nostr-helper-functions";
 import { ProfileAvatar } from "../components/utility-components/profile/avatar";
-import { NostrEvent } from "../types";
+import { ChatObject, NostrEvent, NostrMessageEvent } from "../types";
 import { ChatMessage } from "./chat-message";
 
 export const ChatPanel = ({
@@ -21,18 +21,18 @@ export const ChatPanel = ({
   handleGoBack: () => void;
   handleSendMessage: (message: string) => void;
   currentChatPubkey: string;
-  chatsMap: Map<string, any>;
+  chatsMap: Map<string, ChatObject>;
   isSendingDMLoading: boolean;
 }) => {
   const { decryptedNpub } = getLocalStorageData();
   const [messageInput, setMessageInput] = useState("");
-  const [messages, setMessages] = useState([]); // [chatPubkey, chat]
+  const [messages, setMessages] = useState<NostrMessageEvent[]>([]); // [chatPubkey, chat]
 
   const bottomDivRef = useRef();
 
   useEffect(() => {
-    setMessages(chatsMap.get(currentChatPubkey) || []);
-  }, [currentChatPubkey]);
+    setMessages(chatsMap.get(currentChatPubkey)?.decryptedChat || []);
+  }, [currentChatPubkey, chatsMap]);
 
   useEffect(() => {
     bottomDivRef.current?.scrollIntoView({ behavior: "smooth" });

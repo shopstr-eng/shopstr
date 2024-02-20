@@ -1,4 +1,5 @@
 import { createContext } from "react";
+import { NostrMessageEvent } from "./types";
 
 export interface ProfileContextInterface {
   profileData: Map<string, any>;
@@ -24,9 +25,7 @@ export const ProductContext = createContext({
   removeDeletedProductEvent: (productId: string) => {},
 } as ProductContextInterface);
 
-export interface ChatsMap extends Map<string, any> {
-  [key: string]: any;
-}
+export type ChatsMap = Map<string, NostrMessageEvent[]>;
 
 export interface ChatsContextInterface {
   chatsMap: ChatsMap;
