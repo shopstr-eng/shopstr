@@ -98,7 +98,7 @@ const DisplayEvents = ({
     if (selectedCategories.size === 0) return true;
     return Array.from(selectedCategories).some((selectedCategory) => {
       const re = new RegExp(selectedCategory, "gi");
-      return productData.categories.some((category) => {
+      return productData?.categories?.some((category) => {
         const match = category.match(re);
         return match && match.length > 0;
       });
