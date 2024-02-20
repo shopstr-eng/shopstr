@@ -16,7 +16,7 @@ const parseRequestBody = (body: string) => {
 
 const wallet = new CashuWallet(
   new CashuMint(
-    "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC",
+    "https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV",
   ),
 );
 

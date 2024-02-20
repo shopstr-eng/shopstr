@@ -345,7 +345,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       : null;
 
     if (mints === null) {
-      mints = ["https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"];
+      mints = ["https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV"];
       localStorage.setItem("mints", JSON.stringify(mints));
     }
   }
