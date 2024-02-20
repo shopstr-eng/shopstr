@@ -1,3 +1,7 @@
+import { fetchChatMessagesFromCache } from "../api/nostr/cache-service";
+import { ChatsMap } from "../context";
+import { NostrMessageEvent } from "../types";
+
 export const timeSinceMessageDisplayText = (
   timeSent: number,
 ): { long: string; short: string; dateTime: string } => {
@@ -39,4 +43,21 @@ export const timeSinceMessageDisplayText = (
       dateTime: dateTimeText,
     };
   }
+};
+
+export const countNumberOfUnreadMessagesFromChatsContext = async (
+  chatsMap: ChatsMap,
+) => {
+  let chatMessagesFromCache: Map<string, NostrMessageEvent> =
+    await fetchChatMessagesFromCache();
+  let numberOfUnread = 0;
+  for (let entry of chatsMap) {
+    let chat = entry[1] as NostrMessageEvent[];
+    chat.forEach((messageEvent: NostrMessageEvent) => {
+      if (chatMessagesFromCache.get(messageEvent.id)?.read === false) {
+        numberOfUnread++;
+      }
+    });
+  }
+  return numberOfUnread;
 };

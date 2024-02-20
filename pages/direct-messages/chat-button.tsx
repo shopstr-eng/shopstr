@@ -35,10 +35,10 @@ export const ChatButton = ({
           {lastMessage ? lastMessage.content : "No messages yet"}
         </span>
       </div>
-      <div className="flex flex-shrink-0 flex-grow flex-row-reverse flex-col text-right text-light-text dark:text-dark-text">
+      <div className="flex flex-shrink-0 flex-grow flex-col text-right text-light-text dark:text-dark-text">
         <div className="h-1/2">
           {unreadCount > 0 ? (
-            <span className="ml-2 h-52 w-52 rounded-full bg-shopstr-purple-light p-1 text-xs text-light-bg dark:bg-shopstr-yellow-light dark:text-dark-bg">
+            <span className="ml-2 rounded-full bg-shopstr-purple-light p-1 text-xs text-light-bg dark:bg-shopstr-yellow-light dark:text-dark-bg">
               {unreadCount}
             </span>
           ) : (
