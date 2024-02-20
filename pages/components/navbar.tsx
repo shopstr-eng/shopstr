@@ -14,6 +14,8 @@ import { useTheme } from "next-themes";
 import { getLocalStorageData } from "./utility/nostr-helper-functions";
 import { ChatsContext } from "../context";
 import { countNumberOfUnreadMessagesFromChatsContext } from "../direct-messages/utils";
+import { db } from "../api/nostr/cache-service";
+import { useLiveQuery } from "dexie-react-hooks";
 
 const useLoaded = () => {
   const [loaded, setLoaded] = useState(false);
@@ -54,6 +56,10 @@ const Navbar = () => {
     }
   }, []);
 
+  const liveChatMessagesFromCache = useLiveQuery(
+    async () => await db.table("chatMessages").toArray(),
+  );
+
   useEffect(() => {
     const getUnreadMessages = async () => {
       let unreadMsgCount = await countNumberOfUnreadMessagesFromChatsContext(
@@ -62,7 +68,7 @@ const Navbar = () => {
       setUnreadMsgCount(unreadMsgCount);
     };
     getUnreadMessages();
-  }, [chatsContext]);
+  }, [chatsContext, liveChatMessagesFromCache]);
 
   return (
     <div className="absolute z-20 flex w-full flex-col bg-light-bg px-3 pb-2 dark:bg-dark-bg">

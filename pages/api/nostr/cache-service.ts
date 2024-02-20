@@ -2,12 +2,12 @@ import { NostrEvent } from "../../types";
 import Dexie from "dexie";
 import { ItemType, NostrMessageEvent } from "../../types";
 
-const db = new Dexie("ItemsFetchedFromRelays");
+export const db = new Dexie("ItemsFetchedFromRelays");
 
-db.version(1).stores({
+db.version(2).stores({
   products: "id, product", // product: {id, product}
   profiles: "id, profile", // profile: {pubkey, created_at, content}
-  chats: "id, message", // message: NostrEvent
+  chatMessages: "id, message", // message: NostrEvent
   lastFetchedTime: "itemType, time", // item: {products, profiles, chats} time: timestamp
 });
 
@@ -18,7 +18,7 @@ db.open().catch(function (e) {
   indexedDBWorking = false;
 });
 
-const { products, profiles, chats, lastFetchedTime } = db;
+const { products, profiles, chatMessages, lastFetchedTime } = db;
 
 /**
  * returns the minutes lapsed since last fetch 60000ms = 1 minute
@@ -58,7 +58,7 @@ export const addProfilesToCache = async (profileMap: Map<string, any>) => {
 };
 
 export const addChatMessageToCache = async (chat: NostrMessageEvent) => {
-  await chats.put({ id: chat.id, message: chat });
+  await chatMessages.put({ id: chat.id, message: chat });
 };
 
 export const addChatMessagesToCache = async (chats: NostrMessageEvent[]) => {
@@ -90,7 +90,7 @@ export const fetchProfileDataFromCache = async () => {
 };
 
 export const fetchAllChatsFromCache = async () => {
-  let cache = await chats.toArray();
+  let cache = await chatMessages.toArray();
   let chatsMap = new Map();
   cache.forEach(({ id, messages }) => {
     chatsMap.set(id, messages);
@@ -101,9 +101,9 @@ export const fetchAllChatsFromCache = async () => {
 export const fetchChatMessagesFromCache = async (): Promise<
   Map<string, NostrMessageEvent>
 > => {
-  let chatMessages = await chats.toArray();
+  let chatMessagesFromCache = await chatMessages.toArray();
   let chatMessagesMap = new Map();
-  chatMessages.forEach(
+  chatMessagesFromCache.forEach(
     ({ id, message }: { id: string; message: NostrMessageEvent }) => {
       chatMessagesMap.set(id, message);
     },
