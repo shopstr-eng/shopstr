@@ -95,6 +95,9 @@ export default function RequestPassphraseModal({
             label="Passphrase"
             labelPlacement="inside"
             onChange={(e) => setPassphraseInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onSubmit();
+            }}
             value={passphraseInput}
           />
         </ModalBody>

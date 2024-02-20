@@ -21,10 +21,14 @@ import {
   addChatMessagesToCache,
   fetchChatMessagesFromCache,
 } from "../api/nostr/cache-service";
+import { useKeyPress } from "../components/utility/functions";
 
 const DirectMessages = () => {
   const router = useRouter();
   const chatsContext = useContext(ChatsContext);
+  const arrowUpPressed = useKeyPress("ArrowUp");
+  const arrowDownPressed = useKeyPress("ArrowDown");
+  const escapePressed = useKeyPress("Escape");
 
   const [chatsMap, setChatsMap] = useState<Map<string, ChatObject>>(new Map()); // Map<chatPubkey, chat>
   const [sortedChatsByLastMessage, setSortedChatsByLastMessage] = useState<
@@ -96,6 +100,34 @@ const DirectMessages = () => {
     );
     setSortedChatsByLastMessage(sortedChatsByLastMessage);
   }, [chatsMap]);
+
+  // useEffect used to traverse chats via arrow keys
+  useEffect(() => {
+    if (arrowUpPressed) {
+      if (currentChatPubkey === "") {
+        setCurrentChatPubkey(sortedChatsByLastMessage[0][0]);
+      } else {
+        let index = sortedChatsByLastMessage.findIndex(
+          ([pubkey, chatObject]) => pubkey === currentChatPubkey,
+        );
+        if (index > 0) enterChat(sortedChatsByLastMessage[index - 1][0]);
+      }
+    }
+    if (arrowDownPressed) {
+      if (currentChatPubkey === "") {
+        setCurrentChatPubkey(sortedChatsByLastMessage[0][0]);
+      } else {
+        let index = sortedChatsByLastMessage.findIndex(
+          ([pubkey, chatObject]) => pubkey === currentChatPubkey,
+        );
+        if (index < sortedChatsByLastMessage.length - 1)
+          enterChat(sortedChatsByLastMessage[index + 1][0]);
+      }
+    }
+    if (escapePressed) {
+      goBackFromChatRoom();
+    }
+  }, [arrowUpPressed, arrowDownPressed, escapePressed]);
 
   const decryptEncryptedMessageContent = async (
     messageEvent: NostrMessageEvent,

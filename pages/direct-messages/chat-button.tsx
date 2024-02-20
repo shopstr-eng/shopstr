@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { ProfileAvatar } from "../components/utility-components/profile/avatar";
 import { ProfileDisplayName } from "../components/utility-components/profile/display-name";
 import { ChatObject } from "../types";
@@ -18,6 +19,14 @@ export const ChatButton = ({
   let lastMessage = messages[messages.length - 1];
   let unreadCount = chatObject.unreadCount;
 
+  let divRef = useRef(null);
+
+  useEffect(() => {
+    if (pubkeyOfChat === openedChatPubkey) {
+      divRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [openedChatPubkey]);
+
   return (
     <div
       key={pubkeyOfChat}
@@ -25,6 +34,7 @@ export const ChatButton = ({
         pubkeyOfChat === openedChatPubkey ? "bg-[#ccccccb9]" : ""
       }`}
       onClick={() => handleClickChat(pubkeyOfChat)}
+      ref={divRef}
     >
       <div className="flex-shrink-0 overflow-clip">
         <ProfileAvatar pubkey={pubkeyOfChat} />
