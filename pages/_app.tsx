@@ -96,7 +96,6 @@ function App({ Component, pageProps }: AppProps) {
   };
 
   const editChatContext = (chatsMap: ChatsMap, isLoading: boolean) => {
-    console.log("editChatContext", chatsMap, isLoading);
     setChatsContext({ chatsMap, isLoading });
   };
 
