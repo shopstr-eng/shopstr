@@ -1,6 +1,5 @@
-import { useState, useEffect, useRef, useContext, use } from "react";
+import { useState, useEffect, useContext } from "react";
 import { nip04 } from "nostr-tools";
-import { Button } from "@nextui-org/react";
 import { useRouter } from "next/router";
 import {
   LocalStorageInterface,
@@ -11,27 +10,25 @@ import {
   sendEncryptedMessage,
   validPassphrase,
 } from "../components/utility/nostr-helper-functions";
-import { ProfileAvatar } from "../components/utility-components/profile/avatar";
 import { ChatsContext } from "../context";
-import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
 import RequestPassphraseModal from "../components/utility-components/request-passphrase-modal";
-import {
-  ArrowUturnLeftIcon,
-  MinusCircleIcon,
-} from "@heroicons/react/24/outline";
 import ShopstrSpinner from "../components/utility-components/shopstr-spinner";
 import axios from "axios";
 import { ChatPanel } from "./chat-panel";
-import { ProfileDisplayName } from "../components/utility-components/profile/display-name";
 import { ChatButton } from "./chat-button";
+import { NostrMessageEvent, ChatObject } from "../types";
+import {
+  addChatMessagesToCache,
+  fetchChatMessagesFromCache,
+} from "../api/nostr/cache-service";
 
 const DirectMessages = () => {
   const router = useRouter();
   const chatsContext = useContext(ChatsContext);
 
-  const [chatsMap, setChatsMap] = useState(new Map()); // Map<chatPubkey, chat>
+  const [chatsMap, setChatsMap] = useState<Map<string, ChatObject>>(new Map()); // Map<chatPubkey, chat>
   const [sortedChatsByLastMessage, setSortedChatsByLastMessage] = useState<
-    [string, any[]][]
+    [string, ChatObject][]
   >([]); // [chatPubkey, chat]
   const [currentChatPubkey, setCurrentChatPubkey] = useState("");
 
@@ -51,13 +48,6 @@ const DirectMessages = () => {
 
   useEffect(() => {
     async function loadChats() {
-      if (
-        localStorageValues.signIn === "nsec" &&
-        !validPassphrase(passphrase)
-      ) {
-        setEnterPassphrase(true); // prompt for passphrase when chatsContext is loaded
-        return;
-      }
       if (!chatsContext) {
         setIsChatsLoading(false);
         return;
@@ -72,13 +62,20 @@ const DirectMessages = () => {
         let decryptedChats = await getDecryptedChatsFromContext();
         const passedNPubkey = router.query.pk ? router.query.pk : null;
         if (passedNPubkey) {
-          let decryptedNpub = decryptNpub(passedNPubkey as string) as string;
-          if (!decryptedChats.has(decryptedNpub)) {
-            decryptedChats.set(decryptedNpub as string, []);
+          let pubkey = decryptNpub(passedNPubkey as string) as string;
+          if (!decryptedChats.has(pubkey)) {
+            decryptedChats.set(pubkey as string, {
+              unreadCount: 0,
+              decryptedChat: [],
+            });
           }
-          enterChat(passedNPubkey as string);
+          enterChat(pubkey);
         }
         setChatsMap(decryptedChats);
+        if (currentChatPubkey) {
+          // if the current chat is already open, mark all messages as read
+          markAllMessagesAsReadInChatRoom(currentChatPubkey);
+        }
         setIsChatsLoading(chatsContext.isLoading);
         return;
       }
@@ -88,52 +85,89 @@ const DirectMessages = () => {
 
   useEffect(() => {
     let sortedChatsByLastMessage = Array.from(chatsMap.entries()).sort(
-      (a, b) => {
-        if (a[1].length === 0) return -1;
-        let aLastMessage = a[1][a[1].length - 1].created_at;
-        let bLastMessage = b[1][b[1].length - 1].created_at;
+      (a: [string, ChatObject], b: [string, ChatObject]) => {
+        if (a[1].decryptedChat.length === 0) return -1;
+        let aLastMessage =
+          a[1].decryptedChat[a[1].decryptedChat.length - 1].created_at;
+        let bLastMessage =
+          b[1].decryptedChat[b[1].decryptedChat.length - 1].created_at;
         return bLastMessage - aLastMessage;
       },
     );
     setSortedChatsByLastMessage(sortedChatsByLastMessage);
   }, [chatsMap]);
 
+  const decryptEncryptedMessageContent = async (
+    messageEvent: NostrMessageEvent,
+    chatPubkey: string,
+  ) => {
+    try {
+      let plaintext = "";
+      if (localStorageValues.signIn === "extension") {
+        plaintext = await window.nostr.nip04.decrypt(
+          chatPubkey,
+          messageEvent.content,
+        );
+      } else {
+        let sk2 = getPrivKeyWithPassphrase(passphrase);
+        plaintext = await nip04.decrypt(sk2, chatPubkey, messageEvent.content);
+      }
+      return plaintext;
+    } catch (e) {
+      console.error(e, "Error decrypting message.", messageEvent);
+    }
+  };
+
   const getDecryptedChatsFromContext: () => Promise<
-    Map<string, any[]>
+    Map<string, ChatObject>
   > = async () => {
-    let decryptedChats = new Map(); //  entry: [chatPubkey, chat]
-    for (let [chatPubkey, chat] of chatsContext.chatsMap) {
-      let decryptedChat: MessageEvent[] = [];
+    let decryptedChats: Map<string, ChatObject> = new Map(); //  entry: [chatPubkey, chat]
+    let chatMessagesFromCache: Map<string, NostrMessageEvent> =
+      await fetchChatMessagesFromCache();
+    for (let entry of chatsContext.chatsMap) {
+      let chatPubkey = entry[0] as string;
+      let chat = entry[1] as NostrMessageEvent[];
+      let decryptedChat: NostrMessageEvent[] = [];
+      let unreadCount = 0;
+
       for (let messageEvent of chat) {
-        try {
-          let plaintext = "";
-          if (localStorageValues.signIn === "extension") {
-            plaintext = await window.nostr.nip04.decrypt(
-              chatPubkey,
-              messageEvent.content,
-            );
-          } else {
-            let sk2 = getPrivKeyWithPassphrase(passphrase);
-            plaintext = await nip04.decrypt(
-              sk2,
-              chatPubkey,
-              messageEvent.content,
-            );
-          }
-          decryptedChat.push({ ...messageEvent, content: plaintext });
-        } catch (e) {
-          console.log(e, "Error decrypting message.", messageEvent);
+        let plainText = await decryptEncryptedMessageContent(
+          messageEvent,
+          chatPubkey,
+        );
+        plainText &&
+          decryptedChat.push({ ...messageEvent, content: plainText });
+        if (chatMessagesFromCache.get(messageEvent.id)?.read === false) {
+          unreadCount++;
         }
       }
-      decryptedChats.set(chatPubkey, decryptedChat);
+      decryptedChats.set(chatPubkey, { unreadCount, decryptedChat });
     }
-
     return decryptedChats;
   };
 
-  const enterChat = (npub: string) => {
-    let pubkey = decryptNpub(npub);
-    setCurrentChatPubkey(pubkey as string);
+  const markAllMessagesAsReadInChatRoom = (pubkeyOfChat: string) => {
+    setChatsMap((prevChatMap) => {
+      let updatedChat = prevChatMap.get(pubkeyOfChat) as ChatObject;
+      updatedChat.unreadCount = 0;
+      let encryptedChat = chatsContext.chatsMap.get(
+        pubkeyOfChat,
+      ) as NostrMessageEvent[];
+      encryptedChat.forEach((message) => {
+        message.read = true;
+      });
+      let newChatMap = new Map(prevChatMap);
+      newChatMap.set(pubkeyOfChat, updatedChat);
+      addChatMessagesToCache(encryptedChat);
+      return newChatMap;
+    });
+  };
+
+  const enterChat = (pubkeyOfChat: string) => {
+    setCurrentChatPubkey(pubkeyOfChat as string);
+    // mark all messages in chat as read
+
+    markAllMessagesAsReadInChatRoom(pubkeyOfChat as string);
   };
 
   const goBackFromChatRoom = () => {
@@ -151,17 +185,30 @@ const DirectMessages = () => {
         passphrase,
       );
       await sendEncryptedMessage(encryptedMessageEvent, passphrase);
-      // push message to chatsMap
-      let updatedCurrentChat = chatsMap.get(currentChatPubkey);
-      let unEncryptedMessageEvent = {
-        ...encryptedMessageEvent,
-        content: message,
-      };
-      updatedCurrentChat.push(unEncryptedMessageEvent);
-      let newChatsMap = new Map(chatsMap);
-      newChatsMap.set(currentChatPubkey, updatedCurrentChat);
-      setChatsMap(newChatsMap);
-      if (updatedCurrentChat.length <= 1) {
+      // update chats locally to reflect new message
+      setChatsMap((prevChatMap) => {
+        let updatedChat = prevChatMap.get(currentChatPubkey) as ChatObject;
+        let unEncryptedMessageEvent: NostrMessageEvent = {
+          ...encryptedMessageEvent,
+          content: message,
+          read: true,
+          id: "mock-id",
+          sig: "mock-sig",
+        };
+        let updatedDecryptedChat = updatedChat.decryptedChat
+          ? [...updatedChat.decryptedChat, unEncryptedMessageEvent]
+          : [];
+        let newChatMap = new Map(prevChatMap);
+        newChatMap.set(currentChatPubkey, {
+          decryptedChat: updatedDecryptedChat,
+          unreadCount: 0,
+        });
+        return newChatMap;
+      });
+      if (
+        chatsMap.get(currentChatPubkey) != undefined &&
+        chatsMap.get(currentChatPubkey)?.decryptedChat.length === 0
+      ) {
         // only logs if this is the first msg, aka an iniquiry
         axios({
           method: "POST",
@@ -183,10 +230,6 @@ const DirectMessages = () => {
       alert("Error sending message.");
       setIsSendingDMLoading(false);
     }
-  };
-
-  const handleClickChat = (chat: string) => {
-    setCurrentChatPubkey(chat);
   };
 
   return (
@@ -221,12 +264,12 @@ const DirectMessages = () => {
             <div className="h-[85vh] w-full overflow-y-auto rounded-md dark:bg-dark-bg md:w-[450px] md:max-w-[33%] md:flex-shrink-0">
               {chatsMap &&
                 sortedChatsByLastMessage.map(
-                  ([pubkeyOfChat, messages]: [string, any[]]) => (
+                  ([pubkeyOfChat, chatObject]: [string, ChatObject]) => (
                     <ChatButton
                       pubkeyOfChat={pubkeyOfChat}
-                      messages={messages}
+                      chatObject={chatObject}
                       openedChatPubkey={currentChatPubkey}
-                      handleClickChat={handleClickChat}
+                      handleClickChat={enterChat}
                     />
                   ),
                 )}

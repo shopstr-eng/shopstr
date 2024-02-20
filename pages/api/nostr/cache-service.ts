@@ -1,13 +1,13 @@
 import { NostrEvent } from "../../types";
 import Dexie from "dexie";
-import { ItemType } from "../../types";
+import { ItemType, NostrMessageEvent } from "../../types";
 
 const db = new Dexie("ItemsFetchedFromRelays");
 
 db.version(1).stores({
   products: "id, product", // product: {id, product}
   profiles: "id, profile", // profile: {pubkey, created_at, content}
-  chats: "id, messages", // messages: {pubkey, messages: [message1, message2, ...]}
+  chats: "id, message", // message: NostrEvent
   lastFetchedTime: "itemType, time", // item: {products, profiles, chats} time: timestamp
 });
 
@@ -57,11 +57,14 @@ export const addProfilesToCache = async (profileMap: Map<string, any>) => {
   await lastFetchedTime.put({ itemType: "profiles", time: Date.now() });
 };
 
-export const addChatsToCache = async (chatsMap: Map<string, any>) => {
-  Array.from(chatsMap.entries()).forEach(async ([pubkey, chat]) => {
-    await chats.put({ id: pubkey, messages: chat });
+export const addChatMessageToCache = async (chat: NostrMessageEvent) => {
+  await chats.put({ id: chat.id, message: chat });
+};
+
+export const addChatMessagesToCache = async (chats: NostrMessageEvent[]) => {
+  chats.forEach(async (chat) => {
+    await addChatMessageToCache(chat);
   });
-  await lastFetchedTime.put({ itemType: "chats", time: Date.now() });
 };
 
 export const removeProductFromCache = async (productIds: string[]) => {
@@ -93,4 +96,17 @@ export const fetchAllChatsFromCache = async () => {
     chatsMap.set(id, messages);
   });
   return chatsMap;
+};
+
+export const fetchChatMessagesFromCache = async (): Promise<
+  Map<string, NostrMessageEvent>
+> => {
+  let chatMessages = await chats.toArray();
+  let chatMessagesMap = new Map();
+  chatMessages.forEach(
+    ({ id, message }: { id: string; message: NostrMessageEvent }) => {
+      chatMessagesMap.set(id, message);
+    },
+  );
+  return chatMessagesMap;
 };

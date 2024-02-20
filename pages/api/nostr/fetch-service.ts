@@ -1,13 +1,16 @@
 import { Nostr, SimplePool } from "nostr-tools";
 import {
+  addChatMessageToCache,
   addChatsToCache,
   addProductToCache,
   addProfilesToCache,
   fetchAllProductsFromCache,
+  fetchChatMessagesFromCache,
   fetchProfileDataFromCache,
   removeProductFromCache,
 } from "./cache-service";
-import { NostrEvent } from "@/pages/types";
+import { NostrEvent, NostrMessageEvent } from "@/pages/types";
+import { ChatsMap } from "@/pages/context";
 
 const POSTQUERYLIMIT = 200;
 
@@ -133,122 +136,120 @@ export const fetchProfile = async (
   });
 };
 
-export const fetchAllIncomingChats = async (
-  relays: string[],
-  decryptedNpub: string,
-): Promise<{
-  chatsMap: Map<string, any>;
-}> => {
-  return new Promise(function (resolve, reject) {
-    try {
-      const pool = new SimplePool();
-      let subParams: { kinds: number[] } = {
-        kinds: [4],
-        "#p": [decryptedNpub],
-      };
-
-      let chatsMap: Map<string, any> = new Map();
-
-      let h = pool.subscribeMany(relays, [subParams], {
-        onevent(event) {
-          // console.log("incoming chat event: ", event);
-          let incomingPubkey = event.pubkey;
-          if (!chatsMap.has(incomingPubkey))
-            chatsMap.set(incomingPubkey, [event]);
-          else {
-            chatsMap.get(incomingPubkey).push(event);
-          }
-        },
-        oneose() {
-          h.close();
-          resolve({ chatsMap });
-        },
-      });
-    } catch (error) {
-      console.error("Failed to fetchAllIncomingChats", error);
-    }
-  });
-};
-
-export const fetchAllOutgoingChats = async (
-  relays: string[],
-  decryptedNpub: string,
-): Promise<{
-  chatsMap: Map<string, any>;
-}> => {
-  return new Promise(function (resolve, reject) {
-    try {
-      const pool = new SimplePool();
-      let subParams: { kinds: number[]; authors: string[] } = {
-        kinds: [4],
-        authors: [decryptedNpub],
-      };
-
-      let chatsMap: Map<string, any> = new Map();
-
-      let h = pool.subscribeMany(relays, [subParams], {
-        onevent(event: NostrEvent) {
-          // console.log("outgoing chat event: ", event);
-          let tagsMap: Map<string, string> = new Map(event.tags);
-          let receipientPubkey = tagsMap.get("p") ? tagsMap.get("p") : null; // pubkey you sent the message to
-          if (typeof receipientPubkey !== "string")
-            throw new Error(
-              `fetchAllOutgoingChats: Failed to get receipientPubkey from tagsMap",
-              ${tagsMap},
-              ${event}`,
-            );
-          if (!chatsMap.has(receipientPubkey))
-            chatsMap.set(receipientPubkey, [event]);
-          else {
-            chatsMap.get(receipientPubkey).push(event);
-          }
-        },
-        oneose() {
-          h.close();
-          resolve({ chatsMap });
-        },
-      });
-    } catch (error) {
-      console.error("Failed to fetchAllOutgoingChats", error);
-    }
-  });
-};
-
 export const fetchChatsAndMessages = async (
   relays: string[],
   decryptedNpub: string,
+  editChatContext: (chatsMap: ChatsMap, isLoading: boolean) => void,
 ): Promise<{
-  chatsMap: Map<string, any>;
   profileSetFromChats: Set<string>;
 }> => {
-  if (!decryptedNpub)
-    return { chatsMap: new Map(), profileSetFromChats: new Set() };
   return new Promise(async function (resolve, reject) {
+    // if no decryptedNpub, user is not signed in
+    if (!decryptedNpub) {
+      editChatContext(new Map(), false);
+      return { profileSetFromChats: new Set() };
+    }
+    let chatMessagesFromCache: Map<string, NostrMessageEvent> =
+      await fetchChatMessagesFromCache();
     try {
-      const incomingChats = await fetchAllIncomingChats(relays, decryptedNpub);
-      const outgoingChats = await fetchAllOutgoingChats(relays, decryptedNpub);
       let chatsMap = new Map();
-      let profileSetFromChats: Set<string> = new Set();
-      incomingChats.chatsMap.forEach((value, key) => {
-        chatsMap.set(key, value);
-        profileSetFromChats.add(key);
-      });
-      outgoingChats.chatsMap.forEach((value, key) => {
-        profileSetFromChats.add(key);
-        if (chatsMap.has(key)) {
-          chatsMap.get(key).push(...value);
+      let incomingChatsReachedEOSE = false;
+      let outgoingChatsReachedEOSE = false;
+
+      const addToChatsMap = (
+        pubkeyOfChat: string,
+        event: NostrMessageEvent,
+      ) => {
+        // pubkeyOfChat is the person you are chatting with if incoming, or the person you are sending to if outgoing
+        if (!chatsMap.has(pubkeyOfChat)) {
+          chatsMap.set(pubkeyOfChat, [event]);
         } else {
-          chatsMap.set(key, value);
+          chatsMap.get(pubkeyOfChat).push(event);
         }
-      });
+      };
 
-      //sort chats by created_at
-      chatsMap.forEach((value, key) => {
-        value.sort((a, b) => a.created_at - b.created_at);
-      });
+      const onEOSE = () => {
+        if (incomingChatsReachedEOSE && outgoingChatsReachedEOSE) {
+          //sort chats by created_at
+          chatsMap.forEach((value, key) => {
+            value.sort(
+              (a: NostrMessageEvent, b: NostrMessageEvent) =>
+                a.created_at - b.created_at,
+            );
+          });
+          resolve({ profileSetFromChats: new Set(chatsMap.keys()) });
+          editChatContext(chatsMap, false);
+        }
+      };
 
-      resolve({ chatsMap, profileSetFromChats });
-      await addChatsToCache(chatsMap);
+      new SimplePool().subscribeMany(
+        relays,
+        [
+          {
+            kinds: [4],
+            authors: [decryptedNpub], // all chats where you are the author
+          },
+        ],
+        {
+          onevent(event: NostrEvent) {
+            console.log("outgoing chat event: ", event);
+            let tagsMap: Map<string, string> = new Map(event.tags);
+            let receipientPubkey = tagsMap.get("p") ? tagsMap.get("p") : null; // pubkey you sent the message to
+            if (typeof receipientPubkey !== "string") {
+              console.error(
+                `fetchAllOutgoingChats: Failed to get receipientPubkey from tagsMap",
+                    ${tagsMap},
+                    ${event}`,
+              );
+              alert(
+                `fetchAllOutgoingChats: Failed to get receipientPubkey from tagsMap`,
+              );
+              return;
+            }
+            let chatMessage = chatMessagesFromCache.get(event.id);
+            if (!chatMessage) {
+              chatMessage = { ...event, read: true }; // true because the user sent it himself
+              addChatMessageToCache(chatMessage);
+            }
+            addToChatsMap(receipientPubkey, chatMessage);
+            if (incomingChatsReachedEOSE && outgoingChatsReachedEOSE) {
+              editChatContext(chatsMap, false);
+            }
+          },
+          oneose() {
+            incomingChatsReachedEOSE = true;
+            onEOSE();
+          },
+        },
+      );
+      new SimplePool().subscribeMany(
+        relays,
+        [
+          {
+            kinds: [4],
+            "#p": [decryptedNpub], // all chats where you are the receipient
+          },
+        ],
+        {
+          async onevent(event) {
+            console.log("incoming chat event: ", event);
+            let senderPubkey = event.pubkey;
+            let chatMessage = chatMessagesFromCache.get(event.id);
+            if (!chatMessage) {
+              chatMessage = { ...event, read: false }; // false because the user received it and it wasn't in the cache
+              addChatMessageToCache(chatMessage);
+            }
+            addToChatsMap(senderPubkey, chatMessage);
+            if (incomingChatsReachedEOSE && outgoingChatsReachedEOSE) {
+              editChatContext(chatsMap, false);
+            }
+          },
+          async oneose() {
+            outgoingChatsReachedEOSE = true;
+            onEOSE();
+          },
+        },
+      );
     } catch (error) {
       console.log("Failed to fetchChatsAndMessages: ", error);
       alert("Failed to fetchChatsAndMessages: " + error);
