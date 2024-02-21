@@ -141,6 +141,13 @@ const Keys = () => {
               value={passphrase}
               placeholder="Enter a passphrase of your choice..."
               onChange={(e) => setPassphrase(e.target.value)}
+              onKeyDown={(e) => {
+                if (
+                  e.key === "Enter" &&
+                  !(passphrase === "" || passphrase === null)
+                )
+                  handleSignIn();
+              }}
             />
           </div>
           <div className="flex justify-center">

@@ -148,6 +148,13 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
               className={SHOPSTRBUTTONCLASSNAMES}
               onClick={handleSignIn}
               disabled={!validPrivateKey} // Disable the button only if both key strings are invalid or the button has already been clicked
+              onKeyDown={(e) => {
+                if (
+                  e.key === "Enter" &&
+                  (validPrivateKey)
+                )
+                  handleSignIn();
+              }}
             >
               Sign In
             </Button>
