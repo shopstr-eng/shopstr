@@ -129,6 +129,9 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
               value={passphrase}
               placeholder="Enter a passphrase of your choice..."
               onChange={(e) => setPassphrase(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && validPrivateKey) handleSignIn();
+              }}
             />
           </div>
           <div className="flex flex-row justify-between space-x-2">
@@ -148,9 +151,6 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
               className={SHOPSTRBUTTONCLASSNAMES}
               onClick={handleSignIn}
               disabled={!validPrivateKey} // Disable the button only if both key strings are invalid or the button has already been clicked
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && validPrivateKey) handleSignIn();
-              }}
             >
               Sign In
             </Button>
