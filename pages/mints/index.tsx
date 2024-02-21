@@ -191,7 +191,16 @@ const Mints = () => {
                 Cancel
               </Button>
 
-              <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+              <Button 
+                className={SHOPSTRBUTTONCLASSNAMES} 
+                type="submit"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleSubmit(onSubmit)();
+                  }
+                }}
+              >
                 Change Mint
               </Button>
             </ModalFooter>

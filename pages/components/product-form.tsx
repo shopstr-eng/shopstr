@@ -697,6 +697,12 @@ export default function NewForm({
                   passphraseInputRef.current.focus();
                 }
               }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !isButtonDisabled) {
+                  e.preventDefault(); // Prevent default to avoid submitting the form again
+                  handleSubmit(onSubmit)(); // Programmatic submit
+                }
+              }}
               isDisabled={isPostingOrUpdatingProduct || isButtonDisabled}
               isLoading={isPostingOrUpdatingProduct}
             >
