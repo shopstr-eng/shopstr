@@ -176,6 +176,12 @@ const Mints = () => {
                       onChange={onChange} // send value to hook form
                       onBlur={onBlur} // notify when input is touched/blur
                       value={value}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleSubmit(onSubmit)();
+                        }
+                      }}
                     />
                   );
                 }}
@@ -191,16 +197,7 @@ const Mints = () => {
                 Cancel
               </Button>
 
-              <Button 
-                className={SHOPSTRBUTTONCLASSNAMES} 
-                type="submit"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    handleSubmit(onSubmit)();
-                  }
-                }}
-              >
+              <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
                 Change Mint
               </Button>
             </ModalFooter>
