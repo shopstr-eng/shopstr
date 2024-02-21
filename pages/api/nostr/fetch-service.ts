@@ -147,7 +147,7 @@ export const fetchChatsAndMessages = async (
     // if no decryptedNpub, user is not signed in
     if (!decryptedNpub) {
       editChatContext(new Map(), false);
-      return { profileSetFromChats: new Set() };
+      resolve({ profileSetFromChats: new Set() });
     }
     let chatMessagesFromCache: Map<string, NostrMessageEvent> =
       await fetchChatMessagesFromCache();
