@@ -8,7 +8,7 @@ import {
   Input,
 } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
-import { getLocalStorageData } from "@/components/utility/nostr-helper-functions";
+import { validateNSecKey } from "@/components/utility/nostr-helper-functions";
 import { getPublicKey, nip19 } from "nostr-tools";
 import * as CryptoJS from "crypto-js";
 
@@ -21,12 +21,11 @@ export default function SignInModal({
   opened: boolean;
   some: number;
 }) {
-  const { signIn, decryptedNpub } = getLocalStorageData();
   const [privateKey, setPrivateKey] = useState<string>("");
   const [validPrivateKey, setValidPrivateKey] = useState<boolean>(false);
   const [passphrase, setPassphrase] = useState<string>("");
 
-  const [isPrivateKeySignIn, setIsPrivateKeySignIn] = useState(false);
+  const [showPrivateKeySignIn, setShowPrivateKeySignIn] = useState(false);
   const [showModal, setShowModal] = useState(false);
 
   const router = useRouter();
@@ -56,16 +55,14 @@ export default function SignInModal({
     setShowModal(false);
     router.push("/keys");
   };
-  const handlePrivateKeySignIn = () => {
-    setIsPrivateKeySignIn(true);
-  };
+
   const handleSignIn = async () => {
     if (validPrivateKey) {
       if (passphrase === "" || passphrase === null) {
         alert("No passphrase provided!");
       } else {
         let { data: sk } = nip19.decode(privateKey);
-        let pk = await getPublicKey(sk);
+        let pk = getPublicKey(sk);
         let npub = nip19.npubEncode(pk);
         localStorage.setItem("npub", npub);
 
@@ -92,11 +89,15 @@ export default function SignInModal({
         setShowModal(false);
       }
     } else {
-      setErrorMessage(
+      alert(
         "The private key inputted was not valid! Generate a new key pair or try again.",
       );
     }
   };
+
+  useEffect(() => {
+    setValidPrivateKey(validateNSecKey(privateKey));
+  }, [privateKey]);
 
   useEffect(() => {
     setShowModal(opened);
@@ -165,9 +166,9 @@ export default function SignInModal({
                 <div className="flex flex-col	">
                   <div className="">
                     <Button
-                      onClick={() => handlePrivateKeySignIn()}
+                      onClick={() => setShowPrivateKeySignIn(true)}
                       className={`mt-2 w-full ${
-                        isPrivateKeySignIn ? "hidden" : ""
+                        showPrivateKeySignIn ? "hidden" : ""
                       }`}
                     >
                       Private Key Sign In
@@ -175,7 +176,7 @@ export default function SignInModal({
                   </div>
                   <div
                     className={`mb-4 flex flex-col justify-between space-y-4 ${
-                      isPrivateKeySignIn ? "" : "hidden"
+                      showPrivateKeySignIn ? "" : "hidden"
                     }`}
                   >
                     <div>
@@ -212,7 +213,7 @@ export default function SignInModal({
                       <Button
                         className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
                         onClick={handleSignIn}
-                        disabled={!validPrivateKey} // Disable the button only if both key strings are invalid or the button has already been clicked
+                        isDisabled={!validPrivateKey} // Disable the button only if both key strings are invalid or the button has already been clicked
                       >
                         Private Key Sign In
                       </Button>
