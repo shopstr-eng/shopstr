@@ -3,6 +3,8 @@ import { useForm, Controller } from 'react-hook-form';
 import {
   InformationCircleIcon,
   MinusCircleIcon,
+  MoonIcon,
+  SunIcon,
 } from '@heroicons/react/24/outline';
 import {
   Modal,
@@ -132,8 +134,34 @@ const ProfilePage = () => {
     setRelays(relays.filter((relay) => relay !== relayToDelete));
   };
 
+  const useLoaded = () => {
+    const [loaded, setLoaded] = useState(false);
+    useEffect(() => setLoaded(true), []);
+    return loaded;
+  };
+
+  const DarkModeToggle = () => {
+    const { theme, setTheme } = useTheme();
+
+    return (
+      <div>
+        {useLoaded() && theme === 'dark' ? (
+          <MoonIcon
+            className="h-8 w-8 cursor-pointer text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+            onClick={() => setTheme('light')}
+          />
+        ) : (
+          <SunIcon
+            className="h-8 w-8 cursor-pointer text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+            onClick={() => setTheme('dark')}
+          />
+        )}
+      </div>
+    );
+  };
+
   return (
-    <div className="flex h-full w-full flex-col overflow-x-hidden bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] sm:border-r sm:border-zinc-700 md:ml-[250px]">
+    <div className="flex h-screen w-full flex-col overflow-x-hidden bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] sm:border-r sm:border-zinc-700 md:ml-[250px]">
       <div>
         <span className=" my-8 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
           Relays
@@ -253,9 +281,11 @@ const ProfilePage = () => {
           </ModalContent>
         </Modal>
       </div>
+
       <span className=" my-8 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
         Mint
       </span>
+
       <div>
         {mints.length === 0 && (
           <div className="mt-8 flex items-center justify-center">
@@ -385,7 +415,7 @@ const ProfilePage = () => {
         Account
       </span>
       <div>
-        <span className="ml-4">npub</span>
+        <span className="ml-4 text-light-text dark:text-dark-text">npub</span>
         <div className="mx-3 mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg">
           <div className="max-w-xsm truncate text-light-text dark:text-dark-text">
             {getLocalStorageData().npub}
@@ -415,23 +445,13 @@ const ProfilePage = () => {
           </Button>
         </div>
       </div>
+
       <span className=" my-8 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
-        Preferences
+        Settings
       </span>
-      <RadioGroup
-        className="ml-4"
-        label="Select your prefered theme"
-        orientation={'horizontal'}
-        defaultValue={(localStorage.getItem('theme') as string) || 'system'}
-        onChange={(e) => {
-          localStorage.setItem('theme', e.target.value);
-          setTheme(e.target.value);
-        }}
-      >
-        <Radio value="system">System</Radio>
-        <Radio value="light">Light</Radio>
-        <Radio value="dark">Dark</Radio>
-      </RadioGroup>
+      <div className="flex justify-center">
+        <DarkModeToggle />
+      </div>
     </div>
   );
 };

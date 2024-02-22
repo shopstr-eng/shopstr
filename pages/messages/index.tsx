@@ -273,19 +273,19 @@ const DirectMessages = () => {
   };
 
   return (
-    <div className="flex h-full w-full flex-col overflow-x-hidden bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] sm:border-r sm:border-zinc-700 md:ml-[250px]">
+    <div className="flex h-screen w-full flex-col overflow-x-hidden overflow-y-hidden bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] sm:border-r sm:border-zinc-700 md:ml-[250px]">
       <span className=" my-8 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
         Messages
       </span>
-      <div>
+      <div className="h-full">
         {chatsMap.size === 0 ? (
-          <div className="mt-8 flex items-center justify-center">
+          <div className="mt-2 flex items-center justify-center">
             {isChatsLoading ? (
               <div className="mt-8 flex items-center justify-center">
                 <ShopstrSpinner />
               </div>
             ) : (
-              <p className="break-words text-center text-2xl dark:text-dark-text">
+              <p className="break-words text-center text-2xl text-light-text dark:text-dark-text">
                 {isClient && localStorageValues.decryptedNpub ? (
                   <>
                     No messages . . . yet!
@@ -302,7 +302,6 @@ const DirectMessages = () => {
             )}
           </div>
         ) : (
-          // <div className="h-[85vh] overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
           <div className="flex flex-row">
             <div className="h-[85vh] w-full overflow-y-auto rounded-md dark:bg-dark-bg md:w-[450px] md:max-w-[33%] md:flex-shrink-0">
               {chatsMap &&
