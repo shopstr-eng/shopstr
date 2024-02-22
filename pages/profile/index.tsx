@@ -1,11 +1,15 @@
-import { useState, useEffect } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useState, useEffect } from "react";
+import { useForm, Controller } from "react-hook-form";
 import {
   InformationCircleIcon,
   MinusCircleIcon,
+<<<<<<< HEAD
   MoonIcon,
   SunIcon,
 } from '@heroicons/react/24/outline';
+=======
+} from "@heroicons/react/24/outline";
+>>>>>>> c7f10d1 (useLoaded)
 import {
   Modal,
   ModalContent,
@@ -16,13 +20,13 @@ import {
   Textarea,
   Radio,
   RadioGroup,
-} from '@nextui-org/react';
-import { relayConnect } from 'nostr-tools';
-import { SHOPSTRBUTTONCLASSNAMES } from '../../components/utility/STATIC-VARIABLES';
-import { getLocalStorageData } from '../../components/utility/nostr-helper-functions';
-import { useRouter } from 'next/router';
-import { ProfileAvatar } from '@/components/utility-components/profile/avatar';
-import { useTheme } from 'next-themes';
+} from "@nextui-org/react";
+import { relayConnect } from "nostr-tools";
+import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
+import { getLocalStorageData } from "../../components/utility/nostr-helper-functions";
+import { useRouter } from "next/router";
+import { ProfileAvatar } from "@/components/utility-components/profile/avatar";
+import { useTheme } from "next-themes";
 
 const ProfilePage = () => {
   const [relays, setRelays] = useState(Array<string>(0));
@@ -30,19 +34,19 @@ const ProfilePage = () => {
   const [showRelayModal, setShowRelayModal] = useState(false);
 
   const [mints, setMints] = useState(Array<string>(0));
-  const [mintUrl, setMintUrl] = useState('');
+  const [mintUrl, setMintUrl] = useState("");
   const [showMintModal, setShowMintModal] = useState(false);
 
   const router = useRouter();
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       setMints(getLocalStorageData().mints);
     }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('mints', JSON.stringify(mints));
+    localStorage.setItem("mints", JSON.stringify(mints));
   }, [mints]);
 
   const { theme, setTheme } = useTheme();
@@ -55,7 +59,7 @@ const ProfilePage = () => {
   } = useForm();
 
   const onMintSubmit = async (data) => {
-    let mint = data['mint'];
+    let mint = data["mint"];
     await replaceMint(mint);
   };
 
@@ -67,7 +71,7 @@ const ProfilePage = () => {
   } = useForm();
 
   const onRelaySubmit = async (data) => {
-    let relay = data['relay'];
+    let relay = data["relay"];
     await addRelay(relay);
   };
 
@@ -79,7 +83,7 @@ const ProfilePage = () => {
   const replaceMint = async (newMint: string) => {
     try {
       // Perform a fetch request to the specified mint URL
-      const response = await fetch(newMint + '/keys');
+      const response = await fetch(newMint + "/keys");
       // Check if the response status is in the range of 200-299
       if (response.ok) {
         setMints([newMint]);
@@ -101,17 +105,17 @@ const ProfilePage = () => {
 
   const handleCopyMint = () => {
     navigator.clipboard.writeText(mintUrl);
-    alert('Mint URL copied to clipboard!');
+    alert("Mint URL copied to clipboard!");
   };
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       setRelays(getLocalStorageData().relays);
     }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('relays', JSON.stringify(relays));
+    localStorage.setItem("relays", JSON.stringify(relays));
   }, [relays]);
 
   const handleToggleRelayModal = () => {
@@ -138,26 +142,6 @@ const ProfilePage = () => {
     const [loaded, setLoaded] = useState(false);
     useEffect(() => setLoaded(true), []);
     return loaded;
-  };
-
-  const DarkModeToggle = () => {
-    const { theme, setTheme } = useTheme();
-
-    return (
-      <div>
-        {useLoaded() && theme === 'dark' ? (
-          <MoonIcon
-            className="h-8 w-8 cursor-pointer text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-            onClick={() => setTheme('light')}
-          />
-        ) : (
-          <SunIcon
-            className="h-8 w-8 cursor-pointer text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-            onClick={() => setTheme('dark')}
-          />
-        )}
-      </div>
-    );
   };
 
   return (
@@ -203,14 +187,14 @@ const ProfilePage = () => {
           isOpen={showRelayModal}
           onClose={handleToggleRelayModal}
           classNames={{
-            body: 'py-6',
-            backdrop: 'bg-[#292f46]/50 backdrop-opacity-60',
+            body: "py-6",
+            backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
             // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
-            header: 'border-b-[1px] border-[#292f46]',
-            footer: 'border-t-[1px] border-[#292f46]',
-            closeButton: 'hover:bg-black/5 active:bg-white/10',
+            header: "border-b-[1px] border-[#292f46]",
+            footer: "border-t-[1px] border-[#292f46]",
+            closeButton: "hover:bg-black/5 active:bg-white/10",
           }}
-          scrollBehavior={'outside'}
+          scrollBehavior={"outside"}
           size="2xl"
         >
           <ModalContent>
@@ -223,14 +207,14 @@ const ProfilePage = () => {
                   name="relay"
                   control={relayControl}
                   rules={{
-                    required: 'A relay URL is required.',
+                    required: "A relay URL is required.",
                     maxLength: {
                       value: 300,
-                      message: 'This input exceed maxLength of 300.',
+                      message: "This input exceed maxLength of 300.",
                     },
                     validate: (value) =>
                       /^(wss:\/\/|ws:\/\/)/.test(value) ||
-                      'Invalid relay URL, must start with wss:// or ws://.',
+                      "Invalid relay URL, must start with wss:// or ws://.",
                   }}
                   render={({
                     field: { onChange, onBlur, value },
@@ -239,7 +223,7 @@ const ProfilePage = () => {
                     let isErrored = error !== undefined;
                     let errorMessage: string = error?.message
                       ? error.message
-                      : '';
+                      : "";
                     return (
                       <Textarea
                         className="text-light-text dark:text-dark-text"
@@ -253,7 +237,7 @@ const ProfilePage = () => {
                         onBlur={onBlur} // notify when input is touched/blur
                         value={value}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
+                          if (e.key === "Enter") {
                             e.preventDefault();
                             handleRelaySubmit(onRelaySubmit)();
                           }
@@ -333,14 +317,14 @@ const ProfilePage = () => {
           isOpen={showMintModal}
           onClose={handleToggleMintModal}
           classNames={{
-            body: 'py-6',
-            backdrop: 'bg-[#292f46]/50 backdrop-opacity-60',
+            body: "py-6",
+            backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
             // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
-            header: 'border-b-[1px] border-[#292f46]',
-            footer: 'border-t-[1px] border-[#292f46]',
-            closeButton: 'hover:bg-black/5 active:bg-white/10',
+            header: "border-b-[1px] border-[#292f46]",
+            footer: "border-t-[1px] border-[#292f46]",
+            closeButton: "hover:bg-black/5 active:bg-white/10",
           }}
-          scrollBehavior={'outside'}
+          scrollBehavior={"outside"}
           size="2xl"
         >
           <ModalContent>
@@ -353,14 +337,14 @@ const ProfilePage = () => {
                   name="mint"
                   control={mintControl}
                   rules={{
-                    required: 'A mint URL is required.',
+                    required: "A mint URL is required.",
                     maxLength: {
                       value: 300,
-                      message: 'This input exceed maxLength of 300.',
+                      message: "This input exceed maxLength of 300.",
                     },
                     validate: (value) =>
                       /^(https:\/\/|http:\/\/)/.test(value) ||
-                      'Invalid mint URL, must start with https:// or http://.',
+                      "Invalid mint URL, must start with https:// or http://.",
                   }}
                   render={({
                     field: { onChange, onBlur, value },
@@ -369,7 +353,7 @@ const ProfilePage = () => {
                     let isErrored = error !== undefined;
                     let errorMessage: string = error?.message
                       ? error.message
-                      : '';
+                      : "";
                     return (
                       <Textarea
                         className="text-light-text dark:text-dark-text"
@@ -383,7 +367,7 @@ const ProfilePage = () => {
                         onBlur={onBlur} // notify when input is touched/blur
                         value={value}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
+                          if (e.key === "Enter") {
                             e.preventDefault();
                             handleMintSubmit(onMintSubmit)();
                           }
@@ -433,12 +417,12 @@ const ProfilePage = () => {
           <Button
             className={SHOPSTRBUTTONCLASSNAMES}
             onClick={() => {
-              localStorage.removeItem('npub');
-              localStorage.removeItem('signIn');
-              localStorage.removeItem('encryptedPrivateKey');
-              localStorage.removeItem('decryptedNpub'); // does this exist?
+              localStorage.removeItem("npub");
+              localStorage.removeItem("signIn");
+              localStorage.removeItem("encryptedPrivateKey");
+              localStorage.removeItem("decryptedNpub"); // does this exist?
 
-              router.push('/');
+              router.push("/");
             }}
           >
             Sign out
@@ -449,9 +433,30 @@ const ProfilePage = () => {
       <span className=" my-8 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
         Settings
       </span>
-      <div className="flex justify-center">
-        <DarkModeToggle />
-      </div>
+      {useLoaded() && (
+        <RadioGroup
+          className="ml-4"
+          label="Select your prefered theme"
+          orientation={"horizontal"}
+          defaultValue={
+            (localStorage.getItem("theme") as string) || theme || "system"
+          }
+          onChange={(e) => {
+            localStorage.setItem("theme", e.target.value);
+            setTheme(e.target.value);
+          }}
+        >
+          <Radio value="system" className="mr-4">
+            System
+          </Radio>
+          <Radio value="light" className="mx-4">
+            Light
+          </Radio>
+          <Radio value="dark" className="mx-4">
+            Dark
+          </Radio>
+        </RadioGroup>
+      )}
     </div>
   );
 };
