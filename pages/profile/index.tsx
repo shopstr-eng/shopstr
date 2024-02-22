@@ -12,12 +12,15 @@ import {
   ModalFooter,
   Button,
   Textarea,
+  Radio,
+  RadioGroup,
 } from '@nextui-org/react';
 import { relayConnect } from 'nostr-tools';
 import { SHOPSTRBUTTONCLASSNAMES } from '../../components/utility/STATIC-VARIABLES';
 import { getLocalStorageData } from '../../components/utility/nostr-helper-functions';
 import { useRouter } from 'next/router';
 import { ProfileAvatar } from '@/components/utility-components/profile/avatar';
+import { useTheme } from 'next-themes';
 
 const ProfilePage = () => {
   const [relays, setRelays] = useState(Array<string>(0));
@@ -39,6 +42,8 @@ const ProfilePage = () => {
   useEffect(() => {
     localStorage.setItem('mints', JSON.stringify(mints));
   }, [mints]);
+
+  const { theme, setTheme } = useTheme();
 
   const {
     handleSubmit: handleMintSubmit,
@@ -130,7 +135,9 @@ const ProfilePage = () => {
   return (
     <div className="flex h-full w-full flex-col overflow-x-hidden bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] sm:border-r sm:border-zinc-700 md:ml-[250px]">
       <div>
-        <span className=" my-8 flex px-4 text-2xl font-bold">Relays</span>
+        <span className=" my-8 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
+          Relays
+        </span>
 
         {relays.length === 0 && (
           <div className="mt-8 flex items-center justify-center">
@@ -246,9 +253,9 @@ const ProfilePage = () => {
           </ModalContent>
         </Modal>
       </div>
-
-      <span className=" my-8 flex px-4 text-2xl font-bold">Mint</span>
-
+      <span className=" my-8 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
+        Mint
+      </span>
       <div>
         {mints.length === 0 && (
           <div className="mt-8 flex items-center justify-center">
@@ -374,8 +381,9 @@ const ProfilePage = () => {
           </ModalContent>
         </Modal>
       </div>
-
-      <span className=" my-8 flex px-4 text-2xl font-bold">Account</span>
+      <span className=" my-8 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
+        Account
+      </span>
       <div>
         <span className="ml-4">npub</span>
         <div className="mx-3 mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg">
@@ -390,7 +398,6 @@ const ProfilePage = () => {
           includeDisplayName
         ></ProfileAvatar>
       </div>
-
       <div>
         <div className="flex h-fit w-[99vw] flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
           <Button
@@ -408,6 +415,23 @@ const ProfilePage = () => {
           </Button>
         </div>
       </div>
+      <span className=" my-8 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
+        Preferences
+      </span>
+      <RadioGroup
+        className="ml-4"
+        label="Select your prefered theme"
+        orientation={'horizontal'}
+        defaultValue={(localStorage.getItem('theme') as string) || 'system'}
+        onChange={(e) => {
+          localStorage.setItem('theme', e.target.value);
+          setTheme(e.target.value);
+        }}
+      >
+        <Radio value="system">System</Radio>
+        <Radio value="light">Light</Radio>
+        <Radio value="dark">Dark</Radio>
+      </RadioGroup>
     </div>
   );
 };

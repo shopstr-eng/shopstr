@@ -55,7 +55,7 @@ const HomeFeed = () => {
   return (
     <div className="flex flex-1 flex-col">
       <div
-        className={`sticky inset-x-0 top-0 z-30 flex w-full translate-y-0 flex-col border-b border-zinc-700 pt-2 backdrop-blur-xl transition-all ${headerClass} md:translate-y-0`}
+        className={`sticky inset-x-0 top-0 z-30 flex w-full translate-y-0 flex-col border-0 pt-2 backdrop-blur-xl transition-all ${headerClass} md:translate-y-0`}
       >
         {/* <span className=" flex px-4 text-2xl font-bold">Home</span> */}
 

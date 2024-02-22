@@ -84,7 +84,7 @@ const DisplayEvents = ({
     }
     setShowModal(false);
     router.push({
-      pathname: '/direct-messages',
+      pathname: '/messages',
       query: { pk: nip19.npubEncode(pubkeyToOpenChatWith) },
     });
   };

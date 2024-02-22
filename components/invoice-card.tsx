@@ -203,7 +203,7 @@ export default function InvoiceCard({
       return;
     }
     router.push({
-      pathname: '/direct-messages',
+      pathname: '/messages',
       query: { pk: nip19.npubEncode(pubkeyToOpenChatWith) },
     });
   };

@@ -91,12 +91,14 @@ const DirectMessages = () => {
     let sortedChatsByLastMessage = Array.from(chatsMap.entries()).sort(
       (a: [string, ChatObject], b: [string, ChatObject]) => {
         if (a[1].decryptedChat.length === 0) return -1;
-        let aLastMessage = a[1].decryptedChat.length > 0 
-        ? a[1].decryptedChat[a[1].decryptedChat.length - 1].created_at 
-        : 0;
-        let bLastMessage = b[1].decryptedChat.length > 0
-        ? b[1].decryptedChat[b[1].decryptedChat.length - 1].created_at
-        : 0;
+        let aLastMessage =
+          a[1].decryptedChat.length > 0
+            ? a[1].decryptedChat[a[1].decryptedChat.length - 1].created_at
+            : 0;
+        let bLastMessage =
+          b[1].decryptedChat.length > 0
+            ? b[1].decryptedChat[b[1].decryptedChat.length - 1].created_at
+            : 0;
         return bLastMessage - aLastMessage;
       },
     );
@@ -188,7 +190,8 @@ const DirectMessages = () => {
         let encryptedChat = chatsContext.chatsMap.get(
           pubkeyOfChat,
         ) as NostrMessageEvent[];
-        encryptedChat?.forEach((message) => {
+        if (!encryptedChat) return prevChatMap;
+        encryptedChat.forEach((message) => {
           message.read = true;
         });
         let newChatMap = new Map(prevChatMap);
@@ -271,7 +274,9 @@ const DirectMessages = () => {
 
   return (
     <div className="flex h-full w-full flex-col overflow-x-hidden bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] sm:border-r sm:border-zinc-700 md:ml-[250px]">
-      <span className=" my-8 flex px-4 text-2xl font-bold">Messages</span>
+      <span className=" my-8 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
+        Messages
+      </span>
       <div>
         {chatsMap.size === 0 ? (
           <div className="mt-8 flex items-center justify-center">
