@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import {
   Card,
@@ -12,10 +12,10 @@ import {
   LineChart,
   DateRangePickerItem,
   Callout,
-} from '@tremor/react';
-import { formatDataWithEmptyDateTime } from '@/utils/metrics';
-import { DateTime } from 'luxon';
-import { useState, useEffect } from 'react';
+} from "@tremor/react";
+import { formatDataWithEmptyDateTime } from "@/utils/metrics";
+import { DateTime } from "luxon";
+import { useState, useEffect } from "react";
 
 type Data = {
   label: string;
@@ -73,7 +73,7 @@ export default function MetricsPage() {
   }, [date]);
 
   return (
-    <main className="flex h-screen w-full flex-col bg-light-bg p-4 pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] sm:border-r sm:border-zinc-700 md:ml-[250px] md:p-10">
+    <main className="flex w-full flex-col bg-light-bg p-4 pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] sm:border-r sm:border-zinc-700 md:ml-[250px] md:p-10">
       <Callout title="Work In Progress - Analytics" color="purple">
         This is a global metrics of all of Shopstr. We are working on a
         personalized Analytics page for every Shopstr merchant!
@@ -88,7 +88,7 @@ export default function MetricsPage() {
         <DateRangePickerItem
           key="today"
           value="today"
-          from={DateTime.now().startOf('day').toJSDate()}
+          from={DateTime.now().startOf("day").toJSDate()}
           to={DateTime.now().toJSDate()}
         >
           Today
@@ -112,7 +112,7 @@ export default function MetricsPage() {
         <DateRangePickerItem
           key="mtd"
           value="ytd"
-          from={DateTime.now().startOf('month').toJSDate()}
+          from={DateTime.now().startOf("month").toJSDate()}
           to={DateTime.now().toJSDate()}
         >
           Month to Date
@@ -120,7 +120,7 @@ export default function MetricsPage() {
         <DateRangePickerItem
           key="ytd"
           value="ytd"
-          from={DateTime.now().startOf('year').toJSDate()}
+          from={DateTime.now().startOf("year").toJSDate()}
           to={DateTime.now().toJSDate()}
         >
           Year to Date
@@ -146,7 +146,7 @@ export default function MetricsPage() {
               categories={[item.label]}
               suppressHydrationWarning
               index="period"
-              colors={['indigo', 'fuchsia']}
+              colors={["indigo", "fuchsia"]}
               valueFormatter={
                 (number: number) =>
                   `${number.toString()} ${item.category.symbol}`
