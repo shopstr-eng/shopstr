@@ -2,7 +2,7 @@ import {
   finalizeAndSendNostrEvent,
   generateNostrEventId,
   getLocalStorageData,
-} from "@/pages/components/utility/nostr-helper-functions";
+} from "@/components/utility/nostr-helper-functions";
 import { NostrEvent } from "@/pages/types";
 import { removeProductFromCache } from "./cache-service";
 

@@ -18,7 +18,7 @@ import {
 } from "@nextui-org/react";
 import { TrashIcon } from "@heroicons/react/24/outline";
 import Carousal from "@itseasy21/react-elastic-carousel";
-import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
 
 import {
   PostListing,
@@ -31,9 +31,9 @@ import { finalizeEvent } from "nostr-tools";
 import { CATEGORIES, SHIPPING_OPTIONS } from "./utility/STATIC-VARIABLES";
 import LocationDropdown from "./utility-components/dropdowns/location-dropdown";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
-import { ProductContext } from "../context";
+import { ProductContext } from "../pages/context";
 import { capturePostListingMetric } from "./utility/metrics-helper-functions";
-import { addProductToCache } from "../api/nostr/cache-service";
+import { addProductToCache } from "../pages/api/nostr/cache-service";
 
 interface ProductFormProps {
   handleModalToggle: () => void;

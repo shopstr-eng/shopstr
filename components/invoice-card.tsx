@@ -1,7 +1,7 @@
 //TODO: perhaps see if we can abstract away some payment logic into reusable functions
-import React, { useContext, useState, useEffect } from "react";
-import { ProfileMapContext } from "../context";
-import { useRouter } from "next/router";
+import React, { useContext, useState, useEffect } from 'react';
+import { ProfileMapContext } from '../pages/context';
+import { useRouter } from 'next/router';
 import {
   Button,
   Card,
@@ -10,24 +10,25 @@ import {
   CardFooter,
   Divider,
   Image,
-} from "@nextui-org/react";
-import axios from "axios";
+} from '@nextui-org/react';
+import axios from 'axios';
 import {
   BoltIcon,
   CheckIcon,
   ClipboardIcon,
   EnvelopeIcon,
-} from "@heroicons/react/24/outline";
-import { CashuMint, CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
-import { getLocalStorageData } from "./utility/nostr-helper-functions";
-import { nip19 } from "nostr-tools";
-import { ProductData } from "./utility/product-parser-functions";
+} from '@heroicons/react/24/outline';
+import { CashuMint, CashuWallet, getEncodedToken } from '@cashu/cashu-ts';
+import { getLocalStorageData } from './utility/nostr-helper-functions';
+import { nip19 } from 'nostr-tools';
+import { ProductData } from './utility/product-parser-functions';
 import {
   DisplayCostBreakdown,
   formatWithCommas,
-} from "./utility-components/display-monetary-info";
-import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
-import { captureInvoicePaidmetric } from "./utility/metrics-helper-functions";
+} from './utility-components/display-monetary-info';
+import { SHOPSTRBUTTONCLASSNAMES } from './utility/STATIC-VARIABLES';
+import { captureInvoicePaidmetric } from './utility/metrics-helper-functions';
+import SignInModal from './sign-in/SignInModal';
 
 export default function InvoiceCard({
   productData,
@@ -43,19 +44,22 @@ export default function InvoiceCard({
 
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
-  const [invoice, setInvoice] = useState("");
+  const [invoice, setInvoice] = useState('');
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
 
-  const [name, setName] = useState("");
+  const [name, setName] = useState('');
   const profileContext = useContext(ProfileMapContext);
 
-  const [randomNpub, setRandomNpub] = useState<string>("");
-  const [randomNsec, setRandomNsec] = useState<string>("");
+  const [randomNpub, setRandomNpub] = useState<string>('');
+  const [randomNsec, setRandomNsec] = useState<string>('');
+
+  const [openSignInModal, setOpenSignInModal] = useState(false);
+  let [count, setCount] = useState(0);
 
   useEffect(() => {
     axios({
-      method: "GET",
-      url: "/api/nostr/generate-keys",
+      method: 'GET',
+      url: '/api/nostr/generate-keys',
     })
       .then((response) => {
         setRandomNpub(response.data.npub);
@@ -76,20 +80,20 @@ export default function InvoiceCard({
 
   const handlePayment = async (newPrice: number, currency: string) => {
     const wallet = new CashuWallet(new CashuMint(mints[0]));
-    if (currency === "USD") {
+    if (currency === 'USD') {
       try {
         const res = await axios.get(
-          "https://api.coinbase.com/v2/prices/BTC-USD/spot",
+          'https://api.coinbase.com/v2/prices/BTC-USD/spot',
         );
         const btcSpotPrice = Number(res.data.data.amount);
         const numSats = (newPrice / btcSpotPrice) * 100000000;
         newPrice = Math.round(numSats);
       } catch (err) {
-        console.error("ERROR", err);
+        console.error('ERROR', err);
       }
     }
 
-    const invoiceMinted = await axios.post("/api/cashu/request-mint", {
+    const invoiceMinted = await axios.post('/api/cashu/request-mint', {
       mintUrl: mints[0],
       total: newPrice,
       currency,
@@ -99,14 +103,14 @@ export default function InvoiceCard({
 
     setInvoice(pr);
 
-    const QRCode = require("qrcode");
+    const QRCode = require('qrcode');
 
     QRCode.toDataURL(pr)
       .then((url) => {
         setQrCodeUrl(url);
       })
       .catch((err) => {
-        console.error("ERROR", err);
+        console.error('ERROR', err);
       });
 
     invoiceHasBeenPaid(wallet, newPrice, hash, id);
@@ -141,7 +145,7 @@ export default function InvoiceCard({
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           setTimeout(() => {
-            router.push("/"); // takes you back to the home page after payment has been confirmed by cashu mint api
+            router.push('/'); // takes you back to the home page after payment has been confirmed by cashu mint api
           }, 1900); // 1.9 seconds is the amount of time for the checkmark animation to play
           break;
         }
@@ -158,24 +162,24 @@ export default function InvoiceCard({
     const decryptedRandomNpub = nip19.decode(randomNpub);
     const decryptedRandomNsec = nip19.decode(randomNsec);
     const paymentMessage =
-      "This is a Cashu token payment from " +
+      'This is a Cashu token payment from ' +
       name +
-      " for your " +
+      ' for your ' +
       title +
-      " listing on Shopstr: " +
+      ' listing on Shopstr: ' +
       token;
     axios({
-      method: "POST",
-      url: "/api/nostr/post-event",
+      method: 'POST',
+      url: '/api/nostr/post-event',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       data: {
         pubkey: decryptedRandomNpub.data,
         privkey: decryptedRandomNsec.data,
         created_at: Math.floor(Date.now() / 1000),
         kind: 4,
-        tags: [["p", pubkeyOfProductBeingSold]],
+        tags: [['p', pubkeyOfProductBeingSold]],
         content: paymentMessage,
         relays: relays,
       },
@@ -194,11 +198,12 @@ export default function InvoiceCard({
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
     let { signIn } = getLocalStorageData();
     if (!signIn) {
-      alert("You must be signed in to send a message!");
+      setOpenSignInModal(true);
+      setCount(++count);
       return;
     }
     router.push({
-      pathname: "/direct-messages",
+      pathname: '/direct-messages',
       query: { pk: nip19.npubEncode(pubkeyToOpenChatWith) },
     });
   };
@@ -211,7 +216,7 @@ export default function InvoiceCard({
         <>
           <Button
             type="submit"
-            className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
+            className={SHOPSTRBUTTONCLASSNAMES + ' mt-3'}
             onClick={() => {
               handleSendMessage(pubkeyOfProductBeingSold);
             }}
@@ -223,14 +228,14 @@ export default function InvoiceCard({
           </Button>
           <Button
             type="submit"
-            className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
+            className={SHOPSTRBUTTONCLASSNAMES + ' mt-3'}
             onClick={() => {
               let { signIn } = getLocalStorageData();
               if (!signIn) {
-                alert("You must be signed in to purchase!");
+                alert('You must be signed in to purchase!');
                 return;
               }
-              if (randomNsec !== "") {
+              if (randomNsec !== '') {
                 handlePayment(totalCost, currency);
               }
               setShowInvoiceCard(true);
@@ -274,12 +279,12 @@ export default function InvoiceCard({
                       <ClipboardIcon
                         onClick={handleCopyInvoice}
                         className={`ml-2 h-4 w-4 cursor-pointer ${
-                          copiedToClipboard ? "hidden" : ""
+                          copiedToClipboard ? 'hidden' : ''
                         }`}
                       />
                       <CheckIcon
                         className={`ml-2 h-4 w-4 cursor-pointer ${
-                          copiedToClipboard ? "" : "hidden"
+                          copiedToClipboard ? '' : 'hidden'
                         }`}
                       />
                     </div>
@@ -306,6 +311,7 @@ export default function InvoiceCard({
           </CardFooter>
         </Card>
       )}
+      <SignInModal some={count} opened={openSignInModal}></SignInModal>
     </>
   );
 }

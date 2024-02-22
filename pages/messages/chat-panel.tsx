@@ -1,16 +1,16 @@
 // initialize new react funcitonal component
-import { Button, Input } from "@nextui-org/react";
-import React, { useEffect, useRef, useState } from "react";
-import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
+import { Button, Input } from '@nextui-org/react';
+import React, { useEffect, useRef, useState } from 'react';
+import { SHOPSTRBUTTONCLASSNAMES } from '../../components/utility/STATIC-VARIABLES';
 import {
   ArrowUturnLeftIcon,
   ArrowsUpDownIcon,
   ChatBubbleLeftIcon,
-} from "@heroicons/react/24/outline";
-import { getLocalStorageData } from "../components/utility/nostr-helper-functions";
-import { ProfileAvatar } from "../components/utility-components/profile/avatar";
-import { ChatObject, NostrEvent, NostrMessageEvent } from "../types";
-import { ChatMessage } from "./chat-message";
+} from '@heroicons/react/24/outline';
+import { getLocalStorageData } from '../../components/utility/nostr-helper-functions';
+import { ProfileAvatar } from '../../components/utility-components/profile/avatar';
+import { ChatObject, NostrEvent, NostrMessageEvent } from '../types';
+import { ChatMessage } from './chat-message';
 
 export const ChatPanel = ({
   handleGoBack,
@@ -26,7 +26,7 @@ export const ChatPanel = ({
   isSendingDMLoading: boolean;
 }) => {
   const { decryptedNpub } = getLocalStorageData();
-  const [messageInput, setMessageInput] = useState("");
+  const [messageInput, setMessageInput] = useState('');
   const [messages, setMessages] = useState<NostrMessageEvent[]>([]); // [chatPubkey, chat]
 
   const bottomDivRef = useRef(null);
@@ -36,7 +36,7 @@ export const ChatPanel = ({
   }, [currentChatPubkey, chatsMap]);
 
   useEffect(() => {
-    bottomDivRef.current?.scrollIntoView({ behavior: "smooth" });
+    bottomDivRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isSendingDMLoading]);
 
   if (!currentChatPubkey)
@@ -59,7 +59,7 @@ export const ChatPanel = ({
 
   const sendMessage = () => {
     handleSendMessage(messageInput);
-    setMessageInput("");
+    setMessageInput('');
   };
 
   return (
@@ -100,15 +100,15 @@ export const ChatPanel = ({
           }}
           onKeyDown={(e) => {
             if (
-              e.key === "Enter" &&
-              !(messageInput === "" || isSendingDMLoading)
+              e.key === 'Enter' &&
+              !(messageInput === '' || isSendingDMLoading)
             )
               sendMessage();
           }}
         />
         <Button
           className={SHOPSTRBUTTONCLASSNAMES}
-          isDisabled={messageInput === "" || isSendingDMLoading}
+          isDisabled={messageInput === '' || isSendingDMLoading}
           isLoading={isSendingDMLoading}
           onClick={sendMessage}
         >

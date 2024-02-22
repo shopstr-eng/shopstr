@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { Select, SelectItem, SelectSection, Avatar } from "@nextui-org/react";
-import locations from "../../../../public/locationSelection.json";
+import locations from "../../../public/locationSelection.json";
 
 export const locationAvatar = (location: string) => {
   const getLocationMap = () => {

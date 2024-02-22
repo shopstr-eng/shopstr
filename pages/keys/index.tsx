@@ -1,34 +1,31 @@
-import { useState, useEffect } from "react";
-import axios from "axios";
-import { useRouter } from "next/router";
-import * as CryptoJS from "crypto-js";
+import { useState, useEffect } from 'react';
+import axios from 'axios';
+import { useRouter } from 'next/router';
+import * as CryptoJS from 'crypto-js';
 import {
   EyeIcon,
   EyeSlashIcon,
   InformationCircleIcon,
-} from "@heroicons/react/24/outline";
-import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
+} from '@heroicons/react/24/outline';
+import { Card, CardBody, Button, Input, Image } from '@nextui-org/react';
+import { SHOPSTRBUTTONCLASSNAMES } from '../../components/utility/STATIC-VARIABLES';
 
 const Keys = () => {
   const router = useRouter();
 
-  const [publicKey, setPublicKey] = useState<string>("");
-  const [privateKey, setPrivateKey] = useState<string>("");
-  const [passphrase, setPassphrase] = useState<string>("");
-  const [viewState, setViewState] = useState<"shown" | "hidden">("hidden");
+  const [publicKey, setPublicKey] = useState<string>('');
+  const [privateKey, setPrivateKey] = useState<string>('');
+  const [passphrase, setPassphrase] = useState<string>('');
+  const [viewState, setViewState] = useState<'shown' | 'hidden'>('hidden');
 
   useEffect(() => {
     axios({
-      method: "GET",
-      url: "/api/nostr/generate-keys",
+      method: 'GET',
+      url: '/api/nostr/generate-keys',
     })
       .then((response) => {
         setPublicKey(response.data.npub);
         setPrivateKey(response.data.nsec);
-        alert(
-          "Make sure to write down and save your public and private keys in a secure format!",
-        );
       })
       .catch((error) => {
         console.error(error);
@@ -38,45 +35,45 @@ const Keys = () => {
   const handleCopyPubkey = () => {
     navigator.clipboard.writeText(publicKey);
     // navigator.clipboard.writeText(invoiceString);
-    alert("Public key was copied to clipboard!");
+    alert('Public key was copied to clipboard!');
   };
 
   const handleCopyPrivkey = () => {
     navigator.clipboard.writeText(privateKey);
     // navigator.clipboard.writeText(invoiceString);
-    alert("Private key was copied to clipboard!");
+    alert('Private key was copied to clipboard!');
   };
 
   const handleSignIn = () => {
-    if (passphrase === "" || passphrase === null) {
-      alert("No passphrase provided!");
+    if (passphrase === '' || passphrase === null) {
+      alert('No passphrase provided!');
     } else {
-      localStorage.setItem("npub", publicKey);
+      localStorage.setItem('npub', publicKey);
 
       let encryptedPrivateKey = CryptoJS.AES.encrypt(
         privateKey,
         passphrase,
       ).toString();
 
-      localStorage.setItem("encryptedPrivateKey", encryptedPrivateKey);
+      localStorage.setItem('encryptedPrivateKey', encryptedPrivateKey);
 
-      localStorage.setItem("signIn", "nsec");
+      localStorage.setItem('signIn', 'nsec');
 
       localStorage.setItem(
-        "relays",
+        'relays',
         JSON.stringify([
-          "wss://relay.damus.io",
-          "wss://nos.lol",
-          "wss://nostr.mutinywallet.com",
+          'wss://relay.damus.io',
+          'wss://nos.lol',
+          'wss://nostr.mutinywallet.com',
         ]),
       );
 
-      router.push("/");
+      router.push('/');
     }
   };
 
   return (
-    <div className="flex max-h-screen flex-row items-center justify-center">
+    <div className="flex h-full w-full flex-col overflow-x-hidden bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] sm:border-r sm:border-zinc-700 md:ml-[250px]">
       <Card>
         <CardBody>
           <div className="mb-4 flex flex-row items-center justify-center">
@@ -90,6 +87,10 @@ const Keys = () => {
             <h1 className="cursor-pointer text-center text-3xl font-bold text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light">
               Shopstr
             </h1>
+          </div>
+          <div className="mb-4 flex flex-col">
+            Make sure to write down and save your public and private keys in a
+            secure format!
           </div>
           <div className="mb-4 flex flex-col">
             <label className="text-xl">Public Key:</label>
@@ -110,20 +111,20 @@ const Keys = () => {
                   className="overflow-hidden overflow-ellipsis whitespace-nowrap px-1"
                   onClick={handleCopyPrivkey}
                 >
-                  {viewState === "shown" ? privateKey : "* * * * *"}
+                  {viewState === 'shown' ? privateKey : '* * * * *'}
                 </div>
-                {viewState === "shown" ? (
+                {viewState === 'shown' ? (
                   <EyeSlashIcon
                     className="h-6 w-6 flex-shrink-0 px-1 hover:text-purple-700"
                     onClick={() => {
-                      setViewState("hidden");
+                      setViewState('hidden');
                     }}
                   />
                 ) : (
                   <EyeIcon
                     className="h-6 w-6 flex-shrink-0 px-1 hover:text-purple-700"
                     onClick={() => {
-                      setViewState("shown");
+                      setViewState('shown');
                     }}
                   />
                 )}
@@ -143,8 +144,8 @@ const Keys = () => {
               onChange={(e) => setPassphrase(e.target.value)}
               onKeyDown={(e) => {
                 if (
-                  e.key === "Enter" &&
-                  !(passphrase === "" || passphrase === null)
+                  e.key === 'Enter' &&
+                  !(passphrase === '' || passphrase === null)
                 )
                   handleSignIn();
               }}

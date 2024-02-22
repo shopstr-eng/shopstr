@@ -1,9 +1,8 @@
-import "tailwindcss/tailwind.css";
-import type { AppProps } from "next/app";
-import "../styles/globals.css";
-import Navbar from "./components/navbar";
-import { useState, useEffect } from "react";
-import { useRouter } from "next/router";
+import 'tailwindcss/tailwind.css';
+import type { AppProps } from 'next/app';
+import '../styles/globals.css';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import {
   ProfileMapContext,
   ProfileContextInterface,
@@ -12,24 +11,27 @@ import {
   ChatsContextInterface,
   ChatsContext,
   ChatsMap,
-} from "./context";
+} from './context';
 import {
   getLocalStorageData,
   LocalStorageInterface,
-} from "./components/utility/nostr-helper-functions";
-import { NextUIProvider } from "@nextui-org/react";
-import { ThemeProvider as NextThemesProvider } from "next-themes";
+} from '../components/utility/nostr-helper-functions';
+import { NextUIProvider } from '@nextui-org/react';
+import { ThemeProvider as NextThemesProvider } from 'next-themes';
 import {
   fetchAllPosts,
   fetchChatsAndMessages,
   fetchProfile,
-} from "./api/nostr/fetch-service";
-import { NostrEvent } from "./types";
+} from './api/nostr/fetch-service';
+import { NostrEvent } from './types';
+import MaxWidthWrapper from '@/components/max-width-wrapper';
+import BottomNav from '@/components/nav-bottom';
+import SideNav from '@/components/nav-side';
 
 function App({ Component, pageProps }: AppProps) {
   const router = useRouter();
-  const isSignInPage = router.pathname === "/sign-in";
-  const isKeyPage = router.pathname === "/keys";
+  const isSignInPage = router.pathname === '/sign-in';
+  const isKeyPage = router.pathname === '/keys';
   const [localStorageValues, setLocalStorageValues] =
     useState<LocalStorageInterface>(getLocalStorageData());
   const [productContext, setProductContext] = useState<ProductContextInterface>(
@@ -127,7 +129,7 @@ function App({ Component, pageProps }: AppProps) {
           editProfileContext,
         );
       } catch (error) {
-        console.error("Error fetching data:", error);
+        console.error('Error fetching data:', error);
       }
     }
     if (relays) fetchData(); // Call the async function immediately
@@ -142,13 +144,15 @@ function App({ Component, pageProps }: AppProps) {
               attribute="class"
               forcedTheme={Component.theme || undefined}
             >
-              <div className="min-h-screen bg-light-bg dark:bg-dark-bg">
-                {isSignInPage || isKeyPage ? null : <Navbar />}
-                <div className="h-20">
-                  {/*spacer div needed so pages can account for navbar height*/}
-                </div>
-                <Component {...pageProps} />
-              </div>
+              <>
+                <MaxWidthWrapper>
+                  <div className="flex">
+                    <SideNav />
+                    <Component {...pageProps} />
+                  </div>
+                </MaxWidthWrapper>
+                <BottomNav />
+              </>
             </NextThemesProvider>
           </NextUIProvider>
         </ChatsContext.Provider>
