@@ -22,7 +22,7 @@ const Listing = () => {
       const productIdString = productId ? productId[0] : "";
       setProductIdString(productIdString);
       if (!productIdString) {
-        router.push("/"); // if there isn"t a productId, redirect to home page
+        router.push("/"); // if there isn't a productId, redirect to home page
       }
       let { relays } = getLocalStorageData();
       setRelays(relays);
