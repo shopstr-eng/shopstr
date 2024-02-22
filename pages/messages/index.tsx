@@ -1,6 +1,6 @@
-import { useState, useEffect, useContext } from 'react';
-import { nip04 } from 'nostr-tools';
-import { useRouter } from 'next/router';
+import { useState, useEffect, useContext } from "react";
+import { nip04 } from "nostr-tools";
+import { useRouter } from "next/router";
 import {
   LocalStorageInterface,
   constructEncryptedMessageEvent,
@@ -9,35 +9,35 @@ import {
   getPrivKeyWithPassphrase,
   sendEncryptedMessage,
   validPassphrase,
-} from '../../components/utility/nostr-helper-functions';
-import { ChatsContext } from '../context';
-import RequestPassphraseModal from '../../components/utility-components/request-passphrase-modal';
-import ShopstrSpinner from '../../components/utility-components/shopstr-spinner';
-import axios from 'axios';
-import { ChatPanel } from './chat-panel';
-import { ChatButton } from './chat-button';
-import { NostrMessageEvent, ChatObject } from '../types';
+} from "../../components/utility/nostr-helper-functions";
+import { ChatsContext } from "../context";
+import RequestPassphraseModal from "../../components/utility-components/request-passphrase-modal";
+import ShopstrSpinner from "../../components/utility-components/shopstr-spinner";
+import axios from "axios";
+import { ChatPanel } from "./chat-panel";
+import { ChatButton } from "./chat-button";
+import { NostrMessageEvent, ChatObject } from "../types";
 import {
   addChatMessagesToCache,
   fetchChatMessagesFromCache,
-} from '../api/nostr/cache-service';
-import { useKeyPress } from '../../components/utility/functions';
+} from "../api/nostr/cache-service";
+import { useKeyPress } from "../../components/utility/functions";
 
 const DirectMessages = () => {
   const router = useRouter();
   const chatsContext = useContext(ChatsContext);
-  const arrowUpPressed = useKeyPress('ArrowUp');
-  const arrowDownPressed = useKeyPress('ArrowDown');
-  const escapePressed = useKeyPress('Escape');
+  const arrowUpPressed = useKeyPress("ArrowUp");
+  const arrowDownPressed = useKeyPress("ArrowDown");
+  const escapePressed = useKeyPress("Escape");
 
   const [chatsMap, setChatsMap] = useState<Map<string, ChatObject>>(new Map()); // Map<chatPubkey, chat>
   const [sortedChatsByLastMessage, setSortedChatsByLastMessage] = useState<
     [string, ChatObject][]
   >([]); // [chatPubkey, chat]
-  const [currentChatPubkey, setCurrentChatPubkey] = useState('');
+  const [currentChatPubkey, setCurrentChatPubkey] = useState("");
 
   const [enterPassphrase, setEnterPassphrase] = useState(false);
-  const [passphrase, setPassphrase] = useState('');
+  const [passphrase, setPassphrase] = useState("");
 
   const [isChatsLoading, setIsChatsLoading] = useState(true);
   const [isSendingDMLoading, setIsSendingDMLoading] = useState(false);
@@ -57,7 +57,7 @@ const DirectMessages = () => {
         return;
       }
       if (
-        localStorageValues.signIn === 'nsec' &&
+        localStorageValues.signIn === "nsec" &&
         !validPassphrase(passphrase)
       ) {
         setEnterPassphrase(true); // prompt for passphrase when chatsContext is loaded
@@ -108,7 +108,7 @@ const DirectMessages = () => {
   // useEffect used to traverse chats via arrow keys
   useEffect(() => {
     if (arrowUpPressed) {
-      if (currentChatPubkey === '') {
+      if (currentChatPubkey === "") {
         setCurrentChatPubkey(sortedChatsByLastMessage[0][0]);
       } else {
         let index = sortedChatsByLastMessage.findIndex(
@@ -118,7 +118,7 @@ const DirectMessages = () => {
       }
     }
     if (arrowDownPressed) {
-      if (currentChatPubkey === '') {
+      if (currentChatPubkey === "") {
         setCurrentChatPubkey(sortedChatsByLastMessage[0][0]);
       } else {
         let index = sortedChatsByLastMessage.findIndex(
@@ -138,8 +138,8 @@ const DirectMessages = () => {
     chatPubkey: string,
   ) => {
     try {
-      let plaintext = '';
-      if (localStorageValues.signIn === 'extension') {
+      let plaintext = "";
+      if (localStorageValues.signIn === "extension") {
         plaintext = await window.nostr.nip04.decrypt(
           chatPubkey,
           messageEvent.content,
@@ -150,7 +150,7 @@ const DirectMessages = () => {
       }
       return plaintext;
     } catch (e) {
-      console.error(e, 'Error decrypting message.', messageEvent);
+      console.error(e, "Error decrypting message.", messageEvent);
     }
   };
 
@@ -212,7 +212,7 @@ const DirectMessages = () => {
 
   const goBackFromChatRoom = () => {
     // used when in chatroom on smaller devices
-    setCurrentChatPubkey('');
+    setCurrentChatPubkey("");
   };
 
   const handleSendMessage = async (message: string) => {
@@ -232,8 +232,8 @@ const DirectMessages = () => {
           ...encryptedMessageEvent,
           content: message,
           read: true,
-          id: 'mock-id',
-          sig: 'mock-sig',
+          id: "mock-id",
+          sig: "mock-sig",
         };
         let updatedDecryptedChat = updatedChat.decryptedChat
           ? [...updatedChat.decryptedChat, unEncryptedMessageEvent]
@@ -251,23 +251,23 @@ const DirectMessages = () => {
       ) {
         // only logs if this is the first msg, aka an iniquiry
         axios({
-          method: 'POST',
-          url: '/api/metrics/post-inquiry',
+          method: "POST",
+          url: "/api/metrics/post-inquiry",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
           },
           data: {
             customer_id: localStorageValues.decryptedNpub,
             merchant_id: currentChatPubkey,
-            // listing_id: 'TODO'
+            // listing_id: "TODO"
             // relays: relays,
           },
         });
       }
       setIsSendingDMLoading(false);
     } catch (e) {
-      console.log('handleSendMessage errored', e);
-      alert('Error sending message.');
+      console.log("handleSendMessage errored", e);
+      alert("Error sending message.");
       setIsSendingDMLoading(false);
     }
   };

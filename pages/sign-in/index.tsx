@@ -1,57 +1,57 @@
-import { useState, useEffect } from 'react';
-import { withRouter, NextRouter } from 'next/router';
-import { nip19, getPublicKey } from 'nostr-tools';
-import * as CryptoJS from 'crypto-js';
-import { validateNSecKey } from '../../components/utility/nostr-helper-functions';
-import { Card, CardBody, Button, Input, Image } from '@nextui-org/react';
-import { SHOPSTRBUTTONCLASSNAMES } from '../../components/utility/STATIC-VARIABLES';
+import { useState, useEffect } from "react";
+import { withRouter, NextRouter } from "next/router";
+import { nip19, getPublicKey } from "nostr-tools";
+import * as CryptoJS from "crypto-js";
+import { validateNSecKey } from "../../components/utility/nostr-helper-functions";
+import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
+import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
 
 const LoginPage = ({ router }: { router: NextRouter }) => {
-  const [privateKey, setPrivateKey] = useState<string>('');
-  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [privateKey, setPrivateKey] = useState<string>("");
+  const [errorMessage, setErrorMessage] = useState<string>("");
   const [validPrivateKey, setValidPrivateKey] = useState<boolean>(false);
-  const [passphrase, setPassphrase] = useState<string>('');
+  const [passphrase, setPassphrase] = useState<string>("");
 
   const handleSignIn = async () => {
     if (validPrivateKey) {
-      if (passphrase === '' || passphrase === null) {
-        alert('No passphrase provided!');
+      if (passphrase === "" || passphrase === null) {
+        alert("No passphrase provided!");
       } else {
         let { data: sk } = nip19.decode(privateKey);
         let pk = await getPublicKey(sk);
         let npub = nip19.npubEncode(pk);
-        localStorage.setItem('npub', npub);
+        localStorage.setItem("npub", npub);
 
         let encryptedPrivateKey = CryptoJS.AES.encrypt(
           privateKey,
           passphrase,
         ).toString();
 
-        localStorage.setItem('encryptedPrivateKey', encryptedPrivateKey);
+        localStorage.setItem("encryptedPrivateKey", encryptedPrivateKey);
 
-        localStorage.setItem('signIn', 'nsec');
+        localStorage.setItem("signIn", "nsec");
 
         localStorage.setItem(
-          'relays',
+          "relays",
           JSON.stringify([
-            'wss://relay.damus.io',
-            'wss://nos.lol',
-            'wss://nostr.mutinywallet.com',
+            "wss://relay.damus.io",
+            "wss://nos.lol",
+            "wss://nostr.mutinywallet.com",
           ]),
         );
 
         // alert("Signed in as " + npub + ".");
-        router.push('/');
+        router.push("/");
       }
     } else {
       setErrorMessage(
-        'The private key inputted was not valid! Generate a new key pair or try again.',
+        "The private key inputted was not valid! Generate a new key pair or try again.",
       );
     }
   };
 
   const handleGenerateKeys = () => {
-    router.push('/keys');
+    router.push("/keys");
   };
 
   const startExtensionLogin = async () => {
@@ -59,20 +59,20 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
       // @ts-ignore
       var pk = await window.nostr.getPublicKey();
       let npub = nip19.npubEncode(pk);
-      localStorage.setItem('npub', npub);
-      localStorage.setItem('signIn', 'extension');
+      localStorage.setItem("npub", npub);
+      localStorage.setItem("signIn", "extension");
       localStorage.setItem(
-        'relays',
+        "relays",
         JSON.stringify([
-          'wss://relay.damus.io',
-          'wss://nos.lol',
-          'wss://nostr.mutinywallet.com',
+          "wss://relay.damus.io",
+          "wss://nos.lol",
+          "wss://nostr.mutinywallet.com",
         ]),
       );
       // alert("Signed in as " + npub + ".");
-      router.push('/');
+      router.push("/");
     } catch (error) {
-      alert('Extension sign in failed!');
+      alert("Extension sign in failed!");
     }
   };
 
@@ -94,7 +94,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
             />
             <h1
               onClick={() => {
-                router.push('/');
+                router.push("/");
               }}
               className="cursor-pointer text-center text-3xl font-bold text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light"
             >
@@ -109,7 +109,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
           <div className="mb-4 flex flex-col">
             <label className="text-xl">Private Key:</label>
             <Input
-              color={validPrivateKey ? 'success' : 'error'}
+              color={validPrivateKey ? "success" : "error"}
               type="password"
               width="100%"
               size="large"
@@ -130,7 +130,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
               placeholder="Enter a passphrase of your choice..."
               onChange={(e) => setPassphrase(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && validPrivateKey) handleSignIn();
+                if (e.key === "Enter" && validPrivateKey) handleSignIn();
               }}
             />
           </div>

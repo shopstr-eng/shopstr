@@ -1,15 +1,15 @@
-import { useState, useEffect, useContext } from 'react';
-import { nip19 } from 'nostr-tools';
-import { getLocalStorageData } from './utility/nostr-helper-functions';
-import { NostrEvent } from '../pages/types';
-import { ProductContext, ProfileMapContext } from '../pages/context';
-import ProductCard from './utility-components/product-card';
-import DisplayProductModal from './display-product-modal';
-import { useRouter } from 'next/router';
-import parseTags, { ProductData } from './utility/product-parser-functions';
-import ShopstrSpinner from './utility-components/shopstr-spinner';
-import { DeleteListing } from '../pages/api/nostr/crud-service';
-import { removeProductFromCache } from '../pages/api/nostr/cache-service';
+import { useState, useEffect, useContext } from "react";
+import { nip19 } from "nostr-tools";
+import { getLocalStorageData } from "./utility/nostr-helper-functions";
+import { NostrEvent } from "../pages/types";
+import { ProductContext, ProfileMapContext } from "../pages/context";
+import ProductCard from "./utility-components/product-card";
+import DisplayProductModal from "./display-product-modal";
+import { useRouter } from "next/router";
+import parseTags, { ProductData } from "./utility/product-parser-functions";
+import ShopstrSpinner from "./utility-components/shopstr-spinner";
+import { DeleteListing } from "../pages/api/nostr/crud-service";
+import { removeProductFromCache } from "../pages/api/nostr/cache-service";
 
 const DisplayEvents = ({
   focusedPubkey,
@@ -26,7 +26,7 @@ const DisplayEvents = ({
   const [isProductsLoading, setIsProductLoading] = useState(true);
   const productEventContext = useContext(ProductContext);
   const profileMapContext = useContext(ProfileMapContext);
-  const [focusedProduct, setFocusedProduct] = useState(''); // product being viewed in modal
+  const [focusedProduct, setFocusedProduct] = useState(""); // product being viewed in modal
   const [showModal, setShowModal] = useState(false);
   const router = useRouter();
 
@@ -79,12 +79,12 @@ const DisplayEvents = ({
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
     let { signIn } = getLocalStorageData();
     if (!signIn) {
-      alert('You must be signed in to send a message!');
+      alert("You must be signed in to send a message!");
       return;
     }
     setShowModal(false);
     router.push({
-      pathname: '/messages',
+      pathname: "/messages",
       query: { pk: nip19.npubEncode(pubkeyToOpenChatWith) },
     });
   };
@@ -97,7 +97,7 @@ const DisplayEvents = ({
   const productSatisfiesCategoryFilter = (productData: ProductData) => {
     if (selectedCategories.size === 0) return true;
     return Array.from(selectedCategories).some((selectedCategory) => {
-      const re = new RegExp(selectedCategory, 'gi');
+      const re = new RegExp(selectedCategory, "gi");
       return productData?.categories?.some((category) => {
         const match = category.match(re);
         return match && match.length > 0;
@@ -112,7 +112,7 @@ const DisplayEvents = ({
   const productSatisfiesSearchFilter = (productData: ProductData) => {
     if (!selectedSearch) return true; // nothing in search bar
     if (!productData.title) return false; // we don't want to display it if product has no title
-    const re = new RegExp(selectedSearch, 'gi');
+    const re = new RegExp(selectedSearch, "gi");
     const match = productData.title.match(re);
     return match && match.length > 0;
   };
@@ -130,8 +130,8 @@ const DisplayEvents = ({
     if (!productSatisfiesAllFilters(productData)) return;
     return (
       <ProductCard
-        key={productData.id + '-' + index}
-        uniqueKey={productData.id + '-' + index}
+        key={productData.id + "-" + index}
+        uniqueKey={productData.id + "-" + index}
         productData={productData}
         onProductClick={onProductClick}
       />
@@ -159,7 +159,7 @@ const DisplayEvents = ({
         ) : (
           <div className="my-2 flex h-[90%] max-w-full flex-row flex-wrap justify-evenly overflow-x-hidden overflow-y-hidden">
             {productEvents.map((productData: ProductData, index) => {
-              console.log('aa ', displayProductCard(productData, index));
+              console.log("aa ", displayProductCard(productData, index));
               return displayProductCard(productData, index);
             })}
           </div>

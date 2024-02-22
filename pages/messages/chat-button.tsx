@@ -1,8 +1,8 @@
-import { useEffect, useRef } from 'react';
-import { ProfileAvatar } from '../../components/utility-components/profile/avatar';
-import { ProfileDisplayName } from '../../components/utility-components/profile/display-name';
-import { ChatObject } from '../types';
-import { timeSinceMessageDisplayText } from './utils';
+import { useEffect, useRef } from "react";
+import { ProfileAvatar } from "../../components/utility-components/profile/avatar";
+import { ProfileDisplayName } from "../../components/utility-components/profile/display-name";
+import { ChatObject } from "../types";
+import { timeSinceMessageDisplayText } from "./utils";
 
 export const ChatButton = ({
   pubkeyOfChat,
@@ -23,7 +23,7 @@ export const ChatButton = ({
 
   useEffect(() => {
     if (pubkeyOfChat === openedChatPubkey) {
-      divRef.current?.scrollIntoView({ behavior: 'smooth' });
+      divRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [openedChatPubkey]);
 
@@ -31,7 +31,7 @@ export const ChatButton = ({
     <div
       key={pubkeyOfChat}
       className={`mx-3 mb-2  flex cursor-pointer items-center gap-4 rounded-md border-2 border-light-fg px-3 py-2 hover:opacity-70 dark:border-dark-fg ${
-        pubkeyOfChat === openedChatPubkey ? 'bg-[#ccccccb9]' : ''
+        pubkeyOfChat === openedChatPubkey ? "bg-[#ccccccb9]" : ""
       }`}
       onClick={() => handleClickChat(pubkeyOfChat)}
       ref={divRef}
@@ -42,7 +42,7 @@ export const ChatButton = ({
       <div className="flex w-1/2 flex-col">
         <ProfileDisplayName pubkey={pubkeyOfChat} />
         <span className="truncate text-light-text dark:text-dark-text">
-          {lastMessage ? lastMessage.content : 'No messages yet'}
+          {lastMessage ? lastMessage.content : "No messages yet"}
         </span>
       </div>
       <div className="flex flex-shrink-0 flex-grow flex-col text-right text-light-text dark:text-dark-text">
@@ -59,7 +59,7 @@ export const ChatButton = ({
           <span>
             {lastMessage
               ? timeSinceMessageDisplayText(lastMessage.created_at).short
-              : ''}
+              : ""}
           </span>
         </div>
       </div>
