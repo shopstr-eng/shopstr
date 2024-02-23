@@ -395,7 +395,10 @@ const ProfilePage = () => {
       <div>
         <span className="ml-4 text-light-text dark:text-dark-text">npub</span>
         <div className="mx-3 mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg">
-          <div className="max-w-xsm truncate text-light-text dark:text-dark-text">
+          <div
+            className="max-w-xsm truncate text-light-text dark:text-dark-text"
+            suppressHydrationWarning
+          >
             {getLocalStorageData().npub}
           </div>
         </div>
