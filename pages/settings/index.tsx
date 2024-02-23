@@ -336,14 +336,14 @@ const SettingsPage = () => {
           </div>
         )}
 
-        {/* <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+        <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
           <Button
             className={SHOPSTRBUTTONCLASSNAMES}
             onClick={handleToggleMintModal}
           >
             Change Mint
           </Button>
-        </div> */}
+        </div>
         <Modal
           backdrop="blur"
           isOpen={showMintModal}

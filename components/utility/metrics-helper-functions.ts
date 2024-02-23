@@ -23,6 +23,7 @@ export const captureInvoicePaidmetric = async (
   metricsInvoiceId: string,
   listingId: string,
 ) => {
+  const { mints } = getLocalStorageData();
   await axios({
     method: "POST",
     url: "/api/metrics/post-invoice-status",
@@ -33,6 +34,7 @@ export const captureInvoicePaidmetric = async (
       id: metricsInvoiceId,
       listing_id: listingId,
       merchant_location: location,
+      mint: mints[0],
     },
   });
 };
