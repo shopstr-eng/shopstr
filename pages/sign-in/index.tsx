@@ -18,7 +18,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
         alert("No passphrase provided!");
       } else {
         let { data: sk } = nip19.decode(privateKey);
-        let pk = await getPublicKey(sk);
+        let pk = getPublicKey(sk as Uint8Array);
         let npub = nip19.npubEncode(pk);
         localStorage.setItem("npub", npub);
 
@@ -123,10 +123,10 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
             <div className="mb-4 flex flex-col">
               <label className="text-xl">Private Key:</label>
               <Input
-                color={validPrivateKey ? "success" : "error"}
+                color={validPrivateKey ? "success" : "danger"}
                 type="password"
                 width="100%"
-                size="large"
+                size="lg"
                 value={privateKey}
                 placeholder="nsec..."
                 onChange={(e) => setPrivateKey(e.target.value)}
@@ -139,7 +139,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
               <Input
                 type="text"
                 width="100%"
-                size="large"
+                size="lg"
                 value={passphrase}
                 placeholder="Enter a passphrase of your choice..."
                 onChange={(e) => setPassphrase(e.target.value)}

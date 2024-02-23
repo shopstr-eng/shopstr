@@ -1,8 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { DateTime } from "luxon";
 import { v4 as uuid } from "uuid";
-import repo from "../../../utils/repo";
-import { getLocationFromAddress, locationToSqlGeo } from "@/utils/geo";
+import repo from "../../../utils/metrics/repo";
+import { getLocationFromAddress, locationToSqlGeo } from "@/utils/metrics/geo";
 
 const parseRequestBody = (body: string) => {
   const parsedBody = typeof body === "string" ? JSON.parse(body) : body;

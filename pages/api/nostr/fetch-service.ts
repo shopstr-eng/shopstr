@@ -1,7 +1,6 @@
 import { Nostr, SimplePool } from "nostr-tools";
 import {
   addChatMessageToCache,
-  addChatsToCache,
   addProductToCache,
   addProfilesToCache,
   fetchAllProductsFromCache,
@@ -9,8 +8,8 @@ import {
   fetchProfileDataFromCache,
   removeProductFromCache,
 } from "./cache-service";
-import { NostrEvent, NostrMessageEvent } from "@/pages/types";
-import { ChatsMap } from "@/pages/context";
+import { NostrEvent, NostrMessageEvent } from "@/utils/types/types";
+import { ChatsMap } from "@/utils/context/context";
 
 const POSTQUERYLIMIT = 200;
 

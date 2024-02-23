@@ -1,6 +1,6 @@
 //TODO: perhaps see if we can abstract away some payment logic into reusable functions
 import React, { useContext, useState, useEffect } from "react";
-import { ProfileMapContext } from "../pages/context";
+import { ProfileMapContext } from "../utils/context/context";
 import { useRouter } from "next/router";
 import {
   Button,
@@ -106,10 +106,10 @@ export default function InvoiceCard({
     const QRCode = require("qrcode");
 
     QRCode.toDataURL(pr)
-      .then((url) => {
+      .then((url: string) => {
         setQrCodeUrl(url);
       })
-      .catch((err) => {
+      .catch((err: any) => {
         console.error("ERROR", err);
       });
 

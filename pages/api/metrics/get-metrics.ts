@@ -1,4 +1,4 @@
-import Repo from "@/utils/repo";
+import Repo from "@/utils/metrics/repo";
 import { Knex } from "knex";
 import { DateTime } from "luxon";
 import type { NextApiRequest, NextApiResponse } from "next";
@@ -61,8 +61,8 @@ export default async function GetMetrics(
   const label = isToday
     ? DateTime.fromISO(startDate).toFormat("yyyy LLL dd")
     : `${DateTime.fromISO(startDate).toFormat(
-        "yyyy LLL dd",
-      )} - ${DateTime.fromISO(endDate).toFormat("yyyy LLL dd")}`;
+      "yyyy LLL dd",
+    )} - ${DateTime.fromISO(endDate).toFormat("yyyy LLL dd")}`;
 
   // TODO: USE ONE SQL QUERY TO GET ALL DATA INSTEAD OF MULTIPLE QUERIES
 

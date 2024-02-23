@@ -2,12 +2,12 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { DateTime } from "luxon";
 import { v4 as uuid } from "uuid";
 import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
-import repo from "../../../utils/repo";
+import repo from "../../../utils/metrics/repo";
 import {
   locationToSqlGeo,
   getLocationFromReqHeaders,
   getLocationFromAddress,
-} from "@/utils/geo";
+} from "@/utils/metrics/geo";
 
 const parseRequestBody = (body: string) => {
   const parsedBody = typeof body === "string" ? JSON.parse(body) : body;

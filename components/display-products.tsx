@@ -1,8 +1,8 @@
 import { useState, useEffect, useContext } from "react";
 import { nip19 } from "nostr-tools";
 import { getLocalStorageData } from "./utility/nostr-helper-functions";
-import { NostrEvent } from "../pages/types";
-import { ProductContext, ProfileMapContext } from "../pages/context";
+import { NostrEvent } from "../utils/types/types";
+import { ProductContext, ProfileMapContext } from "../utils/context/context";
 import ProductCard from "./utility-components/product-card";
 import DisplayProductModal from "./display-product-modal";
 import { useRouter } from "next/router";

@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 import { ProfileAvatar } from "../../components/utility-components/profile/avatar";
 import { ProfileDisplayName } from "../../components/utility-components/profile/display-name";
-import { ChatObject } from "../types";
-import { timeSinceMessageDisplayText } from "./utils";
+import { ChatObject } from "../../utils/types/types";
+import { timeSinceMessageDisplayText } from "../../utils/messages/utils";
 
 export const ChatButton = ({
   pubkeyOfChat,
@@ -15,11 +15,12 @@ export const ChatButton = ({
   openedChatPubkey: string;
   handleClickChat: (pubkey: string) => void;
 }) => {
-  let messages = chatObject.decryptedChat;
-  let lastMessage = messages[messages.length - 1];
-  let unreadCount = chatObject.unreadCount;
+  let messages = chatObject?.decryptedChat;
+  let lastMessage =
+    messages && messages.length > 0 && messages[messages.length - 1];
+  let unreadCount = chatObject?.unreadCount;
 
-  let divRef = useRef(null);
+  let divRef = useRef<any>(null);
 
   useEffect(() => {
     if (pubkeyOfChat === openedChatPubkey) {
@@ -66,3 +67,5 @@ export const ChatButton = ({
     </div>
   );
 };
+
+export default ChatButton;

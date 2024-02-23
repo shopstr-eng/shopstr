@@ -1,6 +1,6 @@
-import { fetchChatMessagesFromCache } from "../api/nostr/cache-service";
-import { ChatsMap } from "../context";
-import { NostrMessageEvent } from "../types";
+import { fetchChatMessagesFromCache } from "../../pages/api/nostr/cache-service";
+import { ChatsMap } from "../context/context";
+import { NostrMessageEvent } from "../types/types";
 
 export const timeSinceMessageDisplayText = (
   timeSent: number,

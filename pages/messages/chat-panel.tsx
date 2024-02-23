@@ -9,7 +9,11 @@ import {
 } from "@heroicons/react/24/outline";
 import { getLocalStorageData } from "../../components/utility/nostr-helper-functions";
 import { ProfileAvatar } from "../../components/utility-components/profile/avatar";
-import { ChatObject, NostrEvent, NostrMessageEvent } from "../types";
+import {
+  ChatObject,
+  NostrEvent,
+  NostrMessageEvent,
+} from "../../utils/types/types";
 import { ChatMessage } from "./chat-message";
 
 export const ChatPanel = ({
@@ -29,7 +33,7 @@ export const ChatPanel = ({
   const [messageInput, setMessageInput] = useState("");
   const [messages, setMessages] = useState<NostrMessageEvent[]>([]); // [chatPubkey, chat]
 
-  const bottomDivRef = useRef(null);
+  const bottomDivRef = useRef<any>(null);
 
   useEffect(() => {
     setMessages(chatsMap.get(currentChatPubkey)?.decryptedChat || []);
@@ -78,6 +82,7 @@ export const ChatPanel = ({
       <div className="my-2 h-full overflow-y-scroll rounded-md border-2 border-light-fg bg-light-fg p-3 dark:border-dark-fg dark:bg-dark-fg">
         {messages.map((messageEvent: NostrEvent, index) => {
           return (
+            // eslint-disable-next-line react/jsx-key
             <ChatMessage
               messageEvent={messageEvent}
               index={index}
@@ -118,3 +123,5 @@ export const ChatPanel = ({
     </div>
   );
 };
+
+export default ChatPanel;

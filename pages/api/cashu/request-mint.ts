@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { CashuMint, CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
 import { DateTime } from "luxon";
 import { v4 as uuid } from "uuid";
-import repo from "../../../utils/repo";
+import repo from "../../../utils/metrics/repo";
 
 const requestMint = async (req: NextApiRequest, res: NextApiResponse) => {
   if (req.method !== "POST") {

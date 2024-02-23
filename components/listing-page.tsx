@@ -7,7 +7,7 @@ import InvoiceCard from "./invoice-card";
 export default function ListingPage({
   productData,
 }: {
-  productData: ProductData;
+  productData?: ProductData;
 }) {
   if (!productData) return null;
   const {

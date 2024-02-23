@@ -4,11 +4,12 @@ import locations from "../../../public/locationSelection.json";
 
 export const locationAvatar = (location: string) => {
   const getLocationMap = () => {
-    let countries = locations.countries.map((country) => [
-      country.country,
-      country,
-    ]);
-    let states = locations.states.map((state) => [state.state, state]);
+    let countries = locations.countries.map(
+      (country) => [country.country, country.iso3166] as const,
+    );
+    let states = locations.states.map(
+      (state) => [state.state, state.iso3166] as const,
+    );
     return new Map([...countries, ...states]);
   };
   const locationMap = getLocationMap();
@@ -16,22 +17,12 @@ export const locationAvatar = (location: string) => {
     <Avatar
       alt={location}
       className="h-6 w-6"
-      src={`https://flagcdn.com/16x12/${locationMap.get(location)
-        ?.iso3166}.png`}
+      src={`https://flagcdn.com/16x12/${locationMap.get(location)}.png`}
     />
   ) : null;
 };
 
-const LocationDropdown = ({ value, ...props }) => {
-  const locationMap = useMemo(() => {
-    let countries = locations.countries.map((country) => [
-      country.country,
-      country,
-    ]);
-    let states = locations.states.map((state) => [state.state, state]);
-    return new Map([...countries, ...states]);
-  }, []);
-
+const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
   const locationOptions = useMemo(() => {
     const headingClasses =
       "flex w-full sticky top-1 z-20 py-1.5 px-2 dark:bg-dark-bg bg-light-bg shadow-small rounded-small";
