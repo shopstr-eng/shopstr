@@ -141,11 +141,16 @@ const SettingsPage = () => {
   return (
     <div className="flex h-full flex-col bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
       <div>
-        <span className=" my-8 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
+        <span className="mb-4 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
           Account
         </span>
         <div>
-          <span className="ml-4 text-light-text dark:text-dark-text">npub</span>
+          <div className="mb-2 ml-4 flex-col">
+            <ProfileAvatar
+              pubkey={getLocalStorageData().decryptedNpub}
+              includeDisplayName
+            ></ProfileAvatar>
+          </div>
           <div className="mx-3 mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg">
             <div
               className="max-w-xsm break-all text-light-text dark:text-dark-text"
@@ -154,12 +159,6 @@ const SettingsPage = () => {
               {getLocalStorageData().npub}
             </div>
           </div>
-        </div>
-        <div className="ml-4 flex-col">
-          <ProfileAvatar
-            pubkey={getLocalStorageData().decryptedNpub}
-            includeDisplayName
-          ></ProfileAvatar>
         </div>
         <div>
           <div className="flex h-fit w-[99vw] flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
@@ -179,18 +178,18 @@ const SettingsPage = () => {
           </div>
         </div>
 
-        <span className=" my-8 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
+        <span className="mt-4 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
           Relays
         </span>
 
         {relays.length === 0 && (
-          <div className="mt-8 flex items-center justify-center">
+          <div className="mt-4 flex items-center justify-center">
             <p className="break-words text-center text-xl dark:text-dark-text">
               No relays added . . .
             </p>
           </div>
         )}
-        <div className="mt-8 max-h-96 overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
+        <div className="mt-4 max-h-96 overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
           {relays.map((relay) => (
             <div
               key={relay}
@@ -298,7 +297,7 @@ const SettingsPage = () => {
         </Modal>
       </div>
 
-      <span className=" my-8 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
+      <span className="my-4 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
         Mint
       </span>
 
@@ -429,8 +428,8 @@ const SettingsPage = () => {
         </Modal>
       </div>
 
-      <span className=" my-8 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
-        Settings
+      <span className="my-4 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
+        Theme
       </span>
       {useLoaded() && (
         <RadioGroup

@@ -273,8 +273,8 @@ const DirectMessages = () => {
   };
 
   return (
-    <div className="flex h-full flex-col bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
-      <span className=" my-8 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
+    <div className="flex h-[100vh] flex-col bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
+      <span className="mb-4 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
         Messages
       </span>
       <div>

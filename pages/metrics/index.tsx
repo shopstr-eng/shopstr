@@ -77,7 +77,7 @@ export default function MetricsPage() {
   }, [date]);
 
   return (
-    <div className="flex h-full flex-col bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
+    <div className="flex h-full flex-col bg-light-bg pb-20 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
       <div className="p-4">
         <Callout title="Work In Progress - Analytics" color="purple">
           This is a global metrics of all of Shopstr. We are working on a
@@ -132,7 +132,9 @@ export default function MetricsPage() {
           </DateRangePickerItem>
         </DateRangePicker>
         {loading ? (
-          <ShopstrSpinner />
+          <div className="mt-8 flex items-center justify-center">
+            <ShopstrSpinner />
+          </div>
         ) : (
           <Grid numItemsSm={1} numItemsMd={2} numItemsLg={3} className="gap-6">
             {data.map((item) => (
