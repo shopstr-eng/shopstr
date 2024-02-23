@@ -68,7 +68,7 @@ const BottomNav = () => {
   };
   return (
     <div
-      className={`fixed bottom-0 z-10 w-full border-0 bg-light-fg shadow-lg dark:bg-dark-fg sm:hidden`}
+      className={`fixed bottom-0 pb-2 z-10 w-full border-0 bg-light-fg shadow-lg dark:bg-dark-fg sm:hidden`}
     >
       <div className="flex w-full flex-row items-center justify-evenly justify-items-stretch">
         <div>
@@ -77,6 +77,8 @@ const BottomNav = () => {
             onClick={() => router.push("/")}
           >
             <HomeIcon
+              height={32}
+              width={32}
               className={`cursor-pointer text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
                 isHomeActive
                   ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
@@ -88,7 +90,7 @@ const BottomNav = () => {
         <div>
           <Button
             className="bg-transparent py-8"
-            onClick={() => handleRoute("messages")}
+            onClick={() => handleRoute("/messages")}
           >
             {unreadMsgCount > 0 && (
               <div className="absolute ml-3 flex h-3 w-fit items-center justify-center rounded-full bg-shopstr-purple-light px-1 py-2 font-bold text-light-bg dark:bg-shopstr-yellow-light dark:text-dark-bg">
@@ -96,6 +98,8 @@ const BottomNav = () => {
               </div>
             )}
             <EnvelopeOpenIcon
+              height={32}
+              width={32}
               className={`cursor-pointer text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
                 isMessagesActive
                   ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
@@ -110,6 +114,8 @@ const BottomNav = () => {
             onClick={() => handleRoute("/metrics")}
           >
             <ChartBarIcon
+              height={32}
+              width={32}
               className={`cursor-pointer text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
                 isMetricsActive
                   ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
@@ -121,9 +127,11 @@ const BottomNav = () => {
         <div>
           <Button
             className="bg-transparent py-8"
-            onClick={() => handleRoute("/profile")}
+            onClick={() => handleRoute("/settings")}
           >
             <Cog6ToothIcon
+              height={32}
+              width={32}
               className={`cursor-pointer text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
                 isProfileActive
                   ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"

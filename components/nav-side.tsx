@@ -2,26 +2,15 @@
 
 import React, { useContext, useEffect, useState } from "react";
 
-import Link from "next/link";
-
 import useNavigation from "@/components/hooks/use-navigation";
-import useScrollingEffect from "@/components/hooks/use-scroll";
 
-// import { Icon } from '@iconify/react';
 import {
   HomeIcon,
   EnvelopeOpenIcon,
-  BuildingLibraryIcon,
-  GlobeAltIcon,
-  ArrowRightOnRectangleIcon,
-  ArrowLeftOnRectangleIcon,
-  SunIcon,
-  MoonIcon,
   ChartBarIcon,
   Cog6ToothIcon,
 } from "@heroicons/react/24/outline";
 import { countNumberOfUnreadMessagesFromChatsContext } from "@/pages/messages/utils";
-import { Icon } from "@tremor/react";
 import { ChatsContext } from "@/pages/context";
 import { db } from "../pages/api/nostr/cache-service";
 
@@ -91,7 +80,7 @@ const SideNav = () => {
             alt="Shopstr logo"
             height={50}
             radius="sm"
-            src="/shopstr.png"
+            src="/shopstr-2000x2000.png"
             width={50}
           />
           <span
@@ -111,7 +100,7 @@ const SideNav = () => {
               : ""
           }`}
         >
-          <HomeIcon className={`h-8 w-8`}></HomeIcon>
+          <HomeIcon height={32} width={32}></HomeIcon>
           <span
             className={`hidden pt-2 text-2xl md:flex ${
               isHomeActive ? "font-bold" : ""
@@ -134,9 +123,7 @@ const SideNav = () => {
               {unreadMsgCount}
             </div>
           )}
-          <EnvelopeOpenIcon
-            className={`h-8 w-8 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text`}
-          />
+          <EnvelopeOpenIcon height={32} width={32} />
           <span
             className={`hidden pt-2 text-2xl md:flex ${
               isMessagesActive ? "font-bold" : ""
@@ -153,9 +140,7 @@ const SideNav = () => {
               : ""
           }`}
         >
-          <ChartBarIcon
-            className={`h-8 w-8 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text`}
-          ></ChartBarIcon>
+          <ChartBarIcon height={32} width={32}></ChartBarIcon>
           <span
             className={`hidden pt-2 text-2xl md:flex ${
               isMetricsActive ? "font-bold" : ""
@@ -172,9 +157,7 @@ const SideNav = () => {
               : ""
           }`}
         >
-          <Cog6ToothIcon
-            className={`h-8 w-8 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text`}
-          ></Cog6ToothIcon>
+          <Cog6ToothIcon height={32} width={32}></Cog6ToothIcon>
           <span
             className={`hidden text-2xl md:flex ${
               isProfileActive ? "font-bold" : ""
@@ -188,7 +171,7 @@ const SideNav = () => {
             className={`${SHOPSTRBUTTONCLASSNAMES} m-5 w-full`}
             onClick={() => handleCreateNewListing()}
           >
-            + Create new listing
+            + Add new listing
           </Button>
         </div>
       </div>

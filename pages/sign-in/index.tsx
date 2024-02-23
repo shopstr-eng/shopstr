@@ -81,82 +81,84 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
   }, [privateKey]);
 
   return (
-    <div className="flex max-h-screen flex-row items-center justify-center">
-      <Card>
-        <CardBody>
-          <div className="mb-4 flex flex-row items-center justify-center">
-            <Image
-              alt="Shopstr logo"
-              height={50}
-              radius="sm"
-              src="/shopstr.png"
-              width={50}
-            />
-            <h1
-              onClick={() => {
-                router.push("/");
-              }}
-              className="cursor-pointer text-center text-3xl font-bold text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light"
-            >
-              Shopstr
-            </h1>
-          </div>
-          {errorMessage && (
-            <div className="mb-4 rounded bg-red-500 px-4 py-2 text-light-text dark:text-dark-text">
-              {errorMessage}
+    <div className="flex h-full flex-col bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
+      <div className="flex max-h-screen flex-row items-center justify-center">
+        <Card>
+          <CardBody>
+            <div className="mb-4 flex flex-row items-center justify-center">
+              <Image
+                alt="Shopstr logo"
+                height={50}
+                radius="sm"
+                src="/shopstr-2000x2000.png"
+                width={50}
+              />
+              <h1
+                onClick={() => {
+                  router.push("/");
+                }}
+                className="cursor-pointer text-center text-3xl font-bold text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light"
+              >
+                Shopstr
+              </h1>
             </div>
-          )}
-          <div className="mb-4 flex flex-col">
-            <label className="text-xl">Private Key:</label>
-            <Input
-              color={validPrivateKey ? "success" : "error"}
-              type="password"
-              width="100%"
-              size="large"
-              value={privateKey}
-              placeholder="nsec..."
-              onChange={(e) => setPrivateKey(e.target.value)}
-            />
-          </div>
-          <div className="mb-4 flex flex-col">
-            <label className="text-xl">
-              Encryption Passphrase:<span className="text-red-500">*</span>
-            </label>
-            <Input
-              type="text"
-              width="100%"
-              size="large"
-              value={passphrase}
-              placeholder="Enter a passphrase of your choice..."
-              onChange={(e) => setPassphrase(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && validPrivateKey) handleSignIn();
-              }}
-            />
-          </div>
-          <div className="flex flex-row justify-between space-x-2">
-            <Button
-              className={SHOPSTRBUTTONCLASSNAMES}
-              onClick={handleGenerateKeys}
-            >
-              Create Account
-            </Button>
-            <Button
-              className={SHOPSTRBUTTONCLASSNAMES}
-              onClick={startExtensionLogin}
-            >
-              Extension Sign In
-            </Button>
-            <Button
-              className={SHOPSTRBUTTONCLASSNAMES}
-              onClick={handleSignIn}
-              disabled={!validPrivateKey} // Disable the button only if both key strings are invalid or the button has already been clicked
-            >
-              Sign In
-            </Button>
-          </div>
-        </CardBody>
-      </Card>
+            {errorMessage && (
+              <div className="mb-4 rounded bg-red-500 px-4 py-2 text-light-text dark:text-dark-text">
+                {errorMessage}
+              </div>
+            )}
+            <div className="mb-4 flex flex-col">
+              <label className="text-xl">Private Key:</label>
+              <Input
+                color={validPrivateKey ? "success" : "error"}
+                type="password"
+                width="100%"
+                size="large"
+                value={privateKey}
+                placeholder="nsec..."
+                onChange={(e) => setPrivateKey(e.target.value)}
+              />
+            </div>
+            <div className="mb-4 flex flex-col">
+              <label className="text-xl">
+                Encryption Passphrase:<span className="text-red-500">*</span>
+              </label>
+              <Input
+                type="text"
+                width="100%"
+                size="large"
+                value={passphrase}
+                placeholder="Enter a passphrase of your choice..."
+                onChange={(e) => setPassphrase(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && validPrivateKey) handleSignIn();
+                }}
+              />
+            </div>
+            <div className="flex flex-row justify-between space-x-2">
+              <Button
+                className={SHOPSTRBUTTONCLASSNAMES}
+                onClick={handleGenerateKeys}
+              >
+                Create Account
+              </Button>
+              <Button
+                className={SHOPSTRBUTTONCLASSNAMES}
+                onClick={startExtensionLogin}
+              >
+                Extension Sign In
+              </Button>
+              <Button
+                className={SHOPSTRBUTTONCLASSNAMES}
+                onClick={handleSignIn}
+                disabled={!validPrivateKey} // Disable the button only if both key strings are invalid or the button has already been clicked
+              >
+                Sign In
+              </Button>
+            </div>
+          </CardBody>
+        </Card>
+      </div>
     </div>
   );
 };

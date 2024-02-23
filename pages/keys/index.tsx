@@ -73,91 +73,93 @@ const Keys = () => {
   };
 
   return (
-    <div className="flex h-full w-full flex-col overflow-x-hidden bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] sm:border-r sm:border-zinc-700 md:ml-[250px]">
-      <Card>
-        <CardBody>
-          <div className="mb-4 flex flex-row items-center justify-center">
-            <Image
-              alt="Shopstr logo"
-              height={50}
-              radius="sm"
-              src="/shopstr.png"
-              width={50}
-            />
-            <h1 className="cursor-pointer text-center text-3xl font-bold text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light">
-              Shopstr
-            </h1>
-          </div>
-          <div className="mb-4 flex flex-col">
-            Make sure to write down and save your public and private keys in a
-            secure format!
-          </div>
-          <div className="mb-4 flex flex-col">
-            <label className="text-xl">Public Key:</label>
-            {publicKey && (
-              <div
-                className="border-color-yellow-500 overflow-hidden overflow-ellipsis whitespace-nowrap rounded-md border-b-2 border-l-2 border-shopstr-purple bg-light-bg px-1 text-xl dark:border-shopstr-yellow dark:bg-dark-bg"
-                onClick={handleCopyPubkey}
-              >
-                {publicKey}
-              </div>
-            )}
-          </div>
-          <div className="mb-4 flex flex-col">
-            <label className="text-xl">Private Key:</label>
-            {privateKey && (
-              <div className="flex items-center justify-between rounded-md border-b-2 border-l-2 border-shopstr-purple bg-light-bg text-xl dark:border-shopstr-yellow dark:bg-dark-bg">
+    <div className="flex h-[100vh] flex-col bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
+      <div className="p-4">
+        <Card>
+          <CardBody>
+            <div className="mb-4 flex flex-row items-center justify-center">
+              <Image
+                alt="Shopstr logo"
+                height={50}
+                radius="sm"
+                src="/shopstr-2000x2000.png"
+                width={50}
+              />
+              <h1 className="cursor-pointer text-center text-3xl font-bold text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light">
+                Shopstr
+              </h1>
+            </div>
+            <div className="mb-4 flex flex-col">
+              Make sure to write down and save your public and private keys in a
+              secure format!
+            </div>
+            <div className="mb-4 flex flex-col">
+              <label className="text-xl">Public Key:</label>
+              {publicKey && (
                 <div
-                  className="overflow-hidden overflow-ellipsis whitespace-nowrap px-1"
-                  onClick={handleCopyPrivkey}
+                  className="border-color-yellow-500 break-all rounded-md border-b-2 border-l-2 border-shopstr-purple bg-light-bg px-1 text-xl dark:border-shopstr-yellow dark:bg-dark-bg"
+                  onClick={handleCopyPubkey}
                 >
-                  {viewState === "shown" ? privateKey : "* * * * *"}
+                  {publicKey}
                 </div>
-                {viewState === "shown" ? (
-                  <EyeSlashIcon
-                    className="h-6 w-6 flex-shrink-0 px-1 hover:text-purple-700"
-                    onClick={() => {
-                      setViewState("hidden");
-                    }}
-                  />
-                ) : (
-                  <EyeIcon
-                    className="h-6 w-6 flex-shrink-0 px-1 hover:text-purple-700"
-                    onClick={() => {
-                      setViewState("shown");
-                    }}
-                  />
-                )}
-              </div>
-            )}
-          </div>
-          <div className="mb-4 flex flex-col">
-            <label className="text-xl">
-              Encryption Passphrase:<span className="text-red-500">*</span>
-            </label>
-            <Input
-              type="text"
-              width="100%"
-              size="large"
-              value={passphrase}
-              placeholder="Enter a passphrase of your choice..."
-              onChange={(e) => setPassphrase(e.target.value)}
-              onKeyDown={(e) => {
-                if (
-                  e.key === "Enter" &&
-                  !(passphrase === "" || passphrase === null)
-                )
-                  handleSignIn();
-              }}
-            />
-          </div>
-          <div className="flex justify-center">
-            <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={handleSignIn}>
-              Sign In
-            </Button>
-          </div>
-        </CardBody>
-      </Card>
+              )}
+            </div>
+            <div className="mb-4 flex flex-col">
+              <label className="text-xl">Private Key:</label>
+              {privateKey && (
+                <div className="flex items-center justify-between rounded-md border-b-2 border-l-2 border-shopstr-purple bg-light-bg text-xl dark:border-shopstr-yellow dark:bg-dark-bg">
+                  <div className="break-all px-1" onClick={handleCopyPrivkey}>
+                    {viewState === "shown" ? privateKey : "* * * * *"}
+                  </div>
+                  {viewState === "shown" ? (
+                    <EyeSlashIcon
+                      className="h-6 w-6 flex-shrink-0 px-1 hover:text-purple-700"
+                      onClick={() => {
+                        setViewState("hidden");
+                      }}
+                    />
+                  ) : (
+                    <EyeIcon
+                      className="h-6 w-6 flex-shrink-0 px-1 hover:text-purple-700"
+                      onClick={() => {
+                        setViewState("shown");
+                      }}
+                    />
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="mb-4 flex flex-col">
+              <label className="text-xl">
+                Encryption Passphrase:<span className="text-red-500">*</span>
+              </label>
+              <Input
+                type="text"
+                width="100%"
+                size="large"
+                value={passphrase}
+                placeholder="Enter a passphrase of your choice..."
+                onChange={(e) => setPassphrase(e.target.value)}
+                onKeyDown={(e) => {
+                  if (
+                    e.key === "Enter" &&
+                    !(passphrase === "" || passphrase === null)
+                  )
+                    handleSignIn();
+                }}
+              />
+            </div>
+            <div className="flex justify-center">
+              <Button
+                className={SHOPSTRBUTTONCLASSNAMES}
+                onClick={handleSignIn}
+              >
+                Sign In
+              </Button>
+            </div>
+          </CardBody>
+        </Card>
+      </div>
     </div>
   );
 };

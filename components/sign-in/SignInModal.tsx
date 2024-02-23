@@ -25,7 +25,7 @@ export default function SignInModal({
   const [validPrivateKey, setValidPrivateKey] = useState<boolean>(false);
   const [passphrase, setPassphrase] = useState<string>("");
 
-  const [showPrivateKeySignIn, setShowPrivateKeySignIn] = useState(false);
+  const [showNsecSignIn, setShowNsecSignIn] = useState(false);
   const [showModal, setShowModal] = useState(false);
 
   const router = useRouter();
@@ -134,7 +134,7 @@ export default function SignInModal({
                 <div className="mt-10 flex">
                   <div>
                     <p>New to Nostr?</p>
-                    <p> Sign up to buy and sell!</p>
+                    <p> Sign up to get started!</p>
                   </div>
                   <Button
                     className={"ml-10 self-center"}
@@ -147,14 +147,16 @@ export default function SignInModal({
 
               <div className="flex w-full grow basis-1/2 flex-col">
                 <div className="space-y-2">
-                  <Image
-                    alt="Shopstr logo"
-                    height={50}
-                    radius="sm"
-                    src="/shopstr.png"
-                    width={50}
-                  />
-                  <div>Sign in to Shopstr</div>
+                  <div className="flex items-center justify-center">
+                    <Image
+                      alt="Shopstr logo"
+                      height={50}
+                      radius="sm"
+                      src="/shopstr-2000x2000.png"
+                      width={50}
+                    />
+                    <div>Shopstr</div>
+                  </div>
                   <Button
                     className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
                     onClick={startExtensionLogin}
@@ -166,17 +168,17 @@ export default function SignInModal({
                 <div className="flex flex-col	">
                   <div className="">
                     <Button
-                      onClick={() => setShowPrivateKeySignIn(true)}
+                      onClick={() => setShowNsecSignIn(true)}
                       className={`mt-2 w-full ${
-                        showPrivateKeySignIn ? "hidden" : ""
+                        showNsecSignIn ? "hidden" : ""
                       }`}
                     >
-                      Private Key Sign In
+                      nsec Sign In
                     </Button>
                   </div>
                   <div
                     className={`mb-4 flex flex-col justify-between space-y-4 ${
-                      showPrivateKeySignIn ? "" : "hidden"
+                      showNsecSignIn ? "" : "hidden"
                     }`}
                   >
                     <div>
@@ -215,7 +217,7 @@ export default function SignInModal({
                         onClick={handleSignIn}
                         isDisabled={!validPrivateKey} // Disable the button only if both key strings are invalid or the button has already been clicked
                       >
-                        Private Key Sign In
+                        nsec Sign In
                       </Button>
                     </div>
                   </div>
@@ -227,7 +229,7 @@ export default function SignInModal({
                   <div className="ml-5 mt-2 flex">
                     <div>
                       <p>New to Nostr?</p>
-                      <p> Sign up to buy and sell!</p>
+                      <p> Sign up to get started!</p>
                     </div>
                     <Button
                       className={"ml-10 self-center"}

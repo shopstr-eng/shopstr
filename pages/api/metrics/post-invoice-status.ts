@@ -8,7 +8,6 @@ import {
   getLocationFromReqHeaders,
   getLocationFromAddress,
 } from "@/utils/geo";
-import { getLocalStorageData } from "./utility/nostr-helper-functions";
 
 const parseRequestBody = (body: string) => {
   const parsedBody = typeof body === "string" ? JSON.parse(body) : body;
@@ -20,11 +19,9 @@ const UpdateInvoice = async (req: NextApiRequest, res: NextApiResponse) => {
     return res.status(405).json({});
   }
 
-  const { mints } = getLocalStorageData();
-
-  const wallet = new CashuWallet(new CashuMint(mints[0]));
-
   const event = parseRequestBody(req.body);
+
+  const wallet = new CashuWallet(new CashuMint(event.mint));
 
   if (!event.id || !event.listing_id) {
     return res.status(400).json({});

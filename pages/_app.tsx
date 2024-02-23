@@ -24,7 +24,6 @@ import {
   fetchProfile,
 } from "./api/nostr/fetch-service";
 import { NostrEvent } from "./types";
-import MaxWidthWrapper from "@/components/max-width-wrapper";
 import BottomNav from "@/components/nav-bottom";
 import SideNav from "@/components/nav-side";
 
@@ -135,6 +134,24 @@ function App({ Component, pageProps }: AppProps) {
     if (relays) fetchData(); // Call the async function immediately
   }, [localStorageValues.relays]);
 
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker
+          .register("/service-worker.js")
+          .then((registration) => {
+            console.log("Service Worker registered: ", registration);
+          })
+          .catch((registrationError) => {
+            console.log(
+              "Service Worker registration failed: ",
+              registrationError,
+            );
+          });
+      });
+    }
+  }, []);
+
   return (
     <ProductContext.Provider value={productContext}>
       <ProfileMapContext.Provider value={profileContext}>
@@ -145,12 +162,12 @@ function App({ Component, pageProps }: AppProps) {
               forcedTheme={Component.theme || undefined}
             >
               <>
-                <MaxWidthWrapper>
-                  <div className="flex">
-                    <SideNav />
+                <div className="flex">
+                  <SideNav />
+                  <main className="flex-1">
                     <Component {...pageProps} />
-                  </div>
-                </MaxWidthWrapper>
+                  </main>
+                </div>
                 <BottomNav />
               </>
             </NextThemesProvider>

@@ -273,11 +273,11 @@ const DirectMessages = () => {
   };
 
   return (
-    <div className="flex h-screen w-full flex-col overflow-x-hidden overflow-y-hidden bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] sm:border-r sm:border-zinc-700 md:ml-[250px]">
-      <span className=" my-8 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
+    <div className="flex h-[100vh] flex-col bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
+      <span className="mb-4 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
         Messages
       </span>
-      <div className="h-full">
+      <div>
         {chatsMap.size === 0 ? (
           <div className="mt-2 flex items-center justify-center">
             {isChatsLoading ? (
@@ -313,6 +313,10 @@ const DirectMessages = () => {
                       openedChatPubkey={currentChatPubkey}
                       handleClickChat={enterChat}
                     />
+                    // <div>
+                    //   it's a ruuuuuuuseruuuuuuuseruuuuuuuseruuuuuuuseruuuuuuuse
+                    //   ruuuuuuuse ruuuuuuuse ruuuuuuuse ruuuuuuuse
+                    // </div>
                   ),
                 )}
             </div>
