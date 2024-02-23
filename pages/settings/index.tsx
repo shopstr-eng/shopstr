@@ -139,7 +139,7 @@ const SettingsPage = () => {
   };
 
   return (
-    <div className="flex h-full flex-col bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
+    <div className="flex min-h-screen flex-col bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
       <div>
         <span className="mb-4 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
           Account

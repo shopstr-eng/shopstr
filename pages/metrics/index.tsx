@@ -77,7 +77,7 @@ export default function MetricsPage() {
   }, [date]);
 
   return (
-    <div className="flex h-full flex-col bg-light-bg dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
+    <div className="flex h-full min-h-screen flex-col bg-light-bg dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
       <div className="p-4">
         <Callout title="Work In Progress - Analytics" color="purple">
           This is a global metrics of all of Shopstr. We are working on a
