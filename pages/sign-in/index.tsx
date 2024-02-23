@@ -40,6 +40,13 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
           ]),
         );
 
+        localStorage.setItem(
+          "mints",
+          JSON.stringify([
+            "https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV",
+          ]),
+        );
+
         // alert("Signed in as " + npub + ".");
         router.push("/");
       }
@@ -67,6 +74,12 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
           "wss://relay.damus.io",
           "wss://nos.lol",
           "wss://nostr.mutinywallet.com",
+        ]),
+      );
+      localStorage.setItem(
+        "mints",
+        JSON.stringify([
+          "https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV",
         ]),
       );
       // alert("Signed in as " + npub + ".");
