@@ -159,7 +159,6 @@ const DisplayEvents = ({
         ) : (
           <div className="my-2 flex h-[90%] max-w-full flex-row flex-wrap justify-evenly overflow-x-hidden overflow-y-hidden">
             {productEvents.map((productData: ProductData, index) => {
-              console.log("aa ", displayProductCard(productData, index));
               return displayProductCard(productData, index);
             })}
           </div>

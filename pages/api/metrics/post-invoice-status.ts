@@ -8,22 +8,21 @@ import {
   getLocationFromReqHeaders,
   getLocationFromAddress,
 } from "@/utils/geo";
+import { getLocalStorageData } from "./utility/nostr-helper-functions";
 
 const parseRequestBody = (body: string) => {
   const parsedBody = typeof body === "string" ? JSON.parse(body) : body;
   return parsedBody;
 };
 
-const wallet = new CashuWallet(
-  new CashuMint(
-    "https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV",
-  ),
-);
-
 const UpdateInvoice = async (req: NextApiRequest, res: NextApiResponse) => {
   if (req.method !== "POST") {
     return res.status(405).json({});
   }
+
+  const { mints } = getLocalStorageData();
+
+  const wallet = new CashuWallet(new CashuMint(mints[0]));
 
   const event = parseRequestBody(req.body);
 
@@ -50,7 +49,6 @@ const UpdateInvoice = async (req: NextApiRequest, res: NextApiResponse) => {
   } catch (error: any) {
     console.error(error);
     if (error.message.includes("quote already issued")) {
-      console.log("invoice has been paid");
       await repo()("transactions").insert({
         id: uuid(),
         date_time: DateTime.now().toUTC().toSQL(),

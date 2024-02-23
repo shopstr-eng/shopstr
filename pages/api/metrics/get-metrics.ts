@@ -31,9 +31,6 @@ const getParamsFromURI = (uri: string) => {
   // Get everything after the `?`
   const [, paramString] = uri.split("?");
 
-  // Return parameters
-  console.log(paramString);
-
   return new URLSearchParams(paramString);
 };
 
@@ -59,7 +56,6 @@ export default async function GetMetrics(
     DateTime.fromISO(startDate),
     "day",
   );
-  console.log("isToday", isToday);
   const bucket = isToday ? "1 hour" : "1 day";
 
   const label = isToday
@@ -67,8 +63,6 @@ export default async function GetMetrics(
     : `${DateTime.fromISO(startDate).toFormat(
         "yyyy LLL dd",
       )} - ${DateTime.fromISO(endDate).toFormat("yyyy LLL dd")}`;
-
-  console.log([bucket, label, start, end]);
 
   // TODO: USE ONE SQL QUERY TO GET ALL DATA INSTEAD OF MULTIPLE QUERIES
 
@@ -130,16 +124,8 @@ export default async function GetMetrics(
     ordersMetricsPromise,
   ]);
 
-  console.log(salesMetrics);
-  console.log(shoppersMetrics);
-  console.log(listingsMetrics);
-  console.log(inquiriesMetrics);
-  console.log(invoicesMetrics);
-  console.log(ordersMetrics);
-
   let salesData: Data | null = null;
   if (salesMetrics.status === "fulfilled" && salesMetrics.value) {
-    console.log(salesMetrics.value);
     salesData = {
       label,
       category: {
