@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import {
+  CheckIcon,
+  ClipboardIcon,
   InformationCircleIcon,
   MinusCircleIcon,
 } from "@heroicons/react/24/outline";
@@ -28,8 +30,8 @@ const SettingsPage = () => {
   const [showRelayModal, setShowRelayModal] = useState(false);
 
   const [mints, setMints] = useState(Array<string>(0));
-  const [mintUrl, setMintUrl] = useState("");
   const [showMintModal, setShowMintModal] = useState(false);
+  const [copiedToClipboard, setCopiedToClipboard] = useState(false);
 
   const router = useRouter();
 
@@ -98,8 +100,11 @@ const SettingsPage = () => {
   };
 
   const handleCopyMint = () => {
-    navigator.clipboard.writeText(mintUrl);
-    alert("Mint URL copied to clipboard!");
+    navigator.clipboard.writeText(mints[0]);
+    setCopiedToClipboard(true);
+    setTimeout(() => {
+      setCopiedToClipboard(false);
+    }, 2000);
   };
 
   useEffect(() => {
@@ -305,7 +310,7 @@ const SettingsPage = () => {
         {mints.length === 0 && (
           <div className="mt-8 flex items-center justify-center">
             <p className="break-words text-center text-xl dark:text-dark-text">
-              No mints added . . .
+              No mint added . . .
             </p>
           </div>
         )}
@@ -319,10 +324,17 @@ const SettingsPage = () => {
               <div className="max-w-xsm break-all text-light-text dark:text-dark-text">
                 {mint}
               </div>
-              {/* <MinusCircleIcon
-              onClick={() => deleteMint(mint)}
-              className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
-            /> */}
+              <ClipboardIcon
+                onClick={handleCopyMint}
+                className={`ml-2 h-6 w-6 cursor-pointer text-light-text dark:text-dark-text ${
+                  copiedToClipboard ? "hidden" : ""
+                }`}
+              />
+              <CheckIcon
+                className={`ml-2 h-6 w-6 cursor-pointer text-light-text dark:text-dark-text ${
+                  copiedToClipboard ? "" : "hidden"
+                }`}
+              />
             </div>
           ))}
         </div>

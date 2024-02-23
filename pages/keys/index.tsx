@@ -68,6 +68,13 @@ const Keys = () => {
         ]),
       );
 
+      localStorage.setItem(
+        "mints",
+        JSON.stringify([
+          "https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV",
+        ]),
+      );
+
       router.push("/");
     }
   };
