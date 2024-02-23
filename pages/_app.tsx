@@ -164,7 +164,9 @@ function App({ Component, pageProps }: AppProps) {
               <>
                 <div className="flex">
                   <SideNav />
-                  <Component {...pageProps} />
+                  <main className="flex-1">
+                    <Component {...pageProps} />
+                  </main>
                 </div>
                 <BottomNav />
               </>
