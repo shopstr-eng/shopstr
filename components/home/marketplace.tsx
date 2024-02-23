@@ -128,7 +128,7 @@ export function MarketplacePage() {
             className={`${SHOPSTRBUTTONCLASSNAMES} w-full md:hidden`}
             onClick={() => handleCreateNewListing()}
           >
-            + Create new listing
+            + Add new listing
           </Button>
         </div>
         {focusedPubkey ? (

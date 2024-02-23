@@ -171,7 +171,7 @@ const SideNav = () => {
             className={`${SHOPSTRBUTTONCLASSNAMES} m-5 w-full`}
             onClick={() => handleCreateNewListing()}
           >
-            + Create new listing
+            + Add new listing
           </Button>
         </div>
       </div>

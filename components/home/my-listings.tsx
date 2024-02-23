@@ -29,7 +29,7 @@ export const MyListingsPage = () => {
             className={`${SHOPSTRBUTTONCLASSNAMES} w-full md:hidden`}
             onClick={() => handleCreateNewListing()}
           >
-            + Create new listing
+            + Add new listing
           </Button>
         </div>
         {usersNPub ? (
