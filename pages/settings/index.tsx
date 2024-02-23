@@ -145,7 +145,12 @@ const SettingsPage = () => {
           Account:
         </span>
         <div>
-          <span className="ml-4 text-light-text dark:text-dark-text">npub</span>
+          <div className="mb-2 ml-4 flex-col">
+            <ProfileAvatar
+              pubkey={getLocalStorageData().decryptedNpub}
+              includeDisplayName
+            ></ProfileAvatar>
+          </div>
           <div className="mx-3 mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg">
             <div
               className="max-w-xsm truncate text-light-text dark:text-dark-text"
@@ -154,12 +159,6 @@ const SettingsPage = () => {
               {getLocalStorageData().npub}
             </div>
           </div>
-        </div>
-        <div className="ml-4 flex-col">
-          <ProfileAvatar
-            pubkey={getLocalStorageData().decryptedNpub}
-            includeDisplayName
-          ></ProfileAvatar>
         </div>
         <div>
           <div className="flex h-fit w-[99vw] flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
