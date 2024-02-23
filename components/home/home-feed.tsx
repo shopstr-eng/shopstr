@@ -1,17 +1,17 @@
-'use client';
+"use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 
-import useScrollingEffect from '@/components/hooks/use-scroll';
-import { useTabs } from '@/components/hooks/use-tabs';
-import { Framer } from '@/components/framer';
+import useScrollingEffect from "@/components/hooks/use-scroll";
+import { useTabs } from "@/components/hooks/use-tabs";
+import { Framer } from "@/components/framer";
 
-import MarketplacePage from './marketplace';
-import MyListingsPage from './my-listings';
-import ProductForm from '../product-form';
-import { useRouter } from 'next/router';
-import { useSearchParams } from 'next/navigation';
-import useIsSignedIn from '../hooks/use-is-signed-in';
+import MarketplacePage from "./marketplace";
+import MyListingsPage from "./my-listings";
+import ProductForm from "../product-form";
+import { useRouter } from "next/router";
+import { useSearchParams } from "next/navigation";
+import useIsSignedIn from "../hooks/use-is-signed-in";
 
 const HomeFeed = () => {
   const scrollDirection = useScrollingEffect();
@@ -20,23 +20,23 @@ const HomeFeed = () => {
   const searchParams = useSearchParams();
 
   const headerClass =
-    scrollDirection === 'up' ? 'translate-y-0' : 'translate-y-[-100%]';
+    scrollDirection === "up" ? "translate-y-0" : "translate-y-[-100%]";
   const [showModal, setShowModal] = useState(false);
 
   const [hookProps] = useState({
     tabs: [
       {
-        label: 'Marketplace',
+        label: "Marketplace",
         children: <MarketplacePage />,
-        id: 'marketplace',
+        id: "marketplace",
       },
       {
-        label: 'My Listings',
+        label: "My Listings",
         children: <MyListingsPage />,
-        id: 'my-listings',
+        id: "my-listings",
       },
     ],
-    initialTabId: 'marketplace',
+    initialTabId: "marketplace",
   });
   const framer = useTabs(hookProps);
 
@@ -44,12 +44,12 @@ const HomeFeed = () => {
 
   useEffect(() => {
     if (!searchParams || !isSignedIn) return;
-    setShowModal(searchParams.has('addNewListing'));
+    setShowModal(searchParams.has("addNewListing"));
   }, [searchParams, isSignedIn]);
 
   const handleProductModalToggle = () => {
     setShowModal(!showModal);
-    router.push('/');
+    router.push("/");
   };
 
   return (

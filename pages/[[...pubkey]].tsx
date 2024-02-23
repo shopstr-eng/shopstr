@@ -1,6 +1,6 @@
-import React from 'react';
+import React from "react";
 import Head from "next/head";
-import HomeFeed from '@/components/home/home-feed';
+import HomeFeed from "@/components/home/home-feed";
 
 export default function SellerView() {
   return (

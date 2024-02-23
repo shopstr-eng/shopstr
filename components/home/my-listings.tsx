@@ -1,10 +1,10 @@
-import router from 'next/router';
-import React, { useState } from 'react';
-import DisplayEvents from '../display-products';
-import { getLocalStorageData } from '../utility/nostr-helper-functions';
-import { Button } from '@nextui-org/react';
-import { SHOPSTRBUTTONCLASSNAMES } from '../utility/STATIC-VARIABLES';
-import SignInModal from '../sign-in/SignInModal';
+import router from "next/router";
+import React, { useState } from "react";
+import DisplayEvents from "../display-products";
+import { getLocalStorageData } from "../utility/nostr-helper-functions";
+import { Button } from "@nextui-org/react";
+import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
+import SignInModal from "../sign-in/SignInModal";
 
 export const MyListingsPage = () => {
   let usersNPub = getLocalStorageData().decryptedNpub;
@@ -15,7 +15,7 @@ export const MyListingsPage = () => {
     const loggedIn = getLocalStorageData().decryptedNpub;
 
     if (loggedIn) {
-      router.push('/?addNewListing');
+      router.push("/?addNewListing");
     } else {
       setOpenSignInModal(true);
       setcount(++count);
@@ -36,8 +36,8 @@ export const MyListingsPage = () => {
           <DisplayEvents
             focusedPubkey={usersNPub}
             selectedCategories={new Set<string>([])}
-            selectedLocation={''}
-            selectedSearch={''}
+            selectedLocation={""}
+            selectedSearch={""}
           />
         ) : null}
       </div>

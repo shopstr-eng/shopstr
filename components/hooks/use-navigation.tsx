@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 
-import { usePathname } from 'next/navigation';
+import { usePathname } from "next/navigation";
 
 const useNavigation = () => {
   const pathname = usePathname();
@@ -18,16 +18,16 @@ const useNavigation = () => {
     setIsProfileActive(false);
 
     switch (pathname) {
-      case '/':
+      case "/":
         setIsHomeActive(true);
         break;
-      case '/messages':
+      case "/messages":
         setIsMessagesActive(true);
         break;
-      case '/metrics':
+      case "/metrics":
         setIsMetricsActive(true);
         break;
-      case '/profile':
+      case "/profile":
         setIsProfileActive(true);
         break;
       default:
