@@ -9,10 +9,6 @@ export default function Document() {
         <link rel="apple-icon" href="/shopstr.png" />
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#E8E8E8" />
-        <meta
-          name="viewport"
-          content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
-        />
       </Head>
       <body>
         <Main />
