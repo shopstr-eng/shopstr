@@ -18,7 +18,7 @@ import {
   SunIcon,
   MoonIcon,
   ChartBarIcon,
-  UserIcon,
+  Cog6ToothIcon,
 } from "@heroicons/react/24/outline";
 import { countNumberOfUnreadMessagesFromChatsContext } from "@/pages/messages/utils";
 import { Icon } from "@tremor/react";
@@ -172,9 +172,9 @@ const SideNav = () => {
               : ""
           }`}
         >
-          <UserIcon
+          <Cog6ToothIcon
             className={`h-8 w-8 cursor-pointer hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text`}
-          ></UserIcon>
+          ></Cog6ToothIcon>
           <span
             className={`hidden text-2xl md:flex ${
               isProfileActive ? "font-bold" : ""

@@ -18,7 +18,7 @@ import {
   SunIcon,
   MoonIcon,
   ChartBarIcon,
-  UserIcon,
+  Cog6ToothIcon,
 } from '@heroicons/react/24/outline';
 import { Button } from '@nextui-org/react';
 import { countNumberOfUnreadMessagesFromChatsContext } from '@/pages/messages/utils';
@@ -123,13 +123,13 @@ const BottomNav = () => {
             className="bg-transparent py-8"
             onClick={() => handleRoute('/profile')}
           >
-            <UserIcon
+            <Cog6ToothIcon
               className={`cursor-pointer text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
                 isProfileActive
                   ? 'text-shopstr-purple-light dark:text-shopstr-yellow-light'
                   : ''
               }`}
-            ></UserIcon>
+            ></Cog6ToothIcon>
           </Button>
         </div>
       </div>
