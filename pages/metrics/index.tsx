@@ -16,6 +16,7 @@ import {
 import { formatDataWithEmptyDateTime } from "@/utils/metrics";
 import { DateTime } from "luxon";
 import { useState, useEffect } from "react";
+import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 
 type Data = {
   label: string;
@@ -42,6 +43,7 @@ export default function MetricsPage() {
     to: DateTime.now().toJSDate(),
   });
   const [data, setData] = useState<Data[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const startDate = DateTime.fromJSDate(date.from!).toISO();
@@ -49,6 +51,7 @@ export default function MetricsPage() {
 
     if (!startDate || !endDate) return;
 
+    setLoading(true);
     fetch(`/api/metrics/get-metrics?startDate=${startDate}&endDate=${endDate}`)
       .then((res) => res.json())
       .then((data: Data[]) => {
@@ -69,11 +72,12 @@ export default function MetricsPage() {
           };
         });
         setData(formattedData);
+        setLoading(false);
       });
   }, [date]);
 
   return (
-    <main className="max-w-8xl mx-auto p-4 md:p-10">
+    <main className="flex min-h-screen w-full flex-col bg-light-bg p-4 pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] sm:border-r sm:border-zinc-700 md:ml-[250px] md:p-10">
       <Callout title="Work In Progress - Analytics" color="purple">
         This is a global metrics of all of Shopstr. We are working on a
         personalized Analytics page for every Shopstr merchant!
@@ -126,37 +130,41 @@ export default function MetricsPage() {
           Year to Date
         </DateRangePickerItem>
       </DateRangePicker>
-      <Grid numItems={3} numItemsSm={1} className="gap-6">
-        {data.map((item) => (
-          <Card key={item.category.title}>
-            <Title>{item.category.title}</Title>
-            <Flex
-              justifyContent="start"
-              alignItems="baseline"
-              className="space-x-2"
-            >
-              <Metric>
-                {item.category.total} {item.category.symbol}
-              </Metric>
-            </Flex>
-            <Text>{item.category.subtitle}</Text>
-            <LineChart
-              className="mt-4 h-80"
-              data={item.category.metrics}
-              categories={[item.label]}
-              suppressHydrationWarning
-              index="period"
-              colors={["indigo", "fuchsia"]}
-              valueFormatter={
-                (number: number) =>
-                  `${number.toString()} ${item.category.symbol}`
-                // `$ ${Intl.NumberFormat('us').format(number).toString()}`
-              }
-              yAxisWidth={60}
-            />
-          </Card>
-        ))}
-      </Grid>
+      {loading ? (
+        <ShopstrSpinner />
+      ) : (
+        <Grid numItemsSm={1} numItemsMd={2} numItemsLg={3} className="gap-6">
+          {data.map((item) => (
+            <Card key={item.category.title}>
+              <Title>{item.category.title}</Title>
+              <Flex
+                justifyContent="start"
+                alignItems="baseline"
+                className="space-x-2"
+              >
+                <Metric>
+                  {item.category.total} {item.category.symbol}
+                </Metric>
+              </Flex>
+              <Text>{item.category.subtitle}</Text>
+              <LineChart
+                className="mt-4 h-80"
+                data={item.category.metrics}
+                categories={[item.label]}
+                suppressHydrationWarning
+                index="period"
+                colors={["indigo", "fuchsia"]}
+                valueFormatter={
+                  (number: number) =>
+                    `${number.toString()} ${item.category.symbol}`
+                  // `$ ${Intl.NumberFormat('us').format(number).toString()}`
+                }
+                yAxisWidth={60}
+              />
+            </Card>
+          ))}
+        </Grid>
+      )}
     </main>
   );
 }

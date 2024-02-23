@@ -9,10 +9,10 @@ import {
   getPrivKeyWithPassphrase,
   sendEncryptedMessage,
   validPassphrase,
-} from "../components/utility/nostr-helper-functions";
+} from "../../components/utility/nostr-helper-functions";
 import { ChatsContext } from "../context";
-import RequestPassphraseModal from "../components/utility-components/request-passphrase-modal";
-import ShopstrSpinner from "../components/utility-components/shopstr-spinner";
+import RequestPassphraseModal from "../../components/utility-components/request-passphrase-modal";
+import ShopstrSpinner from "../../components/utility-components/shopstr-spinner";
 import axios from "axios";
 import { ChatPanel } from "./chat-panel";
 import { ChatButton } from "./chat-button";
@@ -21,7 +21,7 @@ import {
   addChatMessagesToCache,
   fetchChatMessagesFromCache,
 } from "../api/nostr/cache-service";
-import { useKeyPress } from "../components/utility/functions";
+import { useKeyPress } from "../../components/utility/functions";
 
 const DirectMessages = () => {
   const router = useRouter();
@@ -91,12 +91,14 @@ const DirectMessages = () => {
     let sortedChatsByLastMessage = Array.from(chatsMap.entries()).sort(
       (a: [string, ChatObject], b: [string, ChatObject]) => {
         if (a[1].decryptedChat.length === 0) return -1;
-        let aLastMessage = a[1].decryptedChat.length > 0 
-        ? a[1].decryptedChat[a[1].decryptedChat.length - 1].created_at 
-        : 0;
-        let bLastMessage = b[1].decryptedChat.length > 0
-        ? b[1].decryptedChat[b[1].decryptedChat.length - 1].created_at
-        : 0;
+        let aLastMessage =
+          a[1].decryptedChat.length > 0
+            ? a[1].decryptedChat[a[1].decryptedChat.length - 1].created_at
+            : 0;
+        let bLastMessage =
+          b[1].decryptedChat.length > 0
+            ? b[1].decryptedChat[b[1].decryptedChat.length - 1].created_at
+            : 0;
         return bLastMessage - aLastMessage;
       },
     );
@@ -188,7 +190,8 @@ const DirectMessages = () => {
         let encryptedChat = chatsContext.chatsMap.get(
           pubkeyOfChat,
         ) as NostrMessageEvent[];
-        encryptedChat?.forEach((message) => {
+        if (!encryptedChat) return prevChatMap;
+        encryptedChat.forEach((message) => {
           message.read = true;
         });
         let newChatMap = new Map(prevChatMap);
@@ -256,7 +259,7 @@ const DirectMessages = () => {
           data: {
             customer_id: localStorageValues.decryptedNpub,
             merchant_id: currentChatPubkey,
-            // listing_id: 'TODO'
+            // listing_id: "TODO"
             // relays: relays,
           },
         });
@@ -270,16 +273,19 @@ const DirectMessages = () => {
   };
 
   return (
-    <>
-      <div>
+    <div className="flex h-screen w-full flex-col overflow-x-hidden overflow-y-hidden bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] sm:border-r sm:border-zinc-700 md:ml-[250px]">
+      <span className=" my-8 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
+        Messages
+      </span>
+      <div className="h-full">
         {chatsMap.size === 0 ? (
-          <div className="mt-8 flex items-center justify-center">
+          <div className="mt-2 flex items-center justify-center">
             {isChatsLoading ? (
               <div className="mt-8 flex items-center justify-center">
                 <ShopstrSpinner />
               </div>
             ) : (
-              <p className="break-words text-center text-2xl dark:text-dark-text">
+              <p className="break-words text-center text-2xl text-light-text dark:text-dark-text">
                 {isClient && localStorageValues.decryptedNpub ? (
                   <>
                     No messages . . . yet!
@@ -296,7 +302,6 @@ const DirectMessages = () => {
             )}
           </div>
         ) : (
-          // <div className="h-[85vh] overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
           <div className="flex flex-row">
             <div className="h-[85vh] w-full overflow-y-auto rounded-md dark:bg-dark-bg md:w-[450px] md:max-w-[33%] md:flex-shrink-0">
               {chatsMap &&
@@ -327,7 +332,7 @@ const DirectMessages = () => {
         isOpen={enterPassphrase}
         setIsOpen={setEnterPassphrase}
       />
-    </>
+    </div>
   );
 };
 

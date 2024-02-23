@@ -1,14 +1,14 @@
 // initialize new react funcitonal component
 import { Button, Input } from "@nextui-org/react";
 import React, { useEffect, useRef, useState } from "react";
-import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
 import {
   ArrowUturnLeftIcon,
   ArrowsUpDownIcon,
   ChatBubbleLeftIcon,
 } from "@heroicons/react/24/outline";
-import { getLocalStorageData } from "../components/utility/nostr-helper-functions";
-import { ProfileAvatar } from "../components/utility-components/profile/avatar";
+import { getLocalStorageData } from "../../components/utility/nostr-helper-functions";
+import { ProfileAvatar } from "../../components/utility-components/profile/avatar";
 import { ChatObject, NostrEvent, NostrMessageEvent } from "../types";
 import { ChatMessage } from "./chat-message";
 
@@ -63,7 +63,7 @@ export const ChatPanel = ({
   };
 
   return (
-    <div className="absolute z-20 flex h-[85vh] w-full flex-col overflow-clip px-2 dark:bg-dark-bg md:relative">
+    <div className="absolute top-0 z-20 flex h-full w-full flex-col overflow-clip bg-light-bg px-2 dark:bg-dark-bg md:relative md:h-[85vh]">
       <h2 className="mt-2 flex h-[60px] w-full flex-row items-center overflow-clip pr-2 align-middle text-shopstr-purple-light dark:text-shopstr-yellow-light">
         <ArrowUturnLeftIcon
           onClick={handleGoBack}

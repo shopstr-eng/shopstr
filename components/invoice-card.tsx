@@ -1,6 +1,6 @@
 //TODO: perhaps see if we can abstract away some payment logic into reusable functions
 import React, { useContext, useState, useEffect } from "react";
-import { ProfileMapContext } from "../context";
+import { ProfileMapContext } from "../pages/context";
 import { useRouter } from "next/router";
 import {
   Button,
@@ -26,8 +26,9 @@ import {
   DisplayCostBreakdown,
   formatWithCommas,
 } from "./utility-components/display-monetary-info";
-import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
 import { captureInvoicePaidmetric } from "./utility/metrics-helper-functions";
+import SignInModal from "./sign-in/SignInModal";
 
 export default function InvoiceCard({
   productData,
@@ -51,6 +52,9 @@ export default function InvoiceCard({
 
   const [randomNpub, setRandomNpub] = useState<string>("");
   const [randomNsec, setRandomNsec] = useState<string>("");
+
+  const [openSignInModal, setOpenSignInModal] = useState(false);
+  let [count, setCount] = useState(0);
 
   useEffect(() => {
     axios({
@@ -194,11 +198,12 @@ export default function InvoiceCard({
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
     let { signIn } = getLocalStorageData();
     if (!signIn) {
-      alert("You must be signed in to send a message!");
+      setOpenSignInModal(true);
+      setCount(++count);
       return;
     }
     router.push({
-      pathname: "/direct-messages",
+      pathname: "/messages",
       query: { pk: nip19.npubEncode(pubkeyToOpenChatWith) },
     });
   };
@@ -306,6 +311,7 @@ export default function InvoiceCard({
           </CardFooter>
         </Card>
       )}
+      <SignInModal some={count} opened={openSignInModal}></SignInModal>
     </>
   );
 }

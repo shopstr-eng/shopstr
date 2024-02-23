@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import { ProfileAvatar } from "../components/utility-components/profile/avatar";
-import { ProfileDisplayName } from "../components/utility-components/profile/display-name";
+import { ProfileAvatar } from "../../components/utility-components/profile/avatar";
+import { ProfileDisplayName } from "../../components/utility-components/profile/display-name";
 import { ChatObject } from "../types";
 import { timeSinceMessageDisplayText } from "./utils";
 
@@ -30,7 +30,7 @@ export const ChatButton = ({
   return (
     <div
       key={pubkeyOfChat}
-      className={`mx-3 mb-2 flex cursor-pointer items-center gap-4 rounded-md border-2 border-light-fg px-3 py-2 hover:opacity-70 dark:border-dark-fg ${
+      className={`mx-3 mb-2  flex cursor-pointer items-center gap-4 rounded-md border-2 border-light-fg px-3 py-2 hover:opacity-70 dark:border-dark-fg ${
         pubkeyOfChat === openedChatPubkey ? "bg-[#ccccccb9]" : ""
       }`}
       onClick={() => handleClickChat(pubkeyOfChat)}

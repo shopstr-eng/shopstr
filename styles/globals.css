@@ -1,4 +1,30 @@
 @tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 0, 0, 0;
+    --background-end-rgb: 0, 0, 0;
+  }
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+}
 
 /* Chrome, Edge, and Safari */
 *::-webkit-scrollbar {
@@ -13,26 +39,4 @@
   border-radius: 2px;
   border: 1px solid;
   background-color: #686868;
-}
-
-@tailwind components;
-@tailwind utilities;
-
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 168, 85, 247;
-  --background-end-rgb: 168, 85, 247;
-  -webkit-text-size-adjust: none;
-  text-size-adjust: none;
-}
-
-body {
-  color: rgb(var(--foreground-rgb));
-}
-
-html,
-body,
-#__next {
-  height: 100%;
-  overflow: auto;
 }

@@ -2,9 +2,9 @@ import { useState, useEffect } from "react";
 import { withRouter, NextRouter } from "next/router";
 import { nip19, getPublicKey } from "nostr-tools";
 import * as CryptoJS from "crypto-js";
-import { validateNSecKey } from "../components/utility/nostr-helper-functions";
+import { validateNSecKey } from "../../components/utility/nostr-helper-functions";
 import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
 
 const LoginPage = ({ router }: { router: NextRouter }) => {
   const [privateKey, setPrivateKey] = useState<string>("");
@@ -40,7 +40,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
           ]),
         );
 
-        alert("Signed in as " + npub + ".");
+        // alert("Signed in as " + npub + ".");
         router.push("/");
       }
     } else {
@@ -69,7 +69,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
           "wss://nostr.mutinywallet.com",
         ]),
       );
-      alert("Signed in as " + npub + ".");
+      // alert("Signed in as " + npub + ".");
       router.push("/");
     } catch (error) {
       alert("Extension sign in failed!");

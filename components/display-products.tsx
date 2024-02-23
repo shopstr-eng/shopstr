@@ -1,15 +1,15 @@
 import { useState, useEffect, useContext } from "react";
 import { nip19 } from "nostr-tools";
 import { getLocalStorageData } from "./utility/nostr-helper-functions";
-import { NostrEvent } from "../types";
-import { ProductContext, ProfileMapContext } from "../context";
+import { NostrEvent } from "../pages/types";
+import { ProductContext, ProfileMapContext } from "../pages/context";
 import ProductCard from "./utility-components/product-card";
 import DisplayProductModal from "./display-product-modal";
 import { useRouter } from "next/router";
 import parseTags, { ProductData } from "./utility/product-parser-functions";
 import ShopstrSpinner from "./utility-components/shopstr-spinner";
-import { DeleteListing } from "../api/nostr/crud-service";
-import { removeProductFromCache } from "../api/nostr/cache-service";
+import { DeleteListing } from "../pages/api/nostr/crud-service";
+import { removeProductFromCache } from "../pages/api/nostr/cache-service";
 
 const DisplayEvents = ({
   focusedPubkey,
@@ -84,7 +84,7 @@ const DisplayEvents = ({
     }
     setShowModal(false);
     router.push({
-      pathname: "/direct-messages",
+      pathname: "/messages",
       query: { pk: nip19.npubEncode(pubkeyToOpenChatWith) },
     });
   };
@@ -140,10 +140,7 @@ const DisplayEvents = ({
 
   return (
     <>
-      <div className="h-full bg-light-bg dark:bg-dark-bg">
-        <div className="h-16">
-          {/*spacer div needed to account for the header (Navbar and categories}*/}
-        </div>
+      <div className="mx-auto w-full">
         {/* DISPLAYS PRODUCT LISTINGS HERE */}
         {profileMapContext.isLoading ||
         isProductsLoading ||
@@ -162,6 +159,7 @@ const DisplayEvents = ({
         ) : (
           <div className="my-2 flex h-[90%] max-w-full flex-row flex-wrap justify-evenly overflow-x-hidden overflow-y-hidden">
             {productEvents.map((productData: ProductData, index) => {
+              console.log("aa ", displayProductCard(productData, index));
               return displayProductCard(productData, index);
             })}
           </div>

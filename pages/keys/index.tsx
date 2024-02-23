@@ -8,7 +8,7 @@ import {
   InformationCircleIcon,
 } from "@heroicons/react/24/outline";
 import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "../components/utility/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
 
 const Keys = () => {
   const router = useRouter();
@@ -26,9 +26,6 @@ const Keys = () => {
       .then((response) => {
         setPublicKey(response.data.npub);
         setPrivateKey(response.data.nsec);
-        alert(
-          "Make sure to write down and save your public and private keys in a secure format!",
-        );
       })
       .catch((error) => {
         console.error(error);
@@ -76,7 +73,7 @@ const Keys = () => {
   };
 
   return (
-    <div className="flex max-h-screen flex-row items-center justify-center">
+    <div className="flex h-full w-full flex-col overflow-x-hidden bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] sm:border-r sm:border-zinc-700 md:ml-[250px]">
       <Card>
         <CardBody>
           <div className="mb-4 flex flex-row items-center justify-center">
@@ -90,6 +87,10 @@ const Keys = () => {
             <h1 className="cursor-pointer text-center text-3xl font-bold text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light">
               Shopstr
             </h1>
+          </div>
+          <div className="mb-4 flex flex-col">
+            Make sure to write down and save your public and private keys in a
+            secure format!
           </div>
           <div className="mb-4 flex flex-col">
             <label className="text-xl">Public Key:</label>

@@ -1,12 +1,14 @@
-/** @type {import('tailwindcss').Config} */
-const { nextui } = require("@nextui-org/react");
-const colors = require("tailwindcss/colors");
+import type { Config } from "tailwindcss";
 
-module.exports = {
+import { nextui } from "@nextui-org/react";
+import colors from "tailwindcss/colors";
+
+const config: Config = {
   content: [
     "./pages/**/*.{js,ts,jsx,tsx}",
     "./components/**/*.{js,ts,jsx,tsx}",
     "./app/**/*.{js,ts,jsx,tsx}",
+    "./lib/**/*.{js,ts,jsx,tsx}",
     "./node_modules/@tremor/**/*.{js,ts,jsx,tsx,mdx}",
     "./node_modules/@nextui-org/theme/dist/**/*.{js,ts,jsx,tsx}",
   ],
@@ -169,3 +171,4 @@ module.exports = {
   darkMode: "class",
   plugins: [nextui()],
 };
+export default config;

@@ -4,9 +4,9 @@ import { useRouter } from "next/router";
 import { SimplePool } from "nostr-tools";
 import parseTags, {
   ProductData,
-} from "../components/utility/product-parser-functions";
-import ListingPage from "../components/listing-page";
-import { getLocalStorageData } from "../components/utility/nostr-helper-functions";
+} from "../../components/utility/product-parser-functions";
+import ListingPage from "../../components/listing-page";
+import { getLocalStorageData } from "../../components/utility/nostr-helper-functions";
 
 const Listing = () => {
   const router = useRouter();
@@ -53,7 +53,7 @@ const Listing = () => {
     : "/shopstr.png";
 
   return (
-    <div className="">
+    <div className="flex h-screen w-full flex-col bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] sm:border-r sm:border-zinc-700 md:ml-[250px]">
       <Head>
         <title>Shopstr</title>
         <meta name="description" content={productData?.title} />

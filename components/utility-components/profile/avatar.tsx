@@ -1,6 +1,6 @@
 import { Avatar } from "@nextui-org/react";
 import { useContext, useEffect, useState } from "react";
-import { ProfileMapContext } from "../../../context";
+import { ProfileMapContext } from "../../../pages/context";
 import { nip19 } from "nostr-tools";
 import { ProfileDisplayName } from "./display-name";
 
@@ -28,7 +28,7 @@ export const ProfileAvatar = ({
         ? profile.content.picture
         : `https://robohash.idena.io/${pubkey}`,
     );
-  }, [profileContext]);
+  }, [profileContext, pubkey]);
 
   const componentWidth = className ? className : " w-full";
   return (
