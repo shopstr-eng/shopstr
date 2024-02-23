@@ -1,41 +1,41 @@
 import {
   MagnifyingGlassIcon,
   ArrowUturnLeftIcon,
-} from '@heroicons/react/24/outline';
+} from "@heroicons/react/24/outline";
 import {
   Button,
   Select,
   SelectItem,
   SelectSection,
   Input,
-} from '@nextui-org/react';
-import { useRouter } from 'next/router';
-import { nip19 } from 'nostr-tools';
-import React, { useEffect, useState } from 'react';
-import DisplayEvents from '../display-products';
-import LocationDropdown from '../utility-components/dropdowns/location-dropdown';
+} from "@nextui-org/react";
+import { useRouter } from "next/router";
+import { nip19 } from "nostr-tools";
+import React, { useEffect, useState } from "react";
+import DisplayEvents from "../display-products";
+import LocationDropdown from "../utility-components/dropdowns/location-dropdown";
 import {
   CATEGORIES,
   SHOPSTRBUTTONCLASSNAMES,
-} from '../utility/STATIC-VARIABLES';
-import { getLocalStorageData } from '../utility/nostr-helper-functions';
-import SignInModal from '../sign-in/SignInModal';
+} from "../utility/STATIC-VARIABLES";
+import { getLocalStorageData } from "../utility/nostr-helper-functions";
+import SignInModal from "../sign-in/SignInModal";
 
 export function MarketplacePage() {
   const router = useRouter();
-  const [focusedPubkey, setfocusedPubkey] = useState(''); // pubkey of shop being viewed
+  const [focusedPubkey, setfocusedPubkey] = useState(""); // pubkey of shop being viewed
   const [selectedCategories, setSelectedCategories] = useState(
     new Set<string>([]),
   );
-  const [selectedLocation, setSelectedLocation] = useState('');
-  const [selectedSearch, setSelectedSearch] = useState('');
+  const [selectedLocation, setSelectedLocation] = useState("");
+  const [selectedSearch, setSelectedSearch] = useState("");
   const [toggleSignInPage, setToggleSignInPage] = useState(false);
   let [count, setCount] = useState(0);
 
   // Update focusedPubkey when pubkey in url changes
   useEffect(() => {
     let focusedPubkeys = router.query.pubkey;
-    if (focusedPubkeys && typeof focusedPubkeys[0] === 'string') {
+    if (focusedPubkeys && typeof focusedPubkeys[0] === "string") {
       const { data } = nip19.decode(focusedPubkeys[0]);
       setfocusedPubkey(data as string); // router.query.pubkey returns array of pubkeys
     }
@@ -44,10 +44,10 @@ export function MarketplacePage() {
   useEffect(() => {
     const loggedIn = getLocalStorageData().decryptedNpub;
     if (loggedIn) {
-      fetch('/api/metrics/post-shopper', {
-        method: 'POST',
+      fetch("/api/metrics/post-shopper", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           id: loggedIn,
@@ -58,18 +58,18 @@ export function MarketplacePage() {
 
   const routeToShop = (npubkey: string) => {
     npubkey = encodeURIComponent(npubkey);
-    if (npubkey === '') {
+    if (npubkey === "") {
       // handles case where we pass in empty string to clear focusedPubkey
-      setfocusedPubkey('');
+      setfocusedPubkey("");
     }
-    router.push('/' + npubkey);
+    router.push("/" + npubkey);
   };
 
   const handleCreateNewListing = () => {
     const loggedIn = getLocalStorageData().npub;
 
     if (loggedIn) {
-      router.push('/?addNewListing');
+      router.push("/?addNewListing");
     } else {
       setToggleSignInPage(true);
       setCount(++count);
@@ -85,7 +85,7 @@ export function MarketplacePage() {
             isClearable
             label="Listings"
             placeholder="Type to search..."
-            startContent={<MagnifyingGlassIcon height={'1em'} />}
+            startContent={<MagnifyingGlassIcon height={"1em"} />}
             onChange={(event) => {
               const value = event.target.value;
               setSelectedSearch(value);
@@ -97,10 +97,10 @@ export function MarketplacePage() {
             placeholder="All"
             selectedKeys={selectedCategories}
             onChange={(event) => {
-              if (event.target.value === '') {
+              if (event.target.value === "") {
                 setSelectedCategories(new Set([]));
               } else {
-                setSelectedCategories(new Set(event.target.value.split(',')));
+                setSelectedCategories(new Set(event.target.value.split(",")));
               }
             }}
             selectionMode="multiple"
@@ -135,14 +135,14 @@ export function MarketplacePage() {
           <div
             className="flex w-fit cursor-pointer flex-row rounded-md px-3 align-middle text-shopstr-purple hover:bg-shopstr-yellow dark:text-shopstr-yellow-light hover:dark:bg-shopstr-purple"
             onClick={() => {
-              routeToShop('');
+              routeToShop("");
             }}
           >
             <div>
               <ArrowUturnLeftIcon
                 className="h-5 w-5 pr-1 text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light"
                 onClick={() => {
-                  routeToShop('');
+                  routeToShop("");
                 }}
               >
                 Go Back

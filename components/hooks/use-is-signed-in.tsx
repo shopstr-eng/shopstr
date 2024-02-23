@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 
-import { getLocalStorageData } from '../utility/nostr-helper-functions';
+import { getLocalStorageData } from "../utility/nostr-helper-functions";
 
 const useIsSignedIn = () => {
   const { npub } = getLocalStorageData();

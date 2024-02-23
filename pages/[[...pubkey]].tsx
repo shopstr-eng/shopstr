@@ -1,5 +1,5 @@
-import React from 'react';
-import HomeFeed from '@/components/home/home-feed';
+import React from "react";
+import HomeFeed from "@/components/home/home-feed";
 
 export default function SellerView() {
   return (

@@ -1,12 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from "react";
 
-import { Tab } from '@/components/hooks/use-tabs';
-import classNames from 'classnames';
-import { motion } from 'framer-motion';
+import { Tab } from "@/components/hooks/use-tabs";
+import classNames from "classnames";
+import { motion } from "framer-motion";
 
 const transition = {
-  type: 'tween',
-  ease: 'easeOut',
+  type: "tween",
+  ease: "easeOut",
   duration: 0.15,
 };
 
@@ -47,10 +47,10 @@ const Tabs = ({
 
     updateRects();
 
-    window.addEventListener('resize', updateRects);
+    window.addEventListener("resize", updateRects);
 
     return () => {
-      window.removeEventListener('resize', updateRects);
+      window.removeEventListener("resize", updateRects);
     };
   }, [buttonRefs, selectedTabIndex]);
 
@@ -66,10 +66,10 @@ const Tabs = ({
           <button
             key={i}
             className={classNames(
-              'relative z-20 flex h-10 w-full cursor-pointer select-none items-center  justify-center bg-transparent px-4 py-8 text-lg duration-200 transition-colors hover:bg-white/10',
+              "relative z-20 flex h-10 w-full cursor-pointer select-none items-center  justify-center bg-transparent px-4 py-8 text-lg duration-200 transition-colors hover:bg-white/10",
               {
-                'text-light-text/60 dark:text-dark-text/60': !isActive, // Default color for non-active tabs
-                'font-bold text-light-text/90 dark:text-dark-text/90': isActive, // Color for active tabs
+                "text-light-text/60 dark:text-dark-text/60": !isActive, // Default color for non-active tabs
+                "font-bold text-light-text/90 dark:text-dark-text/90": isActive, // Color for active tabs
               },
             )}
             ref={(el) => (buttonRefs[i] = el)}
@@ -85,7 +85,7 @@ const Tabs = ({
       {selectedRect && navRect && (
         <motion.div
           className={
-            'absolute bottom-0 left-0.5 z-10 h-[5px] rounded-full bg-shopstr-purple dark:bg-shopstr-yellow'
+            "absolute bottom-0 left-0.5 z-10 h-[5px] rounded-full bg-shopstr-purple dark:bg-shopstr-yellow"
           }
           initial={false}
           animate={{

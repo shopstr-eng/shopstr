@@ -192,7 +192,6 @@ export const fetchChatsAndMessages = async (
         ],
         {
           onevent(event: NostrEvent) {
-            // console.log("outgoing chat event: ", event);
             let tagsMap: Map<string, string> = new Map(event.tags);
             let receipientPubkey = tagsMap.get("p") ? tagsMap.get("p") : null; // pubkey you sent the message to
             if (typeof receipientPubkey !== "string") {
@@ -232,7 +231,6 @@ export const fetchChatsAndMessages = async (
         ],
         {
           async onevent(event) {
-            // console.log("incoming chat event: ", event);
             let senderPubkey = event.pubkey;
             let chatMessage = chatMessagesFromCache.get(event.id);
             if (!chatMessage) {

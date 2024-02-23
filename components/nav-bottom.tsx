@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState } from "react";
 
-import Link from 'next/link';
+import Link from "next/link";
 
-import useNavigation from '@/components/hooks/use-navigation';
-import useScrollingEffect from '@/components/hooks/use-scroll';
+import useNavigation from "@/components/hooks/use-navigation";
+import useScrollingEffect from "@/components/hooks/use-scroll";
 
 // import { Icon } from '@iconify/react';
 import {
@@ -19,17 +19,17 @@ import {
   MoonIcon,
   ChartBarIcon,
   Cog6ToothIcon,
-} from '@heroicons/react/24/outline';
-import { Button } from '@nextui-org/react';
-import { countNumberOfUnreadMessagesFromChatsContext } from '@/pages/messages/utils';
-import { Icon } from '@tremor/react';
-import { ChatsContext } from '@/pages/context';
-import { db } from '../pages/api/nostr/cache-service';
+} from "@heroicons/react/24/outline";
+import { Button } from "@nextui-org/react";
+import { countNumberOfUnreadMessagesFromChatsContext } from "@/pages/messages/utils";
+import { Icon } from "@tremor/react";
+import { ChatsContext } from "@/pages/context";
+import { db } from "../pages/api/nostr/cache-service";
 
-import { useLiveQuery } from 'dexie-react-hooks';
-import { getLocalStorageData } from './utility/nostr-helper-functions';
-import { useRouter } from 'next/router';
-import SignInModal from './sign-in/SignInModal';
+import { useLiveQuery } from "dexie-react-hooks";
+import { getLocalStorageData } from "./utility/nostr-helper-functions";
+import { useRouter } from "next/router";
+import SignInModal from "./sign-in/SignInModal";
 
 const BottomNav = () => {
   const { isHomeActive, isMessagesActive, isMetricsActive, isProfileActive } =
@@ -44,7 +44,7 @@ const BottomNav = () => {
   let [count, setCount] = useState(0);
 
   const liveChatMessagesFromCache = useLiveQuery(
-    async () => await db.table('chatMessages').toArray(),
+    async () => await db.table("chatMessages").toArray(),
   );
   useEffect(() => {
     const getUnreadMessages = async () => {
@@ -74,13 +74,13 @@ const BottomNav = () => {
         <div>
           <Button
             className="bg-transparent py-8"
-            onClick={() => router.push('/')}
+            onClick={() => router.push("/")}
           >
             <HomeIcon
               className={`cursor-pointer text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
                 isHomeActive
-                  ? 'text-shopstr-purple-light dark:text-shopstr-yellow-light'
-                  : ''
+                  ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
+                  : ""
               }`}
             ></HomeIcon>
           </Button>
@@ -88,7 +88,7 @@ const BottomNav = () => {
         <div>
           <Button
             className="bg-transparent py-8"
-            onClick={() => handleRoute('messages')}
+            onClick={() => handleRoute("messages")}
           >
             {unreadMsgCount > 0 && (
               <div className="absolute ml-3 flex h-3 w-fit items-center justify-center rounded-full bg-shopstr-purple-light px-1 py-2 font-bold text-light-bg dark:bg-shopstr-yellow-light dark:text-dark-bg">
@@ -98,8 +98,8 @@ const BottomNav = () => {
             <EnvelopeOpenIcon
               className={`cursor-pointer text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
                 isMessagesActive
-                  ? 'text-shopstr-purple-light dark:text-shopstr-yellow-light'
-                  : ''
+                  ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
+                  : ""
               }`}
             ></EnvelopeOpenIcon>
           </Button>
@@ -107,27 +107,27 @@ const BottomNav = () => {
         <div>
           <Button
             className="bg-transparent py-8"
-            onClick={() => handleRoute('/metrics')}
+            onClick={() => handleRoute("/metrics")}
           >
             <ChartBarIcon
               className={`cursor-pointer text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
                 isMetricsActive
-                  ? 'text-shopstr-purple-light dark:text-shopstr-yellow-light'
-                  : ''
+                  ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
+                  : ""
               }`}
             ></ChartBarIcon>
           </Button>
-        </div>{' '}
+        </div>{" "}
         <div>
           <Button
             className="bg-transparent py-8"
-            onClick={() => handleRoute('/profile')}
+            onClick={() => handleRoute("/profile")}
           >
             <Cog6ToothIcon
               className={`cursor-pointer text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
                 isProfileActive
-                  ? 'text-shopstr-purple-light dark:text-shopstr-yellow-light'
-                  : ''
+                  ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
+                  : ""
               }`}
             ></Cog6ToothIcon>
           </Button>
