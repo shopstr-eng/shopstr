@@ -134,7 +134,7 @@ export default function SignInModal({
                 <div className="mt-10 flex">
                   <div>
                     <p>New to Nostr?</p>
-                    <p> Sign up to buy and sell!</p>
+                    <p> Sign up to get started!</p>
                   </div>
                   <Button
                     className={"ml-10 self-center"}
