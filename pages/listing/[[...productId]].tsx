@@ -77,7 +77,7 @@ const Listing = () => {
         <meta name="twitter:description" content={productData?.title} />
         <meta name="twitter:image" content={imageUrl} />
       </Head>
-      <ListingPage productData={productData} />;
+      <ListingPage productData={productData} />
     </div>
   );
 };
