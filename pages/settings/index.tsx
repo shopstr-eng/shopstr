@@ -161,7 +161,7 @@ const SettingsPage = () => {
           </div>
         </div>
         <div>
-          <div className="flex h-fit w-[99vw] flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+          <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
             <Button
               className={SHOPSTRBUTTONCLASSNAMES}
               onClick={() => {
@@ -205,7 +205,7 @@ const SettingsPage = () => {
             </div>
           ))}
         </div>
-        <div className="flex h-fit w-[99vw] flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+        <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
           <Button
             className={SHOPSTRBUTTONCLASSNAMES}
             onClick={handleToggleRelayModal}
@@ -336,7 +336,7 @@ const SettingsPage = () => {
           </div>
         )}
 
-        <div className="flex h-fit w-[99vw] flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+        <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
           <Button
             className={SHOPSTRBUTTONCLASSNAMES}
             onClick={handleToggleMintModal}
