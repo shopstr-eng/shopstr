@@ -155,10 +155,8 @@ export default function DisplayProductModal({
               </div>
             </div>
             <Divider />
-            <div className="overflow-hidden break-words">
-              <span className="text-xl font-semibold">Summary: </span>
-              {productData.summary}
-            </div>
+            <span className="text-xl font-semibold">Summary: </span>
+            <span className="break-all">{productData.summary}</span>
           </ModalBody>
 
           <ModalFooter>

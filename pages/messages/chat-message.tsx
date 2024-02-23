@@ -30,7 +30,7 @@ export const ChatMessage = ({
             : "rounded-br-lg bg-gray-200 text-light-text dark:bg-gray-300 "
         }`}
       >
-        <p className={`inline-block flex-wrap overflow-x-hidden break-words`}>
+        <p className={`inline-block flex-wrap overflow-x-hidden break-all`}>
           {messageEvent.content}
         </p>
         <div className="m-1"></div>

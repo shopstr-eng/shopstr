@@ -70,7 +70,7 @@ export default function ProductCard({
           </div>
           <Divider />
           <span className="mt-4 text-xl font-semibold">Summary: </span>
-          {productData.summary}
+          <span className="break-all">{productData.summary}</span>
           <Divider className="mt-4" />
           <span className="mt-4 text-xl font-semibold">Cost Breakdown: </span>
           <DisplayCostBreakdown monetaryInfo={productData} />
