@@ -24,7 +24,6 @@ import {
   fetchProfile,
 } from "./api/nostr/fetch-service";
 import { NostrEvent } from "./types";
-import MaxWidthWrapper from "@/components/max-width-wrapper";
 import BottomNav from "@/components/nav-bottom";
 import SideNav from "@/components/nav-side";
 
@@ -163,12 +162,10 @@ function App({ Component, pageProps }: AppProps) {
               forcedTheme={Component.theme || undefined}
             >
               <>
-                <MaxWidthWrapper>
-                  <div className="flex">
-                    <SideNav />
-                    <Component {...pageProps} />
-                  </div>
-                </MaxWidthWrapper>
+                <div className="flex">
+                  <SideNav />
+                  <Component {...pageProps} />
+                </div>
                 <BottomNav />
               </>
             </NextThemesProvider>

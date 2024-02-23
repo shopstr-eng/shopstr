@@ -77,6 +77,8 @@ const BottomNav = () => {
             onClick={() => router.push("/")}
           >
             <HomeIcon
+              height={32}
+              width={32}
               className={`cursor-pointer text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
                 isHomeActive
                   ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
@@ -96,6 +98,8 @@ const BottomNav = () => {
               </div>
             )}
             <EnvelopeOpenIcon
+              height={32}
+              width={32}
               className={`cursor-pointer text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
                 isMessagesActive
                   ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
@@ -110,6 +114,8 @@ const BottomNav = () => {
             onClick={() => handleRoute("/metrics")}
           >
             <ChartBarIcon
+              height={32}
+              width={32}
               className={`cursor-pointer text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
                 isMetricsActive
                   ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
@@ -124,6 +130,8 @@ const BottomNav = () => {
             onClick={() => handleRoute("/profile")}
           >
             <Cog6ToothIcon
+              height={32}
+              width={32}
               className={`cursor-pointer text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
                 isProfileActive
                   ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
