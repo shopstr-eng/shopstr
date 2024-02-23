@@ -135,7 +135,7 @@ export default async function GetMetrics(
           (prev, curr) => prev + curr[label],
           0,
         ),
-        symbol: "sat",
+        symbol: "sats",
         metrics: salesMetrics.value.rows,
       },
     };
