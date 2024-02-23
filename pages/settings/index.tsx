@@ -327,7 +327,7 @@ const SettingsPage = () => {
           ))}
         </div>
         {mints.length > 0 && (
-          <div className="my-4 flex items-center justify-center text-center">
+          <div className="my-4 mx-4 flex items-center justify-center text-center">
             <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
             <p className="ml-2 text-sm text-light-text dark:text-dark-text">
               Copy and paste the above mint URL into your preferred Cashu wallet
@@ -336,14 +336,14 @@ const SettingsPage = () => {
           </div>
         )}
 
-        <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+        {/* <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
           <Button
             className={SHOPSTRBUTTONCLASSNAMES}
             onClick={handleToggleMintModal}
           >
             Change Mint
           </Button>
-        </div>
+        </div> */}
         <Modal
           backdrop="blur"
           isOpen={showMintModal}

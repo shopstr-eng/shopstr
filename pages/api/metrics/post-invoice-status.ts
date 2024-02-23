@@ -8,7 +8,7 @@ import {
   getLocationFromReqHeaders,
   getLocationFromAddress,
 } from "@/utils/geo";
-import { getLocalStorageData } from "./utility/nostr-helper-functions";
+// import { getLocalStorageData } from "../../../components/utility/nostr-helper-functions";
 
 const parseRequestBody = (body: string) => {
   const parsedBody = typeof body === "string" ? JSON.parse(body) : body;
@@ -20,9 +20,9 @@ const UpdateInvoice = async (req: NextApiRequest, res: NextApiResponse) => {
     return res.status(405).json({});
   }
 
-  const { mints } = getLocalStorageData();
+  // const { mints } = getLocalStorageData();
 
-  const wallet = new CashuWallet(new CashuMint(mints[0]));
+  const wallet = new CashuWallet(new CashuMint("https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV"));
 
   const event = parseRequestBody(req.body);
 
