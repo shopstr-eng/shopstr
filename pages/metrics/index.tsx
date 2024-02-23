@@ -132,7 +132,9 @@ export default function MetricsPage() {
           </DateRangePickerItem>
         </DateRangePicker>
         {loading ? (
-          <ShopstrSpinner />
+          <div className="mt-8 flex items-center justify-center">
+            <ShopstrSpinner />
+          </div>
         ) : (
           <Grid numItemsSm={1} numItemsMd={2} numItemsLg={3} className="gap-6">
             {data.map((item) => (

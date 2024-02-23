@@ -148,7 +148,7 @@ const DisplayEvents = ({
           !isProductsLoading && isThereAFilter() ? (
             <div className="mt-8 flex items-center justify-center">
               <h1 className="text-2xl text-light-text dark:text-dark-text">
-                No products found
+                No products found...
               </h1>
             </div>
           ) : (
