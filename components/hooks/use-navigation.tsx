@@ -27,7 +27,7 @@ const useNavigation = () => {
       case "/metrics":
         setIsMetricsActive(true);
         break;
-      case "/profile":
+      case "/settings":
         setIsProfileActive(true);
         break;
       default:
