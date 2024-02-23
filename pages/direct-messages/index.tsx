@@ -188,7 +188,7 @@ const DirectMessages = () => {
         let encryptedChat = chatsContext.chatsMap.get(
           pubkeyOfChat,
         ) as NostrMessageEvent[];
-        encryptedChat.forEach((message) => {
+        encryptedChat?.forEach((message) => {
           message.read = true;
         });
         let newChatMap = new Map(prevChatMap);

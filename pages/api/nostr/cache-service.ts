@@ -62,7 +62,7 @@ export const addChatMessageToCache = async (chat: NostrMessageEvent) => {
 };
 
 export const addChatMessagesToCache = async (chats: NostrMessageEvent[]) => {
-  chats.forEach(async (chat) => {
+  chats?.forEach(async (chat) => {
     await addChatMessageToCache(chat);
   });
 };
