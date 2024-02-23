@@ -3,13 +3,7 @@ import { useForm, Controller } from "react-hook-form";
 import {
   InformationCircleIcon,
   MinusCircleIcon,
-<<<<<<< HEAD
-  MoonIcon,
-  SunIcon,
-} from '@heroicons/react/24/outline';
-=======
 } from "@heroicons/react/24/outline";
->>>>>>> c7f10d1 (useLoaded)
 import {
   Modal,
   ModalContent,
@@ -145,7 +139,7 @@ const ProfilePage = () => {
   };
 
   return (
-    <div className="flex h-screen w-full flex-col overflow-x-hidden bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] sm:border-r sm:border-zinc-700 md:ml-[250px]">
+    <div className="flex h-full min-h-screen w-full flex-col overflow-x-hidden bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] sm:border-r sm:border-zinc-700 md:ml-[250px]">
       <div>
         <span className=" my-8 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
           Relays
