@@ -146,7 +146,7 @@ export default function SignInModal({
               </div>
 
               <div className="flex w-full grow basis-1/2 flex-col">
-                <div className="space-y-2">
+                <div className="space-y-2 flex items-center">
                   <Image
                     alt="Shopstr logo"
                     height={50}
@@ -154,7 +154,7 @@ export default function SignInModal({
                     src="/shopstr-2000x2000.png"
                     width={50}
                   />
-                  <div>Sign in to Shopstr</div>
+                  <div className="ml-2">Sign in to Shopstr</div>
                   <Button
                     className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
                     onClick={startExtensionLogin}
