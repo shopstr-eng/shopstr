@@ -141,8 +141,8 @@ const SettingsPage = () => {
   return (
     <div className="flex h-full flex-col bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
       <div>
-        <span className=" my-8 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
-          Account
+        <span className="mb-4 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
+          Account:
         </span>
         <div>
           <span className="ml-4 text-light-text dark:text-dark-text">npub</span>
@@ -179,18 +179,18 @@ const SettingsPage = () => {
           </div>
         </div>
         
-        <span className=" my-8 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
-          Relays
+        <span className="mt-4 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
+          Relays:
         </span>
 
         {relays.length === 0 && (
-          <div className="mt-8 flex items-center justify-center">
+          <div className="mt-4 flex items-center justify-center">
             <p className="break-words text-center text-xl dark:text-dark-text">
               No relays added . . .
             </p>
           </div>
         )}
-        <div className="mt-8 max-h-96 overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
+        <div className="mt-4 max-h-96 overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
           {relays.map((relay) => (
             <div
               key={relay}
@@ -298,8 +298,8 @@ const SettingsPage = () => {
         </Modal>
       </div>
 
-      <span className=" my-8 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
-        Mint
+      <span className="my-4 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
+        Mint:
       </span>
 
       <div>
@@ -429,8 +429,8 @@ const SettingsPage = () => {
         </Modal>
       </div>
 
-      <span className=" my-8 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
-        Settings
+      <span className="my-4 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
+        Theme:
       </span>
       {useLoaded() && (
         <RadioGroup
