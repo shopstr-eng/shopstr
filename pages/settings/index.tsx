@@ -142,7 +142,7 @@ const SettingsPage = () => {
     <div className="flex h-full flex-col bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
       <div>
         <span className="mb-4 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
-          Account:
+          Account
         </span>
         <div>
           <div className="mb-2 ml-4 flex-col">
@@ -179,7 +179,7 @@ const SettingsPage = () => {
         </div>
         
         <span className="mt-4 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
-          Relays:
+          Relays
         </span>
 
         {relays.length === 0 && (
@@ -298,7 +298,7 @@ const SettingsPage = () => {
       </div>
 
       <span className="my-4 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
-        Mint:
+        Mint
       </span>
 
       <div>
@@ -429,7 +429,7 @@ const SettingsPage = () => {
       </div>
 
       <span className="my-4 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
-        Theme:
+        Theme
       </span>
       {useLoaded() && (
         <RadioGroup
