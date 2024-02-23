@@ -91,7 +91,7 @@ const SideNav = () => {
             alt="Shopstr logo"
             height={50}
             radius="sm"
-            src="/shopstr.png"
+            src="/shopstr-2000x2000.png"
             width={50}
           />
           <span

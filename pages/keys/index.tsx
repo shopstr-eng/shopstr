@@ -81,7 +81,7 @@ const Keys = () => {
               alt="Shopstr logo"
               height={50}
               radius="sm"
-              src="/shopstr.png"
+              src="/shopstr-2000x2000.png"
               width={50}
             />
             <h1 className="cursor-pointer text-center text-3xl font-bold text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light">

@@ -1,6 +1,14 @@
 /** @type {import('next').NextConfig} */
 
-const withPWA = require("next-pwa");
+const withPWA = require("next-pwa")({
+  dest: "public",
+  register: true,
+  skipWaiting: true,
+  sw: {
+    swSrc: "./public/service-worker.js",
+    swDest: "service-worker.js",
+  },
+});
 
 const nextConfig = {
   reactStrictMode: true,
@@ -29,6 +37,21 @@ const nextConfig = {
           },
         },
       },
+    ],
+  },
+  images: {
+    domains: [
+      "www.google.com",
+      "www.facebook.com",
+      "www.twitter.com",
+      "www.instagram.com",
+      "duckduckgo.com",
+      "www.youtube.com",
+      "www.pinterest.com",
+      "www.linkedin.com",
+      "www.reddit.com",
+      "www.quora.com",
+      "www.wikipedia.org",
     ],
   },
 };
