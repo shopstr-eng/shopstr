@@ -1,5 +1,6 @@
 import "tailwindcss/tailwind.css";
 import type { AppProps } from "next/app";
+import Head from "next/head";
 import "../styles/globals.css";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/router";
@@ -153,10 +154,17 @@ function App({ Component, pageProps }: AppProps) {
   }, []);
 
   return (
-    <ProductContext.Provider value={productContext}>
-      <ProfileMapContext.Provider value={profileContext}>
-        <ChatsContext.Provider value={chatsContext}>
-          <NextUIProvider>
+    <>
+      <Head>
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+        />
+      </Head>
+      <ProductContext.Provider value={productContext}>
+        <ProfileMapContext.Provider value={profileContext}>
+          <ChatsContext.Provider value={chatsContext}>
+            <NextUIProvider>
             <NextThemesProvider attribute="class">
               <div className="flex">
                 <SideNav />
@@ -166,10 +174,11 @@ function App({ Component, pageProps }: AppProps) {
               </div>
               <BottomNav />
             </NextThemesProvider>
-          </NextUIProvider>
-        </ChatsContext.Provider>
-      </ProfileMapContext.Provider>
-    </ProductContext.Provider>
+            </NextUIProvider>
+          </ChatsContext.Provider>
+        </ProfileMapContext.Provider>
+      </ProductContext.Provider>
+    </>
   );
 }
 
