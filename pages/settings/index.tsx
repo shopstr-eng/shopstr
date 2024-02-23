@@ -22,7 +22,7 @@ import { useRouter } from "next/router";
 import { ProfileAvatar } from "@/components/utility-components/profile/avatar";
 import { useTheme } from "next-themes";
 
-const ProfilePage = () => {
+const SettingsPage = () => {
   const [relays, setRelays] = useState(Array<string>(0));
   // make initial state equal to proprietary relay
   const [showRelayModal, setShowRelayModal] = useState(false);
@@ -272,15 +272,7 @@ const ProfilePage = () => {
             </p>
           </div>
         )}
-        {mints.length > 0 && (
-          <div className="my-4 flex items-center justify-center text-center">
-            <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-            <p className="ml-2 text-sm text-light-text dark:text-dark-text">
-              Copy and paste the below mint URL into your preferred Cashu wallet
-              to redeem your tokens!
-            </p>
-          </div>
-        )}
+
         <div className="overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
           {mints.map((mint) => (
             <div
@@ -297,6 +289,15 @@ const ProfilePage = () => {
             </div>
           ))}
         </div>
+        {mints.length > 0 && (
+          <div className="my-4 flex items-center justify-center text-center">
+            <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
+            <p className="ml-2 text-sm text-light-text dark:text-dark-text">
+              Copy and paste the below mint URL into your preferred Cashu wallet
+              to redeem your tokens!
+            </p>
+          </div>
+        )}
 
         <div className="flex h-fit w-[99vw] flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
           <Button
@@ -458,4 +459,4 @@ const ProfilePage = () => {
   );
 };
 
-export default ProfilePage;
+export default SettingsPage;

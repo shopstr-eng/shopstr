@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState } from "react";
 
-import Link from 'next/link';
+import Link from "next/link";
 
-import useNavigation from '@/components/hooks/use-navigation';
-import useScrollingEffect from '@/components/hooks/use-scroll';
+import useNavigation from "@/components/hooks/use-navigation";
+import useScrollingEffect from "@/components/hooks/use-scroll";
 
 // import { Icon } from '@iconify/react';
 import {
@@ -19,18 +19,18 @@ import {
   MoonIcon,
   ChartBarIcon,
   UserIcon,
-} from '@heroicons/react/24/outline';
-import { countNumberOfUnreadMessagesFromChatsContext } from '@/pages/messages/utils';
-import { Icon } from '@tremor/react';
-import { ChatsContext } from '@/pages/context';
-import { db } from '../pages/api/nostr/cache-service';
+} from "@heroicons/react/24/outline";
+import { countNumberOfUnreadMessagesFromChatsContext } from "@/pages/messages/utils";
+import { Icon } from "@tremor/react";
+import { ChatsContext } from "@/pages/context";
+import { db } from "../pages/api/nostr/cache-service";
 
-import { useLiveQuery } from 'dexie-react-hooks';
-import { Button, Image } from '@nextui-org/react';
-import { SHOPSTRBUTTONCLASSNAMES } from './utility/STATIC-VARIABLES';
-import { useRouter } from 'next/router';
-import SignInModal from './sign-in/SignInModal';
-import { getLocalStorageData } from './utility/nostr-helper-functions';
+import { useLiveQuery } from "dexie-react-hooks";
+import { Button, Image } from "@nextui-org/react";
+import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
+import { useRouter } from "next/router";
+import SignInModal from "./sign-in/SignInModal";
+import { getLocalStorageData } from "./utility/nostr-helper-functions";
 
 const SideNav = () => {
   const { isHomeActive, isMessagesActive, isMetricsActive, isProfileActive } =
@@ -45,7 +45,7 @@ const SideNav = () => {
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
 
   const liveChatMessagesFromCache = useLiveQuery(
-    async () => await db.table('chatMessages').toArray(),
+    async () => await db.table("chatMessages").toArray(),
   );
 
   useEffect(() => {
@@ -73,7 +73,7 @@ const SideNav = () => {
     const loggedIn = getLocalStorageData().npub;
 
     if (loggedIn) {
-      router.push('/?addNewListing');
+      router.push("/?addNewListing");
     } else {
       setOpenSignInModal(true);
       setCount(++count);
@@ -84,7 +84,7 @@ const SideNav = () => {
     <>
       <div className="fixed hidden h-full w-[120px] flex-col items-center border-0 bg-light-fg py-8  dark:bg-dark-fg sm:flex md:w-[250px] md:items-start">
         <Button
-          onClick={() => router.push('/')}
+          onClick={() => router.push("/")}
           className={`mb-5 flex w-full flex-row justify-start bg-transparent py-8 text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text`}
         >
           <Image
@@ -96,7 +96,7 @@ const SideNav = () => {
           />
           <span
             className={`hidden pt-2 text-2xl md:flex ${
-              isHomeActive ? 'font-bold' : ''
+              isHomeActive ? "font-bold" : ""
             }`}
           >
             Shopstr
@@ -104,17 +104,17 @@ const SideNav = () => {
         </Button>
 
         <Button
-          onClick={() => router.push('/')}
+          onClick={() => router.push("/")}
           className={`flex w-full flex-row justify-start bg-transparent py-8 text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
             isHomeActive
-              ? 'text-shopstr-purple-light dark:text-shopstr-yellow-light'
-              : ''
+              ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
+              : ""
           }`}
         >
           <HomeIcon className={`h-8 w-8`}></HomeIcon>
           <span
             className={`hidden pt-2 text-2xl md:flex ${
-              isHomeActive ? 'font-bold' : ''
+              isHomeActive ? "font-bold" : ""
             }`}
           >
             Home
@@ -122,11 +122,11 @@ const SideNav = () => {
           {/* <span className='h-2 w-2 rounded-full bg-sky-500 absolute top-3 right-[16px] md:right-[100px]'></span> */}
         </Button>
         <Button
-          onClick={() => handleRoute('/messages')}
+          onClick={() => handleRoute("/messages")}
           className={`flex w-full flex-row justify-start bg-transparent py-8 text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
             isMessagesActive
-              ? 'text-shopstr-purple-light dark:text-shopstr-yellow-light'
-              : ''
+              ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
+              : ""
           }`}
         >
           {unreadMsgCount > 0 && (
@@ -139,18 +139,18 @@ const SideNav = () => {
           />
           <span
             className={`hidden pt-2 text-2xl md:flex ${
-              isMessagesActive ? 'font-bold' : ''
+              isMessagesActive ? "font-bold" : ""
             }`}
           >
             Messages
           </span>
         </Button>
         <Button
-          onClick={() => handleRoute('/metrics')}
+          onClick={() => handleRoute("/metrics")}
           className={`flex w-full flex-row justify-start bg-transparent py-8 text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
             isMetricsActive
-              ? 'text-shopstr-purple-light dark:text-shopstr-yellow-light'
-              : ''
+              ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
+              : ""
           }`}
         >
           <ChartBarIcon
@@ -158,18 +158,18 @@ const SideNav = () => {
           ></ChartBarIcon>
           <span
             className={`hidden pt-2 text-2xl md:flex ${
-              isMetricsActive ? 'font-bold' : ''
+              isMetricsActive ? "font-bold" : ""
             }`}
           >
             Metrics
           </span>
         </Button>
         <Button
-          onClick={() => handleRoute('/profile')}
+          onClick={() => handleRoute("/settings")}
           className={`flex w-full  flex-row justify-start bg-transparent py-8 text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
             isProfileActive
-              ? 'text-shopstr-purple-light dark:text-shopstr-yellow-light'
-              : ''
+              ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
+              : ""
           }`}
         >
           <UserIcon
@@ -177,10 +177,10 @@ const SideNav = () => {
           ></UserIcon>
           <span
             className={`hidden text-2xl md:flex ${
-              isProfileActive ? 'font-bold' : ''
+              isProfileActive ? "font-bold" : ""
             }`}
           >
-            Account
+            Settings
           </span>
         </Button>
         <div className="hidden w-full md:flex">
