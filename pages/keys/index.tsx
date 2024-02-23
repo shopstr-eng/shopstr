@@ -97,7 +97,7 @@ const Keys = () => {
               <label className="text-xl">Public Key:</label>
               {publicKey && (
                 <div
-                  className="border-color-yellow-500 overflow-hidden overflow-ellipsis whitespace-nowrap rounded-md border-b-2 border-l-2 border-shopstr-purple bg-light-bg px-1 text-xl dark:border-shopstr-yellow dark:bg-dark-bg"
+                  className="border-color-yellow-500 break-all rounded-md border-b-2 border-l-2 border-shopstr-purple bg-light-bg px-1 text-xl dark:border-shopstr-yellow dark:bg-dark-bg"
                   onClick={handleCopyPubkey}
                 >
                   {publicKey}
@@ -108,10 +108,7 @@ const Keys = () => {
               <label className="text-xl">Private Key:</label>
               {privateKey && (
                 <div className="flex items-center justify-between rounded-md border-b-2 border-l-2 border-shopstr-purple bg-light-bg text-xl dark:border-shopstr-yellow dark:bg-dark-bg">
-                  <div
-                    className="overflow-hidden overflow-ellipsis whitespace-nowrap px-1"
-                    onClick={handleCopyPrivkey}
-                  >
+                  <div className="break-all px-1" onClick={handleCopyPrivkey}>
                     {viewState === "shown" ? privateKey : "* * * * *"}
                   </div>
                   {viewState === "shown" ? (
