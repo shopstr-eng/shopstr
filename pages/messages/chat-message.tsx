@@ -1,17 +1,17 @@
 import { getLocalStorageData } from "../../components/utility/nostr-helper-functions";
-import { NostrEvent } from "../../utils/types/types";
+import { NostrEvent, NostrMessageEvent } from "../../utils/types/types";
 import { timeSinceMessageDisplayText } from "../../utils/messages/utils";
 
 export const ChatMessage = ({
+  index = 0,
   messageEvent,
-  index,
   currentChatPubkey,
 }: {
-  messageEvent?: NostrEvent;
-  index?: number;
+  index: number;
+  messageEvent?: NostrMessageEvent;
   currentChatPubkey?: string;
 }) => {
-  if (!messageEvent || !index || !currentChatPubkey) {
+  if (!messageEvent || !currentChatPubkey) {
     return null;
   }
   const { decryptedNpub } = getLocalStorageData();

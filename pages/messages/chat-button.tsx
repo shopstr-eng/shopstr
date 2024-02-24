@@ -40,7 +40,7 @@ export const ChatButton = ({
       <div className="flex-shrink-0 overflow-clip">
         <ProfileAvatar pubkey={pubkeyOfChat} />
       </div>
-      <div className="flex w-1/2 flex-col">
+      <div className="flex w-2/3 flex-shrink-0 flex-col ">
         <ProfileDisplayName pubkey={pubkeyOfChat} />
         <span className="line-clamp-1 break-all text-light-text dark:text-dark-text">
           {lastMessage ? lastMessage.content : "No messages yet"}
