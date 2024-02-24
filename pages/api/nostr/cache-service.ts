@@ -3,10 +3,10 @@ import Dexie, { Table } from "dexie";
 import { ItemType, NostrMessageEvent } from "../../../utils/types/types";
 
 class ItemsFetchedFromRelays extends Dexie {
-  public products!: Table<{ id: string, product: NostrEvent }>;
-  public profiles!: Table<{ id: string, profile: {} }>;
-  public chatMessages!: Table<{ id: string, message: NostrMessageEvent }>;
-  public lastFetchedTime!: Table<{ itemType: string, time: number }>;
+  public products!: Table<{ id: string; product: NostrEvent }>;
+  public profiles!: Table<{ id: string; profile: {} }>;
+  public chatMessages!: Table<{ id: string; message: NostrMessageEvent }>;
+  public lastFetchedTime!: Table<{ itemType: string; time: number }>;
 
   public constructor() {
     super("ItemsFetchedFromRelays");

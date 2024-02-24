@@ -165,15 +165,15 @@ function App({ Component, pageProps }: AppProps) {
         <ProfileMapContext.Provider value={profileContext}>
           <ChatsContext.Provider value={chatsContext}>
             <NextUIProvider>
-            <NextThemesProvider attribute="class">
-              <div className="flex">
-                <SideNav />
-                <main className="flex-1">
-                  <Component {...pageProps} />
-                </main>
-              </div>
-              <BottomNav />
-            </NextThemesProvider>
+              <NextThemesProvider attribute="class">
+                <div className="flex">
+                  <SideNav />
+                  <main className="flex-1">
+                    <Component {...pageProps} />
+                  </main>
+                </div>
+                <BottomNav />
+              </NextThemesProvider>
             </NextUIProvider>
           </ChatsContext.Provider>
         </ProfileMapContext.Provider>

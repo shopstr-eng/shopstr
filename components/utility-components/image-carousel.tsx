@@ -26,14 +26,18 @@ export default function ImageCarousel({
           <Image
             src="/no-image-placeholder.png"
             className="h-full w-full object-contain"
-            alt="No image placeholder""
+            alt="No image placeholder"
           />
         </div>,
       ];
     return images.map((image, index) => {
       return (
         <div className={className} key={"image" + index}>
-          <Image src={image} className="h-full w-full object-contain" alt="Product image" />
+          <Image
+            src={image}
+            className="h-full w-full object-contain"
+            alt="Product image"
+          />
         </div>
       );
     });

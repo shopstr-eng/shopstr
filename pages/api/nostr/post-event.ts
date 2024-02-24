@@ -166,7 +166,9 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
       event.content = JSON.stringify(event.content);
       signedEvent = finalizeEvent(event, privkey);
     } else if (kind === 30402) {
-      const dValue = event.tags.find(([key]: [key: string]) => key === "d")?.[1] || undefined;
+      const dValue =
+        event.tags.find(([key]: [key: string]) => key === "d")?.[1] ||
+        undefined;
 
       const recommendationEvent = {
         kind: 31989,

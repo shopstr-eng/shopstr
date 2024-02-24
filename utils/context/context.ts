@@ -21,8 +21,8 @@ export interface ProductContextInterface {
 export const ProductContext = createContext({
   productEvents: {},
   isLoading: true,
-  addNewlyCreatedProductEvent: (productEvent: any) => { },
-  removeDeletedProductEvent: (productId: string) => { },
+  addNewlyCreatedProductEvent: (productEvent: any) => {},
+  removeDeletedProductEvent: (productId: string) => {},
 } as ProductContextInterface);
 
 export type ChatsMap = Map<string, NostrMessageEvent[]>;
