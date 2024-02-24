@@ -190,7 +190,7 @@ export default function NewForm({
     return className;
   }, [isButtonDisabled]);
 
-  const passphraseInputRef = useRef<any>(null);
+  const passphraseInputRef = useRef<HTMLInputElement>(null);
 
   const FileUploader = ({
     uploadImage,
@@ -200,22 +200,22 @@ export default function NewForm({
   }: {
     uploadImage: any;
     disabled: any;
-    passphraseInputRef: any;
+    passphraseInputRef: React.RefObject<HTMLInputElement>;
     buttonClassName: any;
   }) => {
     const [loading, setLoading] = useState(false);
     // Create a reference to the hidden file input element
-    const hiddenFileInput = useRef<any>(null);
+    const hiddenFileInput = useRef<HTMLInputElement>(null);
 
     // Programatically click the hidden file input element
     // when the Button component is clicked
     const handleClick = (event: any) => {
       if (disabled && signIn === "nsec") {
         // shows user that they need to enter passphrase
-        passphraseInputRef.current.focus();
+        passphraseInputRef.current?.focus();
         return;
       }
-      hiddenFileInput.current.click();
+      hiddenFileInput.current?.click();
     };
     // Call a function (passed as a prop from the parent component)
     // to handle the user-selected file

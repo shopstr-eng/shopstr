@@ -20,7 +20,7 @@ export const ChatButton = ({
     messages && messages.length > 0 && messages[messages.length - 1];
   let unreadCount = chatObject?.unreadCount;
 
-  let divRef = useRef<any>(null);
+  let divRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (pubkeyOfChat === openedChatPubkey) {

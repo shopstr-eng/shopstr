@@ -3,12 +3,12 @@ import { NostrEvent, NostrMessageEvent } from "../../utils/types/types";
 import { timeSinceMessageDisplayText } from "../../utils/messages/utils";
 
 export const ChatMessage = ({
-  index = 0,
   messageEvent,
+  index = 0,
   currentChatPubkey,
 }: {
-  index: number;
   messageEvent?: NostrMessageEvent;
+  index: number;
   currentChatPubkey?: string;
 }) => {
   if (!messageEvent || !currentChatPubkey) {

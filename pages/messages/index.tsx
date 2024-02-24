@@ -270,6 +270,7 @@ const DirectMessages = () => {
       alert("Error sending message.");
       setIsSendingDMLoading(false);
     }
+    router.replace(`/messages`);
   };
 
   return (

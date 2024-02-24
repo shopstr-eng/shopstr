@@ -33,7 +33,7 @@ export const ChatPanel = ({
   const [messageInput, setMessageInput] = useState("");
   const [messages, setMessages] = useState<NostrMessageEvent[]>([]); // [chatPubkey, chat]
 
-  const bottomDivRef = useRef<any>(null);
+  const bottomDivRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setMessages(chatsMap.get(currentChatPubkey)?.decryptedChat || []);

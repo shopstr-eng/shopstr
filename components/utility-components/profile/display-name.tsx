@@ -18,7 +18,7 @@ export const ProfileDisplayName = ({
     setDisplayName(
       profile && profile.content.name ? profile.content.name : npub,
     );
-  }, [profileContext]);
+  }, [profileContext, pubkey]);
 
   return (
     <span
