@@ -5,7 +5,7 @@ export interface NostrEvent {
   pubkey: string;
   created_at: number;
   kind: number;
-  tags: Tag[];
+  tags: any[];
   content: string;
   sig: string;
 }

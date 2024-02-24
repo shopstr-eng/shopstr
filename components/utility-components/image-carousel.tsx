@@ -1,4 +1,5 @@
 import React from "react";
+import { Image } from "@nextui-org/react";
 import { Carousel } from "react-responsive-carousel";
 import "react-responsive-carousel/lib/styles/carousel.min.css"; // requires a loader
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
@@ -22,16 +23,21 @@ export default function ImageCarousel({
     if (!images || images.length == 0)
       return [
         <div className={className} key={"image" + 0}>
-          <img
+          <Image
             src="/no-image-placeholder.png"
             className="h-full w-full object-contain"
+            alt="No image placeholder"
           />
         </div>,
       ];
     return images.map((image, index) => {
       return (
         <div className={className} key={"image" + index}>
-          <img src={image} className="h-full w-full object-contain" />
+          <Image
+            src={image}
+            className="h-full w-full object-contain"
+            alt="Product image"
+          />
         </div>
       );
     });

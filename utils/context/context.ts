@@ -1,5 +1,5 @@
 import { createContext } from "react";
-import { NostrMessageEvent } from "./types";
+import { NostrMessageEvent } from "../types/types";
 
 export interface ProfileContextInterface {
   profileData: Map<string, any>;

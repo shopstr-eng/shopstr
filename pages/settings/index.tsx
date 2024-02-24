@@ -54,7 +54,7 @@ const SettingsPage = () => {
     reset: mintReset,
   } = useForm();
 
-  const onMintSubmit = async (data) => {
+  const onMintSubmit = async (data: { [x: string]: any }) => {
     let mint = data["mint"];
     await replaceMint(mint);
   };
@@ -66,7 +66,7 @@ const SettingsPage = () => {
     reset: relayReset,
   } = useForm();
 
-  const onRelaySubmit = async (data) => {
+  const onRelaySubmit = async (data: { [x: string]: any }) => {
     let relay = data["relay"];
     await addRelay(relay);
   };
@@ -95,7 +95,7 @@ const SettingsPage = () => {
     }
   };
 
-  const deleteMint = (mintToDelete) => {
+  const deleteMint = (mintToDelete: string) => {
     setMints(mints.filter((mint) => mint !== mintToDelete));
   };
 
@@ -133,7 +133,7 @@ const SettingsPage = () => {
     }
   };
 
-  const deleteRelay = (relayToDelete) => {
+  const deleteRelay = (relayToDelete: string) => {
     setRelays(relays.filter((relay) => relay !== relayToDelete));
   };
 

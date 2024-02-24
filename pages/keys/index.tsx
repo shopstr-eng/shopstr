@@ -143,7 +143,7 @@ const Keys = () => {
               <Input
                 type="text"
                 width="100%"
-                size="large"
+                size="lg"
                 value={passphrase}
                 placeholder="Enter a passphrase of your choice..."
                 onChange={(e) => setPassphrase(e.target.value)}

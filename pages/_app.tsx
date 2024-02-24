@@ -12,7 +12,7 @@ import {
   ChatsContextInterface,
   ChatsContext,
   ChatsMap,
-} from "./context";
+} from "../utils/context/context";
 import {
   getLocalStorageData,
   LocalStorageInterface,
@@ -24,7 +24,7 @@ import {
   fetchChatsAndMessages,
   fetchProfile,
 } from "./api/nostr/fetch-service";
-import { NostrEvent } from "./types";
+import { NostrEvent } from "../utils/types/types";
 import BottomNav from "@/components/nav-bottom";
 import SideNav from "@/components/nav-side";
 
@@ -165,19 +165,14 @@ function App({ Component, pageProps }: AppProps) {
         <ProfileMapContext.Provider value={profileContext}>
           <ChatsContext.Provider value={chatsContext}>
             <NextUIProvider>
-              <NextThemesProvider
-                attribute="class"
-                forcedTheme={Component.theme || undefined}
-              >
-                <>
-                  <div className="flex">
-                    <SideNav />
-                    <main className="flex-1">
-                      <Component {...pageProps} />
-                    </main>
-                  </div>
-                  <BottomNav />
-                </>
+              <NextThemesProvider attribute="class">
+                <div className="flex">
+                  <SideNav />
+                  <main className="flex-1">
+                    <Component {...pageProps} />
+                  </main>
+                </div>
+                <BottomNav />
               </NextThemesProvider>
             </NextUIProvider>
           </ChatsContext.Provider>

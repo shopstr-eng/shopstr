@@ -10,8 +10,8 @@ import {
   ChartBarIcon,
   Cog6ToothIcon,
 } from "@heroicons/react/24/outline";
-import { countNumberOfUnreadMessagesFromChatsContext } from "@/pages/messages/utils";
-import { ChatsContext } from "@/pages/context";
+import { countNumberOfUnreadMessagesFromChatsContext } from "@/utils/messages/utils";
+import { ChatsContext } from "@/utils/context/context";
 import { db } from "../pages/api/nostr/cache-service";
 
 import { useLiveQuery } from "dexie-react-hooks";

@@ -1,4 +1,4 @@
-import Repo from "@/utils/repo";
+import Repo from "@/utils/metrics/repo";
 import { Knex } from "knex";
 import { DateTime } from "luxon";
 import type { NextApiRequest, NextApiResponse } from "next";

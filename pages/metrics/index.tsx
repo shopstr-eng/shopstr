@@ -13,7 +13,7 @@ import {
   DateRangePickerItem,
   Callout,
 } from "@tremor/react";
-import { formatDataWithEmptyDateTime } from "@/utils/metrics";
+import { formatDataWithEmptyDateTime } from "@/utils/metrics/metrics";
 import { DateTime } from "luxon";
 import { useState, useEffect } from "react";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";

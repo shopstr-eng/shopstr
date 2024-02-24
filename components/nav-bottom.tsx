@@ -21,9 +21,9 @@ import {
   Cog6ToothIcon,
 } from "@heroicons/react/24/outline";
 import { Button } from "@nextui-org/react";
-import { countNumberOfUnreadMessagesFromChatsContext } from "@/pages/messages/utils";
+import { countNumberOfUnreadMessagesFromChatsContext } from "@/utils/messages/utils";
 import { Icon } from "@tremor/react";
-import { ChatsContext } from "@/pages/context";
+import { ChatsContext } from "@/utils/context/context";
 import { db } from "../pages/api/nostr/cache-service";
 
 import { useLiveQuery } from "dexie-react-hooks";

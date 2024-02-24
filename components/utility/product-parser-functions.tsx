@@ -1,6 +1,6 @@
 import { ShippingOptionsType } from "./STATIC-VARIABLES";
 import { calculateTotalCost } from "../utility-components/display-monetary-info";
-import { NostrEvent } from "@/pages/types";
+import { NostrEvent } from "@/utils/types/types";
 
 export type ProductData = {
   id: string;
@@ -21,7 +21,20 @@ export type ProductData = {
 };
 
 export const parseTags = (productEvent: NostrEvent) => {
-  let parsedData: ProductData = {};
+  let parsedData: ProductData = {
+    id: "",
+    pubkey: "",
+    createdAt: 0,
+    title: "",
+    summary: "",
+    publishedAt: "",
+    images: [],
+    categories: [],
+    location: "",
+    price: 0,
+    currency: "",
+    totalCost: 0,
+  };
   parsedData.pubkey = productEvent.pubkey;
   parsedData.id = productEvent.id;
   parsedData.createdAt = productEvent.created_at;

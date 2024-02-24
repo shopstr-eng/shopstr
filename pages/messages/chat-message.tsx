@@ -1,16 +1,19 @@
 import { getLocalStorageData } from "../../components/utility/nostr-helper-functions";
-import { NostrEvent } from "../types";
-import { timeSinceMessageDisplayText } from "./utils";
+import { NostrEvent } from "../../utils/types/types";
+import { timeSinceMessageDisplayText } from "../../utils/messages/utils";
 
 export const ChatMessage = ({
   messageEvent,
   index,
   currentChatPubkey,
 }: {
-  messageEvent: NostrEvent;
-  index: number;
-  currentChatPubkey: string;
+  messageEvent?: NostrEvent;
+  index?: number;
+  currentChatPubkey?: string;
 }) => {
+  if (!messageEvent || !index || !currentChatPubkey) {
+    return null;
+  }
   const { decryptedNpub } = getLocalStorageData();
   return (
     <div
@@ -45,3 +48,5 @@ export const ChatMessage = ({
     </div>
   );
 };
+
+export default ChatMessage;

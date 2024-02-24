@@ -31,15 +31,23 @@ import { finalizeEvent } from "nostr-tools";
 import { CATEGORIES, SHIPPING_OPTIONS } from "./utility/STATIC-VARIABLES";
 import LocationDropdown from "./utility-components/dropdowns/location-dropdown";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
-import { ProductContext } from "../pages/context";
+import { ProductContext } from "../utils/context/context";
 import { capturePostListingMetric } from "./utility/metrics-helper-functions";
 import { addProductToCache } from "../pages/api/nostr/cache-service";
+import { ProductData } from "./utility/product-parser-functions";
+import { ProductFormValues } from "@/pages/api/nostr/post-event";
+
+declare global {
+  interface Window {
+    nostr: any;
+  }
+}
 
 interface ProductFormProps {
   handleModalToggle: () => void;
   showModal: boolean;
   // edit props
-  oldValues?: object;
+  oldValues?: ProductData;
   handleDelete?: (productId: string, passphrase: string) => void;
   onSubmitCallback?: () => void;
 }
@@ -96,7 +104,7 @@ export default function NewForm({
     setIsEdit(oldValues ? true : false);
   }, [showModal]);
 
-  const onSubmit = async (data) => {
+  const onSubmit = async (data: { [x: string]: string }) => {
     setIsPostingOrUpdatingProduct(true);
     const encoder = new TextEncoder();
     const dataEncoded = encoder.encode(data["Product Name"]);
@@ -106,7 +114,7 @@ export default function NewForm({
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
 
-    let tags = [
+    let tags: ProductFormValues = [
       ["d", oldValues?.d || hashHex],
       ["alt", "Classified listing: " + data["Product Name"]],
       [
@@ -122,7 +130,7 @@ export default function NewForm({
       [
         "shipping",
         data["Shipping Option"],
-        data["Shipping Cost"] ? data["Shipping Cost"] : 0,
+        data["Shipping Cost"] ? data["Shipping Cost"] : "0",
         data["Currency"],
       ],
     ];
@@ -139,8 +147,8 @@ export default function NewForm({
     capturePostListingMetric(newListing.id, tags);
 
     if (isEdit) {
-      if (handleDelete) {
-        await handleDelete(oldValues.id, passphrase);
+      if (handleDelete && oldValues?.id) {
+        handleDelete(oldValues.id, passphrase);
       }
     }
 
@@ -182,21 +190,26 @@ export default function NewForm({
     return className;
   }, [isButtonDisabled]);
 
-  const passphraseInputRef = useRef(null);
+  const passphraseInputRef = useRef<any>(null);
 
   const FileUploader = ({
     uploadImage,
     disabled,
     passphraseInputRef,
     buttonClassName,
+  }: {
+    uploadImage: any;
+    disabled: any;
+    passphraseInputRef: any;
+    buttonClassName: any;
   }) => {
     const [loading, setLoading] = useState(false);
     // Create a reference to the hidden file input element
-    const hiddenFileInput = useRef(null);
+    const hiddenFileInput = useRef<any>(null);
 
     // Programatically click the hidden file input element
     // when the Button component is clicked
-    const handleClick = (event) => {
+    const handleClick = (event: any) => {
       if (disabled && signIn === "nsec") {
         // shows user that they need to enter passphrase
         passphraseInputRef.current.focus();
@@ -206,7 +219,7 @@ export default function NewForm({
     };
     // Call a function (passed as a prop from the parent component)
     // to handle the user-selected file
-    const handleChange = async (event) => {
+    const handleChange = async (event: any) => {
       const fileUploaded = event.target.files[0];
       setLoading(true);
       await uploadImage(fileUploaded);
@@ -232,7 +245,7 @@ export default function NewForm({
     );
   };
 
-  const deleteImage = (image) => () => {
+  const deleteImage = (image: string) => () => {
     setImages((prevValues) => {
       const updatedImages = [...prevValues];
       const index = updatedImages.indexOf(image);
@@ -256,7 +269,7 @@ export default function NewForm({
 
         const privkey = getPrivKeyWithPassphrase(passphrase);
         response = await nostrBuildUploadImage(imageFile, (e) =>
-          finalizeEvent(e, privkey),
+          Promise.resolve(finalizeEvent(e, privkey as Uint8Array)),
         );
       } else if (signIn === "extension") {
         response = await nostrBuildUploadImage(
@@ -265,10 +278,13 @@ export default function NewForm({
         );
       }
 
-      const imageUrl = response.url;
+      const imageUrl = response?.url;
       setImages((prevValues) => {
         const updatedImages = [...prevValues];
-        return [...updatedImages, imageUrl];
+        if (imageUrl) {
+          return [...updatedImages, imageUrl];
+        }
+        return [...updatedImages];
       });
     } catch (e) {
       if (e instanceof Error) alert("Failed to upload image! " + e.message);
@@ -295,7 +311,7 @@ export default function NewForm({
         <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
           Add New Product Listing
         </ModalHeader>
-        <form onSubmit={handleSubmit(onSubmit)}>
+        <form onSubmit={handleSubmit(onSubmit as any)}>
           <ModalBody>
             <Controller
               name="Product Name"
@@ -535,7 +551,7 @@ export default function NewForm({
                     // controller props
                     onChange={onChange} // send value to hook form
                     onBlur={onBlur} // notify when input is touched/blur
-                    selectedKeys={[value]}
+                    selectedKeys={[value as string]}
                   >
                     <SelectSection className="text-light-text dark:text-dark-text">
                       {SHIPPING_OPTIONS.map((option) => (
@@ -577,7 +593,7 @@ export default function NewForm({
                       // controller props
                       onChange={onChange} // send value to hook form
                       onBlur={onBlur} // notify when input is touched/blur
-                      value={value}
+                      value={value?.toString()}
                       endContent={
                         <div className="flex items-center">
                           <select
@@ -700,7 +716,7 @@ export default function NewForm({
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !isButtonDisabled) {
                   e.preventDefault(); // Prevent default to avoid submitting the form again
-                  handleSubmit(onSubmit)(); // Programmatic submit
+                  handleSubmit(onSubmit as any)(); // Programmatic submit
                 }
               }}
               isDisabled={isPostingOrUpdatingProduct || isButtonDisabled}

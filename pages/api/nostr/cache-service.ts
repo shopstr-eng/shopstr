@@ -1,17 +1,27 @@
-import { NostrEvent } from "../../types";
-import Dexie from "dexie";
-import { ItemType, NostrMessageEvent } from "../../types";
+import { NostrEvent } from "../../../utils/types/types";
+import Dexie, { Table } from "dexie";
+import { ItemType, NostrMessageEvent } from "../../../utils/types/types";
 
-export const db = new Dexie("ItemsFetchedFromRelays");
+class ItemsFetchedFromRelays extends Dexie {
+  public products!: Table<{ id: string; product: NostrEvent }>;
+  public profiles!: Table<{ id: string; profile: {} }>;
+  public chatMessages!: Table<{ id: string; message: NostrMessageEvent }>;
+  public lastFetchedTime!: Table<{ itemType: string; time: number }>;
 
-db.version(2).stores({
-  products: "id, product", // product: {id, product}
-  profiles: "id, profile", // profile: {pubkey, created_at, content}
-  chatMessages: "id, message", // message: NostrEvent
-  lastFetchedTime: "itemType, time", // item: {products, profiles, chats} time: timestamp
-});
+  public constructor() {
+    super("ItemsFetchedFromRelays");
+    this.version(2).stores({
+      products: "id, product", // product: {id, product}
+      profiles: "id, profile", // profile: {pubkey, created_at, content}
+      chatMessages: "id, message", // message: NostrMessageEvent
+      lastFetchedTime: "itemType, time", // item: {products, profiles, chats} time: timestamp
+    });
+  }
+}
 
 let indexedDBWorking = true;
+
+export const db = new ItemsFetchedFromRelays();
 
 db.open().catch(function (e) {
   console.error("IndexDB Open failed: " + e.stack);
@@ -92,8 +102,8 @@ export const fetchProfileDataFromCache = async () => {
 export const fetchAllChatsFromCache = async () => {
   let cache = await chatMessages.toArray();
   let chatsMap = new Map();
-  cache.forEach(({ id, messages }) => {
-    chatsMap.set(id, messages);
+  cache.forEach(({ id, message }) => {
+    chatsMap.set(id, message);
   });
   return chatsMap;
 };

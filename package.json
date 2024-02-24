@@ -43,6 +43,7 @@
     "uuid": "^9.0.0"
   },
   "devDependencies": {
+    "@types/crypto-js": "^4.2.2",
     "@types/lodash": "^4.14.199",
     "@types/luxon": "^3.3.2",
     "@types/node": "20.7.0",

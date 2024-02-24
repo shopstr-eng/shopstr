@@ -102,7 +102,7 @@ const parseProductFormValues = (body: ProductFormValues): ProductFormValues => {
   ];
   const parsedBody = typeof body === "string" ? JSON.parse(body) : body;
   for (const key of expectedKeys) {
-    const matchingPair = parsedBody.find(([k]) => k === key);
+    const matchingPair = parsedBody.find(([k]: [k: string]) => k === key);
     if (
       !matchingPair ||
       !Array.isArray(matchingPair) ||
@@ -118,7 +118,7 @@ const parseNip04Values = (body: ProductFormValues): ProductFormValues => {
   const expectedKeys = ["p"];
   const parsedBody = typeof body === "string" ? JSON.parse(body) : body;
   for (const key of expectedKeys) {
-    const matchingPair = parsedBody.find(([k]) => k === key);
+    const matchingPair = parsedBody.find(([k]: [k: string]) => k === key);
     if (
       !matchingPair ||
       !Array.isArray(matchingPair) ||
@@ -166,7 +166,9 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
       event.content = JSON.stringify(event.content);
       signedEvent = finalizeEvent(event, privkey);
     } else if (kind === 30402) {
-      const dValue = event.tags.find(([key]) => key === "d")?.[1] || undefined;
+      const dValue =
+        event.tags.find(([key]: [key: string]) => key === "d")?.[1] ||
+        undefined;
 
       const recommendationEvent = {
         kind: 31989,

@@ -10,7 +10,7 @@ import { getLocalStorageData } from "../../components/utility/nostr-helper-funct
 
 const Listing = () => {
   const router = useRouter();
-  const [relays, setRelays] = useState([]);
+  const [relays, setRelays] = useState<string[]>([]);
   const [productData, setProductData] = useState<ProductData | undefined>(
     undefined,
   );

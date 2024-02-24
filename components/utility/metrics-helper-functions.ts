@@ -1,7 +1,7 @@
 import axios from "axios";
 import { getLocalStorageData } from "./nostr-helper-functions";
 
-export async function capturePostListingMetric(id, tags) {
+export async function capturePostListingMetric(id: string, tags: any[]) {
   const { decryptedNpub, relays } = getLocalStorageData();
   axios({
     method: "POST",

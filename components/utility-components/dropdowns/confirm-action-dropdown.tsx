@@ -24,15 +24,16 @@ export default function ConfirmActionDropdown({
     <Dropdown>
       <DropdownTrigger>{children}</DropdownTrigger>
       <DropdownMenu variant="faded" aria-label="Static Actions">
-        <DropdownSection title={helpText} showDivider={true}></DropdownSection>
-        <DropdownItem
-          key="delete"
-          className="text-danger"
-          color="danger"
-          onClick={onConfirm}
-        >
-          {buttonLabel}
-        </DropdownItem>
+        <DropdownSection title={helpText} showDivider={true}>
+          <DropdownItem
+            key="delete"
+            className="text-danger"
+            color="danger"
+            onClick={onConfirm}
+          >
+            {buttonLabel}
+          </DropdownItem>
+        </DropdownSection>
       </DropdownMenu>
     </Dropdown>
   );

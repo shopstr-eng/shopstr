@@ -1,4 +1,4 @@
-import { ProfileMapContext } from "@/pages/context";
+import { ProfileMapContext } from "@/utils/context/context";
 import { nip19 } from "nostr-tools";
 import { useContext, useEffect, useState } from "react";
 

@@ -10,13 +10,13 @@ import {
   sendEncryptedMessage,
   validPassphrase,
 } from "../../components/utility/nostr-helper-functions";
-import { ChatsContext } from "../context";
+import { ChatsContext } from "../../utils/context/context";
 import RequestPassphraseModal from "../../components/utility-components/request-passphrase-modal";
 import ShopstrSpinner from "../../components/utility-components/shopstr-spinner";
 import axios from "axios";
 import { ChatPanel } from "./chat-panel";
 import { ChatButton } from "./chat-button";
-import { NostrMessageEvent, ChatObject } from "../types";
+import { NostrMessageEvent, ChatObject } from "../../utils/types/types";
 import {
   addChatMessagesToCache,
   fetchChatMessagesFromCache,
@@ -145,7 +145,7 @@ const DirectMessages = () => {
           messageEvent.content,
         );
       } else {
-        let sk2 = getPrivKeyWithPassphrase(passphrase);
+        let sk2 = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
         plaintext = await nip04.decrypt(sk2, chatPubkey, messageEvent.content);
       }
       return plaintext;
@@ -307,16 +307,13 @@ const DirectMessages = () => {
               {chatsMap &&
                 sortedChatsByLastMessage.map(
                   ([pubkeyOfChat, chatObject]: [string, ChatObject]) => (
+                    // eslint-disable-next-line react/jsx-key
                     <ChatButton
                       pubkeyOfChat={pubkeyOfChat}
                       chatObject={chatObject}
                       openedChatPubkey={currentChatPubkey}
                       handleClickChat={enterChat}
                     />
-                    // <div>
-                    //   it's a ruuuuuuuseruuuuuuuseruuuuuuuseruuuuuuuseruuuuuuuse
-                    //   ruuuuuuuse ruuuuuuuse ruuuuuuuse ruuuuuuuse
-                    // </div>
                   ),
                 )}
             </div>

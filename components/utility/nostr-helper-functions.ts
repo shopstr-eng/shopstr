@@ -1,7 +1,7 @@
 import * as CryptoJS from "crypto-js";
 import { finalizeEvent, nip04, nip19, nip98, SimplePool } from "nostr-tools";
 import axios from "axios";
-import { NostrEvent } from "@/pages/types";
+import { NostrEvent } from "@/utils/types/types";
 import { ProductFormValues } from "@/pages/api/nostr/post-event";
 
 export async function PostListing(
@@ -231,29 +231,27 @@ export async function nostrBuildUploadImage(
 /***** HELPER FUNCTIONS *****/
 
 // function to validate public and private keys
-export function validateNPubKey(publicKey) {
+export function validateNPubKey(publicKey: string) {
   const validPubKey = /^npub[a-zA-Z0-9]{59}$/;
   return publicKey.match(validPubKey) !== null;
 }
-export function validateNSecKey(privateKey) {
+export function validateNSecKey(privateKey: string) {
   const validPrivKey = /^nsec[a-zA-Z0-9]{59}$/;
   return privateKey.match(validPrivKey) !== null;
 }
 
-function sha256Hex(string) {
+async function sha256Hex(string: string | undefined) {
   const utf8 = new TextEncoder().encode(string);
 
-  return crypto.subtle.digest("SHA-256", utf8).then((hashBuffer) => {
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray
-      .map((bytes) => bytes.toString(16).padStart(2, "0"))
-      .join("");
-
-    return hashHex;
-  });
+  const hashBuffer = await crypto.subtle.digest("SHA-256", utf8);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hashHex = hashArray
+    .map((bytes) => bytes.toString(16).padStart(2, "0"))
+    .join("");
+  return hashHex;
 }
 
-export async function generateNostrEventId(msg) {
+export async function generateNostrEventId(msg: NostrEvent) {
   const digest = [
     0,
     msg.pubkey,
@@ -289,7 +287,9 @@ export function getNsecWithPassphrase(passphrase: string) {
 }
 
 export function getPrivKeyWithPassphrase(passphrase: string) {
-  let { data } = nip19.decode(getNsecWithPassphrase(passphrase));
+  const nsec = getNsecWithPassphrase(passphrase);
+  if (!nsec) return undefined;
+  let { data } = nip19.decode(nsec);
   return data;
 }
 
@@ -358,7 +358,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     encryptedPrivateKey: encryptedPrivateKey as string,
     npub: npub as string,
     decryptedNpub: decryptedNpub as string,
-    relays,
+    relays: relays || [],
     mints,
   };
 };

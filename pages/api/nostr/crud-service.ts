@@ -3,7 +3,7 @@ import {
   generateNostrEventId,
   getLocalStorageData,
 } from "@/components/utility/nostr-helper-functions";
-import { NostrEvent } from "@/pages/types";
+import { NostrEvent } from "@/utils/types/types";
 import { removeProductFromCache } from "./cache-service";
 
 export async function DeleteListing(

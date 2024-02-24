@@ -10,7 +10,7 @@ import {
 import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
 import { validateNSecKey } from "@/components/utility/nostr-helper-functions";
 import { getPublicKey, nip19 } from "nostr-tools";
-import * as CryptoJS from "crypto-js";
+import CryptoJS from "crypto-js";
 
 import { useRouter } from "next/router";
 import useIsSignedIn from "../hooks/use-is-signed-in";
@@ -62,7 +62,7 @@ export default function SignInModal({
         alert("No passphrase provided!");
       } else {
         let { data: sk } = nip19.decode(privateKey);
-        let pk = getPublicKey(sk);
+        let pk = getPublicKey(sk as Uint8Array);
         let npub = nip19.npubEncode(pk);
         localStorage.setItem("npub", npub);
 
@@ -184,10 +184,10 @@ export default function SignInModal({
                     <div>
                       <label>Private Key:</label>
                       <Input
-                        color={validPrivateKey ? "success" : "error"}
+                        color={validPrivateKey ? "success" : "danger"}
                         type="password"
                         width="100%"
-                        size="large"
+                        size="lg"
                         value={privateKey}
                         placeholder="Paste your Nostr private key..."
                         onChange={(e) => setPrivateKey(e.target.value)}
@@ -201,7 +201,7 @@ export default function SignInModal({
                       <Input
                         type="text"
                         width="100%"
-                        size="large"
+                        size="lg"
                         value={passphrase}
                         placeholder="Enter a passphrase of your choice..."
                         onChange={(e) => setPassphrase(e.target.value)}
