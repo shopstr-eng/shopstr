@@ -12,7 +12,7 @@ self.addEventListener("push", function (event) {
   event.waitUntil(
     registration.showNotification(data.title, {
       body: data.message,
-      icon: "/icon-192x192.png",
+      icon: "/shopstr-144x144.png",
       data: {
         url: data.url ?? "/",
       },
