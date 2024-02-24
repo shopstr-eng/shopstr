@@ -33,7 +33,7 @@ export const ChatPanel = ({
   const [messageInput, setMessageInput] = useState("");
   const [messages, setMessages] = useState<NostrMessageEvent[]>([]); // [chatPubkey, chat]
 
-  const bottomDivRef = useRef<any>(null);
+  const bottomDivRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setMessages(chatsMap.get(currentChatPubkey)?.decryptedChat || []);
@@ -80,7 +80,7 @@ export const ChatPanel = ({
         />
       </h2>
       <div className="my-2 h-full overflow-y-scroll rounded-md border-2 border-light-fg bg-light-fg p-3 dark:border-dark-fg dark:bg-dark-fg">
-        {messages.map((messageEvent: NostrEvent, index) => {
+        {messages.map((messageEvent: NostrMessageEvent, index) => {
           return (
             // eslint-disable-next-line react/jsx-key
             <ChatMessage

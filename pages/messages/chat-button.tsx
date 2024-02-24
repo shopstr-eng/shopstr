@@ -20,7 +20,7 @@ export const ChatButton = ({
     messages && messages.length > 0 && messages[messages.length - 1];
   let unreadCount = chatObject?.unreadCount;
 
-  let divRef = useRef<any>(null);
+  let divRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (pubkeyOfChat === openedChatPubkey) {
@@ -40,7 +40,7 @@ export const ChatButton = ({
       <div className="flex-shrink-0 overflow-clip">
         <ProfileAvatar pubkey={pubkeyOfChat} />
       </div>
-      <div className="flex w-1/2 flex-col">
+      <div className="flex w-2/3 flex-shrink-0 flex-col ">
         <ProfileDisplayName pubkey={pubkeyOfChat} />
         <span className="line-clamp-1 break-all text-light-text dark:text-dark-text">
           {lastMessage ? lastMessage.content : "No messages yet"}

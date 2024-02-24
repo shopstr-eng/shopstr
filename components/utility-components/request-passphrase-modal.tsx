@@ -32,7 +32,7 @@ export default function RequestPassphraseModal({
     passphrase ? passphrase : "",
   ); // passphrase to be entered by user
   const router = useRouter();
-  const passphraseInputRef = useRef<any>(null);
+  const passphraseInputRef = useRef<HTMLInputElement>(null);
   const isButtonDisabled = useMemo(() => {
     return !validPassphrase(passphraseInput);
   }, [passphraseInput]);

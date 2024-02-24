@@ -6,6 +6,7 @@ import {
   Button,
   Image,
   Input,
+  InputProps,
 } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
 import { validateNSecKey } from "@/components/utility/nostr-helper-functions";
@@ -22,7 +23,8 @@ export default function SignInModal({
   some: number;
 }) {
   const [privateKey, setPrivateKey] = useState<string>("");
-  const [validPrivateKey, setValidPrivateKey] = useState<boolean>(false);
+  const [validPrivateKey, setValidPrivateKey] =
+    useState<InputProps["color"]>("default");
   const [passphrase, setPassphrase] = useState<string>("");
 
   const [showNsecSignIn, setShowNsecSignIn] = useState(false);
@@ -96,7 +98,11 @@ export default function SignInModal({
   };
 
   useEffect(() => {
-    setValidPrivateKey(validateNSecKey(privateKey));
+    if (privateKey === "") {
+      setValidPrivateKey("default");
+    } else {
+      setValidPrivateKey(validateNSecKey(privateKey) ? "success" : "danger");
+    }
   }, [privateKey]);
 
   useEffect(() => {
@@ -184,7 +190,7 @@ export default function SignInModal({
                     <div>
                       <label>Private Key:</label>
                       <Input
-                        color={validPrivateKey ? "success" : "danger"}
+                        color={validPrivateKey}
                         type="password"
                         width="100%"
                         size="lg"

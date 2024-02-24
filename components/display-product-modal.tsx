@@ -156,7 +156,9 @@ export default function DisplayProductModal({
             </div>
             <Divider />
             <span className="text-xl font-semibold">Summary: </span>
-            <span className="break-all">{productData.summary}</span>
+            <span className="whitespace-break-spaces break-all">
+              {productData.summary}
+            </span>
           </ModalBody>
 
           <ModalFooter>
