@@ -1,6 +1,7 @@
 import { useState, useEffect, useContext } from "react";
 import axios from "axios";
-import { Button } from "@nextui-org/react";
+import { Button, Spinner } from "@nextui-org/react";
+import { useTheme } from "next-themes";
 import { ProfileMapContext } from "../../utils/context/context";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
@@ -17,6 +18,9 @@ export default function RedeemButton({ token }: { token: string }) {
   const [openRedemptionModal, setOpenRedemptionModal] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
   const [isCashu, setIsCashu] = useState(false);
+  const [isRedeeming, setIsRedeeming] = useState(false)
+
+  const { theme, setTheme } = useTheme();
 
   const [randomNpub, setRandomNpub] = useState<string>("");
   const [randomNsec, setRandomNsec] = useState<string>("");
@@ -61,6 +65,8 @@ export default function RedeemButton({ token }: { token: string }) {
   }
 
   const redeem = async () => {
+    setOpenRedemptionModal(false);
+    setIsRedeeming(true);
     const decodedToken = decodeBase64ToJson(token);
     const proofs = decodedToken.token[0].proofs;
     const totalAmount = proofs.reduce(
@@ -111,11 +117,13 @@ export default function RedeemButton({ token }: { token: string }) {
       }
       setIsPaid(true);
       setOpenRedemptionModal(true);
+      setIsRedeeming(false);
     } catch (error) {
       console.log(error);
       setIsPaid(false);
       setIsCashu(false);
       setOpenRedemptionModal(true);
+      setIsRedeeming(false);
     }
   };
 
@@ -124,7 +132,19 @@ export default function RedeemButton({ token }: { token: string }) {
   return (
     <div>
       <Button className={SHOPSTRBUTTONCLASSNAMES + " w-[20%]"} onClick={redeem}>
-        Redeem Token
+        {isRedeeming ? (
+          <>
+            {theme === "dark" ? (
+              <Spinner size={"sm"} color="warning" />
+            ) : (
+              <Spinner size={"sm"} color="secondary" />
+            )}
+          </>
+        ) : (
+          <>
+            Redeem Token
+          </>
+        )}
       </Button>
       <RedemptionModal isPaid={isPaid} isCashu={isCashu} opened={openRedemptionModal} />
     </div>

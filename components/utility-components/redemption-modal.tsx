@@ -82,9 +82,9 @@ export default function RedemptionModal({
               <div>Redemption Failed</div>
             </div>
             <div className="flex items-center justify-center">
-              You are redeeming a token of too small an amount, no routes
-              could be found, or it is already redeemed. Go to https://wallet.nutstash.app/ and paste the
-              token string (cashuA...) to redeem it!
+              You are redeeming a token of too small/large an amount, no routes
+              could be found, or the token is already redeemed. Go to https://wallet.nutstash.app/ and paste the
+              token string (cashuA...) to try and redeem it!
             </div>
           </ModalBody>
         </ModalContent>
