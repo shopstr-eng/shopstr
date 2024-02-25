@@ -85,14 +85,18 @@ export default function RedeemButton({ token }: { token: string }) {
       const invoicePaymentRequest = invoice.paymentRequest;
       const response = await wallet.payLnInvoice(invoicePaymentRequest, proofs);
       const changeProofs = response.change;
-      if (changeProofs[0].amount >= 1) {
+      const changeAmount = changeProofs.reduce(
+          (acc, current) => acc + current.amount,
+          0,
+        );
+      if (changeAmount >= 1) {
         const decryptedRandomNpub = nip19.decode(randomNpub);
         const decryptedRandomNsec = nip19.decode(randomNsec);
         let encodedChange = getEncodedToken({
           token: [
             {
               mint: mints[0],
-              proofs: changeProofs,
+              proofs: changeAmount,
             },
           ],
         });
