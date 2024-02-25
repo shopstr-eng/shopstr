@@ -346,8 +346,6 @@ export const getLocalStorageData = (): LocalStorageInterface => {
 
     if (
       mints === null ||
-      mints[0] ===
-        "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC" ||
       mints[0] !==
         "https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV"
     ) {

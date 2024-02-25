@@ -7,7 +7,12 @@ import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { nip19 } from "nostr-tools";
 import { LightningAddress } from "@getalby/lightning-tools";
-import { CashuMint, CashuWallet, payLnInvoiceWithToken, getEncodedToken } from "@cashu/cashu-ts";
+import {
+  CashuMint,
+  CashuWallet,
+  payLnInvoiceWithToken,
+  getEncodedToken,
+} from "@cashu/cashu-ts";
 import RedemptionModal from "./redemption-modal";
 import { formatWithCommas } from "./display-monetary-info";
 
@@ -32,7 +37,7 @@ export default function RedeemButton({ token }: { token: string }) {
   const [openRedemptionModal, setOpenRedemptionModal] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
   const [isCashu, setIsCashu] = useState(false);
-  const [isRedeeming, setIsRedeeming] = useState(false)
+  const [isRedeeming, setIsRedeeming] = useState(false);
   const [proofs, setProofs] = useState([]);
   const [tokenAmount, setTokenAmount] = useState();
   const [formattedTokenAmount, setFormattedTokenAmount] = useState();
@@ -60,10 +65,11 @@ export default function RedeemButton({ token }: { token: string }) {
     const decodedToken = decodeBase64ToJson(token);
     const proofs = decodedToken.token[0].proofs;
     setProofs(proofs);
-    const totalAmount = proofs.reduce(
-      (acc, current) => acc + current.amount,
-      0,
-    );
+    const totalAmount =
+      Array.isArray(proofs) && proofs.length > 0
+        ? proofs.reduce((acc, current) => acc + current.amount, 0)
+        : 0;
+
     setTokenAmount(totalAmount);
     setFormattedTokenAmount(formatWithCommas(totalAmount, "sats"));
   }, [token]);
@@ -80,11 +86,6 @@ export default function RedeemButton({ token }: { token: string }) {
     );
   }, [profileContext]);
 
-  const formatter = new Intl.NumberFormat("en-GB", {
-    notation: "compact",
-    compactDisplay: "short",
-  });
-
   const redeem = async () => {
     setOpenRedemptionModal(false);
     setIsRedeeming(true);
@@ -100,10 +101,10 @@ export default function RedeemButton({ token }: { token: string }) {
       const invoicePaymentRequest = invoice.paymentRequest;
       const response = await wallet.payLnInvoice(invoicePaymentRequest, proofs);
       const changeProofs = response.change;
-      const changeAmount = changeProofs.reduce(
-          (acc, current) => acc + current.amount,
-          0,
-        );
+      const changeAmount =
+        Array.isArray(changeProofs) && cangeProofs.length > 0
+          ? changeProofs.reduce((acc, current) => acc + current.amount, 0)
+          : 0;
       if (changeAmount >= 1) {
         const decryptedRandomNpub = nip19.decode(randomNpub);
         const decryptedRandomNsec = nip19.decode(randomNsec);
@@ -116,7 +117,8 @@ export default function RedeemButton({ token }: { token: string }) {
           ],
         });
         const paymentMessage =
-          "This is the change from your token redemption on Shopstr: " + encodedChange;
+          "This is the change from your token redemption on Shopstr: " +
+          encodedChange;
         axios({
           method: "POST",
           url: "/api/nostr/post-event",
@@ -158,12 +160,14 @@ export default function RedeemButton({ token }: { token: string }) {
             )}
           </>
         ) : (
-          <>
-            Redeem: {tokenAmount} sats
-          </>
+          <>Redeem: {tokenAmount} sats</>
         )}
       </Button>
-      <RedemptionModal isPaid={isPaid} isCashu={isCashu} opened={openRedemptionModal} />
+      <RedemptionModal
+        isPaid={isPaid}
+        isCashu={isCashu}
+        opened={openRedemptionModal}
+      />
     </div>
   );
 }

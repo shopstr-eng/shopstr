@@ -42,15 +42,17 @@ export default function RedemptionModal({
         <ModalContent>
           <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
             <div className="flex items-center justify-center">
-              <CheckCircleIcon className="text-green-500 h-6 w-6" />
+              <CheckCircleIcon className="h-6 w-6 text-green-500" />
               <div>Redeemed</div>
             </div>
             {isCashu ? (
-        <div className="flex items-center justify-center">
+              <div className="flex items-center justify-center">
                 Go to https://npub.cash/ to redeem your token with Lightning!
               </div>
             ) : (
-        <div className="flex items-center justify-center">Check your Lightning address for your sats!</div>
+              <div className="flex items-center justify-center">
+                Check your Lightning address for your sats!
+              </div>
             )}
           </ModalBody>
         </ModalContent>
@@ -78,13 +80,14 @@ export default function RedemptionModal({
         <ModalContent>
           <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
             <div className="flex items-center justify-center space-x-2">
-              <XCircleIcon className="text-red-500 h-6 w-6" />
+              <XCircleIcon className="h-6 w-6 text-red-500" />
               <div>Redemption Failed</div>
             </div>
             <div className="flex items-center justify-center">
               You are redeeming a token of too small/large an amount, no routes
-              could be found, or the token is already redeemed. Go to https://wallet.nutstash.app/ and paste the
-              token string (cashuA...) to try and redeem it!
+              could be found, or the token is already redeemed. Go to
+              https://wallet.nutstash.app/ and paste the token string
+              (cashuA...) to try and redeem it!
             </div>
           </ModalBody>
         </ModalContent>
