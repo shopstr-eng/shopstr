@@ -9,6 +9,20 @@ import { nip19 } from "nostr-tools";
 import { LightningAddress } from "@getalby/lightning-tools";
 import { CashuMint, CashuWallet, payLnInvoiceWithToken, getEncodedToken } from "@cashu/cashu-ts";
 import RedemptionModal from "./redemption-modal";
+import { formatWithCommas } from "./display-monetary-info";
+
+function decodeBase64ToJson(base64: string): any {
+  // Step 1: Decode the base64 string to a regular string
+  const decodedString = atob(base64);
+  // Step 2: Parse the decoded string as JSON
+  try {
+    const json = JSON.parse(decodedString);
+    return json;
+  } catch (error) {
+    console.error("Error parsing JSON from base64", error);
+    throw new Error("Invalid JSON format in base64 string.");
+  }
+}
 
 export default function RedeemButton({ token }: { token: string }) {
   const [lnurl, setLnurl] = useState("");
@@ -19,6 +33,9 @@ export default function RedeemButton({ token }: { token: string }) {
   const [isPaid, setIsPaid] = useState(false);
   const [isCashu, setIsCashu] = useState(false);
   const [isRedeeming, setIsRedeeming] = useState(false)
+  const [proofs, setProofs] = useState([]);
+  const [tokenAmount, setTokenAmount] = useState();
+  const [formattedTokenAmount, setFormattedTokenAmount] = useState();
 
   const { theme, setTheme } = useTheme();
 
@@ -40,6 +57,18 @@ export default function RedeemButton({ token }: { token: string }) {
   }, []);
 
   useEffect(() => {
+    const decodedToken = decodeBase64ToJson(token);
+    const proofs = decodedToken.token[0].proofs;
+    setProofs(proofs);
+    const totalAmount = proofs.reduce(
+      (acc, current) => acc + current.amount,
+      0,
+    );
+    setTokenAmount(totalAmount);
+    setFormattedTokenAmount(formatWithCommas(totalAmount, "sats"));
+  }, [token]);
+
+  useEffect(() => {
     const sellerProfileMap = profileContext.profileData;
     const sellerProfile = sellerProfileMap.has(decryptedNpub)
       ? sellerProfileMap.get(decryptedNpub)
@@ -51,30 +80,16 @@ export default function RedeemButton({ token }: { token: string }) {
     );
   }, [profileContext]);
 
-  function decodeBase64ToJson(base64: string): any {
-    // Step 1: Decode the base64 string to a regular string
-    const decodedString = atob(base64);
-    // Step 2: Parse the decoded string as JSON
-    try {
-      const json = JSON.parse(decodedString);
-      return json;
-    } catch (error) {
-      console.error("Error parsing JSON from base64", error);
-      throw new Error("Invalid JSON format in base64 string.");
-    }
-  }
+  const formatter = new Intl.NumberFormat("en-GB", {
+    notation: "compact",
+    compactDisplay: "short",
+  });
 
   const redeem = async () => {
     setOpenRedemptionModal(false);
     setIsRedeeming(true);
-    const decodedToken = decodeBase64ToJson(token);
-    const proofs = decodedToken.token[0].proofs;
-    const totalAmount = proofs.reduce(
-      (acc, current) => acc + current.amount,
-      0,
-    );
     const wallet = new CashuWallet(new CashuMint(mints[0]));
-    const newAmount = Math.floor(totalAmount * 0.98 - 2);
+    const newAmount = Math.floor(tokenAmount * 0.98 - 2);
     const ln = new LightningAddress(lnurl);
     if (lnurl.includes("@npub.cash")) {
       setIsCashu(true);
@@ -131,8 +146,6 @@ export default function RedeemButton({ token }: { token: string }) {
     }
   };
 
-  // default to npub.cash lnurl if none exists, and alert user to go to the site to redeem
-
   return (
     <div>
       <Button className={SHOPSTRBUTTONCLASSNAMES + " w-[20%]"} onClick={redeem}>
@@ -146,7 +159,7 @@ export default function RedeemButton({ token }: { token: string }) {
           </>
         ) : (
           <>
-            Redeem Token
+            Redeem: {tokenAmount} sats
           </>
         )}
       </Button>
