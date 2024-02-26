@@ -3,7 +3,12 @@ import Link from "next/link";
 import axios from "axios";
 import { Modal, ModalContent, ModalBody, Button } from "@nextui-org/react";
 import { useRouter } from "next/router";
-import { CheckCircleIcon, ArrowUpTrayIcon, ArrowDownTrayIcon, XCircleIcon } from "@heroicons/react/24/outline";
+import {
+  CheckCircleIcon,
+  ArrowUpTrayIcon,
+  ArrowDownTrayIcon,
+  XCircleIcon,
+} from "@heroicons/react/24/outline";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { nip19 } from "nostr-tools";
@@ -16,12 +21,14 @@ export default function RedemptionModal({
   isCashu,
   changeAmount,
   changeProofs,
+  lnurl,
 }: {
   opened: boolean;
   isPaid: boolean;
   isCashu: boolean;
   changeAmount: number;
   changeProofs: any[];
+  lnurl: string;
 }) {
   const [showModal, setShowModal] = useState(false);
   const { npub, decryptedNpub, mints, relays } = getLocalStorageData();
@@ -114,16 +121,26 @@ export default function RedemptionModal({
               <div className="ml-2">Redeemed</div>
             </div>
             {isCashu ? (
-              <div className="flex items-center justify-center">
-                Head over to https://npub.cash/ to redeem your sats with
-                Lightning! Would you like to donate your overpaid Lightning fees
-                ({formattedChangeAmount}) to support the development of Shopstr?
+              <div className="items-center justify-center">
+                Sign in to{" "}
+                <Link href="https://npub.cash/" passHref legacyBehavior>
+                  <a
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline"
+                  >
+                    npub.cash
+                  </a>
+                </Link>{" "}
+                with your Nostr keys to claim your sats! Would you like to
+                donate your overpaid Lightning fees ({formattedChangeAmount}) to
+                support the development of Shopstr?
               </div>
             ) : (
               <div className="flex items-center justify-center">
-                Check your Lightning address for your sats! Would you like to
-                donate your overpaid Lightning fees ({formattedChangeAmount}) to
-                support the development of Shopstr?
+                Check your Lightning address ({lnurl}) for your sats! Would you
+                like to donate your overpaid Lightning fees (
+                {formattedChangeAmount}) to support the development of Shopstr?
               </div>
             )}
             <div className="flex w-full flex-wrap justify-evenly gap-2">

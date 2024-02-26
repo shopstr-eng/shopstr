@@ -66,9 +66,7 @@ const Keys = () => {
 
       localStorage.setItem(
         "mints",
-        JSON.stringify([
-          "https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV",
-        ]),
+        JSON.stringify(["https://mint.minibits.cash/Bitcoin"]),
       );
 
       router.push("/");

@@ -31,14 +31,16 @@ function decodeBase64ToJson(base64: string): any {
 export default function RedeemButton({ token }: { token: string }) {
   const [lnurl, setLnurl] = useState("");
   const profileContext = useContext(ProfileMapContext);
-  const { npub, decryptedNpub, mints, relays } = getLocalStorageData();
+  const { npub, decryptedNpub, relays } = getLocalStorageData();
 
   const [openRedemptionModal, setOpenRedemptionModal] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
   const [isCashu, setIsCashu] = useState(false);
   const [isSpent, setIsSpent] = useState(false);
   const [isRedeeming, setIsRedeeming] = useState(false);
+  const [wallet, setWallet] = useState<CashuWallet>();
   const [proofs, setProofs] = useState([]);
+  const [tokenMint, setTokenMint] = useState("");
   const [tokenAmount, setTokenAmount] = useState();
   const [formattedTokenAmount, setFormattedTokenAmount] = useState();
   const [redemptionChangeAmount, setRedemptionChangeAmount] = useState();
@@ -48,12 +50,14 @@ export default function RedeemButton({ token }: { token: string }) {
 
   const { theme, setTheme } = useTheme();
 
-  const wallet = new CashuWallet(new CashuMint(mints[0]));
-
   useEffect(() => {
     const decodedToken = decodeBase64ToJson(token);
+    const mint = decodedToken.token[0].mint
+    setTokenMint(mint)
     const proofs = decodedToken.token[0].proofs;
     setProofs(proofs);
+    const newWallet = new CashuWallet(new CashuMint(mint));
+    setWallet(newWallet);
     const totalAmount =
       Array.isArray(proofs) && proofs.length > 0
         ? proofs.reduce((acc, current) => acc + current.amount, 0)
@@ -183,6 +187,7 @@ export default function RedeemButton({ token }: { token: string }) {
         opened={openRedemptionModal}
         changeAmount={redemptionChangeAmount}
         changeProofs={redemptionChangeProofs}
+        lnurl={lnurl}
       />
     </div>
   );

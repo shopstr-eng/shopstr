@@ -42,9 +42,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
 
         localStorage.setItem(
           "mints",
-          JSON.stringify([
-            "https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV",
-          ]),
+          JSON.stringify(["https://mint.minibits.cash/Bitcoin"]),
         );
 
         // alert("Signed in as " + npub + ".");
@@ -78,9 +76,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
       );
       localStorage.setItem(
         "mints",
-        JSON.stringify([
-          "https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV",
-        ]),
+        JSON.stringify(["https://mint.minibits.cash/Bitcoin"]),
       );
       // alert("Signed in as " + npub + ".");
       router.push("/");
