@@ -687,9 +687,9 @@ export default function NewForm({
               />
             )}
             <div className="mx-4 my-2 flex items-center justify-center text-center">
-              {/* <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" /> */}
+              <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
               <p className="ml-2 text-xs text-light-text dark:text-dark-text">
-                Sales made over Shopstr will be settled with{" "}
+                Once sold, you will receive a message containing a{" "}
                 <Link href="https://cashu.space" passHref legacyBehavior>
                   <a
                     target="_blank"
@@ -699,11 +699,7 @@ export default function NewForm({
                     Cashu
                   </a>
                 </Link>{" "}
-                via DMs from random npubs. You can either redeem your token
-                directly from our messages page, or by pasting the token string
-                (cashuA...) and mint url (found in settings) into a Cashu wallet
-                of your choice. Overpaid Lightning fees will be donated to
-                Shopstr to support development.
+                token that you can redeem for Bitcoin.
               </p>
             </div>
           </ModalBody>

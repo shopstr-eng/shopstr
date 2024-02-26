@@ -1,6 +1,7 @@
 import { useState, useEffect, useContext, useMemo } from "react";
+import Link from "next/link";
 import axios from "axios";
-import { Button, Spinner } from "@nextui-org/react";
+import { Button, Spinner, Tooltip } from "@nextui-org/react";
 import { useTheme } from "next-themes";
 import { ProfileMapContext } from "../../utils/context/context";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
@@ -183,25 +184,49 @@ export default function RedeemButton({ token }: { token: string }) {
 
   return (
     <div>
-      <Button
-        className={buttonClassName + " mt-2 w-[20%]"}
-        onClick={redeem}
-        isDisabled={isSpent}
+      <Tooltip
+        showArrow={true}
+        content={
+          <div className="flex items-center justify-center px-1 py-2">
+            <div className="max-w-sm text-tiny text-light-text dark:text-dark-text">
+              You can either redeem your tokens here, or by pasting the token
+              string (cashuA...) and mint url (found in settings) into a Cashu
+              wallet of your choice (like{" "}
+              <Link href="https://wallet.nutstash.app/" passHref legacyBehavior>
+                <a
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline"
+                >
+                  Nutstash
+                </a>
+              </Link>
+              ). Overpaid Lightning fees (~1%) will be donated to Shopstr to support
+              development.
+            </div>
+          </div>
+        }
       >
-        {isRedeeming ? (
-          <>
-            {theme === "dark" ? (
-              <Spinner size={"sm"} color="warning" />
-            ) : (
-              <Spinner size={"sm"} color="secondary" />
-            )}
-          </>
-        ) : isSpent ? (
-          <>Redeemed: {tokenAmount} sats</>
-        ) : (
-          <>Redeem: {tokenAmount} sats</>
-        )}
-      </Button>
+        <Button
+          className={buttonClassName + " mt-2 w-[20%]"}
+          onClick={redeem}
+          isDisabled={isSpent}
+        >
+          {isRedeeming ? (
+            <>
+              {theme === "dark" ? (
+                <Spinner size={"sm"} color="warning" />
+              ) : (
+                <Spinner size={"sm"} color="secondary" />
+              )}
+            </>
+          ) : isSpent ? (
+            <>Redeemed: {tokenAmount} sats</>
+          ) : (
+            <>Redeem: {tokenAmount} sats</>
+          )}
+        </Button>
+      </Tooltip>
       <RedemptionModal
         isPaid={isPaid}
         isCashu={isCashu}

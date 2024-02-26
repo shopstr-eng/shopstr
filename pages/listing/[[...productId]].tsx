@@ -53,7 +53,7 @@ const Listing = () => {
     : "/shopstr-2000x2000.png";
 
   return (
-    <div className="flex h-full flex-col bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
+    <div className="flex h-full min-h-screen flex-col bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
       <Head>
         <title>Shopstr</title>
         <meta name="description" content={productData?.title} />
