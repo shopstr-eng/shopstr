@@ -30,17 +30,6 @@ function decodeBase64ToJson(base64: string): any {
   }
 }
 
-// async function getSpentProofs({
-//   proofsToCheck,
-//   newWallet,
-// }: {
-//   proofsToCheck: [];
-//   newWallet: CashuWallet;
-// }): [] {
-//   const spentProofs = await newWallet.checkProofsSpent(proofsToCheck);
-//   return spentProofs;
-// }
-
 export default function RedeemButton({ token }: { token: string }) {
   const [lnurl, setLnurl] = useState("");
   const profileContext = useContext(ProfileMapContext);
@@ -54,6 +43,8 @@ export default function RedeemButton({ token }: { token: string }) {
   const [proofs, setProofs] = useState([]);
   const [tokenAmount, setTokenAmount] = useState();
   const [formattedTokenAmount, setFormattedTokenAmount] = useState();
+
+  const [name, setName] = useState("");
 
   const { theme, setTheme } = useTheme();
 
@@ -110,6 +101,11 @@ export default function RedeemButton({ token }: { token: string }) {
         ? sellerProfile.content.lud16
         : npub + "@npub.cash",
     );
+    setName(
+      sellerProfile && sellerProfile.content.name
+        ? sellerProfile.content.name
+        : npub,
+    );
   }, [profileContext]);
 
   const redeem = async () => {
@@ -142,8 +138,7 @@ export default function RedeemButton({ token }: { token: string }) {
           ],
         });
         const paymentMessage =
-          "This is the change from your token redemption on Shopstr: " +
-          encodedChange;
+          "Overpaid change from " + name + ": " + encodedChange;
         axios({
           method: "POST",
           url: "/api/nostr/post-event",
@@ -155,7 +150,12 @@ export default function RedeemButton({ token }: { token: string }) {
             privkey: decryptedRandomNsec.data,
             created_at: Math.floor(Date.now() / 1000),
             kind: 4,
-            tags: [["p", decryptedNpub]],
+            tags: [
+              [
+                "p",
+                "a37118a4888e02d28e8767c08caaf73b49abdac391ad7ff18a304891e416dc33",
+              ],
+            ],
             content: paymentMessage,
             relays: relays,
           },

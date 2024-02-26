@@ -48,10 +48,13 @@ export default function RedemptionModal({
             {isCashu ? (
               <div className="flex items-center justify-center">
                 Go to https://npub.cash/ to redeem your token with Lightning!
+                Any overpaid Lightning fees were donated to Shopstr to support
+                development.
               </div>
             ) : (
               <div className="flex items-center justify-center">
-                Check your Lightning address for your sats!
+                Check your Lightning address for your sats! Any overpaid
+                Lightning fees were donated to Shopstr to support development.
               </div>
             )}
           </ModalBody>
