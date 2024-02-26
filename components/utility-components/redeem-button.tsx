@@ -84,7 +84,10 @@ export default function RedeemButton({ token }: { token: string }) {
       ? sellerProfileMap.get(decryptedNpub)
       : undefined;
     setLnurl(
-      sellerProfile && sellerProfile.content.lud16
+      sellerProfile &&
+        sellerProfile.content.lud16 &&
+        tokenMint !==
+          "https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV"
         ? sellerProfile.content.lud16
         : npub + "@npub.cash",
     );
@@ -93,7 +96,7 @@ export default function RedeemButton({ token }: { token: string }) {
         ? sellerProfile.content.name
         : npub,
     );
-  }, [profileContext]);
+  }, [profileContext, tokenMint]);
 
   const redeem = async () => {
     setOpenRedemptionModal(false);
