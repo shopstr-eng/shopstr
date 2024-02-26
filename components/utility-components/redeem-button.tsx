@@ -30,6 +30,17 @@ function decodeBase64ToJson(base64: string): any {
   }
 }
 
+// async function getSpentProofs({
+//   proofsToCheck,
+//   newWallet,
+// }: {
+//   proofsToCheck: [];
+//   newWallet: CashuWallet;
+// }): [] {
+//   const spentProofs = await newWallet.checkProofsSpent(proofsToCheck);
+//   return spentProofs;
+// }
+
 export default function RedeemButton({ token }: { token: string }) {
   const [lnurl, setLnurl] = useState("");
   const profileContext = useContext(ProfileMapContext);
@@ -65,12 +76,10 @@ export default function RedeemButton({ token }: { token: string }) {
       });
   }, []);
 
-  useEffect(async () => {
+  useEffect(() => {
     const decodedToken = decodeBase64ToJson(token);
     const proofs = decodedToken.token[0].proofs;
     setProofs(proofs);
-    const spentProofs = await wallet.checkProofsSpent(proofs);
-    if (spentProofs.length > 0) setIsSpent(true);
     const totalAmount =
       Array.isArray(proofs) && proofs.length > 0
         ? proofs.reduce((acc, current) => acc + current.amount, 0)
@@ -79,6 +88,17 @@ export default function RedeemButton({ token }: { token: string }) {
     setTokenAmount(totalAmount);
     setFormattedTokenAmount(formatWithCommas(totalAmount, "sats"));
   }, [token]);
+
+  useEffect(() => {
+    setIsSpent(false);
+    const checkProofsSpent = async () => {
+      if (proofs.length > 0) {
+        const spentProofs = await wallet.checkProofsSpent(proofs);
+        if (spentProofs.length > 0) setIsSpent(true);
+      }
+    };
+    checkProofsSpent();
+  }, [proofs]);
 
   useEffect(() => {
     const sellerProfileMap = profileContext.profileData;
