@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from "react";
+import { useState, useEffect, useContext, useMemo } from "react";
 import axios from "axios";
 import { Button, Spinner } from "@nextui-org/react";
 import { useTheme } from "next-themes";
@@ -10,6 +10,7 @@ import { LightningAddress } from "@getalby/lightning-tools";
 import {
   CashuMint,
   CashuWallet,
+  checkProofsSpent,
   payLnInvoiceWithToken,
   getEncodedToken,
 } from "@cashu/cashu-ts";
@@ -37,6 +38,7 @@ export default function RedeemButton({ token }: { token: string }) {
   const [openRedemptionModal, setOpenRedemptionModal] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
   const [isCashu, setIsCashu] = useState(false);
+  const [isSpent, setIsSpent] = useState(false);
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [proofs, setProofs] = useState([]);
   const [tokenAmount, setTokenAmount] = useState();
@@ -46,6 +48,8 @@ export default function RedeemButton({ token }: { token: string }) {
 
   const [randomNpub, setRandomNpub] = useState<string>("");
   const [randomNsec, setRandomNsec] = useState<string>("");
+
+  const wallet = new CashuWallet(new CashuMint(mints[0]));
 
   useEffect(() => {
     axios({
@@ -61,10 +65,12 @@ export default function RedeemButton({ token }: { token: string }) {
       });
   }, []);
 
-  useEffect(() => {
+  useEffect(async () => {
     const decodedToken = decodeBase64ToJson(token);
     const proofs = decodedToken.token[0].proofs;
     setProofs(proofs);
+    const spentProofs = await wallet.checkProofsSpent(proofs);
+    if (spentProofs.length > 0) setIsSpent(true);
     const totalAmount =
       Array.isArray(proofs) && proofs.length > 0
         ? proofs.reduce((acc, current) => acc + current.amount, 0)
@@ -89,7 +95,6 @@ export default function RedeemButton({ token }: { token: string }) {
   const redeem = async () => {
     setOpenRedemptionModal(false);
     setIsRedeeming(true);
-    const wallet = new CashuWallet(new CashuMint(mints[0]));
     const newAmount = Math.floor(tokenAmount * 0.98 - 2);
     const ln = new LightningAddress(lnurl);
     if (lnurl.includes("@npub.cash")) {
@@ -102,7 +107,7 @@ export default function RedeemButton({ token }: { token: string }) {
       const response = await wallet.payLnInvoice(invoicePaymentRequest, proofs);
       const changeProofs = response.change;
       const changeAmount =
-        Array.isArray(changeProofs) && cangeProofs.length > 0
+        Array.isArray(changeProofs) && changeProofs.length > 0
           ? changeProofs.reduce((acc, current) => acc + current.amount, 0)
           : 0;
       if (changeAmount >= 1) {
@@ -148,9 +153,21 @@ export default function RedeemButton({ token }: { token: string }) {
     }
   };
 
+  const buttonClassName = useMemo(() => {
+    const disabledStyle =
+      "min-w-fit from-gray-300 to-gray-400 cursor-not-allowed";
+    const enabledStyle = SHOPSTRBUTTONCLASSNAMES;
+    const className = isSpent ? disabledStyle : enabledStyle;
+    return className;
+  }, [isSpent]);
+
   return (
     <div>
-      <Button className={SHOPSTRBUTTONCLASSNAMES + " w-[20%]"} onClick={redeem}>
+      <Button
+        className={buttonClassName + " mt-2 w-[20%]"}
+        onClick={redeem}
+        isDisabled={isSpent}
+      >
         {isRedeeming ? (
           <>
             {theme === "dark" ? (
@@ -159,6 +176,8 @@ export default function RedeemButton({ token }: { token: string }) {
               <Spinner size={"sm"} color="secondary" />
             )}
           </>
+        ) : isSpent ? (
+          <>Redeemed: {tokenAmount} sats</>
         ) : (
           <>Redeem: {tokenAmount} sats</>
         )}
