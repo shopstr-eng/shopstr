@@ -1,25 +1,92 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import axios from "axios";
 import { Modal, ModalContent, ModalBody, Button } from "@nextui-org/react";
 import { useRouter } from "next/router";
-import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/outline";
+import { CheckCircleIcon, ArrowUpTrayIcon, ArrowDownTrayIcon, XCircleIcon } from "@heroicons/react/24/outline";
+import { getLocalStorageData } from "../utility/nostr-helper-functions";
+import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
+import { nip19 } from "nostr-tools";
+import { getEncodedToken } from "@cashu/cashu-ts";
+import { formatWithCommas } from "./display-monetary-info";
 
 export default function RedemptionModal({
   opened,
   isPaid,
   isCashu,
+  changeAmount,
+  changeProofs,
 }: {
   opened: boolean;
   isPaid: boolean;
   isCashu: boolean;
+  changeAmount: number;
+  changeProofs: any[];
 }) {
   const [showModal, setShowModal] = useState(false);
+  const { npub, decryptedNpub, mints, relays } = getLocalStorageData();
+
+  const [formattedChangeAmount, setFormattedChangeAmount] = useState();
+
+  const [randomNpub, setRandomNpub] = useState<string>("");
+  const [randomNsec, setRandomNsec] = useState<string>("");
 
   const router = useRouter();
 
   useEffect(() => {
+    axios({
+      method: "GET",
+      url: "/api/nostr/generate-keys",
+    })
+      .then((response) => {
+        setRandomNpub(response.data.npub);
+        setRandomNsec(response.data.nsec);
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+  }, []);
+
+  useEffect(() => {
+    setFormattedChangeAmount(formatWithCommas(changeAmount, "sats"));
+  }, [changeAmount]);
+
+  useEffect(() => {
     setShowModal(opened);
   }, [opened]);
+
+  const sendChange = async (pubkey: string) => {
+    if (changeAmount >= 1) {
+      const decryptedRandomNpub = nip19.decode(randomNpub);
+      const decryptedRandomNsec = nip19.decode(randomNsec);
+      let encodedChange = getEncodedToken({
+        token: [
+          {
+            mint: mints[0],
+            proofs: changeProofs,
+          },
+        ],
+      });
+      const paymentMessage = "Overpaid fee change: " + encodedChange;
+      axios({
+        method: "POST",
+        url: "/api/nostr/post-event",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        data: {
+          pubkey: decryptedRandomNpub.data,
+          privkey: decryptedRandomNsec.data,
+          created_at: Math.floor(Date.now() / 1000),
+          kind: 4,
+          tags: [["p", pubkey]],
+          content: paymentMessage,
+          relays: relays,
+        },
+      });
+    }
+    setShowModal(false);
+  };
 
   return isPaid ? (
     <>
@@ -44,20 +111,45 @@ export default function RedemptionModal({
           <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
             <div className="flex items-center justify-center">
               <CheckCircleIcon className="h-6 w-6 text-green-500" />
-              <div>Redeemed</div>
+              <div className="ml-2">Redeemed</div>
             </div>
             {isCashu ? (
               <div className="flex items-center justify-center">
-                Go to https://npub.cash/ to redeem your token with Lightning!
-                Any overpaid Lightning fees were donated to Shopstr to support
-                development.
+                Head over to https://npub.cash/ to redeem your sats with
+                Lightning! Would you like to donate your overpaid Lightning fees
+                ({formattedChangeAmount}) to support the development of Shopstr?
               </div>
             ) : (
               <div className="flex items-center justify-center">
-                Check your Lightning address for your sats! Any overpaid
-                Lightning fees were donated to Shopstr to support development.
+                Check your Lightning address for your sats! Would you like to
+                donate your overpaid Lightning fees ({formattedChangeAmount}) to
+                support the development of Shopstr?
               </div>
             )}
+            <div className="flex w-full flex-wrap justify-evenly gap-2">
+              <Button
+                className={SHOPSTRBUTTONCLASSNAMES + " mt-2 w-[20%]"}
+                onClick={() =>
+                  sendChange(
+                    "a37118a4888e02d28e8767c08caaf73b49abdac391ad7ff18a304891e416dc33",
+                  )
+                }
+                startContent={
+                  <ArrowUpTrayIcon className="h-6 w-6 hover:text-yellow-500" />
+                }
+              >
+                Donate
+              </Button>
+              <Button
+                className={SHOPSTRBUTTONCLASSNAMES + " mt-2 w-[20%]"}
+                onClick={() => sendChange(decryptedNpub)}
+                startContent={
+                  <ArrowDownTrayIcon className="h-6 w-6 hover:text-yellow-500" />
+                }
+              >
+                Keep
+              </Button>
+            </div>
           </ModalBody>
         </ModalContent>
       </Modal>
@@ -85,7 +177,7 @@ export default function RedemptionModal({
           <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
             <div className="flex items-center justify-center space-x-2">
               <XCircleIcon className="h-6 w-6 text-red-500" />
-              <div>Redemption Failed</div>
+              <div className="ml-2">Redemption Failed</div>
             </div>
             <div className="items-center justify-center">
               You are redeeming a token of too small/large an amount, no routes

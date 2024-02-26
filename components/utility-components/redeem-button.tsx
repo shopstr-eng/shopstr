@@ -1,19 +1,16 @@
 import { useState, useEffect, useContext, useMemo } from "react";
 import Link from "next/link";
-import axios from "axios";
 import { Button, Spinner, Tooltip } from "@nextui-org/react";
 import { useTheme } from "next-themes";
 import { ProfileMapContext } from "../../utils/context/context";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
-import { nip19 } from "nostr-tools";
 import { LightningAddress } from "@getalby/lightning-tools";
 import {
   CashuMint,
   CashuWallet,
   checkProofsSpent,
   payLnInvoiceWithToken,
-  getEncodedToken,
 } from "@cashu/cashu-ts";
 import RedemptionModal from "./redemption-modal";
 import { formatWithCommas } from "./display-monetary-info";
@@ -44,29 +41,14 @@ export default function RedeemButton({ token }: { token: string }) {
   const [proofs, setProofs] = useState([]);
   const [tokenAmount, setTokenAmount] = useState();
   const [formattedTokenAmount, setFormattedTokenAmount] = useState();
+  const [redemptionChangeAmount, setRedemptionChangeAmount] = useState();
+  const [redemptionChangeProofs, setRedemptionChangeProofs] = useState([]);
 
   const [name, setName] = useState("");
 
   const { theme, setTheme } = useTheme();
 
-  const [randomNpub, setRandomNpub] = useState<string>("");
-  const [randomNsec, setRandomNsec] = useState<string>("");
-
   const wallet = new CashuWallet(new CashuMint(mints[0]));
-
-  useEffect(() => {
-    axios({
-      method: "GET",
-      url: "/api/nostr/generate-keys",
-    })
-      .then((response) => {
-        setRandomNpub(response.data.npub);
-        setRandomNsec(response.data.nsec);
-      })
-      .catch((error) => {
-        console.error(error);
-      });
-  }, []);
 
   useEffect(() => {
     const decodedToken = decodeBase64ToJson(token);
@@ -128,39 +110,8 @@ export default function RedeemButton({ token }: { token: string }) {
           ? changeProofs.reduce((acc, current) => acc + current.amount, 0)
           : 0;
       if (changeAmount >= 1) {
-        const decryptedRandomNpub = nip19.decode(randomNpub);
-        const decryptedRandomNsec = nip19.decode(randomNsec);
-        let encodedChange = getEncodedToken({
-          token: [
-            {
-              mint: mints[0],
-              proofs: changeAmount,
-            },
-          ],
-        });
-        const paymentMessage =
-          "Overpaid change from " + name + ": " + encodedChange;
-        axios({
-          method: "POST",
-          url: "/api/nostr/post-event",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          data: {
-            pubkey: decryptedRandomNpub.data,
-            privkey: decryptedRandomNsec.data,
-            created_at: Math.floor(Date.now() / 1000),
-            kind: 4,
-            tags: [
-              [
-                "p",
-                "a37118a4888e02d28e8767c08caaf73b49abdac391ad7ff18a304891e416dc33",
-              ],
-            ],
-            content: paymentMessage,
-            relays: relays,
-          },
-        });
+        setRedemptionChangeAmount(changeAmount);
+        setRedemptionChangeProofs(changeProofs);
       }
       setIsPaid(true);
       setOpenRedemptionModal(true);
@@ -201,8 +152,7 @@ export default function RedeemButton({ token }: { token: string }) {
                   Nutstash
                 </a>
               </Link>
-              ). Overpaid Lightning fees (~1%) will be donated to Shopstr to support
-              development.
+              ).
             </div>
           </div>
         }
@@ -231,6 +181,8 @@ export default function RedeemButton({ token }: { token: string }) {
         isPaid={isPaid}
         isCashu={isCashu}
         opened={openRedemptionModal}
+        changeAmount={redemptionChangeAmount}
+        changeProofs={redemptionChangeProofs}
       />
     </div>
   );
