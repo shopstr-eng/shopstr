@@ -190,7 +190,7 @@ export default function RedeemButton({ token }: { token: string }) {
           <div className="flex items-center justify-center px-1 py-2">
             <div className="max-w-sm text-tiny text-light-text dark:text-dark-text">
               You can either redeem your tokens here, or by pasting the token
-              string (cashuA...) and mint url (found in settings) into a Cashu
+              string (cashuA...) and mint URL (found in settings) into a Cashu
               wallet of your choice (like{" "}
               <Link href="https://wallet.nutstash.app/" passHref legacyBehavior>
                 <a
