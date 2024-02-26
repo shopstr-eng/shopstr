@@ -52,8 +52,8 @@ export default function RedeemButton({ token }: { token: string }) {
 
   useEffect(() => {
     const decodedToken = decodeBase64ToJson(token);
-    const mint = decodedToken.token[0].mint
-    setTokenMint(mint)
+    const mint = decodedToken.token[0].mint;
+    setTokenMint(mint);
     const proofs = decodedToken.token[0].proofs;
     setProofs(proofs);
     const newWallet = new CashuWallet(new CashuMint(mint));
