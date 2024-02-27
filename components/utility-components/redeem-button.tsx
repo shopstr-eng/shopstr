@@ -106,7 +106,7 @@ export default function RedeemButton({ token }: { token: string }) {
       const invoice = await ln.requestInvoice({ satoshi: newAmount });
       const invoicePaymentRequest = invoice.paymentRequest;
       const response = await wallet?.payLnInvoice(invoicePaymentRequest, proofs);
-      const changeProofs = response.change;
+      const changeProofs = response?.change;
       const changeAmount =
         Array.isArray(changeProofs) && changeProofs.length > 0
           ? changeProofs.reduce((acc, current) => acc + current.amount, 0)
