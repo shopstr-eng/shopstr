@@ -66,7 +66,7 @@ export default function RedeemButton({ token }: { token: string }) {
     setIsSpent(false);
     const checkProofsSpent = async () => {
       if (proofs.length > 0) {
-        const spentProofs = await wallet.checkProofsSpent(proofs);
+        const spentProofs = await wallet?.checkProofsSpent(proofs);
         if (spentProofs.length > 0) setIsSpent(true);
       }
     };
@@ -105,7 +105,7 @@ export default function RedeemButton({ token }: { token: string }) {
       await ln.fetch();
       const invoice = await ln.requestInvoice({ satoshi: newAmount });
       const invoicePaymentRequest = invoice.paymentRequest;
-      const response = await wallet.payLnInvoice(invoicePaymentRequest, proofs);
+      const response = await wallet?.payLnInvoice(invoicePaymentRequest, proofs);
       const changeProofs = response.change;
       const changeAmount =
         Array.isArray(changeProofs) && changeProofs.length > 0
