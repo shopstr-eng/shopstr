@@ -33,7 +33,7 @@ export default function RedemptionModal({
   const [showModal, setShowModal] = useState(false);
   const { npub, decryptedNpub, mints, relays } = getLocalStorageData();
 
-  const [formattedChangeAmount, setFormattedChangeAmount] = useState();
+  const [formattedChangeAmount, setFormattedChangeAmount] = useState("");
 
   const [randomNpub, setRandomNpub] = useState<string>("");
   const [randomNsec, setRandomNsec] = useState<string>("");

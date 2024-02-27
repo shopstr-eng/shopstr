@@ -38,7 +38,7 @@ export default function RedeemButton({ token }: { token: string }) {
   const [tokenMint, setTokenMint] = useState("");
   const [tokenAmount, setTokenAmount] = useState(0);
   const [formattedTokenAmount, setFormattedTokenAmount] = useState("");
-  const [redemptionChangeAmount, setRedemptionChangeAmount] = useState();
+  const [redemptionChangeAmount, setRedemptionChangeAmount] = useState(0);
   const [redemptionChangeProofs, setRedemptionChangeProofs] = useState([]);
 
   const [name, setName] = useState("");
