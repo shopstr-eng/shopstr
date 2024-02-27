@@ -6,11 +6,7 @@ import { ProfileMapContext } from "../../utils/context/context";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { LightningAddress } from "@getalby/lightning-tools";
-import {
-  CashuMint,
-  CashuWallet,
-  payLnInvoiceWithToken,
-} from "@cashu/cashu-ts";
+import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
 import RedemptionModal from "./redemption-modal";
 import { formatWithCommas } from "./display-monetary-info";
 
