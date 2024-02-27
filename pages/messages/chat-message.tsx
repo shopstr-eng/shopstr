@@ -1,4 +1,5 @@
 import { getLocalStorageData } from "../../components/utility/nostr-helper-functions";
+import RedeemButton from "../../components/utility-components/redeem-button";
 import { NostrEvent, NostrMessageEvent } from "../../utils/types/types";
 import { timeSinceMessageDisplayText } from "../../utils/messages/utils";
 
@@ -34,7 +35,14 @@ export const ChatMessage = ({
         }`}
       >
         <p className={`inline-block flex-wrap overflow-x-hidden break-all`}>
-          {messageEvent.content}
+          {messageEvent.content.includes("cashuA") ? (
+            <>
+              {messageEvent.content}
+              <RedeemButton token={messageEvent.content.split("cashuA")[1]} />
+            </>
+          ) : (
+            <>{messageEvent.content}</>
+          )}
         </p>
         <div className="m-1"></div>
         <span

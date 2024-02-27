@@ -347,9 +347,11 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     if (
       mints === null ||
       mints[0] ===
+        "https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV" ||
+      mints[0] ===
         "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"
     ) {
-      mints = ["https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV"];
+      mints = ["https://mint.minibits.cash/Bitcoin"];
       localStorage.setItem("mints", JSON.stringify(mints));
     }
   }

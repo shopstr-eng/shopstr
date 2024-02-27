@@ -11,7 +11,8 @@
     "knex:migrate": "node --loader ts-node/esm ./node_modules/.bin/knex --knexfile ./knexfile.ts migrate:latest"
   },
   "dependencies": {
-    "@cashu/cashu-ts": "^0.8.0-rc.4",
+    "@cashu/cashu-ts": "^0.8.1",
+    "@getalby/lightning-tools": "^5.0.1",
     "@heroicons/react": "^2.0.18",
     "@itseasy21/react-elastic-carousel": "^0.12.3",
     "@nextui-org/react": "^2.1.13",

@@ -1,5 +1,6 @@
 // TODO componentarize file uploader
 import React, { useMemo, useRef, useEffect, useState, useContext } from "react";
+import Link from "next/link";
 import { useForm, Controller, set } from "react-hook-form";
 import {
   Modal,
@@ -16,7 +17,7 @@ import {
   Chip,
   Image,
 } from "@nextui-org/react";
-import { TrashIcon } from "@heroicons/react/24/outline";
+import { InformationCircleIcon, TrashIcon } from "@heroicons/react/24/outline";
 import Carousal from "@itseasy21/react-elastic-carousel";
 import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
 
@@ -685,6 +686,22 @@ export default function NewForm({
                 value={passphrase}
               />
             )}
+            <div className="mx-4 my-2 flex items-center justify-center text-center">
+              <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
+              <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+                Once sold, you will receive a message containing a{" "}
+                <Link href="https://cashu.space" passHref legacyBehavior>
+                  <a
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline"
+                  >
+                    Cashu
+                  </a>
+                </Link>{" "}
+                token that you can redeem for Bitcoin.
+              </p>
+            </div>
           </ModalBody>
 
           <ModalFooter>
