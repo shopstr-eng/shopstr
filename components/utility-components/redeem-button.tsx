@@ -9,7 +9,6 @@ import { LightningAddress } from "@getalby/lightning-tools";
 import {
   CashuMint,
   CashuWallet,
-  checkProofsSpent,
   payLnInvoiceWithToken,
 } from "@cashu/cashu-ts";
 import RedemptionModal from "./redemption-modal";
