@@ -36,7 +36,7 @@ export default function RedeemButton({ token }: { token: string }) {
   const [wallet, setWallet] = useState<CashuWallet>();
   const [proofs, setProofs] = useState([]);
   const [tokenMint, setTokenMint] = useState("");
-  const [tokenAmount, setTokenAmount] = useState();
+  const [tokenAmount, setTokenAmount] = useState(0);
   const [formattedTokenAmount, setFormattedTokenAmount] = useState("");
   const [redemptionChangeAmount, setRedemptionChangeAmount] = useState();
   const [redemptionChangeProofs, setRedemptionChangeProofs] = useState([]);
