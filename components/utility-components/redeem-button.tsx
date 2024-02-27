@@ -39,7 +39,9 @@ export default function RedeemButton({ token }: { token: string }) {
   const [tokenAmount, setTokenAmount] = useState(0);
   const [formattedTokenAmount, setFormattedTokenAmount] = useState("");
   const [redemptionChangeAmount, setRedemptionChangeAmount] = useState(0);
-  const [redemptionChangeProofs, setRedemptionChangeProofs] = useState(Proof[]);
+  const [redemptionChangeProofs, setRedemptionChangeProofs] = useState<Proof[]>(
+    [],
+  );
 
   const [name, setName] = useState("");
 
@@ -105,7 +107,10 @@ export default function RedeemButton({ token }: { token: string }) {
       await ln.fetch();
       const invoice = await ln.requestInvoice({ satoshi: newAmount });
       const invoicePaymentRequest = invoice.paymentRequest;
-      const response = await wallet?.payLnInvoice(invoicePaymentRequest, proofs);
+      const response = await wallet?.payLnInvoice(
+        invoicePaymentRequest,
+        proofs,
+      );
       const changeProofs = response?.change;
       const changeAmount =
         Array.isArray(changeProofs) && changeProofs.length > 0
