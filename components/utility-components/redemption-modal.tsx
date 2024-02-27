@@ -123,7 +123,7 @@ export default function RedemptionModal({
             {isCashu ? (
               <div className="items-center justify-center">
                 Sign in to{" "}
-                <Link href="https://npub.cash/" passHref legacyBehavior>
+                <Link href="https://npub.cash/claim" passHref legacyBehavior>
                   <a
                     target="_blank"
                     rel="noopener noreferrer"
