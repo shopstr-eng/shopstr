@@ -71,7 +71,7 @@ export default function RedeemButton({ token }: { token: string }) {
       }
     };
     checkProofsSpent();
-  }, [proofs]);
+  }, [proofs, wallet]);
 
   useEffect(() => {
     const sellerProfileMap = profileContext.profileData;
