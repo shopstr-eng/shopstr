@@ -67,7 +67,7 @@ export default function RedeemButton({ token }: { token: string }) {
     const checkProofsSpent = async () => {
       if (proofs.length > 0) {
         const spentProofs = await wallet?.checkProofsSpent(proofs);
-        if (spentProofs?.length > 0) setIsSpent(true);
+        if (spentProofs && spentProofs.length > 0) setIsSpent(true);
       }
     };
     checkProofsSpent();
