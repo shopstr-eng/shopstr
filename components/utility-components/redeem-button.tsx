@@ -6,7 +6,7 @@ import { ProfileMapContext } from "../../utils/context/context";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { LightningAddress } from "@getalby/lightning-tools";
-import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
+import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
 import RedemptionModal from "./redemption-modal";
 import { formatWithCommas } from "./display-monetary-info";
 
@@ -39,7 +39,7 @@ export default function RedeemButton({ token }: { token: string }) {
   const [tokenAmount, setTokenAmount] = useState(0);
   const [formattedTokenAmount, setFormattedTokenAmount] = useState("");
   const [redemptionChangeAmount, setRedemptionChangeAmount] = useState(0);
-  const [redemptionChangeProofs, setRedemptionChangeProofs] = useState([]);
+  const [redemptionChangeProofs, setRedemptionChangeProofs] = useState(Proof[]);
 
   const [name, setName] = useState("");
 
