@@ -218,15 +218,12 @@ export async function nostrBuildUploadImages(
     headers.Authorization = token;
   }
 
-  console.log('about to')
-
   const response = await fetch(url, {
     body: payload,
     method: "POST",
     headers,
   }).then((res) => res.json() as Promise<NostrBuildResponse>);
 
-  console.log(response)
   return response.data;
 }
 

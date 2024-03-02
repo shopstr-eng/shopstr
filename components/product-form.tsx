@@ -67,7 +67,6 @@ export default function NewForm({
   onSubmitCallback,
 }: ProductFormProps) {
   const [passphrase, setPassphrase] = useState("");
-  // const [images, setImages] = useState<NostrBuildResponse["data"]>([]);
   const [images, setImages] = useState<string[]>([]);
   const [signIn, setSignIn] = useState("");
   const [pubkey, setPubkey] = useState("");
