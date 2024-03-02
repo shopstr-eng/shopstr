@@ -68,7 +68,7 @@ const BottomNav = () => {
   };
   return (
     <div
-      className={`fixed bottom-0 z-10 w-full border-0 bg-light-fg pb-2 shadow-lg dark:bg-dark-fg sm:hidden`}
+      className={`fixed bottom-0 z-50 w-full border-t border-zinc-200 bg-light-fg pb-2 shadow-lg shadow-lg dark:border-zinc-800 dark:bg-dark-fg sm:hidden`}
     >
       <div className="flex w-full flex-row items-center justify-evenly justify-items-stretch">
         <div>

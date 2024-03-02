@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from "react";
-import { nip19 } from "nostr-tools";
+import { Filter, SimplePool, nip19 } from "nostr-tools";
 import { getLocalStorageData } from "./utility/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
 import { ProductContext, ProfileMapContext } from "../utils/context/context";
@@ -9,18 +9,22 @@ import { useRouter } from "next/router";
 import parseTags, { ProductData } from "./utility/product-parser-functions";
 import ShopstrSpinner from "./utility-components/shopstr-spinner";
 import { DeleteListing } from "../pages/api/nostr/crud-service";
-import { removeProductFromCache } from "../pages/api/nostr/cache-service";
+import { Button } from "@nextui-org/react";
+import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
+import { DateTime } from "luxon";
 
 const DisplayEvents = ({
   focusedPubkey,
   selectedCategories,
   selectedLocation,
   selectedSearch,
+  canShowLoadMore,
 }: {
   focusedPubkey?: string;
   selectedCategories: Set<string>;
   selectedLocation: string;
   selectedSearch: string;
+  canShowLoadMore?: boolean;
 }) => {
   const [productEvents, setProductEvents] = useState<ProductData[]>([]);
   const [isProductsLoading, setIsProductLoading] = useState(true);
@@ -28,6 +32,7 @@ const DisplayEvents = ({
   const profileMapContext = useContext(ProfileMapContext);
   const [focusedProduct, setFocusedProduct] = useState(""); // product being viewed in modal
   const [showModal, setShowModal] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -138,9 +143,48 @@ const DisplayEvents = ({
     );
   };
 
+  const loadMoreListings = async () => {
+    try {
+      setIsLoadingMore(true);
+      if (productEventContext.isLoading) return;
+      productEventContext.isLoading = true;
+      const oldestListing =
+        productEvents.length > 0
+          ? productEvents[productEvents.length - 1]
+          : null;
+      const oldestListingCreatedAt = oldestListing
+        ? oldestListing.createdAt
+        : Math.trunc(DateTime.now().toSeconds());
+      const since = Math.trunc(
+        DateTime.fromSeconds(oldestListingCreatedAt)
+          .minus({ days: 14 })
+          .toSeconds(),
+      );
+
+      const pool = new SimplePool();
+      const filter: Filter = {
+        kinds: [30402],
+        since,
+        until: oldestListingCreatedAt,
+      };
+      const events = await pool.querySync(getLocalStorageData().relays, filter);
+      events.forEach((event) => {
+        if (event.id !== oldestListing?.id) {
+          productEventContext.addNewlyCreatedProductEvent(event);
+        }
+      });
+      productEventContext.isLoading = false;
+      setIsLoadingMore(false);
+    } catch (err) {
+      console.log(err);
+      productEventContext.isLoading = false;
+      setIsLoadingMore(false);
+    }
+  };
+
   return (
     <>
-      <div className="mx-auto w-full">
+      <div className="w-full md:pl-4">
         {/* DISPLAYS PRODUCT LISTINGS HERE */}
         {profileMapContext.isLoading ||
         isProductsLoading ||
@@ -157,15 +201,28 @@ const DisplayEvents = ({
             </div>
           )
         ) : (
-          <div className="my-2 flex h-[90%] max-w-full flex-row flex-wrap justify-evenly overflow-x-hidden overflow-y-hidden">
+          <div className="grid h-[90%] max-w-full grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-x-hidden">
             {productEvents.map((productData: ProductData, index) => {
               return displayProductCard(productData, index);
             })}
           </div>
         )}
-        <div className="h-20">
-          {/*spacer div needed to account for the footer buttons*/}
-        </div>
+        {canShowLoadMore ? (
+          <div className="mt-8 h-20">
+            {!isLoadingMore ? (
+              <Button
+                className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
+                onClick={async () => await loadMoreListings()}
+              >
+                Load More
+              </Button>
+            ) : (
+              <div className="mt-8 flex items-center justify-center">
+                <ShopstrSpinner />
+              </div>
+            )}
+          </div>
+        ) : null}
       </div>
       <DisplayProductModal
         productData={focusedProduct}

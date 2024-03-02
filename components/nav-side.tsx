@@ -71,7 +71,7 @@ const SideNav = () => {
 
   return (
     <>
-      <div className="fixed hidden h-full w-[120px] flex-col items-center border-0 bg-light-fg py-8  dark:bg-dark-fg sm:flex md:w-[250px] md:items-start">
+      <div className="fixed z-50 hidden h-full w-[120px] flex-col items-center border-0 bg-light-fg py-8  dark:bg-dark-fg sm:flex md:w-[250px] md:items-start">
         <Button
           onClick={() => router.push("/")}
           className={`mb-5 flex w-full flex-row justify-start bg-transparent py-8 text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text`}
