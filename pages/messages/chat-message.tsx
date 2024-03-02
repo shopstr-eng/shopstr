@@ -3,6 +3,15 @@ import RedeemButton from "../../components/utility-components/redeem-button";
 import { NostrEvent, NostrMessageEvent } from "../../utils/types/types";
 import { timeSinceMessageDisplayText } from "../../utils/messages/utils";
 
+function isDecodableToken(token: string): boolean {
+  try {
+    atob(token);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 export const ChatMessage = ({
   messageEvent,
   index = 0,
@@ -16,6 +25,14 @@ export const ChatMessage = ({
     return null;
   }
   const { decryptedNpub } = getLocalStorageData();
+
+  const tokenAfterCashuA = messageEvent.content.includes("cashuA")
+    ? messageEvent.content.split("cashuA")[1]
+    : null;
+  const canDecodeToken = tokenAfterCashuA
+    ? isDecodableToken(tokenAfterCashuA)
+    : false;
+
   return (
     <div
       key={index}
@@ -35,10 +52,10 @@ export const ChatMessage = ({
         }`}
       >
         <p className={`inline-block flex-wrap overflow-x-hidden break-all`}>
-          {messageEvent.content.includes("cashuA") ? (
+          {messageEvent.content.includes("cashuA") && canDecodeToken ? (
             <>
               {messageEvent.content}
-              <RedeemButton token={messageEvent.content.split("cashuA")[1]} />
+              <RedeemButton token={tokenAfterCashuA} />
             </>
           ) : (
             <>{messageEvent.content}</>
