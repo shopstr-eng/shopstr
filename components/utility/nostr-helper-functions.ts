@@ -309,6 +309,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
   let decryptedNpub;
   let relays;
   let mints;
+  let tokens;
 
   if (typeof window !== "undefined") {
     npub = localStorage.getItem("npub");
@@ -354,6 +355,10 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       mints = ["https://mint.minibits.cash/Bitcoin"];
       localStorage.setItem("mints", JSON.stringify(mints));
     }
+
+    tokens = localStorage.getItem("tokens")
+      ? JSON.parse(localStorage.getItem("tokens"))
+      : localStorage.setItem("tokens", JSON.stringify([]));
   }
   return {
     signIn: signIn as string,
@@ -362,6 +367,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     decryptedNpub: decryptedNpub as string,
     relays: relays || [],
     mints,
+    tokens: tokens || [],
   };
 };
 

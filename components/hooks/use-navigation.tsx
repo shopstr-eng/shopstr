@@ -8,12 +8,14 @@ const useNavigation = () => {
   const pathname = usePathname();
   const [isHomeActive, setIsHomeActive] = useState(false);
   const [isMessagesActive, setIsMessagesActive] = useState(false);
+  const [isWalletActive, setIsWalletActive] = useState(false);
   const [isMetricsActive, setIsMetricsActive] = useState(false);
   const [isProfileActive, setIsProfileActive] = useState(false);
 
   useEffect(() => {
     setIsHomeActive(false);
     setIsMessagesActive(false);
+    setIsWalletActive(false);
     setIsMetricsActive(false);
     setIsProfileActive(false);
 
@@ -23,6 +25,9 @@ const useNavigation = () => {
         break;
       case "/messages":
         setIsMessagesActive(true);
+        break;
+      case "/wallet":
+        setIsWalletActive(true);
         break;
       case "/metrics":
         setIsMetricsActive(true);
@@ -39,6 +44,7 @@ const useNavigation = () => {
   return {
     isHomeActive,
     isMessagesActive,
+    isWalletActive,
     isMetricsActive,
     isProfileActive,
   };

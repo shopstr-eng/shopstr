@@ -9,11 +9,11 @@ import {
   EnvelopeOpenIcon,
   ChartBarIcon,
   Cog6ToothIcon,
+  WalletIcon,
 } from "@heroicons/react/24/outline";
 import { countNumberOfUnreadMessagesFromChatsContext } from "@/utils/messages/utils";
 import { ChatsContext } from "@/utils/context/context";
 import { db } from "../pages/api/nostr/cache-service";
-
 import { useLiveQuery } from "dexie-react-hooks";
 import { Button, Image } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
@@ -22,8 +22,13 @@ import SignInModal from "./sign-in/SignInModal";
 import { getLocalStorageData } from "./utility/nostr-helper-functions";
 
 const SideNav = () => {
-  const { isHomeActive, isMessagesActive, isMetricsActive, isProfileActive } =
-    useNavigation();
+  const {
+    isHomeActive,
+    isMessagesActive,
+    isWalletActive,
+    isMetricsActive,
+    isProfileActive,
+  } = useNavigation();
   const router = useRouter();
 
   const [openSignInModal, setOpenSignInModal] = useState(false);
@@ -130,6 +135,23 @@ const SideNav = () => {
             }`}
           >
             Messages
+          </span>
+        </Button>
+        <Button
+          onClick={() => handleRoute("/wallet")}
+          className={`flex w-full  flex-row justify-start bg-transparent py-8 text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
+            isWalletActive
+              ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
+              : ""
+          }`}
+        >
+          <WalletIcon height={32} width={32}></WalletIcon>
+          <span
+            className={`hidden text-2xl md:flex ${
+              isWalletActive ? "font-bold" : ""
+            }`}
+          >
+            Wallet
           </span>
         </Button>
         <Button
