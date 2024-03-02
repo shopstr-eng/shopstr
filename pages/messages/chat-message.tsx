@@ -52,7 +52,7 @@ export const ChatMessage = ({
         }`}
       >
         <p className={`inline-block flex-wrap overflow-x-hidden break-all`}>
-          {messageEvent.content.includes("cashuA") && canDecodeToken ? (
+          {messageEvent.content.includes("cashuA") && canDecodeToken && tokenAfterCashuA ? (
             <>
               {messageEvent.content}
               <RedeemButton token={tokenAfterCashuA} />
