@@ -1,4 +1,6 @@
 import React, { ReactNode, useEffect, useState } from "react";
+import Link from "next/link";
+import { InformationCircleIcon } from "@heroicons/react/24/outline";
 import { Card, CardBody, Divider, Chip, CardFooter } from "@nextui-org/react";
 import { ProfileAvatar } from "./profile/avatar";
 import { locationAvatar } from "./dropdowns/location-dropdown";
@@ -76,6 +78,22 @@ export default function ProductCard({
           <Divider className="mt-4" />
           <span className="mt-4 text-xl font-semibold">Cost Breakdown: </span>
           <DisplayCostBreakdown monetaryInfo={productData} />
+          <div className="mx-4 mt-2 flex items-center justify-center text-center">
+            <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
+            <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+              Once purchased, the seller should receive a message with a{" "}
+              <Link href="https://cashu.space" passHref legacyBehavior>
+                <a
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline"
+                >
+                  Cashu
+                </a>
+              </Link>{" "}
+              token containing your payment.
+            </p>
+          </div>
         </CardBody>
         {footerContent && <CardFooter>{footerContent}</CardFooter>}
       </Card>
