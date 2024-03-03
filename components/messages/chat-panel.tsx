@@ -1,7 +1,7 @@
 // initialize new react funcitonal component
 import { Button, Input } from "@nextui-org/react";
 import React, { useEffect, useRef, useState } from "react";
-import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import {
   ArrowUturnLeftIcon,
   ArrowsUpDownIcon,

@@ -1,5 +1,5 @@
-import { getLocalStorageData } from "../../components/utility/nostr-helper-functions";
-import RedeemButton from "../../components/utility-components/redeem-button";
+import { getLocalStorageData } from "../utility/nostr-helper-functions";
+import RedeemButton from "../utility-components/redeem-button";
 import { NostrMessageEvent } from "../../utils/types/types";
 import { timeSinceMessageDisplayText } from "../../utils/messages/utils";
 

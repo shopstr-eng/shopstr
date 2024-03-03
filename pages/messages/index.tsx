@@ -13,8 +13,8 @@ import { ChatsContext } from "../../utils/context/context";
 import RequestPassphraseModal from "../../components/utility-components/request-passphrase-modal";
 import ShopstrSpinner from "../../components/utility-components/shopstr-spinner";
 import axios from "axios";
-import { ChatPanel } from "./chat-panel";
-import { ChatButton } from "./chat-button";
+import { ChatPanel } from "../../components/messages/chat-panel";
+import { ChatButton } from "../../components/messages/chat-button";
 import { NostrMessageEvent, ChatObject } from "../../utils/types/types";
 import {
   addChatMessagesToCache,
