@@ -207,8 +207,8 @@ const DisplayEvents = ({
             })}
           </div>
         )}
-        {canShowLoadMore ? (
-          <div className="mt-8 h-20">
+        {canShowLoadMore && !profileMapContext.isLoading && !productEventContext.isLoading ? (
+          <div className="mt-8 h-20 px-4">
             {!isLoadingMore ? (
               <Button
                 className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
