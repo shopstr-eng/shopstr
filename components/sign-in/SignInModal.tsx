@@ -63,13 +63,15 @@ export default function SignInModal({
           passphrase,
         ).toString();
 
+        setTimeout(() => {
+          onClose(); // avoids tree walker issue by closing modal
+        }, 500);
+
         setLocalStorageDataOnSignIn({
           signInMethod: "nsec",
           pubkey: pk,
           encryptedPrivateKey: encryptedPrivateKey,
         });
-
-        onClose();
       }
     } else {
       alert(
@@ -85,6 +87,8 @@ export default function SignInModal({
       setValidPrivateKey(validateNSecKey(privateKey) ? "success" : "danger");
     }
   }, [privateKey]);
+
+  if (!isOpen) return null;
 
   return (
     <Modal
