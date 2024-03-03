@@ -25,7 +25,7 @@ import {
   PostListing,
   getNsecWithPassphrase,
   getPrivKeyWithPassphrase,
-  nostrBuildUploadImage,
+  nostrBuildUploadImages,
   getLocalStorageData,
 } from "./utility/nostr-helper-functions";
 import { finalizeEvent } from "nostr-tools";
@@ -37,6 +37,7 @@ import { capturePostListingMetric } from "./utility/metrics-helper-functions";
 import { addProductToCache } from "../pages/api/nostr/cache-service";
 import { ProductData } from "./utility/product-parser-functions";
 import { ProductFormValues } from "@/pages/api/nostr/post-event";
+import { buildSrcSet } from "@/utils/images";
 
 declare global {
   interface Window {
@@ -219,11 +220,13 @@ export default function NewForm({
       hiddenFileInput.current?.click();
     };
     // Call a function (passed as a prop from the parent component)
-    // to handle the user-selected file
-    const handleChange = async (event: any) => {
-      const fileUploaded = event.target.files[0];
+    // to handle the user-selected files
+    const handleChange = async (e: React.FormEvent<HTMLInputElement>) => {
+      const files = e.currentTarget.files;
       setLoading(true);
-      await uploadImage(fileUploaded);
+      if (files) {
+        await uploadImages(files);
+      }
       setLoading(false);
     };
     return (
@@ -233,11 +236,12 @@ export default function NewForm({
           onClick={handleClick}
           className={buttonClassName}
         >
-          {disabled ? "Enter your passphrase!" : "Upload An Image"}
+          {disabled ? "Enter your passphrase!" : "Upload Images"}
         </Button>
-        <input
+        <Input
           type="file"
           accept="image/*"
+          multiple
           ref={hiddenFileInput}
           onChange={handleChange}
           style={{ display: "none" }}
@@ -246,10 +250,9 @@ export default function NewForm({
     );
   };
 
-  const deleteImage = (image: string) => () => {
+  const deleteImage = (index: number) => () => {
     setImages((prevValues) => {
       const updatedImages = [...prevValues];
-      const index = updatedImages.indexOf(image);
       if (index > -1) {
         updatedImages.splice(index, 1);
       }
@@ -257,10 +260,12 @@ export default function NewForm({
     });
   };
 
-  const uploadImage = async (imageFile: File) => {
+  const uploadImages = async (files: FileList) => {
     try {
-      if (!imageFile.type.includes("image"))
+      const imageFiles = Array.from(files);
+      if (imageFiles.some((imgFile) => !imgFile.type.includes("image"))) {
         throw new Error("Only images are supported");
+      }
 
       let response;
 
@@ -269,21 +274,21 @@ export default function NewForm({
           throw new Error("Invalid passphrase!");
 
         const privkey = getPrivKeyWithPassphrase(passphrase);
-        response = await nostrBuildUploadImage(imageFile, (e) =>
+        response = await nostrBuildUploadImages(imageFiles, (e) =>
           Promise.resolve(finalizeEvent(e, privkey as Uint8Array)),
         );
       } else if (signIn === "extension") {
-        response = await nostrBuildUploadImage(
-          imageFile,
+        response = await nostrBuildUploadImages(
+          imageFiles,
           async (e) => await window.nostr.signEvent(e),
         );
       }
 
-      const imageUrl = response?.url;
+      const imageUrls = response?.map((i) => i.url);
       setImages((prevValues) => {
         const updatedImages = [...prevValues];
-        if (imageUrl) {
-          return [...updatedImages, imageUrl];
+        if (imageUrls && imageUrls.length > 0) {
+          return [...updatedImages, ...imageUrls];
         }
         return [...updatedImages];
       });
@@ -361,7 +366,7 @@ export default function NewForm({
                         <ConfirmActionDropdown
                           helpText="Are you sure you want to delete this image?"
                           buttonLabel="Delete Image"
-                          onConfirm={deleteImage(image)}
+                          onConfirm={deleteImage(index)}
                         >
                           <Button
                             isIconOnly
@@ -381,6 +386,7 @@ export default function NewForm({
                       className="object-cover"
                       width={350}
                       src={image}
+                      srcSet={buildSrcSet(image)}
                     />
                   </div>
                 ))
@@ -396,7 +402,7 @@ export default function NewForm({
               )}
             </Carousal>
             <FileUploader
-              uploadImage={uploadImage}
+              uploadImage={uploadImages}
               disabled={isButtonDisabled}
               passphraseInputRef={passphraseInputRef}
               buttonClassName={buttonClassName}

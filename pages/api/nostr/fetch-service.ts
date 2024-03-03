@@ -1,4 +1,4 @@
-import { Nostr, SimplePool } from "nostr-tools";
+import { Filter, Nostr, SimplePool } from "nostr-tools";
 import {
   addChatMessageToCache,
   addProductToCache,
@@ -10,12 +10,13 @@ import {
 } from "./cache-service";
 import { NostrEvent, NostrMessageEvent } from "@/utils/types/types";
 import { ChatsMap } from "@/utils/context/context";
-
-const POSTQUERYLIMIT = 200;
+import { DateTime } from "luxon";
 
 export const fetchAllPosts = async (
   relays: string[],
   editProductContext: (productEvents: NostrEvent[], isLoading: boolean) => void,
+  since?: number,
+  until?: number,
 ): Promise<{
   profileSetFromProducts: Set<string>;
 }> => {
@@ -33,15 +34,24 @@ export const fetchAllPosts = async (
       }
 
       const pool = new SimplePool();
-      let subParams: { kinds: number[]; authors?: string[]; limit: number } = {
+
+      if (!since) {
+        since = Math.trunc(DateTime.now().minus({ days: 14 }).toSeconds())
+      }
+      if (!until) {
+        until = Math.trunc(DateTime.now().toSeconds())
+      }
+
+      const filter: Filter = {
         kinds: [30402],
-        limit: POSTQUERYLIMIT,
+        since,
+        until,
       };
 
       let productArrayFromRelay: NostrEvent[] = [];
       let profileSetFromProducts: Set<string> = new Set();
 
-      let h = pool.subscribeMany(relays, [subParams], {
+      let h = pool.subscribeMany(relays, [filter], {
         onevent(event) {
           productArrayFromRelay.push(event);
           if (
@@ -191,7 +201,7 @@ export const fetchChatsAndMessages = async (
         ],
         {
           onevent(event: NostrEvent) {
-            let tagsMap: Map<string, string> = new Map(event.tags);
+            let tagsMap: Map<string, string> = new Map(event.tags.map(([k, v]) => [k, v]));
             let receipientPubkey = tagsMap.get("p") ? tagsMap.get("p") : null; // pubkey you sent the message to
             if (typeof receipientPubkey !== "string") {
               console.error(
@@ -217,6 +227,9 @@ export const fetchChatsAndMessages = async (
           oneose() {
             incomingChatsReachedEOSE = true;
             onEOSE();
+          },
+          onclose(reasons) {
+            console.log(reasons)
           },
         },
       );
@@ -244,6 +257,9 @@ export const fetchChatsAndMessages = async (
           async oneose() {
             outgoingChatsReachedEOSE = true;
             onEOSE();
+          },
+          onclose(reasons) {
+            console.log(reasons)
           },
         },
       );

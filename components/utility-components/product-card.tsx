@@ -108,13 +108,13 @@ export default function ProductCard({
   return (
     <Card
       className={
-        "mx-[2.5px] my-3 w-[385px] rounded-lg bg-light-fg dark:bg-dark-fg " +
+        "mx-[2.5px] my-3 w-80 rounded-lg bg-light-fg dark:bg-dark-fg " +
         cardHoverStyle
       }
       key={uniqueKey}
     >
       <CardBody
-        className={"cursor-pointer "}
+        className={"cursor-pointer overflow-x-hidden"}
         onClick={() => {
           onProductClick && onProductClick(productData);
         }}

@@ -133,7 +133,7 @@ export function MarketplacePage() {
         </div>
         {focusedPubkey ? (
           <div
-            className="flex w-fit cursor-pointer flex-row rounded-md px-3 align-middle text-shopstr-purple hover:bg-shopstr-yellow dark:text-shopstr-yellow-light hover:dark:bg-shopstr-purple"
+            className="mt-2 flex w-fit cursor-pointer flex-row rounded-md px-3 align-middle text-shopstr-purple hover:bg-shopstr-yellow dark:text-shopstr-yellow-light hover:dark:bg-shopstr-purple"
             onClick={() => {
               routeToShop("");
             }}
@@ -149,7 +149,7 @@ export function MarketplacePage() {
               </ArrowUturnLeftIcon>
             </div>
 
-            <span className="max-w-full overflow-hidden overflow-ellipsis whitespace-nowrap">
+            <span className="sm:w-72 md:w-full overflow-hidden break-all">
               {nip19.npubEncode(focusedPubkey)}
             </span>
           </div>
@@ -160,6 +160,7 @@ export function MarketplacePage() {
         selectedCategories={selectedCategories}
         selectedLocation={selectedLocation}
         selectedSearch={selectedSearch}
+        canShowLoadMore={true}
       />
       <SignInModal some={count} opened={toggleSignInPage}></SignInModal>
     </div>

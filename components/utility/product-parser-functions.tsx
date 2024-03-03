@@ -70,8 +70,8 @@ export const parseTags = (productEvent: NostrEvent) => {
         break;
       case "shipping":
         if (values.length === 3) {
-          const [type, cost, currency] = values;
-          parsedData.shippingType = type;
+          const [shippingType, cost, currency] = values;
+          parsedData.shippingType = shippingType as ShippingOptionsType;
           parsedData.shippingCost = Number(cost);
           break;
         }
@@ -84,8 +84,8 @@ export const parseTags = (productEvent: NostrEvent) => {
           break;
         } else if (values.length === 1) {
           // [type]
-          const [type] = values;
-          parsedData.shippingType = type;
+          const [shippingType] = values;
+          parsedData.shippingType = shippingType as ShippingOptionsType;
           parsedData.shippingCost = 0;
           break;
         }

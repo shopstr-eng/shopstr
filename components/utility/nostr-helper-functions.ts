@@ -168,53 +168,52 @@ export async function finalizeAndSendNostrEvent(
   await Promise.any(pool.publish(relays, signedEvent));
 }
 
-type NostrBuildResponse = {
+export type NostrBuildResponse = {
   status: "success" | "error";
   message: string;
-  data: [
-    {
-      input_name: "APIv2";
-      name: string;
-      url: string;
-      thumbnail: string;
-      responsive: {
-        "240p": string;
-        "360p": string;
-        "480p": string;
-        "720p": string;
-        "1080p": string;
-      };
-      blurhash: string;
-      sha256: string;
-      type: "picture" | "video";
-      mime: string;
-      size: number;
-      metadata: Record<string, string>;
-      dimensions: {
-        width: number;
-        height: number;
-      };
-    },
-  ];
+  data: {
+    input_name: "APIv2";
+    name: string;
+    url: string;
+    thumbnail: string;
+    responsive: {
+      "240p": string;
+      "360p": string;
+      "480p": string;
+      "720p": string;
+      "1080p": string;
+    };
+    blurhash: string;
+    sha256: string;
+    type: "picture" | "video";
+    mime: string;
+    size: number;
+    metadata: Record<string, string>;
+    dimensions: {
+      width: number;
+      height: number;
+    };
+  }[],
 };
 
 export type DraftNostrEvent = Omit<NostrEvent, "pubkey" | "id" | "sig">;
 
-export async function nostrBuildUploadImage(
-  image: File,
+export async function nostrBuildUploadImages(
+  images: File[],
   sign?: (draft: DraftNostrEvent) => Promise<NostrEvent>,
 ) {
-  if (!image.type.includes("image"))
+  if (images.some(img => !img.type.includes("image")))
     throw new Error("Only images are supported");
 
   const url = "https://nostr.build/api/v2/upload/files";
 
   const payload = new FormData();
-  payload.append("fileToUpload", image);
+  images.forEach((image => {
+    payload.append("file[]", image);
+  }));
 
   const headers: HeadersInit = {};
   if (sign) {
-    // @ts-ignore
     const token = await nip98.getToken(url, "POST", sign, true);
     headers.Authorization = token;
   }
@@ -225,7 +224,7 @@ export async function nostrBuildUploadImage(
     headers,
   }).then((res) => res.json() as Promise<NostrBuildResponse>);
 
-  return response.data[0];
+  return response.data;
 }
 
 /***** HELPER FUNCTIONS *****/
@@ -346,10 +345,8 @@ export const getLocalStorageData = (): LocalStorageInterface => {
 
     if (
       mints === null ||
-      mints[0] ===
-        "https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV" ||
-      mints[0] ===
-        "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"
+      mints[0] === "https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV" ||
+      mints[0] === "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"
     ) {
       mints = ["https://mint.minibits.cash/Bitcoin"];
       localStorage.setItem("mints", JSON.stringify(mints));
