@@ -49,8 +49,8 @@ const DisplayEvents = ({
         let parsedData = parseTags(event);
         if (parsedData) parsedProductData.push(parsedData);
       });
-      setIsProductLoading(false);
       setProductEvents(parsedProductData);
+      setIsProductLoading(false);
     }
   }, [productEventContext]);
 
@@ -186,41 +186,26 @@ const DisplayEvents = ({
     <>
       <div className="w-full md:pl-4">
         {/* DISPLAYS PRODUCT LISTINGS HERE */}
+        <div className="grid h-[90%] max-w-full grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-x-hidden">
+          {productEvents.map((productData: ProductData, index) => {
+            return displayProductCard(productData, index);
+          })}
+        </div>
         {profileMapContext.isLoading ||
+        productEventContext.isLoading ||
         isProductsLoading ||
-        productEvents.length === 0 ? (
-          !isProductsLoading && isThereAFilter() ? (
-            <div className="mt-8 flex items-center justify-center">
-              <h1 className="text-2xl text-light-text dark:text-dark-text">
-                No products found...
-              </h1>
-            </div>
-          ) : (
-            <div className="mt-8 flex items-center justify-center">
-              <ShopstrSpinner />
-            </div>
-          )
-        ) : (
-          <div className="grid h-[90%] max-w-full grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-x-hidden">
-            {productEvents.map((productData: ProductData, index) => {
-              return displayProductCard(productData, index);
-            })}
+        isLoadingMore ? (
+          <div className="mt-8 flex items-center justify-center">
+            <ShopstrSpinner />
           </div>
-        )}
-        {canShowLoadMore && !profileMapContext.isLoading && !productEventContext.isLoading ? (
+        ) : canShowLoadMore ? (
           <div className="mt-8 h-20 px-4">
-            {!isLoadingMore ? (
-              <Button
-                className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
-                onClick={async () => await loadMoreListings()}
-              >
-                Load More
-              </Button>
-            ) : (
-              <div className="mt-8 flex items-center justify-center">
-                <ShopstrSpinner />
-              </div>
-            )}
+            <Button
+              className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
+              onClick={async () => await loadMoreListings()}
+            >
+              Load More
+            </Button>
           </div>
         ) : null}
       </div>
