@@ -10,6 +10,7 @@ import {
   CardFooter,
   Divider,
   Image,
+  useDisclosure,
 } from "@nextui-org/react";
 import axios from "axios";
 import {
@@ -19,7 +20,10 @@ import {
   EnvelopeIcon,
 } from "@heroicons/react/24/outline";
 import { CashuMint, CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
-import { getLocalStorageData } from "./utility/nostr-helper-functions";
+import {
+  getLocalStorageData,
+  isUserLoggedIn,
+} from "./utility/nostr-helper-functions";
 import { nip19 } from "nostr-tools";
 import { ProductData } from "./utility/product-parser-functions";
 import {
@@ -38,7 +42,7 @@ export default function InvoiceCard({
   const router = useRouter();
   const { pubkey, currency, totalCost } = productData;
   const pubkeyOfProductBeingSold = pubkey;
-  const { npub, decryptedNpub, relays, mints } = getLocalStorageData();
+  const { userNPub, userPubkey, relays, mints } = getLocalStorageData();
 
   const [showInvoiceCard, setShowInvoiceCard] = useState(false);
 
@@ -53,8 +57,7 @@ export default function InvoiceCard({
   const [randomNpub, setRandomNpub] = useState<string>("");
   const [randomNsec, setRandomNsec] = useState<string>("");
 
-  const [openSignInModal, setOpenSignInModal] = useState(false);
-  let [count, setCount] = useState(0);
+  const { isOpen, onOpen, onClose } = useDisclosure();
 
   useEffect(() => {
     axios({
@@ -72,10 +75,10 @@ export default function InvoiceCard({
 
   useEffect(() => {
     const profileMap = profileContext.profileData;
-    const profile = profileMap.has(decryptedNpub)
-      ? profileMap.get(decryptedNpub)
+    const profile = profileMap.has(userPubkey)
+      ? profileMap.get(userPubkey)
       : undefined;
-    setName(profile && profile.content.name ? profile.content.name : npub);
+    setName(profile && profile.content.name ? profile.content.name : userNPub);
   }, [profileContext]);
 
   const handlePayment = async (newPrice: number, currency: string) => {
@@ -196,10 +199,9 @@ export default function InvoiceCard({
   };
 
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
-    let { signIn } = getLocalStorageData();
-    if (!signIn) {
-      setOpenSignInModal(true);
-      setCount(++count);
+    let { signInMethod } = getLocalStorageData();
+    if (!signInMethod) {
+      onOpen();
       return;
     }
     router.push({
@@ -230,9 +232,9 @@ export default function InvoiceCard({
             type="submit"
             className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
             onClick={() => {
-              let { signIn } = getLocalStorageData();
-              if (!signIn) {
-                alert("You must be signed in to purchase!");
+              let userLoggedIn = isUserLoggedIn();
+              if (!userLoggedIn) {
+                onOpen();
                 return;
               }
               if (randomNsec !== "") {
@@ -311,7 +313,7 @@ export default function InvoiceCard({
           </CardFooter>
         </Card>
       )}
-      <SignInModal some={count} opened={openSignInModal}></SignInModal>
+      <SignInModal isOpen={isOpen} onClose={onClose} />
     </>
   );
 }

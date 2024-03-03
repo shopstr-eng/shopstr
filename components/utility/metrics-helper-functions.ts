@@ -2,7 +2,7 @@ import axios from "axios";
 import { getLocalStorageData } from "./nostr-helper-functions";
 
 export async function capturePostListingMetric(id: string, tags: any[]) {
-  const { decryptedNpub, relays } = getLocalStorageData();
+  const { userNPub, relays } = getLocalStorageData();
   axios({
     method: "POST",
     url: "/api/metrics/post-listing",
@@ -11,7 +11,7 @@ export async function capturePostListingMetric(id: string, tags: any[]) {
     },
     data: {
       listing_id: id,
-      merchant_id: decryptedNpub,
+      merchant_id: userNPub,
       merchant_location:
         tags.find(([key]: [key: string]) => key === "location")?.[1] || "",
       relays,

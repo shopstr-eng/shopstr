@@ -1,5 +1,12 @@
 import * as CryptoJS from "crypto-js";
-import { finalizeEvent, nip04, nip19, nip98, SimplePool } from "nostr-tools";
+import {
+  finalizeEvent,
+  getPublicKey,
+  nip04,
+  nip19,
+  nip98,
+  SimplePool,
+} from "nostr-tools";
 import axios from "axios";
 import { NostrEvent } from "@/utils/types/types";
 import { ProductFormValues } from "@/pages/api/nostr/post-event";
@@ -8,8 +15,7 @@ export async function PostListing(
   values: ProductFormValues,
   passphrase: string,
 ) {
-  const { signIn, encryptedPrivateKey, decryptedNpub, relays } =
-    getLocalStorageData();
+  const { signInMethod, userNPub, relays } = getLocalStorageData();
   const summary = values.find(([key]) => key === "summary")?.[1] || "";
 
   const dValue = values.find(([key]) => key === "d")?.[1] || undefined;
@@ -18,7 +24,7 @@ export async function PostListing(
   // Add "published_at" key
   const updatedValues = [...values, ["published_at", String(created_at)]];
 
-  if (signIn === "extension") {
+  if (signInMethod === "extension") {
     const event = {
       created_at: created_at,
       kind: 30402,
@@ -33,7 +39,7 @@ export async function PostListing(
         ["d", "30402"],
         [
           "a",
-          "31990:" + decryptedNpub + ":" + dValue,
+          "31990:" + userNPub + ":" + dValue,
           "wss://relay.damus.io",
           "web",
         ],
@@ -71,7 +77,7 @@ export async function PostListing(
         "Content-Type": "application/json",
       },
       data: {
-        pubkey: decryptedNpub,
+        pubkey: userNPub,
         privkey: getPrivKeyWithPassphrase(passphrase),
         created_at: created_at,
         kind: 30402,
@@ -83,7 +89,7 @@ export async function PostListing(
     });
     return {
       id: res.data.id,
-      pubkey: decryptedNpub,
+      pubkey: userNPub,
       created_at: created_at,
       kind: 30402,
       tags: updatedValues,
@@ -107,7 +113,7 @@ export async function constructEncryptedMessageEvent(
   passphrase?: string,
 ): Promise<EncryptedMessageEvent> {
   let encryptedContent = "";
-  let signInMethod = getLocalStorageData().signIn;
+  let signInMethod = getLocalStorageData().signInMethod;
   if (signInMethod === "extension") {
     encryptedContent = await window.nostr.nip04.encrypt(
       recipientPubkey,
@@ -138,9 +144,9 @@ export async function sendEncryptedMessage(
   encryptedMessageEvent: EncryptedMessageEvent,
   passphrase?: string,
 ) {
-  const { signIn, relays } = getLocalStorageData();
+  const { signInMethod, relays } = getLocalStorageData();
   let signedEvent;
-  if (signIn === "extension") {
+  if (signInMethod === "extension") {
     signedEvent = await window.nostr.signEvent(encryptedMessageEvent);
   } else {
     if (!passphrase) throw new Error("Passphrase is required");
@@ -155,15 +161,16 @@ export async function finalizeAndSendNostrEvent(
   nostrEvent: NostrEvent,
   passphrase?: string,
 ) {
-  const { signIn, relays } = getLocalStorageData();
+  const { signInMethod, relays } = getLocalStorageData();
   let signedEvent;
-  if (signIn === "extension") {
+  if (signInMethod === "extension") {
     signedEvent = await window.nostr.signEvent(nostrEvent);
   } else {
     if (!passphrase) throw new Error("Passphrase is required");
     let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
     signedEvent = finalizeEvent(nostrEvent, senderPrivkey);
   }
+  console.log("signedEvent", signedEvent);
   const pool = new SimplePool();
   await Promise.any(pool.publish(relays, signedEvent));
 }
@@ -193,7 +200,7 @@ export type NostrBuildResponse = {
       width: number;
       height: number;
     };
-  }[],
+  }[];
 };
 
 export type DraftNostrEvent = Omit<NostrEvent, "pubkey" | "id" | "sig">;
@@ -202,15 +209,15 @@ export async function nostrBuildUploadImages(
   images: File[],
   sign?: (draft: DraftNostrEvent) => Promise<NostrEvent>,
 ) {
-  if (images.some(img => !img.type.includes("image")))
+  if (images.some((img) => !img.type.includes("image")))
     throw new Error("Only images are supported");
 
   const url = "https://nostr.build/api/v2/upload/files";
 
   const payload = new FormData();
-  images.forEach((image => {
+  images.forEach((image) => {
     payload.append("file[]", image);
-  }));
+  });
 
   const headers: HeadersInit = {};
   if (sign) {
@@ -278,9 +285,10 @@ export function validPassphrase(passphrase: string) {
 export function getNsecWithPassphrase(passphrase: string) {
   if (!passphrase) return undefined;
   const { encryptedPrivateKey } = getLocalStorageData();
-  let nsec = CryptoJS.AES.decrypt(encryptedPrivateKey, passphrase).toString(
-    CryptoJS.enc.Utf8,
-  );
+  let nsec = CryptoJS.AES.decrypt(
+    encryptedPrivateKey as string,
+    passphrase,
+  ).toString(CryptoJS.enc.Utf8);
   // returns undefined or "" thanks to the toString method
   return nsec;
 }
@@ -292,35 +300,100 @@ export function getPrivKeyWithPassphrase(passphrase: string) {
   return data;
 }
 
+const LOCALSTORAGECONSTANTS = {
+  signInMethod: "signInMethod",
+  userNPub: "userNPub",
+  userPubkey: "userPubkey",
+  encryptedPrivateKey: "encryptedPrivateKey",
+  relays: "relays",
+  mints: "mints",
+};
+
+export const setLocalStorageDataOnSignIn = ({
+  signInMethod,
+  pubkey,
+  encryptedPrivateKey,
+  relays,
+  mints,
+}: {
+  signInMethod: string;
+  pubkey: string;
+  encryptedPrivateKey?: string;
+  relays?: string[];
+  mints?: string[];
+}) => {
+  localStorage.setItem(LOCALSTORAGECONSTANTS.signInMethod, signInMethod);
+  localStorage.setItem(
+    LOCALSTORAGECONSTANTS.userNPub,
+    nip19.npubEncode(pubkey),
+  );
+  localStorage.setItem(LOCALSTORAGECONSTANTS.userPubkey, pubkey);
+  if (encryptedPrivateKey) {
+    localStorage.setItem(
+      LOCALSTORAGECONSTANTS.encryptedPrivateKey,
+      encryptedPrivateKey,
+    );
+  }
+
+  localStorage.setItem(
+    LOCALSTORAGECONSTANTS.relays,
+    JSON.stringify(
+      relays
+        ? relays
+        : [
+            "wss://relay.damus.io",
+            "wss://nos.lol",
+            "wss://nostr.mutinywallet.com",
+          ],
+    ),
+  );
+
+  localStorage.setItem(
+    LOCALSTORAGECONSTANTS.mints,
+    JSON.stringify(mints ? mints : ["https://mint.minibits.cash/Bitcoin"]),
+  );
+
+  window.dispatchEvent(new Event("storage"));
+};
+
+export const isUserLoggedIn = () => {
+  const { signInMethod, userNPub, userPubkey } = getLocalStorageData();
+  if (!signInMethod || !userNPub || !userPubkey) return false;
+  return true;
+};
+
 export interface LocalStorageInterface {
-  signIn: string; // extension or nsec
-  encryptedPrivateKey: string;
-  npub: string;
-  decryptedNpub: string;
+  signInMethod: string; // extension or nsec
+  userNPub: string;
+  userPubkey: string;
   relays: string[];
   mints: string[];
+  encryptedPrivateKey?: string;
 }
 
 export const getLocalStorageData = (): LocalStorageInterface => {
-  let signIn;
+  let signInMethod;
   let encryptedPrivateKey;
-  let npub;
-  let decryptedNpub;
+  let userNPub;
+  let userPubkey;
   let relays;
   let mints;
 
   if (typeof window !== "undefined") {
-    npub = localStorage.getItem("npub");
-    if (npub) {
-      const { data } = nip19.decode(npub);
-      decryptedNpub = data;
+    userNPub = localStorage.getItem(LOCALSTORAGECONSTANTS.userNPub);
+    userPubkey = localStorage.getItem(LOCALSTORAGECONSTANTS.userPubkey);
+    if (!userPubkey && userNPub) {
+      const { data } = nip19.decode(userNPub);
+      userPubkey = data;
     }
 
-    encryptedPrivateKey = localStorage.getItem("encryptedPrivateKey");
+    encryptedPrivateKey = localStorage.getItem(
+      LOCALSTORAGECONSTANTS.encryptedPrivateKey,
+    );
 
-    signIn = localStorage.getItem("signIn");
+    signInMethod = localStorage.getItem(LOCALSTORAGECONSTANTS.signInMethod);
 
-    relays = localStorage.getItem("relays");
+    relays = localStorage.getItem(LOCALSTORAGECONSTANTS.relays);
 
     const defaultRelays = [
       "wss://relay.damus.io",
@@ -339,27 +412,32 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     }
     localStorage.setItem("relays", JSON.stringify(relays));
 
-    mints = localStorage.getItem("mints")
+    mints = localStorage.getItem(LOCALSTORAGECONSTANTS.mints)
       ? JSON.parse(localStorage.getItem("mints") as string)
       : null;
 
-    if (
-      mints === null ||
-      mints[0] === "https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV" ||
-      mints[0] === "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"
-    ) {
+    if (mints === null || mints[0] !== "https://mint.minibits.cash/Bitcoin") {
       mints = ["https://mint.minibits.cash/Bitcoin"];
-      localStorage.setItem("mints", JSON.stringify(mints));
+      localStorage.setItem(LOCALSTORAGECONSTANTS.mints, JSON.stringify(mints));
     }
   }
   return {
-    signIn: signIn as string,
+    signInMethod: signInMethod as string,
     encryptedPrivateKey: encryptedPrivateKey as string,
-    npub: npub as string,
-    decryptedNpub: decryptedNpub as string,
+    userNPub: userNPub as string,
+    userPubkey: userPubkey as string,
     relays: relays || [],
     mints,
   };
+};
+
+export const LogOut = () => {
+  localStorage.removeItem(LOCALSTORAGECONSTANTS.signInMethod);
+  localStorage.removeItem(LOCALSTORAGECONSTANTS.userNPub);
+  localStorage.removeItem(LOCALSTORAGECONSTANTS.userPubkey);
+  localStorage.removeItem(LOCALSTORAGECONSTANTS.encryptedPrivateKey);
+
+  window.dispatchEvent(new Event("storage"));
 };
 
 export const decryptNpub = (npub: string) => {

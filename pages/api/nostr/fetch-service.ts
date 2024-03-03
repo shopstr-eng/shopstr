@@ -147,14 +147,14 @@ export const fetchProfile = async (
 
 export const fetchChatsAndMessages = async (
   relays: string[],
-  decryptedNpub: string,
+  userPubkey: string,
   editChatContext: (chatsMap: ChatsMap, isLoading: boolean) => void,
 ): Promise<{
   profileSetFromChats: Set<string>;
 }> => {
   return new Promise(async function (resolve, reject) {
-    // if no decryptedNpub, user is not signed in
-    if (!decryptedNpub) {
+    // if no userPubkey, user is not signed in
+    if (!userPubkey) {
       editChatContext(new Map(), false);
       resolve({ profileSetFromChats: new Set() });
     }
@@ -196,7 +196,7 @@ export const fetchChatsAndMessages = async (
         [
           {
             kinds: [4],
-            authors: [decryptedNpub], // all chats where you are the author
+            authors: [userPubkey], // all chats where you are the author
           },
         ],
         {
@@ -238,7 +238,7 @@ export const fetchChatsAndMessages = async (
         [
           {
             kinds: [4],
-            "#p": [decryptedNpub], // all chats where you are the receipient
+            "#p": [userPubkey], // all chats where you are the receipient
           },
         ],
         {

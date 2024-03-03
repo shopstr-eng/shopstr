@@ -10,10 +10,10 @@ export async function DeleteListing(
   event_ids_to_delete: string[],
   passphrase?: string,
 ) {
-  const { decryptedNpub } = getLocalStorageData();
+  const { userPubkey } = getLocalStorageData();
   let deletionEvent = await createNostrDeleteEvent(
     event_ids_to_delete,
-    decryptedNpub,
+    userPubkey,
     "user deletion request from shopstr.store",
   );
 

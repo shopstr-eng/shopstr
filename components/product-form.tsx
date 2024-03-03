@@ -1,4 +1,4 @@
-// TODO componentarize file uploader
+3; // TODO componentarize file uploader
 import React, { useMemo, useRef, useEffect, useState, useContext } from "react";
 import Link from "next/link";
 import { useForm, Controller, set } from "react-hook-form";
@@ -95,9 +95,9 @@ export default function NewForm({
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      let { signIn, decryptedNpub } = getLocalStorageData();
-      setSignIn(signIn as string);
-      setPubkey(decryptedNpub as string);
+      let { signInMethod, userPubkey } = getLocalStorageData();
+      setSignIn(signInMethod as string);
+      setPubkey(userPubkey as string);
     }
   }, []);
 

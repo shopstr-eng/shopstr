@@ -78,6 +78,47 @@ function App({ Component, pageProps }: AppProps) {
     isLoading: true,
   });
 
+  const initializeContext = () => {
+    setProductContext({
+      productEvents: [],
+      isLoading: true,
+      addNewlyCreatedProductEvent: (productEvent: any) => {
+        setProductContext((productContext) => {
+          let productEvents = [...productContext.productEvents, productEvent];
+          return {
+            productEvents: productEvents,
+            isLoading: false,
+            addNewlyCreatedProductEvent:
+              productContext.addNewlyCreatedProductEvent,
+            removeDeletedProductEvent: productContext.removeDeletedProductEvent,
+          };
+        });
+      },
+      removeDeletedProductEvent: (productId: string) => {
+        setProductContext((productContext) => {
+          let productEvents = [...productContext.productEvents].filter(
+            (event) => event.id !== productId,
+          );
+          return {
+            productEvents: productEvents,
+            isLoading: false,
+            addNewlyCreatedProductEvent:
+              productContext.addNewlyCreatedProductEvent,
+            removeDeletedProductEvent: productContext.removeDeletedProductEvent,
+          };
+        });
+      },
+    });
+    setProfileContext({
+      profileData: new Map(),
+      isLoading: true,
+    });
+    setChatsContext({
+      chatsMap: new Map(),
+      isLoading: true,
+    });
+  };
+
   const editProductContext = (
     productEvents: NostrEvent[],
     isLoading: boolean,
@@ -103,9 +144,10 @@ function App({ Component, pageProps }: AppProps) {
 
   /** FETCH initial PRODUCTS and PROFILES **/
   useEffect(() => {
-    const relays = localStorageValues.relays;
-    const decryptedNpub = localStorageValues.decryptedNpub;
     async function fetchData() {
+      initializeContext();
+      const relays = getLocalStorageData().relays;
+      const userPubkey = getLocalStorageData().userPubkey;
       try {
         let pubkeysToFetchProfilesFor: string[] = [];
         let { profileSetFromProducts } = await fetchAllPosts(
@@ -115,11 +157,11 @@ function App({ Component, pageProps }: AppProps) {
         pubkeysToFetchProfilesFor = [...profileSetFromProducts];
         let { profileSetFromChats } = await fetchChatsAndMessages(
           relays,
-          decryptedNpub,
+          userPubkey,
           editChatContext,
         );
         pubkeysToFetchProfilesFor = [
-          decryptedNpub as string,
+          userPubkey as string,
           ...pubkeysToFetchProfilesFor,
           ...profileSetFromChats,
         ];
@@ -132,7 +174,9 @@ function App({ Component, pageProps }: AppProps) {
         console.error("Error fetching data:", error);
       }
     }
-    if (relays) fetchData(); // Call the async function immediately
+    fetchData();
+    window.addEventListener("storage", fetchData);
+    return () => window.removeEventListener("storage", fetchData);
   }, [localStorageValues.relays]);
 
   useEffect(() => {

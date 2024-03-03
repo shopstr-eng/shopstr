@@ -2,7 +2,6 @@ import { useState, useEffect, useContext } from "react";
 import { nip04 } from "nostr-tools";
 import { useRouter } from "next/router";
 import {
-  LocalStorageInterface,
   constructEncryptedMessageEvent,
   decryptNpub,
   getLocalStorageData,
@@ -41,8 +40,7 @@ const DirectMessages = () => {
 
   const [isChatsLoading, setIsChatsLoading] = useState(true);
   const [isSendingDMLoading, setIsSendingDMLoading] = useState(false);
-  const [localStorageValues, setLocalStorageValues] =
-    useState<LocalStorageInterface>(getLocalStorageData());
+  const { signInMethod, userNPub } = getLocalStorageData();
 
   const [isClient, setIsClient] = useState(false);
 
@@ -56,13 +54,10 @@ const DirectMessages = () => {
         setIsChatsLoading(false);
         return;
       }
-      if (
-        localStorageValues.signIn === "nsec" &&
-        !validPassphrase(passphrase)
-      ) {
+      if (signInMethod === "nsec" && !validPassphrase(passphrase)) {
         setEnterPassphrase(true); // prompt for passphrase when chatsContext is loaded
       } else if (!chatsContext.isLoading && chatsContext.chatsMap) {
-        // comes here only if signIn is extension or its nsec and passphrase is valid
+        // comes here only if signInMethod is extension or its nsec and passphrase is valid
         let decryptedChats = await getDecryptedChatsFromContext();
         const passedNPubkey = router.query.pk ? router.query.pk : null;
         if (passedNPubkey) {
@@ -139,7 +134,7 @@ const DirectMessages = () => {
   ) => {
     try {
       let plaintext = "";
-      if (localStorageValues.signIn === "extension") {
+      if (signInMethod === "extension") {
         plaintext = await window.nostr.nip04.decrypt(
           chatPubkey,
           messageEvent.content,
@@ -219,7 +214,7 @@ const DirectMessages = () => {
     setIsSendingDMLoading(true);
     try {
       let encryptedMessageEvent = await constructEncryptedMessageEvent(
-        localStorageValues.decryptedNpub,
+        userNPub,
         message,
         currentChatPubkey,
         passphrase,
@@ -257,7 +252,7 @@ const DirectMessages = () => {
             "Content-Type": "application/json",
           },
           data: {
-            customer_id: localStorageValues.decryptedNpub,
+            customer_id: userNPub,
             merchant_id: currentChatPubkey,
             // listing_id: "TODO"
             // relays: relays,
@@ -287,7 +282,7 @@ const DirectMessages = () => {
               </div>
             ) : (
               <p className="break-words text-center text-2xl text-light-text dark:text-dark-text">
-                {isClient && localStorageValues.decryptedNpub ? (
+                {isClient && userNPub ? (
                   <>
                     No messages . . . yet!
                     <br></br>

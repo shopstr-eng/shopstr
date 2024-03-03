@@ -20,20 +20,15 @@ import {
 import { relayConnect } from "nostr-tools";
 import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
 import { getLocalStorageData } from "../../components/utility/nostr-helper-functions";
-import { useRouter } from "next/router";
-import { ProfileAvatar } from "@/components/utility-components/profile/avatar";
 import { useTheme } from "next-themes";
 
 const SettingsPage = () => {
   const [relays, setRelays] = useState(Array<string>(0));
-  // make initial state equal to proprietary relay
   const [showRelayModal, setShowRelayModal] = useState(false);
 
   const [mints, setMints] = useState(Array<string>(0));
   const [showMintModal, setShowMintModal] = useState(false);
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
-
-  const router = useRouter();
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -146,43 +141,6 @@ const SettingsPage = () => {
   return (
     <div className="flex min-h-screen flex-col bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
       <div>
-        <span className="mb-4 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
-          Account
-        </span>
-        <div>
-          <div className="mb-2 ml-4 flex-col">
-            <ProfileAvatar
-              pubkey={getLocalStorageData().decryptedNpub}
-              includeDisplayName
-            ></ProfileAvatar>
-          </div>
-          <div className="mx-3 mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg">
-            <div
-              className="max-w-xsm break-all text-light-text dark:text-dark-text"
-              suppressHydrationWarning
-            >
-              {getLocalStorageData().npub}
-            </div>
-          </div>
-        </div>
-        <div>
-          <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
-            <Button
-              className={SHOPSTRBUTTONCLASSNAMES}
-              onClick={() => {
-                localStorage.removeItem("npub");
-                localStorage.removeItem("signIn");
-                localStorage.removeItem("encryptedPrivateKey");
-                localStorage.removeItem("decryptedNpub"); // does this exist?
-
-                router.push("/");
-              }}
-            >
-              Sign out
-            </Button>
-          </div>
-        </div>
-
         <span className="mt-4 flex px-4 text-2xl font-bold text-light-text dark:text-dark-text">
           Relays
         </span>

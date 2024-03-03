@@ -2,23 +2,21 @@ import router from "next/router";
 import React, { useState } from "react";
 import DisplayEvents from "../display-products";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
-import { Button } from "@nextui-org/react";
+import { Button, useDisclosure } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import SignInModal from "../sign-in/SignInModal";
 
 export const MyListingsPage = () => {
-  let usersNPub = getLocalStorageData().decryptedNpub;
-  const [openSignInModal, setOpenSignInModal] = useState(false);
-  let [count, setcount] = useState(0);
+  let usersNPub = getLocalStorageData().userPubkey;
+  const { isOpen, onOpen, onClose } = useDisclosure();
 
   const handleCreateNewListing = () => {
-    const loggedIn = getLocalStorageData().decryptedNpub;
+    const loggedIn = getLocalStorageData().userPubkey;
 
     if (loggedIn) {
       router.push("/?addNewListing");
     } else {
-      setOpenSignInModal(true);
-      setcount(++count);
+      onOpen();
     }
   };
   return (
@@ -41,7 +39,7 @@ export const MyListingsPage = () => {
           />
         ) : null}
       </div>
-      <SignInModal opened={openSignInModal} some={count}></SignInModal>
+      <SignInModal isOpen={isOpen} onClose={onClose} />
     </div>
   );
 };
