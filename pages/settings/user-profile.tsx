@@ -75,7 +75,7 @@ const UserProfilePage = () => {
     setIsUploadingProfile(true);
     let response = await createNostrProfileEvent(
       userPubkey,
-      JSON.stringify(data),
+      JSON.stringify({ ...data, display_name: data.name }),
       passphrase,
     );
     profileContext.updateProfileData({
