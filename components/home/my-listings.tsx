@@ -7,7 +7,7 @@ import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import SignInModal from "../sign-in/SignInModal";
 
 export const MyListingsPage = () => {
-  let usersNPub = getLocalStorageData().userPubkey;
+  let usersNPub = getLocalStorageData().userNPub;
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   const handleCreateNewListing = () => {

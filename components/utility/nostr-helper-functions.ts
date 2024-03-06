@@ -15,7 +15,7 @@ export async function PostListing(
   values: ProductFormValues,
   passphrase: string,
 ) {
-  const { signInMethod, userNPub, relays } = getLocalStorageData();
+  const { signInMethod, userPubkey, relays } = getLocalStorageData();
   const summary = values.find(([key]) => key === "summary")?.[1] || "";
 
   const dValue = values.find(([key]) => key === "d")?.[1] || undefined;
@@ -39,7 +39,7 @@ export async function PostListing(
         ["d", "30402"],
         [
           "a",
-          "31990:" + userNPub + ":" + dValue,
+          "31990:" + userPubkey + ":" + dValue,
           "wss://relay.damus.io",
           "web",
         ],
@@ -77,7 +77,7 @@ export async function PostListing(
         "Content-Type": "application/json",
       },
       data: {
-        pubkey: userNPub,
+        pubkey: userPubkey,
         privkey: getPrivKeyWithPassphrase(passphrase),
         created_at: created_at,
         kind: 30402,
@@ -89,7 +89,7 @@ export async function PostListing(
     });
     return {
       id: res.data.id,
-      pubkey: userNPub,
+      pubkey: userPubkey,
       created_at: created_at,
       kind: 30402,
       tags: updatedValues,
@@ -171,7 +171,6 @@ export async function finalizeAndSendNostrEvent(
       let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
       signedEvent = finalizeEvent(nostrEvent, senderPrivkey);
     }
-    console.log("signedEvent", signedEvent);
     const pool = new SimplePool();
     await Promise.any(pool.publish(relays, signedEvent));
   } catch (e) {

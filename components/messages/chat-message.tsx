@@ -31,12 +31,12 @@ export const ChatMessage = ({
     ? isDecodableToken(tokenAfterCashuA)
     : false;
 
-  const { userNPub } = getLocalStorageData();
+  const { userPubkey } = getLocalStorageData();
   return (
     <div
       key={index}
       className={`my-2 flex ${
-        messageEvent.pubkey === userNPub
+        messageEvent.pubkey === userPubkey
           ? "justify-end"
           : messageEvent.pubkey === currentChatPubkey
             ? "justify-start"
@@ -45,7 +45,7 @@ export const ChatMessage = ({
     >
       <div
         className={`flex max-w-[90%] flex-col rounded-t-large p-3  ${
-          messageEvent.pubkey === userNPub
+          messageEvent.pubkey === userPubkey
             ? "rounded-bl-lg bg-shopstr-purple-light text-light-bg dark:bg-shopstr-yellow-light dark:text-dark-bg"
             : "rounded-br-lg bg-gray-200 text-light-text dark:bg-gray-300 "
         }`}
@@ -65,7 +65,7 @@ export const ChatMessage = ({
         <div className="m-1"></div>
         <span
           className={`text-xs opacity-50 ${
-            messageEvent.pubkey === userNPub ? "text-right" : "text-left"
+            messageEvent.pubkey === userPubkey ? "text-right" : "text-left"
           }`}
         >
           {timeSinceMessageDisplayText(messageEvent.created_at).dateTime}

@@ -40,7 +40,7 @@ const DirectMessages = () => {
 
   const [isChatsLoading, setIsChatsLoading] = useState(true);
   const [isSendingDMLoading, setIsSendingDMLoading] = useState(false);
-  const { signInMethod, userNPub } = getLocalStorageData();
+  const { signInMethod, userPubkey } = getLocalStorageData();
 
   const [isClient, setIsClient] = useState(false);
 
@@ -214,7 +214,7 @@ const DirectMessages = () => {
     setIsSendingDMLoading(true);
     try {
       let encryptedMessageEvent = await constructEncryptedMessageEvent(
-        userNPub,
+        userPubkey,
         message,
         currentChatPubkey,
         passphrase,
@@ -252,7 +252,7 @@ const DirectMessages = () => {
             "Content-Type": "application/json",
           },
           data: {
-            customer_id: userNPub,
+            customer_id: userPubkey,
             merchant_id: currentChatPubkey,
             // listing_id: "TODO"
             // relays: relays,
@@ -282,7 +282,7 @@ const DirectMessages = () => {
               </div>
             ) : (
               <p className="break-words text-center text-2xl text-light-text dark:text-dark-text">
-                {isClient && userNPub ? (
+                {isClient && userPubkey ? (
                   <>
                     No messages . . . yet!
                     <br></br>
