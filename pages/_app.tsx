@@ -29,9 +29,6 @@ import BottomNav from "@/components/nav-bottom";
 import SideNav from "@/components/nav-side";
 
 function App({ Component, pageProps }: AppProps) {
-  const router = useRouter();
-  const isSignInPage = router.pathname === "/sign-in";
-  const isKeyPage = router.pathname === "/keys";
   const [localStorageValues, setLocalStorageValues] =
     useState<LocalStorageInterface>(getLocalStorageData());
   const [productContext, setProductContext] = useState<ProductContextInterface>(
@@ -73,7 +70,7 @@ function App({ Component, pageProps }: AppProps) {
       updateProfileData: (profileData: ProfileData) => {
         setProfileContext((profileContext) => {
           let newProfileData = new Map(profileContext.profileData);
-          newProfileData.set(profileData.pubkey, profileData.content);
+          newProfileData.set(profileData.pubkey, profileData);
           return {
             profileData: newProfileData,
             isLoading: false,
@@ -83,73 +80,22 @@ function App({ Component, pageProps }: AppProps) {
       },
     },
   );
-
   const [chatsContext, setChatsContext] = useState<ChatsContextInterface>({
     chatsMap: new Map(),
     isLoading: true,
   });
 
-  const initializeContext = () => {
-    setProductContext({
-      productEvents: [],
-      isLoading: true,
-      addNewlyCreatedProductEvent: (productEvent: any) => {
-        setProductContext((productContext) => {
-          let productEvents = [...productContext.productEvents, productEvent];
-          return {
-            productEvents: productEvents,
-            isLoading: false,
-            addNewlyCreatedProductEvent:
-              productContext.addNewlyCreatedProductEvent,
-            removeDeletedProductEvent: productContext.removeDeletedProductEvent,
-          };
-        });
-      },
-      removeDeletedProductEvent: (productId: string) => {
-        setProductContext((productContext) => {
-          let productEvents = [...productContext.productEvents].filter(
-            (event) => event.id !== productId,
-          );
-          return {
-            productEvents: productEvents,
-            isLoading: false,
-            addNewlyCreatedProductEvent:
-              productContext.addNewlyCreatedProductEvent,
-            removeDeletedProductEvent: productContext.removeDeletedProductEvent,
-          };
-        });
-      },
-    });
-    setProfileContext({
-      profileData: new Map(),
-      isLoading: true,
-      updateProfileData: (profileData: ProfileData) => {
-        setProfileContext((profileContext) => {
-          let newProfileData = new Map(profileContext.profileData);
-          newProfileData.set(profileData.pubkey, profileData);
-          return {
-            profileData: newProfileData,
-            isLoading: false,
-            updateProfileData: profileContext.updateProfileData,
-          };
-        });
-      },
-    });
-    setChatsContext({
-      chatsMap: new Map(),
-      isLoading: true,
-    });
-  };
-
   const editProductContext = (
     productEvents: NostrEvent[],
     isLoading: boolean,
   ) => {
-    setProductContext({
-      productEvents: productEvents,
-      isLoading: isLoading,
-      addNewlyCreatedProductEvent: productContext.addNewlyCreatedProductEvent,
-      removeDeletedProductEvent: productContext.removeDeletedProductEvent,
+    setProductContext((productContext) => {
+      return {
+        productEvents: productEvents,
+        isLoading: isLoading,
+        addNewlyCreatedProductEvent: productContext.addNewlyCreatedProductEvent,
+        removeDeletedProductEvent: productContext.removeDeletedProductEvent,
+      };
     });
   };
 
@@ -157,10 +103,6 @@ function App({ Component, pageProps }: AppProps) {
     profileData: Map<string, any>,
     isLoading: boolean,
   ) => {
-    console.log(
-      "profileData: ",
-      profileData.get(getLocalStorageData().userPubkey),
-    );
     setProfileContext((profileContext) => {
       return {
         profileData,
@@ -177,7 +119,6 @@ function App({ Component, pageProps }: AppProps) {
   /** FETCH initial PRODUCTS and PROFILES **/
   useEffect(() => {
     async function fetchData() {
-      initializeContext();
       const relays = getLocalStorageData().relays;
       const userPubkey = getLocalStorageData().userPubkey;
       try {
