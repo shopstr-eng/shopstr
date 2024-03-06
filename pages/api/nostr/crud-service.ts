@@ -45,3 +45,24 @@ export async function createNostrDeleteEvent(
   msg.id = await generateNostrEventId(msg);
   return msg;
 }
+
+export async function createNostrProfileEvent(
+  pubkey: string,
+  content: string,
+  passphrase: string,
+) {
+  let msg = {
+    kind: 0, // NIP-1 - Profile
+    content: content,
+    tags: [],
+    created_at: 0,
+    pubkey: pubkey,
+    id: "",
+    sig: "",
+  } as NostrEvent;
+
+  msg.created_at = Math.floor(new Date().getTime() / 1000);
+  msg.id = await generateNostrEventId(msg);
+  await finalizeAndSendNostrEvent(msg, passphrase);
+  return msg;
+}

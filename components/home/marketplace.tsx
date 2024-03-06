@@ -67,7 +67,6 @@ export function MarketplacePage() {
 
   const handleCreateNewListing = () => {
     const loggedIn = isUserLoggedIn();
-    console.log("loggedIn", loggedIn);
     if (loggedIn) {
       router.push("/?addNewListing");
     } else {
@@ -148,7 +147,7 @@ export function MarketplacePage() {
               </ArrowUturnLeftIcon>
             </div>
 
-            <span className="sm:w-72 md:w-full overflow-hidden break-all">
+            <span className="overflow-hidden break-all sm:w-72 md:w-full">
               {nip19.npubEncode(focusedPubkey)}
             </span>
           </div>

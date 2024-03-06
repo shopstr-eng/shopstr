@@ -161,18 +161,24 @@ export async function finalizeAndSendNostrEvent(
   nostrEvent: NostrEvent,
   passphrase?: string,
 ) {
-  const { signInMethod, relays } = getLocalStorageData();
-  let signedEvent;
-  if (signInMethod === "extension") {
-    signedEvent = await window.nostr.signEvent(nostrEvent);
-  } else {
-    if (!passphrase) throw new Error("Passphrase is required");
-    let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
-    signedEvent = finalizeEvent(nostrEvent, senderPrivkey);
+  try {
+    const { signInMethod, relays } = getLocalStorageData();
+    let signedEvent;
+    if (signInMethod === "extension") {
+      signedEvent = await window.nostr.signEvent(nostrEvent);
+    } else {
+      if (!passphrase) throw new Error("Passphrase is required");
+      let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
+      signedEvent = finalizeEvent(nostrEvent, senderPrivkey);
+    }
+    console.log("signedEvent", signedEvent);
+    const pool = new SimplePool();
+    await Promise.any(pool.publish(relays, signedEvent));
+  } catch (e) {
+    console.log("Error: ", e);
+    alert("Failed to send event: " + e.message);
+    return { error: e };
   }
-  console.log("signedEvent", signedEvent);
-  const pool = new SimplePool();
-  await Promise.any(pool.publish(relays, signedEvent));
 }
 
 export type NostrBuildResponse = {

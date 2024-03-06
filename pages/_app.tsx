@@ -24,7 +24,7 @@ import {
   fetchChatsAndMessages,
   fetchProfile,
 } from "./api/nostr/fetch-service";
-import { NostrEvent } from "../utils/types/types";
+import { NostrEvent, ProfileData } from "../utils/types/types";
 import BottomNav from "@/components/nav-bottom";
 import SideNav from "@/components/nav-side";
 
@@ -70,6 +70,17 @@ function App({ Component, pageProps }: AppProps) {
     {
       profileData: new Map(),
       isLoading: true,
+      updateProfileData: (profileData: ProfileData) => {
+        setProfileContext((profileContext) => {
+          let newProfileData = new Map(profileContext.profileData);
+          newProfileData.set(profileData.pubkey, profileData.content);
+          return {
+            profileData: newProfileData,
+            isLoading: false,
+            updateProfileData: profileContext.updateProfileData,
+          };
+        });
+      },
     },
   );
 
@@ -112,6 +123,17 @@ function App({ Component, pageProps }: AppProps) {
     setProfileContext({
       profileData: new Map(),
       isLoading: true,
+      updateProfileData: (profileData: ProfileData) => {
+        setProfileContext((profileContext) => {
+          let newProfileData = new Map(profileContext.profileData);
+          newProfileData.set(profileData.pubkey, profileData);
+          return {
+            profileData: newProfileData,
+            isLoading: false,
+            updateProfileData: profileContext.updateProfileData,
+          };
+        });
+      },
     });
     setChatsContext({
       chatsMap: new Map(),
@@ -135,7 +157,17 @@ function App({ Component, pageProps }: AppProps) {
     profileData: Map<string, any>,
     isLoading: boolean,
   ) => {
-    setProfileContext({ profileData, isLoading });
+    console.log(
+      "profileData: ",
+      profileData.get(getLocalStorageData().userPubkey),
+    );
+    setProfileContext((profileContext) => {
+      return {
+        profileData,
+        isLoading,
+        updateProfileData: profileContext.updateProfileData,
+      };
+    });
   };
 
   const editChatContext = (chatsMap: ChatsMap, isLoading: boolean) => {

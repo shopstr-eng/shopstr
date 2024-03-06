@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import { Listbox, ListboxItem, ListboxSection, cn } from "@nextui-org/react";
 import {
   ArrowRightOnRectangleIcon,
@@ -42,7 +41,7 @@ const SettingsPage = () => {
             </ListboxItem>
             <ListboxItem
               key="preferences"
-              description="Change your relays, mints, and dark mode"
+              description="Change your relays, mints, and theme"
               classNames={listBoxClassnames}
               startContent={<Cog6ToothIcon className={startIconClassnames} />}
               onClick={() => {
