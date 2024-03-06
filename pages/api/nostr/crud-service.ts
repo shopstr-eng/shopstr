@@ -42,7 +42,6 @@ export async function createNostrDeleteEvent(
 
   msg.created_at = Math.floor(new Date().getTime() / 1000);
   msg.pubkey = pubkey;
-  msg.id = await generateNostrEventId(msg);
   return msg;
 }
 
@@ -62,7 +61,6 @@ export async function createNostrProfileEvent(
   } as NostrEvent;
 
   msg.created_at = Math.floor(new Date().getTime() / 1000);
-  msg.id = await generateNostrEventId(msg);
   await finalizeAndSendNostrEvent(msg, passphrase);
   return msg;
 }
