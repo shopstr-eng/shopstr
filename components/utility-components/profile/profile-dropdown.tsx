@@ -17,10 +17,11 @@ import {
   BuildingStorefrontIcon,
   ChatBubbleBottomCenterIcon,
   Cog6ToothIcon,
+  UserIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 
-type DropDownKeys = "shop" | "message" | "settings" | "logout";
+type DropDownKeys = "shop" | "message" | "settings" | "user_profile" | "logout";
 
 export const ProfileWithDropdown = ({
   pubkey,
@@ -107,6 +108,19 @@ export const ProfileWithDropdown = ({
         }}
       >
         Settings
+      </DropdownItem>
+    ),
+    user_profile: (
+      <DropdownItem
+        key="user_profile"
+        color="default"
+        className="text-light-text dark:text-dark-text"
+        startContent={<UserIcon className={"h-5 w-5"} />}
+        onClick={() => {
+          router.push("/settings/user-profile");
+        }}
+      >
+        Profile
       </DropdownItem>
     ),
     logout: (

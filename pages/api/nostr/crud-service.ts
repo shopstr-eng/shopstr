@@ -1,6 +1,5 @@
 import {
   finalizeAndSendNostrEvent,
-  generateNostrEventId,
   getLocalStorageData,
 } from "@/components/utility/nostr-helper-functions";
 import { NostrEvent } from "@/utils/types/types";

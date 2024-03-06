@@ -262,21 +262,6 @@ async function sha256Hex(string: string | undefined) {
   return hashHex;
 }
 
-export async function generateNostrEventId(msg: NostrEvent) {
-  const digest = [
-    0,
-    msg.pubkey,
-    msg.created_at,
-    msg.kind,
-    msg.tags,
-    msg.content,
-  ];
-  const digest_str = JSON.stringify(digest);
-  const hash = await sha256Hex(digest_str);
-
-  return hash;
-}
-
 export function validPassphrase(passphrase: string) {
   try {
     let nsec = getNsecWithPassphrase(passphrase);
