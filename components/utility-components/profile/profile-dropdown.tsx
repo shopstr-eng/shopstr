@@ -1,4 +1,3 @@
-// @ts-ignore
 import {
   LogOut,
   isUserLoggedIn,
@@ -163,10 +162,12 @@ export const ProfileWithDropdown = ({
         />
       </DropdownTrigger>
       <DropdownMenu aria-label="User Actions" variant="flat">
-        {dropDownKeys.map((key) => {
-          return DropDownItems[key];
-        })}
-        {children}
+        <>
+          {dropDownKeys?.map((key) => {
+            return DropDownItems[key];
+          })}
+          {children}
+        </>
       </DropdownMenu>
     </Dropdown>
   );

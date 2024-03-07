@@ -10,6 +10,7 @@ import {
   Popover,
   PopoverTrigger,
   PopoverContent,
+  Image,
 } from "@nextui-org/react";
 import {
   ArrowUpOnSquareIcon,
@@ -155,13 +156,13 @@ const UserProfilePage = () => {
                         <ArrowUpOnSquareIcon className="h-6 w-6" />{" "}
                       </FileUploaderButton>
                       {watchPicture ? (
-                        <img
+                        <Image
                           src={watchPicture}
                           alt="user profile picture"
                           className="rounded-full"
                         />
                       ) : (
-                        <img
+                        <Image
                           src={defaultImage}
                           alt="user profile picture"
                           className="rounded-full"

@@ -15,12 +15,12 @@ export interface ChatObject {
 export interface ProfileData {
   pubkey: string;
   content: {
-    name: string;
-    picture: string;
-    about: string;
-    banner: string;
-    lud16: string;
-    nip05: string;
+    name?: string;
+    picture?: string;
+    about?: string;
+    banner?: string;
+    lud16?: string;
+    nip05?: string;
   };
   created_at: number;
 }
