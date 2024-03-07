@@ -24,14 +24,11 @@ import {
   fetchChatsAndMessages,
   fetchProfile,
 } from "./api/nostr/fetch-service";
-import { NostrEvent } from "../utils/types/types";
+import { NostrEvent, ProfileData } from "../utils/types/types";
 import BottomNav from "@/components/nav-bottom";
 import SideNav from "@/components/nav-side";
 
 function App({ Component, pageProps }: AppProps) {
-  const router = useRouter();
-  const isSignInPage = router.pathname === "/sign-in";
-  const isKeyPage = router.pathname === "/keys";
   const [localStorageValues, setLocalStorageValues] =
     useState<LocalStorageInterface>(getLocalStorageData());
   const [productContext, setProductContext] = useState<ProductContextInterface>(
@@ -70,9 +67,19 @@ function App({ Component, pageProps }: AppProps) {
     {
       profileData: new Map(),
       isLoading: true,
+      updateProfileData: (profileData: ProfileData) => {
+        setProfileContext((profileContext) => {
+          let newProfileData = new Map(profileContext.profileData);
+          newProfileData.set(profileData.pubkey, profileData);
+          return {
+            profileData: newProfileData,
+            isLoading: false,
+            updateProfileData: profileContext.updateProfileData,
+          };
+        });
+      },
     },
   );
-
   const [chatsContext, setChatsContext] = useState<ChatsContextInterface>({
     chatsMap: new Map(),
     isLoading: true,
@@ -82,11 +89,13 @@ function App({ Component, pageProps }: AppProps) {
     productEvents: NostrEvent[],
     isLoading: boolean,
   ) => {
-    setProductContext({
-      productEvents: productEvents,
-      isLoading: isLoading,
-      addNewlyCreatedProductEvent: productContext.addNewlyCreatedProductEvent,
-      removeDeletedProductEvent: productContext.removeDeletedProductEvent,
+    setProductContext((productContext) => {
+      return {
+        productEvents: productEvents,
+        isLoading: isLoading,
+        addNewlyCreatedProductEvent: productContext.addNewlyCreatedProductEvent,
+        removeDeletedProductEvent: productContext.removeDeletedProductEvent,
+      };
     });
   };
 
@@ -94,7 +103,13 @@ function App({ Component, pageProps }: AppProps) {
     profileData: Map<string, any>,
     isLoading: boolean,
   ) => {
-    setProfileContext({ profileData, isLoading });
+    setProfileContext((profileContext) => {
+      return {
+        profileData,
+        isLoading,
+        updateProfileData: profileContext.updateProfileData,
+      };
+    });
   };
 
   const editChatContext = (chatsMap: ChatsMap, isLoading: boolean) => {
@@ -103,9 +118,9 @@ function App({ Component, pageProps }: AppProps) {
 
   /** FETCH initial PRODUCTS and PROFILES **/
   useEffect(() => {
-    const relays = localStorageValues.relays;
-    const decryptedNpub = localStorageValues.decryptedNpub;
     async function fetchData() {
+      const relays = getLocalStorageData().relays;
+      const userPubkey = getLocalStorageData().userPubkey;
       try {
         let pubkeysToFetchProfilesFor: string[] = [];
         let { profileSetFromProducts } = await fetchAllPosts(
@@ -115,11 +130,11 @@ function App({ Component, pageProps }: AppProps) {
         pubkeysToFetchProfilesFor = [...profileSetFromProducts];
         let { profileSetFromChats } = await fetchChatsAndMessages(
           relays,
-          decryptedNpub,
+          userPubkey,
           editChatContext,
         );
         pubkeysToFetchProfilesFor = [
-          decryptedNpub as string,
+          userPubkey as string,
           ...pubkeysToFetchProfilesFor,
           ...profileSetFromChats,
         ];
@@ -132,7 +147,9 @@ function App({ Component, pageProps }: AppProps) {
         console.error("Error fetching data:", error);
       }
     }
-    if (relays) fetchData(); // Call the async function immediately
+    fetchData();
+    window.addEventListener("storage", fetchData);
+    return () => window.removeEventListener("storage", fetchData);
   }, [localStorageValues.relays]);
 
   useEffect(() => {

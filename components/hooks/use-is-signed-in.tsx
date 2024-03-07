@@ -5,16 +5,16 @@ import { useEffect, useState } from "react";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
 
 const useIsSignedIn = () => {
-  const { npub } = getLocalStorageData();
+  const { userNPub } = getLocalStorageData();
   const [isSignedIn, setIsSignedIn] = useState(false);
 
   useEffect(() => {
     setIsSignedIn(false);
 
-    if (npub) {
+    if (userNPub) {
       setIsSignedIn(true);
     }
-  }, [npub]);
+  }, [userNPub]);
 
   return isSignedIn;
 };

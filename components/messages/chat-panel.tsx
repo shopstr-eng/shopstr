@@ -1,20 +1,15 @@
 // initialize new react funcitonal component
 import { Button, Input } from "@nextui-org/react";
 import React, { useEffect, useRef, useState } from "react";
-import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import {
   ArrowUturnLeftIcon,
   ArrowsUpDownIcon,
   ChatBubbleLeftIcon,
 } from "@heroicons/react/24/outline";
-import { getLocalStorageData } from "../../components/utility/nostr-helper-functions";
-import { ProfileAvatar } from "../../components/utility-components/profile/avatar";
-import {
-  ChatObject,
-  NostrEvent,
-  NostrMessageEvent,
-} from "../../utils/types/types";
+import { ChatObject, NostrMessageEvent } from "../../utils/types/types";
 import { ChatMessage } from "./chat-message";
+import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
 
 export const ChatPanel = ({
   handleGoBack,
@@ -29,7 +24,6 @@ export const ChatPanel = ({
   chatsMap: Map<string, ChatObject>;
   isSendingDMLoading: boolean;
 }) => {
-  const { decryptedNpub } = getLocalStorageData();
   const [messageInput, setMessageInput] = useState("");
   const [messages, setMessages] = useState<NostrMessageEvent[]>([]); // [chatPubkey, chat]
 
@@ -73,10 +67,10 @@ export const ChatPanel = ({
           onClick={handleGoBack}
           className="mx-3 h-9 w-9 cursor-pointer rounded-md p-1 text-shopstr-purple-light hover:bg-shopstr-yellow hover:text-purple-700 dark:text-shopstr-yellow-light  hover:dark:bg-shopstr-purple"
         />
-        <ProfileAvatar
+        <ProfileWithDropdown
           pubkey={currentChatPubkey}
-          className=""
-          includeDisplayName
+          dropDownKeys={["shop"]}
+          nameClassname="block"
         />
       </h2>
       <div className="my-2 h-full overflow-y-scroll rounded-md border-2 border-light-fg bg-light-fg p-3 dark:border-dark-fg dark:bg-dark-fg">

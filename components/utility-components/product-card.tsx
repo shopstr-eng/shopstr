@@ -2,7 +2,6 @@ import React, { ReactNode, useEffect, useState } from "react";
 import Link from "next/link";
 import { InformationCircleIcon } from "@heroicons/react/24/outline";
 import { Card, CardBody, Divider, Chip, CardFooter } from "@nextui-org/react";
-import { ProfileAvatar } from "./profile/avatar";
 import { locationAvatar } from "./dropdowns/location-dropdown";
 import CompactCategories from "./compact-categories";
 import ImageCarousel from "./image-carousel";
@@ -10,7 +9,7 @@ import CompactPriceDisplay, {
   DisplayCostBreakdown,
 } from "./display-monetary-info";
 import { ProductData } from "../utility/product-parser-functions";
-import { useRouter } from "next/router";
+import { ProfileWithDropdown } from "./profile/profile-dropdown";
 
 const cardWidth = 380;
 const cardxMargin = 2.5;
@@ -18,20 +17,17 @@ export const TOTALPRODUCTCARDWIDTH = cardWidth + cardxMargin * 2 + 10;
 
 export default function ProductCard({
   productData,
-  handleDelete,
   onProductClick,
   isReview,
   footerContent,
   uniqueKey,
 }: {
   productData: ProductData;
-  handleDelete?: (productId: string, passphrase: string) => void;
   onProductClick?: (productId: any) => void;
   isReview?: boolean;
   footerContent?: ReactNode;
   uniqueKey?: string;
 }) {
-  const router = useRouter();
   if (!productData) return null;
   const { id, pubkey, title, images, categories, location } = productData;
   if (isReview)
@@ -43,11 +39,10 @@ export default function ProductCard({
             onProductClick && onProductClick(productData);
           }}
         >
-          <div className="z-10 flex w-full justify-between">
-            <ProfileAvatar
-              pubkey={pubkey}
-              className="w-4/6"
-              includeDisplayName
+          <div className="z-10 flex w-full justify-between pb-3">
+            <ProfileWithDropdown
+              pubkey={productData.pubkey}
+              dropDownKeys={["shop", "message"]}
             />
             <div className="flex flex-col justify-center ">
               <CompactCategories categories={categories} />
@@ -102,9 +97,6 @@ export default function ProductCard({
   const cardHoverStyle =
     "hover:shadow-lg hover:shadow-shopstr-purple dark:hover:shadow-shopstr-yellow";
 
-  const routeToShop = (npub: string) => {
-    router.push(npub);
-  };
   return (
     <Card
       className={
@@ -119,17 +111,10 @@ export default function ProductCard({
           onProductClick && onProductClick(productData);
         }}
       >
-        <div className="z-10 flex w-full justify-between">
-          <ProfileAvatar
-            pubkey={pubkey}
-            className="w-4/6"
-            includeDisplayName
-            onClickPfp={(npub: string): void => {
-              routeToShop(npub);
-            }}
-            onClickDisplayName={(npub: string): void => {
-              routeToShop(npub);
-            }}
+        <div className="z-10 mb-2 flex w-full justify-between">
+          <ProfileWithDropdown
+            pubkey={productData.pubkey}
+            dropDownKeys={["shop", "message"]}
           />
           <div className="flex flex-col justify-center ">
             <CompactCategories categories={categories} />

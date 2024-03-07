@@ -5,11 +5,13 @@ import * as CryptoJS from "crypto-js";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
+import { getPublicKey, nip19 } from "nostr-tools";
+import { setLocalStorageDataOnSignIn } from "@/components/utility/nostr-helper-functions";
 
 const Keys = () => {
   const router = useRouter();
 
-  const [publicKey, setPublicKey] = useState<string>("");
+  const [npub, setNPub] = useState<string>("");
   const [privateKey, setPrivateKey] = useState<string>("");
   const [passphrase, setPassphrase] = useState<string>("");
   const [viewState, setViewState] = useState<"shown" | "hidden">("hidden");
@@ -20,7 +22,7 @@ const Keys = () => {
       url: "/api/nostr/generate-keys",
     })
       .then((response) => {
-        setPublicKey(response.data.npub);
+        setNPub(response.data.npub);
         setPrivateKey(response.data.nsec);
       })
       .catch((error) => {
@@ -29,7 +31,7 @@ const Keys = () => {
   }, []);
 
   const handleCopyPubkey = () => {
-    navigator.clipboard.writeText(publicKey);
+    navigator.clipboard.writeText(npub);
     // navigator.clipboard.writeText(invoiceString);
     alert("Public key was copied to clipboard!");
   };
@@ -44,30 +46,18 @@ const Keys = () => {
     if (passphrase === "" || passphrase === null) {
       alert("No passphrase provided!");
     } else {
-      localStorage.setItem("npub", publicKey);
-
+      let { data: sk } = nip19.decode(privateKey);
+      let pk = getPublicKey(sk as Uint8Array);
       let encryptedPrivateKey = CryptoJS.AES.encrypt(
         privateKey,
         passphrase,
       ).toString();
 
-      localStorage.setItem("encryptedPrivateKey", encryptedPrivateKey);
-
-      localStorage.setItem("signIn", "nsec");
-
-      localStorage.setItem(
-        "relays",
-        JSON.stringify([
-          "wss://relay.damus.io",
-          "wss://nos.lol",
-          "wss://nostr.mutinywallet.com",
-        ]),
-      );
-
-      localStorage.setItem(
-        "mints",
-        JSON.stringify(["https://mint.minibits.cash/Bitcoin"]),
-      );
+      setLocalStorageDataOnSignIn({
+        signInMethod: "nsec",
+        pubkey: pk as string,
+        encryptedPrivateKey: encryptedPrivateKey,
+      });
 
       router.push("/");
     }
@@ -96,12 +86,12 @@ const Keys = () => {
             </div>
             <div className="mb-4 flex flex-col">
               <label className="text-xl">Public Key:</label>
-              {publicKey && (
+              {npub && (
                 <div
                   className="border-color-yellow-500 break-all rounded-md border-b-2 border-l-2 border-shopstr-purple bg-light-bg px-1 text-xl dark:border-shopstr-yellow dark:bg-dark-bg"
                   onClick={handleCopyPubkey}
                 >
-                  {publicKey}
+                  {npub}
                 </div>
               )}
             </div>

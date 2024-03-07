@@ -9,33 +9,49 @@ import {
   EnvelopeOpenIcon,
   ChartBarIcon,
   Cog6ToothIcon,
+  ArrowLeftOnRectangleIcon,
+  ArrowRightOnRectangleIcon,
 } from "@heroicons/react/24/outline";
 import { countNumberOfUnreadMessagesFromChatsContext } from "@/utils/messages/utils";
 import { ChatsContext } from "@/utils/context/context";
 import { db } from "../pages/api/nostr/cache-service";
 
 import { useLiveQuery } from "dexie-react-hooks";
-import { Button, Image } from "@nextui-org/react";
+import { Button, DropdownItem, Image, useDisclosure } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
 import { useRouter } from "next/router";
 import SignInModal from "./sign-in/SignInModal";
-import { getLocalStorageData } from "./utility/nostr-helper-functions";
+import {
+  getLocalStorageData,
+  isUserLoggedIn,
+} from "./utility/nostr-helper-functions";
+import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
 
 const SideNav = () => {
   const { isHomeActive, isMessagesActive, isMetricsActive, isProfileActive } =
     useNavigation();
   const router = useRouter();
 
-  const [openSignInModal, setOpenSignInModal] = useState(false);
-  let [count, setCount] = useState(0);
+  const { isOpen, onOpen, onClose } = useDisclosure();
 
   const chatsContext = useContext(ChatsContext);
 
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
+  const [signedIn, setSignedIn] = useState(false);
 
   const liveChatMessagesFromCache = useLiveQuery(
     async () => await db.table("chatMessages").toArray(),
   );
+
+  useEffect(() => {
+    const getSignedInStatus = () => {
+      const loggedIn = isUserLoggedIn();
+      setSignedIn(loggedIn);
+    };
+    getSignedInStatus();
+    window.addEventListener("storage", getSignedInStatus);
+    return () => window.removeEventListener("storage", getSignedInStatus);
+  }, []);
 
   useEffect(() => {
     const getUnreadMessages = async () => {
@@ -48,24 +64,18 @@ const SideNav = () => {
   }, [chatsContext, liveChatMessagesFromCache]);
 
   const handleRoute = (path: string) => {
-    const loggedIn = getLocalStorageData().npub;
-
-    if (loggedIn) {
+    if (signedIn) {
       router.push(path);
     } else {
-      setOpenSignInModal(true);
-      setCount(++count);
+      onOpen();
     }
   };
 
   const handleCreateNewListing = () => {
-    const loggedIn = getLocalStorageData().npub;
-
-    if (loggedIn) {
+    if (signedIn) {
       router.push("/?addNewListing");
     } else {
-      setOpenSignInModal(true);
-      setCount(++count);
+      onOpen();
     }
   };
 
@@ -91,7 +101,6 @@ const SideNav = () => {
             Shopstr
           </span>
         </Button>
-
         <Button
           onClick={() => router.push("/")}
           className={`flex w-full flex-row justify-start bg-transparent py-8 text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
@@ -108,7 +117,6 @@ const SideNav = () => {
           >
             Home
           </span>
-          {/* <span className='h-2 w-2 rounded-full bg-sky-500 absolute top-3 right-[16px] md:right-[100px]'></span> */}
         </Button>
         <Button
           onClick={() => handleRoute("/messages")}
@@ -166,6 +174,7 @@ const SideNav = () => {
             Settings
           </span>
         </Button>
+
         <div className="hidden w-full md:flex">
           <Button
             className={`${SHOPSTRBUTTONCLASSNAMES} m-5 w-full`}
@@ -174,8 +183,40 @@ const SideNav = () => {
             + Add new listing
           </Button>
         </div>
+        <div className="bottom-0 mt-auto w-full">
+          {signedIn ? (
+            <div className="flex w-full justify-center">
+              <ProfileWithDropdown
+                pubkey={getLocalStorageData().userPubkey}
+                baseClassname="justify-start dark:hover:shopstr-yellow-light w-[95%] pl-4 rounded-3xl py-2  hover:scale-105 hover:bg-light-bg hover:shadow-lg dark:hover:bg-dark-bg"
+                dropDownKeys={["user_profile", "logout"]}
+                nameClassname="md:block"
+              />
+            </div>
+          ) : (
+            <Button
+              onClick={() => {
+                onOpen();
+              }}
+              className={`flex w-full  flex-row justify-start bg-transparent py-8 text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
+                isProfileActive
+                  ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
+                  : ""
+              }`}
+            >
+              <ArrowLeftOnRectangleIcon height={32} width={32} />
+              <span
+                className={`hidden text-2xl md:flex ${
+                  isProfileActive ? "font-bold" : ""
+                }`}
+              >
+                Sign In
+              </span>
+            </Button>
+          )}
+        </div>
       </div>
-      <SignInModal some={count} opened={openSignInModal}></SignInModal>
+      <SignInModal isOpen={isOpen} onClose={onClose} />
     </>
   );
 };

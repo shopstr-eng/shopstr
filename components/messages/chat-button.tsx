@@ -1,8 +1,7 @@
 import { useEffect, useRef } from "react";
-import { ProfileAvatar } from "../../components/utility-components/profile/avatar";
-import { ProfileDisplayName } from "../../components/utility-components/profile/display-name";
 import { ChatObject } from "../../utils/types/types";
 import { timeSinceMessageDisplayText } from "../../utils/messages/utils";
+import { ProfileAvatar } from "@/components/utility-components/profile/profile-avatar";
 
 export const ChatButton = ({
   pubkeyOfChat,
@@ -37,15 +36,13 @@ export const ChatButton = ({
       onClick={() => handleClickChat(pubkeyOfChat)}
       ref={divRef}
     >
-      <div className="flex-shrink-0 overflow-clip">
-        <ProfileAvatar pubkey={pubkeyOfChat} />
-      </div>
-      <div className="flex w-2/3 flex-shrink-0 flex-col ">
-        <ProfileDisplayName pubkey={pubkeyOfChat} />
-        <span className="line-clamp-1 break-all text-light-text dark:text-dark-text">
-          {lastMessage ? lastMessage.content : "No messages yet"}
-        </span>
-      </div>
+      <ProfileAvatar
+        pubkey={pubkeyOfChat}
+        description={lastMessage ? lastMessage.content : "No messages yet"}
+        descriptionClassname="line-clamp-1 break-all overflow-hidden text-light-text dark:text-dark-text w-full h-[15px]"
+        baseClassname="justify-start w-4/5"
+        wrapperClassname="w-4/5 h-full"
+      />
       <div className="flex flex-shrink-0 flex-grow flex-col text-right text-light-text dark:text-dark-text">
         <div className="h-1/2">
           {unreadCount > 0 ? (

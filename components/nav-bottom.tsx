@@ -2,34 +2,28 @@
 
 import React, { useContext, useEffect, useState } from "react";
 
-import Link from "next/link";
-
 import useNavigation from "@/components/hooks/use-navigation";
-import useScrollingEffect from "@/components/hooks/use-scroll";
 
-// import { Icon } from '@iconify/react';
 import {
   HomeIcon,
   EnvelopeOpenIcon,
-  BuildingLibraryIcon,
-  GlobeAltIcon,
-  ArrowRightOnRectangleIcon,
   ArrowLeftOnRectangleIcon,
-  SunIcon,
-  MoonIcon,
   ChartBarIcon,
-  Cog6ToothIcon,
 } from "@heroicons/react/24/outline";
-import { Button } from "@nextui-org/react";
+import { Button, DropdownItem, useDisclosure } from "@nextui-org/react";
 import { countNumberOfUnreadMessagesFromChatsContext } from "@/utils/messages/utils";
-import { Icon } from "@tremor/react";
 import { ChatsContext } from "@/utils/context/context";
 import { db } from "../pages/api/nostr/cache-service";
 
 import { useLiveQuery } from "dexie-react-hooks";
-import { getLocalStorageData } from "./utility/nostr-helper-functions";
+import {
+  LogOut,
+  getLocalStorageData,
+  isUserLoggedIn,
+} from "./utility/nostr-helper-functions";
 import { useRouter } from "next/router";
 import SignInModal from "./sign-in/SignInModal";
+import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
 
 const BottomNav = () => {
   const { isHomeActive, isMessagesActive, isMetricsActive, isProfileActive } =
@@ -39,13 +33,23 @@ const BottomNav = () => {
   const chatsContext = useContext(ChatsContext);
 
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
-
-  const [openSignInModal, setOpenSignInModal] = useState(false);
-  let [count, setCount] = useState(0);
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const [signedIn, setSignedIn] = useState(false);
 
   const liveChatMessagesFromCache = useLiveQuery(
     async () => await db.table("chatMessages").toArray(),
   );
+
+  useEffect(() => {
+    const getSignedInStatus = () => {
+      const loggedIn = isUserLoggedIn();
+      setSignedIn(loggedIn);
+    };
+    getSignedInStatus();
+    window.addEventListener("storage", getSignedInStatus);
+    return () => window.removeEventListener("storage", getSignedInStatus);
+  }, []);
+
   useEffect(() => {
     const getUnreadMessages = async () => {
       let unreadMsgCount = await countNumberOfUnreadMessagesFromChatsContext(
@@ -57,15 +61,13 @@ const BottomNav = () => {
   }, [chatsContext, liveChatMessagesFromCache]);
 
   const handleRoute = (path: string) => {
-    const loggedIn = getLocalStorageData().npub;
-
-    if (loggedIn) {
+    if (signedIn) {
       router.push(path);
     } else {
-      setOpenSignInModal(true);
-      setCount(++count);
+      onOpen();
     }
   };
+
   return (
     <div
       className={`fixed bottom-0 z-50 w-full border-t border-zinc-200 bg-light-fg pb-2 shadow-lg shadow-lg dark:border-zinc-800 dark:bg-dark-fg sm:hidden`}
@@ -124,24 +126,38 @@ const BottomNav = () => {
             ></ChartBarIcon>
           </Button>
         </div>{" "}
-        <div>
-          <Button
-            className="bg-transparent py-8"
-            onClick={() => handleRoute("/settings")}
-          >
-            <Cog6ToothIcon
-              height={32}
-              width={32}
-              className={`cursor-pointer text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
+        <div className="">
+          {signedIn ? (
+            <ProfileWithDropdown
+              pubkey={getLocalStorageData().userPubkey}
+              baseClassname="justify-start dark:hover:shopstr-yellow-light w-[95%] pl-4 rounded-3xl py-2  hover:scale-105 hover:bg-light-bg hover:shadow-lg dark:hover:bg-dark-bg"
+              dropDownKeys={["settings", "user_profile", "logout"]}
+              nameClassname="md:block"
+            />
+          ) : (
+            <Button
+              onClick={() => {
+                onOpen();
+              }}
+              className={`flex w-full  flex-row justify-start bg-transparent py-8 text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
                 isProfileActive
                   ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
                   : ""
               }`}
-            ></Cog6ToothIcon>
-          </Button>
+            >
+              <ArrowLeftOnRectangleIcon height={32} width={32} />
+              <span
+                className={`hidden text-2xl md:flex ${
+                  isProfileActive ? "font-bold" : ""
+                }`}
+              >
+                Sign In
+              </span>
+            </Button>
+          )}
         </div>
       </div>
-      <SignInModal opened={openSignInModal} some={count}></SignInModal>
+      <SignInModal isOpen={isOpen} onClose={onClose} />
     </div>
   );
 };

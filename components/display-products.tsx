@@ -82,8 +82,8 @@ const DisplayEvents = ({
   };
 
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
-    let { signIn } = getLocalStorageData();
-    if (!signIn) {
+    let { signInMethod } = getLocalStorageData();
+    if (!signInMethod) {
       alert("You must be signed in to send a message!");
       return;
     }
@@ -130,7 +130,11 @@ const DisplayEvents = ({
     );
   };
 
-  const displayProductCard = (productData: ProductData, index: number) => {
+  const displayProductCard = (
+    productData: ProductData,
+    index: number,
+    handleSendMessage: (pubkeyToOpenChatWith: string) => void,
+  ) => {
     if (focusedPubkey && productData.pubkey !== focusedPubkey) return;
     if (!productSatisfiesAllFilters(productData)) return;
     return (
@@ -188,7 +192,7 @@ const DisplayEvents = ({
         {/* DISPLAYS PRODUCT LISTINGS HERE */}
         <div className="grid h-[90%] max-w-full grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-x-hidden">
           {productEvents.map((productData: ProductData, index) => {
-            return displayProductCard(productData, index);
+            return displayProductCard(productData, index, handleSendMessage);
           })}
         </div>
         {profileMapContext.isLoading ||

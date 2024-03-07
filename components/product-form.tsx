@@ -1,4 +1,4 @@
-// TODO componentarize file uploader
+3; // TODO componentarize file uploader
 import React, { useMemo, useRef, useEffect, useState, useContext } from "react";
 import Link from "next/link";
 import { useForm, Controller, set } from "react-hook-form";
@@ -38,6 +38,7 @@ import { addProductToCache } from "../pages/api/nostr/cache-service";
 import { ProductData } from "./utility/product-parser-functions";
 import { ProductFormValues } from "@/pages/api/nostr/post-event";
 import { buildSrcSet } from "@/utils/images";
+import { FileUploaderButton } from "./utility-components/file-uploader";
 
 declare global {
   interface Window {
@@ -95,9 +96,9 @@ export default function NewForm({
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      let { signIn, decryptedNpub } = getLocalStorageData();
-      setSignIn(signIn as string);
-      setPubkey(decryptedNpub as string);
+      let { signInMethod, userPubkey } = getLocalStorageData();
+      setSignIn(signInMethod as string);
+      setPubkey(userPubkey as string);
     }
   }, []);
 
@@ -194,62 +195,6 @@ export default function NewForm({
 
   const passphraseInputRef = useRef<HTMLInputElement>(null);
 
-  const FileUploader = ({
-    uploadImage,
-    disabled,
-    passphraseInputRef,
-    buttonClassName,
-  }: {
-    uploadImage: any;
-    disabled: any;
-    passphraseInputRef: React.RefObject<HTMLInputElement>;
-    buttonClassName: any;
-  }) => {
-    const [loading, setLoading] = useState(false);
-    // Create a reference to the hidden file input element
-    const hiddenFileInput = useRef<HTMLInputElement>(null);
-
-    // Programatically click the hidden file input element
-    // when the Button component is clicked
-    const handleClick = (event: any) => {
-      if (disabled && signIn === "nsec") {
-        // shows user that they need to enter passphrase
-        passphraseInputRef.current?.focus();
-        return;
-      }
-      hiddenFileInput.current?.click();
-    };
-    // Call a function (passed as a prop from the parent component)
-    // to handle the user-selected files
-    const handleChange = async (e: React.FormEvent<HTMLInputElement>) => {
-      const files = e.currentTarget.files;
-      setLoading(true);
-      if (files) {
-        await uploadImages(files);
-      }
-      setLoading(false);
-    };
-    return (
-      <>
-        <Button
-          isLoading={loading}
-          onClick={handleClick}
-          className={buttonClassName}
-        >
-          {disabled ? "Enter your passphrase!" : "Upload Images"}
-        </Button>
-        <Input
-          type="file"
-          accept="image/*"
-          multiple
-          ref={hiddenFileInput}
-          onChange={handleChange}
-          style={{ display: "none" }}
-        />
-      </>
-    );
-  };
-
   const deleteImage = (index: number) => () => {
     setImages((prevValues) => {
       const updatedImages = [...prevValues];
@@ -258,43 +203,6 @@ export default function NewForm({
       }
       return updatedImages;
     });
-  };
-
-  const uploadImages = async (files: FileList) => {
-    try {
-      const imageFiles = Array.from(files);
-      if (imageFiles.some((imgFile) => !imgFile.type.includes("image"))) {
-        throw new Error("Only images are supported");
-      }
-
-      let response;
-
-      if (signIn === "nsec") {
-        if (!passphrase || !getNsecWithPassphrase(passphrase))
-          throw new Error("Invalid passphrase!");
-
-        const privkey = getPrivKeyWithPassphrase(passphrase);
-        response = await nostrBuildUploadImages(imageFiles, (e) =>
-          Promise.resolve(finalizeEvent(e, privkey as Uint8Array)),
-        );
-      } else if (signIn === "extension") {
-        response = await nostrBuildUploadImages(
-          imageFiles,
-          async (e) => await window.nostr.signEvent(e),
-        );
-      }
-
-      const imageUrls = response?.map((i) => i.url);
-      setImages((prevValues) => {
-        const updatedImages = [...prevValues];
-        if (imageUrls && imageUrls.length > 0) {
-          return [...updatedImages, ...imageUrls];
-        }
-        return [...updatedImages];
-      });
-    } catch (e) {
-      if (e instanceof Error) alert("Failed to upload image! " + e.message);
-    }
   };
 
   return (
@@ -401,12 +309,23 @@ export default function NewForm({
                 </div>
               )}
             </Carousal>
-            <FileUploader
-              uploadImage={uploadImages}
-              disabled={isButtonDisabled}
-              passphraseInputRef={passphraseInputRef}
-              buttonClassName={buttonClassName}
-            />
+            <FileUploaderButton
+              isIconOnly={false}
+              className={buttonClassName}
+              passphrase={passphrase}
+              imgCallbackOnUpload={(imgUrl) => {
+                setImages((prevValues) => {
+                  const updatedImages = [...prevValues];
+                  console.log("imgUrl", imgUrl);
+                  if (imgUrl && imgUrl.length > 0) {
+                    return [...updatedImages, imgUrl];
+                  }
+                  return [...updatedImages];
+                });
+              }}
+            >
+              {isButtonDisabled ? "Enter your passphrase!" : "Upload Images"}
+            </FileUploaderButton>
             <Controller
               name="Description"
               control={control}
@@ -653,7 +572,6 @@ export default function NewForm({
                     classNames={{
                       base: "mt-4",
                       trigger: "min-h-unit-12 py-2",
-                      label: "top-5",
                     }}
                     renderValue={(items) => {
                       return (
