@@ -406,7 +406,13 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       ? JSON.parse(localStorage.getItem("mints") as string)
       : null;
 
-    if (mints === null || mints[0] !== "https://mint.minibits.cash/Bitcoin") {
+    if (
+      mints === null ||
+      mints[0] ===
+        "https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV" ||
+      mints[0] ===
+        "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"
+    ) {
       mints = ["https://mint.minibits.cash/Bitcoin"];
       localStorage.setItem(LOCALSTORAGECONSTANTS.mints, JSON.stringify(mints));
     }
@@ -414,7 +420,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
   return {
     signInMethod: signInMethod as string,
     encryptedPrivateKey: encryptedPrivateKey as string,
-    userNPub: userNPub as string,
+    userNsiPub: userNPub as string,
     userPubkey: userPubkey as string,
     relays: relays || [],
     mints,

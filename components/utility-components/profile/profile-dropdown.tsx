@@ -59,7 +59,9 @@ export const ProfileWithDropdown = ({
     );
   }, [profileContext, pubkey]);
 
-  const DropDownItems: { [key in DropDownKeys]: DropdownItemProps & { label: string } } = {
+  const DropDownItems: {
+    [key in DropDownKeys]: DropdownItemProps & { label: string };
+  } = {
     shop: {
       key: "shop",
       color: "default",
@@ -145,7 +147,7 @@ export const ProfileWithDropdown = ({
       <DropdownMenu
         aria-label="User Actions"
         variant="flat"
-        items={dropDownKeys.map(key => DropDownItems[key])}
+        items={dropDownKeys.map((key) => DropDownItems[key])}
       >
         {(item) => {
           return (

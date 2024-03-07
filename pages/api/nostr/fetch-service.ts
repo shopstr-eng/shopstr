@@ -36,10 +36,10 @@ export const fetchAllPosts = async (
       const pool = new SimplePool();
 
       if (!since) {
-        since = Math.trunc(DateTime.now().minus({ days: 14 }).toSeconds())
+        since = Math.trunc(DateTime.now().minus({ days: 14 }).toSeconds());
       }
       if (!until) {
-        until = Math.trunc(DateTime.now().toSeconds())
+        until = Math.trunc(DateTime.now().toSeconds());
       }
 
       const filter: Filter = {
@@ -201,7 +201,9 @@ export const fetchChatsAndMessages = async (
         ],
         {
           onevent(event: NostrEvent) {
-            let tagsMap: Map<string, string> = new Map(event.tags.map(([k, v]) => [k, v]));
+            let tagsMap: Map<string, string> = new Map(
+              event.tags.map(([k, v]) => [k, v]),
+            );
             let receipientPubkey = tagsMap.get("p") ? tagsMap.get("p") : null; // pubkey you sent the message to
             if (typeof receipientPubkey !== "string") {
               console.error(
@@ -229,7 +231,7 @@ export const fetchChatsAndMessages = async (
             onEOSE();
           },
           onclose(reasons) {
-            console.log(reasons)
+            console.log(reasons);
           },
         },
       );
@@ -259,7 +261,7 @@ export const fetchChatsAndMessages = async (
             onEOSE();
           },
           onclose(reasons) {
-            console.log(reasons)
+            console.log(reasons);
           },
         },
       );
