@@ -61,7 +61,7 @@ export const ProfileWithDropdown = ({
   }, [profileContext, pubkey]);
 
   const DropDownItems: {
-    [K in DropDownKeys]?: React.ReactNode;
+    [K in DropDownKeys]?: any;
   } = {
     shop: (
       <DropdownItem
@@ -162,7 +162,7 @@ export const ProfileWithDropdown = ({
         />
       </DropdownTrigger>
       <DropdownMenu aria-label="User Actions" variant="flat">
-        {dropDownKeys.map((key) => DropDownItems[key]).filter(Boolean)}
+        {(dropDownKeys || []).map((key) => DropDownItems[key]).filter(Boolean)}
         {children}
       </DropdownMenu>
     </Dropdown>
