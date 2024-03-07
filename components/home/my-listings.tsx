@@ -7,7 +7,7 @@ import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import SignInModal from "../sign-in/SignInModal";
 
 export const MyListingsPage = () => {
-  let usersNPub = getLocalStorageData().userNPub;
+  let usersPubkey = getLocalStorageData().userPubkey;
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   const handleCreateNewListing = () => {
@@ -30,9 +30,9 @@ export const MyListingsPage = () => {
             + Add new listing
           </Button>
         </div>
-        {usersNPub ? (
+        {usersPubkey ? (
           <DisplayEvents
-            focusedPubkey={usersNPub}
+            focusedPubkey={usersPubkey}
             selectedCategories={new Set<string>([])}
             selectedLocation={""}
             selectedSearch={""}
