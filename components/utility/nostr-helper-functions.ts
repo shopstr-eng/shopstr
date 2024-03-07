@@ -420,7 +420,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
   return {
     signInMethod: signInMethod as string,
     encryptedPrivateKey: encryptedPrivateKey as string,
-    userNsiPub: userNPub as string,
+    userNPub: userNPub as string,
     userPubkey: userPubkey as string,
     relays: relays || [],
     mints,
