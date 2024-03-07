@@ -2,8 +2,20 @@ import React, { useEffect, useState, useContext, useMemo } from "react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { ProfileMapContext } from "@/utils/context/context";
 import { useForm, Controller, set } from "react-hook-form";
-import { Button, Textarea, Input } from "@nextui-org/react";
-import { ArrowUpOnSquareIcon } from "@heroicons/react/24/outline";
+import {
+  Button,
+  Textarea,
+  Input,
+  Tooltip,
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@nextui-org/react";
+import {
+  ArrowUpOnSquareIcon,
+  CheckIcon,
+  ClipboardIcon,
+} from "@heroicons/react/24/outline";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
 
 import {
@@ -22,8 +34,9 @@ const UserProfilePage = () => {
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
   const [isFetchingProfile, setIsFetchingProfile] = useState(false);
   const [userPubkey, setUserPubkey] = useState("");
+  const [isCopyPopoverOpen, setIsCopyPopoverOpen] = React.useState(false);
 
-  const { signInMethod } = getLocalStorageData();
+  const { signInMethod, userNPub } = getLocalStorageData();
 
   const profileContext = useContext(ProfileMapContext);
   const {
@@ -102,13 +115,13 @@ const UserProfilePage = () => {
     const disabledStyle = "from-gray-300 to-gray-400 cursor-not-allowed";
     const enabledStyle = SHOPSTRBUTTONCLASSNAMES;
     const className = isButtonDisabled ? disabledStyle : enabledStyle;
-    return `w-full ${className}`;
+    return `w-full mb-10 ${className}`;
   }, [isButtonDisabled]);
 
   return (
     <>
       <div className="flex min-h-screen flex-col bg-light-bg pb-80 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px] md:pb-20">
-        <div className="bg h-screen w-full px-4 lg:w-1/2">
+        <div className="h-screen w-full px-4 lg:w-1/2">
           <SettingsBreadCrumbs />
           {isFetchingProfile ? (
             <ShopstrSpinner />
@@ -158,6 +171,51 @@ const UserProfilePage = () => {
                   </div>
                 </div>
               </div>
+
+              <Popover
+                placement="bottom"
+                showArrow={true}
+                isOpen={isCopyPopoverOpen}
+                onOpenChange={(open) => setIsCopyPopoverOpen(open)}
+              >
+                <PopoverTrigger>
+                  <div>
+                    <Tooltip
+                      content="Your Npub is your unique Identifier on Nostr. Click to Copy to clipboard"
+                      placement="bottom"
+                    >
+                      <div
+                        className="mb-12 flex cursor-pointer flex-row items-center overflow-hidden hover:opacity-60"
+                        onClick={() => {
+                          // copy to clipboard
+                          navigator.clipboard.writeText(userNPub);
+                          setIsCopyPopoverOpen(true);
+                          setTimeout(() => {
+                            setIsCopyPopoverOpen(false);
+                          }, 1000);
+                        }}
+                      >
+                        {isCopyPopoverOpen ? (
+                          <CheckIcon width={25} height={25} />
+                        ) : (
+                          <ClipboardIcon width={25} height={25} />
+                        )}
+                        <div
+                          className="w-full text-ellipsis whitespace-nowrap text-center text-lg font-bold text-light-text dark:text-dark-text"
+                          suppressHydrationWarning
+                        >
+                          {userNPub}
+                        </div>
+                      </div>
+                    </Tooltip>
+                  </div>
+                </PopoverTrigger>
+                <PopoverContent>
+                  <div className="px-1 py-2">
+                    Successfully copied Npub to clipboard
+                  </div>
+                </PopoverContent>
+              </Popover>
 
               <form onSubmit={handleSubmit(onSubmit as any)}>
                 <Controller

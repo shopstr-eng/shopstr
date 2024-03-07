@@ -422,6 +422,11 @@ export const getLocalStorageData = (): LocalStorageInterface => {
 };
 
 export const LogOut = () => {
+  // remove old data
+  localStorage.removeItem("npub");
+  localStorage.removeItem("signIn");
+  localStorage.removeItem("decryptedNpub");
+
   localStorage.removeItem(LOCALSTORAGECONSTANTS.signInMethod);
   localStorage.removeItem(LOCALSTORAGECONSTANTS.userNPub);
   localStorage.removeItem(LOCALSTORAGECONSTANTS.userPubkey);

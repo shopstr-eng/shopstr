@@ -32,6 +32,8 @@ export const SettingsBreadCrumbs = () => {
               href={`/${p}`}
               classNames={{
                 item: itemClassName,
+                separator:
+                  "text-shopstr-purple-light dark:text-shopstr-yellow-light text-2xl",
               }}
             >
               {pathMap[p]}
