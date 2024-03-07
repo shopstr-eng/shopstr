@@ -1,3 +1,4 @@
+// @ts-ignore
 import {
   LogOut,
   isUserLoggedIn,
@@ -61,7 +62,7 @@ export const ProfileWithDropdown = ({
   }, [profileContext, pubkey]);
 
   const DropDownItems: {
-    [K in DropDownKeys]?: any;
+    [K in DropDownKeys]?: React.ReactNode;
   } = {
     shop: (
       <DropdownItem
@@ -162,7 +163,7 @@ export const ProfileWithDropdown = ({
         />
       </DropdownTrigger>
       <DropdownMenu aria-label="User Actions" variant="flat">
-        {dropDownKeys?.map((key) => {
+        {dropDownKeys.map((key) => {
           return DropDownItems[key];
         })}
         {children}
