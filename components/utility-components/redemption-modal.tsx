@@ -31,7 +31,7 @@ export default function RedemptionModal({
   lnurl: string;
 }) {
   const [showModal, setShowModal] = useState(false);
-  const { npub, decryptedNpub, mints, relays } = getLocalStorageData();
+  const { userNPub, userPubkey, mints, relays } = getLocalStorageData();
 
   const [formattedChangeAmount, setFormattedChangeAmount] = useState("");
 
@@ -159,7 +159,7 @@ export default function RedemptionModal({
               </Button>
               <Button
                 className={SHOPSTRBUTTONCLASSNAMES + " mt-2 w-[20%]"}
-                onClick={() => sendChange(decryptedNpub)}
+                onClick={() => sendChange(userPubkey)}
                 startContent={
                   <ArrowDownTrayIcon className="h-6 w-6 hover:text-yellow-500" />
                 }

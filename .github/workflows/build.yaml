@@ -1,4 +1,4 @@
-name: Lint
+name: Build
 
 on:
   # Trigger the workflow on push or pull request,
@@ -12,7 +12,7 @@ on:
 
 jobs:
   run-linters:
-    name: Run linters
+    name: Run build
     runs-on: ubuntu-latest
 
     steps:
@@ -28,5 +28,5 @@ jobs:
       - name: Install Node.js dependencies
         run: npm ci
 
-      - name: Run linters
-        run: npm run lint
+      - name: Run build
+        run: npm run build

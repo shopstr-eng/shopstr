@@ -173,7 +173,7 @@ export async function finalizeAndSendNostrEvent(
     }
     const pool = new SimplePool();
     await Promise.any(pool.publish(relays, signedEvent));
-  } catch (e) {
+  } catch (e: any) {
     console.log("Error: ", e);
     alert("Failed to send event: " + e.message);
     return { error: e };
