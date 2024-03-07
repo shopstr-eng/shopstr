@@ -243,7 +243,6 @@ const UserProfilePage = () => {
                         classNames={{
                           label: "text-light-text dark:text-dark-text text-lg",
                         }}
-                        autoFocus
                         variant="bordered"
                         fullWidth={true}
                         label="Name"
@@ -322,7 +321,6 @@ const UserProfilePage = () => {
                         classNames={{
                           label: "text-light-text dark:text-dark-text text-lg",
                         }}
-                        autoFocus
                         variant="bordered"
                         fullWidth={true}
                         label="Website"
@@ -361,7 +359,6 @@ const UserProfilePage = () => {
                         classNames={{
                           label: "text-light-text dark:text-dark-text text-lg",
                         }}
-                        autoFocus
                         variant="bordered"
                         fullWidth={true}
                         label="Nostr Address"
@@ -401,7 +398,6 @@ const UserProfilePage = () => {
                         classNames={{
                           label: "text-light-text dark:text-dark-text text-lg",
                         }}
-                        autoFocus
                         variant="bordered"
                         fullWidth={true}
                         label="Lightning Address"
