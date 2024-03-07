@@ -59,7 +59,7 @@ export const FileUploaderButton = ({
       if (imageUrls && imageUrls[0]) {
         imgCallbackOnUpload(imageUrls[0]);
       } else {
-        alert("Image upload failed to yeild img URL");
+        alert("Image upload failed to yield img URL");
       }
     } catch (e) {
       if (e instanceof Error) alert("Failed to upload image! " + e.message);

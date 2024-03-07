@@ -6,7 +6,6 @@ import {
   Button,
   Textarea,
   Input,
-  Tooltip,
   Popover,
   PopoverTrigger,
   PopoverContent,
@@ -129,13 +128,17 @@ const UserProfilePage = () => {
           ) : (
             <>
               <div className="mb-24 h-60 rounded-lg bg-light-fg dark:bg-dark-fg">
-                <div className="relative h-60 rounded-lg bg-shopstr-purple-light dark:bg-dark-fg">
+                <div className="relative flex h-60 items-center justify-center rounded-lg bg-shopstr-purple-light dark:bg-dark-fg">
                   {watchBanner && (
-                    <img src={watchBanner} className="h-60 w-full rounded-lg" />
+                    <Image
+                      alt={"User banner image"}
+                      src={watchBanner}
+                      className="h-60 w-full rounded-lg"
+                    />
                   )}
                   <FileUploaderButton
                     isIconOnly={false}
-                    className={`absolute bottom-5 right-5 ${SHOPSTRBUTTONCLASSNAMES}`}
+                    className={`absolute bottom-5 right-5 z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
                     passphrase={passphrase}
                     imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
                   >
@@ -147,13 +150,13 @@ const UserProfilePage = () => {
                     <div className="">
                       <FileUploaderButton
                         isIconOnly
-                        className={`absolute bottom-[-0.5rem] right-[-0.5rem] ${SHOPSTRBUTTONCLASSNAMES}`}
+                        className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
                         passphrase={passphrase}
                         imgCallbackOnUpload={(imgUrl) =>
                           setValue("picture", imgUrl)
                         }
                       >
-                        <ArrowUpOnSquareIcon className="h-6 w-6" />{" "}
+                        <ArrowUpOnSquareIcon className="h-6 w-6" />
                       </FileUploaderButton>
                       {watchPicture ? (
                         <Image
