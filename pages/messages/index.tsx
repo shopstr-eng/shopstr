@@ -102,6 +102,7 @@ const DirectMessages = () => {
 
   // useEffect used to traverse chats via arrow keys
   useEffect(() => {
+    if (chatsMap.size === 0 || isChatsLoading) return;
     if (arrowUpPressed) {
       if (currentChatPubkey === "") {
         setCurrentChatPubkey(sortedChatsByLastMessage[0][0]);
