@@ -61,7 +61,7 @@ export const ProfileWithDropdown = ({
   }, [profileContext, pubkey]);
 
   const DropDownItems: {
-    [K in DropDownKeys]?: React.ReactNode;
+    [K in DropDownKeys]?: any;
   } = {
     shop: (
       <DropdownItem
