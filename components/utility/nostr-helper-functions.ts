@@ -383,6 +383,13 @@ export const getLocalStorageData = (): LocalStorageInterface => {
 
     signInMethod = localStorage.getItem(LOCALSTORAGECONSTANTS.signInMethod);
 
+    if (signInMethod) {
+      // remove old data
+      localStorage.removeItem("npub");
+      localStorage.removeItem("signIn");
+      localStorage.removeItem("chats");
+    }
+
     relays = localStorage.getItem(LOCALSTORAGECONSTANTS.relays);
 
     const defaultRelays = [
