@@ -29,7 +29,9 @@ export const SettingsBreadCrumbs = () => {
           return (
             <BreadcrumbItem
               key={i}
-              href={`/${p}`}
+              onClick={() => {
+                router.push(`/${p}`);
+              }}
               classNames={{
                 item: itemClassName,
                 separator:

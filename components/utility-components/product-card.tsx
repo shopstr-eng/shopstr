@@ -39,7 +39,7 @@ export default function ProductCard({
             onProductClick && onProductClick(productData);
           }}
         >
-          <div className="z-10 flex w-full justify-between">
+          <div className="z-10 flex w-full justify-between pb-3">
             <ProfileWithDropdown
               pubkey={productData.pubkey}
               dropDownKeys={["shop", "message"]}
@@ -111,7 +111,7 @@ export default function ProductCard({
           onProductClick && onProductClick(productData);
         }}
       >
-        <div className="z-10 flex w-full justify-between">
+        <div className="z-10 mb-2 flex w-full justify-between">
           <ProfileWithDropdown
             pubkey={productData.pubkey}
             dropDownKeys={["shop", "message"]}

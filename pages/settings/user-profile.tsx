@@ -121,7 +121,7 @@ const UserProfilePage = () => {
   return (
     <>
       <div className="flex min-h-screen flex-col bg-light-bg pb-80 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px] md:pb-20">
-        <div className="h-screen w-full px-4 lg:w-1/2">
+        <div className="h-full w-full px-4 lg:w-1/2">
           <SettingsBreadCrumbs />
           {isFetchingProfile ? (
             <ShopstrSpinner />
@@ -179,40 +179,41 @@ const UserProfilePage = () => {
                 onOpenChange={(open) => setIsCopyPopoverOpen(open)}
               >
                 <PopoverTrigger>
-                  <div>
-                    <Tooltip
-                      content="Your Npub is your unique Identifier on Nostr. Click to Copy to clipboard"
-                      placement="bottom"
+                  <div
+                    className="mb-12 flex w-full cursor-pointer flex-row items-center justify-center rounded-lg border-2 border-light-fg p-2 hover:opacity-60 dark:border-dark-fg"
+                    onClick={() => {
+                      // copy to clipboard
+                      navigator.clipboard.writeText(userNPub);
+                      setIsCopyPopoverOpen(true);
+                      setTimeout(() => {
+                        setIsCopyPopoverOpen(false);
+                      }, 1000);
+                    }}
+                  >
+                    <span
+                      className="box-border flex max-w-full overflow-hidden text-ellipsis whitespace-nowrap pr-3 text-center text-lg font-bold text-light-text dark:text-dark-text"
+                      suppressHydrationWarning
                     >
-                      <div
-                        className="mb-12 flex cursor-pointer flex-row items-center overflow-hidden hover:opacity-60"
-                        onClick={() => {
-                          // copy to clipboard
-                          navigator.clipboard.writeText(userNPub);
-                          setIsCopyPopoverOpen(true);
-                          setTimeout(() => {
-                            setIsCopyPopoverOpen(false);
-                          }, 1000);
-                        }}
-                      >
-                        {isCopyPopoverOpen ? (
-                          <CheckIcon width={25} height={25} />
-                        ) : (
-                          <ClipboardIcon width={25} height={25} />
-                        )}
-                        <div
-                          className="w-full text-ellipsis whitespace-nowrap text-center text-lg font-bold text-light-text dark:text-dark-text"
-                          suppressHydrationWarning
-                        >
-                          {userNPub}
-                        </div>
-                      </div>
-                    </Tooltip>
+                      Copy npub to Clipboard
+                    </span>
+                    {isCopyPopoverOpen ? (
+                      <CheckIcon
+                        width={25}
+                        height={25}
+                        className="text-light-text dark:text-dark-text"
+                      />
+                    ) : (
+                      <ClipboardIcon
+                        width={25}
+                        height={25}
+                        className="text-light-text dark:text-dark-text"
+                      />
+                    )}
                   </div>
                 </PopoverTrigger>
                 <PopoverContent>
-                  <div className="px-1 py-2">
-                    Successfully copied Npub to clipboard
+                  <div className="w-full px-1 py-2 text-light-text dark:text-dark-text">
+                    Successfully copied npub to clipboard
                   </div>
                 </PopoverContent>
               </Popover>
