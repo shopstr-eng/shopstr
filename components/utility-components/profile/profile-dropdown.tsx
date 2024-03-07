@@ -47,8 +47,8 @@ export const ProfileWithDropdown = ({
       let displayName =
         profile && profile.content.name ? profile.content.name : npub;
       displayName =
-        displayName.length > 20
-          ? displayName.slice(0, 20) + "..."
+        displayName.length > 15
+          ? displayName.slice(0, 15) + "..."
           : displayName;
       return displayName;
     });

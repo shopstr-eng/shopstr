@@ -431,7 +431,7 @@ export const LogOut = () => {
   // remove old data
   localStorage.removeItem("npub");
   localStorage.removeItem("signIn");
-  localStorage.removeItem("decryptedNpub");
+  localStorage.removeItem("chats");
 
   localStorage.removeItem(LOCALSTORAGECONSTANTS.signInMethod);
   localStorage.removeItem(LOCALSTORAGECONSTANTS.userNPub);

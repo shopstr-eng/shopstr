@@ -34,7 +34,7 @@ export default function ProductCard({
     return (
       <Card className={"mx-[2.5px] my-3 w-[100%] rounded-lg"}>
         <CardBody
-          className={"cursor-pointer "}
+          className={"cursor-pointer"}
           onClick={() => {
             onProductClick && onProductClick(productData);
           }}
@@ -44,7 +44,7 @@ export default function ProductCard({
               pubkey={productData.pubkey}
               dropDownKeys={["shop", "message"]}
             />
-            <div className="flex flex-col justify-center ">
+            <div className="flex flex-col justify-center">
               <CompactCategories categories={categories} />
             </div>
           </div>
@@ -116,7 +116,7 @@ export default function ProductCard({
             pubkey={productData.pubkey}
             dropDownKeys={["shop", "message"]}
           />
-          <div className="flex flex-col justify-center ">
+          <div className="flex flex-col justify-center">
             <CompactCategories categories={categories} />
           </div>
         </div>
