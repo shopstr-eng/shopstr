@@ -50,11 +50,12 @@ const UserProfilePage = () => {
     defaultValues: {
       banner: "",
       picture: "",
+      display_name: "",
       name: "",
-      nip05: "", // Nostr Address
+      nip05: "", // Nostr address
       about: "",
       website: "",
-      lud16: "", // Nostr Address
+      lud16: "", // Lightning address
     },
   });
 
@@ -88,7 +89,7 @@ const UserProfilePage = () => {
     setIsUploadingProfile(true);
     let response = await createNostrProfileEvent(
       userPubkey,
-      JSON.stringify({ ...data, display_name: data.name }),
+      JSON.stringify(data),
       passphrase,
     );
     profileContext.updateProfileData({
@@ -224,6 +225,45 @@ const UserProfilePage = () => {
 
               <form onSubmit={handleSubmit(onSubmit as any)}>
                 <Controller
+                  name="display_name"
+                  control={control}
+                  rules={{
+                    maxLength: {
+                      value: 50,
+                      message: "This input exceed maxLength of 50.",
+                    },
+                  }}
+                  render={({
+                    field: { onChange, onBlur, value },
+                    fieldState: { error },
+                  }) => {
+                    let isErrored = error !== undefined;
+                    let errorMessage: string = error?.message
+                      ? error.message
+                      : "";
+                    return (
+                      <Input
+                        className="pb-4 text-light-text dark:text-dark-text"
+                        classNames={{
+                          label: "text-light-text dark:text-dark-text text-lg",
+                        }}
+                        variant="bordered"
+                        fullWidth={true}
+                        label="Display name"
+                        labelPlacement="outside"
+                        isInvalid={isErrored}
+                        errorMessage={errorMessage}
+                        placeholder="Add your display name . . ."
+                        // controller props
+                        onChange={onChange} // send value to hook form
+                        onBlur={onBlur} // notify when input is touched/blur
+                        value={value}
+                      />
+                    );
+                  }}
+                />
+
+                <Controller
                   name="name"
                   control={control}
                   rules={{
@@ -248,11 +288,11 @@ const UserProfilePage = () => {
                         }}
                         variant="bordered"
                         fullWidth={true}
-                        label="Name"
+                        label="Username"
                         labelPlacement="outside"
                         isInvalid={isErrored}
                         errorMessage={errorMessage}
-                        placeholder="Add your name"
+                        placeholder="Add your username . . ."
                         // controller props
                         onChange={onChange} // send value to hook form
                         onBlur={onBlur} // notify when input is touched/blur
@@ -287,7 +327,7 @@ const UserProfilePage = () => {
                         }}
                         variant="bordered"
                         fullWidth={true}
-                        placeholder="Tell us something about yourself!"
+                        placeholder="Add something about yourself!"
                         isInvalid={isErrored}
                         errorMessage={errorMessage}
                         label="About"
@@ -330,7 +370,7 @@ const UserProfilePage = () => {
                         labelPlacement="outside"
                         isInvalid={isErrored}
                         errorMessage={errorMessage}
-                        placeholder="Add your website address"
+                        placeholder="Add your website URL . . ."
                         // controller props
                         onChange={onChange} // send value to hook form
                         onBlur={onBlur} // notify when input is touched/blur
@@ -364,11 +404,11 @@ const UserProfilePage = () => {
                         }}
                         variant="bordered"
                         fullWidth={true}
-                        label="Nostr Address"
+                        label="Nostr address"
                         labelPlacement="outside"
                         isInvalid={isErrored}
                         errorMessage={errorMessage}
-                        placeholder="Add your nip05 Address"
+                        placeholder="Add your NIP-05 address . . ."
                         // controller props
                         onChange={onChange} // send value to hook form
                         onBlur={onBlur} // notify when input is touched/blur
@@ -403,11 +443,11 @@ const UserProfilePage = () => {
                         }}
                         variant="bordered"
                         fullWidth={true}
-                        label="Lightning Address"
+                        label="Lightning address"
                         labelPlacement="outside"
                         isInvalid={isErrored}
                         errorMessage={errorMessage}
-                        placeholder="Add your lightning address"
+                        placeholder="Add your Lightning address . . ."
                         // controller props
                         onChange={onChange} // send value to hook form
                         onBlur={onBlur} // notify when input is touched/blur
