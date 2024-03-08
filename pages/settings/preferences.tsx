@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
+import Link from "next/link";
 import {
   CheckIcon,
   ClipboardIcon,
@@ -143,7 +144,7 @@ const PreferencesPage = () => {
     <div className="flex min-h-screen flex-col bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
       <div className="px-4">
         <SettingsBreadCrumbs />
-        <span className="mt-4 flex  text-2xl font-bold text-light-text dark:text-dark-text">
+        <span className="mt-4 flex text-2xl font-bold text-light-text dark:text-dark-text">
           Relays
         </span>
 
@@ -301,8 +302,17 @@ const PreferencesPage = () => {
             <div className="mx-4 my-4 flex items-center justify-center text-center">
               <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
               <p className="ml-2 text-sm text-light-text dark:text-dark-text">
-                This mint is used to create Cashu tokens to send to the seller
-                upon purchase.
+                This mint is used to create{" "}
+                <Link href="https://cashu.space" passHref legacyBehavior>
+                  <a
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline"
+                  >
+                    Cashu
+                  </a>
+                </Link>{" "}
+                tokens to send to the seller upon purchase.
               </p>
             </div>
           )}
@@ -399,12 +409,12 @@ const PreferencesPage = () => {
           </Modal>
         </div>
 
-        <span className="my-4 flex  text-2xl font-bold text-light-text dark:text-dark-text">
+        <span className="my-4 flex text-2xl font-bold text-light-text dark:text-dark-text">
           Theme
         </span>
         {useLoaded() && (
           <RadioGroup
-            className="ml-4"
+            className="ml-2"
             label="Select your prefered theme"
             orientation={"horizontal"}
             defaultValue={

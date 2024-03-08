@@ -18,13 +18,12 @@ export const SettingsBreadCrumbs = () => {
         key="foreground"
         color="success"
         classNames={{
-          list: "gap-2",
           base: "pb-2",
         }}
       >
         {path.map((p, i) => {
           const itemClassName =
-            "text-light-text dark:text-dark-text text-2xl font-bold" +
+            "ml-2 text-light-text dark:text-dark-text text-2xl font-bold" +
             (i !== path.length - 1 ? " opacity-50 hover:opacity-100" : "");
           return (
             <BreadcrumbItem

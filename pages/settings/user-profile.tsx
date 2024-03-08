@@ -195,10 +195,10 @@ const UserProfilePage = () => {
                     }}
                   >
                     <span
-                      className="box-border flex max-w-full overflow-hidden text-ellipsis whitespace-nowrap pr-3 text-center text-lg font-bold text-light-text dark:text-dark-text"
+                      className="text-xxs box-border flex max-w-full overflow-hidden text-ellipsis whitespace-nowrap pr-3 text-center font-bold text-light-text dark:text-dark-text"
                       suppressHydrationWarning
                     >
-                      Copy npub to Clipboard
+                      {userNPub}
                     </span>
                     {isCopyPopoverOpen ? (
                       <CheckIcon
@@ -208,8 +208,8 @@ const UserProfilePage = () => {
                       />
                     ) : (
                       <ClipboardIcon
-                        width={25}
-                        height={25}
+                        width={15}
+                        height={15}
                         className="text-light-text dark:text-dark-text"
                       />
                     )}
