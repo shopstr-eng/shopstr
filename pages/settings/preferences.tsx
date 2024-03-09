@@ -42,7 +42,7 @@ const PreferencesPage = () => {
     localStorage.setItem("mints", JSON.stringify(mints));
   }, [mints]);
 
-  const { theme, setTheme } = useTheme();
+  const { mints: oldMints, theme, setTheme } = useTheme();
 
   const {
     handleSubmit: handleMintSubmit,
@@ -79,7 +79,7 @@ const PreferencesPage = () => {
       const response = await fetch(newMint + "/keys");
       // Check if the response status is in the range of 200-299
       if (response.ok) {
-        setMints([newMint]);
+        setMints([newMint, ...oldMints]);
         handleToggleMintModal();
       } else {
         alert(
