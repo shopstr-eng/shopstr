@@ -312,7 +312,7 @@ const PreferencesPage = () => {
                     Cashu
                   </a>
                 </Link>{" "}
-                tokens to send to the seller upon purchase.
+                tokens within your wallet and to send to the seller upon purchase.
               </p>
             </div>
           )}
