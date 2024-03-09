@@ -26,7 +26,7 @@ function decodeBase64ToJson(base64: string): any {
 export default function RedeemButton({ token }: { token: string }) {
   const [lnurl, setLnurl] = useState("");
   const profileContext = useContext(ProfileMapContext);
-  const { npub, decryptedNpub, relays } = getLocalStorageData();
+  const { userNPub, userPubkey, relays } = getLocalStorageData();
 
   const [openRedemptionModal, setOpenRedemptionModal] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
@@ -77,8 +77,8 @@ export default function RedeemButton({ token }: { token: string }) {
 
   useEffect(() => {
     const sellerProfileMap = profileContext.profileData;
-    const sellerProfile = sellerProfileMap.has(decryptedNpub)
-      ? sellerProfileMap.get(decryptedNpub)
+    const sellerProfile = sellerProfileMap.has(userPubkey)
+      ? sellerProfileMap.get(userPubkey)
       : undefined;
     setLnurl(
       sellerProfile &&
@@ -86,12 +86,12 @@ export default function RedeemButton({ token }: { token: string }) {
         tokenMint !==
           "https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV"
         ? sellerProfile.content.lud16
-        : npub + "@npub.cash",
+        : userNPub + "@npub.cash",
     );
     setName(
       sellerProfile && sellerProfile.content.name
         ? sellerProfile.content.name
-        : npub,
+        : userNPub,
     );
   }, [profileContext, tokenMint]);
 

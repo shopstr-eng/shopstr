@@ -3,6 +3,8 @@ import React from "react";
 import { Carousel } from "react-responsive-carousel";
 import "react-responsive-carousel/lib/styles/carousel.min.css"; // requires a loader
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
+import { Image } from "@nextui-org/react";
+import { buildSrcSet } from "@/utils/images";
 
 interface ImageCarouselProps {
   images: string[];
@@ -33,8 +35,9 @@ export default function ImageCarousel({
     return images.map((image, index) => {
       return (
         <div className={className} key={"image" + index}>
-          <img
+          <Image
             src={image}
+            srcSet={buildSrcSet(image)}
             className="h-full w-full object-contain"
             alt="Product image"
           />

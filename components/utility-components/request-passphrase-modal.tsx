@@ -21,12 +21,14 @@ export default function RequestPassphraseModal({
   isOpen,
   setIsOpen,
   actionOnSubmit,
+  onCancelRouteTo,
 }: {
   passphrase?: string;
   setCorrectPassphrase?: (passphrase: string) => void;
   isOpen: boolean;
   setIsOpen: (value: boolean) => void;
   actionOnSubmit?: (passphrase: string) => void; // callback function to be called after getting correct passphrase (delete listing)
+  onCancelRouteTo?: string; // route to go to on cancel
 }) {
   const [passphraseInput, setPassphraseInput] = useState(
     passphrase ? passphrase : "",
@@ -62,7 +64,7 @@ export default function RequestPassphraseModal({
 
   const onCancel = () => {
     setIsOpen(false);
-    router.push("/");
+    onCancelRouteTo ? router.push(onCancelRouteTo) : router.push("/");
   };
 
   return (

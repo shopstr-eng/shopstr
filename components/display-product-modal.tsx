@@ -18,14 +18,13 @@ import {
 } from "@nextui-org/react";
 import ProductForm from "./product-form";
 import ImageCarousel from "./utility-components/image-carousel";
-import { ProfileAvatar } from "./utility-components/profile/avatar";
 import CompactCategories from "./utility-components/compact-categories";
 import { locationAvatar } from "./utility-components/dropdowns/location-dropdown";
-import { DisplayCostBreakdown } from "./utility-components/display-monetary-info";
 import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
 import RequestPassphraseModal from "./utility-components/request-passphrase-modal";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 import { getLocalStorageData } from "./utility/nostr-helper-functions";
+import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
 
 interface ProductModalProps {
   productData: any;
@@ -54,7 +53,7 @@ export default function DisplayProductModal({
     currency,
     totalCost,
   } = productData;
-  const { signIn, decryptedNpub } = getLocalStorageData();
+  const { signInMethod, userPubkey } = getLocalStorageData();
 
   const [requestPassphrase, setRequestPassphrase] = React.useState(false);
   const [deleteLoading, setDeleteLoading] = React.useState(false);
@@ -92,14 +91,14 @@ export default function DisplayProductModal({
   };
 
   const beginDeleteListingProcess = () => {
-    if (signIn === "extension") {
+    if (signInMethod === "extension") {
       finalizeDeleteListingProcess();
-    } else if (signIn === "nsec") {
+    } else if (signInMethod === "nsec") {
       setRequestPassphrase(true);
     }
   };
   const finalizeDeleteListingProcess = async (passphrase?: string) => {
-    // only used for when signIn === "nsec"
+    // only used for when signInMethod === "nsec"
     setDeleteLoading(true);
     handleModalToggle(); // closes product detail modal
     await handleDelete(productData.id, passphrase); // delete listing
@@ -140,10 +139,9 @@ export default function DisplayProductModal({
             ) : null}
             <Divider />
             <div className="flex h-fit w-full flex-row flex-wrap items-center justify-between gap-2">
-              <ProfileAvatar
+              <ProfileWithDropdown
                 pubkey={productData.pubkey}
-                className="w-1/3"
-                includeDisplayName
+                dropDownKeys={["shop", "message"]}
               />
               <Chip key={location} startContent={locationAvatar(location)}>
                 {location}
@@ -173,7 +171,7 @@ export default function DisplayProductModal({
               >
                 Share
               </Button>
-              {decryptedNpub === pubkey && (
+              {userPubkey === pubkey && (
                 <>
                   <Button
                     type="submit"
@@ -204,7 +202,7 @@ export default function DisplayProductModal({
                   </ConfirmActionDropdown>
                 </>
               )}
-              {decryptedNpub !== pubkey && (
+              {userPubkey !== pubkey && (
                 <>
                   <Button
                     onClick={() => {
@@ -239,7 +237,7 @@ export default function DisplayProductModal({
         setIsOpen={setRequestPassphrase}
         actionOnSubmit={finalizeDeleteListingProcess}
       />
-      {decryptedNpub === pubkey && (
+      {userPubkey === pubkey && (
         <ProductForm
           showModal={showProductForm}
           handleModalToggle={handleEditToggle}

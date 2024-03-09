@@ -1,6 +1,5 @@
 import {
   finalizeAndSendNostrEvent,
-  generateNostrEventId,
   getLocalStorageData,
 } from "@/components/utility/nostr-helper-functions";
 import { NostrEvent } from "@/utils/types/types";
@@ -10,10 +9,10 @@ export async function DeleteListing(
   event_ids_to_delete: string[],
   passphrase?: string,
 ) {
-  const { decryptedNpub } = getLocalStorageData();
+  const { userPubkey } = getLocalStorageData();
   let deletionEvent = await createNostrDeleteEvent(
     event_ids_to_delete,
-    decryptedNpub,
+    userPubkey,
     "user deletion request from shopstr.store",
   );
 
@@ -42,6 +41,25 @@ export async function createNostrDeleteEvent(
 
   msg.created_at = Math.floor(new Date().getTime() / 1000);
   msg.pubkey = pubkey;
-  msg.id = await generateNostrEventId(msg);
+  return msg;
+}
+
+export async function createNostrProfileEvent(
+  pubkey: string,
+  content: string,
+  passphrase: string,
+) {
+  let msg = {
+    kind: 0, // NIP-1 - Profile
+    content: content,
+    tags: [],
+    created_at: 0,
+    pubkey: pubkey,
+    id: "",
+    sig: "",
+  } as NostrEvent;
+
+  msg.created_at = Math.floor(new Date().getTime() / 1000);
+  await finalizeAndSendNostrEvent(msg, passphrase);
   return msg;
 }

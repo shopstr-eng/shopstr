@@ -1,4 +1,4 @@
-import { Nostr, SimplePool } from "nostr-tools";
+import { Filter, Nostr, SimplePool } from "nostr-tools";
 import {
   addChatMessageToCache,
   addProductToCache,
@@ -10,12 +10,13 @@ import {
 } from "./cache-service";
 import { NostrEvent, NostrMessageEvent } from "@/utils/types/types";
 import { ChatsMap } from "@/utils/context/context";
-
-const POSTQUERYLIMIT = 200;
+import { DateTime } from "luxon";
 
 export const fetchAllPosts = async (
   relays: string[],
   editProductContext: (productEvents: NostrEvent[], isLoading: boolean) => void,
+  since?: number,
+  until?: number,
 ): Promise<{
   profileSetFromProducts: Set<string>;
 }> => {
@@ -33,15 +34,24 @@ export const fetchAllPosts = async (
       }
 
       const pool = new SimplePool();
-      let subParams: { kinds: number[]; authors?: string[]; limit: number } = {
+
+      if (!since) {
+        since = Math.trunc(DateTime.now().minus({ days: 14 }).toSeconds());
+      }
+      if (!until) {
+        until = Math.trunc(DateTime.now().toSeconds());
+      }
+
+      const filter: Filter = {
         kinds: [30402],
-        limit: POSTQUERYLIMIT,
+        since,
+        until,
       };
 
       let productArrayFromRelay: NostrEvent[] = [];
       let profileSetFromProducts: Set<string> = new Set();
 
-      let h = pool.subscribeMany(relays, [subParams], {
+      let h = pool.subscribeMany(relays, [filter], {
         onevent(event) {
           productArrayFromRelay.push(event);
           if (
@@ -137,14 +147,14 @@ export const fetchProfile = async (
 
 export const fetchChatsAndMessages = async (
   relays: string[],
-  decryptedNpub: string,
+  userPubkey: string,
   editChatContext: (chatsMap: ChatsMap, isLoading: boolean) => void,
 ): Promise<{
   profileSetFromChats: Set<string>;
 }> => {
   return new Promise(async function (resolve, reject) {
-    // if no decryptedNpub, user is not signed in
-    if (!decryptedNpub) {
+    // if no userPubkey, user is not signed in
+    if (!userPubkey) {
       editChatContext(new Map(), false);
       resolve({ profileSetFromChats: new Set() });
     }
@@ -186,12 +196,14 @@ export const fetchChatsAndMessages = async (
         [
           {
             kinds: [4],
-            authors: [decryptedNpub], // all chats where you are the author
+            authors: [userPubkey], // all chats where you are the author
           },
         ],
         {
           onevent(event: NostrEvent) {
-            let tagsMap: Map<string, string> = new Map(event.tags);
+            let tagsMap: Map<string, string> = new Map(
+              event.tags.map(([k, v]) => [k, v]),
+            );
             let receipientPubkey = tagsMap.get("p") ? tagsMap.get("p") : null; // pubkey you sent the message to
             if (typeof receipientPubkey !== "string") {
               console.error(
@@ -218,6 +230,9 @@ export const fetchChatsAndMessages = async (
             incomingChatsReachedEOSE = true;
             onEOSE();
           },
+          onclose(reasons) {
+            console.log(reasons);
+          },
         },
       );
       new SimplePool().subscribeMany(
@@ -225,7 +240,7 @@ export const fetchChatsAndMessages = async (
         [
           {
             kinds: [4],
-            "#p": [decryptedNpub], // all chats where you are the receipient
+            "#p": [userPubkey], // all chats where you are the receipient
           },
         ],
         {
@@ -244,6 +259,9 @@ export const fetchChatsAndMessages = async (
           async oneose() {
             outgoingChatsReachedEOSE = true;
             onEOSE();
+          },
+          onclose(reasons) {
+            console.log(reasons);
           },
         },
       );

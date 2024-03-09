@@ -11,7 +11,7 @@ import MyListingsPage from "./my-listings";
 import ProductForm from "../product-form";
 import { useRouter } from "next/router";
 import { useSearchParams } from "next/navigation";
-import useIsSignedIn from "../hooks/use-is-signed-in";
+import { isUserLoggedIn } from "../utility/nostr-helper-functions";
 
 const HomeFeed = () => {
   const scrollDirection = useScrollingEffect();
@@ -40,12 +40,10 @@ const HomeFeed = () => {
   });
   const framer = useTabs(hookProps);
 
-  const isSignedIn = useIsSignedIn();
-
   useEffect(() => {
-    if (!searchParams || !isSignedIn) return;
+    if (!searchParams || !isUserLoggedIn()) return;
     setShowModal(searchParams.has("addNewListing"));
-  }, [searchParams, isSignedIn]);
+  }, [searchParams]);
 
   const handleProductModalToggle = () => {
     setShowModal(!showModal);

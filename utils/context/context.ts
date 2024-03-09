@@ -1,9 +1,10 @@
 import { createContext } from "react";
-import { NostrMessageEvent } from "../types/types";
+import { NostrMessageEvent, ProfileData } from "../types/types";
 
 export interface ProfileContextInterface {
   profileData: Map<string, any>;
   isLoading: boolean;
+  updateProfileData: (profileData: ProfileData) => void;
 }
 
 export const ProfileMapContext = createContext({

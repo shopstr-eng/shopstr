@@ -8,6 +8,7 @@ import {
   SelectItem,
   SelectSection,
   Input,
+  useDisclosure,
 } from "@nextui-org/react";
 import { useRouter } from "next/router";
 import { nip19 } from "nostr-tools";
@@ -18,7 +19,7 @@ import {
   CATEGORIES,
   SHOPSTRBUTTONCLASSNAMES,
 } from "../utility/STATIC-VARIABLES";
-import { getLocalStorageData } from "../utility/nostr-helper-functions";
+import { isUserLoggedIn } from "../utility/nostr-helper-functions";
 import SignInModal from "../sign-in/SignInModal";
 
 export function MarketplacePage() {
@@ -29,8 +30,7 @@ export function MarketplacePage() {
   );
   const [selectedLocation, setSelectedLocation] = useState("");
   const [selectedSearch, setSelectedSearch] = useState("");
-  const [toggleSignInPage, setToggleSignInPage] = useState(false);
-  let [count, setCount] = useState(0);
+  const { isOpen, onOpen, onClose } = useDisclosure();
 
   // Update focusedPubkey when pubkey in url changes
   useEffect(() => {
@@ -42,7 +42,7 @@ export function MarketplacePage() {
   }, [router.query.pubkey]);
 
   useEffect(() => {
-    const loggedIn = getLocalStorageData().decryptedNpub;
+    const loggedIn = isUserLoggedIn();
     if (loggedIn) {
       fetch("/api/metrics/post-shopper", {
         method: "POST",
@@ -66,13 +66,11 @@ export function MarketplacePage() {
   };
 
   const handleCreateNewListing = () => {
-    const loggedIn = getLocalStorageData().npub;
-
+    const loggedIn = isUserLoggedIn();
     if (loggedIn) {
       router.push("/?addNewListing");
     } else {
-      setToggleSignInPage(true);
-      setCount(++count);
+      onOpen();
     }
   };
 
@@ -133,7 +131,7 @@ export function MarketplacePage() {
         </div>
         {focusedPubkey ? (
           <div
-            className="flex w-fit cursor-pointer flex-row rounded-md px-3 align-middle text-shopstr-purple hover:bg-shopstr-yellow dark:text-shopstr-yellow-light hover:dark:bg-shopstr-purple"
+            className="mt-2 flex w-fit cursor-pointer flex-row rounded-md px-3 align-middle text-shopstr-purple hover:bg-shopstr-yellow dark:text-shopstr-yellow-light hover:dark:bg-shopstr-purple"
             onClick={() => {
               routeToShop("");
             }}
@@ -149,7 +147,7 @@ export function MarketplacePage() {
               </ArrowUturnLeftIcon>
             </div>
 
-            <span className="max-w-full overflow-hidden overflow-ellipsis whitespace-nowrap">
+            <span className="overflow-hidden break-all sm:w-72 md:w-full">
               {nip19.npubEncode(focusedPubkey)}
             </span>
           </div>
@@ -160,8 +158,9 @@ export function MarketplacePage() {
         selectedCategories={selectedCategories}
         selectedLocation={selectedLocation}
         selectedSearch={selectedSearch}
+        canShowLoadMore={true}
       />
-      <SignInModal some={count} opened={toggleSignInPage}></SignInModal>
+      <SignInModal isOpen={isOpen} onClose={onClose} />
     </div>
   );
 }
