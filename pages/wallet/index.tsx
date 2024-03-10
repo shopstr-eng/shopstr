@@ -1,34 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { useForm, Controller } from "react-hook-form";
-import axios from "axios";
 import {
-  ArrowDownTrayIcon,
   ArrowUpTrayIcon,
-  BanknotesIcon,
   BoltIcon,
-  CheckIcon,
-  ClipboardIcon,
 } from "@heroicons/react/24/outline";
 import {
-  Card,
-  CardBody,
-  CardHeader,
-  Divider,
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
   Button,
-  Image,
-  Input,
 } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
 import { getLocalStorageData } from "../../components/utility/nostr-helper-functions";
-import { captureInvoicePaidmetric } from "../../components/utility/metrics-helper-functions";
 import MintButton from "../../components/wallet/mint-button";
 import ReceiveButton from "../../components/wallet/receive-button"
-import { CashuMint, CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
 
 const Wallet = () => {
   const [totalBalance, setTotalBalance] = useState(0);
