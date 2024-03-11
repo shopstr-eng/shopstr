@@ -1,7 +1,6 @@
 import { ProductData } from "@/components/utility/product-parser-functions";
 import {
   ItemType,
-  NostrEvent,
   NostrMessageEvent,
   ProfileData,
 } from "../../../utils/types/types";
