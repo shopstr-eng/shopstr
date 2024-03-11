@@ -2,7 +2,7 @@ import React, { ReactNode, useEffect, useState } from "react";
 import Link from "next/link";
 import { InformationCircleIcon } from "@heroicons/react/24/outline";
 import { Card, CardBody, Divider, Chip, CardFooter } from "@nextui-org/react";
-import { locationAvatar } from "./dropdowns/location-dropdown";
+import { LocationAvatar } from "./dropdowns/location-dropdown";
 import CompactCategories from "./compact-categories";
 import ImageCarousel from "./image-carousel";
 import CompactPriceDisplay, {
@@ -55,8 +55,19 @@ export default function ProductCard({
               showThumbs={false}
             />
             <div className="mt-3 flex flex-row justify-between">
-              <Chip key={location} startContent={locationAvatar(location)}>
-                {location}
+              <Chip
+                key={location.regionCode || location.countryCode}
+                startContent={LocationAvatar({
+                  name:
+                    location.regionName ||
+                    location.countryName ||
+                    location.displayName,
+                  iso3166: location.regionCode || location.countryCode,
+                })}
+              >
+                {location.regionName ||
+                  location.displayName ||
+                  location.countryName}
               </Chip>
               <CompactPriceDisplay monetaryInfo={productData} />
             </div>
@@ -97,6 +108,15 @@ export default function ProductCard({
   const cardHoverStyle =
     "hover:shadow-lg hover:shadow-shopstr-purple dark:hover:shadow-shopstr-yellow";
 
+  const getTrimmedLocationName = (location: ProductData["location"]) => {
+    const name =
+      location.regionName || location.displayName || location.countryName;
+    if (name.length > 20) {
+      return name.slice(0, 20) + "...";
+    }
+    return name;
+  };
+
   return (
     <Card
       className={
@@ -123,16 +143,23 @@ export default function ProductCard({
         <div className="mb-5">
           <ImageCarousel
             images={images}
-            classname="w-full h-[300px]"
+            classname={`w-full h-[300px] ${
+              productData.warning ? "blur-2xl" : ""
+            }`}
             showThumbs={false}
           />
           <div className="mt-3 flex flex-row justify-between">
-            <Chip key={location} startContent={locationAvatar(location)}>
-              {location
-                ? location.length > 20
-                  ? location.slice(0, 20) + "..."
-                  : location
-                : ""}
+            <Chip
+              key={location.regionCode || location.countryCode}
+              startContent={LocationAvatar({
+                name:
+                  location.regionName ||
+                  location.countryName ||
+                  location.displayName,
+                iso3166: location.regionCode || location.countryCode,
+              })}
+            >
+              {getTrimmedLocationName(location)}
             </Chip>
             <CompactPriceDisplay monetaryInfo={productData} />
           </div>
