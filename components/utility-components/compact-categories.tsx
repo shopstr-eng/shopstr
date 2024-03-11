@@ -2,12 +2,18 @@ import React from "react";
 import { CATEGORIES } from "../utility/STATIC-VARIABLES";
 import { Chip, Tooltip } from "@nextui-org/react";
 
-const CompactCategories = ({ categories }: { categories: string[] }) => {
+const SHOPSTR_CATEGORIES = CATEGORIES.map(({ name }) => name);
+
+const CompactCategories = ({ categories }: { categories: Set<string> }) => {
   const [isOpen, setIsOpen] = React.useState(false);
 
-  const validCategories = categories
-    ?.filter((category) => CATEGORIES.includes(category))
-    .sort((a, b) => b.length - a.length); // sort by longest to shortest to avoid styling bugs of categories jumping around
+  const validCategories: string[] = [];
+  categories.forEach((category) => {
+    if (SHOPSTR_CATEGORIES.includes(category)) {
+      validCategories.push(category);
+    }
+  });
+  validCategories.sort((a, b) => b.length - a.length); // sort by longest to shortest to avoid styling bugs of categories jumping around
 
   const categoryChips = validCategories?.map((category, index) => {
     return <Chip key={index}>{category}</Chip>;

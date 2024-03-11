@@ -1,12 +1,22 @@
 import router from "next/router";
+<<<<<<< HEAD
 import React from "react";
+=======
+import React, { useContext, useEffect } from "react";
+>>>>>>> af23432 (updates)
 import DisplayEvents from "../display-products";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import { Button, useDisclosure } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import SignInModal from "../sign-in/SignInModal";
+import { MyListingsContext, ProductContext } from "@/utils/context/context";
+import { SimplePool, Filter } from "nostr-tools";
+import parseTags from "../utility/product-parser-functions";
 
 export const MyListingsPage = () => {
+  const myListingsContext = useContext(MyListingsContext);
+  const productContext = useContext(ProductContext);
+
   let usersPubkey = getLocalStorageData().userPubkey;
   const { isOpen, onOpen, onClose } = useDisclosure();
 
@@ -19,6 +29,30 @@ export const MyListingsPage = () => {
       onOpen();
     }
   };
+
+  useEffect(() => {
+    try {
+      async function load() {
+        myListingsContext.setIsLoading(true);
+        const pool = new SimplePool();
+        const filter: Filter = {
+          authors: [usersPubkey],
+          kinds: [30402],
+        };
+        const events = await pool.querySync(
+          getLocalStorageData().relays,
+          filter,
+        );
+        const myListings = events.map((event) => parseTags(event));
+        myListingsContext.addNewlyCreatedProductEvents(myListings, true);
+        myListingsContext.setIsLoading(false);
+      }
+      load();
+    } catch (err) {
+      console.log(err);
+      myListingsContext.setIsLoading(false);
+    }
+  }, productContext.productEvents);
   return (
     <div className="mx-auto h-full w-full">
       <div className="flex max-w-[100%] flex-col bg-light-bg px-3 pb-2 dark:bg-dark-bg">
@@ -33,11 +67,15 @@ export const MyListingsPage = () => {
         {usersPubkey ? (
           <DisplayEvents
             focusedPubkey={usersPubkey}
+<<<<<<< HEAD
             selectedCategories={new Set<string>([])}
             selectedLocation={""}
             selectedSearch={""}
             canShowLoadMore={true}
             isMyListings={true}
+=======
+            context={MyListingsContext}
+>>>>>>> af23432 (updates)
           />
         ) : null}
       </div>

@@ -1,4 +1,4 @@
-import { ShippingOptionsType } from "./STATIC-VARIABLES";
+import { CurrencyType, ShippingOptionsType } from "./STATIC-VARIABLES";
 import { calculateTotalCost } from "../utility-components/display-monetary-info";
 import { NostrEvent } from "@/utils/types/types";
 
@@ -10,14 +10,21 @@ export type ProductData = {
   summary: string;
   publishedAt: string;
   images: string[];
-  categories: string[];
-  location: string;
+  categories: Set<string>;
+  location: {
+    displayName: string;
+    countryName: string;
+    countryCode: string;
+    regionName: string;
+    regionCode: string;
+  };
   price: number;
-  currency: string;
+  currency: CurrencyType;
   shippingType?: ShippingOptionsType;
   shippingCost?: number;
   totalCost: number;
   d?: string;
+  warning: boolean;
 };
 
 export const parseTags = (productEvent: NostrEvent) => {
@@ -29,17 +36,23 @@ export const parseTags = (productEvent: NostrEvent) => {
     summary: "",
     publishedAt: "",
     images: [],
-    categories: [],
-    location: "",
+    categories: new Set<string>(),
+    location: {
+      displayName: "",
+      countryName: "",
+      countryCode: "",
+      regionName: "",
+      regionCode: "",
+    },
     price: 0,
-    currency: "",
+    currency: "SATS",
     totalCost: 0,
+    warning: false,
   };
   parsedData.pubkey = productEvent.pubkey;
   parsedData.id = productEvent.id;
   parsedData.createdAt = productEvent.created_at;
   const tags = productEvent.tags;
-  if (tags === undefined) return;
   tags.forEach((tag) => {
     const [key, ...values] = tag;
     switch (key) {
@@ -57,16 +70,28 @@ export const parseTags = (productEvent: NostrEvent) => {
         parsedData.images.push(values[0]);
         break;
       case "t":
-        if (parsedData.categories === undefined) parsedData.categories = [];
-        parsedData.categories.push(values[0]);
+        if (parsedData.categories === undefined)
+          parsedData.categories = new Set<string>();
+        parsedData.categories.add(values[0]);
         break;
       case "location":
-        parsedData.location = values[0];
+        parsedData.location.displayName = values[0];
+        break;
+      case "g":
+        if (values[1] === "countryName") {
+          parsedData.location.countryName = values[0];
+        } else if (values[1] === "countryCode") {
+          parsedData.location.countryCode = values[0];
+        } else if (values[1] === "regionName") {
+          parsedData.location.regionName = values[0];
+        } else if (values[1] === "regionCode") {
+          parsedData.location.regionCode = values[0];
+        }
         break;
       case "price":
         const [amount, currency] = values;
         parsedData.price = Number(amount);
-        parsedData.currency = currency;
+        parsedData.currency = currency as CurrencyType;
         break;
       case "shipping":
         if (values.length === 3) {
@@ -92,6 +117,9 @@ export const parseTags = (productEvent: NostrEvent) => {
         break;
       case "d":
         parsedData.d = values[0];
+        break;
+      case "content-warning":
+        parsedData.warning = values[0].length > 0;
         break;
       default:
         return;

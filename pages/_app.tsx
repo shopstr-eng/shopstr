@@ -10,9 +10,13 @@ import {
   ProductContextInterface,
   ChatsContextInterface,
   ChatsContext,
+<<<<<<< HEAD
   ChatsMap,
   FollowsContextInterface,
   FollowsContext,
+=======
+  MyListingsContext,
+>>>>>>> af23432 (updates)
 } from "../utils/context/context";
 import {
   getLocalStorageData,
@@ -29,6 +33,9 @@ import {
 import { NostrEvent, ProfileData } from "../utils/types/types";
 import BottomNav from "@/components/nav-bottom";
 import SideNav from "@/components/nav-side";
+import parseTags, {
+  ProductData,
+} from "@/components/utility/product-parser-functions";
 
 function App({ Component, pageProps }: AppProps) {
   const [localStorageValues, setLocalStorageValues] =
@@ -37,47 +44,107 @@ function App({ Component, pageProps }: AppProps) {
     {
       productEvents: [],
       isLoading: true,
-      addNewlyCreatedProductEvent: (productEvent: any) => {
+      setIsLoading: (isLoading) => {
         setProductContext((productContext) => {
-          let productEvents = [...productContext.productEvents, productEvent];
-          return {
-            productEvents: productEvents,
-            isLoading: false,
-            addNewlyCreatedProductEvent:
-              productContext.addNewlyCreatedProductEvent,
-            removeDeletedProductEvent: productContext.removeDeletedProductEvent,
-          };
+          return { ...productContext, isLoading };
+        });
+      },
+      filters: {
+        searchQuery: "",
+        categories: new Set<string>([]),
+        location: null,
+      },
+      setFilters: (filters) => {
+        setProductContext((productContext) => {
+          return { ...productContext, filters };
+        });
+      },
+      addNewlyCreatedProductEvents: (products: ProductData[]) => {
+        setProductContext((productContext) => {
+          const productEvents = [
+            ...productContext.productEvents,
+            ...products,
+          ].sort((a, b) => b.createdAt - a.createdAt);
+          return { ...productContext, productEvents };
         });
       },
       removeDeletedProductEvent: (productId: string) => {
+        // remove from both
         setProductContext((productContext) => {
-          let productEvents = [...productContext.productEvents].filter(
+          const productEvents = [...productContext.productEvents].filter(
             (event) => event.id !== productId,
           );
-          return {
-            productEvents: productEvents,
-            isLoading: false,
-            addNewlyCreatedProductEvent:
-              productContext.addNewlyCreatedProductEvent,
-            removeDeletedProductEvent: productContext.removeDeletedProductEvent,
-          };
+          return { ...productContext, productEvents };
+        });
+        setMyListingsContext((myListingsContext) => {
+          const productEvents = [...myListingsContext.productEvents].filter(
+            (event) => event.id !== productId,
+          );
+          return { ...myListingsContext, productEvents };
         });
       },
     },
   );
+  const [myListingsContext, setMyListingsContext] =
+    useState<ProductContextInterface>({
+      productEvents: [],
+      isLoading: true,
+      setIsLoading: (isLoading) => {
+        setMyListingsContext((productContext) => {
+          return { ...productContext, isLoading };
+        });
+      },
+      filters: {
+        searchQuery: "",
+        categories: new Set<string>([]),
+        location: null,
+      },
+      setFilters: (filters) => {
+        setMyListingsContext((productContext) => {
+          return { ...productContext, filters };
+        });
+      },
+      addNewlyCreatedProductEvents: (
+        products: ProductData[],
+        replace?: boolean,
+      ) => {
+        setMyListingsContext((productContext) => {
+          const productEvents = [
+            ...(replace ? [] : [...productContext.productEvents]),
+            ...products,
+          ].sort((a, b) => b.createdAt - a.createdAt);
+          if (replace) {
+            return { ...productContext, productEvents };
+          } else {
+            return { ...productContext, productEvents };
+          }
+        });
+      },
+      removeDeletedProductEvent: (productId: string) => {
+        // remove from both
+        setProductContext((productContext) => {
+          const productEvents = [...productContext.productEvents].filter(
+            (event) => event.id !== productId,
+          );
+          return { ...productContext, productEvents };
+        });
+        setMyListingsContext((myListingsContext) => {
+          const productEvents = [...myListingsContext.productEvents].filter(
+            (event) => event.id !== productId,
+          );
+          return { ...myListingsContext, productEvents };
+        });
+      },
+    });
   const [profileContext, setProfileContext] = useState<ProfileContextInterface>(
     {
       profileData: new Map(),
       isLoading: true,
       updateProfileData: (profileData: ProfileData) => {
         setProfileContext((profileContext) => {
-          let newProfileData = new Map(profileContext.profileData);
+          const newProfileData = new Map(profileContext.profileData);
           newProfileData.set(profileData.pubkey, profileData);
-          return {
-            profileData: newProfileData,
-            isLoading: false,
-            updateProfileData: profileContext.updateProfileData,
-          };
+          return { ...profileContext, profileData: newProfileData };
         });
       },
     },
@@ -94,6 +161,7 @@ function App({ Component, pageProps }: AppProps) {
     },
   );
 
+<<<<<<< HEAD
   const editProductContext = (
     productEvents: NostrEvent[],
     isLoading: boolean,
@@ -133,6 +201,8 @@ function App({ Component, pageProps }: AppProps) {
     setFollowsContext({ followList, firstDegreeFollowsLength, isLoading });
   };
 
+=======
+>>>>>>> af23432 (updates)
   /** FETCH initial PRODUCTS and PROFILES **/
   useEffect(() => {
     async function fetchData() {
@@ -141,34 +211,53 @@ function App({ Component, pageProps }: AppProps) {
       try {
         let { followList } = await fetchAllFollows(relays, editFollowsContext);
         let pubkeysToFetchProfilesFor: string[] = [];
-        let { profileSetFromProducts } = await fetchAllPosts(
-          relays,
-          editProductContext,
-        );
+        setProductContext({ ...productContext, isLoading: true });
+        let { profileSetFromProducts, productArrayFromRelay } =
+          await fetchAllPosts(relays, productContext.filters);
+        const productEvents = productArrayFromRelay
+          .reduce((curr, event) => {
+            const productEvent = parseTags(event);
+            return productEvent ? [...curr, productEvent] : curr;
+          }, [] as ProductData[])
+          .sort((a, b) => b.createdAt - a.createdAt);
+        setProductContext({
+          ...productContext,
+          productEvents: [...productEvents],
+          isLoading: false,
+        });
         pubkeysToFetchProfilesFor = [...profileSetFromProducts];
-        let { profileSetFromChats } = await fetchChatsAndMessages(
+        setChatsContext({ ...chatsContext, isLoading: true });
+        let { profileSetFromChats, chatsData } = await fetchChatsAndMessages(
           relays,
           userPubkey,
-          editChatContext,
         );
+        setChatsContext({
+          ...chatsContext,
+          chatsMap: chatsData,
+          isLoading: false,
+        });
         pubkeysToFetchProfilesFor = [
           userPubkey as string,
           ...pubkeysToFetchProfilesFor,
           ...profileSetFromChats,
         ];
-        let { profileMap } = await fetchProfile(
+        setProfileContext({ ...profileContext, isLoading: true });
+        let { profileData } = await fetchProfile(
           relays,
           pubkeysToFetchProfilesFor,
-          editProfileContext,
         );
+        setProfileContext({ ...profileContext, profileData, isLoading: false });
       } catch (error) {
         console.error("Error fetching data:", error);
+        setProductContext({ ...productContext, isLoading: false });
+        setChatsContext({ ...chatsContext, isLoading: false });
+        setProfileContext({ ...profileContext, isLoading: false });
       }
     }
     fetchData();
     window.addEventListener("storage", fetchData);
     return () => window.removeEventListener("storage", fetchData);
-  }, [localStorageValues.relays]);
+  }, [localStorageValues.relays, productContext.filters]);
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
@@ -196,8 +285,13 @@ function App({ Component, pageProps }: AppProps) {
           content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
         />
       </Head>
+<<<<<<< HEAD
       <FollowsContext.Provider value={followsContext}>
         <ProductContext.Provider value={productContext}>
+=======
+      <ProductContext.Provider value={productContext}>
+        <MyListingsContext.Provider value={myListingsContext}>
+>>>>>>> af23432 (updates)
           <ProfileMapContext.Provider value={profileContext}>
             <ChatsContext.Provider value={chatsContext}>
               <NextUIProvider>
@@ -213,8 +307,13 @@ function App({ Component, pageProps }: AppProps) {
               </NextUIProvider>
             </ChatsContext.Provider>
           </ProfileMapContext.Provider>
+<<<<<<< HEAD
         </ProductContext.Provider>
       </FollowsContext.Provider>
+=======
+        </MyListingsContext.Provider>
+      </ProductContext.Provider>
+>>>>>>> af23432 (updates)
     </>
   );
 }
