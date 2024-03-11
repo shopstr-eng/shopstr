@@ -19,7 +19,6 @@ import { getNameToCodeMap } from "@/utils/location/location";
 import parseTags, {
   ProductData,
 } from "@/components/utility/product-parser-functions";
-import keyword_extractor from "keyword-extractor";
 import { getKeywords } from "@/utils/text";
 
 export const fetchAllPosts = async (
@@ -52,15 +51,6 @@ export const fetchAllPosts = async (
         until = Math.trunc(DateTime.now().toSeconds());
       }
 
-      const buildTagsFilters: string[] = [];
-      if (filters.categories.size > 0) {
-        buildTagsFilters.push(...Array.from(filters.categories));
-      }
-      if (filters.searchQuery.length > 0) {
-        buildTagsFilters.push(
-          ...getKeywords(filters.searchQuery),
-        );
-      }
       const filter: Filter = {
         kinds: [30402],
         since,
@@ -69,22 +59,22 @@ export const fetchAllPosts = async (
         // ...(filters.searchQuery.length > 0 && {
         //   search: filters.searchQuery,
         // }),
+        ...(filters.searchQuery.length > 0 && {
+          "#s": getKeywords(filters.searchQuery),
+        }),
         ...(filters.location && {
           "#g": [getNameToCodeMap(filters.location)],
         }),
-        ...(buildTagsFilters.length > 0 && {
-          "#t": buildTagsFilters,
+        ...(filters.categories.size > 0 && {
+          "#t": Array.from(filters.categories),
         }),
       };
 
       let productArrayFromRelay: NostrEvent[] = [];
       let profileSetFromProducts: Set<string> = new Set();
 
-      console.log(relays);
-      console.log(filters);
       let h = pool.subscribeMany(relays, [filter], {
         onevent(event) {
-          console.log(event);
           productArrayFromRelay.push(event);
           if (
             deletedProductsInCacheSet &&

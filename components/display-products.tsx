@@ -109,26 +109,18 @@ const DisplayEvents = ({
 
       const pool = new SimplePool();
 
-      const buildTagsFilters: string[] = [];
-      if (productEventContext.filters.categories.size > 0) {
-        buildTagsFilters.push(
-          ...Array.from(productEventContext.filters.categories),
-        );
-      }
-      if (productEventContext.filters.searchQuery.length > 0) {
-        buildTagsFilters.push(
-          ...getKeywords(productEventContext.filters.searchQuery),
-        );
-      }
       const filter: Filter = {
         kinds: [30402],
         since,
         until: oldestListingCreatedAt,
+        ...(productEventContext.filters.searchQuery.length > 0 && {
+          "#s": getKeywords(productEventContext.filters.searchQuery),
+        }),
         ...(productEventContext.filters.location && {
           "#g": [getNameToCodeMap(productEventContext.filters.location)],
         }),
-        ...(buildTagsFilters.length > 0 && {
-          "#t": buildTagsFilters,
+        ...(productEventContext.filters.categories.size > 0 && {
+          "#t": Array.from(productEventContext.filters.categories),
         }),
       };
       const events = await pool.querySync(getLocalStorageData().relays, filter);

@@ -168,13 +168,13 @@ export default function NewForm({
       });
 
       data["Categories"].forEach((category) => {
-        tags.push(["t", category, "category"]);
+        tags.push(["t", category]);
       });
 
       // Relay search (NIP-50) not widespread enough, use tags instead for relay querying
       getKeywords(data["Product Name"] + " " + data["Description"]).forEach(
         (keyword) => {
-          tags.push(["t", keyword, "keyword"]);
+          tags.push(["s", keyword]);
         },
       );
 

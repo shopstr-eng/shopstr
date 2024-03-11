@@ -1,5 +1,5 @@
 import { createContext } from "react";
-import { NostrEvent, NostrMessageEvent, ProfileData } from "../types/types";
+import { NostrMessageEvent, ProfileData } from "../types/types";
 import { ProductData } from "@/components/utility/product-parser-functions";
 
 export interface ProfileContextInterface {
@@ -24,7 +24,10 @@ export interface ProductContextInterface {
     location: string | null;
   };
   setFilters: (filters: ProductContextInterface["filters"]) => void;
-  addNewlyCreatedProductEvents: (productEvents: ProductData[], replace?: boolean) => void;
+  addNewlyCreatedProductEvents: (
+    productEvents: ProductData[],
+    replace?: boolean,
+  ) => void;
   removeDeletedProductEvent: (productId: string) => void;
 }
 
