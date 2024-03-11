@@ -10,21 +10,6 @@ export default function ListingPage({
   productData?: ProductData;
 }) {
   if (!productData) return null;
-  const {
-    createdAt,
-    title,
-    summary,
-    publishedAt,
-    images,
-    categories,
-    location,
-    price,
-    currency,
-    shippingType,
-    shippingCost,
-    totalCost,
-  } = productData;
-
   const invoiceDisplay = () => {
     return (
       <div className="flex w-full flex-col items-center">

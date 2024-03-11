@@ -1,296 +1,1229 @@
-{
-  "countries": [
-    { "country": "Afghanistan", "iso3166": "af" },
-    { "country": "Albania", "iso3166": "al" },
-    { "country": "Algeria", "iso3166": "dz" },
-    { "country": "American Samoa", "iso3166": "as" },
-    { "country": "Andorra", "iso3166": "ad" },
-    { "country": "Angola", "iso3166": "ao" },
-    { "country": "Anguilla", "iso3166": "ai" },
-    { "country": "Antigua & Barbuda", "iso3166": "ag" },
-    { "country": "Argentina", "iso3166": "ar" },
-    { "country": "Armenia", "iso3166": "am" },
-    { "country": "Aruba", "iso3166": "aw" },
-    { "country": "Australia", "iso3166": "au" },
-    { "country": "Austria", "iso3166": "at" },
-    { "country": "Azerbaijan", "iso3166": "az" },
-    { "country": "Bahamas", "iso3166": "bs" },
-    { "country": "Bahrain", "iso3166": "bh" },
-    { "country": "Bangladesh", "iso3166": "bd" },
-    { "country": "Barbados", "iso3166": "bb" },
-    { "country": "Belarus", "iso3166": "by" },
-    { "country": "Belgium", "iso3166": "be" },
-    { "country": "Belize", "iso3166": "bz" },
-    { "country": "Benin", "iso3166": "bj" },
-    { "country": "Bermuda", "iso3166": "bm" },
-    { "country": "Bhutan", "iso3166": "bt" },
-    { "country": "Bolivia", "iso3166": "bo" },
-    { "country": "Bonaire", "iso3166": "bq" },
-    { "country": "Bosnia & Herzegovina", "iso3166": "ba" },
-    { "country": "Botswana", "iso3166": "bw" },
-    { "country": "Brazil", "iso3166": "br" },
-    { "country": "British Indian Ocean Ter", "iso3166": "io" },
-    { "country": "Brunei", "iso3166": "bn" },
-    { "country": "Bulgaria", "iso3166": "bg" },
-    { "country": "Burkina Faso", "iso3166": "bf" },
-    { "country": "Burundi", "iso3166": "bi" },
-    { "country": "Cambodia", "iso3166": "kh" },
-    { "country": "Cameroon", "iso3166": "cm" },
-    { "country": "Canada", "iso3166": "ca" },
-    { "country": "Cape Verde", "iso3166": "cv" },
-    { "country": "Cayman Islands", "iso3166": "ky" },
-    { "country": "Central African Republic", "iso3166": "cf" },
-    { "country": "Chad", "iso3166": "td" },
-    { "country": "Channel Islands", "iso3166": "je" },
-    { "country": "Chile", "iso3166": "cl" },
-    { "country": "China", "iso3166": "cn" },
-    { "country": "Christmas Island", "iso3166": "cx" },
-    { "country": "Cocos Island", "iso3166": "cc" },
-    { "country": "Colombia", "iso3166": "co" },
-    { "country": "Comoros", "iso3166": "km" },
-    { "country": "Congo", "iso3166": "cg" },
-    { "country": "Cook Islands", "iso3166": "ck" },
-    { "country": "Costa Rica", "iso3166": "cr" },
-    { "country": "Cote D'Ivoire", "iso3166": "ci" },
-    { "country": "Croatia", "iso3166": "hr" },
-    { "country": "Cuba", "iso3166": "cu" },
-    { "country": "Curacao", "iso3166": "cw" },
-    { "country": "Cyprus", "iso3166": "cy" },
-    { "country": "Czech Republic", "iso3166": "cz" },
-    { "country": "Denmark", "iso3166": "dk" },
-    { "country": "Djibouti", "iso3166": "dj" },
-    { "country": "Dominica", "iso3166": "dm" },
-    { "country": "Dominican Republic", "iso3166": "do" },
-    { "country": "East Timor", "iso3166": "tm" },
-    { "country": "Ecuador", "iso3166": "ec" },
-    { "country": "Egypt", "iso3166": "eg" },
-    { "country": "El Salvador", "iso3166": "sv" },
-    { "country": "Equatorial Guinea", "iso3166": "gq" },
-    { "country": "Eritrea", "iso3166": "er" },
-    { "country": "Estonia", "iso3166": "ee" },
-    { "country": "Ethiopia", "iso3166": "et" },
-    { "country": "Falkland Islands", "iso3166": "fk" },
-    { "country": "Faroe Islands", "iso3166": "fo" },
-    { "country": "Fiji", "iso3166": "fj" },
-    { "country": "Finland", "iso3166": "fi" },
-    { "country": "France", "iso3166": "fr" },
-    { "country": "French Guiana", "iso3166": "gf" },
-    { "country": "French Polynesia", "iso3166": "pf" },
-    { "country": "French Southern Ter", "iso3166": "tf" },
-    { "country": "Gabon", "iso3166": "ga" },
-    { "country": "Gambia", "iso3166": "gm" },
-    { "country": "Georgia", "iso3166": "ge" },
-    { "country": "Germany", "iso3166": "de" },
-    { "country": "Ghana", "iso3166": "gh" },
-    { "country": "Gibraltar", "iso3166": "gi" },
-    { "country": "Great Britain", "iso3166": "gb" },
-    { "country": "Greece", "iso3166": "gr" },
-    { "country": "Greenland", "iso3166": "gl" },
-    { "country": "Grenada", "iso3166": "gd" },
-    { "country": "Guadeloupe", "iso3166": "gp" },
-    { "country": "Guam", "iso3166": "gu" },
-    { "country": "Guatemala", "iso3166": "gt" },
-    { "country": "Guinea", "iso3166": "gn" },
-    { "country": "Guyana", "iso3166": "gy" },
-    { "country": "Haiti", "iso3166": "ht" },
-    { "country": "Honduras", "iso3166": "hn" },
-    { "country": "Hong Kong", "iso3166": "hk" },
-    { "country": "Hungary", "iso3166": "hu" },
-    { "country": "Iceland", "iso3166": "is" },
-    { "country": "India", "iso3166": "in" },
-    { "country": "Indonesia", "iso3166": "id" },
-    { "country": "Iran", "iso3166": "ir" },
-    { "country": "Iraq", "iso3166": "iq" },
-    { "country": "Ireland", "iso3166": "ie" },
-    { "country": "Isle of Man", "iso3166": "im" },
-    { "country": "Israel", "iso3166": "il" },
-    { "country": "Italy", "iso3166": "it" },
-    { "country": "Jamaica", "iso3166": "jm" },
-    { "country": "Japan", "iso3166": "jp" },
-    { "country": "Jordan", "iso3166": "jo" },
-    { "country": "Kazakhstan", "iso3166": "kz" },
-    { "country": "Kenya", "iso3166": "ke" },
-    { "country": "Kiribati", "iso3166": "ki" },
-    { "country": "Korea North", "iso3166": "kp" },
-    { "country": "Korea South", "iso3166": "kr" },
-    { "country": "Kuwait", "iso3166": "kw" },
-    { "country": "Kyrgyzstan", "iso3166": "kg" },
-    { "country": "Laos", "iso3166": "la" },
-    { "country": "Latvia", "iso3166": "lv" },
-    { "country": "Lebanon", "iso3166": "lb" },
-    { "country": "Lesotho", "iso3166": "ls" },
-    { "country": "Liberia", "iso3166": "lr" },
-    { "country": "Libya", "iso3166": "ly" },
-    { "country": "Liechtenstein", "iso3166": "li" },
-    { "country": "Lithuania", "iso3166": "lt" },
-    { "country": "Luxembourg", "iso3166": "lu" },
-    { "country": "Macau", "iso3166": "mo" },
-    { "country": "Macedonia", "iso3166": "mk" },
-    { "country": "Madagascar", "iso3166": "mg" },
-    { "country": "Malaysia", "iso3166": "my" },
-    { "country": "Malawi", "iso3166": "mw" },
-    { "country": "Maldives", "iso3166": "mv" },
-    { "country": "Mali", "iso3166": "ml" },
-    { "country": "Malta", "iso3166": "mt" },
-    { "country": "Marshall Islands", "iso3166": "mh" },
-    { "country": "Martinique", "iso3166": "mq" },
-    { "country": "Mauritania", "iso3166": "mr" },
-    { "country": "Mauritius", "iso3166": "mu" },
-    { "country": "Mayotte", "iso3166": "yt" },
-    { "country": "Mexico", "iso3166": "mx" },
-    { "country": "Moldova", "iso3166": "md" },
-    { "country": "Monaco", "iso3166": "mc" },
-    { "country": "Mongolia", "iso3166": "mn" },
-    { "country": "Montserrat", "iso3166": "ms" },
-    { "country": "Morocco", "iso3166": "ma" },
-    { "country": "Mozambique", "iso3166": "mz" },
-    { "country": "Myanmar", "iso3166": "mm" },
-    { "country": "Namibia", "iso3166": "na" },
-    { "country": "Nauru", "iso3166": "nr" },
-    { "country": "Nepal", "iso3166": "np" },
-    { "country": "Netherlands (Holland, Europe)", "iso3166": "nl" },
-    { "country": "New Caledonia", "iso3166": "nc" },
-    { "country": "New Zealand", "iso3166": "nz" },
-    { "country": "Nicaragua", "iso3166": "ni" },
-    { "country": "Niger", "iso3166": "ne" },
-    { "country": "Nigeria", "iso3166": "ng" },
-    { "country": "Niue", "iso3166": "nu" },
-    { "country": "Norfolk Island", "iso3166": "nf" },
-    { "country": "Norway", "iso3166": "no" },
-    { "country": "Oman", "iso3166": "om" },
-    { "country": "Pakistan", "iso3166": "pk" },
-    { "country": "Palau Island", "iso3166": "pw" },
-    { "country": "Palestine", "iso3166": "ps" },
-    { "country": "Panama", "iso3166": "pa" },
-    { "country": "Papua New Guinea", "iso3166": "pg" },
-    { "country": "Paraguay", "iso3166": "py" },
-    { "country": "Peru", "iso3166": "pe" },
-    { "country": "Philippines", "iso3166": "ph" },
-    { "country": "Pitcairn Island", "iso3166": "pn" },
-    { "country": "Poland", "iso3166": "pl" },
-    { "country": "Portugal", "iso3166": "pt" },
-    { "country": "Puerto Rico", "iso3166": "pr" },
-    { "country": "Qatar", "iso3166": "qa" },
-    { "country": "Republic of Montenegro", "iso3166": "me" },
-    { "country": "Republic of Serbia", "iso3166": "rs" },
-    { "country": "Reunion", "iso3166": "re" },
-    { "country": "Romania", "iso3166": "ro" },
-    { "country": "Russia", "iso3166": "ru" },
-    { "country": "Rwanda", "iso3166": "rw" },
-    { "country": "St Barthelemy", "iso3166": "bl" },
-    { "country": "St Eustatius", "iso3166": "bq" },
-    { "country": "St Helena", "iso3166": "sh" },
-    { "country": "St Kitts-Nevis", "iso3166": "kn" },
-    { "country": "St Lucia", "iso3166": "lc" },
-    { "country": "St Maarten", "iso3166": "sx" },
-    { "country": "St Pierre & Miquelon", "iso3166": "pm" },
-    { "country": "St Vincent & Grenadines", "iso3166": "vc" },
-    { "country": "Saipan", "iso3166": "mp" },
-    { "country": "Samoa", "iso3166": "ws" },
-    { "country": "Samoa American", "iso3166": "as" },
-    { "country": "San Marino", "iso3166": "sm" },
-    { "country": "Sao Tome & Principe", "iso3166": "st" },
-    { "country": "Saudi Arabia", "iso3166": "sa" },
-    { "country": "Senegal", "iso3166": "sn" },
-    { "country": "Seychelles", "iso3166": "sc" },
-    { "country": "Sierra Leone", "iso3166": "sl" },
-    { "country": "Singapore", "iso3166": "sg" },
-    { "country": "Slovakia", "iso3166": "sk" },
-    { "country": "Slovenia", "iso3166": "si" },
-    { "country": "Solomon Islands", "iso3166": "sb" },
-    { "country": "Somalia", "iso3166": "so" },
-    { "country": "South Africa", "iso3166": "za" },
-    { "country": "Spain", "iso3166": "es" },
-    { "country": "Sri Lanka", "iso3166": "lk" },
-    { "country": "Sudan", "iso3166": "sd" },
-    { "country": "Suriname", "iso3166": "sr" },
-    { "country": "Swaziland", "iso3166": "sz" },
-    { "country": "Sweden", "iso3166": "se" },
-    { "country": "Switzerland", "iso3166": "ch" },
-    { "country": "Syria", "iso3166": "sy" },
-    { "country": "Tahiti", "iso3166": "pf" },
-    { "country": "Taiwan", "iso3166": "tw" },
-    { "country": "Tajikistan", "iso3166": "tj" },
-    { "country": "Tanzania", "iso3166": "tz" },
-    { "country": "Thailand", "iso3166": "th" },
-    { "country": "Togo", "iso3166": "tg" },
-    { "country": "Tokelau", "iso3166": "tk" },
-    { "country": "Tonga", "iso3166": "to" },
-    { "country": "Trinidad & Tobago", "iso3166": "tt" },
-    { "country": "Tunisia", "iso3166": "tn" },
-    { "country": "Turkey", "iso3166": "tr" },
-    { "country": "Turkmenistan", "iso3166": "tm" },
-    { "country": "Turks & Caicos Is", "iso3166": "tc" },
-    { "country": "Tuvalu", "iso3166": "tv" },
-    { "country": "Uganda", "iso3166": "ug" },
-    { "country": "Ukraine", "iso3166": "ua" },
-    { "country": "United Arab Emirates", "iso3166": "ae" },
-    { "country": "United Kingdom", "iso3166": "gb" },
-    { "country": "United States of America", "iso3166": "us" },
-    { "country": "Uruguay", "iso3166": "uy" },
-    { "country": "Uzbekistan", "iso3166": "uz" },
-    { "country": "Vanuatu", "iso3166": "vu" },
-    { "country": "Vatican City State", "iso3166": "va" },
-    { "country": "Venezuela", "iso3166": "ve" },
-    { "country": "Vietnam", "iso3166": "vn" },
-    { "country": "Virgin Islands (Brit)", "iso3166": "vg" },
-    { "country": "Virgin Islands (USA)", "iso3166": "vi" },
-    { "country": "Wake Island", "iso3166": "um" },
-    { "country": "Wallis & Futana Is", "iso3166": "wf" },
-    { "country": "Yemen", "iso3166": "ye" },
-    { "country": "Zambia", "iso3166": "zm" },
-    { "country": "Zimbabwe", "iso3166": "zw" }
-  ],
-  "states": [
-    { "state": "Alabama", "iso3166": "us-al" },
-    { "state": "Alaska", "iso3166": "us-ak" },
-    { "state": "Arizona", "iso3166": "us-az" },
-    { "state": "Arkansas", "iso3166": "us-ar" },
-    { "state": "California", "iso3166": "us-ca" },
-    { "state": "Colorado", "iso3166": "us-co" },
-    { "state": "Connecticut", "iso3166": "us-ct" },
-    { "state": "Delaware", "iso3166": "us-de" },
-    { "state": "Florida", "iso3166": "us-fl" },
-    { "state": "Georgia", "iso3166": "us-ga" },
-    { "state": "Hawaii", "iso3166": "us-hi" },
-    { "state": "Idaho", "iso3166": "us-id" },
-    { "state": "Illinois", "iso3166": "us-il" },
-    { "state": "Indiana", "iso3166": "us-in" },
-    { "state": "Iowa", "iso3166": "us-ia" },
-    { "state": "Kansas", "iso3166": "us-ks" },
-    { "state": "Kentucky", "iso3166": "us-ky" },
-    { "state": "Louisiana", "iso3166": "us-la" },
-    { "state": "Maine", "iso3166": "us-me" },
-    { "state": "Maryland", "iso3166": "us-md" },
-    { "state": "Massachusetts", "iso3166": "us-ma" },
-    { "state": "Michigan", "iso3166": "us-mi" },
-    { "state": "Minnesota", "iso3166": "us-mn" },
-    { "state": "Mississippi", "iso3166": "us-ms" },
-    { "state": "Missouri", "iso3166": "us-mo" },
-    { "state": "Montana", "iso3166": "us-mt" },
-    { "state": "Nebraska", "iso3166": "us-ne" },
-    { "state": "Nevada", "iso3166": "us-nv" },
-    { "state": "New Hampshire", "iso3166": "us-nh" },
-    { "state": "New Jersey", "iso3166": "us-nj" },
-    { "state": "New Mexico", "iso3166": "us-nm" },
-    { "state": "New York", "iso3166": "us-ny" },
-    { "state": "North Carolina", "iso3166": "us-nc" },
-    { "state": "North Dakota", "iso3166": "us-nd" },
-    { "state": "Ohio", "iso3166": "us-oh" },
-    { "state": "Oklahoma", "iso3166": "us-ok" },
-    { "state": "Oregon", "iso3166": "us-or" },
-    { "state": "Pennsylvania", "iso3166": "us-pa" },
-    { "state": "Rhode Island", "iso3166": "us-ri" },
-    { "state": "South Carolina", "iso3166": "us-sc" },
-    { "state": "South Dakota", "iso3166": "us-sd" },
-    { "state": "Tennessee", "iso3166": "us-tn" },
-    { "state": "Texas", "iso3166": "us-tx" },
-    { "state": "Utah", "iso3166": "us-ut" },
-    { "state": "Vermont", "iso3166": "us-vt" },
-    { "state": "Virginia", "iso3166": "us-va" },
-    { "state": "Washington", "iso3166": "us-wa" },
-    { "state": "West Virginia", "iso3166": "us-wv" },
-    { "state": "Wisconsin", "iso3166": "us-wi" },
-    { "state": "Wyoming", "iso3166": "us-wy" }
-  ]
-}
+[
+  {
+    "section": "Countries",
+    "values": [
+      {
+        "name": "Afghanistan",
+        "iso3166": "af"
+      },
+      {
+        "name": "Albania",
+        "iso3166": "al"
+      },
+      {
+        "name": "Algeria",
+        "iso3166": "dz"
+      },
+      {
+        "name": "American Samoa",
+        "iso3166": "as"
+      },
+      {
+        "name": "Andorra",
+        "iso3166": "ad"
+      },
+      {
+        "name": "Angola",
+        "iso3166": "ao"
+      },
+      {
+        "name": "Anguilla",
+        "iso3166": "ai"
+      },
+      {
+        "name": "Antigua & Barbuda",
+        "iso3166": "ag"
+      },
+      {
+        "name": "Argentina",
+        "iso3166": "ar"
+      },
+      {
+        "name": "Armenia",
+        "iso3166": "am"
+      },
+      {
+        "name": "Aruba",
+        "iso3166": "aw"
+      },
+      {
+        "name": "Australia",
+        "iso3166": "au"
+      },
+      {
+        "name": "Austria",
+        "iso3166": "at"
+      },
+      {
+        "name": "Azerbaijan",
+        "iso3166": "az"
+      },
+      {
+        "name": "Bahamas",
+        "iso3166": "bs"
+      },
+      {
+        "name": "Bahrain",
+        "iso3166": "bh"
+      },
+      {
+        "name": "Bangladesh",
+        "iso3166": "bd"
+      },
+      {
+        "name": "Barbados",
+        "iso3166": "bb"
+      },
+      {
+        "name": "Belarus",
+        "iso3166": "by"
+      },
+      {
+        "name": "Belgium",
+        "iso3166": "be"
+      },
+      {
+        "name": "Belize",
+        "iso3166": "bz"
+      },
+      {
+        "name": "Benin",
+        "iso3166": "bj"
+      },
+      {
+        "name": "Bermuda",
+        "iso3166": "bm"
+      },
+      {
+        "name": "Bhutan",
+        "iso3166": "bt"
+      },
+      {
+        "name": "Bolivia",
+        "iso3166": "bo"
+      },
+      {
+        "name": "Bonaire",
+        "iso3166": "bq"
+      },
+      {
+        "name": "Bosnia & Herzegovina",
+        "iso3166": "ba"
+      },
+      {
+        "name": "Botswana",
+        "iso3166": "bw"
+      },
+      {
+        "name": "Brazil",
+        "iso3166": "br"
+      },
+      {
+        "name": "British Indian Ocean Ter",
+        "iso3166": "io"
+      },
+      {
+        "name": "Brunei",
+        "iso3166": "bn"
+      },
+      {
+        "name": "Bulgaria",
+        "iso3166": "bg"
+      },
+      {
+        "name": "Burkina Faso",
+        "iso3166": "bf"
+      },
+      {
+        "name": "Burundi",
+        "iso3166": "bi"
+      },
+      {
+        "name": "Cambodia",
+        "iso3166": "kh"
+      },
+      {
+        "name": "Cameroon",
+        "iso3166": "cm"
+      },
+      {
+        "name": "Canada",
+        "iso3166": "ca"
+      },
+      {
+        "name": "Cape Verde",
+        "iso3166": "cv"
+      },
+      {
+        "name": "Cayman Islands",
+        "iso3166": "ky"
+      },
+      {
+        "name": "Central African Republic",
+        "iso3166": "cf"
+      },
+      {
+        "name": "Chad",
+        "iso3166": "td"
+      },
+      {
+        "name": "Channel Islands",
+        "iso3166": "je"
+      },
+      {
+        "name": "Chile",
+        "iso3166": "cl"
+      },
+      {
+        "name": "China",
+        "iso3166": "cn"
+      },
+      {
+        "name": "Christmas Island",
+        "iso3166": "cx"
+      },
+      {
+        "name": "Cocos Island",
+        "iso3166": "cc"
+      },
+      {
+        "name": "Colombia",
+        "iso3166": "co"
+      },
+      {
+        "name": "Comoros",
+        "iso3166": "km"
+      },
+      {
+        "name": "Congo",
+        "iso3166": "cg"
+      },
+      {
+        "name": "Cook Islands",
+        "iso3166": "ck"
+      },
+      {
+        "name": "Costa Rica",
+        "iso3166": "cr"
+      },
+      {
+        "name": "Cote D'Ivoire",
+        "iso3166": "ci"
+      },
+      {
+        "name": "Croatia",
+        "iso3166": "hr"
+      },
+      {
+        "name": "Cuba",
+        "iso3166": "cu"
+      },
+      {
+        "name": "Curacao",
+        "iso3166": "cw"
+      },
+      {
+        "name": "Cyprus",
+        "iso3166": "cy"
+      },
+      {
+        "name": "Czech Republic",
+        "iso3166": "cz"
+      },
+      {
+        "name": "Denmark",
+        "iso3166": "dk"
+      },
+      {
+        "name": "Djibouti",
+        "iso3166": "dj"
+      },
+      {
+        "name": "Dominica",
+        "iso3166": "dm"
+      },
+      {
+        "name": "Dominican Republic",
+        "iso3166": "do"
+      },
+      {
+        "name": "East Timor",
+        "iso3166": "tm"
+      },
+      {
+        "name": "Ecuador",
+        "iso3166": "ec"
+      },
+      {
+        "name": "Egypt",
+        "iso3166": "eg"
+      },
+      {
+        "name": "El Salvador",
+        "iso3166": "sv"
+      },
+      {
+        "name": "Equatorial Guinea",
+        "iso3166": "gq"
+      },
+      {
+        "name": "Eritrea",
+        "iso3166": "er"
+      },
+      {
+        "name": "Estonia",
+        "iso3166": "ee"
+      },
+      {
+        "name": "Ethiopia",
+        "iso3166": "et"
+      },
+      {
+        "name": "Falkland Islands",
+        "iso3166": "fk"
+      },
+      {
+        "name": "Faroe Islands",
+        "iso3166": "fo"
+      },
+      {
+        "name": "Fiji",
+        "iso3166": "fj"
+      },
+      {
+        "name": "Finland",
+        "iso3166": "fi"
+      },
+      {
+        "name": "France",
+        "iso3166": "fr"
+      },
+      {
+        "name": "French Guiana",
+        "iso3166": "gf"
+      },
+      {
+        "name": "French Polynesia",
+        "iso3166": "pf"
+      },
+      {
+        "name": "French Southern Ter",
+        "iso3166": "tf"
+      },
+      {
+        "name": "Gabon",
+        "iso3166": "ga"
+      },
+      {
+        "name": "Gambia",
+        "iso3166": "gm"
+      },
+      {
+        "name": "Georgia",
+        "iso3166": "ge"
+      },
+      {
+        "name": "Germany",
+        "iso3166": "de"
+      },
+      {
+        "name": "Ghana",
+        "iso3166": "gh"
+      },
+      {
+        "name": "Gibraltar",
+        "iso3166": "gi"
+      },
+      {
+        "name": "Great Britain",
+        "iso3166": "gb"
+      },
+      {
+        "name": "Greece",
+        "iso3166": "gr"
+      },
+      {
+        "name": "Greenland",
+        "iso3166": "gl"
+      },
+      {
+        "name": "Grenada",
+        "iso3166": "gd"
+      },
+      {
+        "name": "Guadeloupe",
+        "iso3166": "gp"
+      },
+      {
+        "name": "Guam",
+        "iso3166": "gu"
+      },
+      {
+        "name": "Guatemala",
+        "iso3166": "gt"
+      },
+      {
+        "name": "Guinea",
+        "iso3166": "gn"
+      },
+      {
+        "name": "Guyana",
+        "iso3166": "gy"
+      },
+      {
+        "name": "Haiti",
+        "iso3166": "ht"
+      },
+      {
+        "name": "Honduras",
+        "iso3166": "hn"
+      },
+      {
+        "name": "Hong Kong",
+        "iso3166": "hk"
+      },
+      {
+        "name": "Hungary",
+        "iso3166": "hu"
+      },
+      {
+        "name": "Iceland",
+        "iso3166": "is"
+      },
+      {
+        "name": "India",
+        "iso3166": "in"
+      },
+      {
+        "name": "Indonesia",
+        "iso3166": "id"
+      },
+      {
+        "name": "Iran",
+        "iso3166": "ir"
+      },
+      {
+        "name": "Iraq",
+        "iso3166": "iq"
+      },
+      {
+        "name": "Ireland",
+        "iso3166": "ie"
+      },
+      {
+        "name": "Isle of Man",
+        "iso3166": "im"
+      },
+      {
+        "name": "Israel",
+        "iso3166": "il"
+      },
+      {
+        "name": "Italy",
+        "iso3166": "it"
+      },
+      {
+        "name": "Jamaica",
+        "iso3166": "jm"
+      },
+      {
+        "name": "Japan",
+        "iso3166": "jp"
+      },
+      {
+        "name": "Jordan",
+        "iso3166": "jo"
+      },
+      {
+        "name": "Kazakhstan",
+        "iso3166": "kz"
+      },
+      {
+        "name": "Kenya",
+        "iso3166": "ke"
+      },
+      {
+        "name": "Kiribati",
+        "iso3166": "ki"
+      },
+      {
+        "name": "Korea North",
+        "iso3166": "kp"
+      },
+      {
+        "name": "Korea South",
+        "iso3166": "kr"
+      },
+      {
+        "name": "Kuwait",
+        "iso3166": "kw"
+      },
+      {
+        "name": "Kyrgyzstan",
+        "iso3166": "kg"
+      },
+      {
+        "name": "Laos",
+        "iso3166": "la"
+      },
+      {
+        "name": "Latvia",
+        "iso3166": "lv"
+      },
+      {
+        "name": "Lebanon",
+        "iso3166": "lb"
+      },
+      {
+        "name": "Lesotho",
+        "iso3166": "ls"
+      },
+      {
+        "name": "Liberia",
+        "iso3166": "lr"
+      },
+      {
+        "name": "Libya",
+        "iso3166": "ly"
+      },
+      {
+        "name": "Liechtenstein",
+        "iso3166": "li"
+      },
+      {
+        "name": "Lithuania",
+        "iso3166": "lt"
+      },
+      {
+        "name": "Luxembourg",
+        "iso3166": "lu"
+      },
+      {
+        "name": "Macau",
+        "iso3166": "mo"
+      },
+      {
+        "name": "Macedonia",
+        "iso3166": "mk"
+      },
+      {
+        "name": "Madagascar",
+        "iso3166": "mg"
+      },
+      {
+        "name": "Malaysia",
+        "iso3166": "my"
+      },
+      {
+        "name": "Malawi",
+        "iso3166": "mw"
+      },
+      {
+        "name": "Maldives",
+        "iso3166": "mv"
+      },
+      {
+        "name": "Mali",
+        "iso3166": "ml"
+      },
+      {
+        "name": "Malta",
+        "iso3166": "mt"
+      },
+      {
+        "name": "Marshall Islands",
+        "iso3166": "mh"
+      },
+      {
+        "name": "Martinique",
+        "iso3166": "mq"
+      },
+      {
+        "name": "Mauritania",
+        "iso3166": "mr"
+      },
+      {
+        "name": "Mauritius",
+        "iso3166": "mu"
+      },
+      {
+        "name": "Mayotte",
+        "iso3166": "yt"
+      },
+      {
+        "name": "Mexico",
+        "iso3166": "mx"
+      },
+      {
+        "name": "Moldova",
+        "iso3166": "md"
+      },
+      {
+        "name": "Monaco",
+        "iso3166": "mc"
+      },
+      {
+        "name": "Mongolia",
+        "iso3166": "mn"
+      },
+      {
+        "name": "Montserrat",
+        "iso3166": "ms"
+      },
+      {
+        "name": "Morocco",
+        "iso3166": "ma"
+      },
+      {
+        "name": "Mozambique",
+        "iso3166": "mz"
+      },
+      {
+        "name": "Myanmar",
+        "iso3166": "mm"
+      },
+      {
+        "name": "Namibia",
+        "iso3166": "na"
+      },
+      {
+        "name": "Nauru",
+        "iso3166": "nr"
+      },
+      {
+        "name": "Nepal",
+        "iso3166": "np"
+      },
+      {
+        "name": "Netherlands",
+        "iso3166": "nl"
+      },
+      {
+        "name": "New Caledonia",
+        "iso3166": "nc"
+      },
+      {
+        "name": "New Zealand",
+        "iso3166": "nz"
+      },
+      {
+        "name": "Nicaragua",
+        "iso3166": "ni"
+      },
+      {
+        "name": "Niger",
+        "iso3166": "ne"
+      },
+      {
+        "name": "Nigeria",
+        "iso3166": "ng"
+      },
+      {
+        "name": "Niue",
+        "iso3166": "nu"
+      },
+      {
+        "name": "Norfolk Island",
+        "iso3166": "nf"
+      },
+      {
+        "name": "Norway",
+        "iso3166": "no"
+      },
+      {
+        "name": "Oman",
+        "iso3166": "om"
+      },
+      {
+        "name": "Pakistan",
+        "iso3166": "pk"
+      },
+      {
+        "name": "Palau Island",
+        "iso3166": "pw"
+      },
+      {
+        "name": "Palestine",
+        "iso3166": "ps"
+      },
+      {
+        "name": "Panama",
+        "iso3166": "pa"
+      },
+      {
+        "name": "Papua New Guinea",
+        "iso3166": "pg"
+      },
+      {
+        "name": "Paraguay",
+        "iso3166": "py"
+      },
+      {
+        "name": "Peru",
+        "iso3166": "pe"
+      },
+      {
+        "name": "Philippines",
+        "iso3166": "ph"
+      },
+      {
+        "name": "Pitcairn Island",
+        "iso3166": "pn"
+      },
+      {
+        "name": "Poland",
+        "iso3166": "pl"
+      },
+      {
+        "name": "Portugal",
+        "iso3166": "pt"
+      },
+      {
+        "name": "Puerto Rico",
+        "iso3166": "pr"
+      },
+      {
+        "name": "Qatar",
+        "iso3166": "qa"
+      },
+      {
+        "name": "Republic of Montenegro",
+        "iso3166": "me"
+      },
+      {
+        "name": "Republic of Serbia",
+        "iso3166": "rs"
+      },
+      {
+        "name": "Reunion",
+        "iso3166": "re"
+      },
+      {
+        "name": "Romania",
+        "iso3166": "ro"
+      },
+      {
+        "name": "Russia",
+        "iso3166": "ru"
+      },
+      {
+        "name": "Rwanda",
+        "iso3166": "rw"
+      },
+      {
+        "name": "St Barthelemy",
+        "iso3166": "bl"
+      },
+      {
+        "name": "St Eustatius",
+        "iso3166": "bq"
+      },
+      {
+        "name": "St Helena",
+        "iso3166": "sh"
+      },
+      {
+        "name": "St Kitts-Nevis",
+        "iso3166": "kn"
+      },
+      {
+        "name": "St Lucia",
+        "iso3166": "lc"
+      },
+      {
+        "name": "St Maarten",
+        "iso3166": "sx"
+      },
+      {
+        "name": "St Pierre & Miquelon",
+        "iso3166": "pm"
+      },
+      {
+        "name": "St Vincent & Grenadines",
+        "iso3166": "vc"
+      },
+      {
+        "name": "Saipan",
+        "iso3166": "mp"
+      },
+      {
+        "name": "Samoa",
+        "iso3166": "ws"
+      },
+      {
+        "name": "Samoa American",
+        "iso3166": "as"
+      },
+      {
+        "name": "San Marino",
+        "iso3166": "sm"
+      },
+      {
+        "name": "Sao Tome & Principe",
+        "iso3166": "st"
+      },
+      {
+        "name": "Saudi Arabia",
+        "iso3166": "sa"
+      },
+      {
+        "name": "Senegal",
+        "iso3166": "sn"
+      },
+      {
+        "name": "Seychelles",
+        "iso3166": "sc"
+      },
+      {
+        "name": "Sierra Leone",
+        "iso3166": "sl"
+      },
+      {
+        "name": "Singapore",
+        "iso3166": "sg"
+      },
+      {
+        "name": "Slovakia",
+        "iso3166": "sk"
+      },
+      {
+        "name": "Slovenia",
+        "iso3166": "si"
+      },
+      {
+        "name": "Solomon Islands",
+        "iso3166": "sb"
+      },
+      {
+        "name": "Somalia",
+        "iso3166": "so"
+      },
+      {
+        "name": "South Africa",
+        "iso3166": "za"
+      },
+      {
+        "name": "Spain",
+        "iso3166": "es"
+      },
+      {
+        "name": "Sri Lanka",
+        "iso3166": "lk"
+      },
+      {
+        "name": "Sudan",
+        "iso3166": "sd"
+      },
+      {
+        "name": "Suriname",
+        "iso3166": "sr"
+      },
+      {
+        "name": "Swaziland",
+        "iso3166": "sz"
+      },
+      {
+        "name": "Sweden",
+        "iso3166": "se"
+      },
+      {
+        "name": "Switzerland",
+        "iso3166": "ch"
+      },
+      {
+        "name": "Syria",
+        "iso3166": "sy"
+      },
+      {
+        "name": "Tahiti",
+        "iso3166": "pf"
+      },
+      {
+        "name": "Taiwan",
+        "iso3166": "tw"
+      },
+      {
+        "name": "Tajikistan",
+        "iso3166": "tj"
+      },
+      {
+        "name": "Tanzania",
+        "iso3166": "tz"
+      },
+      {
+        "name": "Thailand",
+        "iso3166": "th"
+      },
+      {
+        "name": "Togo",
+        "iso3166": "tg"
+      },
+      {
+        "name": "Tokelau",
+        "iso3166": "tk"
+      },
+      {
+        "name": "Tonga",
+        "iso3166": "to"
+      },
+      {
+        "name": "Trinidad & Tobago",
+        "iso3166": "tt"
+      },
+      {
+        "name": "Tunisia",
+        "iso3166": "tn"
+      },
+      {
+        "name": "Turkey",
+        "iso3166": "tr"
+      },
+      {
+        "name": "Turkmenistan",
+        "iso3166": "tm"
+      },
+      {
+        "name": "Turks & Caicos Is",
+        "iso3166": "tc"
+      },
+      {
+        "name": "Tuvalu",
+        "iso3166": "tv"
+      },
+      {
+        "name": "Uganda",
+        "iso3166": "ug"
+      },
+      {
+        "name": "Ukraine",
+        "iso3166": "ua"
+      },
+      {
+        "name": "United Arab Emirates",
+        "iso3166": "ae"
+      },
+      {
+        "name": "United Kingdom",
+        "iso3166": "gb"
+      },
+      {
+        "name": "United States of America",
+        "iso3166": "us"
+      },
+      {
+        "name": "Uruguay",
+        "iso3166": "uy"
+      },
+      {
+        "name": "Uzbekistan",
+        "iso3166": "uz"
+      },
+      {
+        "name": "Vanuatu",
+        "iso3166": "vu"
+      },
+      {
+        "name": "Vatican City State",
+        "iso3166": "va"
+      },
+      {
+        "name": "Venezuela",
+        "iso3166": "ve"
+      },
+      {
+        "name": "Vietnam",
+        "iso3166": "vn"
+      },
+      {
+        "name": "Virgin Islands (Brit)",
+        "iso3166": "vg"
+      },
+      {
+        "name": "Virgin Islands (USA)",
+        "iso3166": "vi"
+      },
+      {
+        "name": "Wake Island",
+        "iso3166": "um"
+      },
+      {
+        "name": "Wallis & Futana Is",
+        "iso3166": "wf"
+      },
+      {
+        "name": "Yemen",
+        "iso3166": "ye"
+      },
+      {
+        "name": "Zambia",
+        "iso3166": "zm"
+      },
+      {
+        "name": "Zimbabwe",
+        "iso3166": "zw"
+      }
+    ]
+  },
+  {
+    "section": "U.S. States",
+    "values": [
+      {
+        "name": "Alabama",
+        "iso3166": "us-al"
+      },
+      {
+        "name": "Alaska",
+        "iso3166": "us-ak"
+      },
+      {
+        "name": "Arizona",
+        "iso3166": "us-az"
+      },
+      {
+        "name": "Arkansas",
+        "iso3166": "us-ar"
+      },
+      {
+        "name": "California",
+        "iso3166": "us-ca"
+      },
+      {
+        "name": "Colorado",
+        "iso3166": "us-co"
+      },
+      {
+        "name": "Connecticut",
+        "iso3166": "us-ct"
+      },
+      {
+        "name": "Delaware",
+        "iso3166": "us-de"
+      },
+      {
+        "name": "Florida",
+        "iso3166": "us-fl"
+      },
+      {
+        "name": "Georgia",
+        "iso3166": "us-ga"
+      },
+      {
+        "name": "Hawaii",
+        "iso3166": "us-hi"
+      },
+      {
+        "name": "Idaho",
+        "iso3166": "us-id"
+      },
+      {
+        "name": "Illinois",
+        "iso3166": "us-il"
+      },
+      {
+        "name": "Indiana",
+        "iso3166": "us-in"
+      },
+      {
+        "name": "Iowa",
+        "iso3166": "us-ia"
+      },
+      {
+        "name": "Kansas",
+        "iso3166": "us-ks"
+      },
+      {
+        "name": "Kentucky",
+        "iso3166": "us-ky"
+      },
+      {
+        "name": "Louisiana",
+        "iso3166": "us-la"
+      },
+      {
+        "name": "Maine",
+        "iso3166": "us-me"
+      },
+      {
+        "name": "Maryland",
+        "iso3166": "us-md"
+      },
+      {
+        "name": "Massachusetts",
+        "iso3166": "us-ma"
+      },
+      {
+        "name": "Michigan",
+        "iso3166": "us-mi"
+      },
+      {
+        "name": "Minnesota",
+        "iso3166": "us-mn"
+      },
+      {
+        "name": "Mississippi",
+        "iso3166": "us-ms"
+      },
+      {
+        "name": "Missouri",
+        "iso3166": "us-mo"
+      },
+      {
+        "name": "Montana",
+        "iso3166": "us-mt"
+      },
+      {
+        "name": "Nebraska",
+        "iso3166": "us-ne"
+      },
+      {
+        "name": "Nevada",
+        "iso3166": "us-nv"
+      },
+      {
+        "name": "New Hampshire",
+        "iso3166": "us-nh"
+      },
+      {
+        "name": "New Jersey",
+        "iso3166": "us-nj"
+      },
+      {
+        "name": "New Mexico",
+        "iso3166": "us-nm"
+      },
+      {
+        "name": "New York",
+        "iso3166": "us-ny"
+      },
+      {
+        "name": "North Carolina",
+        "iso3166": "us-nc"
+      },
+      {
+        "name": "North Dakota",
+        "iso3166": "us-nd"
+      },
+      {
+        "name": "Ohio",
+        "iso3166": "us-oh"
+      },
+      {
+        "name": "Oklahoma",
+        "iso3166": "us-ok"
+      },
+      {
+        "name": "Oregon",
+        "iso3166": "us-or"
+      },
+      {
+        "name": "Pennsylvania",
+        "iso3166": "us-pa"
+      },
+      {
+        "name": "Rhode Island",
+        "iso3166": "us-ri"
+      },
+      {
+        "name": "South Carolina",
+        "iso3166": "us-sc"
+      },
+      {
+        "name": "South Dakota",
+        "iso3166": "us-sd"
+      },
+      {
+        "name": "Tennessee",
+        "iso3166": "us-tn"
+      },
+      {
+        "name": "Texas",
+        "iso3166": "us-tx"
+      },
+      {
+        "name": "Utah",
+        "iso3166": "us-ut"
+      },
+      {
+        "name": "Vermont",
+        "iso3166": "us-vt"
+      },
+      {
+        "name": "Virginia",
+        "iso3166": "us-va"
+      },
+      {
+        "name": "Washington",
+        "iso3166": "us-wa"
+      },
+      {
+        "name": "West Virginia",
+        "iso3166": "us-wv"
+      },
+      {
+        "name": "Wisconsin",
+        "iso3166": "us-wi"
+      },
+      {
+        "name": "Wyoming",
+        "iso3166": "us-wy"
+      }
+    ]
+  },
+  {
+    "section": "Canada Provinces/Territories",
+    "values": [
+      {
+        "name": "Alberta",
+        "iso3166": "ca"
+      },
+      {
+        "name": "British Columbia",
+        "iso3166": "ca"
+      },
+      {
+        "name": "Manitoba",
+        "iso3166": "ca"
+      },
+      {
+        "name": "New Brunswick",
+        "iso3166": "ca"
+      },
+      {
+        "name": "Newfoundland and Labrador",
+        "iso3166": "ca"
+      },
+      {
+        "name": "Northwest Territories",
+        "iso3166": "ca"
+      },
+      {
+        "name": "Nova Scotia",
+        "iso3166": "ca"
+      },
+      {
+        "name": "Nunavut",
+        "iso3166": "ca"
+      },
+      {
+        "name": "Ontario",
+        "iso3166": "ca"
+      },
+      {
+        "name": "Prince Edward Island",
+        "iso3166": "ca"
+      },
+      {
+        "name": "Québec",
+        "iso3166": "ca"
+      },
+      {
+        "name": "Saskatchewan",
+        "iso3166": "ca"
+      },
+      {
+        "name": "Yukon",
+        "iso3166": "ca"
+      }
+    ]
+  }
+]

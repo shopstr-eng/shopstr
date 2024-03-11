@@ -19,15 +19,16 @@ import {
 import ProductForm from "./product-form";
 import ImageCarousel from "./utility-components/image-carousel";
 import CompactCategories from "./utility-components/compact-categories";
-import { locationAvatar } from "./utility-components/dropdowns/location-dropdown";
+import { LocationAvatar } from "./utility-components/dropdowns/location-dropdown";
 import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
 import RequestPassphraseModal from "./utility-components/request-passphrase-modal";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 import { getLocalStorageData } from "./utility/nostr-helper-functions";
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
+import { ProductData } from "./utility/product-parser-functions";
 
 interface ProductModalProps {
-  productData: any;
+  productData?: ProductData;
   handleModalToggle: () => void;
   showModal: boolean;
   handleSendMessage: (pubkeyToOpenChatWith: string) => void;
@@ -43,16 +44,6 @@ export default function DisplayProductModal({
   handleReviewAndPurchase,
   handleDelete,
 }: ProductModalProps) {
-  const {
-    pubkey,
-    createdAt,
-    title,
-    images,
-    categories,
-    location,
-    currency,
-    totalCost,
-  } = productData;
   const { signInMethod, userPubkey } = getLocalStorageData();
 
   const [requestPassphrase, setRequestPassphrase] = React.useState(false);
@@ -66,6 +57,19 @@ export default function DisplayProductModal({
     const timeString = d.toLocaleString().split(",")[1].trim();
     return [dateString, timeString];
   };
+
+  if (!productData) return null;
+
+  const {
+    pubkey,
+    createdAt,
+    title,
+    images,
+    categories,
+    location,
+    currency,
+    totalCost,
+  } = productData;
 
   const handleShare = async () => {
     // The content you want to share
@@ -143,8 +147,19 @@ export default function DisplayProductModal({
                 pubkey={productData.pubkey}
                 dropDownKeys={["shop", "message"]}
               />
-              <Chip key={location} startContent={locationAvatar(location)}>
-                {location}
+              <Chip
+                key={location.regionCode || location.countryCode}
+                startContent={LocationAvatar({
+                  name:
+                    location.regionName ||
+                    location.countryName ||
+                    location.displayName,
+                  iso3166: location.regionCode || location.countryCode,
+                })}
+              >
+                {location.regionName ||
+                  location.displayName ||
+                  location.countryName}
               </Chip>
               <CompactCategories categories={categories} />
               <div>

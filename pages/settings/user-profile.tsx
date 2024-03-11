@@ -140,7 +140,7 @@ const UserProfilePage = () => {
                     isIconOnly={false}
                     className={`absolute bottom-5 right-5 z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
                     passphrase={passphrase}
-                    imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
+                    imgCallbackOnUpload={(imgUrls) => setValue("banner", imgUrls[0])}
                   >
                     Upload Banner
                   </FileUploaderButton>
@@ -152,8 +152,8 @@ const UserProfilePage = () => {
                         isIconOnly
                         className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
                         passphrase={passphrase}
-                        imgCallbackOnUpload={(imgUrl) =>
-                          setValue("picture", imgUrl)
+                        imgCallbackOnUpload={(imgUrls) =>
+                          setValue("picture", imgUrls[0])
                         }
                       >
                         <ArrowUpOnSquareIcon className="h-6 w-6" />

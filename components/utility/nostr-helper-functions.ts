@@ -14,7 +14,7 @@ import { ProductFormValues } from "@/pages/api/nostr/post-event";
 export async function PostListing(
   values: ProductFormValues,
   passphrase: string,
-) {
+): Promise<NostrEvent> {
   const { signInMethod, userPubkey, relays } = getLocalStorageData();
   const summary = values.find(([key]) => key === "summary")?.[1] || "";
 
@@ -94,6 +94,7 @@ export async function PostListing(
       kind: 30402,
       tags: updatedValues,
       content: summary,
+      sig: res.data.sig,
     };
   }
 }

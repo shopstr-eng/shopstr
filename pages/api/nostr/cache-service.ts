@@ -1,10 +1,15 @@
-import { NostrEvent } from "../../../utils/types/types";
+import { ProductData } from "@/components/utility/product-parser-functions";
+import {
+  ItemType,
+  NostrEvent,
+  NostrMessageEvent,
+  ProfileData,
+} from "../../../utils/types/types";
 import Dexie, { Table } from "dexie";
-import { ItemType, NostrMessageEvent } from "../../../utils/types/types";
 
 class ItemsFetchedFromRelays extends Dexie {
-  public products!: Table<{ id: string; product: NostrEvent }>;
-  public profiles!: Table<{ id: string; profile: {} }>;
+  public products!: Table<{ id: string; product: ProductData }>;
+  public profiles!: Table<{ id: string; profile: ProfileData }>;
   public chatMessages!: Table<{ id: string; message: NostrMessageEvent }>;
   public lastFetchedTime!: Table<{ itemType: string; time: number }>;
 
@@ -48,18 +53,18 @@ export const didXMinutesElapseSinceLastFetch = async (
   return timelapsedInMinutes > minutes;
 };
 
-export const addProductToCache = async (product: NostrEvent) => {
+export const addProductToCache = async (product: ProductData) => {
   await products.put({ id: product.id, product });
 };
 
-export const addProductsToCache = async (productsArray: NostrEvent[]) => {
+export const addProductsToCache = async (productsArray: ProductData[]) => {
   productsArray.forEach(async (product) => {
     await addProductToCache(product);
   });
   await lastFetchedTime.put({ itemType: "products", time: Date.now() });
 };
 
-export const addProfilesToCache = async (profileMap: Map<string, any>) => {
+export const addProfilesToCache = async (profileMap: Map<string, ProfileData>) => {
   Array.from(profileMap.entries()).forEach(async ([pubkey, profile]) => {
     if (profile === null) return;
     await profiles.put({ id: pubkey, profile });
@@ -84,7 +89,7 @@ export const removeProductFromCache = async (productIds: string[]) => {
 export const fetchAllProductsFromCache = async () => {
   let productsFromCache = await products.toArray();
   let productsArray = productsFromCache.map(
-    (productFromCache: { id: string; product: NostrEvent }) =>
+    (productFromCache: { id: string; product: ProductData }) =>
       productFromCache.product,
   );
   return productsArray;
@@ -92,11 +97,11 @@ export const fetchAllProductsFromCache = async () => {
 
 export const fetchProfileDataFromCache = async () => {
   let cache = await profiles.toArray();
-  let productMap = new Map();
+  let profileMap = new Map<string, ProfileData>();
   cache.forEach(({ id, profile }) => {
-    productMap.set(id, profile);
+    profileMap.set(id, profile);
   });
-  return productMap;
+  return profileMap;
 };
 
 export const fetchAllChatsFromCache = async () => {

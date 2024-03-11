@@ -16,10 +16,17 @@ import {
   SelectSection,
   Chip,
   Image,
+  Switch,
+  Divider,
 } from "@nextui-org/react";
 import { InformationCircleIcon, TrashIcon } from "@heroicons/react/24/outline";
 import Carousal from "@itseasy21/react-elastic-carousel";
-import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
+import {
+  CURRENCY_OPTIONS,
+  CurrencyType,
+  SHOPSTRBUTTONCLASSNAMES,
+  ShippingOptionsType,
+} from "./utility/STATIC-VARIABLES";
 
 import {
   PostListing,
@@ -35,10 +42,16 @@ import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action
 import { ProductContext } from "../utils/context/context";
 import { capturePostListingMetric } from "./utility/metrics-helper-functions";
 import { addProductToCache } from "../pages/api/nostr/cache-service";
-import { ProductData } from "./utility/product-parser-functions";
+import parseTags, { ProductData } from "./utility/product-parser-functions";
 import { ProductFormValues } from "@/pages/api/nostr/post-event";
 import { buildSrcSet } from "@/utils/images";
 import { FileUploaderButton } from "./utility-components/file-uploader";
+import {
+  buildListingGeotags,
+  getNameToCodeMap,
+} from "@/utils/location/location";
+import CategoryDropdown from "./utility-components/dropdowns/category-dropdown";
+import { getKeywords } from "@/utils/text";
 
 declare global {
   interface Window {
@@ -54,6 +67,18 @@ interface ProductFormProps {
   handleDelete?: (productId: string, passphrase: string) => void;
   onSubmitCallback?: () => void;
 }
+
+type ProductFormData = {
+  "Product Name": string;
+  Description: string;
+  Price: string;
+  Currency: CurrencyType;
+  Location: string;
+  "Shipping Option": ShippingOptionsType;
+  "Shipping Cost": number;
+  Categories: Set<string>;
+  "Content Warning": boolean;
+};
 
 export default function NewForm({
   showModal,
@@ -76,22 +101,18 @@ export default function NewForm({
     control,
     reset,
     watch,
-  } = useForm({
-    defaultValues: oldValues
-      ? {
-          "Product Name": oldValues.title,
-          Description: oldValues.summary,
-          Price: String(oldValues.price),
-          Currency: oldValues.currency,
-          Location: oldValues.location,
-          "Shipping Option": oldValues.shippingType,
-          "Shipping Cost": oldValues.shippingCost,
-          Category: oldValues.categories ? oldValues.categories.join(",") : "",
-        }
-      : {
-          Currency: "SATS",
-          "Shipping Option": "N/A",
-        },
+  } = useForm<ProductFormData>({
+    defaultValues: {
+      "Product Name": oldValues?.title || "",
+      Description: oldValues?.summary || "",
+      Price: String(oldValues?.price || 0),
+      Currency: oldValues?.currency || "SATS",
+      Location: oldValues?.location.displayName,
+      "Shipping Option": oldValues?.shippingType,
+      "Shipping Cost": oldValues?.shippingCost || 0,
+      Categories: oldValues?.categories || [],
+      "Content Warning": oldValues?.warning || false,
+    },
   });
 
   useEffect(() => {
@@ -107,68 +128,105 @@ export default function NewForm({
     setIsEdit(oldValues ? true : false);
   }, [showModal]);
 
-  const onSubmit = async (data: { [x: string]: string }) => {
-    setIsPostingOrUpdatingProduct(true);
-    const encoder = new TextEncoder();
-    const dataEncoded = encoder.encode(data["Product Name"]);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", dataEncoded);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
+  const onSubmit = async (data: ProductFormData) => {
+    try {
+      setIsPostingOrUpdatingProduct(true);
+      const encoder = new TextEncoder();
+      const dataEncoded = encoder.encode(data["Product Name"]);
+      const hashBuffer = await crypto.subtle.digest("SHA-256", dataEncoded);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashHex = hashArray
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
 
-    let tags: ProductFormValues = [
-      ["d", oldValues?.d || hashHex],
-      ["alt", "Classified listing: " + data["Product Name"]],
-      [
-        "client",
-        "Shopstr",
-        "31990:" + pubkey + ":" + (oldValues?.d || hashHex),
-        "wss://relay.damus.io",
-      ],
-      ["title", data["Product Name"]],
-      ["summary", data["Description"]],
-      ["price", data["Price"], data["Currency"]],
-      ["location", data["Location"]],
-      [
-        "shipping",
-        data["Shipping Option"],
-        data["Shipping Cost"] ? data["Shipping Cost"] : "0",
-        data["Currency"],
-      ],
-    ];
+      let tags: ProductFormValues = [
+        ["d", oldValues?.d || hashHex],
+        ["alt", "Classified listing: " + data["Product Name"]],
+        [
+          "client",
+          "Shopstr",
+          "31990:" + pubkey + ":" + (oldValues?.d || hashHex),
+          "wss://relay.damus.io",
+        ],
+        ["title", data["Product Name"]],
+        ["summary", data["Description"]],
+        ["price", data["Price"], data["Currency"]],
+        ["location", data["Location"]],
+        [
+          "shipping",
+          data["Shipping Option"].toString(),
+          data["Shipping Cost"] ? data["Shipping Cost"].toString() : "0",
+          data["Currency"],
+        ],
+      ];
 
-    images.forEach((image) => {
-      tags.push(["image", image]);
-    });
+      const locationCode = getNameToCodeMap(data["Location"]);
+      tags.push(...buildListingGeotags({ iso3166: locationCode }));
 
-    data["Category"].split(",").forEach((category) => {
-      tags.push(["t", category]);
-    });
-    let newListing = await PostListing(tags, passphrase);
+      images.forEach((image) => {
+        tags.push(["image", image]);
+      });
 
-    capturePostListingMetric(newListing.id, tags);
+      data["Categories"].forEach((category) => {
+        tags.push(["t", category, "category"]);
+      });
 
-    if (isEdit) {
-      if (handleDelete && oldValues?.id) {
-        handleDelete(oldValues.id, passphrase);
+      // Relay search (NIP-50) not widespread enough, use tags instead for relay querying
+      getKeywords(data["Product Name"] + " " + data["Description"]).forEach(
+        (keyword) => {
+          tags.push(["t", keyword, "keyword"]);
+        },
+      );
+
+      if (data["Content Warning"] === true) {
+        tags.push(
+          ["L", "content-warning"],
+          ["l", "n/a", "content-warning"],
+          ["content-warning", "n/a"],
+        );
       }
-    }
 
-    clear();
-    productEventContext.addNewlyCreatedProductEvent(newListing);
-    addProductToCache(newListing);
-    setIsPostingOrUpdatingProduct(false);
-    if (onSubmitCallback) {
-      onSubmitCallback();
+      console.log("generated tags for new listing:", tags);
+
+      let newListing = await PostListing(tags, passphrase);
+
+      capturePostListingMetric(newListing.id, tags);
+
+      if (isEdit) {
+        if (handleDelete && oldValues?.id) {
+          handleDelete(oldValues.id, passphrase);
+        }
+      }
+
+      const productEvent = parseTags(newListing);
+
+      clear();
+      handleModalToggle();
+      productEventContext.addNewlyCreatedProductEvents([productEvent]);
+      addProductToCache(productEvent);
+      setIsPostingOrUpdatingProduct(false);
+      if (onSubmitCallback) {
+        onSubmitCallback();
+      }
+    } catch (err) {
+      console.log("Error submiting listing", err);
     }
   };
 
   const clear = () => {
-    handleModalToggle();
     setPassphrase("");
     setImages([]);
-    reset();
+    reset({
+      "Product Name": "",
+      Description: "",
+      Price: "",
+      Currency: "SATS",
+      Location: "",
+      "Shipping Option": "N/A",
+      "Shipping Cost": 0,
+      Categories: new Set<string>(),
+      "Content Warning": false,
+    });
   };
 
   const watchShippingOption = watch("Shipping Option"); // acts as state for shippingOption input. when shippingOption changes, this variable changes as well
@@ -223,10 +281,24 @@ export default function NewForm({
     >
       <ModalContent>
         <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
-          Add New Product Listing
+          Add a New Product Listing
         </ModalHeader>
         <form onSubmit={handleSubmit(onSubmit as any)}>
           <ModalBody>
+            {signIn === "nsec" && (
+              <Input
+                autoFocus
+                isRequired={isButtonDisabled}
+                className="text-light-text dark:text-dark-text"
+                ref={passphraseInputRef}
+                variant="flat"
+                label="Enter your Passphrase to create a listing..."
+                labelPlacement="inside"
+                onChange={(e) => setPassphrase(e.target.value)}
+                value={passphrase}
+              />
+            )}
+            <Divider></Divider>
             <Controller
               name="Product Name"
               control={control}
@@ -246,7 +318,6 @@ export default function NewForm({
                 return (
                   <Input
                     className="text-light-text dark:text-dark-text"
-                    autoFocus
                     variant="bordered"
                     fullWidth={true}
                     label="Product Name"
@@ -310,21 +381,25 @@ export default function NewForm({
               )}
             </Carousal>
             <FileUploaderButton
+              disabled={isButtonDisabled}
               isIconOnly={false}
               className={buttonClassName}
               passphrase={passphrase}
-              imgCallbackOnUpload={(imgUrl) => {
+              isMultiple={true}
+              imgCallbackOnUpload={(imgUrls) => {
                 setImages((prevValues) => {
                   const updatedImages = [...prevValues];
-                  console.log("imgUrl", imgUrl);
-                  if (imgUrl && imgUrl.length > 0) {
-                    return [...updatedImages, imgUrl];
+                  console.log("imgUrl", imgUrls);
+                  if (imgUrls && imgUrls.length > 0) {
+                    return [...updatedImages, ...imgUrls];
                   }
                   return [...updatedImages];
                 });
               }}
             >
-              {isButtonDisabled ? "Enter your passphrase!" : "Upload Images"}
+              {isButtonDisabled
+                ? "Enter your passphrase to upload images!"
+                : "Upload Images"}
             </FileUploaderButton>
             <Controller
               name="Description"
@@ -376,7 +451,6 @@ export default function NewForm({
                   <Input
                     className="text-light-text dark:text-dark-text"
                     type="number"
-                    autoFocus
                     variant="flat"
                     // label="Price"
                     // labelPlacement="outside"
@@ -409,9 +483,13 @@ export default function NewForm({
                                 onBlur={onBlur} // notify when input is touched/blur
                                 value={value}
                               >
-                                <option key="USD">USD</option>
-                                <option key="SATS">SATS</option>
-                                {/* <option key="EUR">EUR</option> */}
+                                {CURRENCY_OPTIONS.map((currencyOption) => {
+                                  return (
+                                    <option key={currencyOption}>
+                                      {currencyOption}
+                                    </option>
+                                  );
+                                })}
                               </select>
                             </div>
                           );
@@ -437,16 +515,14 @@ export default function NewForm({
                 let errorMessage: string = error?.message ? error.message : "";
                 return (
                   <LocationDropdown
-                    autoFocus
-                    variant="bordered"
-                    aria-label="Select Location"
-                    placeholder="Location"
+                    selectedLocation={value}
+                    onSelectionChange={(key: string) => {
+                      onChange(key);
+                    }}
                     isInvalid={isErrored}
                     errorMessage={errorMessage}
                     // controller props
-                    onChange={onChange} // send value to hook form
                     onBlur={onBlur} // notify when input is touched/blur
-                    value={value}
                   />
                 );
               }}
@@ -467,7 +543,6 @@ export default function NewForm({
                 return (
                   <Select
                     className="text-light-text dark:text-dark-text"
-                    autoFocus
                     variant="bordered"
                     aria-label="Shipping Option"
                     label="Shipping Option"
@@ -477,7 +552,7 @@ export default function NewForm({
                     // controller props
                     onChange={onChange} // send value to hook form
                     onBlur={onBlur} // notify when input is touched/blur
-                    selectedKeys={[value as string]}
+                    selectedKeys={[value]}
                   >
                     <SelectSection className="text-light-text dark:text-dark-text">
                       {SHIPPING_OPTIONS.map((option) => (
@@ -511,7 +586,6 @@ export default function NewForm({
                   return (
                     <Input
                       type="number"
-                      autoFocus
                       variant="flat"
                       placeholder="Shipping Cost"
                       isInvalid={isErrored}
@@ -519,7 +593,7 @@ export default function NewForm({
                       // controller props
                       onChange={onChange} // send value to hook form
                       onBlur={onBlur} // notify when input is touched/blur
-                      value={value?.toString()}
+                      value={value.toString()}
                       endContent={
                         <div className="flex items-center">
                           <select
@@ -530,9 +604,13 @@ export default function NewForm({
                             value={watchCurrency}
                             disabled={true}
                           >
-                            <option key="USD">USD</option>
-                            <option key="SATS">SATS</option>
-                            {/* <option key="EUR">EUR</option> */}
+                            {CURRENCY_OPTIONS.map((currencyOption) => {
+                              return (
+                                <option key={currencyOption}>
+                                  {currencyOption}
+                                </option>
+                              );
+                            })}
                           </select>
                         </div>
                       }
@@ -542,7 +620,7 @@ export default function NewForm({
               />
             )}
             <Controller
-              name="Category"
+              name="Categories"
               control={control}
               rules={{
                 required: "A category is required.",
@@ -554,62 +632,50 @@ export default function NewForm({
                 let isErrored = error !== undefined;
                 let errorMessage: string = error?.message ? error.message : "";
                 return (
-                  <Select
-                    variant="bordered"
-                    isMultiline={true}
-                    autoFocus
-                    aria-label="Category"
-                    label="Categories"
-                    labelPlacement="outside"
-                    selectionMode="multiple"
+                  <CategoryDropdown
+                    selectedCategories={new Set<string>(value)}
+                    // controller props
                     isInvalid={isErrored}
                     errorMessage={errorMessage}
-                    // controller props
-                    onChange={onChange} // send value to hook form
-                    onBlur={onBlur} // notify when input is touched/blur
-                    value={value}
-                    defaultSelectedKeys={value ? value.split(",") : ""}
-                    classNames={{
-                      base: "mt-4",
-                      trigger: "min-h-unit-12 py-2",
+                    onBlur={onBlur}
+                    onChange={(event: { target: { value: string } }) => {
+                      if (event.target.value === "") {
+                        onChange(new Set<string>([]));
+                      } else {
+                        onChange(
+                          new Set<string>(event.target.value.split(",")),
+                        );
+                      }
                     }}
-                    renderValue={(items) => {
-                      return (
-                        <div className="flex flex-wrap gap-2">
-                          {items.map((item) => (
-                            <Chip key={item.key}>
-                              {item.key
-                                ? (item.key as string)
-                                : "unknown category"}
-                            </Chip>
-                          ))}
-                        </div>
-                      );
-                    }}
-                  >
-                    <SelectSection className="text-light-text dark:text-dark-text">
-                      {CATEGORIES.map((category) => (
-                        <SelectItem key={category} value={category}>
-                          {category}
-                        </SelectItem>
-                      ))}
-                    </SelectSection>
-                  </Select>
+                  ></CategoryDropdown>
                 );
               }}
             />
-            {signIn === "nsec" && (
-              <Input
-                autoFocus
-                className="text-light-text dark:text-dark-text"
-                ref={passphraseInputRef}
-                variant="flat"
-                label="Passphrase"
-                labelPlacement="inside"
-                onChange={(e) => setPassphrase(e.target.value)}
-                value={passphrase}
-              />
-            )}
+
+            <Controller
+              name="Content Warning"
+              control={control}
+              // do not add rule; form will prevent submit because of boolean value if false
+              render={({
+                field: { onChange, onBlur, value },
+                fieldState: { error },
+              }) => {
+                return (
+                  <Switch
+                    onValueChange={onChange}
+                    onBlur={onBlur}
+                    isSelected={value === true ? true : false}
+                  >
+                    <div className="text-small text-light-text dark:text-dark-text">
+                      {value === true
+                        ? "Show Content Warning"
+                        : "Don't Show Content Warning"}
+                    </div>
+                  </Switch>
+                );
+              }}
+            />
+            <Divider></Divider>
             <div className="mx-4 my-2 flex items-center justify-center text-center">
               <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
               <p className="ml-2 text-xs text-light-text dark:text-dark-text">
@@ -623,7 +689,7 @@ export default function NewForm({
                     Cashu
                   </a>
                 </Link>{" "}
-                token that you can redeem for Bitcoin.
+                token that is redeemable to Bitcoin.
               </p>
             </div>
           </ModalBody>

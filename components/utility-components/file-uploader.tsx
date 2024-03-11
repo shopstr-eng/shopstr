@@ -26,7 +26,7 @@ export const FileUploaderButton = ({
   className: any;
   children: React.ReactNode;
   passphrase: string;
-  imgCallbackOnUpload: (imgUrl: string) => void;
+  imgCallbackOnUpload: (imgUrls: string[]) => void;
   isMultiple?: boolean;
 }) => {
   const [loading, setLoading] = useState(false);
@@ -56,8 +56,8 @@ export const FileUploaderButton = ({
         );
       }
       const imageUrls = response?.map((i) => i.url);
-      if (imageUrls && imageUrls[0]) {
-        imgCallbackOnUpload(imageUrls[0]);
+      if (imageUrls && imageUrls.length > 0) {
+        imgCallbackOnUpload(imageUrls);
       } else {
         alert("Image upload failed to yield img URL");
       }
@@ -98,6 +98,7 @@ export const FileUploaderButton = ({
       <Input
         type="file"
         accept="image/*"
+        multiple={isMultiple}
         ref={hiddenFileInput}
         onInput={handleChange}
         className="hidden"
