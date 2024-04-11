@@ -1,9 +1,6 @@
 import React, { useState } from "react";
 import { useForm, Controller } from "react-hook-form";
-import {
-  ArrowDownTrayIcon,
-  XCircleIcon,
-} from "@heroicons/react/24/outline";
+import { ArrowDownTrayIcon, XCircleIcon } from "@heroicons/react/24/outline";
 import {
   Modal,
   ModalContent,
@@ -52,7 +49,7 @@ const ReceiveButton = () => {
       const wallet = new CashuWallet(new CashuMint(tokenMint));
       const spentProofs = await wallet?.checkProofsSpent(tokenProofs);
       if (!spentProofs || spentProofs.length !== 0) {
-        const tokenArray = [...tokens, tokenProofs]
+        const tokenArray = [...tokens, transformProofsStructure(tokenProofs)];
         localStorage.setItem("token", JSON.stringify(tokenArray));
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
@@ -65,7 +62,24 @@ const ReceiveButton = () => {
       console.log(error);
       setIsInvalidToken(true);
     }
-  }
+  };
+
+  const transformProofsStructure = (proofs: any) => {
+    const transformedTokenData = { ...proofs };
+    // Assuming tokenData.proofs is an array of objects
+    if (
+      transformedTokenData.proofs &&
+      Array.isArray(transformedTokenData.proofs)
+    ) {
+      transformedTokenData.proofs = transformedTokenData.proofs.reduce(
+        (acc, current) => {
+          return { ...acc, ...current };
+        },
+        {},
+      );
+    }
+    return transformedTokenData;
+  };
 
   return (
     <>
@@ -74,7 +88,7 @@ const ReceiveButton = () => {
           className={SHOPSTRBUTTONCLASSNAMES + " m-2"}
           onClick={() => setShowReceiveModal(!showReceiveModal)}
           startContent={
-            <ArrowDownTrayIcon className="h-6 w-6 hover:text-yellow-500" />
+            <ArrowDownTrayIcon className="h-6 w-6 hover:text-yellow-500 dark:hover:text-purple-500" />
           }
         >
           Receive
@@ -106,7 +120,10 @@ const ReceiveButton = () => {
                   rules={{
                     required: "A Cashu token string is required.",
                     validate: (value) =>
-                      /^(web\+cashu:\/\/|cashu:\/\/|cashu:|cashuA)/.test(value) || "The token must start with 'web+cashu://', 'cashu://', 'cashu:', or 'cashuA'.",
+                      /^(web\+cashu:\/\/|cashu:\/\/|cashu:|cashuA)/.test(
+                        value,
+                      ) ||
+                      "The token must start with 'web+cashu://', 'cashu://', 'cashu:', or 'cashuA'.",
                   }}
                   render={({
                     field: { onChange, onBlur, value },
@@ -135,7 +152,7 @@ const ReceiveButton = () => {
                   }}
                 />
               </ModalBody>
-  
+
               <ModalFooter>
                 <Button
                   color="danger"
@@ -144,7 +161,7 @@ const ReceiveButton = () => {
                 >
                   Cancel
                 </Button>
-  
+
                 <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
                   Receive
                 </Button>
@@ -182,9 +199,7 @@ const ReceiveButton = () => {
             </ModalContent>
           </Modal>
         </>
-      ):(
-        null
-      )}
+      ) : null}
       {isSpent ? (
         <>
           <Modal
@@ -214,11 +229,9 @@ const ReceiveButton = () => {
             </ModalContent>
           </Modal>
         </>
-      ):(
-        null
-      )}
+      ) : null}
     </>
-  )
-}
+  );
+};
 
 export default ReceiveButton;

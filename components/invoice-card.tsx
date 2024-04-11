@@ -14,6 +14,7 @@ import {
 } from "@nextui-org/react";
 import axios from "axios";
 import {
+  BanknotesIcon,
   BoltIcon,
   CheckIcon,
   ClipboardIcon,
@@ -81,7 +82,7 @@ export default function InvoiceCard({
     setName(profile && profile.content.name ? profile.content.name : userNPub);
   }, [profileContext]);
 
-  const handlePayment = async (newPrice: number, currency: string) => {
+  const handleLightningPayment = async (newPrice: number, currency: string) => {
     const wallet = new CashuWallet(new CashuMint(mints[0]));
     if (currency === "USD") {
       try {
@@ -212,6 +213,23 @@ export default function InvoiceCard({
 
   const formattedTotalCost = formatWithCommas(totalCost, currency);
 
+  const handleCashuPayment = async (numSats: number) => {
+    const wallet = new CashuWallet(new CashuMint(mints[0]));
+    const tokenToSend = await wallet.send(numSats, tokens);
+    const encodedSendToken = getEncodedToken({
+      token: [
+        {
+          mint: mints[0],
+          proofs: tokenToSend.send,
+        },
+      ],
+    });
+    sendTokens(encodedSendToken);
+    const changeProofs = tokenToSend.returnChange;
+    const proofArray = [...tokens, transformProofsStructure(changeProofs)];
+    localStorage.setItem("tokens", JSON.stringify(proofArray));
+  };
+
   return (
     <>
       {!showInvoiceCard && (
@@ -238,7 +256,7 @@ export default function InvoiceCard({
                 return;
               }
               if (randomNsec !== "") {
-                handlePayment(totalCost, currency);
+                handleLightningPayment(totalCost, currency);
               }
               setShowInvoiceCard(true);
             }}
@@ -246,7 +264,27 @@ export default function InvoiceCard({
               <BoltIcon className="h-6 w-6 hover:text-yellow-500" />
             }
           >
-            Purchase: {formattedTotalCost}
+            Purchase with Lightning: {formattedTotalCost}
+          </Button>
+          <Button
+            type="submit"
+            className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
+            onClick={() => {
+              let userLoggedIn = isUserLoggedIn();
+              if (!userLoggedIn) {
+                onOpen();
+                return;
+              }
+              if (randomNsec !== "") {
+                handleCashuPayment(totalCost, currency);
+              }
+              setShowInvoiceCard(true);
+            }}
+            startContent={
+              <BanknotesIcon className="h-6 w-6 hover:text-yellow-500" />
+            }
+          >
+            Purchase with Cashu: {formattedTotalCost}
           </Button>
         </>
       )}

@@ -302,7 +302,7 @@ const PreferencesPage = () => {
             <div className="mx-4 my-4 flex items-center justify-center text-center">
               <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
               <p className="ml-2 text-sm text-light-text dark:text-dark-text">
-                This mint is used to create{" "}
+                This mint is used to handle{" "}
                 <Link href="https://cashu.space" passHref legacyBehavior>
                   <a
                     target="_blank"
@@ -312,7 +312,8 @@ const PreferencesPage = () => {
                     Cashu
                   </a>
                 </Link>{" "}
-                tokens within your wallet and to send to the seller upon purchase.
+                tokens within your wallet and to send to the seller upon
+                purchase.
               </p>
             </div>
           )}

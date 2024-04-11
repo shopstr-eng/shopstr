@@ -1,28 +1,27 @@
 import React, { useState, useEffect } from "react";
-import {
-  ArrowUpTrayIcon,
-  BoltIcon,
-} from "@heroicons/react/24/outline";
-import {
-  Button,
-} from "@nextui-org/react";
+import { Button } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
 import { getLocalStorageData } from "../../components/utility/nostr-helper-functions";
 import MintButton from "../../components/wallet/mint-button";
-import ReceiveButton from "../../components/wallet/receive-button"
+import ReceiveButton from "../../components/wallet/receive-button";
+import SendButton from "../../components/wallet/send-button";
+import PayButton from "../../components/wallet/pay-button";
 
 const Wallet = () => {
   const [totalBalance, setTotalBalance] = useState(0);
-  
+
   const { tokens } = getLocalStorageData();
 
   useEffect(() => {
-    const tokensTotal = tokens && tokens.length > 0
-      ? tokens.reduce((acc, current) => {
-          const proofsTotal = current.proofs ? current.proofs.reduce((acc, proof) => acc + proof.amount, 0) : 0;
-          return acc + proofsTotal;
-        }, 0)
-      : 0;
+    const tokensTotal =
+      tokens && tokens.length > 0
+        ? tokens.reduce((acc, current) => {
+            const proofsTotal = current.proofs
+              ? current.proofs.reduce((acc, proof) => acc + proof.amount, 0)
+              : 0;
+            return acc + proofsTotal;
+          }, 0)
+        : 0;
     setTotalBalance(tokensTotal);
   }, [tokens]);
 
@@ -35,23 +34,11 @@ const Wallet = () => {
       </center>
       <center>
         <ReceiveButton />
-        <Button
-          className={SHOPSTRBUTTONCLASSNAMES + " m-2"}
-          startContent={
-            <ArrowUpTrayIcon className="h-6 w-6 hover:text-yellow-500" />
-          }
-        >
-          Send
-        </Button>
+        <SendButton />
       </center>
       <center>
         <MintButton />
-        <Button
-          className={SHOPSTRBUTTONCLASSNAMES + " m-2"}
-          startContent={<BoltIcon className="h-6 w-6 hover:text-yellow-500" />}
-        >
-          Redeem
-        </Button>
+        <PayButton />
       </center>
     </div>
   );

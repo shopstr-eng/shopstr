@@ -93,9 +93,9 @@ const MintButton = () => {
     while (true) {
       try {
         const { proofs } = await wallet.requestTokens(numSats, hash);
-        const proofArray = [...tokens, proofs]
+        const proofArray = [...tokens, transformProofsStructure(proofs)];
         localStorage.setItem("tokens", JSON.stringify(proofArray));
-        
+
         // Encoded proofs can be spent at the mint
         encoded = getEncodedToken({
           token: [
@@ -128,6 +128,23 @@ const MintButton = () => {
     }
   }
 
+  const transformProofsStructure = (proofs: any) => {
+    const transformedTokenData = { ...proofs };
+    // Assuming tokenData.proofs is an array of objects
+    if (
+      transformedTokenData.proofs &&
+      Array.isArray(transformedTokenData.proofs)
+    ) {
+      transformedTokenData.proofs = transformedTokenData.proofs.reduce(
+        (acc, current) => {
+          return { ...acc, ...current };
+        },
+        {},
+      );
+    }
+    return transformedTokenData;
+  };
+
   const handleCopyInvoice = () => {
     navigator.clipboard.writeText(invoice);
     setCopiedToClipboard(true);
@@ -136,14 +153,14 @@ const MintButton = () => {
       setCopiedToClipboard(false);
     }, 2000);
   };
-  
+
   return (
     <div>
       <Button
         className={SHOPSTRBUTTONCLASSNAMES + " m-2"}
         onClick={() => setShowMintModal(!showMintModal)}
         startContent={
-          <BanknotesIcon className="h-6 w-6 hover:text-yellow-500" />
+          <BanknotesIcon className="h-6 w-6 hover:text-yellow-500 dark:hover:text-purple-500" />
         }
       >
         Mint
@@ -289,7 +306,7 @@ const MintButton = () => {
         </ModalContent>
       </Modal>
     </div>
-  )
-}
+  );
+};
 
 export default MintButton;
