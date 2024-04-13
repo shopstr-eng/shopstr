@@ -13,14 +13,9 @@ const Wallet = () => {
   const { tokens } = getLocalStorageData();
 
   useEffect(() => {
-    const tokensTotal =
-      tokens && tokens.length > 0
-        ? tokens.reduce((acc, current) => {
-            const proofsTotal = current.proofs
-              ? current.proofs.reduce((acc, proof) => acc + proof.amount, 0)
-              : 0;
-            return acc + proofsTotal;
-          }, 0)
+    let tokensTotal =
+      tokens && tokens.length >= 1
+        ? tokens.reduce((acc, token) => acc + token.amount, 0)
         : 0;
     setTotalBalance(tokensTotal);
   }, [tokens]);
@@ -32,14 +27,14 @@ const Wallet = () => {
           {totalBalance} sats
         </p>
       </center>
-      <center>
+      <div className="flex justify-center">
         <ReceiveButton />
         <SendButton />
-      </center>
-      <center>
+      </div>
+      <div className="flex justify-center">
         <MintButton />
         <PayButton />
-      </center>
+      </div>
     </div>
   );
 };

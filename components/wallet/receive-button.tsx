@@ -49,7 +49,7 @@ const ReceiveButton = () => {
       const wallet = new CashuWallet(new CashuMint(tokenMint));
       const spentProofs = await wallet?.checkProofsSpent(tokenProofs);
       if (!spentProofs || spentProofs.length !== 0) {
-        const tokenArray = [...tokens, transformProofsStructure(tokenProofs)];
+        const tokenArray = [...tokens, ...tokenProofs];
         localStorage.setItem("token", JSON.stringify(tokenArray));
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
@@ -62,23 +62,6 @@ const ReceiveButton = () => {
       console.log(error);
       setIsInvalidToken(true);
     }
-  };
-
-  const transformProofsStructure = (proofs: any) => {
-    const transformedTokenData = { ...proofs };
-    // Assuming tokenData.proofs is an array of objects
-    if (
-      transformedTokenData.proofs &&
-      Array.isArray(transformedTokenData.proofs)
-    ) {
-      transformedTokenData.proofs = transformedTokenData.proofs.reduce(
-        (acc, current) => {
-          return { ...acc, ...current };
-        },
-        {},
-      );
-    }
-    return transformedTokenData;
   };
 
   return (

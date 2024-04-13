@@ -1,7 +1,16 @@
 import { useState, useEffect, useContext, useMemo } from "react";
+import { useForm, Controller } from "react-hook-form";
 import Link from "next/link";
 import { BoltIcon } from "@heroicons/react/24/outline";
-import { Button, Spinner, Tooltip } from "@nextui-org/react";
+import {
+  Button,
+  Textarea,
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+} from "@nextui-org/react";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { LightningAddress } from "@getalby/lightning-tools";
@@ -32,6 +41,11 @@ const PayButton = () => {
     const newWallet = new CashuWallet(new CashuMint(mints[0]));
     setWallet(newWallet);
   }, [mints]);
+
+  const handleTogglePayModal = () => {
+    payReset();
+    setShowPayModal(!showPayModal);
+  };
 
   const onPaySubmit = async (data: { [x: string]: any }) => {
     let invoiceString = data["invoice"];
@@ -144,22 +158,28 @@ const PayButton = () => {
                         </div>
                       )}
                       {isPaid && (
-                      <>
-                        {paymentFailed ? (
-                          <div className="mt-2 items-center justify-center">
-                          Invoice payment failed! No routes could be found. Please try again with a new Invoice
-                          </div>
-                        ) : (
-                          <div className="mt-2 items-center justify-center">
-                            Invoice paid successfully!
-                          </div>
-                          {changeAmount >= 1 && changeToken && (
+                        <>
+                          {paymentFailed ? (
                             <div className="mt-2 items-center justify-center">
-                              Copy the {changeAmout} Cashu token below; it is your change: {changeToken}
+                              Invoice payment failed! No routes could be found.
+                              Please try again with a new Invoice
                             </div>
+                          ) : (
+                            <>
+                              <div className="mt-2 items-center justify-center">
+                                Invoice paid successfully!
+                              </div>
+                              {changeAmount >= 1 &&
+                                changeToken && ( // Ensure this is properly evaluated as part of the conditional
+                                  <div className="mt-2 items-center justify-center">
+                                    {/* Fixed typo in the next line: changeAmout to changeAmount */}
+                                    Copy the {changeAmount} Cashu token below;
+                                    it is your change: {changeToken}
+                                  </div>
+                                )}
+                            </>
                           )}
-                        )}
-                      </>
+                        </>
                       )}
                     </>
                   );

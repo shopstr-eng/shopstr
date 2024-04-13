@@ -226,7 +226,7 @@ export default function InvoiceCard({
     });
     sendTokens(encodedSendToken);
     const changeProofs = tokenToSend.returnChange;
-    const proofArray = [...tokens, transformProofsStructure(changeProofs)];
+    const proofArray = [...tokens, ...changeProofs];
     localStorage.setItem("tokens", JSON.stringify(proofArray));
   };
 

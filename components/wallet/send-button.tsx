@@ -8,6 +8,10 @@ import {
   XCircleIcon,
 } from "@heroicons/react/24/outline";
 import {
+  Card,
+  CardBody,
+  CardHeader,
+  Divider,
   Modal,
   ModalContent,
   ModalHeader,
@@ -15,6 +19,7 @@ import {
   ModalFooter,
   Button,
   Textarea,
+  Input,
 } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
@@ -64,7 +69,7 @@ const SendButton = () => {
     });
     setNewToken(encodedSendToken);
     const changeProofs = tokenToSend.returnChange;
-    const proofArray = [...tokens, transformProofsStructure(changeProofs)];
+    const proofArray = [...tokens, ...changeProofs];
     localStorage.setItem("tokens", JSON.stringify(proofArray));
   };
   // store proofs as array of proof objects
@@ -77,23 +82,6 @@ const SendButton = () => {
     setTimeout(() => {
       setCopiedToClipboard(false);
     }, 2000);
-  };
-
-  const transformProofsStructure = (proofs: any) => {
-    const transformedTokenData = { ...proofs };
-    // Assuming tokenData.proofs is an array of objects
-    if (
-      transformedTokenData.proofs &&
-      Array.isArray(transformedTokenData.proofs)
-    ) {
-      transformedTokenData.proofs = transformedTokenData.proofs.reduce(
-        (acc, current) => {
-          return { ...acc, ...current };
-        },
-        {},
-      );
-    }
-    return transformedTokenData;
   };
 
   return (
@@ -169,19 +157,20 @@ const SendButton = () => {
               {showTokenCard && (
                 <Card className="mt-3 max-w-[700px]">
                   <CardHeader className="flex justify-center gap-3">
-                    <span className="text-xl font-bold">Cashu Token</span>
+                    <div className="flex items-center justify-center">
+                      <CheckCircleIcon className="h-6 w-6 text-green-500" />
+                      <div className="ml-2">
+                        New token string is ready to be copied and sent!
+                      </div>
+                    </div>
                   </CardHeader>
                   <Divider />
                   <CardBody className="flex flex-col items-center">
                     {newToken ? (
                       <div className="flex flex-col items-center justify-center">
-                        <div className="flex items-center justify-center">
-                          <CheckCircleIcon className="h-6 w-6 text-green-500" />
-                          <div className="ml-2">
-                            New token string is ready to be copied and sent!
-                          </div>
-                        </div>
-                        <p className="text-center">{newToken}</p>
+                        <p className="whitespace-break-spaces break-all">
+                          {newToken}
+                        </p>
                         <ClipboardIcon
                           onClick={handleCopyTokenString}
                           className={`ml-2 h-4 w-4 cursor-pointer ${

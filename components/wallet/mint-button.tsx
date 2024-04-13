@@ -93,24 +93,10 @@ const MintButton = () => {
     while (true) {
       try {
         const { proofs } = await wallet.requestTokens(numSats, hash);
-        const proofArray = [...tokens, transformProofsStructure(proofs)];
-        localStorage.setItem("tokens", JSON.stringify(proofArray));
 
-        // Encoded proofs can be spent at the mint
-        encoded = getEncodedToken({
-          token: [
-            {
-              mint: mints[0],
-              proofs,
-            },
-          ],
-        });
-
-        if (encoded) {
-          localStorage.setItem(
-            "tokens",
-            JSON.stringify([tokens[0], { mint: mints[0], proofs }]),
-          );
+        if (proofs) {
+          const proofArray = [...tokens, ...proofs];
+          localStorage.setItem("tokens", JSON.stringify(proofArray));
           captureInvoicePaidmetric(metricsInvoiceId, productData.id);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
@@ -127,23 +113,6 @@ const MintButton = () => {
       }
     }
   }
-
-  const transformProofsStructure = (proofs: any) => {
-    const transformedTokenData = { ...proofs };
-    // Assuming tokenData.proofs is an array of objects
-    if (
-      transformedTokenData.proofs &&
-      Array.isArray(transformedTokenData.proofs)
-    ) {
-      transformedTokenData.proofs = transformedTokenData.proofs.reduce(
-        (acc, current) => {
-          return { ...acc, ...current };
-        },
-        {},
-      );
-    }
-    return transformedTokenData;
-  };
 
   const handleCopyInvoice = () => {
     navigator.clipboard.writeText(invoice);

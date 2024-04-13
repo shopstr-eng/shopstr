@@ -297,6 +297,7 @@ const LOCALSTORAGECONSTANTS = {
   encryptedPrivateKey: "encryptedPrivateKey",
   relays: "relays",
   mints: "mints",
+  tokens: "tokens",
 };
 
 export const setLocalStorageDataOnSignIn = ({
@@ -358,6 +359,7 @@ export interface LocalStorageInterface {
   userPubkey: string;
   relays: string[];
   mints: string[];
+  tokens: string[];
   encryptedPrivateKey?: string;
 }
 
@@ -425,9 +427,9 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       localStorage.setItem(LOCALSTORAGECONSTANTS.mints, JSON.stringify(mints));
     }
 
-    tokens = localStorage.getItem("tokens")
-      ? JSON.parse(localStorage.getItem("tokens"))
-      : localStorage.setItem("tokens", JSON.stringify([]));
+    tokens = localStorage.getItem(LOCALSTORAGECONSTANTS.tokens)
+      ? JSON.parse(localStorage.getItem("tokens") as string)
+      : localStorage.setItem(LOCALSTORAGECONSTANTS.tokens, JSON.stringify([]));
   }
   return {
     signInMethod: signInMethod as string,
