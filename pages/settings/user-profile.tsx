@@ -121,7 +121,7 @@ const UserProfilePage = () => {
 
   return (
     <>
-      <div className="flex min-h-screen flex-col bg-light-bg pb-80 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px] md:pb-20">
+      <div className="flex min-h-screen flex-col bg-light-bg pb-40 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px] md:pb-20">
         <div className="h-full w-full px-4 lg:w-1/2">
           <SettingsBreadCrumbs />
           {isFetchingProfile ? (
