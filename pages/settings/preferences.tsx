@@ -79,7 +79,11 @@ const PreferencesPage = () => {
       const response = await fetch(newMint + "/keys");
       // Check if the response status is in the range of 200-299
       if (response.ok) {
-        setMints([newMint, ...oldMints]);
+        if (!mints.includes(newMint)) {
+          setMints([newMint, ...oldMints]);
+        } else {
+          setMints([newMint, ...mints.filter(mint => mint !== newMint)]);
+        }
         handleToggleMintModal();
       } else {
         alert(

@@ -69,7 +69,7 @@ const SendButton = () => {
     });
     setNewToken(encodedSendToken);
     const changeProofs = tokenToSend.returnChange;
-    const proofArray = [...tokens, ...changeProofs];
+    const proofArray = [...changeProofs];
     localStorage.setItem("tokens", JSON.stringify(proofArray));
   };
   // store proofs as array of proof objects
@@ -173,12 +173,12 @@ const SendButton = () => {
                         </p>
                         <ClipboardIcon
                           onClick={handleCopyTokenString}
-                          className={`ml-2 h-4 w-4 cursor-pointer ${
+                          className={`ml-2 h-6 w-6 cursor-pointer ${
                             copiedToClipboard ? "hidden" : ""
                           }`}
                         />
                         <CheckIcon
-                          className={`ml-2 h-4 w-4 cursor-pointer ${
+                          className={`ml-2 h-6 w-6 cursor-pointer ${
                             copiedToClipboard ? "" : "hidden"
                           }`}
                         />
@@ -195,19 +195,23 @@ const SendButton = () => {
               )}
             </ModalBody>
 
-            <ModalFooter>
-              <Button
-                color="danger"
-                variant="light"
-                onClick={handleToggleSendModal}
-              >
-                Cancel
-              </Button>
+            {!newToken && (
+              <>
+                <ModalFooter>
+                  <Button
+                    color="danger"
+                    variant="light"
+                    onClick={handleToggleSendModal}
+                  >
+                    Cancel
+                  </Button>
 
-              <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
-                Send
-              </Button>
-            </ModalFooter>
+                  <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                    Send
+                  </Button>
+                </ModalFooter>
+              </>
+            )}
           </form>
         </ModalContent>
       </Modal>

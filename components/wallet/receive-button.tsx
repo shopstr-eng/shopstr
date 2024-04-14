@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useForm, Controller } from "react-hook-form";
-import { ArrowDownTrayIcon, XCircleIcon } from "@heroicons/react/24/outline";
+import { ArrowDownTrayIcon, CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/outline";
 import {
   Modal,
   ModalContent,
@@ -16,6 +16,7 @@ import { CashuMint, CashuWallet, getDecodedToken } from "@cashu/cashu-ts";
 
 const ReceiveButton = () => {
   const [showReceiveModal, setShowReceiveModal] = useState(false);
+  const [isClaimed, setIsClaimed] = useState(false);
   const [isSpent, setIsSpent] = useState(false);
   const [isInvalidToken, setIsInvalidToken] = useState(false);
 
@@ -39,22 +40,25 @@ const ReceiveButton = () => {
   };
 
   const handleReceive = async (tokenString: string) => {
+    setIsClaimed(false);
     setIsSpent(false);
     setIsInvalidToken(false);
     try {
       const token = getDecodedToken(tokenString);
       const tokenEntry = token.token;
-      const tokenMint = tokenEntry.mint;
-      const tokenProofs = tokenEntry.proofs;
+      const tokenMint = tokenEntry[0].mint;
+      const tokenProofs = tokenEntry[0].proofs;
       const wallet = new CashuWallet(new CashuMint(tokenMint));
       const spentProofs = await wallet?.checkProofsSpent(tokenProofs);
       if (!spentProofs || spentProofs.length !== 0) {
         const tokenArray = [...tokens, ...tokenProofs];
-        localStorage.setItem("token", JSON.stringify(tokenArray));
+        localStorage.setItem("tokens", JSON.stringify(tokenArray));
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
           localStorage.setItem("mints", JSON.stringify(updatedMints));
         }
+        setIsClaimed(true);
+        handleToggleReceiveModal();
       } else {
         setIsSpent(true);
       }
@@ -153,6 +157,36 @@ const ReceiveButton = () => {
           </ModalContent>
         </Modal>
       </div>
+      {isClaimed ? (
+        <>
+          <Modal
+            backdrop="blur"
+            isOpen={isClaimed}
+            onClose={() => setIsClaimed(false)}
+            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
+            classNames={{
+              body: "py-6 ",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
+            }}
+            isDismissable={true}
+            scrollBehavior={"normal"}
+            placement={"center"}
+            size="2xl"
+          >
+            <ModalContent>
+              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <div className="flex items-center justify-center">
+                  <CheckCircleIcon className="h-6 w-6 text-green-500" />
+                  <div className="ml-2">Token successfully claimed!</div>
+                </div>
+              </ModalBody>
+            </ModalContent>
+          </Modal>
+        </>
+      ) : null}
       {isInvalidToken ? (
         <>
           <Modal
