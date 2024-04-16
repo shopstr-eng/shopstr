@@ -21,7 +21,7 @@ const PayButton = () => {
   const [showPayModal, setShowPayModal] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
   const [paymentFailed, setPaymentFailed] = useState(false);
-  const [mint, setMint] = useState<CashuMint>("");
+  const [mint, setMint] = useState<CashuMint>();
   const [wallet, setWallet] = useState<CashuWallet>();
   const [proofs, setProofs] = useState([]);
 
