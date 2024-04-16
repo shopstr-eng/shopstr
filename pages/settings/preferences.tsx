@@ -82,7 +82,7 @@ const PreferencesPage = () => {
         if (!mints.includes(newMint)) {
           setMints([newMint, ...oldMints]);
         } else {
-          setMints([newMint, ...mints.filter(mint => mint !== newMint)]);
+          setMints([newMint, ...mints.filter((mint) => mint !== newMint)]);
         }
         handleToggleMintModal();
       } else {

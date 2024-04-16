@@ -191,6 +191,7 @@ export default function RedeemButton({ token }: { token: string }) {
         changeAmount={redemptionChangeAmount}
         changeProofs={redemptionChangeProofs}
         lnurl={lnurl}
+        changeMint={tokenMint}
       />
     </div>
   );

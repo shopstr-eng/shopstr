@@ -43,7 +43,7 @@ export default function InvoiceCard({
   const router = useRouter();
   const { pubkey, currency, totalCost } = productData;
   const pubkeyOfProductBeingSold = pubkey;
-  const { userNPub, userPubkey, relays, mints } = getLocalStorageData();
+  const { userNPub, userPubkey, relays, mints, tokens } = getLocalStorageData();
 
   const [showInvoiceCard, setShowInvoiceCard] = useState(false);
 
@@ -214,8 +214,11 @@ export default function InvoiceCard({
   const formattedTotalCost = formatWithCommas(totalCost, currency);
 
   const handleCashuPayment = async (numSats: number) => {
-    const wallet = new CashuWallet(new CashuMint(mints[0]));
-    const tokenToSend = await wallet.send(numSats, tokens);
+    const mint = new CashuMint(mints[0]);
+    const wallet = new CashuWallet(mint);
+    const mintKeySetIds = mint.getKeySets();
+    const filteredProofs = tokens.filter((p) => mintKeySetIds.includes(p.id));
+    const tokenToSend = await wallet.send(numSats, filteredProofs);
     const encodedSendToken = getEncodedToken({
       token: [
         {
@@ -225,8 +228,14 @@ export default function InvoiceCard({
       ],
     });
     sendTokens(encodedSendToken);
-    const changeProofs = tokenToSend.returnChange;
-    const proofArray = [...tokens, ...changeProofs];
+    const changeProofs = tokenToSend?.returnChange;
+    const remainingProofs = tokens.filter((p) => !mintKeySetIds.includes(p.id));
+    let proofArray;
+    if (changeProofs.length >= 1 && changeProofs) {
+      proofArray = [...remainingProofs, ...changeProofs];
+    } else {
+      proofArray = [...remainingProofs];
+    }
     localStorage.setItem("tokens", JSON.stringify(proofArray));
   };
 

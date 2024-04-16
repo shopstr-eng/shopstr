@@ -14,17 +14,16 @@ import {
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { LightningAddress } from "@getalby/lightning-tools";
-import { CashuMint, CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
+import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
 import { formatWithCommas } from "../utility-components/display-monetary-info";
 
 const PayButton = () => {
   const [showPayModal, setShowPayModal] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
   const [paymentFailed, setPaymentFailed] = useState(false);
+  const [mint, setMint] = useState<CashuMint>("");
   const [wallet, setWallet] = useState<CashuWallet>();
   const [proofs, setProofs] = useState([]);
-  const [changeAmount, setChangeAmount] = useState(0);
-  const [changeToken, setChangeToken] = useState("");
 
   const [fee, setFee] = useState<number | null>(null);
 
@@ -38,7 +37,9 @@ const PayButton = () => {
   } = useForm();
 
   useEffect(() => {
-    const newWallet = new CashuWallet(new CashuMint(mints[0]));
+    const currentMint = new CashuMint(mints[0]);
+    const newWallet = new CashuWallet(currentMint);
+    setMint(currentMint);
     setWallet(newWallet);
   }, [mints]);
 
@@ -56,28 +57,29 @@ const PayButton = () => {
     setIsPaid(false);
     setPaymentFailed(false);
     try {
-      const response = await wallet?.payLnInvoice(invoiceString, tokens);
+      const mintKeySetIds = mint.getKeySets();
+      const filteredProofs = tokens.filter((p) => mintKeySetIds.includes(p.id));
+      const response = await wallet?.payLnInvoice(
+        invoiceString,
+        filteredProofs,
+      );
       const changeProofs = response?.change;
       const changeAmount =
         Array.isArray(changeProofs) && changeProofs.length > 0
           ? changeProofs.reduce((acc, current) => acc + current.amount, 0)
           : 0;
+      const remainingProofs = tokens.filter((p) => !mintKeySetIds.includes(p.id));
+      let proofArray;
       if (changeAmount >= 1 && changeProofs) {
-        setChangeAmount(formatWithCommas(changeAmount, "sat"));
-        let encodedChange = getEncodedToken({
-          token: [
-            {
-              mint: mints[0],
-              proofs: changeProofs,
-            },
-          ],
-        });
-        setChangeToken(encodedChange);
+        proofArray = [...remainingProofs, ...changeProofs];
+      } else {
+        proofArray = [...remainingProofs];
       }
+      localStorage.setItem("tokens", JSON.stringify(proofArray));
       setIsPaid(true);
     } catch (error) {
       console.log(error);
-      setIsPaid(false);
+      setIsPaid(true);
       setPaymentFailed(true);
     }
   };
@@ -161,22 +163,16 @@ const PayButton = () => {
                         <>
                           {paymentFailed ? (
                             <div className="mt-2 items-center justify-center">
-                              Invoice payment failed! No routes could be found.
-                              Please try again with a new Invoice
+                              Invoice payment failed! No routes could be found,
+                              or you don't have enough funds. Please try again
+                              with a new invoice, or change your mint in
+                              settings.
                             </div>
                           ) : (
                             <>
                               <div className="mt-2 items-center justify-center">
                                 Invoice paid successfully!
                               </div>
-                              {changeAmount >= 1 &&
-                                changeToken && ( // Ensure this is properly evaluated as part of the conditional
-                                  <div className="mt-2 items-center justify-center">
-                                    {/* Fixed typo in the next line: changeAmout to changeAmount */}
-                                    Copy the {changeAmount} Cashu token below;
-                                    it is your change: {changeToken}
-                                  </div>
-                                )}
                             </>
                           )}
                         </>

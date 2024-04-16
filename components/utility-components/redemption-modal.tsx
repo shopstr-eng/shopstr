@@ -22,6 +22,7 @@ export default function RedemptionModal({
   changeAmount,
   changeProofs,
   lnurl,
+  changeMint,
 }: {
   opened: boolean;
   isPaid: boolean;
@@ -29,6 +30,7 @@ export default function RedemptionModal({
   changeAmount: number;
   changeProofs: any[];
   lnurl: string;
+  changeMint: string;
 }) {
   const [showModal, setShowModal] = useState(false);
   const { userNPub, userPubkey, mints, relays } = getLocalStorageData();
@@ -69,7 +71,7 @@ export default function RedemptionModal({
       let encodedChange = getEncodedToken({
         token: [
           {
-            mint: mints[0],
+            mint: mint,
             proofs: changeProofs,
           },
         ],
