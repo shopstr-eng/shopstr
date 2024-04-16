@@ -23,7 +23,7 @@ import {
 } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
-import { CashuMint, CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
+import { CashuMint, CashuWallet, getEncodedToken, Proof } from "@cashu/cashu-ts";
 
 const SendButton = () => {
   const [showSendModal, setShowSendModal] = useState(false);
@@ -61,7 +61,7 @@ const SendButton = () => {
     const wallet = new CashuWallet(mint);
     const mintKeySetResponse = await mint.getKeySets();
     const mintKeySetIds = mintKeySetResponse.keysets;
-    const filteredProofs = tokens.filter((p) => mintKeySetIds.includes(p.id));
+    const filteredProofs = tokens.filter((p: Proof) => mintKeySetIds.includes(p.id));
     const tokenToSend = await wallet.send(numSats, filteredProofs);
     const encodedSendToken = getEncodedToken({
       token: [
@@ -73,7 +73,7 @@ const SendButton = () => {
     });
     setNewToken(encodedSendToken);
     const changeProofs = tokenToSend?.returnChange;
-    const remainingProofs = tokens.filter((p) => !mintKeySetIds.includes(p.id));
+    const remainingProofs = tokens.filter((p: Proof) => !mintKeySetIds.includes(p.id));
     let proofArray;
     if (changeProofs.length >= 1 && changeProofs) {
       proofArray = [...remainingProofs, ...changeProofs];

@@ -14,7 +14,7 @@ import {
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { LightningAddress } from "@getalby/lightning-tools";
-import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
+import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
 import { formatWithCommas } from "../utility-components/display-monetary-info";
 
 const PayButton = () => {
@@ -59,7 +59,7 @@ const PayButton = () => {
     try {
       const mintKeySetResponse = await mint.getKeySets();
       const mintKeySetIds = mintKeySetResponse.keysets;
-      const filteredProofs = tokens.filter((p) => mintKeySetIds.includes(p.id));
+      const filteredProofs = tokens.filter((p: Proof) => mintKeySetIds.includes(p.id));
       const response = await wallet?.payLnInvoice(
         invoiceString,
         filteredProofs,
@@ -70,7 +70,7 @@ const PayButton = () => {
           ? changeProofs.reduce((acc, current) => acc + current.amount, 0)
           : 0;
       const remainingProofs = tokens.filter(
-        (p) => !mintKeySetIds.includes(p.id),
+        (p: Proof) => !mintKeySetIds.includes(p.id),
       );
       let proofArray;
       if (changeAmount >= 1 && changeProofs) {

@@ -20,7 +20,7 @@ import {
   ClipboardIcon,
   EnvelopeIcon,
 } from "@heroicons/react/24/outline";
-import { CashuMint, CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
+import { CashuMint, CashuWallet, getEncodedToken, Proof } from "@cashu/cashu-ts";
 import {
   getLocalStorageData,
   isUserLoggedIn,
@@ -219,7 +219,7 @@ export default function InvoiceCard({
     const wallet = new CashuWallet(mint);
     const mintKeySetResponse = await mint.getKeySets();
     const mintKeySetIds = mintKeySetResponse.keysets;
-    const filteredProofs = tokens.filter((p) => mintKeySetIds.includes(p.id));
+    const filteredProofs = tokens.filter((p: Proof) => mintKeySetIds.includes(p.id));
     const tokenToSend = await wallet.send(numSats, filteredProofs);
     const encodedSendToken = getEncodedToken({
       token: [
@@ -231,7 +231,7 @@ export default function InvoiceCard({
     });
     sendTokens(encodedSendToken);
     const changeProofs = tokenToSend?.returnChange;
-    const remainingProofs = tokens.filter((p) => !mintKeySetIds.includes(p.id));
+    const remainingProofs = tokens.filter((p: Proof) => !mintKeySetIds.includes(p.id));
     let proofArray;
     if (changeProofs.length >= 1 && changeProofs) {
       proofArray = [...remainingProofs, ...changeProofs];
