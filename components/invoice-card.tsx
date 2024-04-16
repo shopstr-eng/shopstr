@@ -242,6 +242,8 @@ export default function InvoiceCard({
       ],
     });
     sendTokens(encodedSendToken);
+    // captureInvoicePaidmetric(metricsInvoiceId, productData.id);
+    // another metric to capture native Cashu payments is needed
     const changeProofs = tokenToSend?.returnChange;
     const remainingProofs = tokens.filter((p: Proof) => !mintKeySetIds.includes(p.id));
     let proofArray;

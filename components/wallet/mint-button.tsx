@@ -22,7 +22,6 @@ import {
 } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
-import { captureInvoicePaidmetric } from "../utility/metrics-helper-functions";
 import { CashuMint, CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
 
 const MintButton = () => {
@@ -104,7 +103,7 @@ const MintButton = () => {
               { type: 3, amount: numSats, date: Math.floor(Date.now() / 1000) },
             ]),
           );
-          captureInvoicePaidmetric(metricsInvoiceId, productData.id);
+          // potentially capture a metric for the mint invoice
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           setTimeout(() => {
