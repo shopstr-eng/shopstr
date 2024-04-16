@@ -42,7 +42,7 @@ const PreferencesPage = () => {
     localStorage.setItem("mints", JSON.stringify(mints));
   }, [mints]);
 
-  const { mints: oldMints, theme, setTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
 
   const {
     handleSubmit: handleMintSubmit,
@@ -80,7 +80,7 @@ const PreferencesPage = () => {
       // Check if the response status is in the range of 200-299
       if (response.ok) {
         if (!mints.includes(newMint)) {
-          setMints([newMint, ...oldMints]);
+          setMints([newMint, ...mints]);
         } else {
           setMints([newMint, ...mints.filter((mint) => mint !== newMint)]);
         }
