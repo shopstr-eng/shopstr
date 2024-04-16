@@ -70,7 +70,7 @@ const PayButton = () => {
           ? changeProofs.reduce((acc, current) => acc + current.amount, 0)
           : 0;
       const remainingProofs = tokens.filter(
-        (p: Proof) => !mintKeySetIds.includes(p.id),
+        (p: Proof) => !mintKeySetIds?.includes(p.id),
       );
       let proofArray;
       if (changeAmount >= 1 && changeProofs) {

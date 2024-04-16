@@ -230,8 +230,8 @@ export default function InvoiceCard({
       }
     }
     const mintKeySetResponse = await mint.getKeySets();
-    const mintKeySetIds = mintKeySetResponse.keysets;
-    const filteredProofs = tokens.filter((p: Proof) => mintKeySetIds.includes(p.id));
+    const mintKeySetIds = mintKeySetResponse?.keysets;
+    const filteredProofs = tokens.filter((p: Proof) => mintKeySetIds?.includes(p.id));
     const tokenToSend = await wallet.send(price, filteredProofs);
     const encodedSendToken = getEncodedToken({
       token: [
@@ -245,7 +245,7 @@ export default function InvoiceCard({
     // captureInvoicePaidmetric(metricsInvoiceId, productData.id);
     // another metric to capture native Cashu payments is needed
     const changeProofs = tokenToSend?.returnChange;
-    const remainingProofs = tokens.filter((p: Proof) => !mintKeySetIds.includes(p.id));
+    const remainingProofs = tokens.filter((p: Proof) => !mintKeySetIds?.includes(p.id));
     let proofArray;
     if (changeProofs.length >= 1 && changeProofs) {
       proofArray = [...remainingProofs, ...changeProofs];

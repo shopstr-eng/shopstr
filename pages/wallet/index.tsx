@@ -29,8 +29,8 @@ const Wallet = () => {
       const currentMint = new CashuMint(mints[0]);
       setMint(mints[0]);
       const mintKeySetResponse = await currentMint.getKeySets();
-      const mintKeySetIds = mintKeySetResponse.keysets;
-      const filteredProofs = tokens.filter((p: Proof) => mintKeySetIds.includes(p.id));
+      const mintKeySetIds = mintKeySetResponse?.keysets;
+      const filteredProofs = tokens.filter((p: Proof) => mintKeySetIds?.includes(p.id));
       let walletTotal =
         filteredProofs && filteredProofs.length >= 1 ? filteredProofs.reduce((acc, p) => acc + p.amount, 0) : 0
       setWalletBalance(walletTotal);

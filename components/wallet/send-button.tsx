@@ -60,8 +60,8 @@ const SendButton = () => {
     const mint = new CashuMint(mints[0]);
     const wallet = new CashuWallet(mint);
     const mintKeySetResponse = await mint.getKeySets();
-    const mintKeySetIds = mintKeySetResponse.keysets;
-    const filteredProofs = tokens.filter((p: Proof) => mintKeySetIds.includes(p.id));
+    const mintKeySetIds = mintKeySetResponse?.keysets;
+    const filteredProofs = tokens.filter((p: Proof) => mintKeySetIds?.includes(p.id));
     const tokenToSend = await wallet.send(numSats, filteredProofs);
     const encodedSendToken = getEncodedToken({
       token: [
@@ -73,7 +73,7 @@ const SendButton = () => {
     });
     setNewToken(encodedSendToken);
     const changeProofs = tokenToSend?.returnChange;
-    const remainingProofs = tokens.filter((p: Proof) => !mintKeySetIds.includes(p.id));
+    const remainingProofs = tokens.filter((p: Proof) => !mintKeySetIds?.includes(p.id));
     let proofArray;
     if (changeProofs.length >= 1 && changeProofs) {
       proofArray = [...remainingProofs, ...changeProofs];
