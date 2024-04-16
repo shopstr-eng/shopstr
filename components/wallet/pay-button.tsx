@@ -25,7 +25,7 @@ const PayButton = () => {
   const [wallet, setWallet] = useState<CashuWallet>();
   const [proofs, setProofs] = useState([]);
 
-  const [fee, setFee] = useState("");
+  const [feeAmount, setFeeAmount] = useState("");
 
   const { mints, tokens, history } = getLocalStorageData();
 
@@ -142,7 +142,9 @@ const PayButton = () => {
                   required: "A Lightning invoice is required.",
                   validate: async (value) => {
                     const fee = await wallet?.getFee(value);
-                    setFee(formatWithCommas(fee, "sats")); // Update the fee state with the returned value
+                    if (fee && fee >= 1) {
+                      setFeeAmount(formatWithCommas(fee, "sats"));
+                    }
                     return (
                       /^lnbc/.test(value) ||
                       "The lightning invoice must start with 'lnbc'."
@@ -175,7 +177,7 @@ const PayButton = () => {
                       />
                       {fee && (
                         <div className="mt-2 text-right text-light-text dark:text-dark-text">
-                          Estimated Fee: {fee}
+                          Estimated Fee: {feeAmount}
                         </div>
                       )}
                       {isPaid && (
