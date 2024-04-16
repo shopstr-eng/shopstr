@@ -25,7 +25,7 @@ const PayButton = () => {
   const [wallet, setWallet] = useState<CashuWallet>();
   const [proofs, setProofs] = useState([]);
 
-  const [fee, setFee] = useState<number | null>(null);
+  const [fee, setFee] = useState("");
 
   const { mints, tokens, history } = getLocalStorageData();
 
