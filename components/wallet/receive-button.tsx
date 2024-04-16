@@ -16,7 +16,7 @@ import {
 } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
-import { CashuMint, CashuWallet, getDecodedToken } from "@cashu/cashu-ts";
+import { CashuMint, CashuWallet, getDecodedToken, Proof } from "@cashu/cashu-ts";
 
 const ReceiveButton = () => {
   const [showReceiveModal, setShowReceiveModal] = useState(false);
@@ -64,7 +64,7 @@ const ReceiveButton = () => {
         setIsClaimed(true);
         handleToggleReceiveModal();
         const transactionAmount = tokenProofs.reduce(
-          (acc, token) => acc + token.amount,
+          (acc, token: Proof) => acc + token.amount,
           0,
         );
         localStorage.setItem(

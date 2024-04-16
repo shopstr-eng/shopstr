@@ -67,7 +67,7 @@ const PayButton = () => {
       const changeProofs = response?.change;
       const changeAmount =
         Array.isArray(changeProofs) && changeProofs.length > 0
-          ? changeProofs.reduce((acc, current) => acc + current.amount, 0)
+          ? changeProofs.reduce((acc, current: Proof) => acc + current.amount, 0)
           : 0;
       const remainingProofs = tokens.filter(
         (p: Proof) => !mintKeySetIds?.includes(p.id),
@@ -80,7 +80,7 @@ const PayButton = () => {
       }
       localStorage.setItem("tokens", JSON.stringify(proofArray));
       const filteredTokenAmount = filteredProofs.reduce(
-        (acc, token) => acc + token.amount,
+        (acc, token: Proof) => acc + token.amount,
         0,
       );
       const transactionAmount = filteredTokenAmount - changeAmount;

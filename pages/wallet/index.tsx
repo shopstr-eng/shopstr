@@ -19,7 +19,7 @@ const Wallet = () => {
   useEffect(() => {
     let tokensTotal =
       tokens && tokens.length >= 1
-        ? tokens.reduce((acc, token) => acc + token.amount, 0)
+        ? tokens.reduce((acc, token: Proof) => acc + token.amount, 0)
         : 0;
     setTotalBalance(tokensTotal);
   }, [tokens]);
@@ -32,7 +32,7 @@ const Wallet = () => {
       const mintKeySetIds = mintKeySetResponse?.keysets;
       const filteredProofs = tokens.filter((p: Proof) => mintKeySetIds?.includes(p.id));
       let walletTotal =
-        filteredProofs && filteredProofs.length >= 1 ? filteredProofs.reduce((acc, p) => acc + p.amount, 0) : 0
+        filteredProofs && filteredProofs.length >= 1 ? filteredProofs.reduce((acc, p: Proof) => acc + p.amount, 0) : 0
       setWalletBalance(walletTotal);
     }
     getWalleteBalance();
