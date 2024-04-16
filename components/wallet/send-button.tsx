@@ -59,7 +59,8 @@ const SendButton = () => {
   const handleSend = async (numSats: number) => {
     const mint = new CashuMint(mints[0]);
     const wallet = new CashuWallet(mint);
-    const mintKeySetIds = mint.getKeySets();
+    const mintKeySetResponse = await mint.getKeySets();
+    const mintKeySetIds = mintKeySetResponse.keysets;
     const filteredProofs = tokens.filter((p) => mintKeySetIds.includes(p.id));
     const tokenToSend = await wallet.send(numSats, filteredProofs);
     const encodedSendToken = getEncodedToken({

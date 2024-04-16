@@ -57,7 +57,8 @@ const PayButton = () => {
     setIsPaid(false);
     setPaymentFailed(false);
     try {
-      const mintKeySetIds = mint.getKeySets();
+      const mintKeySetResponse = await mint.getKeySets();
+      const mintKeySetIds = mintKeySetResponse.keysets;
       const filteredProofs = tokens.filter((p) => mintKeySetIds.includes(p.id));
       const response = await wallet?.payLnInvoice(
         invoiceString,

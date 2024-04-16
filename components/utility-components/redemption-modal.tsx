@@ -71,7 +71,7 @@ export default function RedemptionModal({
       let encodedChange = getEncodedToken({
         token: [
           {
-            mint: mint,
+            mint: changeMint,
             proofs: changeProofs,
           },
         ],
