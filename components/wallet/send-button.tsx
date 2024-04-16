@@ -31,7 +31,7 @@ const SendButton = () => {
   const [newToken, setNewToken] = useState("");
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
 
-  const { mints, tokens } = getLocalStorageData();
+  const { mints, tokens, history } = getLocalStorageData();
 
   // store mints as key/value pair
   // { mintString: [proofArrayIndexes] }
@@ -80,6 +80,13 @@ const SendButton = () => {
       proofArray = [...remainingProofs];
     }
     localStorage.setItem("tokens", JSON.stringify(proofArray));
+    localStorage.setItem(
+      "history",
+      JSON.stringify([
+        ...history,
+        { type: 2, amount: numSats, date: Math.floor(Date.now() / 1000) },
+      ]),
+    );
   };
   // store proofs as array of proof objects
   // or store proofs as array of proof arrays, which are all grouped by mint id

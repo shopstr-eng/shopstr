@@ -298,6 +298,7 @@ const LOCALSTORAGECONSTANTS = {
   relays: "relays",
   mints: "mints",
   tokens: "tokens",
+  history: "history",
 };
 
 export const setLocalStorageDataOnSignIn = ({
@@ -359,7 +360,8 @@ export interface LocalStorageInterface {
   userPubkey: string;
   relays: string[];
   mints: string[];
-  tokens: string[];
+  tokens: [];
+  history: [];
   encryptedPrivateKey?: string;
 }
 
@@ -371,6 +373,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
   let relays;
   let mints;
   let tokens;
+  let history;
 
   if (typeof window !== "undefined") {
     userNPub = localStorage.getItem(LOCALSTORAGECONSTANTS.userNPub);
@@ -430,6 +433,10 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     tokens = localStorage.getItem(LOCALSTORAGECONSTANTS.tokens)
       ? JSON.parse(localStorage.getItem("tokens") as string)
       : localStorage.setItem(LOCALSTORAGECONSTANTS.tokens, JSON.stringify([]));
+
+    history = localStorage.getItem(LOCALSTORAGECONSTANTS.history)
+      ? JSON.parse(localStorage.getItem("history") as string)
+      : localStorage.setItem(LOCALSTORAGECONSTANTS.history, JSON.stringify([]));
   }
   return {
     signInMethod: signInMethod as string,
@@ -439,6 +446,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     relays: relays || [],
     mints,
     tokens: tokens || [],
+    history: history || [],
   };
 };
 

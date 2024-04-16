@@ -27,7 +27,7 @@ const PayButton = () => {
 
   const [fee, setFee] = useState<number | null>(null);
 
-  const { mints, tokens } = getLocalStorageData();
+  const { mints, tokens, history } = getLocalStorageData();
 
   const {
     handleSubmit: handlePaySubmit,
@@ -68,7 +68,9 @@ const PayButton = () => {
         Array.isArray(changeProofs) && changeProofs.length > 0
           ? changeProofs.reduce((acc, current) => acc + current.amount, 0)
           : 0;
-      const remainingProofs = tokens.filter((p) => !mintKeySetIds.includes(p.id));
+      const remainingProofs = tokens.filter(
+        (p) => !mintKeySetIds.includes(p.id),
+      );
       let proofArray;
       if (changeAmount >= 1 && changeProofs) {
         proofArray = [...remainingProofs, ...changeProofs];
@@ -76,6 +78,22 @@ const PayButton = () => {
         proofArray = [...remainingProofs];
       }
       localStorage.setItem("tokens", JSON.stringify(proofArray));
+      const filteredTokenAmount = filteredProofs.reduce(
+        (acc, token) => acc + token.amount,
+        0,
+      );
+      const transactionAmount = filteredTokenAmount - changeAmount;
+      localStorage.setItem(
+        "history",
+        JSON.stringify([
+          ...history,
+          {
+            type: 4,
+            amount: transactionAmount,
+            date: Math.floor(Date.now() / 1000),
+          },
+        ]),
+      );
       setIsPaid(true);
     } catch (error) {
       console.log(error);

@@ -43,7 +43,8 @@ export default function InvoiceCard({
   const router = useRouter();
   const { pubkey, currency, totalCost } = productData;
   const pubkeyOfProductBeingSold = pubkey;
-  const { userNPub, userPubkey, relays, mints, tokens } = getLocalStorageData();
+  const { userNPub, userPubkey, relays, mints, tokens, history } =
+    getLocalStorageData();
 
   const [showInvoiceCard, setShowInvoiceCard] = useState(false);
 
@@ -237,6 +238,13 @@ export default function InvoiceCard({
       proofArray = [...remainingProofs];
     }
     localStorage.setItem("tokens", JSON.stringify(proofArray));
+    localStorage.setItem(
+      "history",
+      JSON.stringify([
+        ...history,
+        { type: 5, amount: numSats, date: Math.floor(Date.now() / 1000) },
+      ]),
+    );
   };
 
   return (

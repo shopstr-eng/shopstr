@@ -24,7 +24,7 @@ const ReceiveButton = () => {
   const [isSpent, setIsSpent] = useState(false);
   const [isInvalidToken, setIsInvalidToken] = useState(false);
 
-  const { mints, tokens } = getLocalStorageData();
+  const { mints, tokens, history } = getLocalStorageData();
 
   const {
     handleSubmit: handleReceiveSubmit,
@@ -63,6 +63,21 @@ const ReceiveButton = () => {
         }
         setIsClaimed(true);
         handleToggleReceiveModal();
+        const transactionAmount = tokenProofs.reduce(
+          (acc, token) => acc + token.amount,
+          0,
+        );
+        localStorage.setItem(
+          "history",
+          JSON.stringify([
+            ...history,
+            {
+              type: 1,
+              amount: transactionAmount,
+              date: Math.floor(Date.now() / 1000),
+            },
+          ]),
+        );
       } else {
         setIsSpent(true);
       }

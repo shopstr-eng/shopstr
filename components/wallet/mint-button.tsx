@@ -34,7 +34,7 @@ const MintButton = () => {
   const [invoice, setInvoice] = useState("");
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
 
-  const { mints, tokens } = getLocalStorageData();
+  const { mints, tokens, history } = getLocalStorageData();
 
   const {
     handleSubmit: handleMintSubmit,
@@ -97,6 +97,13 @@ const MintButton = () => {
         if (proofs) {
           const proofArray = [...tokens, ...proofs];
           localStorage.setItem("tokens", JSON.stringify(proofArray));
+          localStorage.setItem(
+            "history",
+            JSON.stringify([
+              ...history,
+              { type: 3, amount: numSats, date: Math.floor(Date.now() / 1000) },
+            ]),
+          );
           captureInvoicePaidmetric(metricsInvoiceId, productData.id);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);

@@ -6,6 +6,7 @@ import MintButton from "../../components/wallet/mint-button";
 import ReceiveButton from "../../components/wallet/receive-button";
 import SendButton from "../../components/wallet/send-button";
 import PayButton from "../../components/wallet/pay-button";
+import Transactions from "../../components/wallet/transactions";
 
 const Wallet = () => {
   const [totalBalance, setTotalBalance] = useState(0);
@@ -23,7 +24,7 @@ const Wallet = () => {
   return (
     <div className="flex min-h-screen flex-col bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
       <center>
-        <p className="break-words text-center text-6xl text-xl text-light-text dark:text-dark-text">
+        <p className="mb-4 break-words text-center text-6xl text-light-text dark:text-dark-text">
           {totalBalance} sats
         </p>
       </center>
@@ -34,6 +35,9 @@ const Wallet = () => {
       <div className="flex justify-center">
         <MintButton />
         <PayButton />
+      </div>
+      <div className="flex justify-center">
+        <Transactions />
       </div>
     </div>
   );
