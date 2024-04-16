@@ -182,8 +182,8 @@ const PayButton = () => {
                           {paymentFailed ? (
                             <div className="mt-2 items-center justify-center">
                               Invoice payment failed! No routes could be found,
-                              or you don't have enough funds. Please try again
-                              with a new invoice, or change your mint in
+                              or you don&apos;t have enough funds. Please try
+                              again with a new invoice, or change your mint in
                               settings.
                             </div>
                           ) : (
