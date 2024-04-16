@@ -214,13 +214,25 @@ export default function InvoiceCard({
 
   const formattedTotalCost = formatWithCommas(totalCost, currency);
 
-  const handleCashuPayment = async (numSats: number) => {
+  const handleCashuPayment = async (price: number, currency: string) => {
     const mint = new CashuMint(mints[0]);
     const wallet = new CashuWallet(mint);
+    if (currency === "USD") {
+      try {
+        const res = await axios.get(
+          "https://api.coinbase.com/v2/prices/BTC-USD/spot",
+        );
+        const btcSpotPrice = Number(res.data.data.amount);
+        const numSats = (price / btcSpotPrice) * 100000000;
+        price = Math.round(numSats);
+      } catch (err) {
+        console.error("ERROR", err);
+      }
+    }
     const mintKeySetResponse = await mint.getKeySets();
     const mintKeySetIds = mintKeySetResponse.keysets;
     const filteredProofs = tokens.filter((p: Proof) => mintKeySetIds.includes(p.id));
-    const tokenToSend = await wallet.send(numSats, filteredProofs);
+    const tokenToSend = await wallet.send(price, filteredProofs);
     const encodedSendToken = getEncodedToken({
       token: [
         {
@@ -243,7 +255,7 @@ export default function InvoiceCard({
       "history",
       JSON.stringify([
         ...history,
-        { type: 5, amount: numSats, date: Math.floor(Date.now() / 1000) },
+        { type: 5, amount: price, date: Math.floor(Date.now() / 1000) },
       ]),
     );
   };
