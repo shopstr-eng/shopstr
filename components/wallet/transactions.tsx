@@ -8,6 +8,7 @@ import {
   QuestionMarkCircleIcon,
 } from "@heroicons/react/24/outline";
 import { getLocalStorageData } from "../../components/utility/nostr-helper-functions";
+import { Transaction } from "@/utils/types/types";
 
 const Transactions = () => {
   const [history, setHistory] = useState([]);
@@ -51,7 +52,7 @@ const Transactions = () => {
             </tr>
           </thead>
           <tbody>
-            {history.map((transaction, index) => (
+            {history.map((transaction: Transaction, index) => (
               <tr
                 key={index}
                 className="border-b bg-white dark:border-gray-700 dark:bg-gray-800"

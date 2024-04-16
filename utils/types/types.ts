@@ -24,3 +24,9 @@ export interface ProfileData {
   };
   created_at: number;
 }
+
+export interface Transaction {
+  type: number;
+  amount: number;
+  date: number;
+}
