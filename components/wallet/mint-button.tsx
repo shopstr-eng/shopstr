@@ -107,9 +107,8 @@ const MintButton = () => {
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           setTimeout(() => {
-            router.push("/"); // takes you back to the home page after payment has been confirmed by cashu mint api
+            handleToggleMintModal(); // takes you back to the page after payment has been confirmed by cashu mint api
           }, 1900); // 1.9 seconds is the amount of time for the checkmark animation to play
-          handleToggleMintModal();
           break;
         }
       } catch (error) {
