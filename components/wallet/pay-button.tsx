@@ -192,7 +192,7 @@ const PayButton = () => {
                         onBlur={onBlur} // notify when input is touched/blur
                         value={value}
                       />
-                      {feeAmount && feeAmount >= 1 && (
+                      {feeAmount && (
                         <div className="mt-2 text-left text-light-text dark:text-dark-text">
                           Estimated Fee: {feeAmount}
                         </div>
