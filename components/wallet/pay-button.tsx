@@ -55,7 +55,7 @@ const PayButton = () => {
     await handlePay(invoiceString);
   };
 
-  const calculateFee = async (invoice) => {
+  const calculateFee = async (invoice: string) => {
     if (invoice && /^lnbc/.test(invoice)) {
       const fee = await wallet?.getFee(invoice);
       if (fee) {
