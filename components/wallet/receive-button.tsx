@@ -16,7 +16,12 @@ import {
 } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
-import { CashuMint, CashuWallet, getDecodedToken, Proof } from "@cashu/cashu-ts";
+import {
+  CashuMint,
+  CashuWallet,
+  getDecodedToken,
+  Proof,
+} from "@cashu/cashu-ts";
 
 const ReceiveButton = () => {
   const [showReceiveModal, setShowReceiveModal] = useState(false);

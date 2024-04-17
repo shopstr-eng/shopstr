@@ -114,7 +114,10 @@ export default function RedeemButton({ token }: { token: string }) {
       const changeProofs = response?.change;
       const changeAmount =
         Array.isArray(changeProofs) && changeProofs.length > 0
-          ? changeProofs.reduce((acc, current: Proof) => acc + current.amount, 0)
+          ? changeProofs.reduce(
+              (acc, current: Proof) => acc + current.amount,
+              0,
+            )
           : 0;
       if (changeAmount >= 1 && changeProofs) {
         setRedemptionChangeAmount(changeAmount);

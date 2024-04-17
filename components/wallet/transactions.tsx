@@ -14,10 +14,21 @@ const Transactions = () => {
   const [history, setHistory] = useState([]);
 
   useEffect(() => {
-    const localData = getLocalStorageData();
-    if (localData && localData.history) {
-      setHistory(localData.history);
-    }
+    // Function to fetch and update transactions
+    const fetchAndUpdateTransactions = () => {
+      const localData = getLocalStorageData();
+      if (localData && localData.history) {
+        setHistory(localData.history);
+      }
+    };
+    // Initial fetch
+    fetchAndUpdateTransactions();
+    // Set up polling with setInterval
+    const interval = setInterval(() => {
+      fetchAndUpdateTransactions();
+    }, 5000); // Polling every 5000 milliseconds (5 seconds)
+    // Clean up on component unmount
+    return () => clearInterval(interval);
   }, []);
 
   const formatDate = (timestamp: number) => {

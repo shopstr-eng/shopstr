@@ -1,7 +1,7 @@
 import { useState, useEffect, useContext, useMemo } from "react";
 import { useForm, Controller } from "react-hook-form";
 import Link from "next/link";
-import { BoltIcon } from "@heroicons/react/24/outline";
+import { BoltIcon, CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/outline";
 import {
   Button,
   Textarea,
@@ -15,6 +15,7 @@ import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { LightningAddress } from "@getalby/lightning-tools";
 import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
+// import { Invoice } from "@getalby/lightning-tools";
 import { formatWithCommas } from "../utility-components/display-monetary-info";
 
 const PayButton = () => {
@@ -25,6 +26,7 @@ const PayButton = () => {
   const [wallet, setWallet] = useState<CashuWallet>();
   const [proofs, setProofs] = useState([]);
 
+  // const [totalAmount, setTotalAmount] = useState(0);
   const [feeAmount, setFeeAmount] = useState("");
 
   const { mints, tokens, history } = getLocalStorageData();
@@ -51,6 +53,23 @@ const PayButton = () => {
   const onPaySubmit = async (data: { [x: string]: any }) => {
     let invoiceString = data["invoice"];
     await handlePay(invoiceString);
+  };
+
+  const calculateFee = async (invoice) => {
+    if (invoice && /^lnbc/.test(invoice)) {
+      const fee = await wallet?.getFee(invoice);
+      if (fee) {
+        setFeeAmount(formatWithCommas(fee, "sats"));
+        // const invoiceValue = new Invoice({ invoice });
+        // const { satoshi } = invoiceValue;
+        // const total = satoshi + fee;
+        // setTotalAmount(total);
+      } else {
+        setFeeAmount("");
+      }
+    } else {
+      setFeeAmount("");
+    }
   };
 
   const handlePay = async (invoiceString: string) => {
@@ -98,7 +117,6 @@ const PayButton = () => {
       setIsPaid(true);
     } catch (error) {
       console.log(error);
-      setIsPaid(true);
       setPaymentFailed(true);
     }
   };
@@ -140,11 +158,7 @@ const PayButton = () => {
                 control={payControl}
                 rules={{
                   required: "A Lightning invoice is required.",
-                  validate: async (value) => {
-                    const fee = await wallet?.getFee(value);
-                    if (fee && fee >= 1) {
-                      setFeeAmount(formatWithCommas(fee, "sats"));
-                    }
+                  validate: (value) => {
                     return (
                       /^lnbc/.test(value) ||
                       "The lightning invoice must start with 'lnbc'."
@@ -170,34 +184,87 @@ const PayButton = () => {
                         labelPlacement="inside"
                         isInvalid={isErrored}
                         errorMessage={errorMessage}
-                        // controller props
-                        onChange={onChange} // send value to hook form
+                        onChange={async (e) => {
+                          const newValue = e.target.value;
+                          onChange(newValue);
+                          await calculateFee(newValue);
+                        }}
                         onBlur={onBlur} // notify when input is touched/blur
                         value={value}
                       />
-                      {feeAmount && (
-                        <div className="mt-2 text-right text-light-text dark:text-dark-text">
+                      {feeAmount && feeAmount >= 1 && (
+                        <div className="mt-2 text-left text-light-text dark:text-dark-text">
                           Estimated Fee: {feeAmount}
                         </div>
                       )}
-                      {isPaid && (
+                      {/* {totalAmount && totalAmount >= 1 && (
+                        <div className="mt-2 text-right text-light-text dark:text-dark-text">
+                          Total Amount: {totalAmount} sats
+                        </div>
+                      )} */}
+                      {paymentFailed ? (
                         <>
-                          {paymentFailed ? (
-                            <div className="mt-2 items-center justify-center">
-                              Invoice payment failed! No routes could be found,
-                              or you don&apos;t have enough funds. Please try
-                              again with a new invoice, or change your mint in
-                              settings.
-                            </div>
-                          ) : (
-                            <>
-                              <div className="mt-2 items-center justify-center">
-                                Invoice paid successfully!
-                              </div>
-                            </>
-                          )}
+                          <Modal
+                            backdrop="blur"
+                            isOpen={paymentFailed}
+                            onClose={() => setPaymentFailed(false)}
+                            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
+                            classNames={{
+                              body: "py-6 ",
+                              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+                              header: "border-b-[1px] border-[#292f46]",
+                              footer: "border-t-[1px] border-[#292f46]",
+                              closeButton: "hover:bg-black/5 active:bg-white/10",
+                            }}
+                            isDismissable={true}
+                            scrollBehavior={"normal"}
+                            placement={"center"}
+                            size="2xl"
+                          >
+                            <ModalContent>
+                              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                                <div className="flex items-center justify-center">
+                                  <XCircleIcon className="h-6 w-6 text-red-500" />
+                                  <div className="ml-2">Invoice payment failed! No routes could be found,
+                                      or you don&apos;t have enough funds. Please try
+                                      again with a new invoice, or change your mint in
+                                      settings.</div>
+                                </div>
+                              </ModalBody>
+                            </ModalContent>
+                          </Modal>
                         </>
-                      )}
+                      ) : null}
+                      {isPaid ? (
+                        <>
+                          <Modal
+                            backdrop="blur"
+                            isOpen={isPaid}
+                            onClose={() => setIsPaid(false)}
+                            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
+                            classNames={{
+                              body: "py-6 ",
+                              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+                              header: "border-b-[1px] border-[#292f46]",
+                              footer: "border-t-[1px] border-[#292f46]",
+                              closeButton: "hover:bg-black/5 active:bg-white/10",
+                            }}
+                            isDismissable={true}
+                            scrollBehavior={"normal"}
+                            placement={"center"}
+                            size="2xl"
+                          >
+                            <ModalContent>
+                              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                                <div className="flex items-center justify-center">
+                                  <CheckCircleIcon className="h-6 w-6 text-green-500" />
+                                  <div className="ml-2">Token successfully claimed!</div>
+                                </div>
+                              </ModalBody>
+                            </ModalContent>
+                          </Modal>
+                        </>
+                      ) : null}
                     </>
                   );
                 }}
