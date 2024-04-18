@@ -162,7 +162,7 @@ const Listing = () => {
               <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                 <div className="flex items-center justify-center">
                   <div className="ml-2">
-                    You didn't have enough balance on your wallet to pay.
+                    You didn&apos;t have enough balance on your wallet to pay.
                   </div>
                 </div>
               </ModalBody>
