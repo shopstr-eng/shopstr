@@ -58,7 +58,7 @@ const ReceiveButton = () => {
       const tokenMint = tokenEntry[0].mint;
       const tokenProofs = tokenEntry[0].proofs;
       const wallet = new CashuWallet(new CashuMint(tokenMint));
-      const spentProofs = await wallet?.checkProofsSpcent(tokenProofs);
+      const spentProofs = await wallet?.checkProofsSpent(tokenProofs);
       if (spentProofs.length === 0) {
         const tokenArray = [...tokens, ...tokenProofs];
         localStorage.setItem("tokens", JSON.stringify(tokenArray));
@@ -78,7 +78,7 @@ const ReceiveButton = () => {
             ...history,
             {
               type: 1,
-              amount: transactionAmount,
+              amcheount: transactionAmount,
               date: Math.floor(Date.now() / 1000),
             },
           ]),
