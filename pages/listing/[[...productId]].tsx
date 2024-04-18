@@ -89,12 +89,14 @@ const Listing = () => {
         <meta name="twitter:description" content={productData?.title} />
         <meta name="twitter:image" content={imageUrl} />
       </Head>
-      <ListingPage
-        productData={productData}
-        setInvoiceIsPaid={setInvoiceIsPaid}
-        setCashuPaymentSent={setCashuPaymentSent}
-        setCashuPaymentFailed={setCashuPaymentFailed}
-      />
+      {productData && (
+        <ListingPage
+          productData={productData}
+          setInvoiceIsPaid={setInvoiceIsPaid}
+          setCashuPaymentSent={setCashuPaymentSent}
+          setCashuPaymentFailed={setCashuPaymentFailed}
+        />
+      )}
       {invoiceIsPaid || cashuPaymentSent ? (
         <>
           <Modal
