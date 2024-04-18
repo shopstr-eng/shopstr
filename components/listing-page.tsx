@@ -35,7 +35,12 @@ export default function ListingPage({
     return (
       <div className="flex w-full flex-col items-center">
         <Divider />
-        <InvoiceCard productData={productData} setInvoiceIsPaid={setInvoiceIsPaid} setCashuPaymentSent={setCashuPaymentSent} setCashuPaymentFailed={setCashuPaymentFailed} />
+        <InvoiceCard
+          productData={productData}
+          setInvoiceIsPaid={setInvoiceIsPaid}
+          setCashuPaymentSent={setCashuPaymentSent}
+          setCashuPaymentFailed={setCashuPaymentFailed}
+        />
       </div>
     );
   };

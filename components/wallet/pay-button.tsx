@@ -243,8 +243,7 @@ const PayButton = () => {
                     backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
                     header: "border-b-[1px] border-[#292f46]",
                     footer: "border-t-[1px] border-[#292f46]",
-                    closeButton:
-                      "hover:bg-black/5 active:bg-white/10",
+                    closeButton: "hover:bg-black/5 active:bg-white/10",
                   }}
                   isDismissable={true}
                   scrollBehavior={"normal"}
@@ -259,10 +258,9 @@ const PayButton = () => {
                     <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                       <div className="flex items-center justify-center">
                         <div className="ml-2">
-                          No routes could be found, or you don&apos;t
-                          have enough funds. Please try again with a
-                          new invoice, or change your mint in
-                          settings.
+                          No routes could be found, or you don&apos;t have
+                          enough funds. Please try again with a new invoice, or
+                          change your mint in settings.
                         </div>
                       </div>
                     </ModalBody>
@@ -270,7 +268,7 @@ const PayButton = () => {
                 </Modal>
               </>
             ) : null}
-            
+
             {isPaid ? (
               <>
                 <Modal
@@ -283,8 +281,7 @@ const PayButton = () => {
                     backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
                     header: "border-b-[1px] border-[#292f46]",
                     footer: "border-t-[1px] border-[#292f46]",
-                    closeButton:
-                      "hover:bg-black/5 active:bg-white/10",
+                    closeButton: "hover:bg-black/5 active:bg-white/10",
                   }}
                   isDismissable={true}
                   scrollBehavior={"normal"}
@@ -295,9 +292,7 @@ const PayButton = () => {
                     <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                       <div className="flex items-center justify-center">
                         <CheckCircleIcon className="h-6 w-6 text-green-500" />
-                        <div className="ml-2">
-                          Invoice successfully paid!
-                        </div>
+                        <div className="ml-2">Invoice successfully paid!</div>
                       </div>
                     </ModalBody>
                   </ModalContent>

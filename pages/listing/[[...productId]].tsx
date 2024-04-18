@@ -8,10 +8,7 @@ import {
   ModalBody,
   ModalFooter,
 } from "@nextui-org/react";
-import {
-  CheckCircleIcon,
-  XCircleIcon,
-} from "@heroicons/react/24/outline";
+import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/outline";
 import { SimplePool } from "nostr-tools";
 import parseTags, {
   ProductData,
@@ -29,7 +26,7 @@ const Listing = () => {
 
   const [invoiceIsPaid, setInvoiceIsPaid] = useState(false);
   const [cashuPaymentSent, setCashuPaymentSent] = useState(false);
-  const [cashuPaymentFailed, setCashuPaymentFailed] = useState(false)
+  const [cashuPaymentFailed, setCashuPaymentFailed] = useState(false);
 
   useEffect(() => {
     if (router.isReady) {
@@ -92,7 +89,12 @@ const Listing = () => {
         <meta name="twitter:description" content={productData?.title} />
         <meta name="twitter:image" content={imageUrl} />
       </Head>
-      <ListingPage productData={productData} setInvoiceIsPaid={setInvoiceIsPaid} setCashuPaymentSent={setCashuPaymentSent} setCashuPaymentFailed={setCashuPaymentFailed} />
+      <ListingPage
+        productData={productData}
+        setInvoiceIsPaid={setInvoiceIsPaid}
+        setCashuPaymentSent={setCashuPaymentSent}
+        setCashuPaymentFailed={setCashuPaymentFailed}
+      />
       {invoiceIsPaid || cashuPaymentSent ? (
         <>
           <Modal
@@ -109,8 +111,7 @@ const Listing = () => {
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
               header: "border-b-[1px] border-[#292f46]",
               footer: "border-t-[1px] border-[#292f46]",
-              closeButton:
-                "hover:bg-black/5 active:bg-white/10",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
             }}
             isDismissable={true}
             scrollBehavior={"normal"}
@@ -125,7 +126,8 @@ const Listing = () => {
               <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                 <div className="flex items-center justify-center">
                   <div className="ml-2">
-                    The seller should have received a DM containing a Cashu token payment.
+                    The seller should have received a DM containing a Cashu
+                    token payment.
                   </div>
                 </div>
               </ModalBody>
@@ -145,8 +147,7 @@ const Listing = () => {
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
               header: "border-b-[1px] border-[#292f46]",
               footer: "border-t-[1px] border-[#292f46]",
-              closeButton:
-                "hover:bg-black/5 active:bg-white/10",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
             }}
             isDismissable={true}
             scrollBehavior={"normal"}
