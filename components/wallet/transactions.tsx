@@ -26,7 +26,7 @@ const Transactions = () => {
     // Set up polling with setInterval
     const interval = setInterval(() => {
       fetchAndUpdateTransactions();
-    }, 5000); // Polling every 5000 milliseconds (5 seconds)
+    }, 1000); // Polling every 1000 milliseconds (1 seconds)
     // Clean up on component unmount
     return () => clearInterval(interval);
   }, []);

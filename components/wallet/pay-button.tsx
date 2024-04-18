@@ -1,7 +1,12 @@
 import { useState, useEffect, useContext, useMemo } from "react";
 import { useForm, Controller } from "react-hook-form";
 import Link from "next/link";
-import { BoltIcon, CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/outline";
+import { useTheme } from "next-themes";
+import {
+  BoltIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+} from "@heroicons/react/24/outline";
 import {
   Button,
   Textarea,
@@ -10,6 +15,7 @@ import {
   ModalHeader,
   ModalBody,
   ModalFooter,
+  Spinner,
 } from "@nextui-org/react";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
@@ -25,11 +31,14 @@ const PayButton = () => {
   const [mint, setMint] = useState<CashuMint>();
   const [wallet, setWallet] = useState<CashuWallet>();
   const [proofs, setProofs] = useState([]);
+  const [isRedeeming, setIsRedeeming] = useState(false);
 
   // const [totalAmount, setTotalAmount] = useState(0);
   const [feeAmount, setFeeAmount] = useState("");
 
   const { mints, tokens, history } = getLocalStorageData();
+
+  const { theme, setTheme } = useTheme();
 
   const {
     handleSubmit: handlePaySubmit,
@@ -56,6 +65,7 @@ const PayButton = () => {
   };
 
   const calculateFee = async (invoice: string) => {
+    setFeeAmount("");
     if (invoice && /^lnbc/.test(invoice)) {
       const fee = await wallet?.getFee(invoice);
       if (fee) {
@@ -75,10 +85,13 @@ const PayButton = () => {
   const handlePay = async (invoiceString: string) => {
     setIsPaid(false);
     setPaymentFailed(false);
+    setIsRedeeming(true);
     try {
       const mintKeySetResponse = await mint?.getKeySets();
       const mintKeySetIds = mintKeySetResponse?.keysets;
-      const filteredProofs = tokens.filter((p: Proof) => mintKeySetIds?.includes(p.id));
+      const filteredProofs = tokens.filter(
+        (p: Proof) => mintKeySetIds?.includes(p.id),
+      );
       const response = await wallet?.payLnInvoice(
         invoiceString,
         filteredProofs,
@@ -86,7 +99,10 @@ const PayButton = () => {
       const changeProofs = response?.change;
       const changeAmount =
         Array.isArray(changeProofs) && changeProofs.length > 0
-          ? changeProofs.reduce((acc, current: Proof) => acc + current.amount, 0)
+          ? changeProofs.reduce(
+              (acc, current: Proof) => acc + current.amount,
+              0,
+            )
           : 0;
       const remainingProofs = tokens.filter(
         (p: Proof) => !mintKeySetIds?.includes(p.id),
@@ -115,9 +131,12 @@ const PayButton = () => {
         ]),
       );
       setIsPaid(true);
+      setIsRedeeming(false);
+      handleTogglePayModal();
     } catch (error) {
       console.log(error);
       setPaymentFailed(true);
+      setIsRedeeming(false);
     }
   };
 
@@ -214,7 +233,8 @@ const PayButton = () => {
                               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
                               header: "border-b-[1px] border-[#292f46]",
                               footer: "border-t-[1px] border-[#292f46]",
-                              closeButton: "hover:bg-black/5 active:bg-white/10",
+                              closeButton:
+                                "hover:bg-black/5 active:bg-white/10",
                             }}
                             isDismissable={true}
                             scrollBehavior={"normal"}
@@ -222,13 +242,18 @@ const PayButton = () => {
                             size="2xl"
                           >
                             <ModalContent>
+                              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                                <XCircleIcon className="h-6 w-6 text-red-500" />
+                                <div className="ml-2">Payment failed!</div>
+                              </ModalHeader>
                               <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                                 <div className="flex items-center justify-center">
-                                  <XCircleIcon className="h-6 w-6 text-red-500" />
-                                  <div className="ml-2">Invoice payment failed! No routes could be found,
-                                      or you don&apos;t have enough funds. Please try
-                                      again with a new invoice, or change your mint in
-                                      settings.</div>
+                                  <div className="ml-2">
+                                    No routes could be found, or you don&apos;t
+                                    have enough funds. Please try again with a
+                                    new invoice, or change your mint in
+                                    settings.
+                                  </div>
                                 </div>
                               </ModalBody>
                             </ModalContent>
@@ -247,7 +272,8 @@ const PayButton = () => {
                               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
                               header: "border-b-[1px] border-[#292f46]",
                               footer: "border-t-[1px] border-[#292f46]",
-                              closeButton: "hover:bg-black/5 active:bg-white/10",
+                              closeButton:
+                                "hover:bg-black/5 active:bg-white/10",
                             }}
                             isDismissable={true}
                             scrollBehavior={"normal"}
@@ -258,7 +284,9 @@ const PayButton = () => {
                               <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                                 <div className="flex items-center justify-center">
                                   <CheckCircleIcon className="h-6 w-6 text-green-500" />
-                                  <div className="ml-2">Token successfully claimed!</div>
+                                  <div className="ml-2">
+                                    Invoice successfully paid!
+                                  </div>
                                 </div>
                               </ModalBody>
                             </ModalContent>
@@ -281,7 +309,17 @@ const PayButton = () => {
               </Button>
 
               <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
-                Pay
+                {isRedeeming ? (
+                  <>
+                    {theme === "dark" ? (
+                      <Spinner size={"sm"} color="warning" />
+                    ) : (
+                      <Spinner size={"sm"} color="secondary" />
+                    )}
+                  </>
+                ) : (
+                  <>Pay</>
+                )}
               </Button>
             </ModalFooter>
           </form>

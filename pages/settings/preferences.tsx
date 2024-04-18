@@ -280,27 +280,22 @@ const PreferencesPage = () => {
           )}
 
           <div className="overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
-            {mints.map((mint) => (
-              <div
-                key={mint}
-                className="mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg"
-              >
-                <div className="max-w-xsm break-all text-light-text dark:text-dark-text">
-                  {mint}
-                </div>
-                <ClipboardIcon
-                  onClick={handleCopyMint}
-                  className={`ml-2 h-6 w-6 cursor-pointer text-light-text dark:text-dark-text ${
-                    copiedToClipboard ? "hidden" : ""
-                  }`}
-                />
-                <CheckIcon
-                  className={`ml-2 h-6 w-6 cursor-pointer text-light-text dark:text-dark-text ${
-                    copiedToClipboard ? "" : "hidden"
-                  }`}
-                />
+            <div className="mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg">
+              <div className="max-w-xsm break-all text-light-text dark:text-dark-text">
+                {mints[0]}
               </div>
-            ))}
+              <ClipboardIcon
+                onClick={handleCopyMint}
+                className={`ml-2 h-6 w-6 cursor-pointer text-light-text dark:text-dark-text ${
+                  copiedToClipboard ? "hidden" : ""
+                }`}
+              />
+              <CheckIcon
+                className={`ml-2 h-6 w-6 cursor-pointer text-light-text dark:text-dark-text ${
+                  copiedToClipboard ? "" : "hidden"
+                }`}
+              />
+            </div>
           </div>
           {mints.length > 0 && (
             <div className="mx-4 my-4 flex items-center justify-center text-center">

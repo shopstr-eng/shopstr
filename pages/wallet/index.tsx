@@ -30,16 +30,19 @@ const Wallet = () => {
       }
       if (localData && localData.mints && localData.tokens) {
         const currentMint = new CashuMint(localData.mints[0]);
+        console.log(currentMint);
         setMint(localData.mints[0]);
         const mintKeySetResponse = await currentMint.getKeySets();
         const mintKeySetIds = mintKeySetResponse?.keysets;
         const filteredProofs = localData.tokens.filter(
           (p: Proof) => mintKeySetIds?.includes(p.id),
         );
+        console.log(filteredProofs);
         let walletTotal =
           filteredProofs && filteredProofs.length >= 1
             ? filteredProofs.reduce((acc, p: Proof) => acc + p.amount, 0)
             : 0;
+        console.log(walletTotal);
         setWalletBalance(walletTotal);
       }
     };
@@ -48,7 +51,7 @@ const Wallet = () => {
     // Set up polling with setInterval
     const interval = setInterval(() => {
       fetchAndUpdateBalances();
-    }, 5000); // Polling every 5000 milliseconds (5 seconds)
+    }, 1000); // Polling every 1000 milliseconds (1 seconds)
     // Clean up on component unmount
     return () => clearInterval(interval);
   }, []);
@@ -62,7 +65,7 @@ const Wallet = () => {
       </center>
       <center>
         <p className="mb-2 break-words text-center text-sm italic text-gray-500">
-          {mint}: {totalBalance} sats
+          {mint}: {walletBalance} sats
         </p>
       </center>
       <div className="flex justify-center">

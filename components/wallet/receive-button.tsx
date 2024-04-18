@@ -58,8 +58,8 @@ const ReceiveButton = () => {
       const tokenMint = tokenEntry[0].mint;
       const tokenProofs = tokenEntry[0].proofs;
       const wallet = new CashuWallet(new CashuMint(tokenMint));
-      const spentProofs = await wallet?.checkProofsSpent(tokenProofs);
-      if (!spentProofs || spentProofs.length !== 0) {
+      const spentProofs = await wallet?.checkProofsSpcent(tokenProofs);
+      if (spentProofs.length === 0) {
         const tokenArray = [...tokens, ...tokenProofs];
         localStorage.setItem("tokens", JSON.stringify(tokenArray));
         if (!mints.includes(tokenMint)) {
@@ -234,7 +234,7 @@ const ReceiveButton = () => {
               <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                 <div className="flex items-center justify-center">
                   <XCircleIcon className="h-6 w-6 text-red-500" />
-                  <div className="ml-2">Invalid token.</div>
+                  <div className="ml-2">Invalid token!</div>
                 </div>
               </ModalBody>
             </ModalContent>
@@ -264,7 +264,7 @@ const ReceiveButton = () => {
               <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                 <div className="flex items-center justify-center">
                   <XCircleIcon className="h-6 w-6 text-red-500" />
-                  <div className="ml-2">Token already spent.</div>
+                  <div className="ml-2">Token already spent!</div>
                 </div>
               </ModalBody>
             </ModalContent>
