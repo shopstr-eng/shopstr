@@ -160,7 +160,9 @@ export default function InvoiceCard({
           captureInvoicePaidmetric(metricsInvoiceId, productData.id);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
-          setInvoiceIsPaid(true);
+          if (setInvoiceIsPaid) {
+            setInvoiceIsPaid(true);
+          }
           break;
         }
       } catch (error) {
@@ -274,10 +276,14 @@ export default function InvoiceCard({
           { type: 5, amount: price, date: Math.floor(Date.now() / 1000) },
         ]),
       );
-      setCashuPaymentSent(true);
+      if (setCashuPaymentSent) {
+        setCashuPaymentSent(true);
+      }
     } catch (error) {
       console.error(error);
-      setCashuPaymentFailed(true);
+      if (setCashuPaymentFailed) {
+        setCashuPaymentFailed(true);
+      }
     }
   };
 
