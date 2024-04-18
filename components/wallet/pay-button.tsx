@@ -206,7 +206,11 @@ const PayButton = () => {
                         onChange={async (e) => {
                           const newValue = e.target.value;
                           onChange(newValue);
-                          await calculateFee(newValue);
+                          try {
+                            await calculateFee(newValue);
+                          } catch (error) {
+                            console.log(error);
+                          }
                         }}
                         onBlur={onBlur} // notify when input is touched/blur
                         value={value}
@@ -221,83 +225,85 @@ const PayButton = () => {
                           Total Amount: {totalAmount} sats
                         </div>
                       )} */}
-                      {paymentFailed ? (
-                        <>
-                          <Modal
-                            backdrop="blur"
-                            isOpen={paymentFailed}
-                            onClose={() => setPaymentFailed(false)}
-                            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
-                            classNames={{
-                              body: "py-6 ",
-                              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-                              header: "border-b-[1px] border-[#292f46]",
-                              footer: "border-t-[1px] border-[#292f46]",
-                              closeButton:
-                                "hover:bg-black/5 active:bg-white/10",
-                            }}
-                            isDismissable={true}
-                            scrollBehavior={"normal"}
-                            placement={"center"}
-                            size="2xl"
-                          >
-                            <ModalContent>
-                              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
-                                <XCircleIcon className="h-6 w-6 text-red-500" />
-                                <div className="ml-2">Payment failed!</div>
-                              </ModalHeader>
-                              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
-                                <div className="flex items-center justify-center">
-                                  <div className="ml-2">
-                                    No routes could be found, or you don&apos;t
-                                    have enough funds. Please try again with a
-                                    new invoice, or change your mint in
-                                    settings.
-                                  </div>
-                                </div>
-                              </ModalBody>
-                            </ModalContent>
-                          </Modal>
-                        </>
-                      ) : null}
-                      {isPaid ? (
-                        <>
-                          <Modal
-                            backdrop="blur"
-                            isOpen={isPaid}
-                            onClose={() => setIsPaid(false)}
-                            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
-                            classNames={{
-                              body: "py-6 ",
-                              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-                              header: "border-b-[1px] border-[#292f46]",
-                              footer: "border-t-[1px] border-[#292f46]",
-                              closeButton:
-                                "hover:bg-black/5 active:bg-white/10",
-                            }}
-                            isDismissable={true}
-                            scrollBehavior={"normal"}
-                            placement={"center"}
-                            size="2xl"
-                          >
-                            <ModalContent>
-                              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
-                                <div className="flex items-center justify-center">
-                                  <CheckCircleIcon className="h-6 w-6 text-green-500" />
-                                  <div className="ml-2">
-                                    Invoice successfully paid!
-                                  </div>
-                                </div>
-                              </ModalBody>
-                            </ModalContent>
-                          </Modal>
-                        </>
-                      ) : null}
                     </>
                   );
                 }}
               />
             </ModalBody>
+
+            {paymentFailed ? (
+              <>
+                <Modal
+                  backdrop="blur"
+                  isOpen={paymentFailed}
+                  onClose={() => setPaymentFailed(false)}
+                  // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
+                  classNames={{
+                    body: "py-6 ",
+                    backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+                    header: "border-b-[1px] border-[#292f46]",
+                    footer: "border-t-[1px] border-[#292f46]",
+                    closeButton:
+                      "hover:bg-black/5 active:bg-white/10",
+                  }}
+                  isDismissable={true}
+                  scrollBehavior={"normal"}
+                  placement={"center"}
+                  size="2xl"
+                >
+                  <ModalContent>
+                    <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                      <XCircleIcon className="h-6 w-6 text-red-500" />
+                      <div className="ml-2">Payment failed!</div>
+                    </ModalHeader>
+                    <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                      <div className="flex items-center justify-center">
+                        <div className="ml-2">
+                          No routes could be found, or you don&apos;t
+                          have enough funds. Please try again with a
+                          new invoice, or change your mint in
+                          settings.
+                        </div>
+                      </div>
+                    </ModalBody>
+                  </ModalContent>
+                </Modal>
+              </>
+            ) : null}
+            
+            {isPaid ? (
+              <>
+                <Modal
+                  backdrop="blur"
+                  isOpen={isPaid}
+                  onClose={() => setIsPaid(false)}
+                  // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
+                  classNames={{
+                    body: "py-6 ",
+                    backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+                    header: "border-b-[1px] border-[#292f46]",
+                    footer: "border-t-[1px] border-[#292f46]",
+                    closeButton:
+                      "hover:bg-black/5 active:bg-white/10",
+                  }}
+                  isDismissable={true}
+                  scrollBehavior={"normal"}
+                  placement={"center"}
+                  size="2xl"
+                >
+                  <ModalContent>
+                    <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                      <div className="flex items-center justify-center">
+                        <CheckCircleIcon className="h-6 w-6 text-green-500" />
+                        <div className="ml-2">
+                          Invoice successfully paid!
+                        </div>
+                      </div>
+                    </ModalBody>
+                  </ModalContent>
+                </Modal>
+              </>
+            ) : null}
 
             <ModalFooter>
               <Button
