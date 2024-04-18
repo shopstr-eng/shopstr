@@ -122,12 +122,12 @@ const PayButton = () => {
       localStorage.setItem(
         "history",
         JSON.stringify([
-          ...history,
           {
             type: 4,
             amount: transactionAmount,
             date: Math.floor(Date.now() / 1000),
           },
+          ...history,
         ]),
       );
       setIsPaid(true);

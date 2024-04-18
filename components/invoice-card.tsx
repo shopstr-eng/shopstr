@@ -272,8 +272,8 @@ export default function InvoiceCard({
       localStorage.setItem(
         "history",
         JSON.stringify([
-          ...history,
           { type: 5, amount: price, date: Math.floor(Date.now() / 1000) },
+          ...history,
         ]),
       );
       if (setCashuPaymentSent) {

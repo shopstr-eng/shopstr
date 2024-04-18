@@ -75,12 +75,12 @@ const ReceiveButton = () => {
         localStorage.setItem(
           "history",
           JSON.stringify([
-            ...history,
             {
               type: 1,
               amcheount: transactionAmount,
               date: Math.floor(Date.now() / 1000),
             },
+            ...history,
           ]),
         );
       } else {

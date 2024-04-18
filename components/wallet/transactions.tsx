@@ -46,8 +46,8 @@ const Transactions = () => {
   };
 
   return (
-    <div className="relative mt-4 overflow-x-auto shadow-md sm:rounded-lg">
-      <div className="max-h-[55vh]">
+    <div className="relative mt-4 overflow-x-auto shadow-md rounded-lg">
+      <div className="max-h-[50vh]">
         <table className="w-full min-w-[50vw] text-left text-sm text-gray-500 dark:text-gray-400">
           <thead className="bg-gray-50 text-xs uppercase text-gray-700 dark:bg-gray-700 dark:text-gray-400">
             <tr>

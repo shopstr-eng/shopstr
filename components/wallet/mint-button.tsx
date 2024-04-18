@@ -99,8 +99,8 @@ const MintButton = () => {
           localStorage.setItem(
             "history",
             JSON.stringify([
-              ...history,
               { type: 3, amount: numSats, date: Math.floor(Date.now() / 1000) },
+              ...history,
             ]),
           );
           // potentially capture a metric for the mint invoice
