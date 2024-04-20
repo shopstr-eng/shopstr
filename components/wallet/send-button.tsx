@@ -37,9 +37,6 @@ const SendButton = () => {
 
   const { mints, tokens, history } = getLocalStorageData();
 
-  // store mints as key/value pair
-  // { mintString: [proofArrayIndexes] }
-
   const {
     handleSubmit: handleSendSubmit,
     formState: { errors },

@@ -28,9 +28,6 @@ const PayButton = () => {
   const [showPayModal, setShowPayModal] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
   const [paymentFailed, setPaymentFailed] = useState(false);
-  const [mint, setMint] = useState<CashuMint>();
-  const [wallet, setWallet] = useState<CashuWallet>();
-  const [proofs, setProofs] = useState([]);
   const [isRedeeming, setIsRedeeming] = useState(false);
 
   // const [totalAmount, setTotalAmount] = useState(0);
@@ -47,12 +44,8 @@ const PayButton = () => {
     reset: payReset,
   } = useForm();
 
-  useEffect(() => {
-    const currentMint = new CashuMint(mints[0]);
-    const newWallet = new CashuWallet(currentMint);
-    setMint(currentMint);
-    setWallet(newWallet);
-  }, [mints]);
+  const getMint = () => new CashuMint(mints[0]);
+  const getWallet = () => new CashuWallet(getMint());
 
   const handleTogglePayModal = () => {
     payReset();
@@ -67,7 +60,7 @@ const PayButton = () => {
   const calculateFee = async (invoice: string) => {
     setFeeAmount("");
     if (invoice && /^lnbc/.test(invoice)) {
-      const fee = await wallet?.getFee(invoice);
+      const fee = await getWallet().getFee(invoice);
       if (fee) {
         setFeeAmount(formatWithCommas(fee, "sats"));
         // const invoiceValue = new Invoice({ invoice });
@@ -87,12 +80,12 @@ const PayButton = () => {
     setPaymentFailed(false);
     setIsRedeeming(true);
     try {
-      const mintKeySetResponse = await mint?.getKeySets();
+      const mintKeySetResponse = await getMint().getKeySets();
       const mintKeySetIds = mintKeySetResponse?.keysets;
       const filteredProofs = tokens.filter(
         (p: Proof) => mintKeySetIds?.includes(p.id),
       );
-      const response = await wallet?.payLnInvoice(
+      const response = await getWallet().payLnInvoice(
         invoiceString,
         filteredProofs,
       );
