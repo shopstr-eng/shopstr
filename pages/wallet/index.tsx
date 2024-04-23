@@ -30,19 +30,16 @@ const Wallet = () => {
       }
       if (localData && localData.mints && localData.tokens) {
         const currentMint = new CashuMint(localData.mints[0]);
-        console.log(currentMint);
         setMint(localData.mints[0]);
         const mintKeySetResponse = await currentMint.getKeySets();
         const mintKeySetIds = mintKeySetResponse?.keysets;
         const filteredProofs = localData.tokens.filter(
           (p: Proof) => mintKeySetIds?.includes(p.id),
         );
-        console.log(filteredProofs);
         let walletTotal =
           filteredProofs && filteredProofs.length >= 1
             ? filteredProofs.reduce((acc, p: Proof) => acc + p.amount, 0)
             : 0;
-        console.log(walletTotal);
         setWalletBalance(walletTotal);
       }
     };

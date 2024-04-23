@@ -321,7 +321,7 @@ export default function InvoiceCard({
               <BoltIcon className="h-6 w-6 hover:text-yellow-500" />
             }
           >
-            Purchase with Lightning: {formattedTotalCost}
+            Pay with Lightning: {formattedTotalCost}
           </Button>
           <Button
             type="submit"
@@ -340,7 +340,7 @@ export default function InvoiceCard({
               <BanknotesIcon className="h-6 w-6 hover:text-yellow-500" />
             }
           >
-            Purchase with Cashu: {formattedTotalCost}
+            Pay with Cashu: {formattedTotalCost}
           </Button>
         </>
       )}
