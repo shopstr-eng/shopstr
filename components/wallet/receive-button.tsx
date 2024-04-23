@@ -77,7 +77,7 @@ const ReceiveButton = () => {
           JSON.stringify([
             {
               type: 1,
-              amcheount: transactionAmount,
+              amount: transactionAmount,
               date: Math.floor(Date.now() / 1000),
             },
             ...history,
