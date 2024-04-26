@@ -22,6 +22,7 @@ export default function RedemptionModal({
   changeAmount,
   changeProofs,
   lnurl,
+  changeMint,
 }: {
   opened: boolean;
   isPaid: boolean;
@@ -29,6 +30,7 @@ export default function RedemptionModal({
   changeAmount: number;
   changeProofs: any[];
   lnurl: string;
+  changeMint: string;
 }) {
   const [showModal, setShowModal] = useState(false);
   const { userNPub, userPubkey, mints, relays } = getLocalStorageData();
@@ -69,7 +71,7 @@ export default function RedemptionModal({
       let encodedChange = getEncodedToken({
         token: [
           {
-            mint: mints[0],
+            mint: changeMint,
             proofs: changeProofs,
           },
         ],
@@ -118,7 +120,7 @@ export default function RedemptionModal({
           <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
             <div className="flex items-center justify-center">
               <CheckCircleIcon className="h-6 w-6 text-green-500" />
-              <div className="ml-2">Redeemed</div>
+              <div className="ml-2">Redeemed!</div>
             </div>
             {isCashu ? (
               <div className="items-center justify-center">
@@ -194,7 +196,7 @@ export default function RedemptionModal({
           <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
             <div className="flex items-center justify-center space-x-2">
               <XCircleIcon className="h-6 w-6 text-red-500" />
-              <div className="ml-2">Redemption Failed</div>
+              <div className="ml-2">Redemption Failed!</div>
             </div>
             <div className="items-center justify-center">
               You are attempting to redeem a token that has already been

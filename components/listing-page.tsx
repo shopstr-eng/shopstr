@@ -6,8 +6,14 @@ import InvoiceCard from "./invoice-card";
 
 export default function ListingPage({
   productData,
+  setInvoiceIsPaid,
+  setCashuPaymentSent,
+  setCashuPaymentFailed,
 }: {
-  productData?: ProductData;
+  productData: ProductData;
+  setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
+  setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
+  setCashuPaymentFailed?: (cashuPaymentFailef: boolean) => void;
 }) {
   if (!productData) return null;
   const {
@@ -29,7 +35,12 @@ export default function ListingPage({
     return (
       <div className="flex w-full flex-col items-center">
         <Divider />
-        <InvoiceCard productData={productData} />
+        <InvoiceCard
+          productData={productData}
+          setInvoiceIsPaid={setInvoiceIsPaid}
+          setCashuPaymentSent={setCashuPaymentSent}
+          setCashuPaymentFailed={setCashuPaymentFailed}
+        />
       </div>
     );
   };

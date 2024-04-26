@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { CashuMint, CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
+import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
 import { DateTime } from "luxon";
 import { v4 as uuid } from "uuid";
 import repo from "../../../utils/metrics/repo";

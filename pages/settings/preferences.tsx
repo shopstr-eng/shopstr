@@ -79,7 +79,11 @@ const PreferencesPage = () => {
       const response = await fetch(newMint + "/keys");
       // Check if the response status is in the range of 200-299
       if (response.ok) {
-        setMints([newMint]);
+        if (!mints.includes(newMint)) {
+          setMints([newMint, ...mints]);
+        } else {
+          setMints([newMint, ...mints.filter((mint) => mint !== newMint)]);
+        }
         handleToggleMintModal();
       } else {
         alert(
@@ -276,33 +280,28 @@ const PreferencesPage = () => {
           )}
 
           <div className="overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
-            {mints.map((mint) => (
-              <div
-                key={mint}
-                className="mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg"
-              >
-                <div className="max-w-xsm break-all text-light-text dark:text-dark-text">
-                  {mint}
-                </div>
-                <ClipboardIcon
-                  onClick={handleCopyMint}
-                  className={`ml-2 h-6 w-6 cursor-pointer text-light-text dark:text-dark-text ${
-                    copiedToClipboard ? "hidden" : ""
-                  }`}
-                />
-                <CheckIcon
-                  className={`ml-2 h-6 w-6 cursor-pointer text-light-text dark:text-dark-text ${
-                    copiedToClipboard ? "" : "hidden"
-                  }`}
-                />
+            <div className="mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg">
+              <div className="max-w-xsm break-all text-light-text dark:text-dark-text">
+                {mints[0]}
               </div>
-            ))}
+              <ClipboardIcon
+                onClick={handleCopyMint}
+                className={`ml-2 h-6 w-6 cursor-pointer text-light-text dark:text-dark-text ${
+                  copiedToClipboard ? "hidden" : ""
+                }`}
+              />
+              <CheckIcon
+                className={`ml-2 h-6 w-6 cursor-pointer text-light-text dark:text-dark-text ${
+                  copiedToClipboard ? "" : "hidden"
+                }`}
+              />
+            </div>
           </div>
           {mints.length > 0 && (
             <div className="mx-4 my-4 flex items-center justify-center text-center">
               <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
               <p className="ml-2 text-sm text-light-text dark:text-dark-text">
-                This mint is used to create{" "}
+                This mint is used to handle{" "}
                 <Link href="https://cashu.space" passHref legacyBehavior>
                   <a
                     target="_blank"
@@ -312,7 +311,8 @@ const PreferencesPage = () => {
                     Cashu
                   </a>
                 </Link>{" "}
-                tokens to send to the seller upon purchase.
+                tokens within your wallet and to send to the seller upon
+                purchase.
               </p>
             </div>
           )}

@@ -14,12 +14,18 @@ import {
 } from "@nextui-org/react";
 import axios from "axios";
 import {
+  BanknotesIcon,
   BoltIcon,
   CheckIcon,
   ClipboardIcon,
   EnvelopeIcon,
 } from "@heroicons/react/24/outline";
-import { CashuMint, CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
+import {
+  CashuMint,
+  CashuWallet,
+  getEncodedToken,
+  Proof,
+} from "@cashu/cashu-ts";
 import {
   getLocalStorageData,
   isUserLoggedIn,
@@ -36,13 +42,20 @@ import SignInModal from "./sign-in/SignInModal";
 
 export default function InvoiceCard({
   productData,
+  setInvoiceIsPaid,
+  setCashuPaymentSent,
+  setCashuPaymentFailed,
 }: {
   productData: ProductData;
+  setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
+  setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
+  setCashuPaymentFailed?: (cashuPaymentFailef: boolean) => void;
 }) {
   const router = useRouter();
   const { pubkey, currency, totalCost } = productData;
   const pubkeyOfProductBeingSold = pubkey;
-  const { userNPub, userPubkey, relays, mints } = getLocalStorageData();
+  const { userNPub, userPubkey, relays, mints, tokens, history } =
+    getLocalStorageData();
 
   const [showInvoiceCard, setShowInvoiceCard] = useState(false);
 
@@ -81,7 +94,7 @@ export default function InvoiceCard({
     setName(profile && profile.content.name ? profile.content.name : userNPub);
   }, [profileContext]);
 
-  const handlePayment = async (newPrice: number, currency: string) => {
+  const handleLightningPayment = async (newPrice: number, currency: string) => {
     const wallet = new CashuWallet(new CashuMint(mints[0]));
     if (currency === "USD") {
       try {
@@ -147,9 +160,9 @@ export default function InvoiceCard({
           captureInvoicePaidmetric(metricsInvoiceId, productData.id);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
-          setTimeout(() => {
-            router.push("/"); // takes you back to the home page after payment has been confirmed by cashu mint api
-          }, 1900); // 1.9 seconds is the amount of time for the checkmark animation to play
+          if (setInvoiceIsPaid) {
+            setInvoiceIsPaid(true);
+          }
           break;
         }
       } catch (error) {
@@ -212,6 +225,68 @@ export default function InvoiceCard({
 
   const formattedTotalCost = formatWithCommas(totalCost, currency);
 
+  const handleCashuPayment = async (price: number, currency: string) => {
+    try {
+      const mint = new CashuMint(mints[0]);
+      const wallet = new CashuWallet(mint);
+      if (currency === "USD") {
+        try {
+          const res = await axios.get(
+            "https://api.coinbase.com/v2/prices/BTC-USD/spot",
+          );
+          const btcSpotPrice = Number(res.data.data.amount);
+          const numSats = (price / btcSpotPrice) * 100000000;
+          price = Math.round(numSats);
+        } catch (err) {
+          console.error("ERROR", err);
+        }
+      }
+      const mintKeySetResponse = await mint.getKeySets();
+      const mintKeySetIds = mintKeySetResponse?.keysets;
+      const filteredProofs = tokens.filter(
+        (p: Proof) => mintKeySetIds?.includes(p.id),
+      );
+      const tokenToSend = await wallet.send(price, filteredProofs);
+      const encodedSendToken = getEncodedToken({
+        token: [
+          {
+            mint: mints[0],
+            proofs: tokenToSend.send,
+          },
+        ],
+      });
+      sendTokens(encodedSendToken);
+      // captureInvoicePaidmetric(metricsInvoiceId, productData.id);
+      // another metric to capture native Cashu payments is needed
+      const changeProofs = tokenToSend?.returnChange;
+      const remainingProofs = tokens.filter(
+        (p: Proof) => !mintKeySetIds?.includes(p.id),
+      );
+      let proofArray;
+      if (changeProofs.length >= 1 && changeProofs) {
+        proofArray = [...remainingProofs, ...changeProofs];
+      } else {
+        proofArray = [...remainingProofs];
+      }
+      localStorage.setItem("tokens", JSON.stringify(proofArray));
+      localStorage.setItem(
+        "history",
+        JSON.stringify([
+          { type: 5, amount: price, date: Math.floor(Date.now() / 1000) },
+          ...history,
+        ]),
+      );
+      if (setCashuPaymentSent) {
+        setCashuPaymentSent(true);
+      }
+    } catch (error) {
+      console.error(error);
+      if (setCashuPaymentFailed) {
+        setCashuPaymentFailed(true);
+      }
+    }
+  };
+
   return (
     <>
       {!showInvoiceCard && (
@@ -238,7 +313,7 @@ export default function InvoiceCard({
                 return;
               }
               if (randomNsec !== "") {
-                handlePayment(totalCost, currency);
+                handleLightningPayment(totalCost, currency);
               }
               setShowInvoiceCard(true);
             }}
@@ -246,7 +321,26 @@ export default function InvoiceCard({
               <BoltIcon className="h-6 w-6 hover:text-yellow-500" />
             }
           >
-            Purchase: {formattedTotalCost}
+            Pay with Lightning: {formattedTotalCost}
+          </Button>
+          <Button
+            type="submit"
+            className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
+            onClick={() => {
+              let userLoggedIn = isUserLoggedIn();
+              if (!userLoggedIn) {
+                onOpen();
+                return;
+              }
+              if (randomNsec !== "") {
+                handleCashuPayment(totalCost, currency);
+              }
+            }}
+            startContent={
+              <BanknotesIcon className="h-6 w-6 hover:text-yellow-500" />
+            }
+          >
+            Pay with Cashu: {formattedTotalCost}
           </Button>
         </>
       )}
