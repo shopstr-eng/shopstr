@@ -86,7 +86,7 @@ export const ChatPanel = ({
         })}
         <div ref={bottomDivRef} />
       </div>
-      <div className="space-x flex items-center p-2">
+      <div className="space-x flex items-center p-2 pb-20 md:pb-0 lg:pb-0">
         <Input
           className="pr-3 text-light-text dark:text-dark-text"
           type="text"
