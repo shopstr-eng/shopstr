@@ -307,8 +307,8 @@ const UserProfilePage = () => {
                   control={control}
                   rules={{
                     maxLength: {
-                      value: 300,
-                      message: "This input exceed maxLength of 300.",
+                      value: 500,
+                      message: "This input exceed maxLength of 500.",
                     },
                   }}
                   render={({

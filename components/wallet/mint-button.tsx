@@ -167,8 +167,8 @@ const MintButton = () => {
                 rules={{
                   required: "A whole number is required.",
                   maxLength: {
-                    value: 300,
-                    message: "This input exceed maxLength of 300.",
+                    value: 500,
+                    message: "This input exceed maxLength of 500.",
                   },
                   validate: (value) =>
                     /^\d+$/.test(value) || "Please enter a whole number.",
