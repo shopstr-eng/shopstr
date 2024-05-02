@@ -59,6 +59,7 @@ const UpdateInvoice = async (req: NextApiRequest, res: NextApiResponse) => {
         currency,
         merchant_id: event.merchant_id,
         listing_id: event.listing_id,
+        funding_source: 'ln',
         customer_location: locationToSqlGeo(
           await getLocationFromReqHeaders(req.headers),
         ),
