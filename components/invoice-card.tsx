@@ -37,7 +37,7 @@ import {
   formatWithCommas,
 } from "./utility-components/display-monetary-info";
 import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
-import { captureInvoicePaidmetric } from "./utility/metrics-helper-functions";
+import { captureCashuPaidMetric, captureInvoicePaidmetric } from "./utility/metrics-helper-functions";
 import SignInModal from "./sign-in/SignInModal";
 
 export default function InvoiceCard({
@@ -94,9 +94,10 @@ export default function InvoiceCard({
     setName(profile && profile.content.name ? profile.content.name : userNPub);
   }, [profileContext]);
 
-  const handleLightningPayment = async (newPrice: number, currency: string) => {
+  const handleLightningPayment = async () => {
+    let newPrice = totalCost;
     const wallet = new CashuWallet(new CashuMint(mints[0]));
-    if (currency === "USD") {
+    if (currency.toUpperCase() === "USD") {
       try {
         const res = await axios.get(
           "https://api.coinbase.com/v2/prices/BTC-USD/spot",
@@ -157,7 +158,7 @@ export default function InvoiceCard({
 
         if (encoded) {
           sendTokens(encoded);
-          captureInvoicePaidmetric(metricsInvoiceId, productData.id);
+          captureInvoicePaidmetric(metricsInvoiceId, productData);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           if (setInvoiceIsPaid) {
@@ -225,8 +226,9 @@ export default function InvoiceCard({
 
   const formattedTotalCost = formatWithCommas(totalCost, currency);
 
-  const handleCashuPayment = async (price: number, currency: string) => {
+  const handleCashuPayment = async () => {
     try {
+      let price = totalCost;
       const mint = new CashuMint(mints[0]);
       const wallet = new CashuWallet(mint);
       if (currency === "USD") {
@@ -255,9 +257,9 @@ export default function InvoiceCard({
           },
         ],
       });
-      sendTokens(encodedSendToken);
-      // captureInvoicePaidmetric(metricsInvoiceId, productData.id);
-      // another metric to capture native Cashu payments is needed
+      sendTokens(encodedSendToken).then(() => {
+        captureCashuPaidMetric(productData);
+      }).catch(console.log)
       const changeProofs = tokenToSend?.returnChange;
       const remainingProofs = tokens.filter(
         (p: Proof) => !mintKeySetIds?.includes(p.id),
@@ -313,7 +315,7 @@ export default function InvoiceCard({
                 return;
               }
               if (randomNsec !== "") {
-                handleLightningPayment(totalCost, currency);
+                handleLightningPayment();
               }
               setShowInvoiceCard(true);
             }}
@@ -333,7 +335,7 @@ export default function InvoiceCard({
                 return;
               }
               if (randomNsec !== "") {
-                handleCashuPayment(totalCost, currency);
+                handleCashuPayment();
               }
             }}
             startContent={
