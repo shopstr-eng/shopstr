@@ -57,7 +57,7 @@ export default function RedeemButton({ token }: { token: string }) {
     setWallet(newWallet);
     const totalAmount =
       Array.isArray(proofs) && proofs.length > 0
-        ? proofs.reduce((acc, current) => acc + current.amount, 0)
+        ? proofs.reduce((acc, current: Proof) => acc + current.amount, 0)
         : 0;
 
     setTokenAmount(totalAmount);
@@ -114,7 +114,10 @@ export default function RedeemButton({ token }: { token: string }) {
       const changeProofs = response?.change;
       const changeAmount =
         Array.isArray(changeProofs) && changeProofs.length > 0
-          ? changeProofs.reduce((acc, current) => acc + current.amount, 0)
+          ? changeProofs.reduce(
+              (acc, current: Proof) => acc + current.amount,
+              0,
+            )
           : 0;
       if (changeAmount >= 1 && changeProofs) {
         setRedemptionChangeAmount(changeAmount);
@@ -191,6 +194,7 @@ export default function RedeemButton({ token }: { token: string }) {
         changeAmount={redemptionChangeAmount}
         changeProofs={redemptionChangeProofs}
         lnurl={lnurl}
+        changeMint={tokenMint}
       />
     </div>
   );

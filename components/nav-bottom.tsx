@@ -10,6 +10,8 @@ import {
   ArrowLeftOnRectangleIcon,
   ChartBarIcon,
   PlusIcon,
+  Cog6ToothIcon,
+  WalletIcon,
 } from "@heroicons/react/24/outline";
 import { Button, DropdownItem, useDisclosure } from "@nextui-org/react";
 import { countNumberOfUnreadMessagesFromChatsContext } from "@/utils/messages/utils";
@@ -28,8 +30,13 @@ import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdo
 import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
 
 const BottomNav = () => {
-  const { isHomeActive, isMessagesActive, isMetricsActive, isProfileActive } =
-    useNavigation();
+  const {
+    isHomeActive,
+    isMessagesActive,
+    isWalletActive,
+    isMetricsActive,
+    isProfileActive,
+  } = useNavigation();
   const router = useRouter();
 
   const chatsContext = useContext(ChatsContext);
@@ -118,6 +125,22 @@ const BottomNav = () => {
                   : ""
               }`}
             ></EnvelopeOpenIcon>
+          </Button>
+        </div>
+        <div>
+          <Button
+            className="bg-transparent py-8"
+            onClick={() => handleRoute("/wallet")}
+          >
+            <WalletIcon
+              height={32}
+              width={32}
+              className={`cursor-pointer text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
+                isWalletActive
+                  ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
+                  : ""
+              }`}
+            ></WalletIcon>
           </Button>
         </div>
         <div>

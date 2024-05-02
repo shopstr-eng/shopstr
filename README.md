@@ -1,6 +1,6 @@
 # Shopstr
 
-A global, decentralized marketplace to buy and sell anything, anywhere, anytime.
+A global, decentralized Nostr marketplace to buy and sell anything, anywhere, anytime, anonymously with Bitcoin.
 
 # Authors
 

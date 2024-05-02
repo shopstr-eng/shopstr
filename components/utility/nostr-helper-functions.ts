@@ -298,6 +298,8 @@ const LOCALSTORAGECONSTANTS = {
   encryptedPrivateKey: "encryptedPrivateKey",
   relays: "relays",
   mints: "mints",
+  tokens: "tokens",
+  history: "history",
 };
 
 export const setLocalStorageDataOnSignIn = ({
@@ -359,6 +361,8 @@ export interface LocalStorageInterface {
   userPubkey: string;
   relays: string[];
   mints: string[];
+  tokens: [];
+  history: [];
   encryptedPrivateKey?: string;
 }
 
@@ -369,6 +373,8 @@ export const getLocalStorageData = (): LocalStorageInterface => {
   let userPubkey;
   let relays;
   let mints;
+  let tokens;
+  let history;
 
   if (typeof window !== "undefined") {
     userNPub = localStorage.getItem(LOCALSTORAGECONSTANTS.userNPub);
@@ -424,6 +430,14 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       mints = ["https://mint.minibits.cash/Bitcoin"];
       localStorage.setItem(LOCALSTORAGECONSTANTS.mints, JSON.stringify(mints));
     }
+
+    tokens = localStorage.getItem(LOCALSTORAGECONSTANTS.tokens)
+      ? JSON.parse(localStorage.getItem("tokens") as string)
+      : localStorage.setItem(LOCALSTORAGECONSTANTS.tokens, JSON.stringify([]));
+
+    history = localStorage.getItem(LOCALSTORAGECONSTANTS.history)
+      ? JSON.parse(localStorage.getItem("history") as string)
+      : localStorage.setItem(LOCALSTORAGECONSTANTS.history, JSON.stringify([]));
   }
   return {
     signInMethod: signInMethod as string,
@@ -432,6 +446,8 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     userPubkey: userPubkey as string,
     relays: relays || [],
     mints,
+    tokens: tokens || [],
+    history: history || [],
   };
 };
 

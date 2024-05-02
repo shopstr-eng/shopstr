@@ -7,3 +7,7 @@ channel = "stable-22_11"
 run = ["sh", "-c", "npm run start"]
 deploymentTarget = "cloudrun"
 build = ["sh", "-c", "npm run build"]
+
+[[ports]]
+localPort = 3000
+externalPort = 80

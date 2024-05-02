@@ -52,3 +52,7 @@ body {
   overflow: auto;
   position: relative;
 }
+
+.text-xxs {
+  font-size: 0.63rem; /* Example of a smaller font size than text-xs */
+}
