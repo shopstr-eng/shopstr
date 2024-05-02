@@ -35,6 +35,8 @@ const DisplayEvents = ({
   const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
   const router = useRouter();
 
+  const { userPubkey } = getLocalStorageData();
+
   useEffect(() => {
     if (!productEventContext) return;
     if (!productEventContext.isLoading && productEventContext.productEvents) {
@@ -137,6 +139,11 @@ const DisplayEvents = ({
   ) => {
     if (focusedPubkey && productData.pubkey !== focusedPubkey) return;
     if (!productSatisfiesAllFilters(productData)) return;
+
+    if (productData.pubkey === "95a5e73109d4c419456372ce99bbf5823dfb6f77aed58d03f77ea052f150ee4a" && userPubkey !== productData.pubkey) {
+      return; // temp fix, add adult categories or separate from global later
+    }
+    
     return (
       <ProductCard
         key={productData.id + "-" + index}
