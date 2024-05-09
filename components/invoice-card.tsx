@@ -37,7 +37,10 @@ import {
   formatWithCommas,
 } from "./utility-components/display-monetary-info";
 import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
-import { captureCashuPaidMetric, captureInvoicePaidmetric } from "./utility/metrics-helper-functions";
+import {
+  captureCashuPaidMetric,
+  captureInvoicePaidmetric,
+} from "./utility/metrics-helper-functions";
 import SignInModal from "./sign-in/SignInModal";
 
 export default function InvoiceCard({
@@ -257,9 +260,11 @@ export default function InvoiceCard({
           },
         ],
       });
-      sendTokens(encodedSendToken).then(() => {
-        captureCashuPaidMetric(productData);
-      }).catch(console.log)
+      sendTokens(encodedSendToken)
+        .then(() => {
+          captureCashuPaidMetric(productData);
+        })
+        .catch(console.log);
       const changeProofs = tokenToSend?.returnChange;
       const remainingProofs = tokens.filter(
         (p: Proof) => !mintKeySetIds?.includes(p.id),

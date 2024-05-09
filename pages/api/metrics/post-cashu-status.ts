@@ -13,7 +13,10 @@ const parseRequestBody = (body: string) => {
   return parsedBody;
 };
 
-const CreateCashuPaidStatus = async (req: NextApiRequest, res: NextApiResponse) => {
+const CreateCashuPaidStatus = async (
+  req: NextApiRequest,
+  res: NextApiResponse,
+) => {
   if (req.method !== "POST") {
     return res.status(405).json({});
   }
@@ -33,7 +36,7 @@ const CreateCashuPaidStatus = async (req: NextApiRequest, res: NextApiResponse) 
     currency: event.currency,
     merchant_id: event.merchant_id,
     listing_id: event.listing_id,
-    funding_source: 'cashu',
+    funding_source: "cashu",
     customer_location: locationToSqlGeo(
       await getLocationFromReqHeaders(req.headers),
     ),
@@ -42,7 +45,6 @@ const CreateCashuPaidStatus = async (req: NextApiRequest, res: NextApiResponse) 
     ),
   });
   return res.status(200).json({});
-
 };
 
 export default CreateCashuPaidStatus;
