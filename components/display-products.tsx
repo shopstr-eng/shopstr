@@ -140,7 +140,7 @@ const DisplayEvents = ({
     if (focusedPubkey && productData.pubkey !== focusedPubkey) return;
     if (!productSatisfiesAllFilters(productData)) return;
 
-    if (productData.pubkey === "95a5e73109d4c419456372ce99bbf5823dfb6f77aed58d03f77ea052f150ee4a" && userPubkey !== productData.pubkey) {
+    if ((productData.pubkey === "95a5e73109d4c419456372ce99bbf5823dfb6f77aed58d03f77ea052f150ee4a" || productData.pubkey === "773ed8aba7ee59f6f24612533e891450b6197b5ca24e7680209adb944e330e2f") && userPubkey !== productData.pubkey) {
       return; // temp fix, add adult categories or separate from global later
     }
     
