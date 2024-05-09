@@ -38,7 +38,7 @@ export default function ClaimButton({ token }: { token: string }) {
   const [openClaimTypeModal, setOpenCLaimTypeModal] = useState(false);
   const [openRedemptionModal, setOpenRedemptionModal] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
-  const [isCashu, setIsCashu] = useState(false);
+  const [isInvalidLnurl, setIsInvalidLnurl] = useState(false);
   const [isSpent, setIsSpent] = useState(false);
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [wallet, setWallet] = useState<CashuWallet>();
@@ -49,7 +49,7 @@ export default function ClaimButton({ token }: { token: string }) {
   const [claimChangeAmount, setClaimChangeAmount] = useState(0);
   const [claimChangeProofs, setClaimChangeProofs] = useState<Proof[]>([]);
 
-  const [showReceiveModal, setShowReceiveModal] = useState(false);
+  const [isInvalidSuccess, setIsInvalidSuccess] = useState(false);
   const [isReceived, setIsReceived] = useState(false);
   const [isSpent, setIsSpent] = useState(false);
   const [isInvalidToken, setIsInvalidToken] = useState(false);
@@ -99,7 +99,7 @@ export default function ClaimButton({ token }: { token: string }) {
         tokenMint !==
           "https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV"
         ? sellerProfile.content.lud16
-        : userNPub + "@npub.cash",
+        : "",
     );
     setName(
       sellerProfile && sellerProfile.content.name
@@ -112,12 +112,18 @@ export default function ClaimButton({ token }: { token: string }) {
     if (type === "receive") {
       receive();
     } else if (type === "redeem") {
-      redeem();
+      if (lnurl) {
+        setIsInvalidLnurl(true);
+        receive();
+      } else {
+        redeem();
+      }
     }
   };
 
   const receive = async () => {
     setOpenClaimTypeModal(false);
+    setIsInvaidSuccess(false);
     setIsReceived(false);
     setIsSpent(false);
     setIsInvalidToken(false);
@@ -132,9 +138,12 @@ export default function ClaimButton({ token }: { token: string }) {
           const updatedMints = [...mints, tokenMint];
           localStorage.setItem("mints", JSON.stringify(updatedMints));
         }
-        setIsReceived(true);
+        if (isInvalidLnurl) {
+          setIsInvalidSuccess(true);
+        } else {
+          setIsReceived(true);
+        }
         setIsRedeeming(false);
-        setShowReceiveModal(!showReceiveModal);
         localStorage.setItem(
           "history",
           JSON.stringify([
@@ -161,9 +170,6 @@ export default function ClaimButton({ token }: { token: string }) {
     setIsRedeeming(true);
     const newAmount = Math.floor(tokenAmount * 0.98 - 2);
     const ln = new LightningAddress(lnurl);
-    if (lnurl.includes("@npub.cash")) {
-      setIsCashu(true);
-    }
     try {
       await ln.fetch();
       const invoice = await ln.requestInvoice({ satoshi: newAmount });
@@ -190,7 +196,6 @@ export default function ClaimButton({ token }: { token: string }) {
     } catch (error) {
       console.log(error);
       setIsPaid(false);
-      setIsCashu(false);
       setOpenRedemptionModal(true);
       setIsRedeeming(false);
     }
@@ -271,6 +276,38 @@ export default function ClaimButton({ token }: { token: string }) {
           </ModalBody>
         </ModalContent>
       </Modal>
+      {isInvalidSuccess ? (
+        <>
+          <Modal
+            backdrop="blur"
+            isOpen={isInvalidSuccess}
+            onClose={() => setIsInvalidSuccess(false)}
+            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
+            classNames={{
+              body: "py-6 ",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
+            }}
+            isDismissable={true}
+            scrollBehavior={"normal"}
+            placement={"center"}
+            size="2xl"
+          >
+            <ModalContent>
+              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <div className="flex items-center justify-center">
+                  <CheckCircleIcon className="h-6 w-6 text-green-500" />
+                  <div className="ml-2">
+                    No valid Lightning address found! Check your Shopstr wallet for your sats.
+                  </div>
+                </div>
+              </ModalBody>
+            </ModalContent>
+          </Modal>
+        </>
+      ) : null}
       {isReceived ? (
         <>
           <Modal
@@ -366,7 +403,6 @@ export default function ClaimButton({ token }: { token: string }) {
       ) : null}
       <RedemptionModal
         isPaid={isPaid}
-        isCashu={isCashu}
         opened={openRedemptionModal}
         changeAmount={claimChangeAmount}
         changeProofs={claimChangeProofs}

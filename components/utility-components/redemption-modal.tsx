@@ -18,7 +18,6 @@ import { formatWithCommas } from "./display-monetary-info";
 export default function RedemptionModal({
   opened,
   isPaid,
-  isCashu,
   changeAmount,
   changeProofs,
   lnurl,
@@ -26,7 +25,6 @@ export default function RedemptionModal({
 }: {
   opened: boolean;
   isPaid: boolean;
-  isCashu: boolean;
   changeAmount: number;
   changeProofs: any[];
   lnurl: string;
@@ -122,29 +120,11 @@ export default function RedemptionModal({
               <CheckCircleIcon className="h-6 w-6 text-green-500" />
               <div className="ml-2">Redeemed!</div>
             </div>
-            {isCashu ? (
-              <div className="items-center justify-center">
-                Sign in to{" "}
-                <Link href="https://npub.cash/claim" passHref legacyBehavior>
-                  <a
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline"
-                  >
-                    npub.cash
-                  </a>
-                </Link>{" "}
-                with your Nostr keys to claim your sats! Would you like to
-                donate your overpaid Lightning fees ({formattedChangeAmount}) to
-                support the development of Shopstr?
-              </div>
-            ) : (
-              <div className="flex items-center justify-center">
-                Check your Lightning address ({lnurl}) for your sats! Would you
-                like to donate your overpaid Lightning fees (
-                {formattedChangeAmount}) to support the development of Shopstr?
-              </div>
-            )}
+            <div className="flex items-center justify-center">
+              Check your Lightning address ({lnurl}) for your sats! Would you
+              like to donate your overpaid Lightning fees (
+              {formattedChangeAmount}) to support the development of Shopstr?
+            </div>
             <div className="flex w-full flex-wrap justify-evenly gap-2">
               <Button
                 className={SHOPSTRBUTTONCLASSNAMES + " mt-2 w-[20%]"}
