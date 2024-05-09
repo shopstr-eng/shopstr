@@ -40,7 +40,6 @@ export const captureInvoicePaidmetric = async (
   });
 };
 
-
 export const captureCashuPaidMetric = async (productData: ProductData) => {
   const { mints } = getLocalStorageData();
   await axios({
@@ -58,7 +57,7 @@ export const captureCashuPaidMetric = async (productData: ProductData) => {
       discount_total: 0,
       fee_total: 0,
       tax_total: 0,
-      currency: 'SATS',
+      currency: "SATS",
       merchant_id: productData.pubkey,
       merchant_location: productData.location,
       mint: mints[0],
