@@ -17,12 +17,14 @@ export const ChatPanel = ({
   currentChatPubkey,
   chatsMap,
   isSendingDMLoading,
+  isPayment,
 }: {
   handleGoBack: () => void;
   handleSendMessage: (message: string) => void;
   currentChatPubkey: string;
   chatsMap: Map<string, ChatObject>;
   isSendingDMLoading: boolean;
+  isPayment: boolean;
 }) => {
   const [messageInput, setMessageInput] = useState("");
   const [messages, setMessages] = useState<NostrMessageEvent[]>([]); // [chatPubkey, chat]
@@ -86,34 +88,36 @@ export const ChatPanel = ({
         })}
         <div ref={bottomDivRef} />
       </div>
-      <div className="space-x flex items-center p-2 pb-20 md:pb-0 lg:pb-0">
-        <Input
-          className="pr-3 text-light-text dark:text-dark-text"
-          type="text"
-          width="100%"
-          size="md"
-          value={messageInput}
-          placeholder="Type your message..."
-          onChange={(e) => {
-            setMessageInput(e.target.value);
-          }}
-          onKeyDown={(e) => {
-            if (
-              e.key === "Enter" &&
-              !(messageInput === "" || isSendingDMLoading)
-            )
-              sendMessage();
-          }}
-        />
-        <Button
-          className={SHOPSTRBUTTONCLASSNAMES}
-          isDisabled={messageInput === "" || isSendingDMLoading}
-          isLoading={isSendingDMLoading}
-          onClick={sendMessage}
-        >
-          Send
-        </Button>
-      </div>
+      {!isPayment && (
+        <div className="space-x flex items-center p-2 pb-20 md:pb-0 lg:pb-0">
+          <Input
+            className="pr-3 text-light-text dark:text-dark-text"
+            type="text"
+            width="100%"
+            size="md"
+            value={messageInput}
+            placeholder="Type your message..."
+            onChange={(e) => {
+              setMessageInput(e.target.value);
+            }}
+            onKeyDown={(e) => {
+              if (
+                e.key === "Enter" &&
+                !(messageInput === "" || isSendingDMLoading)
+              )
+                sendMessage();
+            }}
+          />
+          <Button
+            className={SHOPSTRBUTTONCLASSNAMES}
+            isDisabled={messageInput === "" || isSendingDMLoading}
+            isLoading={isSendingDMLoading}
+            onClick={sendMessage}
+          >
+            Send
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

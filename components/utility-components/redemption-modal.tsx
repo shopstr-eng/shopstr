@@ -181,17 +181,7 @@ export default function RedemptionModal({
             <div className="items-center justify-center">
               You are attempting to redeem a token that has already been
               redeemed, is too small/large, or for which there were no payment
-              routes found. Copy the token string (cashuA...) and head over{" "}
-              <Link href="https://wallet.nutstash.app/" passHref legacyBehavior>
-                <a
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline"
-                >
-                  Nutstash
-                </a>
-              </Link>{" "}
-              to try and redeem it!
+              routes found.
             </div>
           </ModalBody>
         </ModalContent>

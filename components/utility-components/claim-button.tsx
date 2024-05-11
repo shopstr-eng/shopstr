@@ -7,7 +7,7 @@ import {
   Button,
   Spinner,
 } from "@nextui-org/react";
-import { ArrowDownTrayIcon, BoltIcon } from "@heroicons/react/24/outline";
+import { ArrowDownTrayIcon, BoltIcon, CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/outline";
 import { useTheme } from "next-themes";
 import { ProfileMapContext } from "../../utils/context/context";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
@@ -35,11 +35,10 @@ export default function ClaimButton({ token }: { token: string }) {
   const profileContext = useContext(ProfileMapContext);
   const { userNPub, userPubkey, relays } = getLocalStorageData();
 
-  const [openClaimTypeModal, setOpenCLaimTypeModal] = useState(false);
+  const [openClaimTypeModal, setOpenClaimTypeModal] = useState(false);
   const [openRedemptionModal, setOpenRedemptionModal] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
-  const [isInvalidLnurl, setIsInvalidLnurl] = useState(false);
-  const [isSpent, setIsSpent] = useState(false);
+  const [isRedeemed, setIsRedeemed] = useState(false);
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [wallet, setWallet] = useState<CashuWallet>();
   const [proofs, setProofs] = useState([]);
@@ -78,11 +77,11 @@ export default function ClaimButton({ token }: { token: string }) {
   }, [token]);
 
   useEffect(() => {
-    setIsSpent(false);
+    setIsRedeemed(false);
     const checkProofsSpent = async () => {
       if (proofs.length > 0) {
         const spentProofs = await wallet?.checkProofsSpent(proofs);
-        if (spentProofs && spentProofs.length > 0) setIsSpent(true);
+        if (spentProofs && spentProofs.length > 0) setIsRedeemed(true);
       }
     };
     checkProofsSpent();
@@ -99,7 +98,7 @@ export default function ClaimButton({ token }: { token: string }) {
         tokenMint !==
           "https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV"
         ? sellerProfile.content.lud16
-        : "",
+        : "invalid",
     );
     setName(
       sellerProfile && sellerProfile.content.name
@@ -110,20 +109,19 @@ export default function ClaimButton({ token }: { token: string }) {
 
   const handleClaimType = (type: string) => {
     if (type === "receive") {
-      receive();
+      receive(false);
     } else if (type === "redeem") {
-      if (lnurl) {
-        setIsInvalidLnurl(true);
-        receive();
+      if (lnurl === "invalid") {
+        receive(true);
       } else {
         redeem();
       }
     }
   };
 
-  const receive = async () => {
+  const receive = async (isInvalid: boolean) => {
     setOpenClaimTypeModal(false);
-    setIsInvaidSuccess(false);
+    setIsInvalidSuccess(false);
     setIsReceived(false);
     setIsSpent(false);
     setIsInvalidToken(false);
@@ -138,7 +136,7 @@ export default function ClaimButton({ token }: { token: string }) {
           const updatedMints = [...mints, tokenMint];
           localStorage.setItem("mints", JSON.stringify(updatedMints));
         }
-        if (isInvalidLnurl) {
+        if (isInvalid) {
           setIsInvalidSuccess(true);
         } else {
           setIsReceived(true);
@@ -205,16 +203,16 @@ export default function ClaimButton({ token }: { token: string }) {
     const disabledStyle =
       "min-w-fit from-gray-300 to-gray-400 cursor-not-allowed";
     const enabledStyle = SHOPSTRBUTTONCLASSNAMES;
-    const className = isSpent ? disabledStyle : enabledStyle;
+    const className = isRedeemed ? disabledStyle : enabledStyle;
     return className;
-  }, [isSpent]);
+  }, [isRedeemed]);
 
   return (
     <div>
       <Button
         className={buttonClassName + " mt-2 w-[20%]"}
         onClick={() => setOpenClaimTypeModal(true)}
-        isDisabled={isSpent}
+        isDisabled={isRedeemed}
       >
         {isRedeeming ? (
           <>
@@ -224,7 +222,7 @@ export default function ClaimButton({ token }: { token: string }) {
               <Spinner size={"sm"} color="secondary" />
             )}
           </>
-        ) : isSpent ? (
+        ) : isRedeemed ? (
           <>Claimed: {tokenAmount} sats</>
         ) : (
           <>Claim: {tokenAmount} sats</>
@@ -300,7 +298,8 @@ export default function ClaimButton({ token }: { token: string }) {
                 <div className="flex items-center justify-center">
                   <CheckCircleIcon className="h-6 w-6 text-green-500" />
                   <div className="ml-2">
-                    No valid Lightning address found! Check your Shopstr wallet for your sats.
+                    No valid Lightning address found! Check your Shopstr wallet
+                    for your sats.
                   </div>
                 </div>
               </ModalBody>
