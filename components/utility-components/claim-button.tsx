@@ -79,9 +79,13 @@ export default function ClaimButton({ token }: { token: string }) {
   useEffect(() => {
     setIsRedeemed(false);
     const checkProofsSpent = async () => {
-      if (proofs.length > 0) {
-        const spentProofs = await wallet?.checkProofsSpent(proofs);
-        if (spentProofs && spentProofs.length > 0) setIsRedeemed(true);
+      try {
+        if (proofs.length > 0) {
+          const spentProofs = await wallet?.checkProofsSpent(proofs);
+          if (spentProofs && spentProofs.length > 0) setIsRedeemed(true);
+        }
+      } catch (error) {
+        console.error(error);
       }
     };
     checkProofsSpent();
