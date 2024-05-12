@@ -9,7 +9,6 @@ import Inquiries from "./inquiries";
 import Payments from "./payments";
 
 const MessageFeed = () => {
-
   const [hookProps] = useState({
     tabs: [
       {
@@ -29,15 +28,13 @@ const MessageFeed = () => {
 
   return (
     <div className="flex flex-1 flex-col">
-      <div
-        className="sticky inset-x-0 top-0 z-30 flex w-full translate-y-0 flex-col border-0 backdrop-blur-xl transition-all md:translate-y-0"
-      >
+      <div className="sticky inset-x-0 top-0 z-30 flex w-full translate-y-0 flex-col border-0 backdrop-blur-xl transition-all md:translate-y-0">
         <div className="flex w-full flex-row items-center justify-around">
           <Framer.Tabs {...framer.tabProps} />
         </div>
       </div>
 
-      <div className="flex h-[90vh] flex-col bg-light-bg dark:bg-dark-bg w-full pt-4">
+      <div className="flex h-[90vh] w-full flex-col bg-light-bg pt-4 dark:bg-dark-bg">
         {framer.selectedTab.children}
       </div>
     </div>

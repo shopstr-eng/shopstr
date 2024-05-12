@@ -63,7 +63,7 @@ export const ChatPanel = ({
   };
 
   return (
-    <div className="absolute flex h-full w-full flex-col overflow-clip bg-light-bg px-2 dark:bg-dark-bg md:relative md:h-[85vh] pb-20 md:pb-0 lg:pb-0">
+    <div className="absolute flex h-full w-full flex-col overflow-clip bg-light-bg px-2 pb-20 dark:bg-dark-bg md:relative md:h-[85vh] md:pb-0 lg:pb-0">
       <h2 className="flex h-[60px] w-full flex-row items-center overflow-clip align-middle text-shopstr-purple-light dark:text-shopstr-yellow-light">
         <ArrowUturnLeftIcon
           onClick={handleGoBack}

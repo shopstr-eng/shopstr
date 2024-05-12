@@ -301,22 +301,24 @@ const Payments = () => {
           </div>
         ) : (
           <div className="flex flex-row">
-            <div className="h-[85vh] w-full overflow-y-auto rounded-md dark:bg-dark-bg pb-12 md:pb-0 lg:pb-0 md:w-[450px] md:max-w-[33%] md:flex-shrink-0">
+            <div className="h-[85vh] w-full overflow-y-auto rounded-md pb-12 dark:bg-dark-bg md:w-[450px] md:max-w-[33%] md:flex-shrink-0 md:pb-0 lg:pb-0">
               {sortedChatsByLastMessage.map(
                 ([pubkeyOfChat, chatObject]: [string, ChatObject]) => {
-                  const hasCashuA = chatObject.decryptedChat.some(message =>
-                    message.content.includes("cashuA")
+                  const hasCashuA = chatObject.decryptedChat.some((message) =>
+                    message.content.includes("cashuA"),
                   );
-                  return hasCashuA && (
-                    <ChatButton
-                      key={pubkeyOfChat}
-                      pubkeyOfChat={pubkeyOfChat}
-                      chatObject={chatObject}
-                      openedChatPubkey={currentChatPubkey}
-                      handleClickChat={enterChat}
-                    />
+                  return (
+                    hasCashuA && (
+                      <ChatButton
+                        key={pubkeyOfChat}
+                        pubkeyOfChat={pubkeyOfChat}
+                        chatObject={chatObject}
+                        openedChatPubkey={currentChatPubkey}
+                        handleClickChat={enterChat}
+                      />
+                    )
                   );
-                }
+                },
               )}
             </div>
             <ChatPanel

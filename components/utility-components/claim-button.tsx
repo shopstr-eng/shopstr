@@ -7,7 +7,12 @@ import {
   Button,
   Spinner,
 } from "@nextui-org/react";
-import { ArrowDownTrayIcon, BoltIcon, CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/outline";
+import {
+  ArrowDownTrayIcon,
+  BoltIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+} from "@heroicons/react/24/outline";
 import { useTheme } from "next-themes";
 import { ProfileMapContext } from "../../utils/context/context";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
@@ -302,8 +307,8 @@ export default function ClaimButton({ token }: { token: string }) {
                 <div className="flex items-center justify-center">
                   <CheckCircleIcon className="h-6 w-6 text-green-500" />
                   <div className="ml-2">
-                    No valid Lightning address found! Check your Shopstr wallet
-                    for your sats.
+                    Check your Shopstr wallet for your sats! No valid Lightning
+                    address was found.
                   </div>
                 </div>
               </ModalBody>
