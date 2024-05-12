@@ -167,7 +167,7 @@ const Inquiries = () => {
           messageEvent,
           chatPubkey,
         );
-        if (!plainText.includes("cashuA")) {
+        if (!plainText?.includes("cashuA")) {
           plainText &&
             decryptedChat.push({ ...messageEvent, content: plainText });
           if (chatMessagesFromCache.get(messageEvent.id)?.read === false) {
