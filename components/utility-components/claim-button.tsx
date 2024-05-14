@@ -1,5 +1,4 @@
 import { useState, useEffect, useContext, useMemo } from "react";
-import Link from "next/link";
 import {
   Modal,
   ModalContent,
@@ -38,7 +37,7 @@ function decodeBase64ToJson(base64: string): any {
 export default function ClaimButton({ token }: { token: string }) {
   const [lnurl, setLnurl] = useState("");
   const profileContext = useContext(ProfileMapContext);
-  const { userNPub, userPubkey, relays } = getLocalStorageData();
+  const { userNPub, userPubkey } = getLocalStorageData();
 
   const [openClaimTypeModal, setOpenClaimTypeModal] = useState(false);
   const [openRedemptionModal, setOpenRedemptionModal] = useState(false);
@@ -57,6 +56,7 @@ export default function ClaimButton({ token }: { token: string }) {
   const [isReceived, setIsReceived] = useState(false);
   const [isSpent, setIsSpent] = useState(false);
   const [isInvalidToken, setIsInvalidToken] = useState(false);
+  const [isDuplicateToken, setIsDuplicateToken] = useState(false);
 
   const { mints, tokens, history } = getLocalStorageData();
 
@@ -139,7 +139,14 @@ export default function ClaimButton({ token }: { token: string }) {
       const wallet = new CashuWallet(new CashuMint(tokenMint));
       const spentProofs = await wallet?.checkProofsSpent(proofs);
       if (spentProofs.length === 0) {
-        const tokenArray = [...tokens, ...proofs];
+        const uniqueProofs = proofs.filter(
+          (proof: Proof) => !tokens.some((token: Proof) => token.C === proof.C),
+        );
+        if (uniqueProofs != proofs) {
+          setIsDuplicateToken(true);
+          return;
+        }
+        const tokenArray = [...tokens, ...uniqueProofs];
         localStorage.setItem("tokens", JSON.stringify(tokenArray));
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
@@ -232,9 +239,9 @@ export default function ClaimButton({ token }: { token: string }) {
             )}
           </>
         ) : isRedeemed ? (
-          <>Claimed: {tokenAmount} sats</>
+          <>Claimed: {formattedTokenAmount}</>
         ) : (
-          <>Claim: {tokenAmount} sats</>
+          <>Claim: {formattedTokenAmount}</>
         )}
       </Button>
       <Modal
@@ -342,6 +349,38 @@ export default function ClaimButton({ token }: { token: string }) {
                   <div className="ml-2">
                     Token successfully received! Check your Shopstr wallet for
                     your sats.
+                  </div>
+                </div>
+              </ModalBody>
+            </ModalContent>
+          </Modal>
+        </>
+      ) : null}
+      {isDuplicateToken ? (
+        <>
+          <Modal
+            backdrop="blur"
+            isOpen={isDuplicateToken}
+            onClose={() => setIsDuplicateToken(false)}
+            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
+            classNames={{
+              body: "py-6 ",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
+            }}
+            isDismissable={true}
+            scrollBehavior={"normal"}
+            placement={"center"}
+            size="2xl"
+          >
+            <ModalContent>
+              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <div className="flex items-center justify-center">
+                  <XCircleIcon className="h-6 w-6 text-green-500" />
+                  <div className="ml-2">
+                    Duplicate token!
                   </div>
                 </div>
               </ModalBody>
