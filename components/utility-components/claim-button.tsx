@@ -379,9 +379,7 @@ export default function ClaimButton({ token }: { token: string }) {
               <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                 <div className="flex items-center justify-center">
                   <XCircleIcon className="h-6 w-6 text-red-500" />
-                  <div className="ml-2">
-                    Duplicate token!
-                  </div>
+                  <div className="ml-2">Duplicate token!</div>
                 </div>
               </ModalBody>
             </ModalContent>
