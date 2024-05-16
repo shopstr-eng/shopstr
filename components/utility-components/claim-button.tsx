@@ -131,6 +131,7 @@ export default function ClaimButton({ token }: { token: string }) {
 
   const receive = async (isInvalid: boolean) => {
     setOpenClaimTypeModal(false);
+    setIsDuplicateToken(false);
     setIsInvalidSuccess(false);
     setIsReceived(false);
     setIsSpent(false);
