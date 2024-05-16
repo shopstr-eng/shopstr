@@ -250,11 +250,9 @@ const PayButton = () => {
                     </ModalHeader>
                     <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                       <div className="flex items-center justify-center">
-                        <div className="ml-2">
-                          No routes could be found, or you don&apos;t have
-                          enough funds. Please try again with a new invoice, or
-                          change your mint in settings.
-                        </div>
+                        No routes could be found, or you don&apos;t have enough
+                        funds. Please try again with a new invoice, or change
+                        your mint in settings.
                       </div>
                     </ModalBody>
                   </ModalContent>
