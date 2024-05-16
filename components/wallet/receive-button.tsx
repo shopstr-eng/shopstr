@@ -50,6 +50,7 @@ const ReceiveButton = () => {
   };
 
   const handleReceive = async (tokenString: string) => {
+    setIsDuplicateToken(false);
     setIsClaimed(false);
     setIsSpent(false);
     setIsInvalidToken(false);
