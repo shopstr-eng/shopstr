@@ -66,7 +66,7 @@ const Wallet = () => {
       </center>
       <center>
         <p
-          className="mb-2 break-words text-center text-sm italic text-gray-500"
+          className="mb-2 break-words text-center text-sm italic text-gray-500 hover:underline"
           onClick={handleMintClick}
         >
           {mint}: {walletBalance} sats
