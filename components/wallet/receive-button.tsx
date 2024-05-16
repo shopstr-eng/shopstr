@@ -209,10 +209,13 @@ const ReceiveButton = () => {
             size="2xl"
           >
             <ModalContent>
+              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <CheckCircleIcon className="h-6 w-6 text-green-500" />
+                <div className="ml-2">Token successfully claimed!</div>
+              </ModalHeader>
               <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                 <div className="flex items-center justify-center">
-                  <CheckCircleIcon className="h-6 w-6 text-green-500" />
-                  <div className="ml-2">Token successfully claimed!</div>
+                  Your Shopstr wallet balance should now be updated.
                 </div>
               </ModalBody>
             </ModalContent>
@@ -239,10 +242,14 @@ const ReceiveButton = () => {
             size="2xl"
           >
             <ModalContent>
+              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <XCircleIcon className="h-6 w-6 text-red-500" />
+                <div className="ml-2">Duplicate token!</div>
+              </ModalHeader>
               <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                 <div className="flex items-center justify-center">
-                  <XCircleIcon className="h-6 w-6 text-red-500" />
-                  <div className="ml-2">Duplicate token!</div>
+                  The token you are trying to claim is already in your Shopstr
+                  wallet.
                 </div>
               </ModalBody>
             </ModalContent>
@@ -269,10 +276,13 @@ const ReceiveButton = () => {
             size="2xl"
           >
             <ModalContent>
+              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <XCircleIcon className="h-6 w-6 text-red-500" />
+                <div className="ml-2">Invalid token!</div>
+              </ModalHeader>
               <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                 <div className="flex items-center justify-center">
-                  <XCircleIcon className="h-6 w-6 text-red-500" />
-                  <div className="ml-2">Invalid token!</div>
+                  The token you are trying to claim is not a valid Cashu string.
                 </div>
               </ModalBody>
             </ModalContent>
@@ -299,10 +309,13 @@ const ReceiveButton = () => {
             size="2xl"
           >
             <ModalContent>
+              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <XCircleIcon className="h-6 w-6 text-red-500" />
+                <div className="ml-2">Spent token!</div>
+              </ModalHeader>
               <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                 <div className="flex items-center justify-center">
-                  <XCircleIcon className="h-6 w-6 text-red-500" />
-                  <div className="ml-2">Token already spent!</div>
+                  The token you are trying to claim has already been redeemed.
                 </div>
               </ModalBody>
             </ModalContent>

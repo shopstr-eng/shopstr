@@ -1,8 +1,12 @@
 import React, { useEffect, useState } from "react";
-import Link from "next/link";
 import axios from "axios";
-import { Modal, ModalContent, ModalBody, Button } from "@nextui-org/react";
-import { useRouter } from "next/router";
+import {
+  Modal,
+  ModalContent,
+  ModalBody,
+  ModalHeader,
+  Button,
+} from "@nextui-org/react";
 import {
   CheckCircleIcon,
   ArrowUpTrayIcon,
@@ -31,14 +35,12 @@ export default function RedemptionModal({
   changeMint: string;
 }) {
   const [showModal, setShowModal] = useState(false);
-  const { userNPub, userPubkey, mints, relays } = getLocalStorageData();
+  const { userPubkey, relays } = getLocalStorageData();
 
   const [formattedChangeAmount, setFormattedChangeAmount] = useState("");
 
   const [randomNpub, setRandomNpub] = useState<string>("");
   const [randomNsec, setRandomNsec] = useState<string>("");
-
-  const router = useRouter();
 
   useEffect(() => {
     axios({
@@ -115,11 +117,11 @@ export default function RedemptionModal({
         size="2xl"
       >
         <ModalContent>
+          <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+            <CheckCircleIcon className="h-6 w-6 text-green-500" />
+            <div className="ml-2">Token successfully redeemed!</div>
+          </ModalHeader>
           <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
-            <div className="flex items-center justify-center">
-              <CheckCircleIcon className="h-6 w-6 text-green-500" />
-              <div className="ml-2">Redeemed!</div>
-            </div>
             <div className="flex items-center justify-center">
               Check your Lightning address ({lnurl}) for your sats! Would you
               like to donate your overpaid Lightning fees (
@@ -173,12 +175,12 @@ export default function RedemptionModal({
         size="2xl"
       >
         <ModalContent>
+          <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+            <XCircleIcon className="h-6 w-6 text-red-500" />
+            <div className="ml-2">Token redemption failed!</div>
+          </ModalHeader>
           <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
-            <div className="flex items-center justify-center space-x-2">
-              <XCircleIcon className="h-6 w-6 text-red-500" />
-              <div className="ml-2">Redemption Failed!</div>
-            </div>
-            <div className="items-center justify-center">
+            <div className="flex items-center justify-center">
               You are attempting to redeem a token that has already been
               redeemed, is too small/large, or for which there were no payment
               routes found.
