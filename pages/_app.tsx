@@ -11,6 +11,8 @@ import {
   ChatsContextInterface,
   ChatsContext,
   ChatsMap,
+  FollowsContextInterface,
+  FollowsContext,
 } from "../utils/context/context";
 import {
   getLocalStorageData,
@@ -22,6 +24,7 @@ import {
   fetchAllPosts,
   fetchChatsAndMessages,
   fetchProfile,
+  fetchAllFollows,
 } from "./api/nostr/fetch-service";
 import { NostrEvent, ProfileData } from "../utils/types/types";
 import BottomNav from "@/components/nav-bottom";
@@ -83,6 +86,10 @@ function App({ Component, pageProps }: AppProps) {
     chatsMap: new Map(),
     isLoading: true,
   });
+  const [followsContext, setFollowsContext] = useState<FollowsContextInterface>({
+    followList: [],
+    isLoading: true,
+  });
 
   const editProductContext = (
     productEvents: NostrEvent[],
@@ -115,6 +122,10 @@ function App({ Component, pageProps }: AppProps) {
     setChatsContext({ chatsMap, isLoading });
   };
 
+  const editFollowsContext = (followList: string[], isLoading: boolean) => {
+    setFollowsContext({ followList, isLoading });
+  };
+
   /** FETCH initial PRODUCTS and PROFILES **/
   useEffect(() => {
     async function fetchData() {
@@ -142,6 +153,9 @@ function App({ Component, pageProps }: AppProps) {
           pubkeysToFetchProfilesFor,
           editProfileContext,
         );
+        let { followList } = await fetchAllFollows(
+          editFollowsContext,
+        )
       } catch (error) {
         console.error("Error fetching data:", error);
       }
@@ -177,23 +191,25 @@ function App({ Component, pageProps }: AppProps) {
           content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
         />
       </Head>
-      <ProductContext.Provider value={productContext}>
-        <ProfileMapContext.Provider value={profileContext}>
-          <ChatsContext.Provider value={chatsContext}>
-            <NextUIProvider>
-              <NextThemesProvider attribute="class">
-                <div className="flex">
-                  <SideNav />
-                  <main className="flex-1">
-                    <Component {...pageProps} />
-                  </main>
-                </div>
-                <BottomNav />
-              </NextThemesProvider>
-            </NextUIProvider>
-          </ChatsContext.Provider>
-        </ProfileMapContext.Provider>
-      </ProductContext.Provider>
+      <FollowsContext.Provider value={followsContext}>
+        <ProductContext.Provider value={productContext}>
+          <ProfileMapContext.Provider value={profileContext}>
+            <ChatsContext.Provider value={chatsContext}>
+              <NextUIProvider>
+                <NextThemesProvider attribute="class">
+                  <div className="flex">
+                    <SideNav />
+                    <main className="flex-1">
+                      <Component {...pageProps} />
+                    </main>
+                  </div>
+                  <BottomNav />
+                </NextThemesProvider>
+              </NextUIProvider>
+            </ChatsContext.Provider>
+          </ProfileMapContext.Provider>
+        </ProductContext.Provider>
+      </FollowsContext.Provider>
     </>
   );
 }

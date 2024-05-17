@@ -1,4 +1,4 @@
-import { Filter, Nostr, SimplePool } from "nostr-tools";
+import { Filter, Nostr, Relay, SimplePool } from "nostr-tools";
 import {
   addChatMessageToCache,
   addProductToCache,
@@ -11,6 +11,11 @@ import {
 import { NostrEvent, NostrMessageEvent } from "@/utils/types/types";
 import { ChatsMap } from "@/utils/context/context";
 import { DateTime } from "luxon";
+import { getLocalStorageData } from "@/components/utility/nostr-helper-functions";
+
+function isHexString(value: string): boolean {
+  return /^[0-9a-fA-F]{64}$/.test(value);
+}
 
 export const fetchAllPosts = async (
   relays: string[],
@@ -269,6 +274,54 @@ export const fetchChatsAndMessages = async (
       console.log("Failed to fetchChatsAndMessages: ", error);
       alert("Failed to fetchChatsAndMessages: " + error);
       throw new Error("Failed to fetchChatsAndMessages: " + error);
+    }
+  });
+};
+
+export const fetchAllFollows = async (
+  editFollowsContext: (followList: string[], isLoading: boolean) => void,
+): Promise<{
+  followList: string[];
+}> => {
+  return new Promise(async function (resolve, reject) {
+    try {
+
+      const relay = await Relay.connect("wss://purplepag.es");
+
+      const filter: Filter = {
+        kinds: [3],
+        authors: [getLocalStorageData().userPubkey]
+      };
+
+      let followsArrayFromRelay: string[] = [];
+
+      let h = relay.subscribe([filter], {
+        
+        onevent(event) {
+          const validTags = event.tags
+            .map((tag) => tag[1])
+            .filter((pubkey) => isHexString(pubkey));
+          followsArrayFromRelay.push(...validTags);
+        },
+        oneose() {
+          h.close();
+          returnCall();
+        },
+      });
+      const returnCall = () => {
+        // If followsArrayFromRelay is still empty, add the default value
+        if (followsArrayFromRelay.length === 0) {
+          followsArrayFromRelay.push("125c39d113f951bfabf319edbe8c0d834a4fe7dfa0d8c3d42313d17900f3c8c7");
+        }
+        resolve({
+          followList: followsArrayFromRelay,
+        });
+        editFollowsContext(followsArrayFromRelay, false);
+        console.log("loaded: ", followsArrayFromRelay);
+      };
+    } catch (error) {
+      console.log("fetchAllPosts error", error);
+      reject(error);
     }
   });
 };
