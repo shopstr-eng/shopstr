@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from "react";
-import { Filter, SimplePool, nip19 } from "nostr-tools";
+import { Relay, Filter, SimplePool, nip19 } from "nostr-tools";
 import { getLocalStorageData } from "./utility/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
 import { ProductContext, ProfileMapContext } from "../utils/context/context";
@@ -13,18 +13,24 @@ import { Button } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
 import { DateTime } from "luxon";
 
+function isHexString(value: string): boolean {
+  return /^[0-9a-fA-F]{64}$/.test(value);
+}
+
 const DisplayEvents = ({
   focusedPubkey,
   selectedCategories,
   selectedLocation,
   selectedSearch,
   canShowLoadMore,
+  wotFilter,
 }: {
   focusedPubkey?: string;
   selectedCategories: Set<string>;
   selectedLocation: string;
   selectedSearch: string;
   canShowLoadMore?: boolean;
+  wotFilter?: boolean;
 }) => {
   const [productEvents, setProductEvents] = useState<ProductData[]>([]);
   const [isProductsLoading, setIsProductLoading] = useState(true);
@@ -34,8 +40,34 @@ const DisplayEvents = ({
   const [showModal, setShowModal] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
   const router = useRouter();
+  const [followTags, setFollowTags] = useState<string[]>([]);
 
   const { userPubkey } = getLocalStorageData();
+
+  const getFollowList = async () => {
+    try {
+      const relay = await Relay.connect("wss://purplepag.es");
+
+      let filter: Filter = {
+        kinds: [3],
+        authors: [userPubkey],
+      };
+
+      let h = relay.subscribe([filter], {
+        onevent(event) {
+          const validTags = event.tags
+            .map((tag) => tag[1])
+            .filter((pubkey) => isHexString(pubkey));
+          setFollowTags(validTags);
+        },
+        oneose() {
+          h.close();
+        },
+      });
+    } catch (error) {
+      console.log(error);
+    }
+  };
 
   useEffect(() => {
     if (!productEventContext) return;
@@ -48,13 +80,21 @@ const DisplayEvents = ({
       ]; // sorts most recently created to least recently created
       let parsedProductData: ProductData[] = [];
       sortedProductEvents.forEach((event) => {
-        let parsedData = parseTags(event);
-        if (parsedData) parsedProductData.push(parsedData);
+        if (wotFilter) {
+          getFollowList();
+          if (followTags.includes(event.pubkey)) {
+            let parsedData = parseTags(event);
+            if (parsedData) parsedProductData.push(parsedData);
+          }
+        } else {
+          let parsedData = parseTags(event);
+          if (parsedData) parsedProductData.push(parsedData);
+        }
       });
       setProductEvents(parsedProductData);
       setIsProductLoading(false);
     }
-  }, [productEventContext]);
+  }, [productEventContext, wotFilter]);
 
   const isThereAFilter = () => {
     return (
