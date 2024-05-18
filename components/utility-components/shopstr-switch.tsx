@@ -11,17 +11,10 @@ const ShopstrSwitch = ({
   const { theme, setTheme } = useTheme();
 
   return (
-    <>
-      {theme === "dark" ? (
-        <Switch size={"lg"} color="warning" onClick={() => setWotFilter(!wotFilter)}>
-          WoT
-        </Switch>
-      ) : (
-        <Switch size={"lg"} color="secondary" onClick={() => setWotFilter(!wotFilter)}>
-          WoT
-        </Switch>
-      )}
-    </>
+    <div className="flex items-center p-2">
+      <Switch size={"lg"} color={theme === "dark" ? "warning" : "secondary"} onClick={() => setWotFilter(!wotFilter)} />
+      <span className=" text-light-text dark:text-dark-text">Trust</span>
+    </div>
   );
 }
 

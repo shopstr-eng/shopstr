@@ -294,14 +294,35 @@ export const fetchAllFollows = async (
       };
 
       let followsArrayFromRelay: string[] = [];
+      const followsSet: Set<string> = new Set();
 
       let h = relay.subscribe([filter], {
         
         onevent(event) {
           const validTags = event.tags
             .map((tag) => tag[1])
-            .filter((pubkey) => isHexString(pubkey));
+            .filter((pubkey) => isHexString(pubkey) && !followsSet.has(pubkey));
+          validTags.forEach((pubkey) => followsSet.add(pubkey));
           followsArrayFromRelay.push(...validTags);
+          validTags.forEach((pubkey) => {
+            const followFilter: Filter = {
+              kinds: [3],
+              authors: [pubkey]
+            };
+
+            let p = relay.subscribe([followFilter], {
+              onevent(followEvent) {
+                const validFollowTags = followEvent.tags
+                  .map((tag) => tag[1])
+                  .filter((pubkey) => isHexString(pubkey) && !followsSet.has(pubkey));
+                validFollowTags.forEach((pubkey) => followsSet.add(pubkey));
+                followsArrayFromRelay.push(...validFollowTags);
+              },
+              oneose() {
+                p.close();
+              }
+            })
+          })
         },
         oneose() {
           h.close();
