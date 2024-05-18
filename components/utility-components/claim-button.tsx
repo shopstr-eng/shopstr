@@ -144,7 +144,7 @@ export default function ClaimButton({ token }: { token: string }) {
         const uniqueProofs = proofs.filter(
           (proof: Proof) => !tokens.some((token: Proof) => token.C === proof.C),
         );
-        if (uniqueProofs != proofs) {
+        if (JSON.stringify(uniqueProofs) != JSON.stringify(proofs)) {
           setIsDuplicateToken(true);
           setIsRedeeming(false);
           return;
@@ -174,10 +174,12 @@ export default function ClaimButton({ token }: { token: string }) {
         );
       } else {
         setIsSpent(true);
+        setIsRedeeming(false);
       }
     } catch (error) {
       console.log(error);
       setIsInvalidToken(true);
+      setIsRedeeming(false);
     }
   };
 
@@ -267,7 +269,7 @@ export default function ClaimButton({ token }: { token: string }) {
         <ModalContent>
           <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
             <div className="flex items-center justify-center">
-              Would you like to claim the token directly to your Shopstr wallet
+              Would you like to claim the token directly to your Shopstr wallet,
               or to your Lightning address?
             </div>
             <div className="flex w-full flex-wrap justify-evenly gap-2">

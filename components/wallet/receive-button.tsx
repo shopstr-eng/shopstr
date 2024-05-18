@@ -65,7 +65,7 @@ const ReceiveButton = () => {
         const uniqueProofs = tokenProofs.filter(
           (proof: Proof) => !tokens.some((token: Proof) => token.C === proof.C),
         );
-        if (uniqueProofs != tokenProofs) {
+        if (JSON.stringify(uniqueProofs) != JSON.stringify(tokenProofs)) {
           setIsDuplicateToken(true);
           return;
         }
