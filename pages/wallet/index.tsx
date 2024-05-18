@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Button } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
+import { useRouter } from "next/router";
 import { getLocalStorageData } from "../../components/utility/nostr-helper-functions";
 import MintButton from "../../components/wallet/mint-button";
 import ReceiveButton from "../../components/wallet/receive-button";
@@ -13,6 +12,7 @@ const Wallet = () => {
   const [totalBalance, setTotalBalance] = useState(0);
   const [walletBalance, setWalletBalance] = useState(0);
   const [mint, setMint] = useState("");
+  const router = useRouter();
 
   useEffect(() => {
     // Function to fetch and update balances
@@ -53,6 +53,10 @@ const Wallet = () => {
     return () => clearInterval(interval);
   }, []);
 
+  const handleMintClick = () => {
+    router.push("/settings/preferences");
+  };
+
   return (
     <div className="flex min-h-screen flex-col bg-light-bg pb-20 pt-6 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
       <center>
@@ -61,7 +65,10 @@ const Wallet = () => {
         </p>
       </center>
       <center>
-        <p className="mb-2 break-words text-center text-sm italic text-gray-500">
+        <p
+          className="mb-2 break-words text-center text-sm italic text-gray-500 hover:underline"
+          onClick={handleMintClick}
+        >
           {mint}: {walletBalance} sats
         </p>
       </center>

@@ -17,12 +17,14 @@ export const ChatPanel = ({
   currentChatPubkey,
   chatsMap,
   isSendingDMLoading,
+  isPayment,
 }: {
   handleGoBack: () => void;
   handleSendMessage: (message: string) => void;
   currentChatPubkey: string;
   chatsMap: Map<string, ChatObject>;
   isSendingDMLoading: boolean;
+  isPayment: boolean;
 }) => {
   const [messageInput, setMessageInput] = useState("");
   const [messages, setMessages] = useState<NostrMessageEvent[]>([]); // [chatPubkey, chat]
@@ -61,8 +63,8 @@ export const ChatPanel = ({
   };
 
   return (
-    <div className="absolute top-0 z-20 flex h-full w-full flex-col overflow-clip bg-light-bg px-2 dark:bg-dark-bg md:relative md:h-[85vh]">
-      <h2 className="mt-2 flex h-[60px] w-full flex-row items-center overflow-clip pr-2 align-middle text-shopstr-purple-light dark:text-shopstr-yellow-light">
+    <div className="absolute flex h-full w-full flex-col overflow-clip bg-light-bg px-2 pb-20 dark:bg-dark-bg md:relative md:h-[85vh] md:pb-0 lg:pb-0">
+      <h2 className="flex h-[60px] w-full flex-row items-center overflow-clip align-middle text-shopstr-purple-light dark:text-shopstr-yellow-light">
         <ArrowUturnLeftIcon
           onClick={handleGoBack}
           className="mx-3 h-9 w-9 cursor-pointer rounded-md p-1 text-shopstr-purple-light hover:bg-shopstr-yellow hover:text-purple-700 dark:text-shopstr-yellow-light  hover:dark:bg-shopstr-purple"
@@ -86,34 +88,36 @@ export const ChatPanel = ({
         })}
         <div ref={bottomDivRef} />
       </div>
-      <div className="space-x flex items-center p-2 pb-20 md:pb-0 lg:pb-0">
-        <Input
-          className="pr-3 text-light-text dark:text-dark-text"
-          type="text"
-          width="100%"
-          size="md"
-          value={messageInput}
-          placeholder="Type your message..."
-          onChange={(e) => {
-            setMessageInput(e.target.value);
-          }}
-          onKeyDown={(e) => {
-            if (
-              e.key === "Enter" &&
-              !(messageInput === "" || isSendingDMLoading)
-            )
-              sendMessage();
-          }}
-        />
-        <Button
-          className={SHOPSTRBUTTONCLASSNAMES}
-          isDisabled={messageInput === "" || isSendingDMLoading}
-          isLoading={isSendingDMLoading}
-          onClick={sendMessage}
-        >
-          Send
-        </Button>
-      </div>
+      {!isPayment && (
+        <div className="space-x flex items-center p-2">
+          <Input
+            className="pr-3 text-light-text dark:text-dark-text"
+            type="text"
+            width="100%"
+            size="md"
+            value={messageInput}
+            placeholder="Type your message..."
+            onChange={(e) => {
+              setMessageInput(e.target.value);
+            }}
+            onKeyDown={(e) => {
+              if (
+                e.key === "Enter" &&
+                !(messageInput === "" || isSendingDMLoading)
+              )
+                sendMessage();
+            }}
+          />
+          <Button
+            className={SHOPSTRBUTTONCLASSNAMES}
+            isDisabled={messageInput === "" || isSendingDMLoading}
+            isLoading={isSendingDMLoading}
+            onClick={sendMessage}
+          >
+            Send
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

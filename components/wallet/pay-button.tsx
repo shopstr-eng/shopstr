@@ -250,11 +250,9 @@ const PayButton = () => {
                     </ModalHeader>
                     <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                       <div className="flex items-center justify-center">
-                        <div className="ml-2">
-                          No routes could be found, or you don&apos;t have
-                          enough funds. Please try again with a new invoice, or
-                          change your mint in settings.
-                        </div>
+                        No routes could be found, or you don&apos;t have enough
+                        funds. Please try again with a new invoice, or change
+                        your mint in settings.
                       </div>
                     </ModalBody>
                   </ModalContent>
@@ -282,10 +280,13 @@ const PayButton = () => {
                   size="2xl"
                 >
                   <ModalContent>
+                    <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                      <CheckCircleIcon className="h-6 w-6 text-green-500" />
+                      <div className="ml-2">Invoice successfully paid!</div>
+                    </ModalHeader>
                     <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                       <div className="flex items-center justify-center">
-                        <CheckCircleIcon className="h-6 w-6 text-green-500" />
-                        <div className="ml-2">Invoice successfully paid!</div>
+                        Check your external Lightning wallet for your sats.
                       </div>
                     </ModalBody>
                   </ModalContent>

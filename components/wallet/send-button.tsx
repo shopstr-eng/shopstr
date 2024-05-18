@@ -5,6 +5,7 @@ import {
   ClipboardIcon,
   CheckIcon,
   CheckCircleIcon,
+  XCircleIcon,
 } from "@heroicons/react/24/outline";
 import {
   Card,
@@ -17,7 +18,6 @@ import {
   ModalBody,
   ModalFooter,
   Button,
-  Textarea,
   Input,
 } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
@@ -34,6 +34,7 @@ const SendButton = () => {
   const [showTokenCard, setShowTokenCard] = useState(false);
   const [newToken, setNewToken] = useState("");
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
+  const [sendFailed, setSendFailed] = useState(false);
 
   const { mints, tokens, history } = getLocalStorageData();
 
@@ -48,51 +49,59 @@ const SendButton = () => {
     sendReset();
     setShowSendModal(!showSendModal);
     setShowTokenCard(false);
+    setSendFailed(false);
     setNewToken("");
   };
 
   const onSendSubmit = async (data: { [x: string]: any }) => {
     let numSats = data["sats"];
-    setShowTokenCard(true);
     await handleSend(numSats);
   };
 
   const handleSend = async (numSats: number) => {
-    const mint = new CashuMint(mints[0]);
-    const wallet = new CashuWallet(mint);
-    const mintKeySetResponse = await mint.getKeySets();
-    const mintKeySetIds = mintKeySetResponse?.keysets;
-    const filteredProofs = tokens.filter(
-      (p: Proof) => mintKeySetIds?.includes(p.id),
-    );
-    const tokenToSend = await wallet.send(numSats, filteredProofs);
-    const encodedSendToken = getEncodedToken({
-      token: [
-        {
-          mint: mints[0],
-          proofs: tokenToSend.send,
-        },
-      ],
-    });
-    setNewToken(encodedSendToken);
-    const changeProofs = tokenToSend?.returnChange;
-    const remainingProofs = tokens.filter(
-      (p: Proof) => !mintKeySetIds?.includes(p.id),
-    );
-    let proofArray;
-    if (changeProofs.length >= 1 && changeProofs) {
-      proofArray = [...remainingProofs, ...changeProofs];
-    } else {
-      proofArray = [...remainingProofs];
+    setSendFailed(false);
+    try {
+      const mint = new CashuMint(mints[0]);
+      const wallet = new CashuWallet(mint);
+      const mintKeySetResponse = await mint.getKeySets();
+      const mintKeySetIds = mintKeySetResponse?.keysets;
+      const filteredProofs = tokens.filter(
+        (p: Proof) => mintKeySetIds?.includes(p.id),
+      );
+      const tokenToSend = await wallet.send(numSats, filteredProofs);
+      console.log(tokenToSend)
+      const encodedSendToken = getEncodedToken({
+        token: [
+          {
+            mint: mints[0],
+            proofs: tokenToSend.send,
+          },
+        ],
+      });
+      setShowTokenCard(true);
+      setNewToken(encodedSendToken);
+      const changeProofs = tokenToSend?.returnChange;
+      const remainingProofs = tokens.filter(
+        (p: Proof) => !mintKeySetIds?.includes(p.id),
+      );
+      let proofArray;
+      if (changeProofs.length >= 1 && changeProofs) {
+        proofArray = [...remainingProofs, ...changeProofs];
+      } else {
+        proofArray = [...remainingProofs];
+      }
+      localStorage.setItem("tokens", JSON.stringify(proofArray));
+      localStorage.setItem(
+        "history",
+        JSON.stringify([
+          { type: 2, amount: numSats, date: Math.floor(Date.now() / 1000) },
+          ...history,
+        ]),
+      );
+    } catch (error) {
+      console.log(error);
+      setSendFailed(true);
     }
-    localStorage.setItem("tokens", JSON.stringify(proofArray));
-    localStorage.setItem(
-      "history",
-      JSON.stringify([
-        { type: 2, amount: numSats, date: Math.floor(Date.now() / 1000) },
-        ...history,
-      ]),
-    );
   };
   // store proofs as array of proof objects
   // or store proofs as array of proof arrays, which are all grouped by mint id
@@ -176,6 +185,27 @@ const SendButton = () => {
                   );
                 }}
               />
+              {sendFailed && (
+                <Card className="mt-3 max-w-[700px]">
+                  <CardHeader className="flex justify-center gap-3">
+                    <div className="flex items-center justify-center">
+                      <XCircleIcon className="h-6 w-6 text-red-500" />
+                      <div className="ml-2">
+                        Send failed!
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <Divider />
+                  <CardBody className="flex flex-col items-center">
+                      <div className="flex flex-col items-center justify-center">
+                        <p className="text-center">
+                          You don&apos;t have enough funds to send. Please try again with a new amount, or change
+                          your mint in settings.
+                        </p>
+                      </div>
+                  </CardBody>
+                </Card>
+              )}
               {showTokenCard && (
                 <Card className="mt-3 max-w-[700px]">
                   <CardHeader className="flex justify-center gap-3">

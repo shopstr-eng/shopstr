@@ -1,5 +1,5 @@
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
-import RedeemButton from "../utility-components/redeem-button";
+import ClaimButton from "../utility-components/claim-button";
 import { NostrMessageEvent } from "../../utils/types/types";
 import { timeSinceMessageDisplayText } from "../../utils/messages/utils";
 
@@ -56,7 +56,7 @@ export const ChatMessage = ({
           tokenAfterCashuA ? (
             <>
               {messageEvent.content}
-              <RedeemButton token={tokenAfterCashuA} />
+              <ClaimButton token={tokenAfterCashuA} />
             </>
           ) : (
             <>{messageEvent.content}</>

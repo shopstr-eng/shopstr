@@ -28,6 +28,7 @@ const ReceiveButton = () => {
   const [isClaimed, setIsClaimed] = useState(false);
   const [isSpent, setIsSpent] = useState(false);
   const [isInvalidToken, setIsInvalidToken] = useState(false);
+  const [isDuplicateToken, setIsDuplicateToken] = useState(false);
 
   const { mints, tokens, history } = getLocalStorageData();
 
@@ -49,6 +50,7 @@ const ReceiveButton = () => {
   };
 
   const handleReceive = async (tokenString: string) => {
+    setIsDuplicateToken(false);
     setIsClaimed(false);
     setIsSpent(false);
     setIsInvalidToken(false);
@@ -60,7 +62,14 @@ const ReceiveButton = () => {
       const wallet = new CashuWallet(new CashuMint(tokenMint));
       const spentProofs = await wallet?.checkProofsSpent(tokenProofs);
       if (spentProofs.length === 0) {
-        const tokenArray = [...tokens, ...tokenProofs];
+        const uniqueProofs = tokenProofs.filter(
+          (proof: Proof) => !tokens.some((token: Proof) => token.C === proof.C),
+        );
+        if (JSON.stringify(uniqueProofs) != JSON.stringify(tokenProofs)) {
+          setIsDuplicateToken(true);
+          return;
+        }
+        const tokenArray = [...tokens, ...uniqueProofs];
         localStorage.setItem("tokens", JSON.stringify(tokenArray));
         if (!mints.includes(tokenMint)) {
           const updatedMints = [...mints, tokenMint];
@@ -201,10 +210,47 @@ const ReceiveButton = () => {
             size="2xl"
           >
             <ModalContent>
+              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <CheckCircleIcon className="h-6 w-6 text-green-500" />
+                <div className="ml-2">Token successfully claimed!</div>
+              </ModalHeader>
               <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                 <div className="flex items-center justify-center">
-                  <CheckCircleIcon className="h-6 w-6 text-green-500" />
-                  <div className="ml-2">Token successfully claimed!</div>
+                  Your Shopstr wallet balance should now be updated.
+                </div>
+              </ModalBody>
+            </ModalContent>
+          </Modal>
+        </>
+      ) : null}
+      {isDuplicateToken ? (
+        <>
+          <Modal
+            backdrop="blur"
+            isOpen={isDuplicateToken}
+            onClose={() => setIsDuplicateToken(false)}
+            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
+            classNames={{
+              body: "py-6 ",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
+            }}
+            isDismissable={true}
+            scrollBehavior={"normal"}
+            placement={"center"}
+            size="2xl"
+          >
+            <ModalContent>
+              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <XCircleIcon className="h-6 w-6 text-red-500" />
+                <div className="ml-2">Duplicate token!</div>
+              </ModalHeader>
+              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <div className="flex items-center justify-center">
+                  The token you are trying to claim is already in your Shopstr
+                  wallet.
                 </div>
               </ModalBody>
             </ModalContent>
@@ -231,10 +277,13 @@ const ReceiveButton = () => {
             size="2xl"
           >
             <ModalContent>
+              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <XCircleIcon className="h-6 w-6 text-red-500" />
+                <div className="ml-2">Invalid token!</div>
+              </ModalHeader>
               <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                 <div className="flex items-center justify-center">
-                  <XCircleIcon className="h-6 w-6 text-red-500" />
-                  <div className="ml-2">Invalid token!</div>
+                  The token you are trying to claim is not a valid Cashu string.
                 </div>
               </ModalBody>
             </ModalContent>
@@ -261,10 +310,13 @@ const ReceiveButton = () => {
             size="2xl"
           >
             <ModalContent>
+              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <XCircleIcon className="h-6 w-6 text-red-500" />
+                <div className="ml-2">Spent token!</div>
+              </ModalHeader>
               <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                 <div className="flex items-center justify-center">
-                  <XCircleIcon className="h-6 w-6 text-red-500" />
-                  <div className="ml-2">Token already spent!</div>
+                  The token you are trying to claim has already been redeemed.
                 </div>
               </ModalBody>
             </ModalContent>

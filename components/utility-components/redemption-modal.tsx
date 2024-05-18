@@ -1,8 +1,12 @@
 import React, { useEffect, useState } from "react";
-import Link from "next/link";
 import axios from "axios";
-import { Modal, ModalContent, ModalBody, Button } from "@nextui-org/react";
-import { useRouter } from "next/router";
+import {
+  Modal,
+  ModalContent,
+  ModalBody,
+  ModalHeader,
+  Button,
+} from "@nextui-org/react";
 import {
   CheckCircleIcon,
   ArrowUpTrayIcon,
@@ -18,7 +22,6 @@ import { formatWithCommas } from "./display-monetary-info";
 export default function RedemptionModal({
   opened,
   isPaid,
-  isCashu,
   changeAmount,
   changeProofs,
   lnurl,
@@ -26,21 +29,18 @@ export default function RedemptionModal({
 }: {
   opened: boolean;
   isPaid: boolean;
-  isCashu: boolean;
   changeAmount: number;
   changeProofs: any[];
   lnurl: string;
   changeMint: string;
 }) {
   const [showModal, setShowModal] = useState(false);
-  const { userNPub, userPubkey, mints, relays } = getLocalStorageData();
+  const { userPubkey, relays } = getLocalStorageData();
 
   const [formattedChangeAmount, setFormattedChangeAmount] = useState("");
 
   const [randomNpub, setRandomNpub] = useState<string>("");
   const [randomNsec, setRandomNsec] = useState<string>("");
-
-  const router = useRouter();
 
   useEffect(() => {
     axios({
@@ -117,34 +117,16 @@ export default function RedemptionModal({
         size="2xl"
       >
         <ModalContent>
+          <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+            <CheckCircleIcon className="h-6 w-6 text-green-500" />
+            <div className="ml-2">Token successfully redeemed!</div>
+          </ModalHeader>
           <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
             <div className="flex items-center justify-center">
-              <CheckCircleIcon className="h-6 w-6 text-green-500" />
-              <div className="ml-2">Redeemed!</div>
+              Check your Lightning address ({lnurl}) for your sats! Would you
+              like to donate your overpaid Lightning fees (
+              {formattedChangeAmount}) to support the development of Shopstr?
             </div>
-            {isCashu ? (
-              <div className="items-center justify-center">
-                Sign in to{" "}
-                <Link href="https://npub.cash/claim" passHref legacyBehavior>
-                  <a
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline"
-                  >
-                    npub.cash
-                  </a>
-                </Link>{" "}
-                with your Nostr keys to claim your sats! Would you like to
-                donate your overpaid Lightning fees ({formattedChangeAmount}) to
-                support the development of Shopstr?
-              </div>
-            ) : (
-              <div className="flex items-center justify-center">
-                Check your Lightning address ({lnurl}) for your sats! Would you
-                like to donate your overpaid Lightning fees (
-                {formattedChangeAmount}) to support the development of Shopstr?
-              </div>
-            )}
             <div className="flex w-full flex-wrap justify-evenly gap-2">
               <Button
                 className={SHOPSTRBUTTONCLASSNAMES + " mt-2 w-[20%]"}
@@ -193,25 +175,15 @@ export default function RedemptionModal({
         size="2xl"
       >
         <ModalContent>
+          <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+            <XCircleIcon className="h-6 w-6 text-red-500" />
+            <div className="ml-2">Token redemption failed!</div>
+          </ModalHeader>
           <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
-            <div className="flex items-center justify-center space-x-2">
-              <XCircleIcon className="h-6 w-6 text-red-500" />
-              <div className="ml-2">Redemption Failed!</div>
-            </div>
-            <div className="items-center justify-center">
+            <div className="flex items-center justify-center">
               You are attempting to redeem a token that has already been
               redeemed, is too small/large, or for which there were no payment
-              routes found. Copy the token string (cashuA...) and head over{" "}
-              <Link href="https://wallet.nutstash.app/" passHref legacyBehavior>
-                <a
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline"
-                >
-                  Nutstash
-                </a>
-              </Link>{" "}
-              to try and redeem it!
+              routes found.
             </div>
           </ModalBody>
         </ModalContent>
