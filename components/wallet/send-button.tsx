@@ -69,7 +69,7 @@ const SendButton = () => {
         (p: Proof) => mintKeySetIds?.includes(p.id),
       );
       const tokenToSend = await wallet.send(numSats, filteredProofs);
-      console.log(tokenToSend)
+      console.log(tokenToSend);
       const encodedSendToken = getEncodedToken({
         token: [
           {
@@ -190,19 +190,18 @@ const SendButton = () => {
                   <CardHeader className="flex justify-center gap-3">
                     <div className="flex items-center justify-center">
                       <XCircleIcon className="h-6 w-6 text-red-500" />
-                      <div className="ml-2">
-                        Send failed!
-                      </div>
+                      <div className="ml-2">Send failed!</div>
                     </div>
                   </CardHeader>
                   <Divider />
                   <CardBody className="flex flex-col items-center">
-                      <div className="flex flex-col items-center justify-center">
-                        <p className="text-center">
-                          You don&apos;t have enough funds to send. Please try again with a new amount, or change
-                          your mint in settings.
-                        </p>
-                      </div>
+                    <div className="flex flex-col items-center justify-center">
+                      <p className="text-center">
+                        You don&apos;t have enough funds to send. Please try
+                        again with a new amount, or change your mint in
+                        settings.
+                      </p>
+                    </div>
                   </CardBody>
                 </Card>
               )}
