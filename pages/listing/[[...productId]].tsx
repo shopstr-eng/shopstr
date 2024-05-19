@@ -127,10 +127,8 @@ const Listing = () => {
               </ModalHeader>
               <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                 <div className="flex items-center justify-center">
-                  <div className="ml-2">
-                    The seller should have received a DM containing a Cashu
-                    token payment.
-                  </div>
+                  The seller should have received a DM containing a Cashu token
+                  payment.
                 </div>
               </ModalBody>
             </ModalContent>
@@ -163,9 +161,7 @@ const Listing = () => {
               </ModalHeader>
               <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                 <div className="flex items-center justify-center">
-                  <div className="ml-2">
-                    You didn&apos;t have enough balance on your wallet to pay.
-                  </div>
+                  You didn&apos;t have enough balance in your wallet to pay.
                 </div>
               </ModalBody>
             </ModalContent>

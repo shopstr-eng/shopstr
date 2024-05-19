@@ -108,7 +108,7 @@ const MintButton = () => {
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           setTimeout(() => {
-            handleToggleMintModal();// takes you back to the page after payment has been confirmed by cashu mint api
+            handleToggleMintModal(); // takes you back to the page after payment has been confirmed by cashu mint api
           }, 1900); // 1.9 seconds is the amount of time for the checkmark animation to play
           break;
         }
@@ -167,8 +167,8 @@ const MintButton = () => {
                 rules={{
                   required: "A whole number is required.",
                   maxLength: {
-                    value: 300,
-                    message: "This input exceed maxLength of 300.",
+                    value: 500,
+                    message: "This input exceed maxLength of 500.",
                   },
                   validate: (value) =>
                     /^\d+$/.test(value) || "Please enter a whole number.",

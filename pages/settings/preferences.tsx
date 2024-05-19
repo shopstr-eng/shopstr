@@ -210,8 +210,8 @@ const PreferencesPage = () => {
                   rules={{
                     required: "A relay URL is required.",
                     maxLength: {
-                      value: 300,
-                      message: "This input exceed maxLength of 300.",
+                      value: 500,
+                      message: "This input exceed maxLength of 500.",
                     },
                     validate: (value) =>
                       /^(wss:\/\/|ws:\/\/)/.test(value) ||
@@ -352,8 +352,8 @@ const PreferencesPage = () => {
                     rules={{
                       required: "A mint URL is required.",
                       maxLength: {
-                        value: 300,
-                        message: "This input exceed maxLength of 300.",
+                        value: 500,
+                        message: "This input exceed maxLength of 500.",
                       },
                       validate: (value) =>
                         /^(https:\/\/|http:\/\/)/.test(value) ||
