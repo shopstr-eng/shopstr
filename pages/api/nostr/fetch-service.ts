@@ -35,7 +35,7 @@ export const fetchAllPosts = async (
         );
         editProductContext(productArrayFromCache, false);
       } catch (error) {
-        console.log("Error: ", error);
+        console.log("Failed to fetch all listings from cache: ", error);
       }
 
       const pool = new SimplePool();
@@ -81,7 +81,7 @@ export const fetchAllPosts = async (
         removeProductFromCache(Array.from(deletedProductsInCacheSet));
       };
     } catch (error) {
-      console.log("fetchAllPosts error", error);
+      console.log("Failed to fetch all listings from relays: ", error);
       reject(error);
     }
   });
@@ -103,7 +103,7 @@ export const fetchProfile = async (
         let profileData = await fetchProfileDataFromCache();
         editProfileContext(profileData, false);
       } catch (error) {
-        console.log("Error: ", error);
+        console.log("Failed to fetch profiles: ", error);
       }
 
       const pool = new SimplePool();
@@ -271,9 +271,7 @@ export const fetchChatsAndMessages = async (
         },
       );
     } catch (error) {
-      console.log("Failed to fetchChatsAndMessages: ", error);
-      alert("Failed to fetchChatsAndMessages: " + error);
-      throw new Error("Failed to fetchChatsAndMessages: " + error);
+      console.log("Failed to fetch chats and messages: ", error);
     }
   });
 };
@@ -285,63 +283,129 @@ export const fetchAllFollows = async (
 }> => {
   return new Promise(async function (resolve, reject) {
     try {
-
       const relay = await Relay.connect("wss://purplepag.es");
 
-      const filter: Filter = {
+      const firstFollowfilter: Filter = {
         kinds: [3],
-        authors: [getLocalStorageData().userPubkey]
+        authors: [getLocalStorageData().userPubkey],
       };
 
       let followsArrayFromRelay: string[] = [];
       const followsSet: Set<string> = new Set();
 
-      let h = relay.subscribe([filter], {
-        
+      let first = relay.subscribe([firstFollowfilter], {
         onevent(event) {
           const validTags = event.tags
             .map((tag) => tag[1])
             .filter((pubkey) => isHexString(pubkey) && !followsSet.has(pubkey));
           validTags.forEach((pubkey) => followsSet.add(pubkey));
           followsArrayFromRelay.push(...validTags);
-          validTags.forEach((pubkey) => {
-            const followFilter: Filter = {
-              kinds: [3],
-              authors: [pubkey]
-            };
 
-            let p = relay.subscribe([followFilter], {
-              onevent(followEvent) {
-                const validFollowTags = followEvent.tags
-                  .map((tag) => tag[1])
-                  .filter((pubkey) => isHexString(pubkey) && !followsSet.has(pubkey));
-                validFollowTags.forEach((pubkey) => followsSet.add(pubkey));
-                followsArrayFromRelay.push(...validFollowTags);
-              },
-              oneose() {
-                p.close();
-              }
-            })
-          })
+          const secondFollowFilter: Filter = {
+            kinds: [3],
+            authors: followsArrayFromRelay,
+          };
+
+          let secondDegreeFollowsArrayFromRelay: string[] = [];
+
+          let second = relay.subscribe([secondFollowFilter], {
+            onevent(followEvent) {
+              const validFollowTags = followEvent.tags
+                .map((tag) => tag[1])
+                .filter(
+                  (pubkey) => isHexString(pubkey) && !followsSet.has(pubkey),
+                );
+              secondDegreeFollowsArrayFromRelay.push(...validFollowTags);
+            },
+            oneose() {
+              second.close();
+              const pubkeyCount: Map<string, number> = new Map();
+              secondDegreeFollowsArrayFromRelay.forEach((pubkey) => {
+                pubkeyCount.set(pubkey, (pubkeyCount.get(pubkey) || 0) + 1);
+              });
+              secondDegreeFollowsArrayFromRelay =
+                secondDegreeFollowsArrayFromRelay.filter(
+                  (pubkey) => (pubkeyCount.get(pubkey) || 0) >= 3,
+                );
+              followsArrayFromRelay.push(...secondDegreeFollowsArrayFromRelay);
+            },
+          });
         },
         oneose() {
-          h.close();
-          returnCall();
+          first.close();
+          returnCall(relay, followsArrayFromRelay, followsSet);
         },
       });
-      const returnCall = () => {
+      const returnCall = async (
+        relay: Relay,
+        followsArray: string[],
+        followsSet: Set<string>,
+      ) => {
         // If followsArrayFromRelay is still empty, add the default value
         if (followsArrayFromRelay.length === 0) {
-          followsArrayFromRelay.push("125c39d113f951bfabf319edbe8c0d834a4fe7dfa0d8c3d42313d17900f3c8c7");
+          const firstFollowfilter: Filter = {
+            kinds: [3],
+            authors: [
+              "d36e8083fa7b36daee646cb8b3f99feaa3d89e5a396508741f003e21ac0b6bec",
+            ],
+          };
+
+          let first = relay.subscribe([firstFollowfilter], {
+            onevent(event) {
+              const validTags = event.tags
+                .map((tag) => tag[1])
+                .filter(
+                  (pubkey) => isHexString(pubkey) && !followsSet.has(pubkey),
+                );
+              validTags.forEach((pubkey) => followsSet.add(pubkey));
+              followsArrayFromRelay.push(...validTags);
+
+              const secondFollowFilter: Filter = {
+                kinds: [3],
+                authors: followsArrayFromRelay,
+              };
+
+              let secondDegreeFollowsArrayFromRelay: string[] = [];
+
+              let second = relay.subscribe([secondFollowFilter], {
+                onevent(followEvent) {
+                  const validFollowTags = followEvent.tags
+                    .map((tag) => tag[1])
+                    .filter(
+                      (pubkey) =>
+                        isHexString(pubkey) && !followsSet.has(pubkey),
+                    );
+                  secondDegreeFollowsArrayFromRelay.push(...validFollowTags);
+                },
+                oneose() {
+                  second.close();
+                  const pubkeyCount: Map<string, number> = new Map();
+                  secondDegreeFollowsArrayFromRelay.forEach((pubkey) => {
+                    pubkeyCount.set(pubkey, (pubkeyCount.get(pubkey) || 0) + 1);
+                  });
+                  secondDegreeFollowsArrayFromRelay =
+                    secondDegreeFollowsArrayFromRelay.filter(
+                      (pubkey) => (pubkeyCount.get(pubkey) || 0) >= 3,
+                    );
+                  followsArrayFromRelay.push(
+                    ...secondDegreeFollowsArrayFromRelay,
+                  );
+                },
+              });
+            },
+            oneose() {
+              first.close();
+            },
+          });
         }
+        // followsArrayFromRelay = followsArrayFromRelay.filter((pubkey) => isHexString(pubkey) && followsSet.has(pubkey))
         resolve({
           followList: followsArrayFromRelay,
         });
         editFollowsContext(followsArrayFromRelay, false);
-        console.log("loaded: ", followsArrayFromRelay);
       };
     } catch (error) {
-      console.log("fetchAllPosts error", error);
+      console.log("failed to fetch follow list: ", error);
       reject(error);
     }
   });

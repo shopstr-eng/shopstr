@@ -86,10 +86,12 @@ function App({ Component, pageProps }: AppProps) {
     chatsMap: new Map(),
     isLoading: true,
   });
-  const [followsContext, setFollowsContext] = useState<FollowsContextInterface>({
-    followList: [],
-    isLoading: true,
-  });
+  const [followsContext, setFollowsContext] = useState<FollowsContextInterface>(
+    {
+      followList: [],
+      isLoading: true,
+    },
+  );
 
   const editProductContext = (
     productEvents: NostrEvent[],
@@ -153,9 +155,7 @@ function App({ Component, pageProps }: AppProps) {
           pubkeysToFetchProfilesFor,
           editProfileContext,
         );
-        let { followList } = await fetchAllFollows(
-          editFollowsContext,
-        )
+        let { followList } = await fetchAllFollows(editFollowsContext);
       } catch (error) {
         console.error("Error fetching data:", error);
       }

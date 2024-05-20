@@ -40,7 +40,7 @@ export const ChatsContext = createContext({
 
 export interface FollowsContextInterface {
   followList: string[];
-  isLoading: boolean,
+  isLoading: boolean;
 }
 
 export const FollowsContext = createContext({

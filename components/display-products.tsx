@@ -2,7 +2,11 @@ import { useState, useEffect, useContext } from "react";
 import { Relay, Filter, SimplePool, nip19 } from "nostr-tools";
 import { getLocalStorageData } from "./utility/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
-import { ProductContext, ProfileMapContext, FollowsContext } from "../utils/context/context";
+import {
+  ProductContext,
+  ProfileMapContext,
+  FollowsContext,
+} from "../utils/context/context";
 import ProductCard from "./utility-components/product-card";
 import DisplayProductModal from "./display-product-modal";
 import { useRouter } from "next/router";
@@ -54,7 +58,6 @@ const DisplayEvents = ({
         if (wotFilter) {
           if (!followsContext.isLoading && followsContext.followList) {
             const followList = followsContext.followList;
-            console.log("using: ", followList);
             if (followList.length > 0 && followList.includes(event.pubkey)) {
               let parsedData = parseTags(event);
               if (parsedData) parsedProductData.push(parsedData);
