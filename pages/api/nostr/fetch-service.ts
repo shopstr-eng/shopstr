@@ -285,13 +285,13 @@ export const fetchAllFollows = async (
     try {
       const relay = await Relay.connect("wss://purplepag.es");
 
+      let followsArrayFromRelay: string[] = [];
+      const followsSet: Set<string> = new Set();
+
       const firstFollowfilter: Filter = {
         kinds: [3],
         authors: [getLocalStorageData().userPubkey],
       };
-
-      let followsArrayFromRelay: string[] = [];
-      const followsSet: Set<string> = new Set();
 
       let first = relay.subscribe([firstFollowfilter], {
         onevent(event) {
@@ -342,7 +342,7 @@ export const fetchAllFollows = async (
         followsSet: Set<string>,
       ) => {
         // If followsArrayFromRelay is still empty, add the default value
-        if (followsArrayFromRelay.length === 0) {
+        if (followsArray.length === 0) {
           const firstFollowfilter: Filter = {
             kinds: [3],
             authors: [
@@ -358,14 +358,14 @@ export const fetchAllFollows = async (
                   (pubkey) => isHexString(pubkey) && !followsSet.has(pubkey),
                 );
               validTags.forEach((pubkey) => followsSet.add(pubkey));
-              followsArrayFromRelay.push(...validTags);
+              followsArray.push(...validTags);
 
               const secondFollowFilter: Filter = {
                 kinds: [3],
-                authors: followsArrayFromRelay,
+                authors: followsArray,
               };
 
-              let secondDegreeFollowsArrayFromRelay: string[] = [];
+              let secondDegreeFollowsArray: string[] = [];
 
               let second = relay.subscribe([secondFollowFilter], {
                 onevent(followEvent) {
@@ -375,21 +375,18 @@ export const fetchAllFollows = async (
                       (pubkey) =>
                         isHexString(pubkey) && !followsSet.has(pubkey),
                     );
-                  secondDegreeFollowsArrayFromRelay.push(...validFollowTags);
+                  secondDegreeFollowsArray.push(...validFollowTags);
                 },
                 oneose() {
                   second.close();
                   const pubkeyCount: Map<string, number> = new Map();
-                  secondDegreeFollowsArrayFromRelay.forEach((pubkey) => {
+                  secondDegreeFollowsArray.forEach((pubkey) => {
                     pubkeyCount.set(pubkey, (pubkeyCount.get(pubkey) || 0) + 1);
                   });
-                  secondDegreeFollowsArrayFromRelay =
-                    secondDegreeFollowsArrayFromRelay.filter(
-                      (pubkey) => (pubkeyCount.get(pubkey) || 0) >= 3,
-                    );
-                  followsArrayFromRelay.push(
-                    ...secondDegreeFollowsArrayFromRelay,
+                  secondDegreeFollowsArray = secondDegreeFollowsArray.filter(
+                    (pubkey) => (pubkeyCount.get(pubkey) || 0) >= 3,
                   );
+                  followsArray.push(...secondDegreeFollowsArray);
                 },
               });
             },
@@ -398,7 +395,6 @@ export const fetchAllFollows = async (
             },
           });
         }
-        // followsArrayFromRelay = followsArrayFromRelay.filter((pubkey) => isHexString(pubkey) && followsSet.has(pubkey))
         resolve({
           followList: followsArrayFromRelay,
         });
