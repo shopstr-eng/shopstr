@@ -5,20 +5,22 @@ import React, { useState } from "react";
 import { useTabs } from "@/components/hooks/use-tabs";
 import { Framer } from "@/components/framer";
 
-import Inquiries from "./inquiries";
-import Payments from "./payments";
+// import Inquiries from "./inquiries";
+// import Payments from "./payments";
+
+import Messages from "./messages";
 
 const MessageFeed = () => {
   const [hookProps] = useState({
     tabs: [
       {
         label: "Inquiries",
-        children: <Inquiries />,
+        children: <Messages isPayment={false} />,
         id: "inquiries",
       },
       {
         label: "Payments",
-        children: <Payments />,
+        children: <Messages isPayment={true} />,
         id: "payments",
       },
     ],
