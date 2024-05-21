@@ -153,7 +153,6 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
   const getDecryptedChatsFromContext: () => Promise<
     Map<string, ChatObject>
   > = async () => {
-    setIsChatsLoading(true);
     let decryptedChats: Map<string, ChatObject> = new Map(); //  entry: [chatPubkey, chat]
     let chatMessagesFromCache: Map<string, NostrMessageEvent> =
       await fetchChatMessagesFromCache();
@@ -183,7 +182,6 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         decryptedChats.set(chatPubkey, { unreadCount, decryptedChat });
       }
     }
-    setIsChatsLoading(false);
     return decryptedChats;
   };
 
