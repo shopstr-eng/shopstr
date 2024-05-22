@@ -302,12 +302,6 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
               </p>
             )}
           </div>
-        ) : isChatsLoading ? (
-          <div className="mt-2 flex items-center justify-center">
-            <div className="mt-8 flex items-center justify-center">
-              <ShopstrSpinner />
-            </div>
-          </div>
         ) : (
           <div className="flex flex-row">
             <div className="h-[85vh] w-full overflow-y-auto rounded-md pb-12 dark:bg-dark-bg md:w-[450px] md:max-w-[33%] md:flex-shrink-0 md:pb-0 lg:pb-0">
