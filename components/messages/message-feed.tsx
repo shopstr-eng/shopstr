@@ -9,7 +9,7 @@ import Messages from "./messages";
 
 const MessageFeed = () => {
   const [showSpinner, setShowSpinner] = useState(false);
-  
+
   const [hookProps] = useState({
     tabs: [
       {
@@ -27,12 +27,11 @@ const MessageFeed = () => {
   });
   const framer = useTabs(hookProps);
 
-  // Show spinner when changing tabs
   useEffect(() => {
     setShowSpinner(true);
     const timeout = setTimeout(() => {
       setShowSpinner(false);
-    }, 1); // change timeout as per your requirement
+    }, 1);
     return () => clearTimeout(timeout);
   }, [framer.selectedTab]);
 
