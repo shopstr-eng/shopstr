@@ -103,7 +103,7 @@ export default function InvoiceCard({
     const wallet = new CashuWallet(new CashuMint(mints[0]));
     if (currency.toLowerCase() !== "sats" || currency.toLowerCase() !== "sat") {
       try {
-        const currencyData = { amount: newPrice, currency: currency }
+        const currencyData = { amount: newPrice, currency: currency };
         const numSats = await fiat.getSatoshiValue(currencyData);
         newPrice = Math.round(numSats);
       } catch (err) {
@@ -236,9 +236,12 @@ export default function InvoiceCard({
       let price = totalCost;
       const mint = new CashuMint(mints[0]);
       const wallet = new CashuWallet(mint);
-      if (currency.toLowerCase() !== "sats" || currency.toLowerCase() !== "sat") {
+      if (
+        currency.toLowerCase() !== "sats" ||
+        currency.toLowerCase() !== "sat"
+      ) {
         try {
-          const currencyData = { amount: price, currency: currency }
+          const currencyData = { amount: price, currency: currency };
           const numSats = await fiat.getSatoshiValue(currencyData);
           price = Math.round(numSats);
         } catch (err) {

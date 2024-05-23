@@ -411,7 +411,10 @@ export default function NewForm({
                                 value={value}
                               >
                                 {currencyOptions.map((currency) => (
-                                  <option key={currency.value} value={currency.value}>
+                                  <option
+                                    key={currency.value}
+                                    value={currency.value}
+                                  >
                                     {currency.value}
                                   </option>
                                 ))}
@@ -534,7 +537,10 @@ export default function NewForm({
                             disabled={true}
                           >
                             {currencyOptions.map((currency) => (
-                              <option key={currency.value} value={currency.value}>
+                              <option
+                                key={currency.value}
+                                value={currency.value}
+                              >
                                 {currency.value}
                               </option>
                             ))}
