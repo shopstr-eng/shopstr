@@ -134,6 +134,7 @@ function App({ Component, pageProps }: AppProps) {
       const relays = getLocalStorageData().relays;
       const userPubkey = getLocalStorageData().userPubkey;
       try {
+        let { followList } = await fetchAllFollows(editFollowsContext);
         let pubkeysToFetchProfilesFor: string[] = [];
         let { profileSetFromProducts } = await fetchAllPosts(
           relays,
@@ -155,7 +156,6 @@ function App({ Component, pageProps }: AppProps) {
           pubkeysToFetchProfilesFor,
           editProfileContext,
         );
-        let { followList } = await fetchAllFollows(editFollowsContext);
       } catch (error) {
         console.error("Error fetching data:", error);
       }
