@@ -40,6 +40,8 @@ import { ProductFormValues } from "@/pages/api/nostr/post-event";
 import { buildSrcSet } from "@/utils/images";
 import { FileUploaderButton } from "./utility-components/file-uploader";
 
+import currencySelection from "../public/currencySelection.json";
+
 declare global {
   interface Window {
     nostr: any;
@@ -49,7 +51,6 @@ declare global {
 interface ProductFormProps {
   handleModalToggle: () => void;
   showModal: boolean;
-  // edit props
   oldValues?: ProductData;
   handleDelete?: (productId: string, passphrase: string) => void;
   onSubmitCallback?: () => void;
@@ -205,6 +206,10 @@ export default function NewForm({
     });
   };
 
+  const currencyOptions = Object.keys(currencySelection).map((code) => ({
+    value: code,
+  }));
+
   return (
     <Modal
       backdrop="blur"
@@ -324,17 +329,15 @@ export default function NewForm({
                 });
               }}
             >
-              {isButtonDisabled ? "Enter your passphrase!" : "Upload Images"}
+              {isButtonDisabled
+                ? "Enter your passphrase below!"
+                : "Upload Images"}
             </FileUploaderButton>
             <Controller
               name="Description"
               control={control}
               rules={{
                 required: "A description is required.",
-                maxLength: {
-                  value: 500,
-                  message: "This input exceed maxLength of 500.",
-                },
               }}
               render={({
                 field: { onChange, onBlur, value },
@@ -409,9 +412,14 @@ export default function NewForm({
                                 onBlur={onBlur} // notify when input is touched/blur
                                 value={value}
                               >
-                                <option key="USD">USD</option>
-                                <option key="SATS">SATS</option>
-                                {/* <option key="EUR">EUR</option> */}
+                                {currencyOptions.map((currency) => (
+                                  <option
+                                    key={currency.value}
+                                    value={currency.value}
+                                  >
+                                    {currency.value}
+                                  </option>
+                                ))}
                               </select>
                             </div>
                           );
@@ -530,9 +538,14 @@ export default function NewForm({
                             value={watchCurrency}
                             disabled={true}
                           >
-                            <option key="USD">USD</option>
-                            <option key="SATS">SATS</option>
-                            {/* <option key="EUR">EUR</option> */}
+                            {currencyOptions.map((currency) => (
+                              <option
+                                key={currency.value}
+                                value={currency.value}
+                              >
+                                {currency.value}
+                              </option>
+                            ))}
                           </select>
                         </div>
                       }

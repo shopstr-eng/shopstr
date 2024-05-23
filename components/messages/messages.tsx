@@ -22,7 +22,7 @@ import {
 } from "../../pages/api/nostr/cache-service";
 import { useKeyPress } from "../utility/functions";
 
-const Inquiries = () => {
+const Messages = ({ isPayment }: { isPayment: boolean }) => {
   const router = useRouter();
   const chatsContext = useContext(ChatsContext);
   const arrowUpPressed = useKeyPress("ArrowUp");
@@ -80,7 +80,7 @@ const Inquiries = () => {
       }
     }
     loadChats();
-  }, [chatsContext, passphrase]);
+  }, [chatsContext, passphrase, isPayment]);
 
   useEffect(() => {
     let sortedChatsByLastMessage = Array.from(chatsMap.entries()).sort(
@@ -167,7 +167,10 @@ const Inquiries = () => {
           messageEvent,
           chatPubkey,
         );
-        if (!plainText?.includes("cashuA")) {
+        if (
+          (isPayment && plainText?.includes("cashuA")) ||
+          (!isPayment && !plainText?.includes("cashuA"))
+        ) {
           plainText &&
             decryptedChat.push({ ...messageEvent, content: plainText });
           if (chatMessagesFromCache.get(messageEvent.id)?.read === false) {
@@ -301,22 +304,17 @@ const Inquiries = () => {
           </div>
         ) : (
           <div className="flex flex-row">
-            <div className="h-[85vh] w-full overflow-y-auto rounded-md dark:bg-dark-bg md:w-[450px] md:max-w-[33%] md:flex-shrink-0">
+            <div className="h-[85vh] w-full overflow-y-auto rounded-md pb-12 dark:bg-dark-bg md:w-[450px] md:max-w-[33%] md:flex-shrink-0 md:pb-0 lg:pb-0">
               {sortedChatsByLastMessage.map(
                 ([pubkeyOfChat, chatObject]: [string, ChatObject]) => {
-                  const hasCashuA = chatObject.decryptedChat.some((message) =>
-                    message.content.includes("cashuA"),
-                  );
                   return (
-                    !hasCashuA && (
-                      <ChatButton
-                        key={pubkeyOfChat}
-                        pubkeyOfChat={pubkeyOfChat}
-                        chatObject={chatObject}
-                        openedChatPubkey={currentChatPubkey}
-                        handleClickChat={enterChat}
-                      />
-                    )
+                    <ChatButton
+                      key={pubkeyOfChat}
+                      pubkeyOfChat={pubkeyOfChat}
+                      chatObject={chatObject}
+                      openedChatPubkey={currentChatPubkey}
+                      handleClickChat={enterChat}
+                    />
                   );
                 },
               )}
@@ -327,7 +325,7 @@ const Inquiries = () => {
               currentChatPubkey={currentChatPubkey}
               isSendingDMLoading={isSendingDMLoading}
               handleSendMessage={handleSendMessage}
-              isPayment={false}
+              isPayment={isPayment}
             />
           </div>
         )}
@@ -342,4 +340,4 @@ const Inquiries = () => {
   );
 };
 
-export default Inquiries;
+export default Messages;

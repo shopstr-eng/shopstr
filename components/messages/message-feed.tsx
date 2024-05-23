@@ -1,30 +1,39 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 import { useTabs } from "@/components/hooks/use-tabs";
 import { Framer } from "@/components/framer";
 
-import Inquiries from "./inquiries";
-import Payments from "./payments";
+import Messages from "./messages";
 
 const MessageFeed = () => {
+  const [showSpinner, setShowSpinner] = useState(false);
+
   const [hookProps] = useState({
     tabs: [
       {
         label: "Inquiries",
-        children: <Inquiries />,
+        children: <Messages isPayment={false} />,
         id: "inquiries",
       },
       {
         label: "Payments",
-        children: <Payments />,
+        children: <Messages isPayment={true} />,
         id: "payments",
       },
     ],
     initialTabId: "inquiries",
   });
   const framer = useTabs(hookProps);
+
+  useEffect(() => {
+    setShowSpinner(true);
+    const timeout = setTimeout(() => {
+      setShowSpinner(false);
+    }, 1);
+    return () => clearTimeout(timeout);
+  }, [framer.selectedTab]);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -35,7 +44,7 @@ const MessageFeed = () => {
       </div>
 
       <div className="flex h-[90vh] w-full flex-col bg-light-bg pt-4 dark:bg-dark-bg">
-        {framer.selectedTab.children}
+        {showSpinner ? null : framer.selectedTab.children}
       </div>
     </div>
   );
