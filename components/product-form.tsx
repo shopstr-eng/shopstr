@@ -329,7 +329,7 @@ export default function NewForm({
                 });
               }}
             >
-              {isButtonDisabled ? "Enter your passphrase!" : "Upload Images"}
+              {isButtonDisabled ? "Enter your passphrase below!" : "Upload Images"}
             </FileUploaderButton>
             <Controller
               name="Description"
