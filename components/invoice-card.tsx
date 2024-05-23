@@ -20,6 +20,7 @@ import {
   ClipboardIcon,
   EnvelopeIcon,
 } from "@heroicons/react/24/outline";
+import { fiat } from "@getalby/lightning-tools";
 import {
   CashuMint,
   CashuWallet,
@@ -100,17 +101,18 @@ export default function InvoiceCard({
   const handleLightningPayment = async () => {
     let newPrice = totalCost;
     const wallet = new CashuWallet(new CashuMint(mints[0]));
-    if (currency.toUpperCase() === "USD") {
+    if (currency.toLowerCase() !== "sats" || currency.toLowerCase() !== "sat") {
       try {
-        const res = await axios.get(
-          "https://api.coinbase.com/v2/prices/BTC-USD/spot",
-        );
-        const btcSpotPrice = Number(res.data.data.amount);
-        const numSats = (newPrice / btcSpotPrice) * 100000000;
+        const currencyData = { amount: newPrice, currency: currency }
+        const numSats = await fiat.getSatoshiValue(currencyData);
         newPrice = Math.round(numSats);
       } catch (err) {
         console.error("ERROR", err);
       }
+    }
+
+    if (newPrice < 1) {
+      newPrice = 1;
     }
 
     const invoiceMinted = await axios.post("/api/cashu/request-mint", {
@@ -234,17 +236,17 @@ export default function InvoiceCard({
       let price = totalCost;
       const mint = new CashuMint(mints[0]);
       const wallet = new CashuWallet(mint);
-      if (currency === "USD") {
+      if (currency.toLowerCase() !== "sats" || currency.toLowerCase() !== "sat") {
         try {
-          const res = await axios.get(
-            "https://api.coinbase.com/v2/prices/BTC-USD/spot",
-          );
-          const btcSpotPrice = Number(res.data.data.amount);
-          const numSats = (price / btcSpotPrice) * 100000000;
+          const currencyData = { amount: price, currency: currency }
+          const numSats = await fiat.getSatoshiValue(currencyData);
           price = Math.round(numSats);
         } catch (err) {
           console.error("ERROR", err);
         }
+      }
+      if (price < 1) {
+        price = 1;
       }
       const mintKeySetResponse = await mint.getKeySets();
       const mintKeySetIds = mintKeySetResponse?.keysets;
