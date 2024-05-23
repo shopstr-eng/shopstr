@@ -1,4 +1,13 @@
 {
+  "SAT": {
+    "symbol": "丰",
+    "name": "Satoshi",
+    "symbol_native": "丰",
+    "decimal_digits": 0,
+    "rounding": 0,
+    "code": "SAT",
+    "name_plural": "Satoshis"
+  },
   "SATS": {
     "symbol": "丰",
     "name": "Satoshi",

@@ -43,15 +43,18 @@ import {
   captureInvoicePaidmetric,
 } from "./utility/metrics-helper-functions";
 import SignInModal from "./sign-in/SignInModal";
+import currencySelection from "../public/currencySelection.json";
 
 export default function InvoiceCard({
   productData,
   setInvoiceIsPaid,
+  setInvoiceGenerationFailed,
   setCashuPaymentSent,
   setCashuPaymentFailed,
 }: {
   productData: ProductData;
   setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
+  setInvoiceGenerationFailed?: (invoiceGenerationFailed: boolean) => void;
   setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
   setCashuPaymentFailed?: (cashuPaymentFailef: boolean) => void;
 }) {
@@ -99,43 +102,62 @@ export default function InvoiceCard({
   }, [profileContext]);
 
   const handleLightningPayment = async () => {
-    let newPrice = totalCost;
-    const wallet = new CashuWallet(new CashuMint(mints[0]));
-    if (currency.toLowerCase() !== "sats" || currency.toLowerCase() !== "sat") {
-      try {
-        const currencyData = { amount: newPrice, currency: currency };
-        const numSats = await fiat.getSatoshiValue(currencyData);
-        newPrice = Math.round(numSats);
-      } catch (err) {
-        console.error("ERROR", err);
+    try {
+      setShowInvoiceCard(true);
+      let newPrice = totalCost;
+      const wallet = new CashuWallet(new CashuMint(mints[0]));
+      if (!currencySelection.hasOwnProperty(currency)) {
+        throw new Error(`${currency} is not a supported currency.`);
+      } else if (
+        currencySelection.hasOwnProperty(currency) &&
+        currency.toLowerCase() !== "sats" &&
+        currency.toLowerCase() !== "sat"
+      ) {
+        try {
+          const currencyData = { amount: newPrice, currency: currency };
+          const numSats = await fiat.getSatoshiValue(currencyData);
+          newPrice = Math.round(numSats);
+        } catch (err) {
+          console.error("ERROR", err);
+        }
+      } else if (currency.toLowerCase() === "btc") {
+        newPrice = newPrice * 100000000;
       }
-    }
 
-    if (newPrice < 1) {
-      newPrice = 1;
-    }
+      if (newPrice < 1) {
+        throw new Error("Listing price is less than 1 sat.");
+      }
 
-    const invoiceMinted = await axios.post("/api/cashu/request-mint", {
-      mintUrl: mints[0],
-      total: newPrice,
-      currency,
-    });
-
-    const { id, pr, hash } = invoiceMinted.data;
-
-    setInvoice(pr);
-
-    const QRCode = require("qrcode");
-
-    QRCode.toDataURL(pr)
-      .then((url: string) => {
-        setQrCodeUrl(url);
-      })
-      .catch((err: any) => {
-        console.error("ERROR", err);
+      const invoiceMinted = await axios.post("/api/cashu/request-mint", {
+        mintUrl: mints[0],
+        total: newPrice,
+        currency,
       });
 
-    invoiceHasBeenPaid(wallet, newPrice, hash, id);
+      const { id, pr, hash } = invoiceMinted.data;
+
+      setInvoice(pr);
+
+      const QRCode = require("qrcode");
+
+      QRCode.toDataURL(pr)
+        .then((url: string) => {
+          setQrCodeUrl(url);
+        })
+        .catch((err: any) => {
+          console.error("ERROR", err);
+        });
+
+      invoiceHasBeenPaid(wallet, newPrice, hash, id);
+    } catch (error) {
+      console.error(error);
+      if (setInvoiceGenerationFailed) {
+        setInvoiceGenerationFailed(true);
+        setShowInvoiceCard(false);
+        setInvoice("");
+        setQrCodeUrl(null);
+      }
+    }
   };
 
   /** CHECKS WHETHER INVOICE HAS BEEN PAID */
@@ -236,8 +258,11 @@ export default function InvoiceCard({
       let price = totalCost;
       const mint = new CashuMint(mints[0]);
       const wallet = new CashuWallet(mint);
-      if (
-        currency.toLowerCase() !== "sats" ||
+      if (!currencySelection.hasOwnProperty(currency)) {
+        throw new Error(`${currency} is not a supported currency.`);
+      } else if (
+        currencySelection.hasOwnProperty(currency) &&
+        currency.toLowerCase() !== "sats" &&
         currency.toLowerCase() !== "sat"
       ) {
         try {
@@ -247,9 +272,11 @@ export default function InvoiceCard({
         } catch (err) {
           console.error("ERROR", err);
         }
+      } else if (currency.toLowerCase() === "btc") {
+        price = price * 100000000;
       }
       if (price < 1) {
-        price = 1;
+        throw new Error("Listing price is less than 1 sat.");
       }
       const mintKeySetResponse = await mint.getKeySets();
       const mintKeySetIds = mintKeySetResponse?.keysets;
@@ -327,7 +354,6 @@ export default function InvoiceCard({
               if (randomNsec !== "") {
                 handleLightningPayment();
               }
-              setShowInvoiceCard(true);
             }}
             startContent={
               <BoltIcon className="h-6 w-6 hover:text-yellow-500" />
