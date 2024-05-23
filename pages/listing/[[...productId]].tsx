@@ -25,6 +25,7 @@ const Listing = () => {
   const [productIdString, setProductIdString] = useState("");
 
   const [invoiceIsPaid, setInvoiceIsPaid] = useState(false);
+  const [invoiceGenerationFailed, setInvoiceGenerationFailed] = useState(false);
   const [cashuPaymentSent, setCashuPaymentSent] = useState(false);
   const [cashuPaymentFailed, setCashuPaymentFailed] = useState(false);
 
@@ -93,6 +94,7 @@ const Listing = () => {
         <ListingPage
           productData={productData}
           setInvoiceIsPaid={setInvoiceIsPaid}
+          setInvoiceGenerationFailed={setInvoiceGenerationFailed}
           setCashuPaymentSent={setCashuPaymentSent}
           setCashuPaymentFailed={setCashuPaymentFailed}
         />
@@ -129,6 +131,39 @@ const Listing = () => {
                 <div className="flex items-center justify-center">
                   The seller should have received a DM containing a Cashu token
                   payment.
+                </div>
+              </ModalBody>
+            </ModalContent>
+          </Modal>
+        </>
+      ) : null}
+      {invoiceGenerationFailed ? (
+        <>
+          <Modal
+            backdrop="blur"
+            isOpen={invoiceGenerationFailed}
+            onClose={() => setInvoiceGenerationFailed(false)}
+            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
+            classNames={{
+              body: "py-6 ",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
+            }}
+            isDismissable={true}
+            scrollBehavior={"normal"}
+            placement={"center"}
+            size="2xl"
+          >
+            <ModalContent>
+              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <XCircleIcon className="h-6 w-6 text-red-500" />
+                <div className="ml-2">Invoice generation failed!</div>
+              </ModalHeader>
+              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <div className="flex items-center justify-center">
+                  The price and/or currency set for this listing was invalid.
                 </div>
               </ModalBody>
             </ModalContent>

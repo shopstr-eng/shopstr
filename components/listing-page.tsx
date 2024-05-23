@@ -7,29 +7,17 @@ import InvoiceCard from "./invoice-card";
 export default function ListingPage({
   productData,
   setInvoiceIsPaid,
+  setInvoiceGenerationFailed,
   setCashuPaymentSent,
   setCashuPaymentFailed,
 }: {
   productData: ProductData;
   setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
+  setInvoiceGenerationFailed?: (invoiceGenerationFailed: boolean) => void;
   setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
   setCashuPaymentFailed?: (cashuPaymentFailef: boolean) => void;
 }) {
   if (!productData) return null;
-  const {
-    createdAt,
-    title,
-    summary,
-    publishedAt,
-    images,
-    categories,
-    location,
-    price,
-    currency,
-    shippingType,
-    shippingCost,
-    totalCost,
-  } = productData;
 
   const invoiceDisplay = () => {
     return (
@@ -38,6 +26,7 @@ export default function ListingPage({
         <InvoiceCard
           productData={productData}
           setInvoiceIsPaid={setInvoiceIsPaid}
+          setInvoiceGenerationFailed={setInvoiceGenerationFailed}
           setCashuPaymentSent={setCashuPaymentSent}
           setCashuPaymentFailed={setCashuPaymentFailed}
         />
