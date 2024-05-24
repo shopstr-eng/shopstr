@@ -176,10 +176,12 @@ const PreferencesPage = () => {
               <div className="max-w-xsm break-all text-light-text dark:text-dark-text ">
                 {relay}
               </div>
-              <MinusCircleIcon
-                onClick={() => deleteRelay(relay)}
-                className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
-              />
+              {relays.length > 1 && (
+                <MinusCircleIcon
+                  onClick={() => deleteRelay(relay)}
+                  className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
+                />
+              )}
             </div>
           ))}
         </div>
