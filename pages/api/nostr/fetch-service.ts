@@ -282,6 +282,7 @@ export const fetchAllFollows = async (
   followList: string[];
 }> => {
   return new Promise(async function (resolve, reject) {
+    const wot = getLocalStorageData().wot;
     try {
       const relay = await Relay.connect("wss://purplepag.es");
 
@@ -325,7 +326,7 @@ export const fetchAllFollows = async (
               });
               secondDegreeFollowsArrayFromRelay =
                 secondDegreeFollowsArrayFromRelay.filter(
-                  (pubkey) => (pubkeyCount.get(pubkey) || 0) >= 3,
+                  (pubkey) => (pubkeyCount.get(pubkey) || 0) >= wot,
                 );
               followsArrayFromRelay.push(...secondDegreeFollowsArrayFromRelay);
             },
@@ -384,7 +385,7 @@ export const fetchAllFollows = async (
                     pubkeyCount.set(pubkey, (pubkeyCount.get(pubkey) || 0) + 1);
                   });
                   secondDegreeFollowsArray = secondDegreeFollowsArray.filter(
-                    (pubkey) => (pubkeyCount.get(pubkey) || 0) >= 3,
+                    (pubkey) => (pubkeyCount.get(pubkey) || 0) >= wot,
                   );
                   followsArray.push(...secondDegreeFollowsArray);
                 },

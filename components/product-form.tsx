@@ -321,7 +321,6 @@ export default function NewForm({
               imgCallbackOnUpload={(imgUrl) => {
                 setImages((prevValues) => {
                   const updatedImages = [...prevValues];
-                  console.log("imgUrl", imgUrl);
                   if (imgUrl && imgUrl.length > 0) {
                     return [...updatedImages, imgUrl];
                   }

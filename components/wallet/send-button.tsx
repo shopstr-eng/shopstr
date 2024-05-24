@@ -69,7 +69,6 @@ const SendButton = () => {
         (p: Proof) => mintKeySetIds?.includes(p.id),
       );
       const tokenToSend = await wallet.send(numSats, filteredProofs);
-      console.log(tokenToSend);
       const encodedSendToken = getEncodedToken({
         token: [
           {

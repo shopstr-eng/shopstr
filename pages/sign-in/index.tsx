@@ -45,7 +45,8 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
           JSON.stringify(["https://mint.minibits.cash/Bitcoin"]),
         );
 
-        // alert("Signed in as " + npub + ".");
+        localStorage.setItem("wot", "3");
+
         router.push("/");
       }
     } else {
@@ -78,7 +79,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
         "mints",
         JSON.stringify(["https://mint.minibits.cash/Bitcoin"]),
       );
-      // alert("Signed in as " + npub + ".");
+      localStorage.setItem("wot", "3");
       router.push("/");
     } catch (error) {
       alert("Extension sign in failed!");
