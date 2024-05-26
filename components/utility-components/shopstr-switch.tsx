@@ -13,6 +13,7 @@ const ShopstrSwitch = ({
   return (
     <div className="flex items-center p-2">
       <Switch
+        defaultSelected
         size={"lg"}
         color={theme === "dark" ? "warning" : "secondary"}
         onClick={() => setWotFilter(!wotFilter)}
