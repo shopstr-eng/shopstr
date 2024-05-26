@@ -24,6 +24,7 @@ import { getLocalStorageData } from "../../components/utility/nostr-helper-funct
 import { useTheme } from "next-themes";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import ShopstrSlider from "../../components/utility-components/shopstr-slider";
+import { webln } from "@getalby/sdk";
 
 const PreferencesPage = () => {
   const [relays, setRelays] = useState(Array<string>(0));
@@ -34,6 +35,8 @@ const PreferencesPage = () => {
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
 
   const [isLoaded, setIsLoaded] = useState(false);
+
+  const [nwcUri, setNwcUri] = useState("");
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -151,6 +154,15 @@ const PreferencesPage = () => {
     useEffect(() => setLoaded(true), []);
     return loaded;
   };
+
+  const handleURIGeneration = () => {
+    // same options can be provided to .withNewSecret() as creating a new NostrWebLNProvider()
+    const webLN = webln.NostrWebLNProvider.withNewSecret();
+
+    // get the connect URL to the interface where the user has to enable the connection
+    const uri = webLN.getNostrWalletConnectUrl();
+    setNwcUri(uri);
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
@@ -428,6 +440,23 @@ const PreferencesPage = () => {
             <ShopstrSlider />
           </>
         )}
+
+        <span className="my-4 flex  text-2xl font-bold text-light-text dark:text-dark-text">
+          Nostr Wallet Connect
+        </span>
+
+        <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+          <Button
+            className={SHOPSTRBUTTONCLASSNAMES}
+            onClick={handleURIGeneration}
+          >
+            Generate New URI
+          </Button>
+        </div>
+
+        {nwcUri && (<div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+          {nwcUri}
+        </div>)}
 
         <span className="my-4 flex text-2xl font-bold text-light-text dark:text-dark-text">
           Theme
