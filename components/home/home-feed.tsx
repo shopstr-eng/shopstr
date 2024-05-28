@@ -55,8 +55,6 @@ const HomeFeed = () => {
       <div
         className={`sticky inset-x-0 top-0 z-30 flex w-full translate-y-0 flex-col border-0 backdrop-blur-xl transition-all ${headerClass} md:translate-y-0`}
       >
-        {/* <span className=" flex px-4 text-2xl font-bold">Home</span> */}
-
         <div className="flex w-full flex-row items-center justify-around">
           <Framer.Tabs {...framer.tabProps} />
         </div>

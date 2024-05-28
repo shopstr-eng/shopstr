@@ -24,11 +24,8 @@ import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
 import {
   PostListing,
   getNsecWithPassphrase,
-  getPrivKeyWithPassphrase,
-  nostrBuildUploadImages,
   getLocalStorageData,
 } from "./utility/nostr-helper-functions";
-import { finalizeEvent } from "nostr-tools";
 import { CATEGORIES, SHIPPING_OPTIONS } from "./utility/STATIC-VARIABLES";
 import LocationDropdown from "./utility-components/dropdowns/location-dropdown";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";

@@ -146,12 +146,6 @@ const PreferencesPage = () => {
     setRelays(relays.filter((relay) => relay !== relayToDelete));
   };
 
-  const useLoaded = () => {
-    const [loaded, setLoaded] = useState(false);
-    useEffect(() => setLoaded(true), []);
-    return loaded;
-  };
-
   return (
     <div className="flex min-h-screen flex-col bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
       <div className="px-4">
@@ -429,13 +423,20 @@ const PreferencesPage = () => {
           </>
         )}
 
+        <div className="mx-4 my-4 flex items-center justify-center text-center">
+          <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
+          <p className="ml-2 text-sm text-light-text dark:text-dark-text">
+            This filters for listings from friends and friends of friends.
+          </p>
+        </div>
+
         <span className="my-4 flex text-2xl font-bold text-light-text dark:text-dark-text">
           Theme
         </span>
-        {useLoaded() && (
+        {isLoaded && (
           <RadioGroup
             className="ml-2"
-            label="Select your prefered theme"
+            label="Select your prefered theme:"
             orientation={"horizontal"}
             defaultValue={
               (localStorage.getItem("theme") as string) || theme || "system"

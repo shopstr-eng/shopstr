@@ -33,7 +33,7 @@ export function MarketplacePage() {
   const [selectedSearch, setSelectedSearch] = useState("");
   const { isOpen, onOpen, onClose } = useDisclosure();
 
-  const [wotFilter, setWotFilter] = useState(true);
+  const [wotFilter, setWotFilter] = useState(false);
 
   // Update focusedPubkey when pubkey in url changes
   useEffect(() => {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from "react";
-import { Relay, Filter, SimplePool, nip19 } from "nostr-tools";
+import { Filter, SimplePool, nip19 } from "nostr-tools";
 import { getLocalStorageData } from "./utility/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
 import {
@@ -24,6 +24,7 @@ const DisplayEvents = ({
   selectedSearch,
   canShowLoadMore,
   wotFilter,
+  isMyListings,
 }: {
   focusedPubkey?: string;
   selectedCategories: Set<string>;
@@ -31,6 +32,7 @@ const DisplayEvents = ({
   selectedSearch: string;
   canShowLoadMore?: boolean;
   wotFilter?: boolean;
+  isMyListings?: boolean;
 }) => {
   const [productEvents, setProductEvents] = useState<ProductData[]>([]);
   const [isProductsLoading, setIsProductLoading] = useState(true);
@@ -220,11 +222,32 @@ const DisplayEvents = ({
     <>
       <div className="w-full md:pl-4">
         {/* DISPLAYS PRODUCT LISTINGS HERE */}
-        <div className="grid h-[90%] max-w-full grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-x-hidden">
-          {productEvents.map((productData: ProductData, index) => {
-            return displayProductCard(productData, index, handleSendMessage);
-          })}
-        </div>
+        {productEvents.length != 0 ? (
+          <div className="grid h-[90%] max-w-full grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-x-hidden">
+            {productEvents.map((productData: ProductData, index) => {
+              return displayProductCard(productData, index, handleSendMessage);
+            })}
+          </div>
+        ) : (
+          <p className="mt-4 break-words text-center text-2xl text-light-text dark:text-dark-text">
+            {wotFilter && !isProductsLoading && (
+              <>
+                No products found...
+                <br></br>
+                <br></br>Try turning of the trust filter!
+              </>
+            )}
+          </p>
+        )}
+        {isMyListings &&
+          !isProductsLoading &&
+          !productEvents.some((product) => product.pubkey === userPubkey) && (
+            <p className="mt-4 break-words text-center text-2xl text-light-text dark:text-dark-text">
+              No products found...
+              <br></br>
+              <br></br>Try adding a new listing, or load more!
+            </p>
+          )}
         {profileMapContext.isLoading ||
         productEventContext.isLoading ||
         isProductsLoading ||
@@ -232,7 +255,7 @@ const DisplayEvents = ({
           <div className="mt-8 flex items-center justify-center">
             <ShopstrSpinner />
           </div>
-        ) : canShowLoadMore ? (
+        ) : canShowLoadMore && productEvents.length != 0 ? (
           <div className="mt-8 h-20 px-4">
             <Button
               className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
