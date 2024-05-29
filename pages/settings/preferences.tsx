@@ -23,6 +23,7 @@ import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABL
 import { getLocalStorageData } from "../../components/utility/nostr-helper-functions";
 import { useTheme } from "next-themes";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
+import ShopstrSlider from "../../components/utility-components/shopstr-slider";
 
 const PreferencesPage = () => {
   const [relays, setRelays] = useState(Array<string>(0));
@@ -32,14 +33,19 @@ const PreferencesPage = () => {
   const [showMintModal, setShowMintModal] = useState(false);
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
 
+  const [isLoaded, setIsLoaded] = useState(false);
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       setMints(getLocalStorageData().mints);
     }
+    setIsLoaded(true);
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("mints", JSON.stringify(mints));
+    if (mints.length != 0) {
+      localStorage.setItem("mints", JSON.stringify(mints));
+    }
   }, [mints]);
 
   const { theme, setTheme } = useTheme();
@@ -115,7 +121,9 @@ const PreferencesPage = () => {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("relays", JSON.stringify(relays));
+    if (relays.length != 0) {
+      localStorage.setItem("relays", JSON.stringify(relays));
+    }
   }, [relays]);
 
   const handleToggleRelayModal = () => {
@@ -136,12 +144,6 @@ const PreferencesPage = () => {
 
   const deleteRelay = (relayToDelete: string) => {
     setRelays(relays.filter((relay) => relay !== relayToDelete));
-  };
-
-  const useLoaded = () => {
-    const [loaded, setLoaded] = useState(false);
-    useEffect(() => setLoaded(true), []);
-    return loaded;
   };
 
   return (
@@ -168,10 +170,12 @@ const PreferencesPage = () => {
               <div className="max-w-xsm break-all text-light-text dark:text-dark-text ">
                 {relay}
               </div>
-              <MinusCircleIcon
-                onClick={() => deleteRelay(relay)}
-                className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
-              />
+              {relays.length > 1 && (
+                <MinusCircleIcon
+                  onClick={() => deleteRelay(relay)}
+                  className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
+                />
+              )}
             </div>
           ))}
         </div>
@@ -271,32 +275,32 @@ const PreferencesPage = () => {
         </span>
 
         <div>
-          {mints.length === 0 && (
+          {mints.length === 0 ? (
             <div className="mt-8 flex items-center justify-center">
               <p className="break-words text-center text-xl dark:text-dark-text">
                 No mint added . . .
               </p>
             </div>
-          )}
-
-          <div className="overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
-            <div className="mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg">
-              <div className="max-w-xsm break-all text-light-text dark:text-dark-text">
-                {mints[0]}
+          ) : (
+            <div className="overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
+              <div className="mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg">
+                <div className="max-w-xsm break-all text-light-text dark:text-dark-text">
+                  {mints[0]}
+                </div>
+                <ClipboardIcon
+                  onClick={handleCopyMint}
+                  className={`ml-2 h-6 w-6 cursor-pointer text-light-text dark:text-dark-text ${
+                    copiedToClipboard ? "hidden" : ""
+                  }`}
+                />
+                <CheckIcon
+                  className={`ml-2 h-6 w-6 cursor-pointer text-light-text dark:text-dark-text ${
+                    copiedToClipboard ? "" : "hidden"
+                  }`}
+                />
               </div>
-              <ClipboardIcon
-                onClick={handleCopyMint}
-                className={`ml-2 h-6 w-6 cursor-pointer text-light-text dark:text-dark-text ${
-                  copiedToClipboard ? "hidden" : ""
-                }`}
-              />
-              <CheckIcon
-                className={`ml-2 h-6 w-6 cursor-pointer text-light-text dark:text-dark-text ${
-                  copiedToClipboard ? "" : "hidden"
-                }`}
-              />
             </div>
-          </div>
+          )}
           {mints.length > 0 && (
             <div className="mx-4 my-4 flex items-center justify-center text-center">
               <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
@@ -409,13 +413,30 @@ const PreferencesPage = () => {
           </Modal>
         </div>
 
+        <span className="my-4 flex  text-2xl font-bold text-light-text dark:text-dark-text">
+          Web of Trust
+        </span>
+
+        {isLoaded && (
+          <>
+            <ShopstrSlider />
+          </>
+        )}
+
+        <div className="mx-4 my-4 flex items-center justify-center text-center">
+          <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
+          <p className="ml-2 text-sm text-light-text dark:text-dark-text">
+            This filters for listings from friends and friends of friends.
+          </p>
+        </div>
+
         <span className="my-4 flex text-2xl font-bold text-light-text dark:text-dark-text">
           Theme
         </span>
-        {useLoaded() && (
+        {isLoaded && (
           <RadioGroup
             className="ml-2"
-            label="Select your prefered theme"
+            label="Select your prefered theme:"
             orientation={"horizontal"}
             defaultValue={
               (localStorage.getItem("theme") as string) || theme || "system"

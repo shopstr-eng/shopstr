@@ -3,7 +3,6 @@ import type { AppProps } from "next/app";
 import Head from "next/head";
 import "../styles/globals.css";
 import { useState, useEffect } from "react";
-import { useRouter } from "next/router";
 import {
   ProfileMapContext,
   ProfileContextInterface,
@@ -12,6 +11,8 @@ import {
   ChatsContextInterface,
   ChatsContext,
   ChatsMap,
+  FollowsContextInterface,
+  FollowsContext,
 } from "../utils/context/context";
 import {
   getLocalStorageData,
@@ -23,6 +24,7 @@ import {
   fetchAllPosts,
   fetchChatsAndMessages,
   fetchProfile,
+  fetchAllFollows,
 } from "./api/nostr/fetch-service";
 import { NostrEvent, ProfileData } from "../utils/types/types";
 import BottomNav from "@/components/nav-bottom";
@@ -84,6 +86,12 @@ function App({ Component, pageProps }: AppProps) {
     chatsMap: new Map(),
     isLoading: true,
   });
+  const [followsContext, setFollowsContext] = useState<FollowsContextInterface>(
+    {
+      followList: [],
+      isLoading: true,
+    },
+  );
 
   const editProductContext = (
     productEvents: NostrEvent[],
@@ -116,12 +124,17 @@ function App({ Component, pageProps }: AppProps) {
     setChatsContext({ chatsMap, isLoading });
   };
 
+  const editFollowsContext = (followList: string[], isLoading: boolean) => {
+    setFollowsContext({ followList, isLoading });
+  };
+
   /** FETCH initial PRODUCTS and PROFILES **/
   useEffect(() => {
     async function fetchData() {
       const relays = getLocalStorageData().relays;
       const userPubkey = getLocalStorageData().userPubkey;
       try {
+        let { followList } = await fetchAllFollows(editFollowsContext);
         let pubkeysToFetchProfilesFor: string[] = [];
         let { profileSetFromProducts } = await fetchAllPosts(
           relays,
@@ -178,23 +191,25 @@ function App({ Component, pageProps }: AppProps) {
           content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
         />
       </Head>
-      <ProductContext.Provider value={productContext}>
-        <ProfileMapContext.Provider value={profileContext}>
-          <ChatsContext.Provider value={chatsContext}>
-            <NextUIProvider>
-              <NextThemesProvider attribute="class">
-                <div className="flex">
-                  <SideNav />
-                  <main className="flex-1">
-                    <Component {...pageProps} />
-                  </main>
-                </div>
-                <BottomNav />
-              </NextThemesProvider>
-            </NextUIProvider>
-          </ChatsContext.Provider>
-        </ProfileMapContext.Provider>
-      </ProductContext.Provider>
+      <FollowsContext.Provider value={followsContext}>
+        <ProductContext.Provider value={productContext}>
+          <ProfileMapContext.Provider value={profileContext}>
+            <ChatsContext.Provider value={chatsContext}>
+              <NextUIProvider>
+                <NextThemesProvider attribute="class">
+                  <div className="flex">
+                    <SideNav />
+                    <main className="flex-1">
+                      <Component {...pageProps} />
+                    </main>
+                  </div>
+                  <BottomNav />
+                </NextThemesProvider>
+              </NextUIProvider>
+            </ChatsContext.Provider>
+          </ProfileMapContext.Provider>
+        </ProductContext.Provider>
+      </FollowsContext.Provider>
     </>
   );
 }

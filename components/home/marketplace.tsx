@@ -21,6 +21,7 @@ import {
 } from "../utility/STATIC-VARIABLES";
 import { isUserLoggedIn } from "../utility/nostr-helper-functions";
 import SignInModal from "../sign-in/SignInModal";
+import ShopstrSwitch from "../utility-components/shopstr-switch";
 
 export function MarketplacePage() {
   const router = useRouter();
@@ -31,6 +32,8 @@ export function MarketplacePage() {
   const [selectedLocation, setSelectedLocation] = useState("");
   const [selectedSearch, setSelectedSearch] = useState("");
   const { isOpen, onOpen, onClose } = useDisclosure();
+
+  const [wotFilter, setWotFilter] = useState(false);
 
   // Update focusedPubkey when pubkey in url changes
   useEffect(() => {
@@ -120,6 +123,7 @@ export function MarketplacePage() {
               setSelectedLocation(event.target.value);
             }}
           />
+          <ShopstrSwitch wotFilter={wotFilter} setWotFilter={setWotFilter} />
         </div>
         <div>
           <Button
@@ -159,6 +163,7 @@ export function MarketplacePage() {
         selectedLocation={selectedLocation}
         selectedSearch={selectedSearch}
         canShowLoadMore={true}
+        wotFilter={wotFilter}
       />
       <SignInModal isOpen={isOpen} onClose={onClose} />
     </div>

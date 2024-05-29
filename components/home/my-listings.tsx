@@ -1,5 +1,5 @@
 import router from "next/router";
-import React, { useState } from "react";
+import React from "react";
 import DisplayEvents from "../display-products";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import { Button, useDisclosure } from "@nextui-org/react";
@@ -36,6 +36,8 @@ export const MyListingsPage = () => {
             selectedCategories={new Set<string>([])}
             selectedLocation={""}
             selectedSearch={""}
+            canShowLoadMore={true}
+            isMyListings={true}
           />
         ) : null}
       </div>

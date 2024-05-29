@@ -37,3 +37,13 @@ export const ChatsContext = createContext({
   chatsMap: new Map(),
   isLoading: true,
 } as ChatsContextInterface);
+
+export interface FollowsContextInterface {
+  followList: string[];
+  isLoading: boolean;
+}
+
+export const FollowsContext = createContext({
+  followList: [],
+  isLoading: true,
+} as FollowsContextInterface);

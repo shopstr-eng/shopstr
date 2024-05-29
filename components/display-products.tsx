@@ -2,7 +2,11 @@ import { useState, useEffect, useContext } from "react";
 import { Filter, SimplePool, nip19 } from "nostr-tools";
 import { getLocalStorageData } from "./utility/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
-import { ProductContext, ProfileMapContext } from "../utils/context/context";
+import {
+  ProductContext,
+  ProfileMapContext,
+  FollowsContext,
+} from "../utils/context/context";
 import ProductCard from "./utility-components/product-card";
 import DisplayProductModal from "./display-product-modal";
 import { useRouter } from "next/router";
@@ -19,17 +23,22 @@ const DisplayEvents = ({
   selectedLocation,
   selectedSearch,
   canShowLoadMore,
+  wotFilter,
+  isMyListings,
 }: {
   focusedPubkey?: string;
   selectedCategories: Set<string>;
   selectedLocation: string;
   selectedSearch: string;
   canShowLoadMore?: boolean;
+  wotFilter?: boolean;
+  isMyListings?: boolean;
 }) => {
   const [productEvents, setProductEvents] = useState<ProductData[]>([]);
   const [isProductsLoading, setIsProductLoading] = useState(true);
   const productEventContext = useContext(ProductContext);
   const profileMapContext = useContext(ProfileMapContext);
+  const followsContext = useContext(FollowsContext);
   const [focusedProduct, setFocusedProduct] = useState(""); // product being viewed in modal
   const [showModal, setShowModal] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
@@ -48,13 +57,23 @@ const DisplayEvents = ({
       ]; // sorts most recently created to least recently created
       let parsedProductData: ProductData[] = [];
       sortedProductEvents.forEach((event) => {
-        let parsedData = parseTags(event);
-        if (parsedData) parsedProductData.push(parsedData);
+        if (wotFilter) {
+          if (!followsContext.isLoading && followsContext.followList) {
+            const followList = followsContext.followList;
+            if (followList.length > 0 && followList.includes(event.pubkey)) {
+              let parsedData = parseTags(event);
+              if (parsedData) parsedProductData.push(parsedData);
+            }
+          }
+        } else {
+          let parsedData = parseTags(event);
+          if (parsedData) parsedProductData.push(parsedData);
+        }
       });
       setProductEvents(parsedProductData);
       setIsProductLoading(false);
     }
-  }, [productEventContext]);
+  }, [productEventContext, wotFilter]);
 
   const isThereAFilter = () => {
     return (
@@ -203,11 +222,42 @@ const DisplayEvents = ({
     <>
       <div className="w-full md:pl-4">
         {/* DISPLAYS PRODUCT LISTINGS HERE */}
-        <div className="grid h-[90%] max-w-full grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-x-hidden">
-          {productEvents.map((productData: ProductData, index) => {
-            return displayProductCard(productData, index, handleSendMessage);
-          })}
-        </div>
+        {productEvents.length != 0 ? (
+          <div className="grid h-[90%] max-w-full grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-x-hidden">
+            {productEvents.map((productData: ProductData, index) => {
+              return displayProductCard(productData, index, handleSendMessage);
+            })}
+          </div>
+        ) : (
+          wotFilter &&
+          !isProductsLoading && (
+            <p className="mt-4 break-words text-center text-2xl text-light-text dark:text-dark-text">
+              No products found...
+              <br></br>
+              <br></br>Try turning of the trust filter!
+            </p>
+          )
+        )}
+        {isThereAFilter() &&
+          !isProductsLoading &&
+          !productEvents.some((product) =>
+            productSatisfiesAllFilters(product),
+          ) && (
+            <p className="mt-4 break-words text-center text-2xl text-light-text dark:text-dark-text">
+              No products found...
+              <br></br>
+              <br></br>Try loading more!
+            </p>
+          )}
+        {isMyListings &&
+          !isProductsLoading &&
+          !productEvents.some((product) => product.pubkey === userPubkey) && (
+            <p className="mt-4 break-words text-center text-2xl text-light-text dark:text-dark-text">
+              No products found...
+              <br></br>
+              <br></br>Try adding a new listing, or load more!
+            </p>
+          )}
         {profileMapContext.isLoading ||
         productEventContext.isLoading ||
         isProductsLoading ||
@@ -215,7 +265,7 @@ const DisplayEvents = ({
           <div className="mt-8 flex items-center justify-center">
             <ShopstrSpinner />
           </div>
-        ) : canShowLoadMore ? (
+        ) : canShowLoadMore && productEvents.length != 0 ? (
           <div className="mt-8 h-20 px-4">
             <Button
               className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
