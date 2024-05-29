@@ -229,16 +229,26 @@ const DisplayEvents = ({
             })}
           </div>
         ) : (
-          <p className="mt-4 break-words text-center text-2xl text-light-text dark:text-dark-text">
-            {wotFilter && !isProductsLoading && (
-              <>
-                No products found...
-                <br></br>
-                <br></br>Try turning of the trust filter!
-              </>
-            )}
-          </p>
+          wotFilter &&
+          !isProductsLoading && (
+            <p className="mt-4 break-words text-center text-2xl text-light-text dark:text-dark-text">
+              No products found...
+              <br></br>
+              <br></br>Try turning of the trust filter!
+            </p>
+          )
         )}
+        {isThereAFilter() &&
+          !isProductsLoading &&
+          !productEvents.some((product) =>
+            productSatisfiesAllFilters(product),
+          ) && (
+            <p className="mt-4 break-words text-center text-2xl text-light-text dark:text-dark-text">
+              No products found...
+              <br></br>
+              <br></br>Try loading more!
+            </p>
+          )}
         {isMyListings &&
           !isProductsLoading &&
           !productEvents.some((product) => product.pubkey === userPubkey) && (
