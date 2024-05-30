@@ -95,16 +95,8 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
         }}
         className="text-light-text dark:text-dark-text"
       >
-        <SelectItem
-          key={"Worldwide"}
-        >
-          Worldwide
-        </SelectItem>
-        <SelectItem
-          key={"Online"}
-        >
-          Online
-        </SelectItem>
+        <SelectItem key={"Worldwide"}>Worldwide</SelectItem>
+        <SelectItem key={"Online"}>Online</SelectItem>
       </SelectSection>
     );
     return [stateOptions, countryOptions, globalOptions];
