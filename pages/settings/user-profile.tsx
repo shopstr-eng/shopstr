@@ -128,13 +128,13 @@ const UserProfilePage = () => {
             <ShopstrSpinner />
           ) : (
             <>
-              <div className="mb-24 h-60 rounded-lg bg-light-fg dark:bg-dark-fg">
-                <div className="relative flex h-60 items-center justify-center rounded-lg bg-shopstr-purple-light dark:bg-dark-fg">
+              <div className="mb-20 h-40 rounded-lg bg-light-fg dark:bg-dark-fg">
+                <div className="relative flex h-40 items-center justify-center rounded-lg bg-shopstr-purple-light dark:bg-dark-fg">
                   {watchBanner && (
                     <Image
                       alt={"User banner image"}
                       src={watchBanner}
-                      className="h-60 w-full rounded-lg"
+                      className="h-40 w-full rounded-lg object-cover object-fill"
                     />
                   )}
                   <FileUploaderButton

@@ -85,7 +85,29 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
         })}
       </SelectSection>
     );
-    return [stateOptions, countryOptions];
+
+    let globalOptions = (
+      <SelectSection
+        key={"globalOptions"}
+        title="Global"
+        classNames={{
+          heading: headingClasses,
+        }}
+        className="text-light-text dark:text-dark-text"
+      >
+        <SelectItem
+          key={"Worldwide"}
+        >
+          Worldwide
+        </SelectItem>
+        <SelectItem
+          key={"Online"}
+        >
+          Online
+        </SelectItem>
+      </SelectSection>
+    );
+    return [stateOptions, countryOptions, globalOptions];
   }, []);
 
   return (
