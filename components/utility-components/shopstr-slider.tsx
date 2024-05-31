@@ -35,7 +35,7 @@ const ShopstrSlider = () => {
           maxValue={
             !followsContext.isLoading && followsContext.firstDegreeFollowsLength
               ? followsContext.firstDegreeFollowsLength
-              : 10
+              : wot
           }
           minValue={1}
           defaultValue={wot}
