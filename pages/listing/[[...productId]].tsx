@@ -66,11 +66,10 @@ const Listing = () => {
     : "/shopstr-2000x2000.png";
 
   return (
-    <div className="flex h-full min-h-screen flex-col bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
+    <>
       <Head>
         <title>Shopstr</title>
         <meta name="description" content={productData?.title} />
-
         <meta
           property="og:url"
           content={`https://shopstr.store/listing/${productData?.id}`}
@@ -79,7 +78,6 @@ const Listing = () => {
         <meta property="og:title" content="Shopstr" />
         <meta property="og:description" content={productData?.title} />
         <meta property="og:image" content={imageUrl} />
-
         <meta name="twitter:card" content="summary_large_image" />
         <meta property="twitter:domain" content="shopstr.store" />
         <meta
@@ -90,120 +88,122 @@ const Listing = () => {
         <meta name="twitter:description" content={productData?.title} />
         <meta name="twitter:image" content={imageUrl} />
       </Head>
-      {productData && (
-        <ListingPage
-          productData={productData}
-          setInvoiceIsPaid={setInvoiceIsPaid}
-          setInvoiceGenerationFailed={setInvoiceGenerationFailed}
-          setCashuPaymentSent={setCashuPaymentSent}
-          setCashuPaymentFailed={setCashuPaymentFailed}
-        />
-      )}
-      {invoiceIsPaid || cashuPaymentSent ? (
-        <>
-          <Modal
-            backdrop="blur"
-            isOpen={invoiceIsPaid || cashuPaymentSent}
-            onClose={() => {
-              setInvoiceIsPaid(false);
-              setCashuPaymentSent(false);
-              router.push("/");
-            }}
-            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
-            classNames={{
-              body: "py-6 ",
-              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-              header: "border-b-[1px] border-[#292f46]",
-              footer: "border-t-[1px] border-[#292f46]",
-              closeButton: "hover:bg-black/5 active:bg-white/10",
-            }}
-            isDismissable={true}
-            scrollBehavior={"normal"}
-            placement={"center"}
-            size="2xl"
-          >
-            <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
-                <CheckCircleIcon className="h-6 w-6 text-green-500" />
-                <div className="ml-2">Purchase successful!</div>
-              </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
-                <div className="flex items-center justify-center">
-                  The seller should have received a DM containing a Cashu token
-                  payment.
-                </div>
-              </ModalBody>
-            </ModalContent>
-          </Modal>
-        </>
-      ) : null}
-      {invoiceGenerationFailed ? (
-        <>
-          <Modal
-            backdrop="blur"
-            isOpen={invoiceGenerationFailed}
-            onClose={() => setInvoiceGenerationFailed(false)}
-            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
-            classNames={{
-              body: "py-6 ",
-              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-              header: "border-b-[1px] border-[#292f46]",
-              footer: "border-t-[1px] border-[#292f46]",
-              closeButton: "hover:bg-black/5 active:bg-white/10",
-            }}
-            isDismissable={true}
-            scrollBehavior={"normal"}
-            placement={"center"}
-            size="2xl"
-          >
-            <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
-                <XCircleIcon className="h-6 w-6 text-red-500" />
-                <div className="ml-2">Invoice generation failed!</div>
-              </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
-                <div className="flex items-center justify-center">
-                  The price and/or currency set for this listing was invalid.
-                </div>
-              </ModalBody>
-            </ModalContent>
-          </Modal>
-        </>
-      ) : null}
-      {cashuPaymentFailed ? (
-        <>
-          <Modal
-            backdrop="blur"
-            isOpen={cashuPaymentFailed}
-            onClose={() => setCashuPaymentFailed(false)}
-            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
-            classNames={{
-              body: "py-6 ",
-              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-              header: "border-b-[1px] border-[#292f46]",
-              footer: "border-t-[1px] border-[#292f46]",
-              closeButton: "hover:bg-black/5 active:bg-white/10",
-            }}
-            isDismissable={true}
-            scrollBehavior={"normal"}
-            placement={"center"}
-            size="2xl"
-          >
-            <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
-                <XCircleIcon className="h-6 w-6 text-red-500" />
-                <div className="ml-2">Purchase failed!</div>
-              </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
-                <div className="flex items-center justify-center">
-                  You didn&apos;t have enough balance in your wallet to pay.
-                </div>
-              </ModalBody>
-            </ModalContent>
-          </Modal>
-        </>
-      ) : null}
-    </div>
+      <div className="flex h-full min-h-screen flex-col bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
+        {productData && (
+          <ListingPage
+            productData={productData}
+            setInvoiceIsPaid={setInvoiceIsPaid}
+            setInvoiceGenerationFailed={setInvoiceGenerationFailed}
+            setCashuPaymentSent={setCashuPaymentSent}
+            setCashuPaymentFailed={setCashuPaymentFailed}
+          />
+        )}
+        {invoiceIsPaid || cashuPaymentSent ? (
+          <>
+            <Modal
+              backdrop="blur"
+              isOpen={invoiceIsPaid || cashuPaymentSent}
+              onClose={() => {
+                setInvoiceIsPaid(false);
+                setCashuPaymentSent(false);
+                router.push("/");
+              }}
+              // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
+              classNames={{
+                body: "py-6 ",
+                backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+                header: "border-b-[1px] border-[#292f46]",
+                footer: "border-t-[1px] border-[#292f46]",
+                closeButton: "hover:bg-black/5 active:bg-white/10",
+              }}
+              isDismissable={true}
+              scrollBehavior={"normal"}
+              placement={"center"}
+              size="2xl"
+            >
+              <ModalContent>
+                <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                  <CheckCircleIcon className="h-6 w-6 text-green-500" />
+                  <div className="ml-2">Purchase successful!</div>
+                </ModalHeader>
+                <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                  <div className="flex items-center justify-center">
+                    The seller should have received a DM containing a Cashu
+                    token payment.
+                  </div>
+                </ModalBody>
+              </ModalContent>
+            </Modal>
+          </>
+        ) : null}
+        {invoiceGenerationFailed ? (
+          <>
+            <Modal
+              backdrop="blur"
+              isOpen={invoiceGenerationFailed}
+              onClose={() => setInvoiceGenerationFailed(false)}
+              // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
+              classNames={{
+                body: "py-6 ",
+                backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+                header: "border-b-[1px] border-[#292f46]",
+                footer: "border-t-[1px] border-[#292f46]",
+                closeButton: "hover:bg-black/5 active:bg-white/10",
+              }}
+              isDismissable={true}
+              scrollBehavior={"normal"}
+              placement={"center"}
+              size="2xl"
+            >
+              <ModalContent>
+                <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                  <XCircleIcon className="h-6 w-6 text-red-500" />
+                  <div className="ml-2">Invoice generation failed!</div>
+                </ModalHeader>
+                <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                  <div className="flex items-center justify-center">
+                    The price and/or currency set for this listing was invalid.
+                  </div>
+                </ModalBody>
+              </ModalContent>
+            </Modal>
+          </>
+        ) : null}
+        {cashuPaymentFailed ? (
+          <>
+            <Modal
+              backdrop="blur"
+              isOpen={cashuPaymentFailed}
+              onClose={() => setCashuPaymentFailed(false)}
+              // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
+              classNames={{
+                body: "py-6 ",
+                backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+                header: "border-b-[1px] border-[#292f46]",
+                footer: "border-t-[1px] border-[#292f46]",
+                closeButton: "hover:bg-black/5 active:bg-white/10",
+              }}
+              isDismissable={true}
+              scrollBehavior={"normal"}
+              placement={"center"}
+              size="2xl"
+            >
+              <ModalContent>
+                <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                  <XCircleIcon className="h-6 w-6 text-red-500" />
+                  <div className="ml-2">Purchase failed!</div>
+                </ModalHeader>
+                <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                  <div className="flex items-center justify-center">
+                    You didn&apos;t have enough balance in your wallet to pay.
+                  </div>
+                </ModalBody>
+              </ModalContent>
+            </Modal>
+          </>
+        ) : null}
+      </div>
+    </>
   );
 };
 

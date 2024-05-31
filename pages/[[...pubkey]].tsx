@@ -4,7 +4,7 @@ import HomeFeed from "@/components/home/home-feed";
 
 export default function SellerView() {
   return (
-    <div className="">
+    <>
       <Head>
         <title>Shopstr</title>
         <meta
@@ -34,6 +34,6 @@ export default function SellerView() {
       <div className="flex h-full min-h-screen flex-col bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
         <HomeFeed />
       </div>
-    </div>
+    </>
   );
 }
