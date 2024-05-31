@@ -89,6 +89,7 @@ function App({ Component, pageProps }: AppProps) {
   const [followsContext, setFollowsContext] = useState<FollowsContextInterface>(
     {
       followList: [],
+      firstDegreeFollowsLength: 0,
       isLoading: true,
     },
   );
@@ -124,8 +125,12 @@ function App({ Component, pageProps }: AppProps) {
     setChatsContext({ chatsMap, isLoading });
   };
 
-  const editFollowsContext = (followList: string[], isLoading: boolean) => {
-    setFollowsContext({ followList, isLoading });
+  const editFollowsContext = (
+    followList: string[],
+    firstDegreeFollowsLength: number,
+    isLoading: boolean,
+  ) => {
+    setFollowsContext({ followList, firstDegreeFollowsLength, isLoading });
   };
 
   /** FETCH initial PRODUCTS and PROFILES **/

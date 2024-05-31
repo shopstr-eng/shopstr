@@ -1,12 +1,15 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { Button } from "@nextui-org/react";
 import { Slider } from "@nextui-org/react";
 import { useTheme } from "next-themes";
+import { FollowsContext } from "../../utils/context/context";
 import { getLocalStorageData } from "../../components/utility/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
 
 const ShopstrSlider = () => {
   const { theme, setTheme } = useTheme();
+
+  const followsContext = useContext(FollowsContext);
 
   const [wot, setWot] = useState(getLocalStorageData().wot);
   const [wotIsChanged, setWotIsChanged] = useState(false);
@@ -29,7 +32,11 @@ const ShopstrSlider = () => {
           color={theme === "dark" ? "warning" : "secondary"}
           label="Minimum Follower Count:"
           showSteps={true}
-          maxValue={10}
+          maxValue={
+            !followsContext.isLoading && followsContext.firstDegreeFollowsLength
+              ? followsContext.firstDegreeFollowsLength
+              : 10
+          }
           minValue={1}
           defaultValue={wot}
           className="max-w-md text-light-text dark:text-dark-text"

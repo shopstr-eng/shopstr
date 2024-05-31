@@ -277,7 +277,11 @@ export const fetchChatsAndMessages = async (
 };
 
 export const fetchAllFollows = async (
-  editFollowsContext: (followList: string[], isLoading: boolean) => void,
+  editFollowsContext: (
+    followList: string[],
+    firstDegreeFollowsLength: number,
+    isLoading: boolean,
+  ) => void,
 ): Promise<{
   followList: string[];
 }> => {
@@ -288,6 +292,7 @@ export const fetchAllFollows = async (
 
       let followsArrayFromRelay: string[] = [];
       const followsSet: Set<string> = new Set();
+      let firstDegreeFollowsLength = 0;
 
       const firstFollowfilter: Filter = {
         kinds: [3],
@@ -301,6 +306,8 @@ export const fetchAllFollows = async (
             .filter((pubkey) => isHexString(pubkey) && !followsSet.has(pubkey));
           validTags.forEach((pubkey) => followsSet.add(pubkey));
           followsArrayFromRelay.push(...validTags);
+
+          firstDegreeFollowsLength = followsArrayFromRelay.length;
 
           const secondFollowFilter: Filter = {
             kinds: [3],
@@ -334,13 +341,19 @@ export const fetchAllFollows = async (
         },
         oneose() {
           first.close();
-          returnCall(relay, followsArrayFromRelay, followsSet);
+          returnCall(
+            relay,
+            followsArrayFromRelay,
+            followsSet,
+            firstDegreeFollowsLength,
+          );
         },
       });
       const returnCall = async (
         relay: Relay,
         followsArray: string[],
         followsSet: Set<string>,
+        firstDegreeFollowsLength: number,
       ) => {
         // If followsArrayFromRelay is still empty, add the default value
         if (followsArray.length === 0) {
@@ -360,6 +373,8 @@ export const fetchAllFollows = async (
                 );
               validTags.forEach((pubkey) => followsSet.add(pubkey));
               followsArray.push(...validTags);
+
+              firstDegreeFollowsLength = followsArray.length;
 
               const secondFollowFilter: Filter = {
                 kinds: [3],
@@ -399,7 +414,11 @@ export const fetchAllFollows = async (
         resolve({
           followList: followsArrayFromRelay,
         });
-        editFollowsContext(followsArrayFromRelay, false);
+        editFollowsContext(
+          followsArrayFromRelay,
+          firstDegreeFollowsLength,
+          false,
+        );
       };
     } catch (error) {
       console.log("failed to fetch follow list: ", error);

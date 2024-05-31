@@ -40,10 +40,12 @@ export const ChatsContext = createContext({
 
 export interface FollowsContextInterface {
   followList: string[];
+  firstDegreeFollowsLength: number;
   isLoading: boolean;
 }
 
 export const FollowsContext = createContext({
   followList: [],
+  firstDegreeFollowsLength: 0,
   isLoading: true,
 } as FollowsContextInterface);
