@@ -6,6 +6,7 @@ A global, decentralized Nostr marketplace to buy and sell anything, anywhere, an
 
 - [x] NIP-02: Follow List
 - [x] NIP-04: Encrypted Direct Message
+- [ ] NIP-05: Mapping Nostr keys to DNS-based internet identifiers
 - [x] NIP-07: window.nostr capability for web browsers
 - [x] NIP-09: Event Deletion
 - [ ] NIP-15: Nostr Marketplace (for resilient marketplaces)
