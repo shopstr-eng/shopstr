@@ -276,10 +276,11 @@ export const fetchChatsAndMessages = async (
   });
 };
 
-export const fetchAllFollows = async (
+export const fetchAllFollowsAndRelays = async (
   editFollowsContext: (
     followList: string[],
     firstDegreeFollowsLength: number,
+    relayList: string[],
     isLoading: boolean,
   ) => void,
 ): Promise<{
@@ -293,14 +294,24 @@ export const fetchAllFollows = async (
       let followsArrayFromRelay: string[] = [];
       const followsSet: Set<string> = new Set();
       let firstDegreeFollowsLength = 0;
+      let relayList: string[] = [];
+      const relaySet: Set<string> = new Set();
 
       const firstFollowfilter: Filter = {
-        kinds: [3],
+        kinds: [3, 10002],
         authors: [getLocalStorageData().userPubkey],
       };
 
       let first = relay.subscribe([firstFollowfilter], {
         onevent(event) {
+          if (event.kind === 10002) {
+            const validRelays = event.tags.filter(
+              (tag) => tag[0] === "r" && (tag[2] === "write" || !tag[2]),
+            );
+
+            validRelays.forEach((tag) => relaySet.add(tag[1]));
+            relayList.push(...validRelays.map((tag) => tag[1]));
+          }
           const validTags = event.tags
             .map((tag) => tag[1])
             .filter((pubkey) => isHexString(pubkey) && !followsSet.has(pubkey));
@@ -417,6 +428,7 @@ export const fetchAllFollows = async (
         editFollowsContext(
           followsArrayFromRelay,
           firstDegreeFollowsLength,
+          relayList,
           false,
         );
       };

@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { withRouter, NextRouter } from "next/router";
 import { nip19, getPublicKey } from "nostr-tools";
 import * as CryptoJS from "crypto-js";
 import { validateNSecKey } from "../../components/utility/nostr-helper-functions";
+import { FollowsAndRelaysContext } from "../../utils/context/context";
 import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
 
@@ -11,6 +12,8 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [validPrivateKey, setValidPrivateKey] = useState<boolean>(false);
   const [passphrase, setPassphrase] = useState<string>("");
+
+  const followsAndRelaysContext = useContext(FollowsAndRelaysContext);
 
   const handleSignIn = async () => {
     if (validPrivateKey) {
@@ -31,14 +34,24 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
 
         localStorage.setItem("signIn", "nsec");
 
-        localStorage.setItem(
-          "relays",
-          JSON.stringify([
-            "wss://relay.damus.io",
-            "wss://nos.lol",
-            "wss://nostr.mutinywallet.com",
-          ]),
-        );
+        if (
+          !followsAndRelaysContext.isLoading &&
+          followsAndRelaysContext.relayList.length >= 0
+        ) {
+          localStorage.setItem(
+            "relays",
+            JSON.stringify(followsAndRelaysContext.relayList),
+          );
+        } else {
+          localStorage.setItem(
+            "relays",
+            JSON.stringify([
+              "wss://relay.damus.io",
+              "wss://nos.lol",
+              "wss://nostr.mutinywallet.com",
+            ]),
+          );
+        }
 
         localStorage.setItem(
           "mints",
@@ -67,14 +80,24 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
       let npub = nip19.npubEncode(pk);
       localStorage.setItem("npub", npub);
       localStorage.setItem("signIn", "extension");
-      localStorage.setItem(
-        "relays",
-        JSON.stringify([
-          "wss://relay.damus.io",
-          "wss://nos.lol",
-          "wss://nostr.mutinywallet.com",
-        ]),
-      );
+      if (
+        !followsAndRelaysContext.isLoading &&
+        followsAndRelaysContext.relayList.length >= 0
+      ) {
+        localStorage.setItem(
+          "relays",
+          JSON.stringify(followsAndRelaysContext.relayList),
+        );
+      } else {
+        localStorage.setItem(
+          "relays",
+          JSON.stringify([
+            "wss://relay.damus.io",
+            "wss://nos.lol",
+            "wss://nostr.mutinywallet.com",
+          ]),
+        );
+      }
       localStorage.setItem(
         "mints",
         JSON.stringify(["https://mint.minibits.cash/Bitcoin"]),

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useContext } from "react";
 import {
   Modal,
   ModalContent,
@@ -13,6 +13,7 @@ import {
   setLocalStorageDataOnSignIn,
   validateNSecKey,
 } from "@/components/utility/nostr-helper-functions";
+import { FollowsAndRelaysContext } from "../../utils/context/context";
 import { getPublicKey, nip19 } from "nostr-tools";
 import CryptoJS from "crypto-js";
 import { useRouter } from "next/router";
@@ -31,16 +32,29 @@ export default function SignInModal({
 
   const [showNsecSignIn, setShowNsecSignIn] = useState(false);
 
+  const followsAndRelaysContext = useContext(FollowsAndRelaysContext);
+
   const router = useRouter();
 
   const startExtensionLogin = async () => {
     try {
       // @ts-ignore
       var pk = await window.nostr.getPublicKey();
-      setLocalStorageDataOnSignIn({
-        signInMethod: "extension",
-        pubkey: pk,
-      });
+      if (
+        !followsAndRelaysContext.isLoading &&
+        followsAndRelaysContext.relayList.length >= 0
+      ) {
+        setLocalStorageDataOnSignIn({
+          signInMethod: "nsec",
+          pubkey: pk,
+          relays: followsAndRelaysContext.relayList,
+        });
+      } else {
+        setLocalStorageDataOnSignIn({
+          signInMethod: "nsec",
+          pubkey: pk,
+        });
+      }
       onClose();
     } catch (error) {
       alert("Extension sign in failed!");
@@ -67,11 +81,23 @@ export default function SignInModal({
           onClose(); // avoids tree walker issue by closing modal
         }, 500);
 
-        setLocalStorageDataOnSignIn({
-          signInMethod: "nsec",
-          pubkey: pk,
-          encryptedPrivateKey: encryptedPrivateKey,
-        });
+        if (
+          !followsAndRelaysContext.isLoading &&
+          followsAndRelaysContext.relayList.length >= 0
+        ) {
+          setLocalStorageDataOnSignIn({
+            signInMethod: "nsec",
+            pubkey: pk,
+            encryptedPrivateKey: encryptedPrivateKey,
+            relays: followsAndRelaysContext.relayList,
+          });
+        } else {
+          setLocalStorageDataOnSignIn({
+            signInMethod: "nsec",
+            pubkey: pk,
+            encryptedPrivateKey: encryptedPrivateKey,
+          });
+        }
       }
     } else {
       alert(

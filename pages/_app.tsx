@@ -11,8 +11,8 @@ import {
   ChatsContextInterface,
   ChatsContext,
   ChatsMap,
-  FollowsContextInterface,
-  FollowsContext,
+  FollowsAndRelaysContextInterface,
+  FollowsAndRelaysContext,
 } from "../utils/context/context";
 import {
   getLocalStorageData,
@@ -24,7 +24,7 @@ import {
   fetchAllPosts,
   fetchChatsAndMessages,
   fetchProfile,
-  fetchAllFollows,
+  fetchAllFollowsAndRelays,
 } from "./api/nostr/fetch-service";
 import { NostrEvent, ProfileData } from "../utils/types/types";
 import BottomNav from "@/components/nav-bottom";
@@ -86,13 +86,13 @@ function App({ Component, pageProps }: AppProps) {
     chatsMap: new Map(),
     isLoading: true,
   });
-  const [followsContext, setFollowsContext] = useState<FollowsContextInterface>(
-    {
+  const [followsAndRelaysContext, setFollowsAndRelaysContext] =
+    useState<FollowsAndRelaysContextInterface>({
       followList: [],
       firstDegreeFollowsLength: 0,
+      relayList: [],
       isLoading: true,
-    },
-  );
+    });
 
   const editProductContext = (
     productEvents: NostrEvent[],
@@ -125,12 +125,18 @@ function App({ Component, pageProps }: AppProps) {
     setChatsContext({ chatsMap, isLoading });
   };
 
-  const editFollowsContext = (
+  const editFollowsAndRelaysContext = (
     followList: string[],
     firstDegreeFollowsLength: number,
+    relayList: string[],
     isLoading: boolean,
   ) => {
-    setFollowsContext({ followList, firstDegreeFollowsLength, isLoading });
+    setFollowsAndRelaysContext({
+      followList,
+      firstDegreeFollowsLength,
+      relayList,
+      isLoading,
+    });
   };
 
   /** FETCH initial PRODUCTS and PROFILES **/
@@ -139,7 +145,9 @@ function App({ Component, pageProps }: AppProps) {
       const relays = getLocalStorageData().relays;
       const userPubkey = getLocalStorageData().userPubkey;
       try {
-        let { followList } = await fetchAllFollows(editFollowsContext);
+        let { followList } = await fetchAllFollowsAndRelays(
+          editFollowsAndRelaysContext,
+        );
         let pubkeysToFetchProfilesFor: string[] = [];
         let { profileSetFromProducts } = await fetchAllPosts(
           relays,
@@ -196,7 +204,7 @@ function App({ Component, pageProps }: AppProps) {
           content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
         />
       </Head>
-      <FollowsContext.Provider value={followsContext}>
+      <FollowsAndRelaysContext.Provider value={followsAndRelaysContext}>
         <ProductContext.Provider value={productContext}>
           <ProfileMapContext.Provider value={profileContext}>
             <ChatsContext.Provider value={chatsContext}>
@@ -214,7 +222,7 @@ function App({ Component, pageProps }: AppProps) {
             </ChatsContext.Provider>
           </ProfileMapContext.Provider>
         </ProductContext.Provider>
-      </FollowsContext.Provider>
+      </FollowsAndRelaysContext.Provider>
     </>
   );
 }
