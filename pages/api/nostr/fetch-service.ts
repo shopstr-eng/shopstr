@@ -284,7 +284,7 @@ export const fetchAllFollowsAndRelays = async (
     isLoading: boolean,
   ) => void,
 ): Promise<{
-  followList: string[];
+  relayList: string[];
 }> => {
   return new Promise(async function (resolve, reject) {
     const wot = getLocalStorageData().wot;
@@ -423,7 +423,7 @@ export const fetchAllFollowsAndRelays = async (
           });
         }
         resolve({
-          followList: followsArrayFromRelay,
+          relayList: relayList,
         });
         editFollowsContext(
           followsArrayFromRelay,

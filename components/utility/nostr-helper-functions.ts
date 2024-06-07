@@ -1,7 +1,6 @@
 import * as CryptoJS from "crypto-js";
 import {
   finalizeEvent,
-  getPublicKey,
   nip04,
   nip19,
   nip98,
@@ -333,7 +332,7 @@ export const setLocalStorageDataOnSignIn = ({
   localStorage.setItem(
     LOCALSTORAGECONSTANTS.relays,
     JSON.stringify(
-      relays
+      (relays && relays.length != 0)
         ? relays
         : [
             "wss://relay.damus.io",

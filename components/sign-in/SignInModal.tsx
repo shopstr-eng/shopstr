@@ -45,13 +45,13 @@ export default function SignInModal({
         followsAndRelaysContext.relayList.length >= 0
       ) {
         setLocalStorageDataOnSignIn({
-          signInMethod: "nsec",
+          signInMethod: "extension",
           pubkey: pk,
           relays: followsAndRelaysContext.relayList,
         });
       } else {
         setLocalStorageDataOnSignIn({
-          signInMethod: "nsec",
+          signInMethod: "extension",
           pubkey: pk,
         });
       }

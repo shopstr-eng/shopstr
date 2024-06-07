@@ -139,15 +139,18 @@ function App({ Component, pageProps }: AppProps) {
     });
   };
 
-  /** FETCH initial PRODUCTS and PROFILES **/
+  /** FETCH initial FOLLOWS, RELAYS, PRODUCTS, and PROFILES **/
   useEffect(() => {
     async function fetchData() {
       const relays = getLocalStorageData().relays;
       const userPubkey = getLocalStorageData().userPubkey;
       try {
-        let { followList } = await fetchAllFollowsAndRelays(
+        let { relayList } = await fetchAllFollowsAndRelays(
           editFollowsAndRelaysContext,
         );
+        if (getLocalStorageData().relays.length != 0) {
+          localStorage.setItem("relays", JSON.stringify(relayList));
+        }
         let pubkeysToFetchProfilesFor: string[] = [];
         let { profileSetFromProducts } = await fetchAllPosts(
           relays,
