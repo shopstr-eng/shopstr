@@ -42,6 +42,8 @@ export interface FollowsAndRelaysContextInterface {
   followList: string[];
   firstDegreeFollowsLength: number;
   relayList: string[];
+  readRelayList: string[];
+  writeRelayList: string[];
   isLoading: boolean;
 }
 
@@ -49,5 +51,7 @@ export const FollowsAndRelaysContext = createContext({
   followList: [],
   firstDegreeFollowsLength: 0,
   relayList: [],
+  readRelayList: [],
+  writeRelayList: [],
   isLoading: true,
 } as FollowsAndRelaysContextInterface);

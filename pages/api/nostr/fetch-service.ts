@@ -1,4 +1,4 @@
-import { Filter, Nostr, Relay, SimplePool } from "nostr-tools";
+import { Filter, Relay, SimplePool } from "nostr-tools";
 import {
   addChatMessageToCache,
   addProductToCache,
@@ -281,10 +281,14 @@ export const fetchAllFollowsAndRelays = async (
     followList: string[],
     firstDegreeFollowsLength: number,
     relayList: string[],
+    readRelayList: string[],
+    writeRelayList: string[],
     isLoading: boolean,
   ) => void,
 ): Promise<{
   relayList: string[];
+  readRelayList: string[];
+  writeRelayList: string[];
 }> => {
   return new Promise(async function (resolve, reject) {
     const wot = getLocalStorageData().wot;
@@ -296,6 +300,10 @@ export const fetchAllFollowsAndRelays = async (
       let firstDegreeFollowsLength = 0;
       let relayList: string[] = [];
       const relaySet: Set<string> = new Set();
+      let readRelayList: string[] = [];
+      const readRelaySet: Set<string> = new Set();
+      let writeRelayList: string[] = [];
+      const writeRelaySet: Set<string> = new Set();
 
       const firstFollowfilter: Filter = {
         kinds: [3, 10002],
@@ -306,11 +314,25 @@ export const fetchAllFollowsAndRelays = async (
         onevent(event) {
           if (event.kind === 10002) {
             const validRelays = event.tags.filter(
-              (tag) => tag[0] === "r" && (tag[2] === "write" || !tag[2]),
+              (tag) => tag[0] === "r" && !tag[2],
+            );
+
+            const validReadRelays = event.tags.filter(
+              (tag) => tag[0] === "r" && tag[2] === "read",
+            );
+
+            const validWriteRelays = event.tags.filter(
+              (tag) => tag[0] === "r" && tag[2] === "write",
             );
 
             validRelays.forEach((tag) => relaySet.add(tag[1]));
             relayList.push(...validRelays.map((tag) => tag[1]));
+
+            validReadRelays.forEach((tag) => readRelaySet.add(tag[1]));
+            readRelayList.push(...validReadRelays.map((tag) => tag[1]));
+
+            validWriteRelays.forEach((tag) => writeRelaySet.add(tag[1]));
+            writeRelayList.push(...validWriteRelays.map((tag) => tag[1]));
           }
           const validTags = event.tags
             .map((tag) => tag[1])
@@ -424,11 +446,15 @@ export const fetchAllFollowsAndRelays = async (
         }
         resolve({
           relayList: relayList,
+          readRelayList: readRelayList,
+          writeRelayList: writeRelayList,
         });
         editFollowsContext(
           followsArrayFromRelay,
           firstDegreeFollowsLength,
           relayList,
+          readRelayList,
+          writeRelayList,
           false,
         );
       };

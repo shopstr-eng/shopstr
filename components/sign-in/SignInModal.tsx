@@ -42,12 +42,19 @@ export default function SignInModal({
       var pk = await window.nostr.getPublicKey();
       if (
         !followsAndRelaysContext.isLoading &&
-        followsAndRelaysContext.relayList.length >= 0
+        followsAndRelaysContext.relayList.length >= 0 &&
+        followsAndRelaysContext.readRelayList &&
+        followsAndRelaysContext.writeRelayList
       ) {
+        const allRelays = [
+          ...followsAndRelaysContext.relayList,
+          ...followsAndRelaysContext.readRelayList,
+          ...followsAndRelaysContext.writeRelayList,
+        ];
         setLocalStorageDataOnSignIn({
           signInMethod: "extension",
           pubkey: pk,
-          relays: followsAndRelaysContext.relayList,
+          relays: allRelays,
         });
       } else {
         setLocalStorageDataOnSignIn({
@@ -83,13 +90,20 @@ export default function SignInModal({
 
         if (
           !followsAndRelaysContext.isLoading &&
-          followsAndRelaysContext.relayList.length >= 0
+          followsAndRelaysContext.relayList.length >= 0 &&
+          followsAndRelaysContext.readRelayList &&
+          followsAndRelaysContext.writeRelayList
         ) {
+          const allRelays = [
+            ...followsAndRelaysContext.relayList,
+            ...followsAndRelaysContext.readRelayList,
+            ...followsAndRelaysContext.writeRelayList,
+          ];
           setLocalStorageDataOnSignIn({
             signInMethod: "nsec",
             pubkey: pk,
             encryptedPrivateKey: encryptedPrivateKey,
-            relays: followsAndRelaysContext.relayList,
+            relays: allRelays,
           });
         } else {
           setLocalStorageDataOnSignIn({

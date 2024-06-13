@@ -36,11 +36,21 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
 
         if (
           !followsAndRelaysContext.isLoading &&
-          followsAndRelaysContext.relayList.length >= 0
+          followsAndRelaysContext.relayList.length != 0 &&
+          followsAndRelaysContext.readRelayList &&
+          followsAndRelaysContext.writeRelayList
         ) {
           localStorage.setItem(
             "relays",
             JSON.stringify(followsAndRelaysContext.relayList),
+          );
+          localStorage.setItem(
+            "readRelays",
+            JSON.stringify(followsAndRelaysContext.readRelayList),
+          );
+          localStorage.setItem(
+            "writeRelays",
+            JSON.stringify(followsAndRelaysContext.writeRelayList),
           );
         } else {
           localStorage.setItem(
@@ -82,11 +92,21 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
       localStorage.setItem("signIn", "extension");
       if (
         !followsAndRelaysContext.isLoading &&
-        followsAndRelaysContext.relayList.length >= 0
+        followsAndRelaysContext.relayList.length != 0 &&
+        followsAndRelaysContext.readRelayList &&
+        followsAndRelaysContext.writeRelayList
       ) {
         localStorage.setItem(
           "relays",
           JSON.stringify(followsAndRelaysContext.relayList),
+        );
+        localStorage.setItem(
+          "readRelays",
+          JSON.stringify(followsAndRelaysContext.readRelayList),
+        );
+        localStorage.setItem(
+          "writeRelays",
+          JSON.stringify(followsAndRelaysContext.writeRelayList),
         );
       } else {
         localStorage.setItem(

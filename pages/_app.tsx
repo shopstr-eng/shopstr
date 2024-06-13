@@ -91,6 +91,8 @@ function App({ Component, pageProps }: AppProps) {
       followList: [],
       firstDegreeFollowsLength: 0,
       relayList: [],
+      readRelayList: [],
+      writeRelayList: [],
       isLoading: true,
     });
 
@@ -129,12 +131,16 @@ function App({ Component, pageProps }: AppProps) {
     followList: string[],
     firstDegreeFollowsLength: number,
     relayList: string[],
+    readRelayList: string[],
+    writeRelayList: string[],
     isLoading: boolean,
   ) => {
     setFollowsAndRelaysContext({
       followList,
       firstDegreeFollowsLength,
       relayList,
+      readRelayList,
+      writeRelayList,
       isLoading,
     });
   };
@@ -145,11 +151,12 @@ function App({ Component, pageProps }: AppProps) {
       const relays = getLocalStorageData().relays;
       const userPubkey = getLocalStorageData().userPubkey;
       try {
-        let { relayList } = await fetchAllFollowsAndRelays(
-          editFollowsAndRelaysContext,
-        );
+        let { relayList, readRelayList, writeRelayList } =
+          await fetchAllFollowsAndRelays(editFollowsAndRelaysContext);
         if (getLocalStorageData().relays.length != 0) {
           localStorage.setItem("relays", JSON.stringify(relayList));
+          localStorage.setItem("readRelays", JSON.stringify(readRelayList));
+          localStorage.setItem("writeRelays", JSON.stringify(writeRelayList));
         }
         let pubkeysToFetchProfilesFor: string[] = [];
         let { profileSetFromProducts } = await fetchAllPosts(

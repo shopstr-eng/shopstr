@@ -1,11 +1,5 @@
 import * as CryptoJS from "crypto-js";
-import {
-  finalizeEvent,
-  nip04,
-  nip19,
-  nip98,
-  SimplePool,
-} from "nostr-tools";
+import { finalizeEvent, nip04, nip19, nip98, SimplePool } from "nostr-tools";
 import axios from "axios";
 import { NostrEvent } from "@/utils/types/types";
 import { ProductFormValues } from "@/pages/api/nostr/post-event";
@@ -14,7 +8,8 @@ export async function PostListing(
   values: ProductFormValues,
   passphrase: string,
 ) {
-  const { signInMethod, userPubkey, relays } = getLocalStorageData();
+  const { signInMethod, userPubkey, relays, writeRelays } =
+    getLocalStorageData();
   const summary = values.find(([key]) => key === "summary")?.[1] || "";
 
   const dValue = values.find(([key]) => key === "d")?.[1] || undefined;
@@ -64,11 +59,14 @@ export async function PostListing(
 
     const pool = new SimplePool();
 
-    await Promise.any(pool.publish(relays, signedEvent));
-    await Promise.any(pool.publish(relays, signedRecEvent));
-    await Promise.any(pool.publish(relays, signedHandlerEvent));
+    const allWriteRelays = [...writeRelays, ...relays];
+
+    await Promise.any(pool.publish(allWriteRelays, signedEvent));
+    await Promise.any(pool.publish(allWriteRelays, signedRecEvent));
+    await Promise.any(pool.publish(allWriteRelays, signedHandlerEvent));
     return signedEvent;
   } else {
+    const allWriteRelays = [...writeRelays, ...relays];
     const res = await axios({
       method: "POST",
       url: "/api/nostr/post-event",
@@ -83,7 +81,7 @@ export async function PostListing(
         // kind: 30018,
         tags: updatedValues,
         content: summary,
-        relays: relays,
+        relays: allWriteRelays,
       },
     });
     return {
@@ -143,7 +141,7 @@ export async function sendEncryptedMessage(
   encryptedMessageEvent: EncryptedMessageEvent,
   passphrase?: string,
 ) {
-  const { signInMethod, relays } = getLocalStorageData();
+  const { signInMethod, relays, writeRelays } = getLocalStorageData();
   let signedEvent;
   if (signInMethod === "extension") {
     signedEvent = await window.nostr.signEvent(encryptedMessageEvent);
@@ -153,7 +151,8 @@ export async function sendEncryptedMessage(
     signedEvent = finalizeEvent(encryptedMessageEvent, senderPrivkey);
   }
   const pool = new SimplePool();
-  await Promise.any(pool.publish(relays, signedEvent));
+  const allWriteRelays = [...writeRelays, ...relays];
+  await Promise.any(pool.publish(allWriteRelays, signedEvent));
 }
 
 export async function finalizeAndSendNostrEvent(
@@ -161,7 +160,7 @@ export async function finalizeAndSendNostrEvent(
   passphrase?: string,
 ) {
   try {
-    const { signInMethod, relays } = getLocalStorageData();
+    const { signInMethod, relays, writeRelays } = getLocalStorageData();
     let signedEvent;
     if (signInMethod === "extension") {
       signedEvent = await window.nostr.signEvent(nostrEvent);
@@ -171,7 +170,8 @@ export async function finalizeAndSendNostrEvent(
       signedEvent = finalizeEvent(nostrEvent, senderPrivkey);
     }
     const pool = new SimplePool();
-    await Promise.any(pool.publish(relays, signedEvent));
+    const allWriteRelays = [...writeRelays, ...relays];
+    await Promise.any(pool.publish(allWriteRelays, signedEvent));
   } catch (e: any) {
     console.log("Error: ", e);
     alert("Failed to send event: " + e.message);
@@ -295,6 +295,8 @@ const LOCALSTORAGECONSTANTS = {
   userPubkey: "userPubkey",
   encryptedPrivateKey: "encryptedPrivateKey",
   relays: "relays",
+  readRelays: "readRelays",
+  writeRelays: "writeRelays",
   mints: "mints",
   tokens: "tokens",
   history: "history",
@@ -306,6 +308,8 @@ export const setLocalStorageDataOnSignIn = ({
   pubkey,
   encryptedPrivateKey,
   relays,
+  readRelays,
+  writeRelays,
   mints,
   wot,
 }: {
@@ -313,6 +317,8 @@ export const setLocalStorageDataOnSignIn = ({
   pubkey: string;
   encryptedPrivateKey?: string;
   relays?: string[];
+  readRelays?: string[];
+  writeRelays?: string[];
   mints?: string[];
   wot?: number;
 }) => {
@@ -332,7 +338,7 @@ export const setLocalStorageDataOnSignIn = ({
   localStorage.setItem(
     LOCALSTORAGECONSTANTS.relays,
     JSON.stringify(
-      (relays && relays.length != 0)
+      relays && relays.length != 0
         ? relays
         : [
             "wss://relay.damus.io",
@@ -340,6 +346,16 @@ export const setLocalStorageDataOnSignIn = ({
             "wss://nostr.mutinywallet.com",
           ],
     ),
+  );
+
+  localStorage.setItem(
+    LOCALSTORAGECONSTANTS.readRelays,
+    JSON.stringify(readRelays && readRelays.length != 0 ? readRelays : []),
+  );
+
+  localStorage.setItem(
+    LOCALSTORAGECONSTANTS.writeRelays,
+    JSON.stringify(writeRelays && writeRelays.length != 0 ? writeRelays : []),
   );
 
   localStorage.setItem(
@@ -363,6 +379,8 @@ export interface LocalStorageInterface {
   userNPub: string;
   userPubkey: string;
   relays: string[];
+  readRelays: string[];
+  writeRelays: string[];
   mints: string[];
   tokens: [];
   history: [];
@@ -376,6 +394,8 @@ export const getLocalStorageData = (): LocalStorageInterface => {
   let userNPub;
   let userPubkey;
   let relays;
+  let readRelays;
+  let writeRelays;
   let mints;
   let tokens;
   let history;
@@ -412,14 +432,31 @@ export const getLocalStorageData = (): LocalStorageInterface => {
 
     if (!relays) {
       relays = defaultRelays;
+      localStorage.setItem("relays", JSON.stringify(relays));
     } else {
       try {
         relays = (JSON.parse(relays) as string[]).filter((r) => r);
       } catch {
         relays = defaultRelays;
+        localStorage.setItem("relays", JSON.stringify(relays));
       }
     }
-    localStorage.setItem("relays", JSON.stringify(relays));
+
+    readRelays = localStorage.getItem(LOCALSTORAGECONSTANTS.readRelays)
+      ? (
+          JSON.parse(
+            localStorage.getItem(LOCALSTORAGECONSTANTS.readRelays) as string,
+          ) as string[]
+        ).filter((r) => r)
+      : [];
+
+    writeRelays = localStorage.getItem(LOCALSTORAGECONSTANTS.writeRelays)
+      ? (
+          JSON.parse(
+            localStorage.getItem(LOCALSTORAGECONSTANTS.writeRelays) as string,
+          ) as string[]
+        ).filter((r) => r)
+      : [];
 
     mints = localStorage.getItem(LOCALSTORAGECONSTANTS.mints)
       ? JSON.parse(localStorage.getItem("mints") as string)
@@ -454,6 +491,8 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     userNPub: userNPub as string,
     userPubkey: userPubkey as string,
     relays: relays || [],
+    readRelays: readRelays || [],
+    writeRelays: writeRelays || [],
     mints,
     tokens: tokens || [],
     history: history || [],
@@ -471,6 +510,9 @@ export const LogOut = () => {
   localStorage.removeItem(LOCALSTORAGECONSTANTS.userNPub);
   localStorage.removeItem(LOCALSTORAGECONSTANTS.userPubkey);
   localStorage.removeItem(LOCALSTORAGECONSTANTS.encryptedPrivateKey);
+  localStorage.removeItem(LOCALSTORAGECONSTANTS.relays);
+  localStorage.removeItem(LOCALSTORAGECONSTANTS.readRelays);
+  localStorage.removeItem(LOCALSTORAGECONSTANTS.writeRelays);
 
   window.dispatchEvent(new Event("storage"));
 };
