@@ -149,6 +149,8 @@ function App({ Component, pageProps }: AppProps) {
   useEffect(() => {
     async function fetchData() {
       const relays = getLocalStorageData().relays;
+      const readRelays = getLocalStorageData().readRelays;
+      const allRelays = [...relays, ...readRelays];
       const userPubkey = getLocalStorageData().userPubkey;
       try {
         let { relayList, readRelayList, writeRelayList } =
@@ -160,12 +162,12 @@ function App({ Component, pageProps }: AppProps) {
         }
         let pubkeysToFetchProfilesFor: string[] = [];
         let { profileSetFromProducts } = await fetchAllPosts(
-          relays,
+          allRelays,
           editProductContext,
         );
         pubkeysToFetchProfilesFor = [...profileSetFromProducts];
         let { profileSetFromChats } = await fetchChatsAndMessages(
-          relays,
+          allRelays,
           userPubkey,
           editChatContext,
         );
@@ -175,7 +177,7 @@ function App({ Component, pageProps }: AppProps) {
           ...profileSetFromChats,
         ];
         let { profileMap } = await fetchProfile(
-          relays,
+          allRelays,
           pubkeysToFetchProfilesFor,
           editProfileContext,
         );
