@@ -277,6 +277,7 @@ export const fetchChatsAndMessages = async (
 };
 
 export const fetchAllFollowsAndRelays = async (
+  relays: string[],
   editFollowsContext: (
     followList: string[],
     firstDegreeFollowsLength: number,
@@ -293,7 +294,7 @@ export const fetchAllFollowsAndRelays = async (
   return new Promise(async function (resolve, reject) {
     const wot = getLocalStorageData().wot;
     try {
-      const relay = await Relay.connect("wss://purplepag.es");
+      const pool = new SimplePool();
 
       let followsArrayFromRelay: string[] = [];
       const followsSet: Set<string> = new Set();
@@ -310,7 +311,7 @@ export const fetchAllFollowsAndRelays = async (
         authors: [getLocalStorageData().userPubkey],
       };
 
-      let first = relay.subscribe([firstFollowfilter], {
+      let first = pool.subscribeMany(relays, [firstFollowfilter], {
         onevent(event) {
           if (event.kind === 10002) {
             const validRelays = event.tags.filter(
@@ -349,7 +350,7 @@ export const fetchAllFollowsAndRelays = async (
 
           let secondDegreeFollowsArrayFromRelay: string[] = [];
 
-          let second = relay.subscribe([secondFollowFilter], {
+          let second = pool.subscribeMany(relays, [secondFollowFilter], {
             onevent(followEvent) {
               const validFollowTags = followEvent.tags
                 .map((tag) => tag[1])
@@ -375,7 +376,7 @@ export const fetchAllFollowsAndRelays = async (
         oneose() {
           first.close();
           returnCall(
-            relay,
+            relays,
             followsArrayFromRelay,
             followsSet,
             firstDegreeFollowsLength,
@@ -383,7 +384,7 @@ export const fetchAllFollowsAndRelays = async (
         },
       });
       const returnCall = async (
-        relay: Relay,
+        relays: string[],
         followsArray: string[],
         followsSet: Set<string>,
         firstDegreeFollowsLength: number,
@@ -397,7 +398,7 @@ export const fetchAllFollowsAndRelays = async (
             ],
           };
 
-          let first = relay.subscribe([firstFollowfilter], {
+          let first = pool.subscribeMany(relays, [firstFollowfilter], {
             onevent(event) {
               const validTags = event.tags
                 .map((tag) => tag[1])
@@ -416,7 +417,7 @@ export const fetchAllFollowsAndRelays = async (
 
               let secondDegreeFollowsArray: string[] = [];
 
-              let second = relay.subscribe([secondFollowFilter], {
+              let second = pool.subscribeMany(relays, [secondFollowFilter], {
                 onevent(followEvent) {
                   const validFollowTags = followEvent.tags
                     .map((tag) => tag[1])

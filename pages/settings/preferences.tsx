@@ -21,13 +21,18 @@ import {
 import { relayConnect } from "nostr-tools";
 import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
 import { getLocalStorageData } from "../../components/utility/nostr-helper-functions";
+import { createNostrRelayEvent } from "../api/nostr/crud-service";
 import { useTheme } from "next-themes";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import ShopstrSlider from "../../components/utility-components/shopstr-slider";
 
 const PreferencesPage = () => {
   const [relays, setRelays] = useState(Array<string>(0));
+  const [readRelays, setReadRelays] = useState(Array<string>(0));
+  const [writeRelays, setWriteRelays] = useState(Array<string>(0));
   const [showRelayModal, setShowRelayModal] = useState(false);
+  const [relaysAreChanged, setRelaysAreChanged] = useState(false);
+  const [relayType, setRelayType] = useState("");
 
   const [mints, setMints] = useState(Array<string>(0));
   const [showMintModal, setShowMintModal] = useState(false);
@@ -35,9 +40,15 @@ const PreferencesPage = () => {
 
   const [isLoaded, setIsLoaded] = useState(false);
 
+  const [pubkey, setPubkey] = useState("");
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       setMints(getLocalStorageData().mints);
+      setRelays(getLocalStorageData().relays);
+      setReadRelays(getLocalStorageData().readRelays);
+      setWriteRelays(getLocalStorageData().writeRelays);
+      setPubkey(getLocalStorageData().userPubkey);
     }
     setIsLoaded(true);
   }, []);
@@ -115,12 +126,6 @@ const PreferencesPage = () => {
   };
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      setRelays(getLocalStorageData().relays);
-    }
-  }, []);
-
-  useEffect(() => {
     if (relays.length != 0) {
       localStorage.setItem("relays", JSON.stringify(relays));
     }
@@ -137,6 +142,7 @@ const PreferencesPage = () => {
       setRelays([...relays, newRelay]);
       relayTest.close();
       handleToggleRelayModal();
+      setRelaysAreChanged(true);
     } catch {
       alert(`Relay ${newRelay} was unable to connect!`);
     }
@@ -144,132 +150,17 @@ const PreferencesPage = () => {
 
   const deleteRelay = (relayToDelete: string) => {
     setRelays(relays.filter((relay) => relay !== relayToDelete));
+    setRelaysAreChanged(true);
   };
+
+  const publishRelays = (relays: string[], type: string) {
+    createNostrRelayEvent(pubkey, relays, type, ""); // passphrase required in final param
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
       <div className="px-4">
         <SettingsBreadCrumbs />
-        <span className="mt-4 flex text-2xl font-bold text-light-text dark:text-dark-text">
-          Relays
-        </span>
-
-        {relays.length === 0 && (
-          <div className="mt-4 flex items-center justify-center">
-            <p className="break-words text-center text-xl dark:text-dark-text">
-              No relays added . . .
-            </p>
-          </div>
-        )}
-        <div className="mt-4 max-h-96 overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
-          {relays.map((relay) => (
-            <div
-              key={relay}
-              className="mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg"
-            >
-              <div className="max-w-xsm break-all text-light-text dark:text-dark-text ">
-                {relay}
-              </div>
-              {relays.length > 1 && (
-                <MinusCircleIcon
-                  onClick={() => deleteRelay(relay)}
-                  className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
-                />
-              )}
-            </div>
-          ))}
-        </div>
-        <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
-          <Button
-            className={SHOPSTRBUTTONCLASSNAMES}
-            onClick={handleToggleRelayModal}
-          >
-            Add New Relay
-          </Button>
-        </div>
-        <Modal
-          backdrop="blur"
-          isOpen={showRelayModal}
-          onClose={handleToggleRelayModal}
-          classNames={{
-            body: "py-6",
-            backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-            // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
-            header: "border-b-[1px] border-[#292f46]",
-            footer: "border-t-[1px] border-[#292f46]",
-            closeButton: "hover:bg-black/5 active:bg-white/10",
-          }}
-          scrollBehavior={"outside"}
-          size="2xl"
-        >
-          <ModalContent>
-            <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
-              Add New Relay
-            </ModalHeader>
-            <form onSubmit={handleRelaySubmit(onRelaySubmit)}>
-              <ModalBody>
-                <Controller
-                  name="relay"
-                  control={relayControl}
-                  rules={{
-                    required: "A relay URL is required.",
-                    maxLength: {
-                      value: 500,
-                      message: "This input exceed maxLength of 500.",
-                    },
-                    validate: (value) =>
-                      /^(wss:\/\/|ws:\/\/)/.test(value) ||
-                      "Invalid relay URL, must start with wss:// or ws://.",
-                  }}
-                  render={({
-                    field: { onChange, onBlur, value },
-                    fieldState: { error },
-                  }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
-                      ? error.message
-                      : "";
-                    return (
-                      <Textarea
-                        className="text-light-text dark:text-dark-text"
-                        variant="bordered"
-                        fullWidth={true}
-                        placeholder="wss://..."
-                        isInvalid={isErrored}
-                        errorMessage={errorMessage}
-                        // controller props
-                        onChange={onChange} // send value to hook form
-                        onBlur={onBlur} // notify when input is touched/blur
-                        value={value}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            handleRelaySubmit(onRelaySubmit)();
-                          }
-                        }}
-                      />
-                    );
-                  }}
-                />
-              </ModalBody>
-
-              <ModalFooter>
-                <Button
-                  color="danger"
-                  variant="light"
-                  onClick={handleToggleRelayModal}
-                >
-                  Cancel
-                </Button>
-
-                <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
-                  Add Relay
-                </Button>
-              </ModalFooter>
-            </form>
-          </ModalContent>
-        </Modal>
-
         <span className="my-4 flex  text-2xl font-bold text-light-text dark:text-dark-text">
           Mint
         </span>
@@ -412,6 +303,381 @@ const PreferencesPage = () => {
             </ModalContent>
           </Modal>
         </div>
+        
+        <span className="mt-4 flex text-2xl font-bold text-light-text dark:text-dark-text">
+          Read/Write Relays
+        </span>
+
+        {relays.length === 0 && (
+          <div className="mt-4 flex items-center justify-center">
+            <p className="break-words text-center text-xl dark:text-dark-text">
+              No relays added . . .
+            </p>
+          </div>
+        )}
+        <div className="mt-4 max-h-96 overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
+          {relays.map((relay) => (
+            <div
+              key={relay}
+              className="mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg"
+            >
+              <div className="max-w-xsm break-all text-light-text dark:text-dark-text ">
+                {relay}
+              </div>
+              {relays.length > 1 && (
+                <MinusCircleIcon
+                  onClick={() => deleteRelay(relay)}
+                  className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
+                />
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+          <Button
+            className={SHOPSTRBUTTONCLASSNAMES}
+            onClick={handleToggleRelayModal}
+          >
+            Add New Relay
+          </Button>
+          {relaysAreChanged && relayType === "all" && (
+            <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+              <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={publishRelays}>
+                Save
+              </Button>
+            </div>
+          )}
+        </div>
+        <Modal
+          backdrop="blur"
+          isOpen={showRelayModal}
+          onClose={handleToggleRelayModal}
+          classNames={{
+            body: "py-6",
+            backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+            // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
+            header: "border-b-[1px] border-[#292f46]",
+            footer: "border-t-[1px] border-[#292f46]",
+            closeButton: "hover:bg-black/5 active:bg-white/10",
+          }}
+          scrollBehavior={"outside"}
+          size="2xl"
+        >
+          <ModalContent>
+            <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+              Add New Relay
+            </ModalHeader>
+            <form onSubmit={handleRelaySubmit(onRelaySubmit)}>
+              <ModalBody>
+                <Controller
+                  name="relay"
+                  control={relayControl}
+                  rules={{
+                    required: "A relay URL is required.",
+                    maxLength: {
+                      value: 500,
+                      message: "This input exceed maxLength of 500.",
+                    },
+                    validate: (value) =>
+                      /^(wss:\/\/|ws:\/\/)/.test(value) ||
+                      "Invalid relay URL, must start with wss:// or ws://.",
+                  }}
+                  render={({
+                    field: { onChange, onBlur, value },
+                    fieldState: { error },
+                  }) => {
+                    let isErrored = error !== undefined;
+                    let errorMessage: string = error?.message
+                      ? error.message
+                      : "";
+                    return (
+                      <Textarea
+                        className="text-light-text dark:text-dark-text"
+                        variant="bordered"
+                        fullWidth={true}
+                        placeholder="wss://..."
+                        isInvalid={isErrored}
+                        errorMessage={errorMessage}
+                        // controller props
+                        onChange={onChange} // send value to hook form
+                        onBlur={onBlur} // notify when input is touched/blur
+                        value={value}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleRelaySubmit(onRelaySubmit)();
+                          }
+                        }}
+                      />
+                    );
+                  }}
+                />
+              </ModalBody>
+
+              <ModalFooter>
+                <Button
+                  color="danger"
+                  variant="light"
+                  onClick={handleToggleRelayModal}
+                >
+                  Cancel
+                </Button>
+
+                <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                  Add Relay
+                </Button>
+              </ModalFooter>
+            </form>
+          </ModalContent>
+        </Modal>
+
+        {readRelays.length != 0 && (
+          <>
+            <span className="mt-4 flex text-2xl font-bold text-light-text dark:text-dark-text">
+              Read Only Relays
+            </span>
+
+            <div className="mt-4 max-h-96 overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
+              {readRelays.map((relay) => (
+                <div
+                  key={relay}
+                  className="mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg"
+                >
+                  <div className="max-w-xsm break-all text-light-text dark:text-dark-text ">
+                    {relay}
+                  </div>
+                  {readRelays.length > 1 && (
+                    <MinusCircleIcon
+                      onClick={() => deleteRelay(relay)}
+                      className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+              <Button
+                className={SHOPSTRBUTTONCLASSNAMES}
+                onClick={handleToggleRelayModal}
+              >
+                Add New Relay
+              </Button>
+              {relaysAreChanged && relayType === "read" && (
+                <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+                  <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={publishRelays}>
+                    Save
+                  </Button>
+                </div>
+              )}
+            </div>
+            <Modal
+              backdrop="blur"
+              isOpen={showRelayModal}
+              onClose={handleToggleRelayModal}
+              classNames={{
+                body: "py-6",
+                backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+                // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
+                header: "border-b-[1px] border-[#292f46]",
+                footer: "border-t-[1px] border-[#292f46]",
+                closeButton: "hover:bg-black/5 active:bg-white/10",
+              }}
+              scrollBehavior={"outside"}
+              size="2xl"
+            >
+              <ModalContent>
+                <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+                  Add New Relay
+                </ModalHeader>
+                <form onSubmit={handleRelaySubmit(onRelaySubmit)}>
+                  <ModalBody>
+                    <Controller
+                      name="relay"
+                      control={relayControl}
+                      rules={{
+                        required: "A relay URL is required.",
+                        maxLength: {
+                          value: 500,
+                          message: "This input exceed maxLength of 500.",
+                        },
+                        validate: (value) =>
+                          /^(wss:\/\/|ws:\/\/)/.test(value) ||
+                          "Invalid relay URL, must start with wss:// or ws://.",
+                      }}
+                      render={({
+                        field: { onChange, onBlur, value },
+                        fieldState: { error },
+                      }) => {
+                        let isErrored = error !== undefined;
+                        let errorMessage: string = error?.message
+                          ? error.message
+                          : "";
+                        return (
+                          <Textarea
+                            className="text-light-text dark:text-dark-text"
+                            variant="bordered"
+                            fullWidth={true}
+                            placeholder="wss://..."
+                            isInvalid={isErrored}
+                            errorMessage={errorMessage}
+                            // controller props
+                            onChange={onChange} // send value to hook form
+                            onBlur={onBlur} // notify when input is touched/blur
+                            value={value}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleRelaySubmit(onRelaySubmit)();
+                              }
+                            }}
+                          />
+                        );
+                      }}
+                    />
+                  </ModalBody>
+
+                  <ModalFooter>
+                    <Button
+                      color="danger"
+                      variant="light"
+                      onClick={handleToggleRelayModal}
+                    >
+                      Cancel
+                    </Button>
+
+                    <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                      Add Relay
+                    </Button>
+                  </ModalFooter>
+                </form>
+              </ModalContent>
+            </Modal>
+          </>
+        )}
+
+        {writeRelays.length != 0 && (
+          <>
+            <span className="mt-4 flex text-2xl font-bold text-light-text dark:text-dark-text">
+              Write Only Relays
+            </span>
+
+            <div className="mt-4 max-h-96 overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
+              {writeRelays.map((relay) => (
+                <div
+                  key={relay}
+                  className="mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg"
+                >
+                  <div className="max-w-xsm break-all text-light-text dark:text-dark-text ">
+                    {relay}
+                  </div>
+                  {writeRelays.length > 1 && (
+                    <MinusCircleIcon
+                      onClick={() => deleteRelay(relay)}
+                      className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+              <Button
+                className={SHOPSTRBUTTONCLASSNAMES}
+                onClick={handleToggleRelayModal}
+              >
+                Add New Relay
+              </Button>
+              {relaysAreChanged && relayType === "write" && (
+                <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+                  <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={publishRelays}>
+                    Save
+                  </Button>
+                </div>
+              )}
+            </div>
+            <Modal
+              backdrop="blur"
+              isOpen={showRelayModal}
+              onClose={handleToggleRelayModal}
+              classNames={{
+                body: "py-6",
+                backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+                // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
+                header: "border-b-[1px] border-[#292f46]",
+                footer: "border-t-[1px] border-[#292f46]",
+                closeButton: "hover:bg-black/5 active:bg-white/10",
+              }}
+              scrollBehavior={"outside"}
+              size="2xl"
+            >
+              <ModalContent>
+                <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+                  Add New Relay
+                </ModalHeader>
+                <form onSubmit={handleRelaySubmit(onRelaySubmit)}>
+                  <ModalBody>
+                    <Controller
+                      name="relay"
+                      control={relayControl}
+                      rules={{
+                        required: "A relay URL is required.",
+                        maxLength: {
+                          value: 500,
+                          message: "This input exceed maxLength of 500.",
+                        },
+                        validate: (value) =>
+                          /^(wss:\/\/|ws:\/\/)/.test(value) ||
+                          "Invalid relay URL, must start with wss:// or ws://.",
+                      }}
+                      render={({
+                        field: { onChange, onBlur, value },
+                        fieldState: { error },
+                      }) => {
+                        let isErrored = error !== undefined;
+                        let errorMessage: string = error?.message
+                          ? error.message
+                          : "";
+                        return (
+                          <Textarea
+                            className="text-light-text dark:text-dark-text"
+                            variant="bordered"
+                            fullWidth={true}
+                            placeholder="wss://..."
+                            isInvalid={isErrored}
+                            errorMessage={errorMessage}
+                            // controller props
+                            onChange={onChange} // send value to hook form
+                            onBlur={onBlur} // notify when input is touched/blur
+                            value={value}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleRelaySubmit(onRelaySubmit)();
+                              }
+                            }}
+                          />
+                        );
+                      }}
+                    />
+                  </ModalBody>
+
+                  <ModalFooter>
+                    <Button
+                      color="danger"
+                      variant="light"
+                      onClick={handleToggleRelayModal}
+                    >
+                      Cancel
+                    </Button>
+
+                    <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                      Add Relay
+                    </Button>
+                  </ModalFooter>
+                </form>
+              </ModalContent>
+            </Modal>
+          </>
+        )}
 
         <span className="my-4 flex  text-2xl font-bold text-light-text dark:text-dark-text">
           Web of Trust

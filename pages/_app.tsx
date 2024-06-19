@@ -154,7 +154,7 @@ function App({ Component, pageProps }: AppProps) {
       const userPubkey = getLocalStorageData().userPubkey;
       try {
         let { relayList, readRelayList, writeRelayList } =
-          await fetchAllFollowsAndRelays(editFollowsAndRelaysContext);
+          await fetchAllFollowsAndRelays(allRelays, editFollowsAndRelaysContext);
         if (getLocalStorageData().relays.length != 0) {
           localStorage.setItem("relays", JSON.stringify(relayList));
           localStorage.setItem("readRelays", JSON.stringify(readRelayList));
