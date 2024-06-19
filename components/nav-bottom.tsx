@@ -9,8 +9,12 @@ import {
   EnvelopeOpenIcon,
   ArrowLeftOnRectangleIcon,
   ChartBarIcon,
+<<<<<<< HEAD
   Cog6ToothIcon,
   WalletIcon,
+=======
+  PlusIcon,
+>>>>>>> af23432 (updates)
 } from "@heroicons/react/24/outline";
 import { Button, DropdownItem, useDisclosure } from "@nextui-org/react";
 import { countNumberOfUnreadMessagesFromChatsContext } from "@/utils/messages/utils";
@@ -26,6 +30,7 @@ import {
 import { useRouter } from "next/router";
 import SignInModal from "./sign-in/SignInModal";
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
+import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
 
 const BottomNav = () => {
   const {
@@ -70,6 +75,14 @@ const BottomNav = () => {
   const handleRoute = (path: string) => {
     if (signedIn) {
       router.push(path);
+    } else {
+      onOpen();
+    }
+  };
+
+  const handleCreateNewListing = () => {
+    if (signedIn) {
+      router.push("/?addNewListing");
     } else {
       onOpen();
     }
@@ -180,6 +193,14 @@ const BottomNav = () => {
           )}
         </div>
       </div>
+      <Button
+        radius="full"
+        className={`${SHOPSTRBUTTONCLASSNAMES} fixed bottom-24 right-5 z-50 h-16 w-16`}
+        onClick={() => handleCreateNewListing()}
+      >
+        <PlusIcon></PlusIcon>
+      </Button>
+
       <SignInModal isOpen={isOpen} onClose={onClose} />
     </div>
   );

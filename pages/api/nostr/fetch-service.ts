@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import { Filter, Nostr, Relay, SimplePool } from "nostr-tools";
+=======
+import { Filter, SimplePool } from "nostr-tools";
+>>>>>>> af23432 (updates)
 import {
   addChatMessageToCache,
   addProductToCache,
@@ -8,32 +12,44 @@ import {
   fetchProfileDataFromCache,
   removeProductFromCache,
 } from "./cache-service";
-import { NostrEvent, NostrMessageEvent } from "@/utils/types/types";
-import { ChatsMap } from "@/utils/context/context";
+import {
+  NostrEvent,
+  NostrMessageEvent,
+  ProfileData,
+} from "@/utils/types/types";
+import { ChatsMap, ProductContextInterface } from "@/utils/context/context";
 import { DateTime } from "luxon";
+<<<<<<< HEAD
 import { getLocalStorageData } from "@/components/utility/nostr-helper-functions";
 
 function isHexString(value: string): boolean {
   return /^[0-9a-fA-F]{64}$/.test(value);
 }
+=======
+import { getNameToCodeMap } from "@/utils/location/location";
+import parseTags, {
+  ProductData,
+} from "@/components/utility/product-parser-functions";
+import { getKeywords } from "@/utils/text";
+>>>>>>> af23432 (updates)
 
 export const fetchAllPosts = async (
   relays: string[],
-  editProductContext: (productEvents: NostrEvent[], isLoading: boolean) => void,
+  filters: ProductContextInterface["filters"],
   since?: number,
   until?: number,
 ): Promise<{
   profileSetFromProducts: Set<string>;
+  productArrayFromRelay: NostrEvent[];
 }> => {
   return new Promise(async function (resolve, reject) {
     try {
-      let deletedProductsInCacheSet: Set<any> = new Set(); // used to remove deleted items from cache
+      let deletedProductsInCacheSet: Set<string> = new Set(); // used to remove deleted items from cache
       try {
         let productArrayFromCache = await fetchAllProductsFromCache();
         deletedProductsInCacheSet = new Set(
-          productArrayFromCache.map((product: NostrEvent) => product.id),
+          productArrayFromCache.map((product: ProductData) => product.id),
         );
-        editProductContext(productArrayFromCache, false);
       } catch (error) {
         console.log("Failed to fetch all listings from cache: ", error);
       }
@@ -51,6 +67,19 @@ export const fetchAllPosts = async (
         kinds: [30402],
         since,
         until,
+        // No relays support NIP-50 for 30402 kinds, yet...
+        // ...(filters.searchQuery.length > 0 && {
+        //   search: filters.searchQuery,
+        // }),
+        ...(filters.searchQuery.length > 0 && {
+          "#s": getKeywords(filters.searchQuery),
+        }),
+        ...(filters.location && {
+          "#g": [getNameToCodeMap(filters.location)],
+        }),
+        ...(filters.categories.size > 0 && {
+          "#t": Array.from(filters.categories),
+        }),
       };
 
       let productArrayFromRelay: NostrEvent[] = [];
@@ -65,7 +94,7 @@ export const fetchAllPosts = async (
           ) {
             deletedProductsInCacheSet.delete(event.id);
           }
-          addProductToCache(event);
+          addProductToCache(parseTags(event));
           profileSetFromProducts.add(event.pubkey);
         },
         oneose() {
@@ -76,8 +105,8 @@ export const fetchAllPosts = async (
       const returnCall = () => {
         resolve({
           profileSetFromProducts,
+          productArrayFromRelay,
         });
-        editProductContext(productArrayFromRelay, false);
         removeProductFromCache(Array.from(deletedProductsInCacheSet));
       };
     } catch (error) {
@@ -90,21 +119,21 @@ export const fetchAllPosts = async (
 export const fetchProfile = async (
   relays: string[],
   pubkeyProfilesToFetch: string[],
-  editProfileContext: (
-    productEvents: Map<any, any>,
-    isLoading: boolean,
-  ) => void,
 ): Promise<{
-  profileMap: Map<string, any>;
+  profileData: Map<string, ProfileData>;
 }> => {
   return new Promise(async function (resolve, reject) {
     try {
+<<<<<<< HEAD
       try {
         let profileData = await fetchProfileDataFromCache();
         editProfileContext(profileData, false);
       } catch (error) {
         console.log("Failed to fetch profiles: ", error);
       }
+=======
+      let profileData = await fetchProfileDataFromCache();
+>>>>>>> af23432 (updates)
 
       const pool = new SimplePool();
       let subParams: { kinds: number[]; authors?: string[] } = {
@@ -112,20 +141,17 @@ export const fetchProfile = async (
         authors: Array.from(pubkeyProfilesToFetch),
       };
 
-      let profileMap: Map<string, any> = new Map(
-        Array.from(pubkeyProfilesToFetch).map((pubkey) => [pubkey, null]),
-      );
-
       let h = pool.subscribeMany(relays, [subParams], {
         onevent(event) {
           if (
-            profileMap.get(event.pubkey) === null ||
-            profileMap.get(event.pubkey).created_at > event.created_at
+            !profileData.has(event.pubkey) ||
+            (profileData.get(event.pubkey) as ProfileData).created_at >
+              event.created_at
           ) {
             // update only if the profile is not already set or the new event is newer
             try {
               const content = JSON.parse(event.content);
-              profileMap.set(event.pubkey, {
+              profileData.set(event.pubkey, {
                 pubkey: event.pubkey,
                 created_at: event.created_at,
                 content: content,
@@ -140,8 +166,8 @@ export const fetchProfile = async (
         },
         oneose() {
           h.close();
-          resolve({ profileMap });
-          addProfilesToCache(profileMap);
+          resolve({ profileData });
+          addProfilesToCache(profileData);
         },
       });
     } catch (error) {
@@ -153,15 +179,14 @@ export const fetchProfile = async (
 export const fetchChatsAndMessages = async (
   relays: string[],
   userPubkey: string,
-  editChatContext: (chatsMap: ChatsMap, isLoading: boolean) => void,
 ): Promise<{
   profileSetFromChats: Set<string>;
+  chatsData: ChatsMap;
 }> => {
   return new Promise(async function (resolve, reject) {
     // if no userPubkey, user is not signed in
     if (!userPubkey) {
-      editChatContext(new Map(), false);
-      resolve({ profileSetFromChats: new Set() });
+      resolve({ profileSetFromChats: new Set(), chatsData: new Map() });
     }
     let chatMessagesFromCache: Map<string, NostrMessageEvent> =
       await fetchChatMessagesFromCache();
@@ -191,8 +216,10 @@ export const fetchChatsAndMessages = async (
                 a.created_at - b.created_at,
             );
           });
-          resolve({ profileSetFromChats: new Set(chatsMap.keys()) });
-          editChatContext(chatsMap, false);
+          resolve({
+            profileSetFromChats: new Set(chatsMap.keys()),
+            chatsData: chatsMap,
+          });
         }
       };
 
@@ -228,7 +255,10 @@ export const fetchChatsAndMessages = async (
             }
             addToChatsMap(receipientPubkey, chatMessage);
             if (incomingChatsReachedEOSE && outgoingChatsReachedEOSE) {
-              editChatContext(chatsMap, false);
+              resolve({
+                profileSetFromChats: new Set(chatsMap.keys()),
+                chatsData: chatsMap,
+              });
             }
           },
           oneose() {
@@ -258,7 +288,10 @@ export const fetchChatsAndMessages = async (
             }
             addToChatsMap(senderPubkey, chatMessage);
             if (incomingChatsReachedEOSE && outgoingChatsReachedEOSE) {
-              editChatContext(chatsMap, false);
+              resolve({
+                profileSetFromChats: new Set(chatsMap.keys()),
+                chatsData: chatsMap,
+              });
             }
           },
           async oneose() {

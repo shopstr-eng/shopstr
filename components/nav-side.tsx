@@ -11,7 +11,7 @@ import {
   Cog6ToothIcon,
   WalletIcon,
   ArrowLeftOnRectangleIcon,
-  ArrowRightOnRectangleIcon,
+  PlusIcon,
 } from "@heroicons/react/24/outline";
 import { countNumberOfUnreadMessagesFromChatsContext } from "@/utils/messages/utils";
 import { ChatsContext } from "@/utils/context/context";
@@ -205,6 +205,17 @@ const SideNav = () => {
             + Add new listing
           </Button>
         </div>
+        <div className="hidden w-full sm:flex md:hidden">
+          {/* Ugly styling, TODO fix navbar styling and alignment */}
+          <Button
+            radius="full"
+            className={`${SHOPSTRBUTTONCLASSNAMES} h-16 w-16`}
+            onClick={() => handleCreateNewListing()}
+          >
+            <PlusIcon height={32} width={32}></PlusIcon>
+          </Button>
+        </div>
+
         <div className="bottom-0 mt-auto w-full">
           {signedIn ? (
             <div className="flex w-full justify-center">

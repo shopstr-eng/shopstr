@@ -18,7 +18,10 @@ export default function ListingPage({
   setCashuPaymentFailed?: (cashuPaymentFailef: boolean) => void;
 }) {
   if (!productData) return null;
+<<<<<<< HEAD
 
+=======
+>>>>>>> af23432 (updates)
   const invoiceDisplay = () => {
     return (
       <div className="flex w-full flex-col items-center">
