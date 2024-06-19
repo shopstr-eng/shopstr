@@ -60,6 +60,10 @@ export async function PostListing(
     const pool = new SimplePool();
 
     const allWriteRelays = [...writeRelays, ...relays];
+    const blastrRelay = "wss://relay.mutinywallet.com";
+    if (!allWriteRelays.includes(blastrRelay)) {
+      allWriteRelays.push(blastrRelay);
+    }
 
     await Promise.any(pool.publish(allWriteRelays, signedEvent));
     await Promise.any(pool.publish(allWriteRelays, signedRecEvent));
@@ -67,6 +71,10 @@ export async function PostListing(
     return signedEvent;
   } else {
     const allWriteRelays = [...writeRelays, ...relays];
+    const blastrRelay = "wss://relay.mutinywallet.com";
+    if (!allWriteRelays.includes(blastrRelay)) {
+      allWriteRelays.push(blastrRelay);
+    }
     const res = await axios({
       method: "POST",
       url: "/api/nostr/post-event",
@@ -152,6 +160,10 @@ export async function sendEncryptedMessage(
   }
   const pool = new SimplePool();
   const allWriteRelays = [...writeRelays, ...relays];
+  const blastrRelay = "wss://relay.mutinywallet.com";
+  if (!allWriteRelays.includes(blastrRelay)) {
+    allWriteRelays.push(blastrRelay);
+  }
   await Promise.any(pool.publish(allWriteRelays, signedEvent));
 }
 
@@ -171,6 +183,10 @@ export async function finalizeAndSendNostrEvent(
     }
     const pool = new SimplePool();
     const allWriteRelays = [...writeRelays, ...relays];
+    const blastrRelay = "wss://relay.mutinywallet.com";
+    if (!allWriteRelays.includes(blastrRelay)) {
+      allWriteRelays.push(blastrRelay);
+    }
     await Promise.any(pool.publish(allWriteRelays, signedEvent));
   } catch (e: any) {
     console.log("Error: ", e);

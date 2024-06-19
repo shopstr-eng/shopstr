@@ -72,10 +72,6 @@ export async function createNostrRelayEvent(
   const readRelayList = getLocalStorageData().readRelays;
   const writeRelayList = getLocalStorageData().writeRelays;
   let relayTags = [];
-  for (const relay of relayList) {
-    const relayTag = ["r", relay];
-    relayTags.push(relayTag);
-  }
   if (relayList.length != 0) {
     for (const relay of relayList) {
       const relayTag = ["r", relay];
