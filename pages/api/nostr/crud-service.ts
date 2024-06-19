@@ -66,8 +66,6 @@ export async function createNostrProfileEvent(
 
 export async function createNostrRelayEvent(
   pubkey: string,
-  relays: string[],
-  type: string,
   passphrase: string,
 ) {
   const relayList = getLocalStorageData().relays;
@@ -94,22 +92,6 @@ export async function createNostrRelayEvent(
     for (const relay of writeRelayList) {
       const relayTag = ["r", relay, "write"];
       relayTags.push(relayTag);
-    }
-  }
-  if (type === "read") {
-    for (const relay of relays) {
-      const newTag = ["r", relay, "read"];
-      relayTags.push(newTag);
-    }
-  } else if (type === "write") {
-    for (const relay of relays) {
-      const newTag = ["r", relay, "write"];
-      relayTags.push(newTag);
-    }
-  } else {
-    for (const relay of relays) {
-      const newTag = ["r", relay];
-      relayTags.push(newTag);
     }
   }
   let relayEvent = {
