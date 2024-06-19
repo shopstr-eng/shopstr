@@ -139,7 +139,7 @@ function App({ Component, pageProps }: AppProps) {
       const relays = getLocalStorageData().relays;
       const userPubkey = getLocalStorageData().userPubkey;
       try {
-        let { followList } = await fetchAllFollows(editFollowsContext);
+        let { followList } = await fetchAllFollows(relays, editFollowsContext);
         let pubkeysToFetchProfilesFor: string[] = [];
         let { profileSetFromProducts } = await fetchAllPosts(
           relays,
