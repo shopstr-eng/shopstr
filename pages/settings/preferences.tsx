@@ -20,7 +20,10 @@ import {
 } from "@nextui-org/react";
 import { relayConnect } from "nostr-tools";
 import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
-import { getLocalStorageData, validPassphrase } from "../../components/utility/nostr-helper-functions";
+import {
+  getLocalStorageData,
+  validPassphrase,
+} from "../../components/utility/nostr-helper-functions";
 import { createNostrRelayEvent } from "../api/nostr/crud-service";
 import { useTheme } from "next-themes";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
@@ -30,7 +33,7 @@ import RequestPassphraseModal from "@/components/utility-components/request-pass
 const PreferencesPage = () => {
   const [enterPassphrase, setEnterPassphrase] = useState(false);
   const [passphrase, setPassphrase] = useState("");
-  
+
   const [relays, setRelays] = useState(Array<string>(0));
   const [readRelays, setReadRelays] = useState(Array<string>(0));
   const [writeRelays, setWriteRelays] = useState(Array<string>(0));
@@ -163,7 +166,7 @@ const PreferencesPage = () => {
   const publishRelays = () => {
     createNostrRelayEvent(pubkey, passphrase);
     setRelaysAreChanged(false);
-  }
+  };
 
   return (
     <>
@@ -173,7 +176,7 @@ const PreferencesPage = () => {
           <span className="my-4 flex  text-2xl font-bold text-light-text dark:text-dark-text">
             Mint
           </span>
-  
+
           <div>
             {mints.length === 0 ? (
               <div className="mt-8 flex items-center justify-center">
@@ -220,7 +223,7 @@ const PreferencesPage = () => {
                 </p>
               </div>
             )}
-  
+
             <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
               <Button
                 className={SHOPSTRBUTTONCLASSNAMES}
@@ -294,7 +297,7 @@ const PreferencesPage = () => {
                       }}
                     />
                   </ModalBody>
-  
+
                   <ModalFooter>
                     <Button
                       color="danger"
@@ -303,7 +306,7 @@ const PreferencesPage = () => {
                     >
                       Cancel
                     </Button>
-  
+
                     <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
                       Change Mint
                     </Button>
@@ -312,11 +315,11 @@ const PreferencesPage = () => {
               </ModalContent>
             </Modal>
           </div>
-          
+
           <span className="mt-4 flex text-2xl font-bold text-light-text dark:text-dark-text">
             Read/Write Relays
           </span>
-  
+
           {relays.length === 0 && (
             <div className="mt-4 flex items-center justify-center">
               <p className="break-words text-center text-xl dark:text-dark-text">
@@ -351,7 +354,10 @@ const PreferencesPage = () => {
             </Button>
             {relaysAreChanged && (
               <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
-                <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={publishRelays}>
+                <Button
+                  className={SHOPSTRBUTTONCLASSNAMES}
+                  onClick={publishRelays}
+                >
                   Save
                 </Button>
               </div>
@@ -422,7 +428,7 @@ const PreferencesPage = () => {
                     }}
                   />
                 </ModalBody>
-  
+
                 <ModalFooter>
                   <Button
                     color="danger"
@@ -431,7 +437,7 @@ const PreferencesPage = () => {
                   >
                     Cancel
                   </Button>
-  
+
                   <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
                     Add Relay
                   </Button>
@@ -439,13 +445,13 @@ const PreferencesPage = () => {
               </form>
             </ModalContent>
           </Modal>
-  
+
           {readRelays.length != 0 && (
             <>
               <span className="mt-4 flex text-2xl font-bold text-light-text dark:text-dark-text">
                 Read Only Relays
               </span>
-  
+
               <div className="mt-4 max-h-96 overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
                 {readRelays.map((relay) => (
                   <div
@@ -473,7 +479,10 @@ const PreferencesPage = () => {
                 </Button>
                 {relaysAreChanged && (
                   <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
-                    <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={publishRelays}>
+                    <Button
+                      className={SHOPSTRBUTTONCLASSNAMES}
+                      onClick={publishRelays}
+                    >
                       Save
                     </Button>
                   </div>
@@ -544,7 +553,7 @@ const PreferencesPage = () => {
                         }}
                       />
                     </ModalBody>
-  
+
                     <ModalFooter>
                       <Button
                         color="danger"
@@ -553,7 +562,7 @@ const PreferencesPage = () => {
                       >
                         Cancel
                       </Button>
-  
+
                       <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
                         Add Relay
                       </Button>
@@ -563,13 +572,13 @@ const PreferencesPage = () => {
               </Modal>
             </>
           )}
-  
+
           {writeRelays.length != 0 && (
             <>
               <span className="mt-4 flex text-2xl font-bold text-light-text dark:text-dark-text">
                 Write Only Relays
               </span>
-  
+
               <div className="mt-4 max-h-96 overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
                 {writeRelays.map((relay) => (
                   <div
@@ -597,7 +606,10 @@ const PreferencesPage = () => {
                 </Button>
                 {relaysAreChanged && (
                   <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
-                    <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={publishRelays}>
+                    <Button
+                      className={SHOPSTRBUTTONCLASSNAMES}
+                      onClick={publishRelays}
+                    >
                       Save
                     </Button>
                   </div>
@@ -668,7 +680,7 @@ const PreferencesPage = () => {
                         }}
                       />
                     </ModalBody>
-  
+
                     <ModalFooter>
                       <Button
                         color="danger"
@@ -677,7 +689,7 @@ const PreferencesPage = () => {
                       >
                         Cancel
                       </Button>
-  
+
                       <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
                         Add Relay
                       </Button>
@@ -687,24 +699,24 @@ const PreferencesPage = () => {
               </Modal>
             </>
           )}
-  
+
           <span className="my-4 flex  text-2xl font-bold text-light-text dark:text-dark-text">
             Web of Trust
           </span>
-  
+
           {isLoaded && (
             <>
               <ShopstrSlider />
             </>
           )}
-  
+
           <div className="mx-4 my-4 flex items-center justify-center text-center">
             <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
             <p className="ml-2 text-sm text-light-text dark:text-dark-text">
               This filters for listings from friends and friends of friends.
             </p>
           </div>
-  
+
           <span className="my-4 flex text-2xl font-bold text-light-text dark:text-dark-text">
             Theme
           </span>
