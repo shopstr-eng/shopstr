@@ -4,6 +4,10 @@ import axios from "axios";
 import { NostrEvent } from "@/utils/types/types";
 import { ProductFormValues } from "@/pages/api/nostr/post-event";
 
+function containsRelay(relays: string[], relay: string): boolean {
+  return relays.some((r) => r.includes(relay));
+}
+
 export async function PostListing(
   values: ProductFormValues,
   passphrase: string,
@@ -60,8 +64,8 @@ export async function PostListing(
     const pool = new SimplePool();
 
     const allWriteRelays = [...writeRelays, ...relays];
-    const blastrRelay = "wss://relay.mutinywallet.com";
-    if (!allWriteRelays.includes(blastrRelay)) {
+    const blastrRelay = "wss://nostr.mutinywallet.com";
+    if (!containsRelay(allWriteRelays, blastrRelay)) {
       allWriteRelays.push(blastrRelay);
     }
 
@@ -71,8 +75,8 @@ export async function PostListing(
     return signedEvent;
   } else {
     const allWriteRelays = [...writeRelays, ...relays];
-    const blastrRelay = "wss://relay.mutinywallet.com";
-    if (!allWriteRelays.includes(blastrRelay)) {
+    const blastrRelay = "wss://nostr.mutinywallet.com";
+    if (!containsRelay(allWriteRelays, blastrRelay)) {
       allWriteRelays.push(blastrRelay);
     }
     const res = await axios({
@@ -160,8 +164,8 @@ export async function sendEncryptedMessage(
   }
   const pool = new SimplePool();
   const allWriteRelays = [...writeRelays, ...relays];
-  const blastrRelay = "wss://relay.mutinywallet.com";
-  if (!allWriteRelays.includes(blastrRelay)) {
+  const blastrRelay = "wss://nostr.mutinywallet.com";
+  if (!containsRelay(allWriteRelays, blastrRelay)) {
     allWriteRelays.push(blastrRelay);
   }
   await Promise.any(pool.publish(allWriteRelays, signedEvent));
@@ -183,8 +187,8 @@ export async function finalizeAndSendNostrEvent(
     }
     const pool = new SimplePool();
     const allWriteRelays = [...writeRelays, ...relays];
-    const blastrRelay = "wss://relay.mutinywallet.com";
-    if (!allWriteRelays.includes(blastrRelay)) {
+    const blastrRelay = "wss://nostr.mutinywallet.com";
+    if (!containsRelay(allWriteRelays, blastrRelay)) {
       allWriteRelays.push(blastrRelay);
     }
     await Promise.any(pool.publish(allWriteRelays, signedEvent));
