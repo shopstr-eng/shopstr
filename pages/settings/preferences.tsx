@@ -369,7 +369,7 @@ const PreferencesPage = () => {
               className={SHOPSTRBUTTONCLASSNAMES}
               onClick={() => handleToggleRelayModal("all")}
             >
-              Add New Relay
+              Add Relay
             </Button>
             {relaysAreChanged && (
               <Button
@@ -397,7 +397,7 @@ const PreferencesPage = () => {
           >
             <ModalContent>
               <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
-                Add New Relay
+                Add Relay
               </ModalHeader>
               <form onSubmit={handleRelaySubmit(onRelaySubmit)}>
                 <ModalBody>
@@ -497,7 +497,7 @@ const PreferencesPage = () => {
               className={SHOPSTRBUTTONCLASSNAMES}
               onClick={() => handleToggleRelayModal("read")}
             >
-              Add New Relay
+              Add Relay
             </Button>
             {relaysAreChanged && (
               <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
@@ -527,7 +527,7 @@ const PreferencesPage = () => {
           >
             <ModalContent>
               <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
-                Add New Relay
+                Add Relay
               </ModalHeader>
               <form onSubmit={handleRelaySubmit(onRelaySubmit)}>
                 <ModalBody>
@@ -627,7 +627,7 @@ const PreferencesPage = () => {
               className={SHOPSTRBUTTONCLASSNAMES}
               onClick={() => handleToggleRelayModal("write")}
             >
-              Add New Relay
+              Add Relay
             </Button>
             {relaysAreChanged && (
               <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
@@ -657,7 +657,7 @@ const PreferencesPage = () => {
           >
             <ModalContent>
               <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
-                Add New Relay
+                Add Relay
               </ModalHeader>
               <form onSubmit={handleRelaySubmit(onRelaySubmit)}>
                 <ModalBody>
