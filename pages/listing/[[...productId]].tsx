@@ -6,7 +6,6 @@ import {
   ModalContent,
   ModalHeader,
   ModalBody,
-  ModalFooter,
 } from "@nextui-org/react";
 import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/outline";
 import { SimplePool } from "nostr-tools";

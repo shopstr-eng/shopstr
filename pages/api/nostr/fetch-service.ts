@@ -1,4 +1,4 @@
-import { Filter, Relay, SimplePool } from "nostr-tools";
+import { Filter, SimplePool } from "nostr-tools";
 import {
   addChatMessageToCache,
   addProductToCache,

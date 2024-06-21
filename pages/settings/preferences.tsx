@@ -18,7 +18,7 @@ import {
   Radio,
   RadioGroup,
 } from "@nextui-org/react";
-import { relayConnect } from "nostr-tools";
+import { Relay } from "nostr-tools";
 import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
 import {
   getLocalStorageData,
@@ -161,7 +161,7 @@ const PreferencesPage = () => {
     type: "all" | "read" | "write" | "",
   ) => {
     try {
-      const relayTest = await relayConnect(newRelay);
+      const relayTest = await Relay.connect(newRelay);
       if (type === "read") {
         setReadRelays([...readRelays, newRelay]);
       } else if (type === "write") {
