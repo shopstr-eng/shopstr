@@ -25,6 +25,7 @@ A global, decentralized Nostr marketplace to buy and sell anything, anywhere, an
 - [ ] NIP-58: Badges
 - [ ] NIP-65: Relay List Metadata
 - [x] NIP-89: Recommended Application Handlers
+- [x] NIP-98: HTTP Auth
 - [x] NIP-99: Classified Listings
 
 # Authors
