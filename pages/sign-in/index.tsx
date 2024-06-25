@@ -3,7 +3,7 @@ import { withRouter, NextRouter } from "next/router";
 import { nip19, getPublicKey } from "nostr-tools";
 import * as CryptoJS from "crypto-js";
 import { validateNSecKey } from "../../components/utility/nostr-helper-functions";
-import { FollowsAndRelaysContext } from "../../utils/context/context";
+import { RelaysContext } from "../../utils/context/context";
 import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
 
@@ -13,7 +13,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
   const [validPrivateKey, setValidPrivateKey] = useState<boolean>(false);
   const [passphrase, setPassphrase] = useState<string>("");
 
-  const followsAndRelaysContext = useContext(FollowsAndRelaysContext);
+  const relaysContext = useContext(RelaysContext);
 
   const handleSignIn = async () => {
     if (validPrivateKey) {
@@ -35,22 +35,22 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
         localStorage.setItem("signIn", "nsec");
 
         if (
-          !followsAndRelaysContext.isLoading &&
-          followsAndRelaysContext.relayList.length != 0 &&
-          followsAndRelaysContext.readRelayList &&
-          followsAndRelaysContext.writeRelayList
+          !relaysContext.isLoading &&
+          relaysContext.relayList.length != 0 &&
+          relaysContext.readRelayList &&
+          relaysContext.writeRelayList
         ) {
           localStorage.setItem(
             "relays",
-            JSON.stringify(followsAndRelaysContext.relayList),
+            JSON.stringify(relaysContext.relayList),
           );
           localStorage.setItem(
             "readRelays",
-            JSON.stringify(followsAndRelaysContext.readRelayList),
+            JSON.stringify(relaysContext.readRelayList),
           );
           localStorage.setItem(
             "writeRelays",
-            JSON.stringify(followsAndRelaysContext.writeRelayList),
+            JSON.stringify(relaysContext.writeRelayList),
           );
         } else {
           localStorage.setItem(
@@ -59,6 +59,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
               "wss://relay.damus.io",
               "wss://nos.lol",
               "wss://nostr.mutinywallet.com",
+              "wss://purplepag.es",
             ]),
           );
         }
@@ -91,22 +92,19 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
       localStorage.setItem("npub", npub);
       localStorage.setItem("signIn", "extension");
       if (
-        !followsAndRelaysContext.isLoading &&
-        followsAndRelaysContext.relayList.length != 0 &&
-        followsAndRelaysContext.readRelayList &&
-        followsAndRelaysContext.writeRelayList
+        !relaysContext.isLoading &&
+        relaysContext.relayList.length != 0 &&
+        relaysContext.readRelayList &&
+        relaysContext.writeRelayList
       ) {
-        localStorage.setItem(
-          "relays",
-          JSON.stringify(followsAndRelaysContext.relayList),
-        );
+        localStorage.setItem("relays", JSON.stringify(relaysContext.relayList));
         localStorage.setItem(
           "readRelays",
-          JSON.stringify(followsAndRelaysContext.readRelayList),
+          JSON.stringify(relaysContext.readRelayList),
         );
         localStorage.setItem(
           "writeRelays",
-          JSON.stringify(followsAndRelaysContext.writeRelayList),
+          JSON.stringify(relaysContext.writeRelayList),
         );
       } else {
         localStorage.setItem(
@@ -115,6 +113,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
             "wss://relay.damus.io",
             "wss://nos.lol",
             "wss://nostr.mutinywallet.com",
+            "wss://purplepag.es",
           ]),
         );
       }

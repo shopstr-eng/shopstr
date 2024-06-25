@@ -38,20 +38,28 @@ export const ChatsContext = createContext({
   isLoading: true,
 } as ChatsContextInterface);
 
-export interface FollowsAndRelaysContextInterface {
+export interface FollowsContextInterface {
   followList: string[];
   firstDegreeFollowsLength: number;
+  isLoading: boolean;
+}
+
+export const FollowsContext = createContext({
+  followList: [],
+  firstDegreeFollowsLength: 0,
+  isLoading: true,
+} as FollowsContextInterface);
+
+export interface RelaysContextInterface {
   relayList: string[];
   readRelayList: string[];
   writeRelayList: string[];
   isLoading: boolean;
 }
 
-export const FollowsAndRelaysContext = createContext({
-  followList: [],
-  firstDegreeFollowsLength: 0,
+export const RelaysContext = createContext({
   relayList: [],
   readRelayList: [],
   writeRelayList: [],
   isLoading: true,
-} as FollowsAndRelaysContextInterface);
+} as RelaysContextInterface);

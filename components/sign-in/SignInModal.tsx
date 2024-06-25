@@ -13,7 +13,7 @@ import {
   setLocalStorageDataOnSignIn,
   validateNSecKey,
 } from "@/components/utility/nostr-helper-functions";
-import { FollowsAndRelaysContext } from "../../utils/context/context";
+import { RelaysContext } from "../../utils/context/context";
 import { getPublicKey, nip19 } from "nostr-tools";
 import CryptoJS from "crypto-js";
 import { useRouter } from "next/router";
@@ -32,7 +32,7 @@ export default function SignInModal({
 
   const [showNsecSignIn, setShowNsecSignIn] = useState(false);
 
-  const followsAndRelaysContext = useContext(FollowsAndRelaysContext);
+  const relaysContext = useContext(RelaysContext);
 
   const router = useRouter();
 
@@ -41,15 +41,15 @@ export default function SignInModal({
       // @ts-ignore
       var pk = await window.nostr.getPublicKey();
       if (
-        !followsAndRelaysContext.isLoading &&
-        followsAndRelaysContext.relayList.length >= 0 &&
-        followsAndRelaysContext.readRelayList &&
-        followsAndRelaysContext.writeRelayList
+        !relaysContext.isLoading &&
+        relaysContext.relayList.length >= 0 &&
+        relaysContext.readRelayList &&
+        relaysContext.writeRelayList
       ) {
         const allRelays = [
-          ...followsAndRelaysContext.relayList,
-          ...followsAndRelaysContext.readRelayList,
-          ...followsAndRelaysContext.writeRelayList,
+          ...relaysContext.relayList,
+          ...relaysContext.readRelayList,
+          ...relaysContext.writeRelayList,
         ];
         setLocalStorageDataOnSignIn({
           signInMethod: "extension",
@@ -89,15 +89,15 @@ export default function SignInModal({
         }, 500);
 
         if (
-          !followsAndRelaysContext.isLoading &&
-          followsAndRelaysContext.relayList.length >= 0 &&
-          followsAndRelaysContext.readRelayList &&
-          followsAndRelaysContext.writeRelayList
+          !relaysContext.isLoading &&
+          relaysContext.relayList.length >= 0 &&
+          relaysContext.readRelayList &&
+          relaysContext.writeRelayList
         ) {
           const allRelays = [
-            ...followsAndRelaysContext.relayList,
-            ...followsAndRelaysContext.readRelayList,
-            ...followsAndRelaysContext.writeRelayList,
+            ...relaysContext.relayList,
+            ...relaysContext.readRelayList,
+            ...relaysContext.writeRelayList,
           ];
           setLocalStorageDataOnSignIn({
             signInMethod: "nsec",

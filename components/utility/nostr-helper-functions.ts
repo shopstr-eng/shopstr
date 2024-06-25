@@ -364,6 +364,7 @@ export const setLocalStorageDataOnSignIn = ({
             "wss://relay.damus.io",
             "wss://nos.lol",
             "wss://nostr.mutinywallet.com",
+            "wss://purplepag.es",
           ],
     ),
   );
@@ -442,20 +443,24 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       localStorage.removeItem("chats");
     }
 
-    relays = localStorage.getItem(LOCALSTORAGECONSTANTS.relays);
+    const relaysString = localStorage.getItem(LOCALSTORAGECONSTANTS.relays);
+    relays = relaysString ? (JSON.parse(relaysString) as string[]) : [];
 
     const defaultRelays = [
       "wss://relay.damus.io",
       "wss://nos.lol",
       "wss://nostr.mutinywallet.com",
+      "wss://purplepag.es",
     ];
 
-    if (!relays) {
+    if (relays && relays.length === 0) {
       relays = defaultRelays;
       localStorage.setItem("relays", JSON.stringify(relays));
     } else {
       try {
-        relays = (JSON.parse(relays) as string[]).filter((r) => r);
+        if (relays) {
+          relays = relays.filter((r) => r);
+        }
       } catch {
         relays = defaultRelays;
         localStorage.setItem("relays", JSON.stringify(relays));
@@ -530,9 +535,6 @@ export const LogOut = () => {
   localStorage.removeItem(LOCALSTORAGECONSTANTS.userNPub);
   localStorage.removeItem(LOCALSTORAGECONSTANTS.userPubkey);
   localStorage.removeItem(LOCALSTORAGECONSTANTS.encryptedPrivateKey);
-  localStorage.removeItem(LOCALSTORAGECONSTANTS.relays);
-  localStorage.removeItem(LOCALSTORAGECONSTANTS.readRelays);
-  localStorage.removeItem(LOCALSTORAGECONSTANTS.writeRelays);
 
   window.dispatchEvent(new Event("storage"));
 };

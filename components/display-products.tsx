@@ -5,7 +5,7 @@ import { NostrEvent } from "../utils/types/types";
 import {
   ProductContext,
   ProfileMapContext,
-  FollowsAndRelaysContext,
+  FollowsContext,
 } from "../utils/context/context";
 import ProductCard from "./utility-components/product-card";
 import DisplayProductModal from "./display-product-modal";
@@ -38,7 +38,7 @@ const DisplayEvents = ({
   const [isProductsLoading, setIsProductLoading] = useState(true);
   const productEventContext = useContext(ProductContext);
   const profileMapContext = useContext(ProfileMapContext);
-  const followsAndRelaysContext = useContext(FollowsAndRelaysContext);
+  const followsContext = useContext(FollowsContext);
   const [focusedProduct, setFocusedProduct] = useState(""); // product being viewed in modal
   const [showModal, setShowModal] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
@@ -58,11 +58,8 @@ const DisplayEvents = ({
       let parsedProductData: ProductData[] = [];
       sortedProductEvents.forEach((event) => {
         if (wotFilter) {
-          if (
-            !followsAndRelaysContext.isLoading &&
-            followsAndRelaysContext.followList
-          ) {
-            const followList = followsAndRelaysContext.followList;
+          if (!followsContext.isLoading && followsContext.followList) {
+            const followList = followsContext.followList;
             if (followList.length > 0 && followList.includes(event.pubkey)) {
               let parsedData = parseTags(event);
               if (parsedData) parsedProductData.push(parsedData);
