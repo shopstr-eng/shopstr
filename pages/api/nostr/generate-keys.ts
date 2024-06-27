@@ -7,11 +7,11 @@ const generateKeys = async (req: NextApiRequest, res: NextApiResponse) => {
   }
 
   try {
-    const sk = await generateSecretKey(); // `sk` is a hex string
-    const nsec = await nip19.nsecEncode(sk);
+    const sk = generateSecretKey(); // `sk` is a hex string
+    const nsec = nip19.nsecEncode(sk);
 
-    const pk = await getPublicKey(sk); // `pk` is a hex string
-    const npub = await nip19.npubEncode(pk);
+    const pk = getPublicKey(sk); // `pk` is a hex string
+    const npub = nip19.npubEncode(pk);
 
     return res.status(200).json({ nsec, npub });
   } catch (error) {

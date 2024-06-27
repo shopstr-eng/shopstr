@@ -1,4 +1,4 @@
-import { Filter, Nostr, Relay, SimplePool } from "nostr-tools";
+import { Filter, SimplePool } from "nostr-tools";
 import {
   addChatMessageToCache,
   addProductToCache,
@@ -294,10 +294,56 @@ export const fetchAllFollows = async (
       let followsArrayFromRelay: string[] = [];
       const followsSet: Set<string> = new Set();
       let firstDegreeFollowsLength = 0;
+      let secondDegreeFollowsArrayFromRelay: string[] = [];
 
       const firstFollowfilter: Filter = {
         kinds: [3],
-        authors: [getLocalStorageData().userPubkey],
+        authors: [
+          getLocalStorageData().userPubkey
+            ? getLocalStorageData().userPubkey
+            : "d36e8083fa7b36daee646cb8b3f99feaa3d89e5a396508741f003e21ac0b6bec",
+        ],
+      };
+
+      const fetchSecondDegreeFollows = (authors: string[]) => {
+        const secondFollowFilter: Filter = {
+          kinds: [3],
+          authors,
+        };
+        let second = pool.subscribeMany(relays, [secondFollowFilter], {
+          onevent(followEvent) {
+            const validFollowTags = followEvent.tags
+              .map((tag) => tag[1])
+              .filter(
+                (pubkey) => isHexString(pubkey) && !followsSet.has(pubkey),
+              );
+            secondDegreeFollowsArrayFromRelay.push(...validFollowTags);
+          },
+          oneose() {
+            second.close();
+            // Filter second degree follows based on count
+            const pubkeyCount: Map<string, number> = new Map();
+            secondDegreeFollowsArrayFromRelay.forEach((pubkey) => {
+              pubkeyCount.set(pubkey, (pubkeyCount.get(pubkey) || 0) + 1);
+            });
+            secondDegreeFollowsArrayFromRelay =
+              secondDegreeFollowsArrayFromRelay.filter(
+                (pubkey) => (pubkeyCount.get(pubkey) || 0) >= wot,
+              );
+            // Concatenate arrays ensuring uniqueness
+            followsArrayFromRelay = Array.from(
+              new Set(
+                followsArrayFromRelay.concat(secondDegreeFollowsArrayFromRelay),
+              ),
+            );
+            returnCall(
+              relays,
+              followsArrayFromRelay,
+              followsSet,
+              firstDegreeFollowsLength,
+            );
+          },
+        });
       };
 
       let first = pool.subscribeMany(relays, [firstFollowfilter], {
@@ -307,49 +353,15 @@ export const fetchAllFollows = async (
             .filter((pubkey) => isHexString(pubkey) && !followsSet.has(pubkey));
           validTags.forEach((pubkey) => followsSet.add(pubkey));
           followsArrayFromRelay.push(...validTags);
-
           firstDegreeFollowsLength = followsArrayFromRelay.length;
-
-          const secondFollowFilter: Filter = {
-            kinds: [3],
-            authors: followsArrayFromRelay,
-          };
-
-          let secondDegreeFollowsArrayFromRelay: string[] = [];
-
-          let second = pool.subscribeMany(relays, [secondFollowFilter], {
-            onevent(followEvent) {
-              const validFollowTags = followEvent.tags
-                .map((tag) => tag[1])
-                .filter(
-                  (pubkey) => isHexString(pubkey) && !followsSet.has(pubkey),
-                );
-              secondDegreeFollowsArrayFromRelay.push(...validFollowTags);
-            },
-            oneose() {
-              second.close();
-              const pubkeyCount: Map<string, number> = new Map();
-              secondDegreeFollowsArrayFromRelay.forEach((pubkey) => {
-                pubkeyCount.set(pubkey, (pubkeyCount.get(pubkey) || 0) + 1);
-              });
-              secondDegreeFollowsArrayFromRelay =
-                secondDegreeFollowsArrayFromRelay.filter(
-                  (pubkey) => (pubkeyCount.get(pubkey) || 0) >= wot,
-                );
-              followsArrayFromRelay.push(...secondDegreeFollowsArrayFromRelay);
-            },
-          });
+          // Fetch second-degree follows
+          fetchSecondDegreeFollows(followsArrayFromRelay);
         },
         oneose() {
           first.close();
-          returnCall(
-            relays,
-            followsArrayFromRelay,
-            followsSet,
-            firstDegreeFollowsLength,
-          );
         },
       });
+
       const returnCall = async (
         relays: string[],
         followsArray: string[],
@@ -357,12 +369,47 @@ export const fetchAllFollows = async (
         firstDegreeFollowsLength: number,
       ) => {
         // If followsArrayFromRelay is still empty, add the default value
-        if (followsArray.length === 0) {
+        if (followsArray?.length === 0) {
           const firstFollowfilter: Filter = {
             kinds: [3],
             authors: [
               "d36e8083fa7b36daee646cb8b3f99feaa3d89e5a396508741f003e21ac0b6bec",
             ],
+          };
+
+          const fetchSecondDegreeFollows = (authors: string[]) => {
+            const secondFollowFilter: Filter = {
+              kinds: [3],
+              authors,
+            };
+
+            let secondDegreeFollowsArray: string[] = [];
+
+            let second = pool.subscribeMany(relays, [secondFollowFilter], {
+              onevent(followEvent) {
+                const validFollowTags = followEvent.tags
+                  .map((tag) => tag[1])
+                  .filter(
+                    (pubkey) => isHexString(pubkey) && !followsSet.has(pubkey),
+                  );
+                secondDegreeFollowsArray.push(...validFollowTags);
+              },
+              oneose() {
+                second.close();
+                const pubkeyCount: Map<string, number> = new Map();
+                secondDegreeFollowsArray.forEach((pubkey) => {
+                  pubkeyCount.set(pubkey, (pubkeyCount.get(pubkey) || 0) + 1);
+                });
+                secondDegreeFollowsArray = secondDegreeFollowsArray.filter(
+                  (pubkey) => (pubkeyCount.get(pubkey) || 0) >= wot,
+                );
+
+                // Concatenate arrays ensuring uniqueness
+                followsArray = Array.from(
+                  new Set(followsArray.concat(secondDegreeFollowsArray)),
+                );
+              },
+            });
           };
 
           let first = pool.subscribeMany(relays, [firstFollowfilter], {
@@ -376,36 +423,7 @@ export const fetchAllFollows = async (
               followsArray.push(...validTags);
 
               firstDegreeFollowsLength = followsArray.length;
-
-              const secondFollowFilter: Filter = {
-                kinds: [3],
-                authors: followsArray,
-              };
-
-              let secondDegreeFollowsArray: string[] = [];
-
-              let second = pool.subscribeMany(relays, [secondFollowFilter], {
-                onevent(followEvent) {
-                  const validFollowTags = followEvent.tags
-                    .map((tag) => tag[1])
-                    .filter(
-                      (pubkey) =>
-                        isHexString(pubkey) && !followsSet.has(pubkey),
-                    );
-                  secondDegreeFollowsArray.push(...validFollowTags);
-                },
-                oneose() {
-                  second.close();
-                  const pubkeyCount: Map<string, number> = new Map();
-                  secondDegreeFollowsArray.forEach((pubkey) => {
-                    pubkeyCount.set(pubkey, (pubkeyCount.get(pubkey) || 0) + 1);
-                  });
-                  secondDegreeFollowsArray = secondDegreeFollowsArray.filter(
-                    (pubkey) => (pubkeyCount.get(pubkey) || 0) >= wot,
-                  );
-                  followsArray.push(...secondDegreeFollowsArray);
-                },
-              });
+              fetchSecondDegreeFollows(followsArray);
             },
             oneose() {
               first.close();
@@ -413,13 +431,85 @@ export const fetchAllFollows = async (
           });
         }
         resolve({
-          followList: followsArrayFromRelay,
+          followList: followsArray,
         });
-        editFollowsContext(
-          followsArrayFromRelay,
-          firstDegreeFollowsLength,
-          false,
-        );
+        editFollowsContext(followsArray, firstDegreeFollowsLength, false);
+      };
+    } catch (error) {
+      console.log("Failed to fetch follow list: ", error);
+      reject(error);
+    }
+  });
+};
+
+export const fetchAllRelays = async (
+  relays: string[],
+  editRelaysContext: (
+    relayList: string[],
+    readRelayList: string[],
+    writeRelayList: string[],
+    isLoading: boolean,
+  ) => void,
+): Promise<{
+  relayList: string[];
+  readRelayList: string[];
+  writeRelayList: string[];
+}> => {
+  return new Promise(async function (resolve, reject) {
+    try {
+      const pool = new SimplePool();
+
+      let relayList: string[] = [];
+      const relaySet: Set<string> = new Set();
+      let readRelayList: string[] = [];
+      const readRelaySet: Set<string> = new Set();
+      let writeRelayList: string[] = [];
+      const writeRelaySet: Set<string> = new Set();
+
+      const relayfilter: Filter = {
+        kinds: [10002],
+        authors: [getLocalStorageData().userPubkey],
+      };
+
+      let h = pool.subscribeMany(relays, [relayfilter], {
+        onevent(event) {
+          const validRelays = event.tags.filter(
+            (tag) => tag[0] === "r" && !tag[2],
+          );
+
+          const validReadRelays = event.tags.filter(
+            (tag) => tag[0] === "r" && tag[2] === "read",
+          );
+
+          const validWriteRelays = event.tags.filter(
+            (tag) => tag[0] === "r" && tag[2] === "write",
+          );
+
+          validRelays.forEach((tag) => relaySet.add(tag[1]));
+          relayList.push(...validRelays.map((tag) => tag[1]));
+
+          validReadRelays.forEach((tag) => readRelaySet.add(tag[1]));
+          readRelayList.push(...validReadRelays.map((tag) => tag[1]));
+
+          validWriteRelays.forEach((tag) => writeRelaySet.add(tag[1]));
+          writeRelayList.push(...validWriteRelays.map((tag) => tag[1]));
+        },
+        oneose() {
+          h.close();
+          returnCall(relayList, readRelayList, writeRelayList);
+        },
+      });
+      const returnCall = async (
+        relayList: string[],
+        readRelayList: string[],
+        writeRelayList: string[],
+      ) => {
+        resolve({
+          relayList: relayList,
+          readRelayList: readRelayList,
+          writeRelayList: writeRelayList,
+        });
+        editRelaysContext(relayList, readRelayList, writeRelayList, false);
       };
     } catch (error) {
       console.log("failed to fetch follow list: ", error);

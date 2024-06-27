@@ -49,3 +49,17 @@ export const FollowsContext = createContext({
   firstDegreeFollowsLength: 0,
   isLoading: true,
 } as FollowsContextInterface);
+
+export interface RelaysContextInterface {
+  relayList: string[];
+  readRelayList: string[];
+  writeRelayList: string[];
+  isLoading: boolean;
+}
+
+export const RelaysContext = createContext({
+  relayList: [],
+  readRelayList: [],
+  writeRelayList: [],
+  isLoading: true,
+} as RelaysContextInterface);

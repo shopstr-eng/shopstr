@@ -1,13 +1,7 @@
 import React, { useState, useEffect } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import {
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
-} from "@nextui-org/react";
+import { Modal, ModalContent, ModalHeader, ModalBody } from "@nextui-org/react";
 import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/outline";
 import { SimplePool } from "nostr-tools";
 import parseTags, {

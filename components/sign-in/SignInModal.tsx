@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useContext } from "react";
 import {
   Modal,
   ModalContent,
@@ -13,6 +13,7 @@ import {
   setLocalStorageDataOnSignIn,
   validateNSecKey,
 } from "@/components/utility/nostr-helper-functions";
+import { RelaysContext } from "../../utils/context/context";
 import { getPublicKey, nip19 } from "nostr-tools";
 import CryptoJS from "crypto-js";
 import { useRouter } from "next/router";
@@ -31,16 +32,36 @@ export default function SignInModal({
 
   const [showNsecSignIn, setShowNsecSignIn] = useState(false);
 
+  const relaysContext = useContext(RelaysContext);
+
   const router = useRouter();
 
   const startExtensionLogin = async () => {
     try {
       // @ts-ignore
       var pk = await window.nostr.getPublicKey();
-      setLocalStorageDataOnSignIn({
-        signInMethod: "extension",
-        pubkey: pk,
-      });
+      if (
+        !relaysContext.isLoading &&
+        relaysContext.relayList.length >= 0 &&
+        relaysContext.readRelayList &&
+        relaysContext.writeRelayList
+      ) {
+        const allRelays = [
+          ...relaysContext.relayList,
+          ...relaysContext.readRelayList,
+          ...relaysContext.writeRelayList,
+        ];
+        setLocalStorageDataOnSignIn({
+          signInMethod: "extension",
+          pubkey: pk,
+          relays: allRelays,
+        });
+      } else {
+        setLocalStorageDataOnSignIn({
+          signInMethod: "extension",
+          pubkey: pk,
+        });
+      }
       onClose();
     } catch (error) {
       alert("Extension sign in failed!");
@@ -67,11 +88,30 @@ export default function SignInModal({
           onClose(); // avoids tree walker issue by closing modal
         }, 500);
 
-        setLocalStorageDataOnSignIn({
-          signInMethod: "nsec",
-          pubkey: pk,
-          encryptedPrivateKey: encryptedPrivateKey,
-        });
+        if (
+          !relaysContext.isLoading &&
+          relaysContext.relayList.length >= 0 &&
+          relaysContext.readRelayList &&
+          relaysContext.writeRelayList
+        ) {
+          const allRelays = [
+            ...relaysContext.relayList,
+            ...relaysContext.readRelayList,
+            ...relaysContext.writeRelayList,
+          ];
+          setLocalStorageDataOnSignIn({
+            signInMethod: "nsec",
+            pubkey: pk,
+            encryptedPrivateKey: encryptedPrivateKey,
+            relays: allRelays,
+          });
+        } else {
+          setLocalStorageDataOnSignIn({
+            signInMethod: "nsec",
+            pubkey: pk,
+            encryptedPrivateKey: encryptedPrivateKey,
+          });
+        }
       }
     } else {
       alert(

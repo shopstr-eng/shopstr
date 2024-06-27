@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { withRouter, NextRouter } from "next/router";
 import { nip19, getPublicKey } from "nostr-tools";
 import * as CryptoJS from "crypto-js";
 import { validateNSecKey } from "../../components/utility/nostr-helper-functions";
+import { RelaysContext } from "../../utils/context/context";
 import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
 
@@ -11,6 +12,8 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [validPrivateKey, setValidPrivateKey] = useState<boolean>(false);
   const [passphrase, setPassphrase] = useState<string>("");
+
+  const relaysContext = useContext(RelaysContext);
 
   const handleSignIn = async () => {
     if (validPrivateKey) {
@@ -31,14 +34,35 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
 
         localStorage.setItem("signIn", "nsec");
 
-        localStorage.setItem(
-          "relays",
-          JSON.stringify([
-            "wss://relay.damus.io",
-            "wss://nos.lol",
-            "wss://nostr.mutinywallet.com",
-          ]),
-        );
+        if (
+          !relaysContext.isLoading &&
+          relaysContext.relayList.length != 0 &&
+          relaysContext.readRelayList &&
+          relaysContext.writeRelayList
+        ) {
+          localStorage.setItem(
+            "relays",
+            JSON.stringify(relaysContext.relayList),
+          );
+          localStorage.setItem(
+            "readRelays",
+            JSON.stringify(relaysContext.readRelayList),
+          );
+          localStorage.setItem(
+            "writeRelays",
+            JSON.stringify(relaysContext.writeRelayList),
+          );
+        } else {
+          localStorage.setItem(
+            "relays",
+            JSON.stringify([
+              "wss://relay.damus.io",
+              "wss://nos.lol",
+              "wss://nostr.mutinywallet.com",
+              "wss://purplepag.es",
+            ]),
+          );
+        }
 
         localStorage.setItem(
           "mints",
@@ -67,14 +91,32 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
       let npub = nip19.npubEncode(pk);
       localStorage.setItem("npub", npub);
       localStorage.setItem("signIn", "extension");
-      localStorage.setItem(
-        "relays",
-        JSON.stringify([
-          "wss://relay.damus.io",
-          "wss://nos.lol",
-          "wss://nostr.mutinywallet.com",
-        ]),
-      );
+      if (
+        !relaysContext.isLoading &&
+        relaysContext.relayList.length != 0 &&
+        relaysContext.readRelayList &&
+        relaysContext.writeRelayList
+      ) {
+        localStorage.setItem("relays", JSON.stringify(relaysContext.relayList));
+        localStorage.setItem(
+          "readRelays",
+          JSON.stringify(relaysContext.readRelayList),
+        );
+        localStorage.setItem(
+          "writeRelays",
+          JSON.stringify(relaysContext.writeRelayList),
+        );
+      } else {
+        localStorage.setItem(
+          "relays",
+          JSON.stringify([
+            "wss://relay.damus.io",
+            "wss://nos.lol",
+            "wss://nostr.mutinywallet.com",
+            "wss://purplepag.es",
+          ]),
+        );
+      }
       localStorage.setItem(
         "mints",
         JSON.stringify(["https://mint.minibits.cash/Bitcoin"]),

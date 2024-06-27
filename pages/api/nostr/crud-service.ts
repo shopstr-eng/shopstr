@@ -63,3 +63,44 @@ export async function createNostrProfileEvent(
   await finalizeAndSendNostrEvent(msg, passphrase);
   return msg;
 }
+
+export async function createNostrRelayEvent(
+  pubkey: string,
+  passphrase: string,
+) {
+  const relayList = getLocalStorageData().relays;
+  const readRelayList = getLocalStorageData().readRelays;
+  const writeRelayList = getLocalStorageData().writeRelays;
+  let relayTags = [];
+  if (relayList.length != 0) {
+    for (const relay of relayList) {
+      const relayTag = ["r", relay];
+      relayTags.push(relayTag);
+    }
+  }
+  if (readRelayList.length != 0) {
+    for (const relay of readRelayList) {
+      const relayTag = ["r", relay, "read"];
+      relayTags.push(relayTag);
+    }
+  }
+  if (writeRelayList.length != 0) {
+    for (const relay of writeRelayList) {
+      const relayTag = ["r", relay, "write"];
+      relayTags.push(relayTag);
+    }
+  }
+  let relayEvent = {
+    kind: 10002, // NIP-65 - Relay List Metadata
+    content: "",
+    tags: relayTags,
+    created_at: 0,
+    pubkey: pubkey,
+    id: "",
+    sig: "",
+  } as NostrEvent;
+
+  relayEvent.created_at = Math.floor(new Date().getTime() / 1000);
+  await finalizeAndSendNostrEvent(relayEvent, passphrase);
+  return relayEvent;
+}

@@ -13,6 +13,8 @@ import {
   ChatsMap,
   FollowsContextInterface,
   FollowsContext,
+  RelaysContextInterface,
+  RelaysContext,
 } from "../utils/context/context";
 import {
   getLocalStorageData,
@@ -25,6 +27,7 @@ import {
   fetchChatsAndMessages,
   fetchProfile,
   fetchAllFollows,
+  fetchAllRelays,
 } from "./api/nostr/fetch-service";
 import { NostrEvent, ProfileData } from "../utils/types/types";
 import BottomNav from "@/components/nav-bottom";
@@ -93,6 +96,12 @@ function App({ Component, pageProps }: AppProps) {
       isLoading: true,
     },
   );
+  const [relaysContext, setRelaysContext] = useState<RelaysContextInterface>({
+    relayList: [],
+    readRelayList: [],
+    writeRelayList: [],
+    isLoading: true,
+  });
 
   const editProductContext = (
     productEvents: NostrEvent[],
@@ -130,24 +139,66 @@ function App({ Component, pageProps }: AppProps) {
     firstDegreeFollowsLength: number,
     isLoading: boolean,
   ) => {
-    setFollowsContext({ followList, firstDegreeFollowsLength, isLoading });
+    setFollowsContext({
+      followList,
+      firstDegreeFollowsLength,
+      isLoading,
+    });
   };
 
-  /** FETCH initial PRODUCTS and PROFILES **/
+  const editRelaysContext = (
+    relayList: string[],
+    readRelayList: string[],
+    writeRelayList: string[],
+    isLoading: boolean,
+  ) => {
+    setRelaysContext({
+      relayList,
+      readRelayList,
+      writeRelayList,
+      isLoading,
+    });
+  };
+
+  /** FETCH initial FOLLOWS, RELAYS, PRODUCTS, and PROFILES **/
   useEffect(() => {
     async function fetchData() {
       const relays = getLocalStorageData().relays;
+      const readRelays = getLocalStorageData().readRelays;
+      let allRelays = [...relays, ...readRelays];
+      if (allRelays.length === 0) {
+        allRelays = [
+          "wss://relay.damus.io",
+          "wss://nos.lol",
+          "wss://nostr.mutinywallet.com",
+          "wss://purplepag.es",
+        ];
+        localStorage.setItem("relays", JSON.stringify(allRelays));
+      }
       const userPubkey = getLocalStorageData().userPubkey;
       try {
-        let { followList } = await fetchAllFollows(relays, editFollowsContext);
+        if (getLocalStorageData().signInMethod) {
+          let { relayList, readRelayList, writeRelayList } =
+            await fetchAllRelays(allRelays, editRelaysContext);
+          if (relayList.length != 0) {
+            localStorage.setItem("relays", JSON.stringify(relayList));
+            localStorage.setItem("readRelays", JSON.stringify(readRelayList));
+            localStorage.setItem("writeRelays", JSON.stringify(writeRelayList));
+            allRelays = [...relayList, ...readRelayList];
+          }
+        }
+        let { followList } = await fetchAllFollows(
+          allRelays,
+          editFollowsContext,
+        );
         let pubkeysToFetchProfilesFor: string[] = [];
         let { profileSetFromProducts } = await fetchAllPosts(
-          relays,
+          allRelays,
           editProductContext,
         );
         pubkeysToFetchProfilesFor = [...profileSetFromProducts];
         let { profileSetFromChats } = await fetchChatsAndMessages(
-          relays,
+          allRelays,
           userPubkey,
           editChatContext,
         );
@@ -157,7 +208,7 @@ function App({ Component, pageProps }: AppProps) {
           ...profileSetFromChats,
         ];
         let { profileMap } = await fetchProfile(
-          relays,
+          allRelays,
           pubkeysToFetchProfilesFor,
           editProfileContext,
         );
@@ -196,25 +247,27 @@ function App({ Component, pageProps }: AppProps) {
           content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
         />
       </Head>
-      <FollowsContext.Provider value={followsContext}>
-        <ProductContext.Provider value={productContext}>
-          <ProfileMapContext.Provider value={profileContext}>
-            <ChatsContext.Provider value={chatsContext}>
-              <NextUIProvider>
-                <NextThemesProvider attribute="class">
-                  <div className="flex">
-                    <SideNav />
-                    <main className="flex-1">
-                      <Component {...pageProps} />
-                    </main>
-                  </div>
-                  <BottomNav />
-                </NextThemesProvider>
-              </NextUIProvider>
-            </ChatsContext.Provider>
-          </ProfileMapContext.Provider>
-        </ProductContext.Provider>
-      </FollowsContext.Provider>
+      <RelaysContext.Provider value={relaysContext}>
+        <FollowsContext.Provider value={followsContext}>
+          <ProductContext.Provider value={productContext}>
+            <ProfileMapContext.Provider value={profileContext}>
+              <ChatsContext.Provider value={chatsContext}>
+                <NextUIProvider>
+                  <NextThemesProvider attribute="class">
+                    <div className="flex">
+                      <SideNav />
+                      <main className="flex-1">
+                        <Component {...pageProps} />
+                      </main>
+                    </div>
+                    <BottomNav />
+                  </NextThemesProvider>
+                </NextUIProvider>
+              </ChatsContext.Provider>
+            </ProfileMapContext.Provider>
+          </ProductContext.Provider>
+        </FollowsContext.Provider>
+      </RelaysContext.Provider>
     </>
   );
 }
