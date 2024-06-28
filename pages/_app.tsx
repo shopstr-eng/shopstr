@@ -177,7 +177,10 @@ function App({ Component, pageProps }: AppProps) {
       }
       const userPubkey = getLocalStorageData().userPubkey;
       try {
-        if (getLocalStorageData().signInMethod) {
+        if (
+          getLocalStorageData().signInMethod &&
+          getLocalStorageData().signInMethod != "nsec"
+        ) {
           let { relayList, readRelayList, writeRelayList } =
             await fetchAllRelays(allRelays, editRelaysContext);
           if (relayList.length != 0) {
@@ -186,11 +189,11 @@ function App({ Component, pageProps }: AppProps) {
             localStorage.setItem("writeRelays", JSON.stringify(writeRelayList));
             allRelays = [...relayList, ...readRelayList];
           }
+          let { followList } = await fetchAllFollows(
+            allRelays,
+            editFollowsContext,
+          );
         }
-        let { followList } = await fetchAllFollows(
-          allRelays,
-          editFollowsContext,
-        );
         let pubkeysToFetchProfilesFor: string[] = [];
         let { profileSetFromProducts } = await fetchAllPosts(
           allRelays,

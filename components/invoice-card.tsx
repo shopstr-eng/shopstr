@@ -2,6 +2,7 @@
 import React, { useContext, useState, useEffect } from "react";
 import { ProfileMapContext } from "../utils/context/context";
 import { useRouter } from "next/router";
+import { useForm, Controller } from "react-hook-form";
 import {
   Button,
   Card,
@@ -10,7 +11,13 @@ import {
   CardFooter,
   Divider,
   Image,
+  Input,
   useDisclosure,
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
 } from "@nextui-org/react";
 import axios from "axios";
 import {
@@ -43,6 +50,7 @@ import {
   captureInvoicePaidmetric,
 } from "./utility/metrics-helper-functions";
 import SignInModal from "./sign-in/SignInModal";
+import LocationDropdown from "./utility-components/dropdowns/location-dropdown";
 import currencySelection from "../public/currencySelection.json";
 
 export default function InvoiceCard({
@@ -79,6 +87,15 @@ export default function InvoiceCard({
 
   const { isOpen, onOpen, onClose } = useDisclosure();
 
+  const [showContactModal, setShowContactModal] = useState(false);
+
+  const {
+    handleSubmit,
+    formState: { errors },
+    control,
+    reset,
+  } = useForm();
+
   useEffect(() => {
     axios({
       method: "GET",
@@ -101,7 +118,39 @@ export default function InvoiceCard({
     setName(profile && profile.content.name ? profile.content.name : userNPub);
   }, [profileContext]);
 
-  const handleLightningPayment = async () => {
+  const onContactSubmit = async (data: { [x: string]: any }) => {
+    let contactName = data["Name"];
+    let contactAddress = data["Address"];
+    let contactUnitNo = data["Unit No."];
+    let contactCity = data["City"];
+    let contactPostalCode = data["Postal Code"];
+    let contactState = data["State/Province"];
+    let contactCountry = data["Country"];
+    await handleLightningPayment(
+      contactName,
+      contactAddress,
+      contactUnitNo,
+      contactCity,
+      contactPostalCode,
+      contactState,
+      contactCountry,
+    );
+  };
+
+  const handleToggleContactModal = () => {
+    reset();
+    setShowContactModal(!showContactModal);
+  };
+
+  const handleLightningPayment = async (
+    contactName: string,
+    contactAddress: string,
+    contactUnitNo: string,
+    contactCity: string,
+    contactPostalCode: string,
+    contactState: string,
+    contactCountry: string,
+  ) => {
     try {
       setShowInvoiceCard(true);
       let newPrice = totalCost;
@@ -148,7 +197,19 @@ export default function InvoiceCard({
           console.error("ERROR", err);
         });
 
-      invoiceHasBeenPaid(wallet, newPrice, hash, id);
+      invoiceHasBeenPaid(
+        wallet,
+        newPrice,
+        hash,
+        id,
+        contactName,
+        contactAddress,
+        contactUnitNo,
+        contactCity,
+        contactPostalCode,
+        contactState,
+        contactCountry,
+      );
     } catch (error) {
       console.error(error);
       if (setInvoiceGenerationFailed) {
@@ -166,6 +227,13 @@ export default function InvoiceCard({
     newPrice: number,
     hash: string,
     metricsInvoiceId: string,
+    contactName: string,
+    contactAddress: string,
+    contactUnitNo: string,
+    contactCity: string,
+    contactPostalCode: string,
+    contactState: string,
+    contactCountry: string,
   ) {
     let encoded;
 
@@ -184,7 +252,16 @@ export default function InvoiceCard({
         });
 
         if (encoded) {
-          sendTokens(encoded);
+          sendTokens(
+            encoded,
+            contactName,
+            contactAddress,
+            contactUnitNo,
+            contactCity,
+            contactPostalCode,
+            contactState,
+            contactCountry,
+          );
           captureInvoicePaidmetric(metricsInvoiceId, productData);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
@@ -201,7 +278,16 @@ export default function InvoiceCard({
     }
   }
 
-  const sendTokens = async (token: string) => {
+  const sendTokens = async (
+    token: string,
+    contactName: string,
+    contactAddress: string,
+    contactUnitNo: string,
+    contactCity: string,
+    contactPostalCode: string,
+    contactState: string,
+    contactCountry: string,
+  ) => {
     const { title } = productData;
     const decryptedRandomNpub = nip19.decode(randomNpub);
     const decryptedRandomNsec = nip19.decode(randomNsec);
@@ -225,6 +311,38 @@ export default function InvoiceCard({
         kind: 4,
         tags: [["p", pubkeyOfProductBeingSold]],
         content: paymentMessage,
+        relays: relays,
+      },
+    });
+    const contactMessage =
+      "Please ship the product to " +
+      contactName +
+      " at " +
+      contactAddress +
+      " " +
+      contactUnitNo +
+      ", " +
+      contactCity +
+      ", " +
+      contactPostalCode +
+      ", " +
+      contactState +
+      ", " +
+      contactCountry +
+      ".";
+    axios({
+      method: "POST",
+      url: "/api/nostr/post-event",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      data: {
+        pubkey: decryptedRandomNpub.data,
+        privkey: decryptedRandomNsec.data,
+        created_at: Math.floor(Date.now() / 1000),
+        kind: 4,
+        tags: [["p", pubkeyOfProductBeingSold]],
+        content: contactMessage,
         relays: relays,
       },
     });
@@ -292,7 +410,7 @@ export default function InvoiceCard({
           },
         ],
       });
-      sendTokens(encodedSendToken)
+      sendTokens(encodedSendToken, "", "", "", "", "", "", "")
         .then(() => {
           captureCashuPaidMetric(productData);
         })
@@ -352,7 +470,8 @@ export default function InvoiceCard({
                 return;
               }
               if (randomNsec !== "") {
-                handleLightningPayment();
+                handleToggleContactModal();
+                // handleLightningPayment();
               }
             }}
             startContent={
@@ -445,6 +564,301 @@ export default function InvoiceCard({
           </CardFooter>
         </Card>
       )}
+      <Modal
+        backdrop="blur"
+        isOpen={showContactModal}
+        onClose={handleToggleContactModal}
+        classNames={{
+          body: "py-6",
+          backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+          // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
+          header: "border-b-[1px] border-[#292f46]",
+          footer: "border-t-[1px] border-[#292f46]",
+          closeButton: "hover:bg-black/5 active:bg-white/10",
+        }}
+        scrollBehavior={"outside"}
+        size="2xl"
+      >
+        <ModalContent>
+          <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+            Enter Contact Info
+          </ModalHeader>
+          <form onSubmit={handleSubmit(onContactSubmit)}>
+            <ModalBody>
+              <Controller
+                name="Name"
+                control={control}
+                rules={{
+                  required: "A Name is required.",
+                  maxLength: {
+                    value: 50,
+                    message: "This input exceed maxLength of 50.",
+                  },
+                }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => {
+                  let isErrored = error !== undefined;
+                  let errorMessage: string = error?.message
+                    ? error.message
+                    : "";
+                  return (
+                    <Input
+                      className="text-light-text dark:text-dark-text"
+                      autoFocus
+                      variant="bordered"
+                      fullWidth={true}
+                      label="Name"
+                      labelPlacement="inside"
+                      isInvalid={isErrored}
+                      errorMessage={errorMessage}
+                      // controller props
+                      onChange={onChange} // send value to hook form
+                      onBlur={onBlur} // notify when input is touched/blur
+                      value={value}
+                    />
+                  );
+                }}
+              />
+
+              <Controller
+                name="Address"
+                control={control}
+                rules={{
+                  required: "An address is required.",
+                  maxLength: {
+                    value: 50,
+                    message: "This input exceed maxLength of 50.",
+                  },
+                }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => {
+                  let isErrored = error !== undefined;
+                  let errorMessage: string = error?.message
+                    ? error.message
+                    : "";
+                  return (
+                    <Input
+                      className="text-light-text dark:text-dark-text"
+                      autoFocus
+                      variant="bordered"
+                      fullWidth={true}
+                      label="Address"
+                      labelPlacement="inside"
+                      isInvalid={isErrored}
+                      errorMessage={errorMessage}
+                      // controller props
+                      onChange={onChange} // send value to hook form
+                      onBlur={onBlur} // notify when input is touched/blur
+                      value={value}
+                    />
+                  );
+                }}
+              />
+
+              <Controller
+                name="Unit No."
+                control={control}
+                rules={{
+                  maxLength: {
+                    value: 50,
+                    message: "This input exceed maxLength of 50.",
+                  },
+                }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => {
+                  let isErrored = error !== undefined;
+                  let errorMessage: string = error?.message
+                    ? error.message
+                    : "";
+                  return (
+                    <Input
+                      className="text-light-text dark:text-dark-text"
+                      autoFocus
+                      variant="bordered"
+                      fullWidth={true}
+                      label="Unit No."
+                      labelPlacement="inside"
+                      isInvalid={isErrored}
+                      errorMessage={errorMessage}
+                      // controller props
+                      onChange={onChange} // send value to hook form
+                      onBlur={onBlur} // notify when input is touched/blur
+                      value={value}
+                    />
+                  );
+                }}
+              />
+
+              <Controller
+                name="City"
+                control={control}
+                rules={{
+                  maxLength: {
+                    value: 50,
+                    message: "This input exceed maxLength of 50.",
+                  },
+                }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => {
+                  let isErrored = error !== undefined;
+                  let errorMessage: string = error?.message
+                    ? error.message
+                    : "";
+                  return (
+                    <Input
+                      className="text-light-text dark:text-dark-text"
+                      autoFocus
+                      variant="bordered"
+                      fullWidth={true}
+                      label="City"
+                      labelPlacement="inside"
+                      isInvalid={isErrored}
+                      errorMessage={errorMessage}
+                      // controller props
+                      onChange={onChange} // send value to hook form
+                      onBlur={onBlur} // notify when input is touched/blur
+                      value={value}
+                    />
+                  );
+                }}
+              />
+
+              <Controller
+                name="Postal Code"
+                control={control}
+                rules={{
+                  maxLength: {
+                    value: 50,
+                    message: "This input exceed maxLength of 50.",
+                  },
+                }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => {
+                  let isErrored = error !== undefined;
+                  let errorMessage: string = error?.message
+                    ? error.message
+                    : "";
+                  return (
+                    <Input
+                      className="text-light-text dark:text-dark-text"
+                      autoFocus
+                      variant="bordered"
+                      fullWidth={true}
+                      label="Postal Code"
+                      labelPlacement="inside"
+                      isInvalid={isErrored}
+                      errorMessage={errorMessage}
+                      // controller props
+                      onChange={onChange} // send value to hook form
+                      onBlur={onBlur} // notify when input is touched/blur
+                      value={value}
+                    />
+                  );
+                }}
+              />
+
+              <Controller
+                name="State/Province"
+                control={control}
+                rules={{
+                  required: "Please specify a country.",
+                }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => {
+                  let isErrored = error !== undefined;
+                  let errorMessage: string = error?.message
+                    ? error.message
+                    : "";
+                  return (
+                    <LocationDropdown
+                      autoFocus
+                      variant="bordered"
+                      aria-label="Select Location"
+                      placeholder="State/Province"
+                      isInvalid={isErrored}
+                      errorMessage={errorMessage}
+                      // controller props
+                      onChange={onChange} // send value to hook form
+                      onBlur={onBlur} // notify when input is touched/blur
+                      value={value}
+                    />
+                  );
+                }}
+              />
+
+              <Controller
+                name="Country"
+                control={control}
+                rules={{
+                  required: "Please specify a country.",
+                }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => {
+                  let isErrored = error !== undefined;
+                  let errorMessage: string = error?.message
+                    ? error.message
+                    : "";
+                  return (
+                    <LocationDropdown
+                      autoFocus
+                      variant="bordered"
+                      aria-label="Select Location"
+                      placeholder="Country"
+                      isInvalid={isErrored}
+                      errorMessage={errorMessage}
+                      // controller props
+                      onChange={onChange} // send value to hook form
+                      onBlur={onBlur} // notify when input is touched/blur
+                      value={value}
+                    />
+                  );
+                }}
+              />
+
+              {/* {signIn === "nsec" && (
+                <Input
+                  autoFocus
+                  className="text-light-text dark:text-dark-text"
+                  ref={passphraseInputRef}
+                  variant="flat"
+                  label="Passphrase"
+                  labelPlacement="inside"
+                  onChange={(e) => setPassphrase(e.target.value)}
+                  value={passphrase}
+                />
+              )} */}
+            </ModalBody>
+
+            <ModalFooter>
+              <Button
+                color="danger"
+                variant="light"
+                onClick={handleToggleContactModal}
+              >
+                Cancel
+              </Button>
+
+              <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                Submit
+              </Button>
+            </ModalFooter>
+          </form>
+        </ModalContent>
+      </Modal>
       <SignInModal isOpen={isOpen} onClose={onClose} />
     </>
   );

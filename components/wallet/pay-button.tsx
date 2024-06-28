@@ -1,6 +1,5 @@
-import { useState, useEffect, useContext, useMemo } from "react";
+import { useState } from "react";
 import { useForm, Controller } from "react-hook-form";
-import Link from "next/link";
 import { useTheme } from "next-themes";
 import {
   BoltIcon,
@@ -19,7 +18,6 @@ import {
 } from "@nextui-org/react";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
-import { LightningAddress } from "@getalby/lightning-tools";
 import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
 // import { Invoice } from "@getalby/lightning-tools";
 import { formatWithCommas } from "../utility-components/display-monetary-info";
