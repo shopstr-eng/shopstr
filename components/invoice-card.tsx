@@ -134,7 +134,7 @@ export default function InvoiceCard({
   const onShippingSubmit = async (data: { [x: string]: any }) => {
     let shippingName = data["Name"];
     let shippingAddress = data["Address"];
-    let shippingUnitNo = data["Unit No."];
+    let shippingUnitNo = data["Unit"];
     let shippingCity = data["City"];
     let shippingPostalCode = data["Postal Code"];
     let shippingState = data["State/Province"];
@@ -881,7 +881,7 @@ export default function InvoiceCard({
               />
 
               <Controller
-                name="Unit No."
+                name="Unit"
                 control={shippingControl}
                 rules={{
                   maxLength: {
@@ -903,7 +903,7 @@ export default function InvoiceCard({
                       autoFocus
                       variant="bordered"
                       fullWidth={true}
-                      label="Unit No."
+                      label="Apt, suite, unit, etc."
                       labelPlacement="inside"
                       isInvalid={isErrored}
                       errorMessage={errorMessage}
@@ -977,7 +977,7 @@ export default function InvoiceCard({
                       autoFocus
                       variant="bordered"
                       fullWidth={true}
-                      label="Postal Code"
+                      label="Postal code"
                       labelPlacement="inside"
                       isInvalid={isErrored}
                       errorMessage={errorMessage}
@@ -1042,7 +1042,8 @@ export default function InvoiceCard({
                       autoFocus
                       variant="bordered"
                       aria-label="Select Country"
-                      placeholder="Country"
+                      label="Country"
+                      labelPlacement="inside"
                       isInvalid={isErrored}
                       errorMessage={errorMessage}
                       // controller props
@@ -1117,8 +1118,9 @@ export default function InvoiceCard({
                       autoFocus
                       variant="bordered"
                       fullWidth={true}
-                      label="shopstr@shopstr.store"
+                      label="Contact"
                       labelPlacement="inside"
+                      placeholder="shopstr@shopstr.store"
                       isInvalid={isErrored}
                       errorMessage={errorMessage}
                       // controller props
@@ -1154,8 +1156,9 @@ export default function InvoiceCard({
                       autoFocus
                       variant="bordered"
                       fullWidth={true}
-                      label="Nostr, Signal, Telegram, email, phone, etc."
+                      label="Contact type"
                       labelPlacement="inside"
+                      placeholder="Nostr, Signal, Telegram, email, phone, etc."
                       isInvalid={isErrored}
                       errorMessage={errorMessage}
                       // controller props
@@ -1186,7 +1189,9 @@ export default function InvoiceCard({
                       className="text-light-text dark:text-dark-text"
                       variant="bordered"
                       fullWidth={true}
-                      placeholder="Please send file over to my email."
+                      label="Delivery instructions"
+                      labelPlacement="inside"
+                      placeholder="Meet me by . . .; Send file to . . ."
                       isInvalid={isErrored}
                       errorMessage={errorMessage}
                       // controller props
