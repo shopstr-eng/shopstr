@@ -433,7 +433,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
                     className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
                     onClick={async () => await loadMoreMessages()}
                   >
-                    Load More
+                    Load More . . .
                   </Button>
                 </div>
               ) : null}
