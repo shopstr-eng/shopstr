@@ -31,11 +31,13 @@ export type ChatsMap = Map<string, NostrMessageEvent[]>;
 export interface ChatsContextInterface {
   chatsMap: ChatsMap;
   isLoading: boolean;
+  addNewlyCreatedMessageEvent: (messageEvent: NostrMessageEvent) => void;
 }
 
 export const ChatsContext = createContext({
   chatsMap: new Map(),
   isLoading: true,
+  addNewlyCreatedMessageEvent: (messageEvent: NostrMessageEvent) => {},
 } as ChatsContextInterface);
 
 export interface FollowsContextInterface {
