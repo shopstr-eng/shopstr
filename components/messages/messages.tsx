@@ -42,6 +42,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
   const [passphrase, setPassphrase] = useState("");
 
   const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
+  const [oldestTimestamp, setOldestTimestamp] = useState(Number.MAX_VALUE);
 
   const [isChatsLoading, setIsChatsLoading] = useState(true);
   const [isSendingDMLoading, setIsSendingDMLoading] = useState(false);
@@ -285,8 +286,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       setIsLoadingMore(true);
       if (chatsContext.isLoading) return;
       chatsContext.isLoading = true;
-
-      let oldestMessageCreatedAt = Number.MAX_VALUE;
+      let oldestMessageCreatedAt = Math.trunc(DateTime.now().toSeconds());
       let oldestMessageId = "";
       for (const [chatPubkey, chatObject] of chatsMap.entries()) {
         for (const messageEvent of chatObject.decryptedChat) {
@@ -296,13 +296,18 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
           }
         }
       }
-
+      if (oldestMessageCreatedAt > oldestTimestamp) {
+        oldestMessageCreatedAt = oldestTimestamp;
+      }
       const since = Math.trunc(
         DateTime.fromSeconds(oldestMessageCreatedAt)
           .minus({ days: 14 })
           .toSeconds(),
       );
-
+      setOldestTimestamp(since);
+      const relays = getLocalStorageData().relays;
+      const readRelays = getLocalStorageData().readRelays;
+      const allReadRelays = [...relays, ...readRelays];
       const pool = new SimplePool();
       const sentFilter: Filter = {
         kinds: [4],
@@ -310,39 +315,31 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         since,
         until: oldestMessageCreatedAt,
       };
-
-      const sentEvents = await pool.querySync(
-        getLocalStorageData().relays,
-        sentFilter,
-      );
+      const sentEvents = await pool.querySync(allReadRelays, sentFilter);
       const sentMessages: NostrMessageEvent[] = sentEvents
         .filter((event) => event.id !== oldestMessageId)
         .map((event) => ({
           ...event,
-          read: false, // Add read property
+          read: false,
         }));
-
-      const receivedFilter = {
+      const receivedFilter: Filter = {
         kinds: [4],
         "#p": [userPubkey],
         since,
         until: oldestMessageCreatedAt,
       };
-
       const receivedEvents = await pool.querySync(
-        getLocalStorageData().relays,
+        allReadRelays,
         receivedFilter,
       );
       const receivedMessages: NostrMessageEvent[] = receivedEvents
         .filter((event) => event.id !== oldestMessageId)
         .map((event) => ({
           ...event,
-          read: false, // Add read property
+          read: false,
         }));
-
       const olderMessages = [...sentMessages, ...receivedMessages];
       olderMessages.sort((a, b) => b.created_at - a.created_at);
-
       // Combine the newly fetched messages with the existing chatsMap
       const combinedChatsMap = new Map(chatsMap);
       olderMessages.forEach((messageEvent) => {
@@ -391,7 +388,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
                 <ShopstrSpinner />
               </div>
             ) : (
-              <p className="break-words text-center text-2xl text-light-text dark:text-dark-text">
+              <div className="break-words text-center text-2xl text-light-text dark:text-dark-text">
                 {isClient && userPubkey ? (
                   <>
                     No messages . . . yet!
@@ -399,12 +396,26 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
                     <br></br>
                     Just logged in?
                     <br></br>
-                    Try reloading the page!
+                    Try reloading the page, or load more!
+                    {chatsContext.isLoading || isLoadingMore ? (
+                      <div className="mt-8 flex items-center justify-center">
+                        <ShopstrSpinner />
+                      </div>
+                    ) : (
+                      <div className="mt-8 h-20 px-4">
+                        <Button
+                          className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
+                          onClick={async () => await loadMoreMessages()}
+                        >
+                          Load More . . .
+                        </Button>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <>You must be signed in to see your chats!</>
                 )}
-              </p>
+              </div>
             )}
           </div>
         ) : (
