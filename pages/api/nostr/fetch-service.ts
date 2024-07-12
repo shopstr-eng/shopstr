@@ -201,9 +201,6 @@ export const fetchChatsAndMessages = async (
       if (!since) {
         since = Math.trunc(DateTime.now().minus({ days: 14 }).toSeconds());
       }
-      if (!until) {
-        until = Math.trunc(DateTime.now().toSeconds());
-      }
 
       new SimplePool().subscribeMany(
         relays,
@@ -212,7 +209,6 @@ export const fetchChatsAndMessages = async (
             kinds: [4],
             authors: [userPubkey], // all chats where you are the author
             since,
-            until,
           },
         ],
         {
@@ -258,7 +254,6 @@ export const fetchChatsAndMessages = async (
             kinds: [4],
             "#p": [userPubkey], // all chats where you are the receipient
             since,
-            until,
           },
         ],
         {

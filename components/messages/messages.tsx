@@ -232,36 +232,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         currentChatPubkey,
         passphrase,
       );
-      let signedEvent = await sendEncryptedMessage(
-        encryptedMessageEvent,
-        passphrase,
-      );
-      const signedMessageEvent = {
-        ...signedEvent,
-        read: true,
-      };
-
-      // update chats locally to reflect new message
-      chatsContext.addNewlyCreatedMessageEvent(signedMessageEvent, true);
-      setChatsMap((prevChatMap) => {
-        let updatedChat = prevChatMap.get(currentChatPubkey) as ChatObject;
-        let unEncryptedMessageEvent: NostrMessageEvent = {
-          ...encryptedMessageEvent,
-          content: message,
-          read: true,
-          id: "mock-id",
-          sig: "mock-sig",
-        };
-        let updatedDecryptedChat = updatedChat.decryptedChat
-          ? [...updatedChat.decryptedChat, unEncryptedMessageEvent]
-          : [];
-        let newChatMap = new Map(prevChatMap);
-        newChatMap.set(currentChatPubkey, {
-          decryptedChat: updatedDecryptedChat,
-          unreadCount: 0,
-        });
-        return newChatMap;
-      });
+      await sendEncryptedMessage(encryptedMessageEvent, passphrase);
       if (
         chatsMap.get(currentChatPubkey) != undefined &&
         chatsMap.get(currentChatPubkey)?.decryptedChat.length === 0

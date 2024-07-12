@@ -139,6 +139,7 @@ export default function InvoiceCard({
     let shippingPostalCode = data["Postal Code"];
     let shippingState = data["State/Province"];
     let shippingCountry = data["Country"];
+    setShowShippingModal(false);
     if (isCashuPayment) {
       await handleCashuPayment(
         shippingName,
@@ -166,6 +167,7 @@ export default function InvoiceCard({
     let contact = data["Contact"];
     let contactType = data["Contact Type"];
     let contactInstructions = data["Instructions"];
+    setShowContactModal(false);
     if (isCashuPayment) {
       await handleCashuPayment(
         undefined,
