@@ -152,7 +152,7 @@ export async function constructEncryptedMessageEvent(
 export async function sendEncryptedMessage(
   encryptedMessageEvent: EncryptedMessageEvent,
   passphrase?: string,
-): NostrEvent {
+): Promise<NostrEvent> {
   const { signInMethod, relays, writeRelays } = getLocalStorageData();
   let signedEvent;
   if (signInMethod === "extension") {

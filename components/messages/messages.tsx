@@ -236,8 +236,13 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         encryptedMessageEvent,
         passphrase,
       );
+      const signedMessageEvent = {
+        ...signedEvent,
+        read: true,
+      };
+
       // update chats locally to reflect new message
-      chatsContext.addNewlyCreatedMessageEvent(signedEvent, true);
+      chatsContext.addNewlyCreatedMessageEvent(signedMessageEvent, true);
       setChatsMap((prevChatMap) => {
         let updatedChat = prevChatMap.get(currentChatPubkey) as ChatObject;
         let unEncryptedMessageEvent: NostrMessageEvent = {
