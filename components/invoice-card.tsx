@@ -632,6 +632,9 @@ export default function InvoiceCard({
                 } else if (shippingType === "Free/Pickup") {
                   setIsCashuPayment(false);
                   setShowShippingOption(true);
+                } else {
+                  setIsCashuPayment(false);
+                  handleToggleContactModal();
                 }
               }
             }}
@@ -663,6 +666,9 @@ export default function InvoiceCard({
                 } else if (shippingType === "Free/Pickup") {
                   setIsCashuPayment(true);
                   setShowShippingOption(true);
+                } else {
+                  setIsCashuPayment(true);
+                  handleToggleContactModal();
                 }
               }
             }}
