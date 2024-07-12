@@ -232,8 +232,12 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         currentChatPubkey,
         passphrase,
       );
-      await sendEncryptedMessage(encryptedMessageEvent, passphrase);
+      let signedEvent = await sendEncryptedMessage(
+        encryptedMessageEvent,
+        passphrase,
+      );
       // update chats locally to reflect new message
+      chatsContext.addNewlyCreatedMessageEvent(signedEvent, true);
       setChatsMap((prevChatMap) => {
         let updatedChat = prevChatMap.get(currentChatPubkey) as ChatObject;
         let unEncryptedMessageEvent: NostrMessageEvent = {

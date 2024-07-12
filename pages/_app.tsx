@@ -92,7 +92,10 @@ function App({ Component, pageProps }: AppProps) {
   const [chatsContext, setChatsContext] = useState<ChatsContextInterface>({
     chatsMap: new Map(),
     isLoading: true,
-    addNewlyCreatedMessageEvent: (messageEvent: NostrMessageEvent) => {
+    addNewlyCreatedMessageEvent: (
+      messageEvent: NostrMessageEvent,
+      sent?: boolean,
+    ) => {
       setChatsContext((chatsContext) => {
         const newChatsMap = new Map(chatsContext.chatsMap);
         let chatArray;
@@ -102,12 +105,20 @@ function App({ Component, pageProps }: AppProps) {
           )?.[1];
           if (recipientPubkey) {
             chatArray = newChatsMap.get(recipientPubkey) || [];
-            chatArray = [messageEvent, ...chatArray];
+            if (sent) {
+              chatArray.push(messageEvent);
+            } else {
+              chatArray = [messageEvent, ...chatArray];
+            }
             newChatsMap.set(recipientPubkey, chatArray);
           }
         } else {
           chatArray = newChatsMap.get(messageEvent.pubkey) || [];
-          chatArray = [messageEvent, ...chatArray];
+          if (sent) {
+            chatArray.push(messageEvent);
+          } else {
+            chatArray = [messageEvent, ...chatArray];
+          }
           newChatsMap.set(messageEvent.pubkey, chatArray);
         }
         return {
