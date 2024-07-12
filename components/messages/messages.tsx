@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from "react";
-import { nip04 } from "nostr-tools";
+import { Filter, nip04, SimplePool } from "nostr-tools";
 import { useRouter } from "next/router";
 import {
   constructEncryptedMessageEvent,
@@ -15,12 +15,15 @@ import ShopstrSpinner from "../utility-components/shopstr-spinner";
 import axios from "axios";
 import { ChatPanel } from "./chat-panel";
 import { ChatButton } from "./chat-button";
+import { Button } from "@nextui-org/react";
+import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { NostrMessageEvent, ChatObject } from "../../utils/types/types";
 import {
   addChatMessagesToCache,
   fetchChatMessagesFromCache,
 } from "../../pages/api/nostr/cache-service";
 import { useKeyPress } from "../utility/functions";
+import { DateTime } from "luxon";
 
 const Messages = ({ isPayment }: { isPayment: boolean }) => {
   const router = useRouter();
@@ -37,6 +40,9 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
 
   const [enterPassphrase, setEnterPassphrase] = useState(false);
   const [passphrase, setPassphrase] = useState("");
+
+  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
+  const [oldestTimestamp, setOldestTimestamp] = useState(Number.MAX_VALUE);
 
   const [isChatsLoading, setIsChatsLoading] = useState(true);
   const [isSendingDMLoading, setIsSendingDMLoading] = useState(false);
@@ -209,7 +215,6 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
   const enterChat = (pubkeyOfChat: string) => {
     setCurrentChatPubkey(pubkeyOfChat as string);
     // mark all messages in chat as read
-
     markAllMessagesAsReadInChatRoom(pubkeyOfChat as string);
   };
 
@@ -227,8 +232,17 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         currentChatPubkey,
         passphrase,
       );
-      await sendEncryptedMessage(encryptedMessageEvent, passphrase);
+      let signedEvent = await sendEncryptedMessage(
+        encryptedMessageEvent,
+        passphrase,
+      );
+      const signedMessageEvent = {
+        ...signedEvent,
+        read: true,
+      };
+
       // update chats locally to reflect new message
+      chatsContext.addNewlyCreatedMessageEvent(signedMessageEvent, true);
       setChatsMap((prevChatMap) => {
         let updatedChat = prevChatMap.get(currentChatPubkey) as ChatObject;
         let unEncryptedMessageEvent: NostrMessageEvent = {
@@ -276,6 +290,103 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
     router.replace(`/messages`);
   };
 
+  const loadMoreMessages = async () => {
+    try {
+      setIsLoadingMore(true);
+      if (chatsContext.isLoading) return;
+      chatsContext.isLoading = true;
+      let oldestMessageCreatedAt = Math.trunc(DateTime.now().toSeconds());
+      let oldestMessageId = "";
+      for (const [chatPubkey, chatObject] of chatsMap.entries()) {
+        for (const messageEvent of chatObject.decryptedChat) {
+          if (messageEvent.created_at < oldestMessageCreatedAt) {
+            oldestMessageCreatedAt = messageEvent.created_at;
+            oldestMessageId = messageEvent.id;
+          }
+        }
+      }
+      if (oldestMessageCreatedAt > oldestTimestamp) {
+        oldestMessageCreatedAt = oldestTimestamp;
+      }
+      const since = Math.trunc(
+        DateTime.fromSeconds(oldestMessageCreatedAt)
+          .minus({ days: 14 })
+          .toSeconds(),
+      );
+      setOldestTimestamp(since);
+      const relays = getLocalStorageData().relays;
+      const readRelays = getLocalStorageData().readRelays;
+      const allReadRelays = [...relays, ...readRelays];
+      const pool = new SimplePool();
+      const sentFilter: Filter = {
+        kinds: [4],
+        authors: [userPubkey],
+        since,
+        until: oldestMessageCreatedAt,
+      };
+      const sentEvents = await pool.querySync(allReadRelays, sentFilter);
+      const sentMessages: NostrMessageEvent[] = sentEvents
+        .filter((event) => event.id !== oldestMessageId)
+        .map((event) => ({
+          ...event,
+          read: false,
+        }));
+      const receivedFilter: Filter = {
+        kinds: [4],
+        "#p": [userPubkey],
+        since,
+        until: oldestMessageCreatedAt,
+      };
+      const receivedEvents = await pool.querySync(
+        allReadRelays,
+        receivedFilter,
+      );
+      const receivedMessages: NostrMessageEvent[] = receivedEvents
+        .filter((event) => event.id !== oldestMessageId)
+        .map((event) => ({
+          ...event,
+          read: false,
+        }));
+      const olderMessages = [...sentMessages, ...receivedMessages];
+      olderMessages.sort((a, b) => b.created_at - a.created_at);
+      // Combine the newly fetched messages with the existing chatsMap
+      const combinedChatsMap = new Map(chatsMap);
+      olderMessages.forEach((messageEvent) => {
+        let chatArray;
+        if (messageEvent.pubkey === userPubkey) {
+          let recipientPubkey = messageEvent.tags.find(
+            (tag) => tag[0] === "p",
+          )?.[1];
+          if (recipientPubkey) {
+            chatArray =
+              combinedChatsMap.get(recipientPubkey)?.decryptedChat || [];
+            chatArray.push(messageEvent);
+            combinedChatsMap.set(recipientPubkey, {
+              unreadCount: chatArray.filter((event) => !event.read).length,
+              decryptedChat: chatArray,
+            });
+          }
+        } else {
+          chatArray =
+            combinedChatsMap.get(messageEvent.pubkey)?.decryptedChat || [];
+          chatArray.push(messageEvent);
+          combinedChatsMap.set(messageEvent.pubkey, {
+            unreadCount: chatArray.filter((event) => !event.read).length,
+            decryptedChat: chatArray,
+          });
+        }
+        chatsContext.addNewlyCreatedMessageEvent(messageEvent);
+      });
+      setChatsMap(combinedChatsMap);
+      chatsContext.isLoading = false;
+      setIsLoadingMore(false);
+    } catch (err) {
+      console.log(err);
+      chatsContext.isLoading = false;
+      setIsLoadingMore(false);
+    }
+  };
+
   return (
     <div className="h-[100vh] bg-light-bg dark:bg-dark-bg">
       <div>
@@ -286,7 +397,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
                 <ShopstrSpinner />
               </div>
             ) : (
-              <p className="break-words text-center text-2xl text-light-text dark:text-dark-text">
+              <div className="break-words text-center text-2xl text-light-text dark:text-dark-text">
                 {isClient && userPubkey ? (
                   <>
                     No messages . . . yet!
@@ -294,12 +405,26 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
                     <br></br>
                     Just logged in?
                     <br></br>
-                    Try reloading the page!
+                    Try reloading the page, or load more!
+                    {chatsContext.isLoading || isLoadingMore ? (
+                      <div className="mt-8 flex items-center justify-center">
+                        <ShopstrSpinner />
+                      </div>
+                    ) : (
+                      <div className="mt-8 h-20 px-4">
+                        <Button
+                          className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
+                          onClick={async () => await loadMoreMessages()}
+                        >
+                          Load More . . .
+                        </Button>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <>You must be signed in to see your chats!</>
                 )}
-              </p>
+              </div>
             )}
           </div>
         ) : (
@@ -318,6 +443,20 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
                   );
                 },
               )}
+              {chatsContext.isLoading || isLoadingMore ? (
+                <div className="mt-8 flex items-center justify-center">
+                  <ShopstrSpinner />
+                </div>
+              ) : chatsMap.size != 0 ? (
+                <div className="mt-8 h-20 px-4">
+                  <Button
+                    className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
+                    onClick={async () => await loadMoreMessages()}
+                  >
+                    Load More . . .
+                  </Button>
+                </div>
+              ) : null}
             </div>
             <ChatPanel
               handleGoBack={goBackFromChatRoom}

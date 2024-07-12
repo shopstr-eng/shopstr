@@ -29,7 +29,11 @@ import {
   fetchAllFollows,
   fetchAllRelays,
 } from "./api/nostr/fetch-service";
-import { NostrEvent, ProfileData } from "../utils/types/types";
+import {
+  NostrEvent,
+  ProfileData,
+  NostrMessageEvent,
+} from "../utils/types/types";
 import BottomNav from "@/components/nav-bottom";
 import SideNav from "@/components/nav-side";
 
@@ -88,6 +92,42 @@ function App({ Component, pageProps }: AppProps) {
   const [chatsContext, setChatsContext] = useState<ChatsContextInterface>({
     chatsMap: new Map(),
     isLoading: true,
+    addNewlyCreatedMessageEvent: (
+      messageEvent: NostrMessageEvent,
+      sent?: boolean,
+    ) => {
+      setChatsContext((chatsContext) => {
+        const newChatsMap = new Map(chatsContext.chatsMap);
+        let chatArray;
+        if (messageEvent.pubkey === getLocalStorageData().userPubkey) {
+          let recipientPubkey = messageEvent.tags.find(
+            (tag) => tag[0] === "p",
+          )?.[1];
+          if (recipientPubkey) {
+            chatArray = newChatsMap.get(recipientPubkey) || [];
+            if (sent) {
+              chatArray.push(messageEvent);
+            } else {
+              chatArray = [messageEvent, ...chatArray];
+            }
+            newChatsMap.set(recipientPubkey, chatArray);
+          }
+        } else {
+          chatArray = newChatsMap.get(messageEvent.pubkey) || [];
+          if (sent) {
+            chatArray.push(messageEvent);
+          } else {
+            chatArray = [messageEvent, ...chatArray];
+          }
+          newChatsMap.set(messageEvent.pubkey, chatArray);
+        }
+        return {
+          chatsMap: newChatsMap,
+          isLoading: false,
+          addNewlyCreatedMessageEvent: chatsContext.addNewlyCreatedMessageEvent,
+        };
+      });
+    },
   });
   const [followsContext, setFollowsContext] = useState<FollowsContextInterface>(
     {
@@ -131,7 +171,13 @@ function App({ Component, pageProps }: AppProps) {
   };
 
   const editChatContext = (chatsMap: ChatsMap, isLoading: boolean) => {
-    setChatsContext({ chatsMap, isLoading });
+    setChatsContext((chatsContext) => {
+      return {
+        chatsMap,
+        isLoading,
+        addNewlyCreatedMessageEvent: chatsContext.addNewlyCreatedMessageEvent,
+      };
+    });
   };
 
   const editFollowsContext = (

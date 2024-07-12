@@ -1,7 +1,7 @@
 3; // TODO componentarize file uploader
 import React, { useMemo, useRef, useEffect, useState, useContext } from "react";
 import Link from "next/link";
-import { useForm, Controller, set } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import {
   Modal,
   ModalContent,
@@ -251,7 +251,7 @@ export default function NewForm({
                     autoFocus
                     variant="bordered"
                     fullWidth={true}
-                    label="Product Name"
+                    label="Product name"
                     labelPlacement="inside"
                     isInvalid={isErrored}
                     errorMessage={errorMessage}
@@ -346,7 +346,8 @@ export default function NewForm({
                     className="text-light-text dark:text-dark-text"
                     variant="bordered"
                     fullWidth={true}
-                    placeholder="Description"
+                    label="Description"
+                    labelPlacement="inside"
                     isInvalid={isErrored}
                     errorMessage={errorMessage}
                     // controller props
@@ -377,9 +378,8 @@ export default function NewForm({
                     type="number"
                     autoFocus
                     variant="flat"
-                    // label="Price"
-                    // labelPlacement="outside"
-                    placeholder="Price"
+                    label="Price"
+                    labelPlacement="inside"
                     isInvalid={isErrored}
                     errorMessage={errorMessage}
                     // controller props
@@ -444,7 +444,8 @@ export default function NewForm({
                     autoFocus
                     variant="bordered"
                     aria-label="Select Location"
-                    placeholder="Location"
+                    label="Location"
+                    labelPlacement="inside"
                     isInvalid={isErrored}
                     errorMessage={errorMessage}
                     // controller props
@@ -474,7 +475,8 @@ export default function NewForm({
                     autoFocus
                     variant="bordered"
                     aria-label="Shipping Option"
-                    label="Shipping Option"
+                    label="Shipping option"
+                    labelPlacement="inside"
                     isInvalid={isErrored}
                     errorMessage={errorMessage}
                     disallowEmptySelection={true}
@@ -569,7 +571,7 @@ export default function NewForm({
                     autoFocus
                     aria-label="Category"
                     label="Categories"
-                    labelPlacement="outside"
+                    labelPlacement="inside"
                     selectionMode="multiple"
                     isInvalid={isErrored}
                     errorMessage={errorMessage}

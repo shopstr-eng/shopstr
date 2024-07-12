@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { CheckIcon, ClipboardIcon } from "@heroicons/react/24/outline";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import ClaimButton from "../utility-components/claim-button";
 import { NostrMessageEvent } from "../../utils/types/types";
@@ -21,6 +23,8 @@ export const ChatMessage = ({
   index: number;
   currentChatPubkey?: string;
 }) => {
+  const [copiedToClipboard, setCopiedToClipboard] = useState(false);
+
   if (!messageEvent || !currentChatPubkey) {
     return null;
   }
@@ -30,8 +34,20 @@ export const ChatMessage = ({
   const canDecodeToken = tokenAfterCashuA
     ? isDecodableToken(tokenAfterCashuA)
     : false;
+  const contentBeforeCashuA = messageEvent.content.includes("cashuA")
+    ? messageEvent.content.split("cashuA")[0]
+    : messageEvent.content;
 
   const { userPubkey } = getLocalStorageData();
+
+  const handleCopyToken = (token: string) => {
+    navigator.clipboard.writeText(token);
+    setCopiedToClipboard(true);
+    setTimeout(() => {
+      setCopiedToClipboard(false);
+    }, 2000);
+  };
+
   return (
     <div
       key={index}
@@ -55,8 +71,21 @@ export const ChatMessage = ({
           canDecodeToken &&
           tokenAfterCashuA ? (
             <>
-              {messageEvent.content}
-              <ClaimButton token={tokenAfterCashuA} />
+              {contentBeforeCashuA}
+              <div className="flex items-center">
+                <ClaimButton token={tokenAfterCashuA} />
+                <ClipboardIcon
+                  onClick={() => handleCopyToken("cashuA" + tokenAfterCashuA)}
+                  className={`ml-2 mt-1 h-5 w-5 cursor-pointer text-dark-text dark:text-light-text ${
+                    copiedToClipboard ? "hidden" : ""
+                  }`}
+                />
+                <CheckIcon
+                  className={`ml-2 mt-1 h-5 w-5 cursor-pointer text-dark-text dark:text-light-text ${
+                    copiedToClipboard ? "" : "hidden"
+                  }`}
+                />
+              </div>
             </>
           ) : (
             <>{messageEvent.content}</>

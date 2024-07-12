@@ -327,7 +327,7 @@ const UserProfilePage = () => {
                         }}
                         variant="bordered"
                         fullWidth={true}
-                        placeholder="Add something about yourself!"
+                        placeholder="Add something about yourself . . ."
                         isInvalid={isErrored}
                         errorMessage={errorMessage}
                         label="About"

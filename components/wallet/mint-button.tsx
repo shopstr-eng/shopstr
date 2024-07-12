@@ -22,7 +22,7 @@ import {
 } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
-import { CashuMint, CashuWallet, getEncodedToken } from "@cashu/cashu-ts";
+import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
 
 const MintButton = () => {
   const [showMintModal, setShowMintModal] = useState(false);

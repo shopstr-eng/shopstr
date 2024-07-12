@@ -152,7 +152,7 @@ export async function constructEncryptedMessageEvent(
 export async function sendEncryptedMessage(
   encryptedMessageEvent: EncryptedMessageEvent,
   passphrase?: string,
-) {
+): Promise<NostrEvent> {
   const { signInMethod, relays, writeRelays } = getLocalStorageData();
   let signedEvent;
   if (signInMethod === "extension") {
@@ -169,6 +169,7 @@ export async function sendEncryptedMessage(
     allWriteRelays.push(blastrRelay);
   }
   await Promise.any(pool.publish(allWriteRelays, signedEvent));
+  return signedEvent;
 }
 
 export async function finalizeAndSendNostrEvent(

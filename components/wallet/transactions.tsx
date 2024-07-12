@@ -5,7 +5,6 @@ import {
   BanknotesIcon,
   BoltIcon,
   ShoppingBagIcon,
-  QuestionMarkCircleIcon,
 } from "@heroicons/react/24/outline";
 import { getLocalStorageData } from "../../components/utility/nostr-helper-functions";
 import { Transaction } from "@/utils/types/types";

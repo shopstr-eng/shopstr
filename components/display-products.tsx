@@ -273,7 +273,7 @@ const DisplayEvents = ({
               className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
               onClick={async () => await loadMoreListings()}
             >
-              Load More
+              Load More . . .
             </Button>
           </div>
         ) : null}

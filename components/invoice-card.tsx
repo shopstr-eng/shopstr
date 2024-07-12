@@ -2,6 +2,7 @@
 import React, { useContext, useState, useEffect } from "react";
 import { ProfileMapContext } from "../utils/context/context";
 import { useRouter } from "next/router";
+import { useForm, Controller } from "react-hook-form";
 import {
   Button,
   Card,
@@ -10,7 +11,16 @@ import {
   CardFooter,
   Divider,
   Image,
+  Input,
   useDisclosure,
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Select,
+  SelectItem,
+  Textarea,
 } from "@nextui-org/react";
 import axios from "axios";
 import {
@@ -43,6 +53,7 @@ import {
   captureInvoicePaidmetric,
 } from "./utility/metrics-helper-functions";
 import SignInModal from "./sign-in/SignInModal";
+import CountryDropdown from "./utility-components/dropdowns/country-dropdown";
 import currencySelection from "../public/currencySelection.json";
 
 export default function InvoiceCard({
@@ -59,7 +70,7 @@ export default function InvoiceCard({
   setCashuPaymentFailed?: (cashuPaymentFailef: boolean) => void;
 }) {
   const router = useRouter();
-  const { pubkey, currency, totalCost } = productData;
+  const { pubkey, currency, totalCost, shippingType } = productData;
   const pubkeyOfProductBeingSold = pubkey;
   const { userNPub, userPubkey, relays, mints, tokens, history } =
     getLocalStorageData();
@@ -78,6 +89,25 @@ export default function InvoiceCard({
   const [randomNsec, setRandomNsec] = useState<string>("");
 
   const { isOpen, onOpen, onClose } = useDisclosure();
+
+  const [showShippingModal, setShowShippingModal] = useState(false);
+  const [showContactModal, setShowContactModal] = useState(false);
+  const [showShippingOption, setShowShippingOption] = useState(false);
+  const [isCashuPayment, setIsCashuPayment] = useState(false);
+
+  const {
+    handleSubmit: handleShippingSubmit,
+    formState: shippingFormState,
+    control: shippingControl,
+    reset: shippingReset,
+  } = useForm();
+
+  const {
+    handleSubmit: handleContactSubmit,
+    formState: contactFormState,
+    control: contactControl,
+    reset: contactReset,
+  } = useForm();
 
   useEffect(() => {
     axios({
@@ -101,7 +131,92 @@ export default function InvoiceCard({
     setName(profile && profile.content.name ? profile.content.name : userNPub);
   }, [profileContext]);
 
-  const handleLightningPayment = async () => {
+  const onShippingSubmit = async (data: { [x: string]: any }) => {
+    let shippingName = data["Name"];
+    let shippingAddress = data["Address"];
+    let shippingUnitNo = data["Unit"];
+    let shippingCity = data["City"];
+    let shippingPostalCode = data["Postal Code"];
+    let shippingState = data["State/Province"];
+    let shippingCountry = data["Country"];
+    if (isCashuPayment) {
+      await handleCashuPayment(
+        shippingName,
+        shippingAddress,
+        shippingUnitNo,
+        shippingCity,
+        shippingPostalCode,
+        shippingState,
+        shippingCountry,
+      );
+    } else {
+      await handleLightningPayment(
+        shippingName,
+        shippingAddress,
+        shippingUnitNo,
+        shippingCity,
+        shippingPostalCode,
+        shippingState,
+        shippingCountry,
+      );
+    }
+  };
+
+  const onContactSubmit = async (data: { [x: string]: any }) => {
+    let contact = data["Contact"];
+    let contactType = data["Contact Type"];
+    let contactInstructions = data["Instructions"];
+    if (isCashuPayment) {
+      await handleCashuPayment(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        contact,
+        contactType,
+        contactInstructions,
+      );
+    } else {
+      await handleLightningPayment(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        contact,
+        contactType,
+        contactInstructions,
+      );
+    }
+  };
+
+  const handleToggleShippingModal = () => {
+    shippingReset();
+    setShowShippingModal(!showShippingModal);
+  };
+
+  const handleToggleContactModal = () => {
+    contactReset();
+    setShowContactModal(!showContactModal);
+  };
+
+  const handleLightningPayment = async (
+    shippingName?: string,
+    shippingAddress?: string,
+    shippingUnitNo?: string,
+    shippingCity?: string,
+    shippingPostalCode?: string,
+    shippingState?: string,
+    shippingCountry?: string,
+    contact?: string,
+    contactType?: string,
+    contactInstructions?: string,
+  ) => {
     try {
       setShowInvoiceCard(true);
       let newPrice = totalCost;
@@ -148,7 +263,22 @@ export default function InvoiceCard({
           console.error("ERROR", err);
         });
 
-      invoiceHasBeenPaid(wallet, newPrice, hash, id);
+      invoiceHasBeenPaid(
+        wallet,
+        newPrice,
+        hash,
+        id,
+        shippingName ? shippingName : undefined,
+        shippingAddress ? shippingAddress : undefined,
+        shippingUnitNo ? shippingUnitNo : undefined,
+        shippingCity ? shippingCity : undefined,
+        shippingPostalCode ? shippingPostalCode : undefined,
+        shippingState ? shippingState : undefined,
+        shippingCountry ? shippingCountry : undefined,
+        contact ? contact : undefined,
+        contactType ? contactType : undefined,
+        contactInstructions ? contactInstructions : undefined,
+      );
     } catch (error) {
       console.error(error);
       if (setInvoiceGenerationFailed) {
@@ -166,6 +296,16 @@ export default function InvoiceCard({
     newPrice: number,
     hash: string,
     metricsInvoiceId: string,
+    shippingName?: string,
+    shippingAddress?: string,
+    shippingUnitNo?: string,
+    shippingCity?: string,
+    shippingPostalCode?: string,
+    shippingState?: string,
+    shippingCountry?: string,
+    contact?: string,
+    contactType?: string,
+    contactInstructions?: string,
   ) {
     let encoded;
 
@@ -184,7 +324,19 @@ export default function InvoiceCard({
         });
 
         if (encoded) {
-          sendTokens(encoded);
+          sendTokens(
+            encoded,
+            shippingName ? shippingName : undefined,
+            shippingAddress ? shippingAddress : undefined,
+            shippingUnitNo ? shippingUnitNo : undefined,
+            shippingCity ? shippingCity : undefined,
+            shippingPostalCode ? shippingPostalCode : undefined,
+            shippingState ? shippingState : undefined,
+            shippingCountry ? shippingCountry : undefined,
+            contact ? contact : undefined,
+            contactType ? contactType : undefined,
+            contactInstructions ? contactInstructions : undefined,
+          );
           captureInvoicePaidmetric(metricsInvoiceId, productData);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
@@ -201,7 +353,19 @@ export default function InvoiceCard({
     }
   }
 
-  const sendTokens = async (token: string) => {
+  const sendTokens = async (
+    token: string,
+    shippingName?: string,
+    shippingAddress?: string,
+    shippingUnitNo?: string,
+    shippingCity?: string,
+    shippingPostalCode?: string,
+    shippingState?: string,
+    shippingCountry?: string,
+    contact?: string,
+    contactType?: string,
+    contactInstructions?: string,
+  ) => {
     const { title } = productData;
     const decryptedRandomNpub = nip19.decode(randomNpub);
     const decryptedRandomNsec = nip19.decode(randomNsec);
@@ -228,6 +392,92 @@ export default function InvoiceCard({
         relays: relays,
       },
     });
+    if (
+      shippingName &&
+      shippingAddress &&
+      shippingUnitNo &&
+      shippingCity &&
+      shippingPostalCode &&
+      shippingState &&
+      shippingCountry
+    ) {
+      let contactMessage;
+      if (!shippingUnitNo) {
+        contactMessage =
+          "Please ship the product to " +
+          shippingName +
+          " at " +
+          shippingAddress +
+          ", " +
+          shippingCity +
+          ", " +
+          shippingPostalCode +
+          ", " +
+          shippingState +
+          ", " +
+          shippingCountry +
+          ".";
+      } else {
+        contactMessage =
+          "Please ship the product to " +
+          shippingName +
+          " at " +
+          shippingAddress +
+          " " +
+          shippingUnitNo +
+          ", " +
+          shippingCity +
+          ", " +
+          shippingPostalCode +
+          ", " +
+          shippingState +
+          ", " +
+          shippingCountry +
+          ".";
+      }
+      axios({
+        method: "POST",
+        url: "/api/nostr/post-event",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        data: {
+          pubkey: decryptedRandomNpub.data,
+          privkey: decryptedRandomNsec.data,
+          created_at: Math.floor(Date.now() / 1000),
+          kind: 4,
+          tags: [["p", pubkeyOfProductBeingSold]],
+          content: contactMessage,
+          relays: relays,
+        },
+      });
+    } else if (contact && contactType && contactInstructions) {
+      const contactMessage =
+        "To finalize the sale of your " +
+        title +
+        " listing on Shopstr, please contact " +
+        contact +
+        " over " +
+        contactType +
+        " using the following instructions: " +
+        contactInstructions;
+      axios({
+        method: "POST",
+        url: "/api/nostr/post-event",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        data: {
+          pubkey: decryptedRandomNpub.data,
+          privkey: decryptedRandomNsec.data,
+          created_at: Math.floor(Date.now() / 1000),
+          kind: 4,
+          tags: [["p", pubkeyOfProductBeingSold]],
+          content: contactMessage,
+          relays: relays,
+        },
+      });
+    }
   };
 
   const handleCopyInvoice = () => {
@@ -253,7 +503,18 @@ export default function InvoiceCard({
 
   const formattedTotalCost = formatWithCommas(totalCost, currency);
 
-  const handleCashuPayment = async () => {
+  const handleCashuPayment = async (
+    shippingName?: string,
+    shippingAddress?: string,
+    shippingUnitNo?: string,
+    shippingCity?: string,
+    shippingPostalCode?: string,
+    shippingState?: string,
+    shippingCountry?: string,
+    contact?: string,
+    contactType?: string,
+    contactInstructions?: string,
+  ) => {
     try {
       let price = totalCost;
       const mint = new CashuMint(mints[0]);
@@ -292,7 +553,19 @@ export default function InvoiceCard({
           },
         ],
       });
-      sendTokens(encodedSendToken)
+      sendTokens(
+        encodedSendToken,
+        shippingName ? shippingName : undefined,
+        shippingAddress ? shippingAddress : undefined,
+        shippingUnitNo ? shippingUnitNo : undefined,
+        shippingCity ? shippingCity : undefined,
+        shippingPostalCode ? shippingPostalCode : undefined,
+        shippingState ? shippingState : undefined,
+        shippingCountry ? shippingCountry : undefined,
+        contact ? contact : undefined,
+        contactType ? contactType : undefined,
+        contactInstructions ? contactInstructions : undefined,
+      )
         .then(() => {
           captureCashuPaidMetric(productData);
         })
@@ -346,13 +619,20 @@ export default function InvoiceCard({
             type="submit"
             className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
             onClick={() => {
-              let userLoggedIn = isUserLoggedIn();
-              if (!userLoggedIn) {
-                onOpen();
-                return;
-              }
               if (randomNsec !== "") {
-                handleLightningPayment();
+                if (shippingType === "Free" || shippingType === "Added Cost") {
+                  setIsCashuPayment(false);
+                  handleToggleShippingModal();
+                } else if (
+                  shippingType === "N/A" ||
+                  shippingType === "Pickup"
+                ) {
+                  setIsCashuPayment(false);
+                  handleToggleContactModal();
+                } else if (shippingType === "Free/Pickup") {
+                  setIsCashuPayment(false);
+                  setShowShippingOption(true);
+                }
               }
             }}
             startContent={
@@ -371,7 +651,19 @@ export default function InvoiceCard({
                 return;
               }
               if (randomNsec !== "") {
-                handleCashuPayment();
+                if (shippingType === "Free" || shippingType === "Added Cost") {
+                  setIsCashuPayment(true);
+                  handleToggleShippingModal();
+                } else if (
+                  shippingType === "N/A" ||
+                  shippingType === "Pickup"
+                ) {
+                  setIsCashuPayment(true);
+                  handleToggleContactModal();
+                } else if (shippingType === "Free/Pickup") {
+                  setIsCashuPayment(true);
+                  setShowShippingOption(true);
+                }
               }
             }}
             startContent={
@@ -445,6 +737,489 @@ export default function InvoiceCard({
           </CardFooter>
         </Card>
       )}
+      <Modal
+        backdrop="blur"
+        isOpen={showShippingOption}
+        onClose={() => {
+          setShowShippingOption(false);
+        }}
+        classNames={{
+          body: "py-6 ",
+          backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+          header: "border-b-[1px] border-[#292f46]",
+          footer: "border-t-[1px] border-[#292f46]",
+          closeButton: "hover:bg-black/5 active:bg-white/10",
+        }}
+        isDismissable={true}
+        scrollBehavior={"normal"}
+        placement={"center"}
+        size="2xl"
+      >
+        <ModalContent>
+          <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+            Select your delivery option:
+          </ModalHeader>
+          <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+            <div className="flex items-center justify-center">
+              <Select label="Delivery Method" className="max-w-xs">
+                <SelectItem
+                  key="free"
+                  onClick={() => {
+                    handleToggleShippingModal();
+                    setShowShippingOption(false);
+                  }}
+                >
+                  Free shipping
+                </SelectItem>
+                <SelectItem
+                  key="pickup"
+                  onClick={() => {
+                    handleToggleContactModal();
+                    setShowShippingOption(false);
+                  }}
+                >
+                  Pickup
+                </SelectItem>
+              </Select>
+            </div>
+          </ModalBody>
+        </ModalContent>
+      </Modal>
+      <Modal
+        backdrop="blur"
+        isOpen={showShippingModal}
+        onClose={handleToggleShippingModal}
+        classNames={{
+          body: "py-6",
+          backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+          // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
+          header: "border-b-[1px] border-[#292f46]",
+          footer: "border-t-[1px] border-[#292f46]",
+          closeButton: "hover:bg-black/5 active:bg-white/10",
+        }}
+        scrollBehavior={"outside"}
+        size="2xl"
+      >
+        <ModalContent>
+          <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+            Enter Shipping Info
+          </ModalHeader>
+          <form onSubmit={handleShippingSubmit(onShippingSubmit)}>
+            <ModalBody>
+              <Controller
+                name="Name"
+                control={shippingControl}
+                rules={{
+                  required: "A name is required.",
+                  maxLength: {
+                    value: 50,
+                    message: "This input exceed maxLength of 50.",
+                  },
+                }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => {
+                  let isErrored = error !== undefined;
+                  let errorMessage: string = error?.message
+                    ? error.message
+                    : "";
+                  return (
+                    <Input
+                      className="text-light-text dark:text-dark-text"
+                      autoFocus
+                      variant="bordered"
+                      fullWidth={true}
+                      label="Name"
+                      labelPlacement="inside"
+                      isInvalid={isErrored}
+                      errorMessage={errorMessage}
+                      // controller props
+                      onChange={onChange} // send value to hook form
+                      onBlur={onBlur} // notify when input is touched/blur
+                      value={value}
+                    />
+                  );
+                }}
+              />
+
+              <Controller
+                name="Address"
+                control={shippingControl}
+                rules={{
+                  required: "An address is required.",
+                  maxLength: {
+                    value: 50,
+                    message: "This input exceed maxLength of 50.",
+                  },
+                }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => {
+                  let isErrored = error !== undefined;
+                  let errorMessage: string = error?.message
+                    ? error.message
+                    : "";
+                  return (
+                    <Input
+                      className="text-light-text dark:text-dark-text"
+                      autoFocus
+                      variant="bordered"
+                      fullWidth={true}
+                      label="Address"
+                      labelPlacement="inside"
+                      isInvalid={isErrored}
+                      errorMessage={errorMessage}
+                      // controller props
+                      onChange={onChange} // send value to hook form
+                      onBlur={onBlur} // notify when input is touched/blur
+                      value={value}
+                    />
+                  );
+                }}
+              />
+
+              <Controller
+                name="Unit"
+                control={shippingControl}
+                rules={{
+                  maxLength: {
+                    value: 50,
+                    message: "This input exceed maxLength of 50.",
+                  },
+                }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => {
+                  let isErrored = error !== undefined;
+                  let errorMessage: string = error?.message
+                    ? error.message
+                    : "";
+                  return (
+                    <Input
+                      className="text-light-text dark:text-dark-text"
+                      autoFocus
+                      variant="bordered"
+                      fullWidth={true}
+                      label="Apt, suite, unit, etc."
+                      labelPlacement="inside"
+                      isInvalid={isErrored}
+                      errorMessage={errorMessage}
+                      // controller props
+                      onChange={onChange} // send value to hook form
+                      onBlur={onBlur} // notify when input is touched/blur
+                      value={value}
+                    />
+                  );
+                }}
+              />
+
+              <Controller
+                name="City"
+                control={shippingControl}
+                rules={{
+                  required: "A city is required.",
+                  maxLength: {
+                    value: 50,
+                    message: "This input exceed maxLength of 50.",
+                  },
+                }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => {
+                  let isErrored = error !== undefined;
+                  let errorMessage: string = error?.message
+                    ? error.message
+                    : "";
+                  return (
+                    <Input
+                      className="text-light-text dark:text-dark-text"
+                      autoFocus
+                      variant="bordered"
+                      fullWidth={true}
+                      label="City"
+                      labelPlacement="inside"
+                      isInvalid={isErrored}
+                      errorMessage={errorMessage}
+                      // controller props
+                      onChange={onChange} // send value to hook form
+                      onBlur={onBlur} // notify when input is touched/blur
+                      value={value}
+                    />
+                  );
+                }}
+              />
+
+              <Controller
+                name="Postal Code"
+                control={shippingControl}
+                rules={{
+                  required: "A postal code is required.",
+                  maxLength: {
+                    value: 50,
+                    message: "This input exceed maxLength of 50.",
+                  },
+                }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => {
+                  let isErrored = error !== undefined;
+                  let errorMessage: string = error?.message
+                    ? error.message
+                    : "";
+                  return (
+                    <Input
+                      className="text-light-text dark:text-dark-text"
+                      autoFocus
+                      variant="bordered"
+                      fullWidth={true}
+                      label="Postal code"
+                      labelPlacement="inside"
+                      isInvalid={isErrored}
+                      errorMessage={errorMessage}
+                      // controller props
+                      onChange={onChange} // send value to hook form
+                      onBlur={onBlur} // notify when input is touched/blur
+                      value={value}
+                    />
+                  );
+                }}
+              />
+
+              <Controller
+                name="State/Province"
+                control={shippingControl}
+                rules={{
+                  required: "A state/province is required.",
+                }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => {
+                  let isErrored = error !== undefined;
+                  let errorMessage: string = error?.message
+                    ? error.message
+                    : "";
+                  return (
+                    <Input
+                      className="text-light-text dark:text-dark-text"
+                      autoFocus
+                      variant="bordered"
+                      fullWidth={true}
+                      label="State/Province"
+                      labelPlacement="inside"
+                      isInvalid={isErrored}
+                      errorMessage={errorMessage}
+                      // controller props
+                      onChange={onChange} // send value to hook form
+                      onBlur={onBlur} // notify when input is touched/blur
+                      value={value}
+                    />
+                  );
+                }}
+              />
+
+              <Controller
+                name="Country"
+                control={shippingControl}
+                rules={{
+                  required: "A country is required.",
+                }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => {
+                  let isErrored = error !== undefined;
+                  let errorMessage: string = error?.message
+                    ? error.message
+                    : "";
+                  return (
+                    <CountryDropdown
+                      autoFocus
+                      variant="bordered"
+                      aria-label="Select Country"
+                      label="Country"
+                      labelPlacement="inside"
+                      isInvalid={isErrored}
+                      errorMessage={errorMessage}
+                      // controller props
+                      onChange={onChange} // send value to hook form
+                      onBlur={onBlur} // notify when input is touched/blur
+                      value={value}
+                    />
+                  );
+                }}
+              />
+            </ModalBody>
+
+            <ModalFooter>
+              <Button
+                color="danger"
+                variant="light"
+                onClick={handleToggleShippingModal}
+              >
+                Cancel
+              </Button>
+
+              <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                Submit
+              </Button>
+            </ModalFooter>
+          </form>
+        </ModalContent>
+      </Modal>
+
+      <Modal
+        backdrop="blur"
+        isOpen={showContactModal}
+        onClose={handleToggleContactModal}
+        classNames={{
+          body: "py-6",
+          backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+          // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
+          header: "border-b-[1px] border-[#292f46]",
+          footer: "border-t-[1px] border-[#292f46]",
+          closeButton: "hover:bg-black/5 active:bg-white/10",
+        }}
+        scrollBehavior={"outside"}
+        size="2xl"
+      >
+        <ModalContent>
+          <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+            Enter Contact Info
+          </ModalHeader>
+          <form onSubmit={handleContactSubmit(onContactSubmit)}>
+            <ModalBody>
+              <Controller
+                name="Contact"
+                control={contactControl}
+                rules={{
+                  required: "A contact is required.",
+                  maxLength: {
+                    value: 50,
+                    message: "This input exceed maxLength of 50.",
+                  },
+                }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => {
+                  let isErrored = error !== undefined;
+                  let errorMessage: string = error?.message
+                    ? error.message
+                    : "";
+                  return (
+                    <Input
+                      className="text-light-text dark:text-dark-text"
+                      autoFocus
+                      variant="bordered"
+                      fullWidth={true}
+                      label="Contact"
+                      labelPlacement="inside"
+                      placeholder="shopstr@shopstr.store"
+                      isInvalid={isErrored}
+                      errorMessage={errorMessage}
+                      // controller props
+                      onChange={onChange} // send value to hook form
+                      onBlur={onBlur} // notify when input is touched/blur
+                      value={value}
+                    />
+                  );
+                }}
+              />
+
+              <Controller
+                name="Contact Type"
+                control={contactControl}
+                rules={{
+                  required: "A contact type is required.",
+                  maxLength: {
+                    value: 50,
+                    message: "This input exceed maxLength of 50.",
+                  },
+                }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => {
+                  let isErrored = error !== undefined;
+                  let errorMessage: string = error?.message
+                    ? error.message
+                    : "";
+                  return (
+                    <Input
+                      className="text-light-text dark:text-dark-text"
+                      autoFocus
+                      variant="bordered"
+                      fullWidth={true}
+                      label="Contact type"
+                      labelPlacement="inside"
+                      placeholder="Nostr, Signal, Telegram, email, phone, etc."
+                      isInvalid={isErrored}
+                      errorMessage={errorMessage}
+                      // controller props
+                      onChange={onChange} // send value to hook form
+                      onBlur={onBlur} // notify when input is touched/blur
+                      value={value}
+                    />
+                  );
+                }}
+              />
+
+              <Controller
+                name="Instructions"
+                control={contactControl}
+                rules={{
+                  required: "Delivery instructions are required.",
+                }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => {
+                  let isErrored = error !== undefined;
+                  let errorMessage: string = error?.message
+                    ? error.message
+                    : "";
+                  return (
+                    <Textarea
+                      className="text-light-text dark:text-dark-text"
+                      variant="bordered"
+                      fullWidth={true}
+                      label="Delivery instructions"
+                      labelPlacement="inside"
+                      placeholder="Meet me by . . .; Send file to . . ."
+                      isInvalid={isErrored}
+                      errorMessage={errorMessage}
+                      // controller props
+                      onChange={onChange} // send value to hook form
+                      onBlur={onBlur} // notify when input is touched/blur
+                      value={value}
+                    />
+                  );
+                }}
+              />
+            </ModalBody>
+
+            <ModalFooter>
+              <Button
+                color="danger"
+                variant="light"
+                onClick={handleToggleContactModal}
+              >
+                Cancel
+              </Button>
+
+              <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                Submit
+              </Button>
+            </ModalFooter>
+          </form>
+        </ModalContent>
+      </Modal>
       <SignInModal isOpen={isOpen} onClose={onClose} />
     </>
   );
