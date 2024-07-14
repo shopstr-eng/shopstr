@@ -80,6 +80,7 @@ export const ChatPanel = ({
           return (
             // eslint-disable-next-line react/jsx-key
             <ChatMessage
+              key={index}
               messageEvent={messageEvent}
               index={index}
               currentChatPubkey={currentChatPubkey}
