@@ -1,5 +1,5 @@
 import * as CryptoJS from "crypto-js";
-import { finalizeEvent, nip04, nip19, nip98, SimplePool } from "nostr-tools";
+import { finalizeEvent, nip04, nip19, nip44, nip98, SimplePool } from "nostr-tools";
 import axios from "axios";
 import { NostrEvent } from "@/utils/types/types";
 import { ProductFormValues } from "@/pages/api/nostr/post-event";
@@ -170,6 +170,112 @@ export async function sendEncryptedMessage(
   }
   await Promise.any(pool.publish(allWriteRelays, signedEvent));
   return signedEvent;
+}
+
+export async function publishCashuRelayListEvent(passphrase?: string) {
+  try {
+    const { signInMethod, relays, writeRelays } = getLocalStorageData();
+    const allWriteRelays = [...relays, ...writeRelays];
+    const relayTags = allWriteRelays.map((relay) => ["relay", relay]);
+    const cashuRelayListEvent = {
+      kind: 10019,
+      tags: relayTags,
+      content: "",
+      created_at: Math.floor(Date.now() / 1000),
+    }
+    let signedEvent;
+    if (signInMethod === "extension") {
+      signedEvent = await window.nostr.signEvent(cashuRelayListEvent);
+    } else {
+      if (!passphrase) throw new Error("Passphrase is required");
+      let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
+      signedEvent = finalizeEvent(cashuRelayListEvent, senderPrivkey);
+    }
+    const pool = new SimplePool();
+    await Promise.any(pool.publish(allWriteRelays, signedEvent));
+  } catch (e: any) {
+    console.log("Error: ", e);
+    alert("Failed to send event: " + e.message);
+    return { error: e };
+  }
+}
+
+export async function publishWalletEvent(balance: number, passphrase?: string) {
+  try {
+    const { signInMethod, relays, writeRelays, mints, userPubkey } = getLocalStorageData();
+    const allWriteRelays = [...relays, ...writeRelays];
+    const relayTags = allWriteRelays.map((relay) => ["relay", relay]);
+    const mintTags = mints.map((mint) => ["mint", mint]);
+    const walletContent = [
+      ...relayTags,
+      ...mintTags,
+      ["name", "Shopstr Wallet"],
+      ["currency", "btc"],
+      ["description", "a wallet for shopstr sales and purchases"],
+      ["balance", String(balance), "sats"],
+    ];
+    let signedEvent;
+    if (signInMethod === "extension") {
+      const cashuWalletEvent = {
+        kind: 37375,
+        tags: [["d", "my-shopstr-wallet"]],
+        content: window.nostr.nip44.encrypt(userPubkey, JSON.stringify(walletContent)),
+        created_at: Math.floor(Date.now() / 1000),
+      }
+      signedEvent = await window.nostr.signEvent(cashuWalletEvent);
+    } else {
+      if (!passphrase) throw new Error("Passphrase is required");
+      let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
+      const conversationKey = nip44.getConversationKey(senderPrivkey, userPubkey);
+      const cashuWalletEvent = {
+        kind: 37375,
+        tags: [["d", "my-shopstr-wallet"]],
+        content: nip44.encrypt(JSON.stringify(walletContent), conversationKey),
+        created_at: Math.floor(Date.now() / 1000),
+      }
+      signedEvent = finalizeEvent(cashuWalletEvent, senderPrivkey);
+    }
+    const pool = new SimplePool();
+    await Promise.any(pool.publish(allWriteRelays, signedEvent));
+  } catch (e: any) {
+    console.log("Error: ", e);
+    alert("Failed to send event: " + e.message);
+    return { error: e };
+  }
+}
+
+export async function publishProofEvent(proof: [], passphrase?: string) {
+  try {
+    const { userPubkey, signInMethod, relays, writeRelays } = getLocalStorageData();
+    const allWriteRelays = [...relays, ...writeRelays];
+    let signedEvent;
+    if (signInMethod === "extension") {
+      const cashuProofEvent = {
+        kind: 7375,
+        tags: [["a", "37375:" + userPubkey + ":my-shopstr-wallet"]],
+        content: window.nostr.nip44.encrypt(userPubkey, JSON.stringify(proof)),
+        created_at: Math.floor(Date.now() / 1000),
+      }
+      signedEvent = await window.nostr.signEvent(cashuProofEvent);
+    } else {
+      if (!passphrase) throw new Error("Passphrase is required");
+      let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
+      const conversationKey = nip44.getConversationKey(senderPrivkey, userPubkey);
+      const cashuProofEvent = {
+        kind: 7375,
+        tags: [["a", "37375:" + userPubkey + ":my-shopstr-wallet"]],
+        content: nip44.encrypt(JSON.stringify(proof), conversationKey),
+        created_at: Math.floor(Date.now() / 1000),
+      }
+      signedEvent = finalizeEvent(cashuProofEvent, senderPrivkey);
+    }
+    const pool = new SimplePool();
+    await Promise.any(pool.publish(allWriteRelays, signedEvent));
+  } catch (e: any) {
+    console.log("Error: ", e);
+    alert("Failed to send event: " + e.message);
+    return { error: e };
+  }
 }
 
 export async function finalizeAndSendNostrEvent(
