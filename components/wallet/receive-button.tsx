@@ -15,7 +15,11 @@ import {
   Textarea,
 } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
-import { getLocalStorageData } from "../utility/nostr-helper-functions";
+import {
+  getLocalStorageData,
+  publishWalletEvent,
+  publishProofEvent,
+} from "../utility/nostr-helper-functions";
 import {
   CashuMint,
   CashuWallet,
@@ -23,7 +27,7 @@ import {
   Proof,
 } from "@cashu/cashu-ts";
 
-const ReceiveButton = () => {
+const ReceiveButton = ({ passphrase }: { passphrase?: string }) => {
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   const [isClaimed, setIsClaimed] = useState(false);
   const [isSpent, setIsSpent] = useState(false);
@@ -92,6 +96,8 @@ const ReceiveButton = () => {
             ...history,
           ]),
         );
+        await publishWalletEvent(passphrase);
+        await publishProofEvent(tokenMint, uniqueProofs, passphrase);
       } else {
         setIsSpent(true);
       }

@@ -15,7 +15,11 @@ import {
 } from "@heroicons/react/24/outline";
 import { useTheme } from "next-themes";
 import { ProfileMapContext } from "../../utils/context/context";
-import { getLocalStorageData } from "../utility/nostr-helper-functions";
+import {
+  getLocalStorageData,
+  publishWalletEvent,
+  publishProofEvent,
+} from "../utility/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { LightningAddress } from "@getalby/lightning-tools";
 import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
@@ -35,7 +39,13 @@ function decodeBase64ToJson(base64: string): any {
   }
 }
 
-export default function ClaimButton({ token }: { token: string }) {
+export default function ClaimButton({
+  token,
+  passphrase,
+}: {
+  token: string;
+  passphrase?: string;
+}) {
   const [lnurl, setLnurl] = useState("");
   const profileContext = useContext(ProfileMapContext);
   const { userNPub, userPubkey } = getLocalStorageData();
@@ -138,9 +148,8 @@ export default function ClaimButton({ token }: { token: string }) {
     setIsInvalidToken(false);
     setIsRedeeming(true);
     try {
-      const wallet = new CashuWallet(new CashuMint(tokenMint));
       const spentProofs = await wallet?.checkProofsSpent(proofs);
-      if (spentProofs.length === 0) {
+      if (spentProofs?.length === 0) {
         const uniqueProofs = proofs.filter(
           (proof: Proof) => !tokens.some((token: Proof) => token.C === proof.C),
         );
@@ -149,6 +158,7 @@ export default function ClaimButton({ token }: { token: string }) {
           setIsRedeeming(false);
           return;
         }
+        await publishProofEvent(tokenMint, uniqueProofs);
         const tokenArray = [...tokens, ...uniqueProofs];
         localStorage.setItem("tokens", JSON.stringify(tokenArray));
         if (!mints.includes(tokenMint)) {
@@ -172,6 +182,7 @@ export default function ClaimButton({ token }: { token: string }) {
             ...history,
           ]),
         );
+        await publishWalletEvent(passphrase);
       } else {
         setIsSpent(true);
         setIsRedeeming(false);

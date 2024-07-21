@@ -21,10 +21,14 @@ import {
   Input,
 } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
-import { getLocalStorageData } from "../utility/nostr-helper-functions";
+import {
+  getLocalStorageData,
+  publishWalletEvent,
+  publishProofEvent,
+} from "../utility/nostr-helper-functions";
 import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
 
-const MintButton = () => {
+const MintButton = ({ passphrase }: { passphrase?: string }) => {
   const [showMintModal, setShowMintModal] = useState(false);
   const [showInvoiceCard, setShowInvoiceCard] = useState(false);
 
@@ -104,6 +108,8 @@ const MintButton = () => {
               ...history,
             ]),
           );
+          await publishWalletEvent(passphrase);
+          await publishProofEvent(mints[0], proofs, passphrase);
           // potentially capture a metric for the mint invoice
           setPaymentConfirmed(true);
           setQrCodeUrl(null);

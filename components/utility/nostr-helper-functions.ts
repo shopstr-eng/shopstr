@@ -1,7 +1,15 @@
 import * as CryptoJS from "crypto-js";
-import { finalizeEvent, nip04, nip19, nip44, nip98, SimplePool } from "nostr-tools";
+import {
+  finalizeEvent,
+  nip04,
+  nip19,
+  nip44,
+  nip98,
+  SimplePool,
+} from "nostr-tools";
 import axios from "axios";
 import { NostrEvent } from "@/utils/types/types";
+import { Proof } from "@cashu/cashu-ts";
 import { ProductFormValues } from "@/pages/api/nostr/post-event";
 
 function containsRelay(relays: string[], relay: string): boolean {
@@ -172,67 +180,67 @@ export async function sendEncryptedMessage(
   return signedEvent;
 }
 
-export async function publishCashuRelayListEvent(passphrase?: string) {
+export async function publishWalletEvent(passphrase?: string) {
   try {
-    const { signInMethod, relays, writeRelays } = getLocalStorageData();
+    const {
+      signInMethod,
+      relays,
+      writeRelays,
+      cashuWalletRelays,
+      mints,
+      tokens,
+      userPubkey,
+    } = getLocalStorageData();
+    let balance = tokens.reduce(
+      (acc, current: Proof) => acc + current.amount,
+      0,
+    );
     const allWriteRelays = [...relays, ...writeRelays];
-    const relayTags = allWriteRelays.map((relay) => ["relay", relay]);
-    const cashuRelayListEvent = {
-      kind: 10019,
-      tags: relayTags,
-      content: "",
-      created_at: Math.floor(Date.now() / 1000),
-    }
-    let signedEvent;
-    if (signInMethod === "extension") {
-      signedEvent = await window.nostr.signEvent(cashuRelayListEvent);
-    } else {
-      if (!passphrase) throw new Error("Passphrase is required");
-      let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
-      signedEvent = finalizeEvent(cashuRelayListEvent, senderPrivkey);
-    }
-    const pool = new SimplePool();
-    await Promise.any(pool.publish(allWriteRelays, signedEvent));
-  } catch (e: any) {
-    console.log("Error: ", e);
-    alert("Failed to send event: " + e.message);
-    return { error: e };
-  }
-}
-
-export async function publishWalletEvent(balance: number, passphrase?: string) {
-  try {
-    const { signInMethod, relays, writeRelays, mints, userPubkey } = getLocalStorageData();
-    const allWriteRelays = [...relays, ...writeRelays];
-    const relayTags = allWriteRelays.map((relay) => ["relay", relay]);
+    const relayTags =
+      cashuWalletRelays.length != 0
+        ? cashuWalletRelays.map((relay) => ["relay", relay])
+        : allWriteRelays.map((relay) => ["relay", relay]);
     const mintTags = mints.map((mint) => ["mint", mint]);
-    const walletContent = [
-      ...relayTags,
-      ...mintTags,
-      ["name", "Shopstr Wallet"],
-      ["currency", "btc"],
-      ["description", "a wallet for shopstr sales and purchases"],
-      ["balance", String(balance), "sats"],
-    ];
+    const walletContent = [["balance", String(balance), "sat"]];
     let signedEvent;
     if (signInMethod === "extension") {
       const cashuWalletEvent = {
         kind: 37375,
-        tags: [["d", "my-shopstr-wallet"]],
-        content: window.nostr.nip44.encrypt(userPubkey, JSON.stringify(walletContent)),
+        tags: [
+          ["d", "my-shopstr-wallet"],
+          ...mintTags,
+          ["name", "Shopstr Wallet"],
+          ["unit", "sat"],
+          ["description", "a wallet for shopstr sales and purchases"],
+          ...relayTags,
+        ],
+        content: await window.nostr.nip44.encrypt(
+          userPubkey,
+          JSON.stringify(walletContent),
+        ),
         created_at: Math.floor(Date.now() / 1000),
-      }
+      };
       signedEvent = await window.nostr.signEvent(cashuWalletEvent);
     } else {
       if (!passphrase) throw new Error("Passphrase is required");
       let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
-      const conversationKey = nip44.getConversationKey(senderPrivkey, userPubkey);
+      const conversationKey = nip44.getConversationKey(
+        senderPrivkey,
+        userPubkey,
+      );
       const cashuWalletEvent = {
         kind: 37375,
-        tags: [["d", "my-shopstr-wallet"]],
+        tags: [
+          ["d", "my-shopstr-wallet"],
+          ...mintTags,
+          ["name", "Shopstr Wallet"],
+          ["unit", "sat"],
+          ["description", "a wallet for shopstr sales and purchases"],
+          ...relayTags,
+        ],
         content: nip44.encrypt(JSON.stringify(walletContent), conversationKey),
         created_at: Math.floor(Date.now() / 1000),
-      }
+      };
       signedEvent = finalizeEvent(cashuWalletEvent, senderPrivkey);
     }
     const pool = new SimplePool();
@@ -244,35 +252,54 @@ export async function publishWalletEvent(balance: number, passphrase?: string) {
   }
 }
 
-export async function publishProofEvent(proof: [], passphrase?: string) {
+export async function publishProofEvent(
+  mint: string,
+  proof: Proof[],
+  passphrase?: string,
+) {
   try {
-    const { userPubkey, signInMethod, relays, writeRelays } = getLocalStorageData();
+    const { userPubkey, signInMethod, relays, writeRelays, cashuWalletRelays } =
+      getLocalStorageData();
     const allWriteRelays = [...relays, ...writeRelays];
+    const tokenArray = [{ mint: mint, proofs: proof }];
+
     let signedEvent;
     if (signInMethod === "extension") {
       const cashuProofEvent = {
         kind: 7375,
         tags: [["a", "37375:" + userPubkey + ":my-shopstr-wallet"]],
-        content: window.nostr.nip44.encrypt(userPubkey, JSON.stringify(proof)),
+        content: await window.nostr.nip44.encrypt(
+          userPubkey,
+          JSON.stringify(tokenArray),
+        ),
         created_at: Math.floor(Date.now() / 1000),
-      }
+      };
       signedEvent = await window.nostr.signEvent(cashuProofEvent);
     } else {
       if (!passphrase) throw new Error("Passphrase is required");
       let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
-      const conversationKey = nip44.getConversationKey(senderPrivkey, userPubkey);
+      const conversationKey = nip44.getConversationKey(
+        senderPrivkey,
+        userPubkey,
+      );
       const cashuProofEvent = {
         kind: 7375,
         tags: [["a", "37375:" + userPubkey + ":my-shopstr-wallet"]],
-        content: nip44.encrypt(JSON.stringify(proof), conversationKey),
+        content: nip44.encrypt(JSON.stringify(tokenArray), conversationKey),
         created_at: Math.floor(Date.now() / 1000),
-      }
+      };
       signedEvent = finalizeEvent(cashuProofEvent, senderPrivkey);
     }
+
     const pool = new SimplePool();
-    await Promise.any(pool.publish(allWriteRelays, signedEvent));
+    await Promise.any(
+      pool.publish(
+        cashuWalletRelays.length != 0 ? cashuWalletRelays : allWriteRelays,
+        signedEvent,
+      ),
+    );
   } catch (e: any) {
-    console.log("Error: ", e);
+    console.error("Failed to send event due to:", e); // Enhanced error log
     alert("Failed to send event: " + e.message);
     return { error: e };
   }
@@ -424,6 +451,7 @@ const LOCALSTORAGECONSTANTS = {
   relays: "relays",
   readRelays: "readRelays",
   writeRelays: "writeRelays",
+  cashuWalletRelays: "cashuWalletRelays",
   mints: "mints",
   tokens: "tokens",
   history: "history",
@@ -437,6 +465,7 @@ export const setLocalStorageDataOnSignIn = ({
   relays,
   readRelays,
   writeRelays,
+  cashuWalletRelays,
   mints,
   wot,
 }: {
@@ -445,6 +474,7 @@ export const setLocalStorageDataOnSignIn = ({
   encryptedPrivateKey?: string;
   relays?: string[];
   readRelays?: string[];
+  cashuWalletRelays?: string[];
   writeRelays?: string[];
   mints?: string[];
   wot?: number;
@@ -487,6 +517,15 @@ export const setLocalStorageDataOnSignIn = ({
   );
 
   localStorage.setItem(
+    LOCALSTORAGECONSTANTS.cashuWalletRelays,
+    JSON.stringify(
+      cashuWalletRelays && cashuWalletRelays.length != 0
+        ? cashuWalletRelays
+        : [],
+    ),
+  );
+
+  localStorage.setItem(
     LOCALSTORAGECONSTANTS.mints,
     JSON.stringify(mints ? mints : ["https://mint.minibits.cash/Bitcoin"]),
   );
@@ -509,6 +548,7 @@ export interface LocalStorageInterface {
   relays: string[];
   readRelays: string[];
   writeRelays: string[];
+  cashuWalletRelays: string[];
   mints: string[];
   tokens: [];
   history: [];
@@ -524,6 +564,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
   let relays;
   let readRelays;
   let writeRelays;
+  let cashuWalletRelays;
   let mints;
   let tokens;
   let history;
@@ -590,6 +631,18 @@ export const getLocalStorageData = (): LocalStorageInterface => {
         ).filter((r) => r)
       : [];
 
+    cashuWalletRelays = localStorage.getItem(
+      LOCALSTORAGECONSTANTS.cashuWalletRelays,
+    )
+      ? (
+          JSON.parse(
+            localStorage.getItem(
+              LOCALSTORAGECONSTANTS.cashuWalletRelays,
+            ) as string,
+          ) as string[]
+        ).filter((r) => r)
+      : [];
+
     mints = localStorage.getItem(LOCALSTORAGECONSTANTS.mints)
       ? JSON.parse(localStorage.getItem("mints") as string)
       : null;
@@ -625,6 +678,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     relays: relays || [],
     readRelays: readRelays || [],
     writeRelays: writeRelays || [],
+    cashuWalletRelays: cashuWalletRelays || [],
     mints,
     tokens: tokens || [],
     history: history || [],
