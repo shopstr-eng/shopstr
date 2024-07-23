@@ -1,6 +1,7 @@
 import { Listbox, ListboxItem, ListboxSection, cn } from "@nextui-org/react";
 import {
   ArrowRightOnRectangleIcon,
+  BuildingStorefrontIcon,
   Cog6ToothIcon,
   UserIcon,
 } from "@heroicons/react/24/outline";
@@ -29,8 +30,21 @@ const SettingsPage = () => {
             classNames={listBoxSectionClassnames}
           >
             <ListboxItem
+              key="shop-settings"
+              description="Edit your shop settings"
+              classNames={listBoxClassnames}
+              startContent={
+                <BuildingStorefrontIcon className={startIconClassnames} />
+              }
+              onClick={() => {
+                router.push("/settings/shop-settings");
+              }}
+            >
+              Shop Settings
+            </ListboxItem>
+            <ListboxItem
               key="user-profile"
-              description="Edit your Nostr Profile"
+              description="Edit your Nostr profile"
               classNames={listBoxClassnames}
               startContent={<UserIcon className={startIconClassnames} />}
               onClick={() => {

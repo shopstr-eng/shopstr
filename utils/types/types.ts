@@ -12,6 +12,18 @@ export interface ChatObject {
   decryptedChat: NostrMessageEvent[];
 }
 
+export interface ShopSettings {
+  name?: string;
+  about?: string;
+  ui: {
+    picture?: string;
+    banner?: string;
+    theme?: string;
+    darkMode: boolean;
+  };
+  merchants?: string[];
+}
+
 export interface ProfileData {
   pubkey: string;
   content: {

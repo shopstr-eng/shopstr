@@ -1,4 +1,4 @@
-import { Filter, nip44, SimplePool } from "nostr-tools";
+import { Filter, nip04, nip44, SimplePool } from "nostr-tools";
 import {
   addChatMessageToCache,
   addProductToCache,
@@ -8,7 +8,11 @@ import {
   fetchProfileDataFromCache,
   removeProductFromCache,
 } from "./cache-service";
-import { NostrEvent, NostrMessageEvent } from "@/utils/types/types";
+import {
+  NostrEvent,
+  NostrMessageEvent,
+  ShopSettings,
+} from "@/utils/types/types";
 import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
 import { ChatsMap } from "@/utils/context/context";
 import { DateTime } from "luxon";
@@ -106,6 +110,59 @@ export const fetchAllPosts = async (
       };
     } catch (error) {
       console.log("Failed to fetch all listings from relays: ", error);
+      reject(error);
+    }
+  });
+};
+
+export const fetchShopSettings = async (
+  relays: string[],
+  editShopContext: (shopEvents: ShopSettings, isLoading: boolean) => void,
+  passphrase: string,
+): Promise<{
+  shopSettings: ShopSettings;
+}> => {
+  return new Promise(async function (resolve, reject) {
+    try {
+      let shopEvents: NostrEvent[] = [];
+      let shopSettings: ShopSettings;
+      const pool = new SimplePool();
+      let shopFilter: Filter = {
+        kinds: [30019],
+        authors: [getLocalStorageData().userPubkey],
+      };
+      let h = pool.subscribeMany(relays, [shopFilter], {
+        onevent(event) {
+          shopEvents.push(event);
+        },
+        oneose: async () => {
+          h.close();
+          if (shopEvents.length > 0) {
+            const { signInMethod, userPubkey } = getLocalStorageData();
+            // Sort the events based on the created_at timestamp in descending order
+            shopEvents.sort((a, b) => b.created_at - a.created_at);
+            if (signInMethod === "extension") {
+              shopSettings = JSON.parse(
+                await window.nostr.nip04.decrypt(
+                  userPubkey,
+                  shopEvents[0].content,
+                ),
+              );
+            } else if (signInMethod === "wallet") {
+              let sk2 = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
+              shopSettings = JSON.parse(
+                await nip04.decrypt(sk2, userPubkey, shopEvents[0].content),
+              );
+            }
+            editShopContext(shopSettings, false);
+            // Return the most recent event
+            resolve({ shopSettings: shopSettings });
+          } else {
+            throw new Error("No shop settings found.");
+          }
+        },
+      });
+    } catch (error) {
       reject(error);
     }
   });
@@ -611,7 +668,10 @@ export const fetchCashuWallet = async (
                 senderPrivkey,
                 getLocalStorageData().userPubkey,
               );
-              const eventContent = nip44.decrypt(event.content, conversationKey);
+              const eventContent = nip44.decrypt(
+                event.content,
+                conversationKey,
+              );
               if (!isValidJSON(eventContent)) {
                 throw new Error("Invalid JSON string");
               }
@@ -626,7 +686,9 @@ export const fetchCashuWallet = async (
             );
             relayList.forEach((tag) => cashuRelaySet.add(tag[1]));
             cashuRelays.push(...relayList.map((tag: string[]) => tag[1]));
-            const mints = event.tags.filter((tag: string[]) => tag[0] === "mint");
+            const mints = event.tags.filter(
+              (tag: string[]) => tag[0] === "mint",
+            );
             mints.forEach((tag) => cashuMintSet.add(tag[1]));
             cashuMints.push(...mints.map((tag: string[]) => tag[1]));
             // const cashuMintArray = cashuWalletEventContent.filter(
@@ -637,7 +699,10 @@ export const fetchCashuWallet = async (
             // );
             // cashuMints = Array.from(uniqueCashuMints);
           } catch (decryptionError) {
-            console.error("Error decrypting or parsing content:", decryptionError);
+            console.error(
+              "Error decrypting or parsing content:",
+              decryptionError,
+            );
           }
         },
         oneose() {
@@ -711,7 +776,10 @@ export const fetchCashuWallet = async (
                 }
               }
             } catch (decryptionError) {
-              console.error("Error decrypting or parsing content:", decryptionError);
+              console.error(
+                "Error decrypting or parsing content:",
+                decryptionError,
+              );
             }
           },
           oneose() {

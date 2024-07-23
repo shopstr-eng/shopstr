@@ -10,6 +10,7 @@ import CompactPriceDisplay, {
 } from "./display-monetary-info";
 import { ProductData } from "../utility/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
+import { getLocalStorageData } from "../utility/nostr-helper-functions";
 
 const cardWidth = 380;
 const cardxMargin = 2.5;
@@ -42,7 +43,11 @@ export default function ProductCard({
           <div className="z-10 flex w-full justify-between pb-3">
             <ProfileWithDropdown
               pubkey={productData.pubkey}
-              dropDownKeys={["shop", "message"]}
+              dropDownKeys={
+                productData.pubkey === getLocalStorageData().userPubkey
+                  ? ["shop_settings"]
+                  : ["shop", "message"]
+              }
             />
             <div className="flex flex-col justify-center">
               <CompactCategories categories={categories} />
@@ -114,7 +119,11 @@ export default function ProductCard({
         <div className="z-10 mb-2 flex w-full justify-between">
           <ProfileWithDropdown
             pubkey={productData.pubkey}
-            dropDownKeys={["shop", "message"]}
+            dropDownKeys={
+              productData.pubkey === getLocalStorageData().userPubkey
+                ? ["shop_settings"]
+                : ["shop", "message"]
+            }
           />
           <div className="flex flex-col justify-center">
             <CompactCategories categories={categories} />

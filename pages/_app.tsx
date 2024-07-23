@@ -6,6 +6,8 @@ import { useState, useEffect } from "react";
 import {
   ProfileMapContext,
   ProfileContextInterface,
+  ShopMapContext,
+  ShopContextInterface,
   ProductContext,
   ProductContextInterface,
   ChatsContextInterface,
@@ -28,6 +30,7 @@ import { ThemeProvider as NextThemesProvider } from "next-themes";
 import {
   fetchAllPosts,
   fetchChatsAndMessages,
+  fetchShopSettings,
   fetchProfile,
   fetchAllFollows,
   fetchAllRelays,
@@ -37,6 +40,7 @@ import {
   NostrEvent,
   ProfileData,
   NostrMessageEvent,
+  ShopSettings,
 } from "../utils/types/types";
 import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
 import BottomNav from "@/components/nav-bottom";
@@ -80,6 +84,30 @@ function App({ Component, pageProps }: AppProps) {
       },
     },
   );
+  const [shopContext, setShopContext] = useState<ShopContextInterface>({
+    shopData: {
+      name: "",
+      about: "",
+      ui: {
+        picture: "",
+        banner: "",
+        theme: "",
+        darkMode: false,
+      },
+      merchants: [],
+    },
+    isLoading: true,
+    updateShopData: (shopData: any) => {
+      setShopContext((shopContext) => {
+        let shopDataMap = shopContext.shopData;
+        return {
+          shopData: shopDataMap,
+          isLoading: false,
+          updateShopData: shopContext.updateShopData,
+        };
+      });
+    },
+  });
   const [profileContext, setProfileContext] = useState<ProfileContextInterface>(
     {
       profileData: new Map(),
@@ -168,6 +196,16 @@ function App({ Component, pageProps }: AppProps) {
         isLoading: isLoading,
         addNewlyCreatedProductEvent: productContext.addNewlyCreatedProductEvent,
         removeDeletedProductEvent: productContext.removeDeletedProductEvent,
+      };
+    });
+  };
+
+  const editShopContext = (shopData: ShopSettings, isLoading: boolean) => {
+    setShopContext((shopContext) => {
+      return {
+        shopData,
+        isLoading,
+        updateShopData: shopContext.updateShopData,
       };
     });
   };
@@ -300,6 +338,12 @@ function App({ Component, pageProps }: AppProps) {
           (getLocalStorageData().signInMethod === "nsec" && passphrase) ||
           getLocalStorageData().signInMethod === "extension"
         ) {
+          let { shopSettings } = await fetchShopSettings(
+            allRelays,
+            editShopContext,
+            passphrase,
+          );
+
           let { cashuWalletRelays, cashuMints, cashuProofs } =
             await fetchCashuWallet(
               allRelays,

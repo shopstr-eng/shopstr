@@ -90,15 +90,15 @@ export const ProfileWithDropdown = ({
       },
       label: "Send Message",
     },
-    settings: {
-      key: "settings",
+    shop_settings: {
+      key: "shop_settings",
       color: "default",
       className: "text-light-text dark:text-dark-text",
-      startContent: <Cog6ToothIcon className={"h-5 w-5"} />,
+      startContent: <BuildingStorefrontIcon className={"h-5 w-5"} />,
       onClick: () => {
-        router.push("/settings");
+        router.push("/settings/shop");
       },
-      label: "Settings",
+      label: "Shop",
     },
     user_profile: {
       key: "user_profile",
@@ -109,6 +109,16 @@ export const ProfileWithDropdown = ({
         router.push("/settings/user-profile");
       },
       label: "Profile",
+    },
+    settings: {
+      key: "settings",
+      color: "default",
+      className: "text-light-text dark:text-dark-text",
+      startContent: <Cog6ToothIcon className={"h-5 w-5"} />,
+      onClick: () => {
+        router.push("/settings");
+      },
+      label: "Settings",
     },
     logout: {
       key: "logout",

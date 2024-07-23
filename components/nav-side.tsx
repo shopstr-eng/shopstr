@@ -211,7 +211,7 @@ const SideNav = () => {
               <ProfileWithDropdown
                 pubkey={getLocalStorageData().userPubkey}
                 baseClassname="justify-start dark:hover:shopstr-yellow-light w-[95%] pl-4 rounded-3xl py-2  hover:scale-105 hover:bg-light-bg hover:shadow-lg dark:hover:bg-dark-bg"
-                dropDownKeys={["user_profile", "logout"]}
+                dropDownKeys={["shop_settings", "user_profile", "logout"]}
                 nameClassname="md:block"
               />
             </div>
