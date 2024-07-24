@@ -241,7 +241,7 @@ export default function NewForm({
               name="Product Name"
               control={control}
               rules={{
-                required: "A Product Name is required.",
+                required: "A product name is required.",
                 maxLength: {
                   value: 50,
                   message: "This input exceed maxLength of 50.",
@@ -318,7 +318,7 @@ export default function NewForm({
               )}
             </Carousal>
             {imageError && (
-              <div className="mt-2 text-red-500">{imageError}</div>
+              <div className="text-red-600">{imageError}</div>
             )}
             <FileUploaderButton
               isIconOnly={false}
