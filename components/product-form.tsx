@@ -317,9 +317,7 @@ export default function NewForm({
                 </div>
               )}
             </Carousal>
-            {imageError && (
-              <div className="text-red-600">{imageError}</div>
-            )}
+            {imageError && <div className="text-red-600">{imageError}</div>}
             <FileUploaderButton
               isIconOnly={false}
               className={buttonClassName}
