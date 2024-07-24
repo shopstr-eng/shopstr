@@ -228,6 +228,8 @@ export async function publishWalletEvent(passphrase?: string) {
         senderPrivkey,
         userPubkey,
       );
+      console.log("wallet content", walletContent);
+      console.log("stringified wallet content", JSON.stringify(walletContent))
       const cashuWalletEvent = {
         kind: 37375,
         tags: [
@@ -243,6 +245,7 @@ export async function publishWalletEvent(passphrase?: string) {
       };
       signedEvent = finalizeEvent(cashuWalletEvent, senderPrivkey);
     }
+    console.log("signed wallet", signedEvent)
     const pool = new SimplePool();
     await Promise.any(pool.publish(allWriteRelays, signedEvent));
   } catch (e: any) {
@@ -261,7 +264,7 @@ export async function publishProofEvent(
     const { userPubkey, signInMethod, relays, writeRelays, cashuWalletRelays } =
       getLocalStorageData();
     const allWriteRelays = [...relays, ...writeRelays];
-    const tokenArray = [{ mint: mint, proofs: proof }];
+    const tokenArray = { mint: mint, proofs: proof };
 
     let signedEvent;
     if (signInMethod === "extension") {
@@ -282,6 +285,10 @@ export async function publishProofEvent(
         senderPrivkey,
         userPubkey,
       );
+
+      console.log("proofs", tokenArray);
+      console.log("stringified proofs", JSON.stringify(tokenArray))
+      
       const cashuProofEvent = {
         kind: 7375,
         tags: [["a", "37375:" + userPubkey + ":my-shopstr-wallet"]],
@@ -290,6 +297,8 @@ export async function publishProofEvent(
       };
       signedEvent = finalizeEvent(cashuProofEvent, senderPrivkey);
     }
+
+    console.log("signed proof", signedEvent)
 
     const pool = new SimplePool();
     await Promise.any(
