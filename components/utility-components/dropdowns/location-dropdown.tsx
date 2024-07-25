@@ -27,6 +27,21 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
     const headingClasses =
       "flex w-full sticky top-1 z-20 py-1.5 px-2 dark:bg-dark-bg bg-light-bg shadow-small rounded-small";
 
+    let conferenceOptions = (
+      <SelectSection
+        key={"conferenceOptions"}
+        title="Conferences"
+        classNames={{
+          heading: headingClasses,
+        }}
+        className="text-light-text dark:text-dark-text"
+      >
+        <SelectItem key={"Bitcoin 2024 Nashville"}>
+          Bitcoin 2024 Nashville
+        </SelectItem>
+      </SelectSection>
+    );
+
     let countryOptions = (
       <SelectSection
         key={"countryOptions"}
@@ -99,7 +114,7 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
         <SelectItem key={"Online"}>Online</SelectItem>
       </SelectSection>
     );
-    return [stateOptions, countryOptions, globalOptions];
+    return [conferenceOptions, stateOptions, countryOptions, globalOptions];
   }, []);
 
   return (
