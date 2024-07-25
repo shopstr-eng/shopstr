@@ -673,10 +673,6 @@ export const fetchCashuWallet = async (
                     ...cashuProofs,
                   ];
                   console.log("allproofs", allProofs)
-                  // cashuProofs = allProofs.filter(
-                  //   (proof: Proof) =>
-                  //     !tokens.some((token: Proof) => token.C === proof.C),
-                  // );
                   cashuProofs = getUniqueProofs(allProofs);
                   console.log("final cashuProofs", cashuProofs)
                 }
@@ -684,9 +680,11 @@ export const fetchCashuWallet = async (
             } catch (decryptionError) {
               console.error("Error decrypting or parsing content:", decryptionError);
             }
+            console.log("og cashu proofs", cashuProofs)
           },
           oneose() {
             w.close();
+            console.log("oneose cashuProofs", cashuProofs)
             cashuMints.forEach(async (mint) => {
               console.log("mint", mint)
               try {
@@ -695,14 +693,17 @@ export const fetchCashuWallet = async (
                 if (cashuProofs.length > 0) {
                   let spentProofs = await wallet?.checkProofsSpent(cashuProofs);
                   console.log("spentProofs", spentProofs)
-                  cashuProofs = cashuProofs.filter(
-                    (proof) => !spentProofs.includes(proof),
-                  );
+                  if (spentProofs.length > 0) {
+                    cashuProofs = cashuProofs.filter(
+                      (proof) => !spentProofs.includes(proof),
+                    );
+                  }
                 }
               } catch (error) {
                 console.log("Error checking spent proofs: ", error);
               }
             });
+            console.log("final cashuProofs", cashuProofs)
             returnCall(cashuRelays, cashuMints, cashuProofs);
           },
         },

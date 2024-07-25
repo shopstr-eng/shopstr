@@ -306,6 +306,9 @@ function App({ Component, pageProps }: AppProps) {
               editCashuWalletContext,
               passphrase,
             );
+          console.log("cashuWalletRelays", cashuWalletRelays)
+          console.log("cashuMints", cashuMints)
+          console.log("cashuProofs", cashuProofs)
           // add transactions state
           if (
             cashuWalletRelays.length != 0 &&
