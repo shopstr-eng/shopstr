@@ -158,7 +158,7 @@ export default function ClaimButton({
           setIsRedeeming(false);
           return;
         }
-        await publishProofEvent(tokenMint, uniqueProofs);
+        await publishProofEvent(tokenMint, uniqueProofs, "in");
         const tokenArray = [...tokens, ...uniqueProofs];
         localStorage.setItem("tokens", JSON.stringify(tokenArray));
         if (!mints.includes(tokenMint)) {

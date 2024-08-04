@@ -109,7 +109,7 @@ const MintButton = ({ passphrase }: { passphrase?: string }) => {
             ]),
           );
           await publishWalletEvent(passphrase);
-          await publishProofEvent(mints[0], proofs, passphrase);
+          await publishProofEvent(mints[0], proofs, "in", passphrase);
           // potentially capture a metric for the mint invoice
           setPaymentConfirmed(true);
           setQrCodeUrl(null);

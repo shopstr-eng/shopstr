@@ -256,10 +256,6 @@ function App({ Component, pageProps }: AppProps) {
       }
       const userPubkey = getLocalStorageData().userPubkey;
       try {
-        // if (
-        //   getLocalStorageData().signInMethod &&
-        //   getLocalStorageData().signInMethod != "nsec"
-        // ) {
         let { relayList, readRelayList, writeRelayList } = await fetchAllRelays(
           allRelays,
           editRelaysContext,
@@ -274,7 +270,6 @@ function App({ Component, pageProps }: AppProps) {
           allRelays,
           editFollowsContext,
         );
-        // }
         let pubkeysToFetchProfilesFor: string[] = [];
         let { profileSetFromProducts } = await fetchAllPosts(
           allRelays,
@@ -306,9 +301,6 @@ function App({ Component, pageProps }: AppProps) {
               editCashuWalletContext,
               passphrase,
             );
-          console.log("cashuWalletRelays", cashuWalletRelays)
-          console.log("cashuMints", cashuMints)
-          console.log("cashuProofs", cashuProofs)
           // add transactions state
           if (
             cashuWalletRelays.length != 0 &&

@@ -625,6 +625,7 @@ export default function NewForm({
                 variant="flat"
                 label="Passphrase"
                 labelPlacement="inside"
+                type="password"
                 onChange={(e) => setPassphrase(e.target.value)}
                 value={passphrase}
               />

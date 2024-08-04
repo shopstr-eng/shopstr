@@ -97,7 +97,7 @@ const ReceiveButton = ({ passphrase }: { passphrase?: string }) => {
           ]),
         );
         await publishWalletEvent(passphrase);
-        await publishProofEvent(tokenMint, uniqueProofs, passphrase);
+        await publishProofEvent(tokenMint, uniqueProofs, "in", passphrase);
       } else {
         setIsSpent(true);
       }

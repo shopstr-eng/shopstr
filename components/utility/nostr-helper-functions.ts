@@ -11,6 +11,7 @@ import axios from "axios";
 import { NostrEvent } from "@/utils/types/types";
 import { Proof } from "@cashu/cashu-ts";
 import { ProductFormValues } from "@/pages/api/nostr/post-event";
+import { splitAmount } from "@cashu/cashu-ts/dist/lib/es5/utils";
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
@@ -228,8 +229,6 @@ export async function publishWalletEvent(passphrase?: string) {
         senderPrivkey,
         userPubkey,
       );
-      console.log("wallet content", walletContent);
-      console.log("stringified wallet content", JSON.stringify(walletContent))
       const cashuWalletEvent = {
         kind: 37375,
         tags: [
@@ -245,11 +244,9 @@ export async function publishWalletEvent(passphrase?: string) {
       };
       signedEvent = finalizeEvent(cashuWalletEvent, senderPrivkey);
     }
-    console.log("signed wallet", signedEvent)
     const pool = new SimplePool();
     await Promise.any(pool.publish(allWriteRelays, signedEvent));
   } catch (e: any) {
-    console.log("Error: ", e);
     alert("Failed to send event: " + e.message);
     return { error: e };
   }
@@ -258,6 +255,7 @@ export async function publishWalletEvent(passphrase?: string) {
 export async function publishProofEvent(
   mint: string,
   proof: Proof[],
+  direction: "in" | "out",
   passphrase?: string,
 ) {
   try {
@@ -265,6 +263,10 @@ export async function publishProofEvent(
       getLocalStorageData();
     const allWriteRelays = [...relays, ...writeRelays];
     const tokenArray = { mint: mint, proofs: proof };
+
+    const amount = tokenArray.proofs
+      .reduce((acc, token: Proof) => acc + token.amount, 0)
+      .toString();
 
     let signedEvent;
     if (signInMethod === "extension") {
@@ -286,9 +288,6 @@ export async function publishProofEvent(
         userPubkey,
       );
 
-      console.log("proofs", tokenArray);
-      console.log("stringified proofs", JSON.stringify(tokenArray))
-      
       const cashuProofEvent = {
         kind: 7375,
         tags: [["a", "37375:" + userPubkey + ":my-shopstr-wallet"]],
@@ -298,7 +297,77 @@ export async function publishProofEvent(
       signedEvent = finalizeEvent(cashuProofEvent, senderPrivkey);
     }
 
-    console.log("signed proof", signedEvent)
+    const pool = new SimplePool();
+    await Promise.any(
+      pool.publish(
+        cashuWalletRelays.length != 0 ? cashuWalletRelays : allWriteRelays,
+        signedEvent,
+      ),
+    );
+
+    await publishSpendingHistoryEvent(
+      direction,
+      amount,
+      signedEvent.id,
+      passphrase,
+    );
+  } catch (e: any) {
+    alert("Failed to send event: " + e.message);
+    return { error: e };
+  }
+}
+
+export async function publishSpendingHistoryEvent(
+  direction: string,
+  amount: string,
+  eventId: string,
+  passphrase?: string,
+) {
+  try {
+    const { userPubkey, signInMethod, relays, writeRelays, cashuWalletRelays } =
+      getLocalStorageData();
+    const allWriteRelays = [...relays, ...writeRelays];
+    const eventContent = [
+      ["direction", direction],
+      ["amount", amount, "sats"],
+      [
+        "e",
+        eventId,
+        cashuWalletRelays.length != 0
+          ? cashuWalletRelays[0]
+          : allWriteRelays[0],
+        direction === "in" ? "created" : "destroyed",
+      ],
+    ];
+
+    let signedEvent;
+    if (signInMethod === "extension") {
+      const cashuSpendingHistoryEvent = {
+        kind: 7376,
+        tags: [["a", "37375:" + userPubkey + ":my-shopstr-wallet"]],
+        content: await window.nostr.nip44.encrypt(
+          userPubkey,
+          JSON.stringify(eventContent),
+        ),
+        created_at: Math.floor(Date.now() / 1000),
+      };
+      signedEvent = await window.nostr.signEvent(cashuSpendingHistoryEvent);
+    } else {
+      if (!passphrase) throw new Error("Passphrase is required");
+      let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
+      const conversationKey = nip44.getConversationKey(
+        senderPrivkey,
+        userPubkey,
+      );
+
+      const cashuSpendingHistoryEvent = {
+        kind: 7376,
+        tags: [["a", "37375:" + userPubkey + ":my-shopstr-wallet"]],
+        content: nip44.encrypt(JSON.stringify(eventContent), conversationKey),
+        created_at: Math.floor(Date.now() / 1000),
+      };
+      signedEvent = finalizeEvent(cashuSpendingHistoryEvent, senderPrivkey);
+    }
 
     const pool = new SimplePool();
     await Promise.any(
@@ -308,7 +377,6 @@ export async function publishProofEvent(
       ),
     );
   } catch (e: any) {
-    console.error("Failed to send event due to:", e); // Enhanced error log
     alert("Failed to send event: " + e.message);
     return { error: e };
   }
@@ -336,7 +404,6 @@ export async function finalizeAndSendNostrEvent(
     }
     await Promise.any(pool.publish(allWriteRelays, signedEvent));
   } catch (e: any) {
-    console.log("Error: ", e);
     alert("Failed to send event: " + e.message);
     return { error: e };
   }
