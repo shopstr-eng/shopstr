@@ -1,18 +1,33 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/router";
-import { getLocalStorageData } from "../../components/utility/nostr-helper-functions";
+import {
+  getLocalStorageData,
+  validPassphrase,
+} from "../../components/utility/nostr-helper-functions";
 import MintButton from "../../components/wallet/mint-button";
 import ReceiveButton from "../../components/wallet/receive-button";
 import SendButton from "../../components/wallet/send-button";
 import PayButton from "../../components/wallet/pay-button";
 import Transactions from "../../components/wallet/transactions";
 import { CashuMint, Proof } from "@cashu/cashu-ts";
+import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
 
 const Wallet = () => {
+  const [enterPassphrase, setEnterPassphrase] = useState(false);
+  const [passphrase, setPassphrase] = useState("");
+
   const [totalBalance, setTotalBalance] = useState(0);
   const [walletBalance, setWalletBalance] = useState(0);
   const [mint, setMint] = useState("");
   const router = useRouter();
+
+  const { signInMethod } = getLocalStorageData();
+
+  useEffect(() => {
+    if (signInMethod === "nsec" && !validPassphrase(passphrase)) {
+      setEnterPassphrase(true);
+    }
+  }, [signInMethod, passphrase]);
 
   useEffect(() => {
     // Function to fetch and update balances
@@ -58,32 +73,41 @@ const Wallet = () => {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-light-bg pb-20 pt-6 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
-      <center>
-        <p className="mb-2 break-words text-center text-6xl text-light-text dark:text-dark-text">
-          {totalBalance} sats
-        </p>
-      </center>
-      <center>
-        <p
-          className="mb-2 break-words text-center text-sm italic text-gray-500 hover:underline"
-          onClick={handleMintClick}
-        >
-          {mint}: {walletBalance} sats
-        </p>
-      </center>
-      <div className="flex justify-center">
-        <ReceiveButton />
-        <SendButton />
+    <>
+      <div className="flex min-h-screen flex-col bg-light-bg pb-20 pt-6 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
+        <center>
+          <p className="mb-2 break-words text-center text-6xl text-light-text dark:text-dark-text">
+            {totalBalance} sats
+          </p>
+        </center>
+        <center>
+          <p
+            className="mb-2 break-words text-center text-sm italic text-gray-500 hover:underline"
+            onClick={handleMintClick}
+          >
+            {mint}: {walletBalance} sats
+          </p>
+        </center>
+        <div className="flex justify-center">
+          <ReceiveButton passphrase={passphrase} />
+          <SendButton passphrase={passphrase} />
+        </div>
+        <div className="flex justify-center">
+          <MintButton passphrase={passphrase} />
+          <PayButton passphrase={passphrase} />
+        </div>
+        <div className="flex justify-center">
+          <Transactions />
+        </div>
       </div>
-      <div className="flex justify-center">
-        <MintButton />
-        <PayButton />
-      </div>
-      <div className="flex justify-center">
-        <Transactions />
-      </div>
-    </div>
+      <RequestPassphraseModal
+        passphrase={passphrase}
+        setCorrectPassphrase={setPassphrase}
+        isOpen={enterPassphrase}
+        setIsOpen={setEnterPassphrase}
+        onCancelRouteTo="/wallet"
+      />
+    </>
   );
 };
 

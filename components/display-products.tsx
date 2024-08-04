@@ -12,7 +12,7 @@ import DisplayProductModal from "./display-product-modal";
 import { useRouter } from "next/router";
 import parseTags, { ProductData } from "./utility/product-parser-functions";
 import ShopstrSpinner from "./utility-components/shopstr-spinner";
-import { DeleteListing } from "../pages/api/nostr/crud-service";
+import { DeleteEvent } from "../pages/api/nostr/crud-service";
 import { Button } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
 import { DateTime } from "luxon";
@@ -86,7 +86,7 @@ const DisplayEvents = ({
 
   const handleDelete = async (productId: string, passphrase?: string) => {
     try {
-      await DeleteListing([productId], passphrase);
+      await DeleteEvent([productId], passphrase);
       productEventContext.removeDeletedProductEvent(productId);
     } catch (e) {
       console.log(e);

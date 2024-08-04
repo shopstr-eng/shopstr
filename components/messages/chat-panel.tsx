@@ -18,6 +18,7 @@ export const ChatPanel = ({
   chatsMap,
   isSendingDMLoading,
   isPayment,
+  passphrase,
 }: {
   handleGoBack: () => void;
   handleSendMessage: (message: string) => void;
@@ -25,6 +26,7 @@ export const ChatPanel = ({
   chatsMap: Map<string, ChatObject>;
   isSendingDMLoading: boolean;
   isPayment: boolean;
+  passphrase?: string;
 }) => {
   const [messageInput, setMessageInput] = useState("");
   const [messages, setMessages] = useState<NostrMessageEvent[]>([]); // [chatPubkey, chat]
@@ -84,6 +86,7 @@ export const ChatPanel = ({
               messageEvent={messageEvent}
               index={index}
               currentChatPubkey={currentChatPubkey}
+              passphrase={passphrase}
             />
           );
         })}

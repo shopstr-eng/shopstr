@@ -16,13 +16,15 @@ import {
   ModalFooter,
   Spinner,
 } from "@nextui-org/react";
-import { getLocalStorageData } from "../utility/nostr-helper-functions";
+import {
+  getLocalStorageData,
+  publishWalletEvent,
+} from "../utility/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
-// import { Invoice } from "@getalby/lightning-tools";
 import { formatWithCommas } from "../utility-components/display-monetary-info";
 
-const PayButton = () => {
+const PayButton = ({ passphrase }: { passphrase?: string }) => {
   const [showPayModal, setShowPayModal] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
   const [paymentFailed, setPaymentFailed] = useState(false);
@@ -121,6 +123,7 @@ const PayButton = () => {
           ...history,
         ]),
       );
+      await publishWalletEvent(passphrase);
       setIsPaid(true);
       setIsRedeeming(false);
       handleTogglePayModal();

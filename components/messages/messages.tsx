@@ -436,6 +436,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
               isSendingDMLoading={isSendingDMLoading}
               handleSendMessage={handleSendMessage}
               isPayment={isPayment}
+              passphrase={passphrase}
             />
           </div>
         )}

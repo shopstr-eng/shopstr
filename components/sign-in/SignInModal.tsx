@@ -221,7 +221,7 @@ export default function SignInModal({
                       <span className="text-red-500">*</span>
                     </label>
                     <Input
-                      type="text"
+                      type="password"
                       width="100%"
                       size="lg"
                       value={passphrase}

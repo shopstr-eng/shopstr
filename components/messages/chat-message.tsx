@@ -18,10 +18,12 @@ export const ChatMessage = ({
   messageEvent,
   index = 0,
   currentChatPubkey,
+  passphrase,
 }: {
   messageEvent?: NostrMessageEvent;
   index: number;
   currentChatPubkey?: string;
+  passphrase?: string;
 }) => {
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
 
@@ -73,7 +75,7 @@ export const ChatMessage = ({
             <>
               {contentBeforeCashuA}
               <div className="flex items-center">
-                <ClaimButton token={tokenAfterCashuA} />
+                <ClaimButton token={tokenAfterCashuA} passphrase={passphrase} />
                 <ClipboardIcon
                   onClick={() => handleCopyToken("cashuA" + tokenAfterCashuA)}
                   className={`ml-2 mt-1 h-5 w-5 cursor-pointer text-dark-text dark:text-light-text ${

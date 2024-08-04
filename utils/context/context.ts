@@ -1,5 +1,6 @@
 import { createContext } from "react";
 import { NostrMessageEvent, ProfileData } from "../types/types";
+import { Proof } from "@cashu/cashu-ts";
 
 export interface ProfileContextInterface {
   profileData: Map<string, any>;
@@ -71,3 +72,17 @@ export const RelaysContext = createContext({
   writeRelayList: [],
   isLoading: true,
 } as RelaysContextInterface);
+
+export interface CashuWalletContextInterface {
+  cashuWalletRelays: string[];
+  cashuMints: string[];
+  cashuProofs: Proof[];
+  isLoading: boolean;
+}
+
+export const CashuWalletContext = createContext({
+  cashuWalletRelays: [],
+  cashuMints: [],
+  cashuProofs: [],
+  isLoading: true,
+} as CashuWalletContextInterface);

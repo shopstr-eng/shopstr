@@ -21,7 +21,10 @@ import {
   Input,
 } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
-import { getLocalStorageData } from "../utility/nostr-helper-functions";
+import {
+  getLocalStorageData,
+  publishWalletEvent,
+} from "../utility/nostr-helper-functions";
 import {
   CashuMint,
   CashuWallet,
@@ -29,7 +32,7 @@ import {
   Proof,
 } from "@cashu/cashu-ts";
 
-const SendButton = () => {
+const SendButton = ({ passphrase }: { passphrase?: string }) => {
   const [showSendModal, setShowSendModal] = useState(false);
   const [showTokenCard, setShowTokenCard] = useState(false);
   const [newToken, setNewToken] = useState("");
@@ -97,13 +100,12 @@ const SendButton = () => {
           ...history,
         ]),
       );
+      await publishWalletEvent(passphrase);
     } catch (error) {
       console.log(error);
       setSendFailed(true);
     }
   };
-  // store proofs as array of proof objects
-  // or store proofs as array of proof arrays, which are all grouped by mint id
 
   const handleCopyTokenString = () => {
     navigator.clipboard.writeText(newToken);

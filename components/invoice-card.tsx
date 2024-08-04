@@ -39,7 +39,9 @@ import {
 } from "@cashu/cashu-ts";
 import {
   getLocalStorageData,
+  validPassphrase,
   isUserLoggedIn,
+  publishWalletEvent,
 } from "./utility/nostr-helper-functions";
 import { nip19 } from "nostr-tools";
 import { ProductData } from "./utility/product-parser-functions";
@@ -55,6 +57,7 @@ import {
 import SignInModal from "./sign-in/SignInModal";
 import CountryDropdown from "./utility-components/dropdowns/country-dropdown";
 import currencySelection from "../public/currencySelection.json";
+import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
 
 export default function InvoiceCard({
   productData,
@@ -70,10 +73,13 @@ export default function InvoiceCard({
   setCashuPaymentFailed?: (cashuPaymentFailef: boolean) => void;
 }) {
   const router = useRouter();
-  const { pubkey, currency, totalCost, shippingType } = productData;
+  const { id, pubkey, currency, totalCost, shippingType } = productData;
   const pubkeyOfProductBeingSold = pubkey;
-  const { userNPub, userPubkey, relays, mints, tokens, history } =
+  const { signInMethod, userNPub, userPubkey, relays, mints, tokens, history } =
     getLocalStorageData();
+
+  const [enterPassphrase, setEnterPassphrase] = useState(false);
+  const [passphrase, setPassphrase] = useState("");
 
   const [showInvoiceCard, setShowInvoiceCard] = useState(false);
 
@@ -108,6 +114,12 @@ export default function InvoiceCard({
     control: contactControl,
     reset: contactReset,
   } = useForm();
+
+  useEffect(() => {
+    if (signInMethod === "nsec" && !validPassphrase(passphrase)) {
+      setEnterPassphrase(true);
+    }
+  }, [signInMethod, passphrase]);
 
   useEffect(() => {
     axios({
@@ -590,6 +602,7 @@ export default function InvoiceCard({
           ...history,
         ]),
       );
+      await publishWalletEvent(passphrase);
       if (setCashuPaymentSent) {
         setCashuPaymentSent(true);
       }
@@ -1229,6 +1242,13 @@ export default function InvoiceCard({
         </ModalContent>
       </Modal>
       <SignInModal isOpen={isOpen} onClose={onClose} />
+      <RequestPassphraseModal
+        passphrase={passphrase}
+        setCorrectPassphrase={setPassphrase}
+        isOpen={enterPassphrase}
+        setIsOpen={setEnterPassphrase}
+        onCancelRouteTo={`/${id}`}
+      />
     </>
   );
 }

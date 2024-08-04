@@ -3,7 +3,7 @@ import { withRouter, NextRouter } from "next/router";
 import { nip19, getPublicKey } from "nostr-tools";
 import * as CryptoJS from "crypto-js";
 import { validateNSecKey } from "../../components/utility/nostr-helper-functions";
-import { RelaysContext } from "../../utils/context/context";
+import { RelaysContext, CashuWalletContext } from "../../utils/context/context";
 import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
 
@@ -14,6 +14,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
   const [passphrase, setPassphrase] = useState<string>("");
 
   const relaysContext = useContext(RelaysContext);
+  const cashuWalletContext = useContext(CashuWalletContext);
 
   const handleSignIn = async () => {
     if (validPrivateKey) {
@@ -64,10 +65,31 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
           );
         }
 
-        localStorage.setItem(
-          "mints",
-          JSON.stringify(["https://mint.minibits.cash/Bitcoin"]),
-        );
+        if (!cashuWalletContext.isLoading) {
+          if (cashuWalletContext.cashuWalletRelays.length != 0) {
+            localStorage.setItem(
+              "cashuWalletRelays",
+              JSON.stringify(cashuWalletContext.cashuWalletRelays),
+            );
+          }
+          if (cashuWalletContext.cashuMints.length != 0) {
+            localStorage.setItem(
+              "mints",
+              JSON.stringify(cashuWalletContext.cashuMints),
+            );
+          } else {
+            localStorage.setItem(
+              "mints",
+              JSON.stringify(["https://mint.minibits.cash/Bitcoin"]),
+            );
+          }
+          if (cashuWalletContext.cashuProofs.length != 0) {
+            localStorage.setItem(
+              "tokens",
+              JSON.stringify(cashuWalletContext.cashuProofs),
+            );
+          }
+        }
 
         localStorage.setItem("wot", "3");
 
@@ -117,10 +139,31 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
           ]),
         );
       }
-      localStorage.setItem(
-        "mints",
-        JSON.stringify(["https://mint.minibits.cash/Bitcoin"]),
-      );
+      if (!cashuWalletContext.isLoading) {
+        if (cashuWalletContext.cashuWalletRelays.length != 0) {
+          localStorage.setItem(
+            "cashuWalletRelays",
+            JSON.stringify(cashuWalletContext.cashuWalletRelays),
+          );
+        }
+        if (cashuWalletContext.cashuMints.length != 0) {
+          localStorage.setItem(
+            "mints",
+            JSON.stringify(cashuWalletContext.cashuMints),
+          );
+        } else {
+          localStorage.setItem(
+            "mints",
+            JSON.stringify(["https://mint.minibits.cash/Bitcoin"]),
+          );
+        }
+        if (cashuWalletContext.cashuProofs.length != 0) {
+          localStorage.setItem(
+            "tokens",
+            JSON.stringify(cashuWalletContext.cashuProofs),
+          );
+        }
+      }
       localStorage.setItem("wot", "3");
       router.push("/");
     } catch (error) {
@@ -176,7 +219,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
                 Encryption Passphrase:<span className="text-red-500">*</span>
               </label>
               <Input
-                type="text"
+                type="password"
                 width="100%"
                 size="lg"
                 value={passphrase}
