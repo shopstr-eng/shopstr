@@ -62,6 +62,7 @@ export default function NewForm({
 }: ProductFormProps) {
   const [passphrase, setPassphrase] = useState("");
   const [images, setImages] = useState<string[]>([]);
+  const [imageError, setImageError] = useState<string | null>(null);
   const [signIn, setSignIn] = useState("");
   const [pubkey, setPubkey] = useState("");
   const [isEdit, setIsEdit] = useState(false);
@@ -106,6 +107,13 @@ export default function NewForm({
   }, [showModal]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
+    if (images.length === 0) {
+      setImageError("At least one image is required.");
+      return;
+    } else {
+      setImageError(null);
+    }
+
     setIsPostingOrUpdatingProduct(true);
     const encoder = new TextEncoder();
     const dataEncoded = encoder.encode(data["Product Name"]);
@@ -233,7 +241,7 @@ export default function NewForm({
               name="Product Name"
               control={control}
               rules={{
-                required: "A Product Name is required.",
+                required: "A product name is required.",
                 maxLength: {
                   value: 50,
                   message: "This input exceed maxLength of 50.",
@@ -272,24 +280,22 @@ export default function NewForm({
                 images.map((image, index) => (
                   <div key={index}>
                     <div className="flex flex-row-reverse ">
-                      {
-                        <ConfirmActionDropdown
-                          helpText="Are you sure you want to delete this image?"
-                          buttonLabel="Delete Image"
-                          onConfirm={deleteImage(index)}
+                      <ConfirmActionDropdown
+                        helpText="Are you sure you want to delete this image?"
+                        buttonLabel="Delete Image"
+                        onConfirm={deleteImage(index)}
+                      >
+                        <Button
+                          isIconOnly
+                          color="danger"
+                          aria-label="Trash"
+                          radius="full"
+                          className="right-3 top-12 z-20 bg-gradient-to-tr from-blue-950 to-red-950 text-white"
+                          variant="bordered"
                         >
-                          <Button
-                            isIconOnly
-                            color="danger"
-                            aria-label="Trash"
-                            radius="full"
-                            className="right-3 top-12 z-20 bg-gradient-to-tr from-blue-950 to-red-950 text-white"
-                            variant="bordered"
-                          >
-                            <TrashIcon style={{ padding: 4 }} />
-                          </Button>
-                        </ConfirmActionDropdown>
-                      }
+                          <TrashIcon style={{ padding: 4 }} />
+                        </Button>
+                      </ConfirmActionDropdown>
                     </div>
                     <Image
                       alt="Product Image"
@@ -311,6 +317,7 @@ export default function NewForm({
                 </div>
               )}
             </Carousal>
+            {imageError && <div className="text-red-600">{imageError}</div>}
             <FileUploaderButton
               isIconOnly={false}
               className={buttonClassName}
@@ -319,6 +326,7 @@ export default function NewForm({
                 setImages((prevValues) => {
                   const updatedImages = [...prevValues];
                   if (imgUrl && imgUrl.length > 0) {
+                    setImageError(null);
                     return [...updatedImages, imgUrl];
                   }
                   return [...updatedImages];
@@ -617,6 +625,7 @@ export default function NewForm({
                 variant="flat"
                 label="Passphrase"
                 labelPlacement="inside"
+                type="password"
                 onChange={(e) => setPassphrase(e.target.value)}
                 value={passphrase}
               />

@@ -19,26 +19,19 @@ import { DateTime } from "luxon";
 import {
   getLocalStorageData,
   getPrivKeyWithPassphrase,
-  finalizeAndSendNostrEvent,
 } from "@/components/utility/nostr-helper-functions";
 import { DeleteEvent } from "../../../pages/api/nostr/crud-service";
 
-function isValidBase64(str: string) {
-  try {
-    const base64Regex = /^[A-Za-z0-9+/]+={0,2}$/;
-    return base64Regex.test(str);
-  } catch (e) {
+function getUniqueProofs(proofs: Proof[]): Proof[] {
+  const uniqueProofs = new Set<string>();
+  return proofs.filter((proof) => {
+    const serializedProof = JSON.stringify(proof);
+    if (!uniqueProofs.has(serializedProof)) {
+      uniqueProofs.add(serializedProof);
+      return true;
+    }
     return false;
-  }
-}
-
-function isValidJSON(str: string) {
-  try {
-    JSON.parse(str);
-    return true;
-  } catch (e) {
-    return false;
-  }
+  });
 }
 
 function isHexString(value: string): boolean {
@@ -633,104 +626,33 @@ export const fetchCashuWallet = async (
     try {
       let cashuRelays: string[] = [];
       const cashuRelaySet: Set<string> = new Set();
+
       let cashuWalletBalance: string = "";
+
       let cashuMints: string[] = [];
       let cashuMintSet: Set<string> = new Set();
       let uniqueCashuMints = new Set(cashuMints);
+
       let cashuProofs: Proof[] = [];
+      let incomingSpentProofs: [][] = [];
+
       const pool = new SimplePool();
+
       const cashuWalletFilter: Filter = {
         kinds: [37375],
         authors: [userPubkey],
       };
-      let h = pool.subscribeMany(relays, [cashuWalletFilter], {
-        onevent: async (event) => {
-          try {
-            if (!isValidBase64(event.content)) {
-              throw new Error("Invalid base64 string");
-            }
-            let cashuWalletEventContent;
-            if (signInMethod === "extension") {
-              let eventContent = await window.nostr.nip44.decrypt(
-                userPubkey,
-                event.content,
-              );
-              if (!isValidJSON(eventContent)) {
-                throw new Error("Invalid JSON string");
-              }
-              cashuWalletEventContent = JSON.parse(eventContent);
-            } else if (signInMethod === "nsec") {
-              if (!passphrase) throw new Error("Passphrase is required");
-              let senderPrivkey = getPrivKeyWithPassphrase(
-                passphrase,
-              ) as Uint8Array;
-              const conversationKey = nip44.getConversationKey(
-                senderPrivkey,
-                getLocalStorageData().userPubkey,
-              );
-              const eventContent = nip44.decrypt(
-                event.content,
-                conversationKey,
-              );
-              if (!isValidJSON(eventContent)) {
-                throw new Error("Invalid JSON string");
-              }
-              cashuWalletEventContent = JSON.parse(eventContent);
-            }
-            const balanceArray = cashuWalletEventContent.filter(
-              (tag: string[]) => tag[0] === "balance",
-            );
-            cashuWalletBalance = balanceArray.map((tag: string[]) => tag[1]);
-            const relayList = event.tags.filter(
-              (tag: string[]) => tag[0] === "relay",
-            );
-            relayList.forEach((tag) => cashuRelaySet.add(tag[1]));
-            cashuRelays.push(...relayList.map((tag: string[]) => tag[1]));
-            const mints = event.tags.filter(
-              (tag: string[]) => tag[0] === "mint",
-            );
-            mints.forEach((tag) => cashuMintSet.add(tag[1]));
-            cashuMints.push(...mints.map((tag: string[]) => tag[1]));
-            // const cashuMintArray = cashuWalletEventContent.filter(
-            //   (tag: string[]) => tag[0] === "mint",
-            // );
-            // cashuMintArray.forEach((mint: string[]) =>
-            //   uniqueCashuMints.add(mint[1]),
-            // );
-            // cashuMints = Array.from(uniqueCashuMints);
-          } catch (decryptionError) {
-            console.error(
-              "Error decrypting or parsing content:",
-              decryptionError,
-            );
-          }
-        },
-        oneose() {
-          h.close();
-        },
-      });
-      const cashuProofFilter: Filter = {
-        kinds: [7375], // maybe 7376
-        authors: [userPubkey],
-      };
-      let w = pool.subscribeMany(
-        cashuRelays.length != 0 ? cashuRelays : relays,
-        [cashuProofFilter],
-        {
+
+      const handleHSubscription = new Promise<void>((resolveH) => {
+        let h = pool.subscribeMany(relays, [cashuWalletFilter], {
           onevent: async (event) => {
             try {
-              if (!isValidBase64(event.content)) {
-                throw new Error("Invalid base64 string");
-              }
               let cashuWalletEventContent;
               if (signInMethod === "extension") {
                 let eventContent = await window.nostr.nip44.decrypt(
                   userPubkey,
                   event.content,
                 );
-                if (!isValidJSON(eventContent)) {
-                  throw new Error("Invalid JSON string");
-                }
                 cashuWalletEventContent = JSON.parse(eventContent);
               } else if (signInMethod === "nsec") {
                 if (!passphrase) throw new Error("Passphrase is required");
@@ -745,36 +667,22 @@ export const fetchCashuWallet = async (
                   event.content,
                   conversationKey,
                 );
-                if (!isValidJSON(eventContent)) {
-                  throw new Error("Invalid JSON string");
-                }
                 cashuWalletEventContent = JSON.parse(eventContent);
               }
-              if (event.kind === 7375) {
-                let wallet = new CashuWallet(
-                  new CashuMint(cashuWalletEventContent[0]?.mint),
-                );
-                let spentProofs = await wallet?.checkProofsSpent(
-                  cashuWalletEventContent[0]?.proofs,
-                );
-                if (
-                  spentProofs.length > 0 &&
-                  JSON.stringify(spentProofs) ===
-                    JSON.stringify(cashuWalletEventContent[0]?.proofs)
-                ) {
-                  await DeleteEvent([event.id], passphrase);
-                } else {
-                  let allProofs = [
-                    ...tokens,
-                    ...cashuWalletEventContent[0]?.proofs,
-                    ...cashuProofs,
-                  ];
-                  cashuProofs = allProofs.filter(
-                    (proof: Proof) =>
-                      !tokens.some((token: Proof) => token.C === proof.C),
-                  );
-                }
-              }
+              const balanceArray = cashuWalletEventContent.filter(
+                (tag: string[]) => tag[0] === "balance",
+              );
+              cashuWalletBalance = balanceArray.map((tag: string[]) => tag[1]);
+              const relayList = event.tags.filter(
+                (tag: string[]) => tag[0] === "relay",
+              );
+              relayList.forEach((tag) => cashuRelaySet.add(tag[1]));
+              cashuRelays.push(...relayList.map((tag: string[]) => tag[1]));
+              const mints = event.tags.filter(
+                (tag: string[]) => tag[0] === "mint",
+              );
+              mints.forEach((tag) => cashuMintSet.add(tag[1]));
+              cashuMints.push(...mints.map((tag: string[]) => tag[1]));
             } catch (decryptionError) {
               console.error(
                 "Error decrypting or parsing content:",
@@ -783,22 +691,121 @@ export const fetchCashuWallet = async (
             }
           },
           oneose() {
-            w.close();
-            cashuMints.forEach(async (mint) => {
-              try {
-                let wallet = new CashuWallet(new CashuMint(mint));
-                let spentProofs = await wallet?.checkProofsSpent(cashuProofs);
-                cashuProofs = cashuProofs.filter(
-                  (proof) => !spentProofs.includes(proof),
-                );
-              } catch (error) {
-                console.log("Error checking spent proofs: ", error);
-              }
-            });
-            returnCall(cashuRelays, cashuMints, cashuProofs);
+            h.close();
+            resolveH();
           },
-        },
-      );
+        });
+      });
+
+      const cashuProofFilter: Filter = {
+        kinds: [7375, 7376],
+        authors: [userPubkey],
+      };
+
+      const handleWSubscription = new Promise<void>((resolveW) => {
+        let w = pool.subscribeMany(
+          cashuRelays.length !== 0 ? cashuRelays : relays,
+          [cashuProofFilter],
+          {
+            onevent: async (event) => {
+              try {
+                let cashuWalletEventContent;
+                if (signInMethod === "extension") {
+                  let eventContent = await window.nostr.nip44.decrypt(
+                    userPubkey,
+                    event.content,
+                  );
+                  cashuWalletEventContent = JSON.parse(eventContent);
+                } else if (signInMethod === "nsec") {
+                  if (!passphrase) throw new Error("Passphrase is required");
+                  let senderPrivkey = getPrivKeyWithPassphrase(
+                    passphrase,
+                  ) as Uint8Array;
+                  const conversationKey = nip44.getConversationKey(
+                    senderPrivkey,
+                    getLocalStorageData().userPubkey,
+                  );
+                  let eventContent = nip44.decrypt(
+                    event.content,
+                    conversationKey,
+                  );
+                  cashuWalletEventContent = JSON.parse(eventContent);
+                }
+                if (event.kind === 7375) {
+                  let wallet = new CashuWallet(
+                    new CashuMint(cashuWalletEventContent?.mint),
+                  );
+                  let spentProofs = await wallet?.checkProofsSpent(
+                    cashuWalletEventContent?.proofs,
+                  );
+                  if (
+                    spentProofs.length > 0 &&
+                    JSON.stringify(spentProofs) ===
+                      JSON.stringify(cashuWalletEventContent?.proofs)
+                  ) {
+                    await DeleteEvent([event.id], passphrase);
+                  } else {
+                    let allProofs = [
+                      ...tokens,
+                      ...cashuWalletEventContent?.proofs,
+                      ...cashuProofs,
+                    ];
+                    cashuProofs = getUniqueProofs(allProofs);
+                  }
+                } else if (event.kind === 7376) {
+                  incomingSpentProofs.push(JSON.parse(event.content));
+                }
+              } catch (decryptionError) {
+                console.error(
+                  "Error decrypting or parsing content:",
+                  decryptionError,
+                );
+              }
+            },
+            oneose() {
+              w.close();
+              cashuMints.forEach(async (mint) => {
+                try {
+                  let wallet = new CashuWallet(new CashuMint(mint));
+                  if (cashuProofs.length > 0) {
+                    let spentProofs =
+                      await wallet?.checkProofsSpent(cashuProofs);
+                    if (spentProofs.length > 0) {
+                      cashuProofs = cashuProofs.filter(
+                        (proof) => !spentProofs.includes(proof),
+                      );
+                    }
+                  }
+
+                  let outProofs = incomingSpentProofs
+                    .filter((eventTags) =>
+                      eventTags.some(
+                        (tag) => tag[0] === "direction" && tag[1] === "out",
+                      ),
+                    )
+                    .map((eventTags) => {
+                      const destroyedTag = eventTags.find(
+                        (tag) => tag[0] === "e" && tag[3] === "destroyed",
+                      );
+                      return destroyedTag ? destroyedTag[1] : "";
+                    })
+                    .filter((eventId) => eventId !== "");
+
+                  if (outProofs.length > 0) {
+                    await DeleteEvent(outProofs, passphrase);
+                  }
+                } catch (error) {
+                  console.log("Error checking spent proofs: ", error);
+                }
+              });
+              resolveW();
+            },
+          },
+        );
+      });
+
+      await Promise.all([handleHSubscription, handleWSubscription]);
+
       const returnCall = async (
         cashuWalletRelays: string[],
         cashuMints: string[],
@@ -816,7 +823,7 @@ export const fetchCashuWallet = async (
           false,
         );
       };
-      returnCall(cashuRelays, cashuMints, cashuProofs);
+      await returnCall(cashuRelays, cashuMints, cashuProofs);
     } catch (error) {
       console.log("failed to fetch Cashu wallet: ", error);
       reject(error);
