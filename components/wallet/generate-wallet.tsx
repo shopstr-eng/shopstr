@@ -35,13 +35,14 @@ export const GenerateWallet = ({ onGenerateSuccess }: GenerateWalletProps ) => {
     }
   }
   return (
-    <>
+    <div className="w-max mx-auto flex flex-col items-center">
+      <h2 className="text-4xl font-bold">You don't have a wallet yet!</h2>
       <Button
         className={SHOPSTRBUTTONCLASSNAMES + " m-2"}
         onClick={() => handleGenerateWallet() }
       >
         Generate a New Wallet
       </Button>
-    </>
+    </div>
   )
 }
