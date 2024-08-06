@@ -1,35 +1,30 @@
-import React, { useEffect, useState } from "react";
-import {
-  ArrowDownTrayIcon,
-  ArrowUpTrayIcon,
-  BanknotesIcon,
-  BoltIcon,
-  ShoppingBagIcon,
-} from "@heroicons/react/24/outline";
-import { getLocalStorageData } from "../../components/utility/nostr-helper-functions";
-import { Transaction } from "@/utils/types/types";
+import React from "react";
+import { Transaction } from "lwk_wasm";
 
-const Transactions = () => {
-  const [history, setHistory] = useState([]);
+const Transactions = ({ transactions }: { transactions: Transaction[]}) => {
 
-  useEffect(() => {
-    // Function to fetch and update transactions
-    const fetchAndUpdateTransactions = () => {
-      const localData = getLocalStorageData();
-      if (localData && localData.history) {
-        setHistory(localData.history);
-      }
-    };
-    // Initial fetch
-    fetchAndUpdateTransactions();
-    // Set up polling with setInterval
-    const interval = setInterval(() => {
-      fetchAndUpdateTransactions();
-    }, 1000); // Polling every 1000 milliseconds (1 seconds)
-    // Clean up on component unmount
-    return () => clearInterval(interval);
-  }, []);
+    // convert a unix timestamp to human readable elapsed time, like "1 day ago"
+  function elapsedFrom(unixTs: any) {
+    const currentUnixTs = new Date().getTime() / 1000.0
+    const delta = currentUnixTs - unixTs
 
+    const secondsPer = [31536000, 2592000, 604800, 86400, 3600, 60, 1];
+    const namesPer = ["year", "month", "week", "day", "hour", "minute", "second"];
+
+    function numberEnding(number: any) {
+        return (number > 1) ? 's' : ''
+    }
+
+    for (let i = 0; i < secondsPer.length; i++) {
+        let current = Math.floor(delta / secondsPer[i])
+        if (current) {
+            return current + ' ' + namesPer[i] + numberEnding(current) + ' ago'
+
+        }
+    }
+
+    return 'now';
+  }
   const formatDate = (timestamp: number) => {
     const date = new Date(timestamp * 1000);
     const options: Intl.DateTimeFormatOptions = {
@@ -44,9 +39,21 @@ const Transactions = () => {
     return `${date.toLocaleDateString("en-US", options)}`;
   };
 
+  const txs = transactions?.map((tx) => {
+    return {
+      // @ts-expect-error
+      txType: tx.txType(),
+      txId: tx.txid().toString(),
+      // @ts-expect-error
+      txAmount: tx.amount,
+      // @ts-expect-error
+      txDate: (typeof tx.timestamp() === 'undefined') ? "unconfirmed" : elapsedFrom(tx.timestamp())
+    }
+  });
+
   return (
     <div className="relative mt-4 overflow-x-auto rounded-lg shadow-md">
-      <div className="max-h-[50vh]">
+      <div className="max-h-[50vh] px-12">
         <table className="w-full min-w-[50vw] text-left text-sm text-gray-500 dark:text-gray-400">
           <thead className="bg-gray-50 text-xs uppercase text-gray-700 dark:bg-gray-700 dark:text-gray-400">
             <tr>
@@ -54,7 +61,7 @@ const Transactions = () => {
                 Type
               </th>
               <th scope="col" className="px-6 py-3">
-                Amount
+                txid
               </th>
               <th scope="col" className="px-6 py-3">
                 Date
@@ -62,26 +69,18 @@ const Transactions = () => {
             </tr>
           </thead>
           <tbody>
-            {history.map((transaction: Transaction, index) => (
+            {txs?.map((tx, index) => (
               <tr
                 key={index}
                 className="border-b bg-white dark:border-gray-700 dark:bg-gray-800"
               >
                 <td className="flex items-center px-6 py-4">
-                  {transaction.type === 1 ? (
-                    <ArrowDownTrayIcon className="mr-2 h-5 w-5 text-green-500" />
-                  ) : transaction.type === 2 ? (
-                    <ArrowUpTrayIcon className="mr-2 h-5 w-5 text-red-500" />
-                  ) : transaction.type === 3 ? (
-                    <BanknotesIcon className="mr-2 h-5 w-5 text-green-500" />
-                  ) : transaction.type === 4 ? (
-                    <BoltIcon className="mr-2 h-5 w-5 text-red-500" />
-                  ) : transaction.type === 5 ? (
-                    <ShoppingBagIcon className="mr-2 h-5 w-5 text-shopstr-purple-light dark:text-shopstr-yellow-light" />
-                  ) : null}
+                  {tx.txType}
                 </td>
-                <td className="px-6 py-4">{transaction.amount} sats</td>
-                <td className="px-6 py-4">{formatDate(transaction.date)}</td>
+                <td className="px-6 py-4">
+                  <a href={`https://blockstream.info/liquidtestnet/tx/${tx.txId}`} className="text-cyan-300" target="_blank">{tx.txId}</a>
+                </td>
+                <td className="px-6 py-4">{tx.txDate}</td>
               </tr>
             ))}
           </tbody>
