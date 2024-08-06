@@ -60,7 +60,6 @@ export const isValidPassphraseWallet = (passphrase: string) => {
 
   const bool =
     !!getDecryptedDescriptorFromLocalStorage(passphrase)?.startsWith("ct");
-  console.log({ bool });
   return bool;
 };
 

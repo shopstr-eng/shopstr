@@ -36,6 +36,7 @@ import {
 } from "../utils/types/types";
 import BottomNav from "@/components/nav-bottom";
 import SideNav from "@/components/nav-side";
+import { WalletProvider } from "@/components/wallet/wallet-context";
 
 function App({ Component, pageProps }: AppProps) {
   const [localStorageValues, setLocalStorageValues] =
@@ -302,15 +303,17 @@ function App({ Component, pageProps }: AppProps) {
             <ProfileMapContext.Provider value={profileContext}>
               <ChatsContext.Provider value={chatsContext}>
                 <NextUIProvider>
-                  <NextThemesProvider attribute="class">
-                    <div className="flex">
-                      <SideNav />
-                      <main className="flex-1">
-                        <Component {...pageProps} />
-                      </main>
-                    </div>
-                    <BottomNav />
-                  </NextThemesProvider>
+                  <WalletProvider>
+                    <NextThemesProvider attribute="class">
+                      <div className="flex">
+                        <SideNav />
+                        <main className="flex-1">
+                          <Component {...pageProps} />
+                        </main>
+                      </div>
+                      <BottomNav />
+                    </NextThemesProvider>
+                  </WalletProvider>
                 </NextUIProvider>
               </ChatsContext.Provider>
             </ProfileMapContext.Provider>
