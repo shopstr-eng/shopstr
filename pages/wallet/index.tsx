@@ -15,11 +15,11 @@ const Wallet = () => {
   const receiveAddress = useMemo(() => {
     if (descriptor) {
       const wolletDescriptor = new WolletDescriptor(descriptor)
-      return getAddress(wolletDescriptor).address();
+      return getAddress(wolletDescriptor, transactions?.length + 1).address();
     } else {
       return null;
     }
-  }, [descriptor])
+  }, [descriptor, transactions])
 
   const onGenerateSuccess = (passphrase: string) => {
     const descriptor = getDecryptedDescriptorFromLocalStorage(passphrase);

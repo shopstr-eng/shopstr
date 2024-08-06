@@ -63,9 +63,9 @@ export const isValidPassphraseWallet = (passphrase: string) => {
   return bool;
 };
 
-export const getAddress = (descriptor: lwk.WolletDescriptor) => {
+export const getAddress = (descriptor: lwk.WolletDescriptor, index?: number) => {
   const wollet = new lwk.Wollet(getNetwork(), descriptor);
-  return wollet.address();
+  return wollet.address(index);
 };
 
 export const getBalance = (descriptor: lwk.WolletDescriptor) => {
