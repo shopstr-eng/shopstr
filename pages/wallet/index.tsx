@@ -3,11 +3,14 @@ import { getAddress, getBalance, getDecryptedDescriptorFromLocalStorage, isValid
 import { GenerateWallet } from "@/components/wallet/generate-wallet";
 import { useWalletContext } from "@/components/wallet/wallet-context";
 import { WolletDescriptor } from "lwk_wasm";
+import Transactions from "@/components/wallet/transactions";
 
 const Wallet = () => {
   const [walletExists, toggleWalletExists] = useState(false);
   const { descriptor, passphrase, changeDescriptor, changePassphrase } = useWalletContext();
   const [balance, setBalance] = useState(0n);
+  const [transactions, setTransactions] = useState<any>();
+  console.log({descriptor})
   
   const receiveAddress = useMemo(() => {
     if (descriptor) {
@@ -44,6 +47,16 @@ const Wallet = () => {
           changeDescriptor(descriptor);
           changePassphrase(passphrase);
           toggleWalletExists(true);
+
+          if (descriptor) {
+            const wolletDescriptor = new WolletDescriptor(descriptor);
+            getBalance(wolletDescriptor).then((value) => {
+              const balanceMap: Map<string, string> = value?.balance;
+              const balance = balanceMap.values().next().value;
+              setBalance(BigInt(balance));
+              setTransactions(value?.transactions)
+            })
+          }
           break;
         } else {
           alert("Incorrect passphrase.");
@@ -56,10 +69,16 @@ const Wallet = () => {
     const interval = setInterval(() => {
       if (descriptor) {
         const wolletDescriptor = new WolletDescriptor(descriptor);
-        const lBalance = getBalance(wolletDescriptor).values().next().value;
-        setBalance(BigInt(lBalance))
+        getBalance(wolletDescriptor).then((value) => {
+          const balanceMap: Map<string, string> = value?.balance;
+          const balance = balanceMap.values().next().value;
+          setBalance(BigInt(balance));
+          setTransactions(value?.transactions)
+        })
+        // console.log({lBalance})
+        // setBalance(BigInt(lBalance))
       }
-    }, 3000);
+    }, 15 * 1000);
 
     return () => clearInterval(interval);
   }, [descriptor])
@@ -78,7 +97,10 @@ const Wallet = () => {
             </div>
           </center>
           <center>
-            <strong>Balance: </strong><span>{balance.toString()}</span>
+            <strong>Balance: </strong><span>{balance.toString()} sats</span>
+          </center>
+          <center>
+            <Transactions transactions={transactions}/>
           </center>
         </section>
       ) : (
