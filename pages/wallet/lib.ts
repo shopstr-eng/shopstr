@@ -65,11 +65,28 @@ export const isValidPassphraseWallet = (passphrase: string) => {
 
 export const getAddress = (descriptor: lwk.WolletDescriptor) => {
   const wollet = new lwk.Wollet(getNetwork(), descriptor);
-  return wollet.address(0);
+  return wollet.address();
 };
 
 export const getBalance = (descriptor: lwk.WolletDescriptor) => {
-  const wollet = new lwk.Wollet(getNetwork(), descriptor);
-  const balance: Map<string, string> = wollet.balance();
-  return balance;
+  const doIt = async () => {
+    const wollet = new lwk.Wollet(getNetwork(), descriptor);
+    const esploraClient = new lwk.EsploraClient(getNetwork(), "https://waterfalls.liquidwebwallet.org/liquidtestnet/api", true);
+    const update = await esploraClient.fullScan(wollet);
+
+    if (update instanceof lwk.Update) {
+      const walletStatus = wollet.status();
+      wollet.applyUpdate(update);
+      const balance = wollet.balance();
+      const transactions = wollet.transactions();
+
+      console.log({balance, transactions})
+      return {
+        balance,
+        transactions
+      }
+    }
+  }
+
+  return doIt();
 };
