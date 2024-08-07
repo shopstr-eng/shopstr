@@ -89,6 +89,15 @@ export const getBalance = (descriptor: lwk.WolletDescriptor) => {
   return doIt();
 };
 
+export const isValidDescriptor = (descriptorInput: string) => {
+  try {
+    new lwk.WolletDescriptor(descriptorInput);
+    return true;
+  } catch(_) {
+    return false;
+  }
+}
+
 export function mapBalance(map: any) {
   map.forEach((value: bigint, key: any) => {
       map.set(key, mapAssetPrecision(key, value))
