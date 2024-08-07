@@ -1,7 +1,7 @@
 import React from "react";
-import { Transaction } from "lwk_wasm";
+import { WalletTx } from "lwk_wasm";
 
-const Transactions = ({ transactions }: { transactions: Transaction[]}) => {
+const Transactions = ({ transactions }: { transactions: WalletTx[]}) => {
 
     // convert a unix timestamp to human readable elapsed time, like "1 day ago"
   function elapsedFrom(unixTs: any) {
@@ -41,12 +41,9 @@ const Transactions = ({ transactions }: { transactions: Transaction[]}) => {
 
   const txs = transactions?.map((tx) => {
     return {
-      // @ts-expect-error
       txType: tx.txType(),
       txId: tx.txid().toString(),
-      // @ts-expect-error
-      txAmount: tx.amount,
-      // @ts-expect-error
+      txAmount: tx.balance().values().next().value as bigint,
       txDate: (typeof tx.timestamp() === 'undefined') ? "unconfirmed" : elapsedFrom(tx.timestamp())
     }
   });
@@ -59,6 +56,9 @@ const Transactions = ({ transactions }: { transactions: Transaction[]}) => {
             <tr>
               <th scope="col" className="px-6 py-3">
                 Type
+              </th>
+              <th scope="col" className="px-6 py-3">
+                Amount
               </th>
               <th scope="col" className="px-6 py-3">
                 txid
@@ -76,6 +76,9 @@ const Transactions = ({ transactions }: { transactions: Transaction[]}) => {
               >
                 <td className="flex items-center px-6 py-4">
                   {tx.txType}
+                </td>
+                <td className="px-6 py-4">
+                  {tx.txAmount > 0 ? `+ ${tx.txAmount.toLocaleString()}` : `- ${tx.txAmount.toLocaleString()}`} Sats
                 </td>
                 <td className="px-6 py-4">
                   <a href={`https://blockstream.info/liquidtestnet/tx/${tx.txId}`} className="text-cyan-300" target="_blank">{tx.txId}</a>
