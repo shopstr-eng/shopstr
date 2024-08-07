@@ -4,6 +4,8 @@ import { GenerateWallet } from "@/components/wallet/generate-wallet";
 import { useWalletContext } from "@/components/wallet/wallet-context";
 import { WolletDescriptor } from "lwk_wasm";
 import Transactions from "@/components/wallet/transactions";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
+import { Button } from "@nextui-org/react";
 
 const Wallet = () => {
   const [walletExists, toggleWalletExists] = useState(false);
@@ -26,6 +28,10 @@ const Wallet = () => {
     changeDescriptor(descriptor);
     changePassphrase(passphrase);
     toggleWalletExists(true);
+  }
+
+  const handleCopyToClipboard = (val: string) => {
+    navigator.clipboard.writeText(val);
   }
 
   useEffect(() => {
@@ -92,7 +98,10 @@ const Wallet = () => {
           </center>
           <center>
             <div className="flex flex-col gap-y-12 items-center px-4">
-              <h4 className="break-all">{receiveAddress?.toString()}</h4>
+              <div className="flex gap-x-6 items-center justify-center">
+                <h4 className="break-all">{receiveAddress?.toString().substring(0, 8) + "...." + receiveAddress?.toString().substring(receiveAddress.toString().length - 8, receiveAddress.toString().length)}</h4>
+                <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={() => handleCopyToClipboard(receiveAddress?.toString()!)}>Copy</Button>
+              </div>
               <img src={receiveAddress?.QRCodeUri()} style={{ imageRendering: "pixelated"}} className="w-32 mx-auto"/>
             </div>
           </center>
