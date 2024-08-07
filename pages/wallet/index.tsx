@@ -116,16 +116,8 @@ const Wallet = () => {
         </section>
       ) : (
         <>
-          { !!passphrase ? (
-            <>
-              <GenerateWallet onGenerateSuccess={onWalletSetupSuccess}/>
-              <RecoverWallet onRecoverSuccess={onWalletSetupSuccess}/>
-            </>
-          ) : (
-            <center>
-              <h2 className="text-3xl font-bold">Shopstr Liquid Web Wallet</h2>
-            </center>
-          ) }
+          <GenerateWallet onGenerateSuccess={onWalletSetupSuccess}/>
+          <RecoverWallet onRecoverSuccess={onWalletSetupSuccess}/>
         </>
       )}
     </div>
