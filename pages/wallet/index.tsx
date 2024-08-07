@@ -97,7 +97,7 @@ const Wallet = () => {
             </div>
           </center>
           <center>
-            <strong>Balance: </strong><span>{balance.toString()} sats</span>
+            <strong>Balance: </strong><span>{balance.toLocaleString()} sats</span>
           </center>
           <center>
             <Transactions transactions={transactions}/>
