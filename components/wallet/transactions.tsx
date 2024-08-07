@@ -1,5 +1,6 @@
 import React from "react";
 import { WalletTx } from "lwk_wasm";
+import { shortenString } from "../utility/wallet-helper";
 
 const Transactions = ({ transactions }: { transactions: WalletTx[]}) => {
 
@@ -41,7 +42,6 @@ const Transactions = ({ transactions }: { transactions: WalletTx[]}) => {
 
   const txs = transactions?.map((tx) => {
     return {
-      txType: tx.txType(),
       txId: tx.txid().toString(),
       txAmount: tx.balance().values().next().value as bigint,
       txDate: (typeof tx.timestamp() === 'undefined') ? "unconfirmed" : elapsedFrom(tx.timestamp())
@@ -50,13 +50,10 @@ const Transactions = ({ transactions }: { transactions: WalletTx[]}) => {
 
   return (
     <div className="relative mt-4 overflow-x-auto rounded-lg shadow-md">
-      <div className="max-h-[50vh] px-12">
+      <div className="max-h-[50vh] px-3">
         <table className="w-full min-w-[50vw] text-left text-sm text-gray-500 dark:text-gray-400">
           <thead className="bg-gray-50 text-xs uppercase text-gray-700 dark:bg-gray-700 dark:text-gray-400">
             <tr>
-              <th scope="col" className="px-6 py-3">
-                Type
-              </th>
               <th scope="col" className="px-6 py-3">
                 Amount
               </th>
@@ -68,22 +65,19 @@ const Transactions = ({ transactions }: { transactions: WalletTx[]}) => {
               </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="px-0 mx-0 text-xs">
             {txs?.map((tx, index) => (
               <tr
                 key={index}
-                className="border-b bg-white dark:border-gray-700 dark:bg-gray-800"
+                className="border-b bg-white dark:border-gray-700 dark:bg-gray-800 px-0 mx-0"
               >
-                <td className="flex items-center px-6 py-4">
-                  {tx.txType}
-                </td>
-                <td className="px-6 py-4">
+                <td className={`px-6 py-4 ${tx.txAmount > 0 ? 'text-lime-200' : 'text-red-200'}`}>
                   {tx.txAmount > 0 ? `+ ${tx.txAmount.toLocaleString()}` : `- ${tx.txAmount.toLocaleString()}`} Sats
                 </td>
                 <td className="px-6 py-4">
-                  <a href={`https://blockstream.info/liquidtestnet/tx/${tx.txId}`} className="text-cyan-300" target="_blank">{tx.txId}</a>
+                  <a href={`https://blockstream.info/liquidtestnet/tx/${tx.txId}`} className="text-cyan-300" target="_blank">{shortenString(tx.txId, 6, 6)}</a>
                 </td>
-                <td className="px-6 py-4">{tx.txDate}</td>
+                <td className="px-6 py-4 break-word">{tx.txDate}</td>
               </tr>
             ))}
           </tbody>
