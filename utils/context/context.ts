@@ -14,13 +14,13 @@ export const ProfileMapContext = createContext({
 } as ProfileContextInterface);
 
 export interface ShopContextInterface {
-  shopData: ShopSettings;
+  shopData: Map<string, ShopSettings>;
   isLoading: boolean;
   updateShopData: (shopData: ShopSettings) => void;
 }
 
 export const ShopMapContext = createContext({
-  shopData: {},
+  shopData: new Map(),
   isLoading: true,
 } as ShopContextInterface);
 

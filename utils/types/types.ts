@@ -13,15 +13,19 @@ export interface ChatObject {
 }
 
 export interface ShopSettings {
-  name?: string;
-  about?: string;
-  ui: {
-    picture?: string;
-    banner?: string;
-    theme?: string;
-    darkMode: boolean;
+  pubkey: string;
+  content: {
+    name?: string;
+    about?: string;
+    ui: {
+      picture?: string;
+      banner?: string;
+      theme?: string;
+      darkMode: boolean;
+    };
+    merchants?: string[];
   };
-  merchants?: string[];
+  created_at: number;
 }
 
 export interface ProfileData {

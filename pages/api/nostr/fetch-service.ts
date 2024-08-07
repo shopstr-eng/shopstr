@@ -110,19 +110,24 @@ export const fetchAllPosts = async (
 
 export const fetchShopSettings = async (
   relays: string[],
-  editShopContext: (shopEvents: ShopSettings, isLoading: boolean) => void,
-  passphrase: string,
+  pubkeyShopSettingsToFetch: string[],
+  editShopContext: (
+    shopEvents: Map<string, ShopSettings>,
+    isLoading: boolean,
+  ) => void,
 ): Promise<{
-  shopSettings: ShopSettings;
+  shopSettingsMap: Map<string, ShopSettings>;
 }> => {
   return new Promise(async function (resolve, reject) {
     try {
       let shopEvents: NostrEvent[] = [];
-      let shopSettings: ShopSettings;
+      let shopSettings: Map<string, ShopSettings | any> = new Map(
+        pubkeyShopSettingsToFetch.map((pubkey) => [pubkey, null]),
+      );
       const pool = new SimplePool();
       let shopFilter: Filter = {
         kinds: [30019],
-        authors: [getLocalStorageData().userPubkey],
+        authors: pubkeyShopSettingsToFetch,
       };
       let h = pool.subscribeMany(relays, [shopFilter], {
         onevent(event) {
@@ -131,25 +136,30 @@ export const fetchShopSettings = async (
         oneose: async () => {
           h.close();
           if (shopEvents.length > 0) {
-            const { signInMethod, userPubkey } = getLocalStorageData();
-            // Sort the events based on the created_at timestamp in descending order
             shopEvents.sort((a, b) => b.created_at - a.created_at);
-            if (signInMethod === "extension") {
-              shopSettings = JSON.parse(
-                await window.nostr.nip04.decrypt(
-                  userPubkey,
-                  shopEvents[0].content,
-                ),
-              );
-            } else if (signInMethod === "wallet") {
-              let sk2 = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
-              shopSettings = JSON.parse(
-                await nip04.decrypt(sk2, userPubkey, shopEvents[0].content),
-              );
-            }
+            const latestEventsMap: Map<string, NostrEvent> = new Map();
+            shopEvents.forEach((event) => {
+              if (!latestEventsMap.has(event.pubkey)) {
+                latestEventsMap.set(event.pubkey, event);
+              }
+            });
+            latestEventsMap.forEach((event, pubkey) => {
+              try {
+                const shopSetting = {
+                  pubkey: event.pubkey,
+                  content: JSON.parse(event.content),
+                  created_at: event.created_at,
+                };
+                shopSettings.set(pubkey, shopSetting);
+              } catch (error) {
+                console.error(
+                  `Failed to parse shop setting for pubkey: ${pubkey}`,
+                  error,
+                );
+              }
+            });
             editShopContext(shopSettings, false);
-            // Return the most recent event
-            resolve({ shopSettings: shopSettings });
+            resolve({ shopSettingsMap: shopSettings });
           } else {
             throw new Error("No shop settings found.");
           }

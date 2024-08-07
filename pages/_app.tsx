@@ -85,21 +85,12 @@ function App({ Component, pageProps }: AppProps) {
     },
   );
   const [shopContext, setShopContext] = useState<ShopContextInterface>({
-    shopData: {
-      name: "",
-      about: "",
-      ui: {
-        picture: "",
-        banner: "",
-        theme: "",
-        darkMode: false,
-      },
-      merchants: [],
-    },
+    shopData: new Map(),
     isLoading: true,
-    updateShopData: (shopData: any) => {
+    updateShopData: (shopData: ShopSettings) => {
       setShopContext((shopContext) => {
-        let shopDataMap = shopContext.shopData;
+        let shopDataMap = new Map(shopContext.shopData);
+        shopDataMap.set(shopData.pubkey, shopData);
         return {
           shopData: shopDataMap,
           isLoading: false,
@@ -200,7 +191,10 @@ function App({ Component, pageProps }: AppProps) {
     });
   };
 
-  const editShopContext = (shopData: ShopSettings, isLoading: boolean) => {
+  const editShopContext = (
+    shopData: Map<string, ShopSettings>,
+    isLoading: boolean,
+  ) => {
     setShopContext((shopContext) => {
       return {
         shopData,
@@ -329,16 +323,15 @@ function App({ Component, pageProps }: AppProps) {
           pubkeysToFetchProfilesFor,
           editProfileContext,
         );
+        let { shopSettingsMap } = await fetchShopSettings(
+          allRelays,
+          pubkeysToFetchProfilesFor,
+          editShopContext,
+        );
         if (
           (getLocalStorageData().signInMethod === "nsec" && passphrase) ||
           getLocalStorageData().signInMethod === "extension"
         ) {
-          let { shopSettings } = await fetchShopSettings(
-            allRelays,
-            editShopContext,
-            passphrase,
-          );
-
           let { cashuWalletRelays, cashuMints, cashuProofs } =
             await fetchCashuWallet(
               allRelays,
@@ -412,19 +405,21 @@ function App({ Component, pageProps }: AppProps) {
           <FollowsContext.Provider value={followsContext}>
             <ProductContext.Provider value={productContext}>
               <ProfileMapContext.Provider value={profileContext}>
-                <ChatsContext.Provider value={chatsContext}>
-                  <NextUIProvider>
-                    <NextThemesProvider attribute="class">
-                      <div className="flex">
-                        <SideNav />
-                        <main className="flex-1">
-                          <Component {...pageProps} />
-                        </main>
-                      </div>
-                      <BottomNav />
-                    </NextThemesProvider>
-                  </NextUIProvider>
-                </ChatsContext.Provider>
+                <ShopMapContext.Provider value={shopContext}>
+                  <ChatsContext.Provider value={chatsContext}>
+                    <NextUIProvider>
+                      <NextThemesProvider attribute="class">
+                        <div className="flex">
+                          <SideNav />
+                          <main className="flex-1">
+                            <Component {...pageProps} />
+                          </main>
+                        </div>
+                        <BottomNav />
+                      </NextThemesProvider>
+                    </NextUIProvider>
+                  </ChatsContext.Provider>
+                </ShopMapContext.Provider>
               </ProfileMapContext.Provider>
             </ProductContext.Provider>
           </FollowsContext.Provider>

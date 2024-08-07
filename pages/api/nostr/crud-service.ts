@@ -1,9 +1,7 @@
 import {
   finalizeAndSendNostrEvent,
   getLocalStorageData,
-  getPrivKeyWithPassphrase,
 } from "@/components/utility/nostr-helper-functions";
-import { nip04 } from "nostr-tools";
 import { NostrEvent } from "@/utils/types/types";
 import { removeProductFromCache } from "./cache-service";
 
@@ -71,45 +69,18 @@ export async function createNostrShopEvent(
   content: string,
   passphrase: string,
 ) {
-  const { signInMethod } = getLocalStorageData();
-  let msg;
-  if (signInMethod === "extension") {
-    msg = {
-      kind: 30019, // NIP-15 - Stall
-      content: await window.nostr.nip04.encrypt(
-        getLocalStorageData().userPubkey,
-        content,
-      ),
-      tags: [],
-      created_at: 0,
-      pubkey: pubkey,
-      id: "",
-      sig: "",
-    } as NostrEvent;
+  let msg = {
+    kind: 30019, // NIP-15 - Stall Metadata
+    content: content,
+    tags: [],
+    created_at: 0,
+    pubkey: pubkey,
+    id: "",
+    sig: "",
+  } as NostrEvent;
 
-    msg.created_at = Math.floor(new Date().getTime() / 1000);
-    await finalizeAndSendNostrEvent(msg, passphrase);
-  } else if (signInMethod === "nsec") {
-    if (!passphrase) throw new Error("Passphrase is required");
-    let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
-
-    msg = {
-      kind: 30019, // NIP-15 - Stall
-      content: await nip04.encrypt(
-        senderPrivkey,
-        getLocalStorageData().userPubkey,
-        content,
-      ),
-      tags: [],
-      created_at: 0,
-      pubkey: pubkey,
-      id: "",
-      sig: "",
-    } as NostrEvent;
-
-    msg.created_at = Math.floor(new Date().getTime() / 1000);
-    await finalizeAndSendNostrEvent(msg, passphrase);
-  }
+  msg.created_at = Math.floor(new Date().getTime() / 1000);
+  await finalizeAndSendNostrEvent(msg, passphrase);
   return msg;
 }
 

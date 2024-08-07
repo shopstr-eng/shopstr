@@ -11,7 +11,6 @@ import axios from "axios";
 import { NostrEvent } from "@/utils/types/types";
 import { Proof } from "@cashu/cashu-ts";
 import { ProductFormValues } from "@/pages/api/nostr/post-event";
-import { splitAmount } from "@cashu/cashu-ts/dist/lib/es5/utils";
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
