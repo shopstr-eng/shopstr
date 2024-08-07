@@ -51,7 +51,7 @@ const Transactions = ({ transactions }: { transactions: WalletTx[]}) => {
   return (
     <div className="relative mt-4 overflow-x-auto rounded-lg shadow-md">
       <div className="max-h-[50vh] px-3">
-        <table className="w-full min-w-[50vw] text-left text-sm text-gray-500 dark:text-gray-400">
+        <table className="w-full min-w-[50vw] text-left text-sm text-gray-500 dark:text-gray-400 max-w-3xl">
           <thead className="bg-gray-50 text-xs uppercase text-gray-700 dark:bg-gray-700 dark:text-gray-400">
             <tr>
               <th scope="col" className="px-6 py-3">
@@ -65,7 +65,7 @@ const Transactions = ({ transactions }: { transactions: WalletTx[]}) => {
               </th>
             </tr>
           </thead>
-          <tbody className="px-0 mx-0 text-xs">
+          <tbody className="px-0 mx-0 text-xs lg:text-md">
             {txs?.map((tx, index) => (
               <tr
                 key={index}
