@@ -7,6 +7,7 @@ import Transactions from "@/components/wallet/transactions";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
 import { Button } from "@nextui-org/react";
 import { shortenString } from "@/components/utility/wallet-helper";
+import { RecoverWallet } from "@/components/wallet/recover-wallet";
 
 const Wallet = () => {
   const [walletExists, toggleWalletExists] = useState(false);
@@ -23,7 +24,7 @@ const Wallet = () => {
     }
   }, [descriptor, transactions])
 
-  const onGenerateSuccess = (passphrase: string) => {
+  const onWalletSetupSuccess = (passphrase: string) => {
     const descriptor = getDecryptedDescriptorFromLocalStorage(passphrase);
     changeDescriptor(descriptor);
     changePassphrase(passphrase);
@@ -95,10 +96,13 @@ const Wallet = () => {
             <h2 className="text-3xl font-bold">Shopstr Liquid Wallet</h2>
           </center>
           <center>
-            <div className="flex flex-col gap-y-12 items-center px-4">
-              <div className="flex gap-x-6 items-center justify-center">
+            <div className="flex flex-col gap-y-6 items-center px-4">
+              <div className="flex flex-col gap-y-2 items-center justify-center">
                 <h4 className="break-all">{shortenString(receiveAddress?.toString()!, 8)}</h4>
-                <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={() => handleCopyToClipboard(receiveAddress?.toString()!)}>Copy</Button>
+                <div className="flex gap-x-4">
+                  <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={() => handleCopyToClipboard(receiveAddress?.toString()!)}>Copy Receive Address</Button>
+                  <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={() => handleCopyToClipboard(descriptor)}>Copy CT Descriptor</Button>
+                </div>
               </div>
               <img src={receiveAddress?.QRCodeUri()} style={{ imageRendering: "pixelated"}} className="w-32 mx-auto"/>
             </div>
@@ -112,7 +116,16 @@ const Wallet = () => {
         </section>
       ) : (
         <>
-          <GenerateWallet onGenerateSuccess={onGenerateSuccess}/>
+          { !!passphrase ? (
+            <>
+              <GenerateWallet onGenerateSuccess={onWalletSetupSuccess}/>
+              <RecoverWallet onRecoverSuccess={onWalletSetupSuccess}/>
+            </>
+          ) : (
+            <center>
+              <h2 className="text-3xl font-bold">Shopstr Liquid Web Wallet</h2>
+            </center>
+          ) }
         </>
       )}
     </div>
