@@ -10,14 +10,13 @@ import {
   ChartBarIcon,
   Cog6ToothIcon,
   WalletIcon,
-  ArrowLeftOnRectangleIcon,
-  ArrowRightOnRectangleIcon,
+  ArrowLeftEndOnRectangleIcon,
 } from "@heroicons/react/24/outline";
 import { countNumberOfUnreadMessagesFromChatsContext } from "@/utils/messages/utils";
-import { ChatsContext } from "@/utils/context/context";
+import { ChatsContext, ShopMapContext } from "@/utils/context/context";
 import { db } from "../pages/api/nostr/cache-service";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Button, DropdownItem, Image, useDisclosure } from "@nextui-org/react";
+import { Button, Image, useDisclosure } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
 import { useRouter } from "next/router";
 import SignInModal from "./sign-in/SignInModal";
@@ -26,6 +25,7 @@ import {
   isUserLoggedIn,
 } from "./utility/nostr-helper-functions";
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
+import { ShopSettings } from "../utils/types/types"
 
 const SideNav = () => {
   const {
@@ -40,9 +40,13 @@ const SideNav = () => {
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   const chatsContext = useContext(ChatsContext);
+  const shopMapContext = useContext(ShopMapContext);
 
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
   const [signedIn, setSignedIn] = useState(false);
+
+  const [shopLogoURL, setShopLogoURL] = useState("");
+  const [shopName, setShopName] = useState("");
 
   const liveChatMessagesFromCache = useLiveQuery(
     async () => await db.table("chatMessages").toArray(),
@@ -67,6 +71,17 @@ const SideNav = () => {
     };
     getUnreadMessages();
   }, [chatsContext, liveChatMessagesFromCache]);
+
+  useEffect(() => {
+    const npub = router.pathname.split('/').find(segment => segment.includes('npub'));
+    if (npub && shopMapContext.shopData.has(npub) && typeof shopMapContext.shopData.get(npub) != "undefined") {
+      const shopSettings: ShopSettings | undefined = shopMapContext.shopData.get(npub);
+      if (shopSettings) {
+        setShopLogoURL(shopSettings.content.ui.picture);
+        setShopName(shopSettings.content.name);
+      }
+    }
+  }, [router.pathname, shopMapContext]);
 
   const handleRoute = (path: string) => {
     if (signedIn) {
@@ -95,7 +110,7 @@ const SideNav = () => {
             alt="Shopstr logo"
             height={50}
             radius="sm"
-            src="/shopstr-2000x2000.png"
+            src={shopLogoURL != "" ? shopLogoURL : "/shopstr-2000x2000.png"}
             width={50}
           />
           <span
@@ -103,7 +118,7 @@ const SideNav = () => {
               isHomeActive ? "font-bold" : ""
             }`}
           >
-            Shopstr
+            {shopName != "" ? shopName : "Shopstr"}
           </span>
         </Button>
         <Button
@@ -226,7 +241,7 @@ const SideNav = () => {
                   : ""
               }`}
             >
-              <ArrowLeftOnRectangleIcon height={32} width={32} />
+              <ArrowLeftEndOnRectangleIcon height={32} width={32} />
               <span
                 className={`hidden text-2xl md:flex ${
                   isProfileActive ? "font-bold" : ""

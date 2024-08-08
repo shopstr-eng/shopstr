@@ -7,12 +7,11 @@ import useNavigation from "@/components/hooks/use-navigation";
 import {
   HomeIcon,
   EnvelopeOpenIcon,
-  ArrowLeftOnRectangleIcon,
+  ArrowLeftEndOnRectangleIcon,
   ChartBarIcon,
-  Cog6ToothIcon,
   WalletIcon,
 } from "@heroicons/react/24/outline";
-import { Button, DropdownItem, useDisclosure } from "@nextui-org/react";
+import { Button, useDisclosure } from "@nextui-org/react";
 import { countNumberOfUnreadMessagesFromChatsContext } from "@/utils/messages/utils";
 import { ChatsContext } from "@/utils/context/context";
 import { db } from "../pages/api/nostr/cache-service";
@@ -173,7 +172,7 @@ const BottomNav = () => {
                   : ""
               }`}
             >
-              <ArrowLeftOnRectangleIcon height={32} width={32} />
+              <ArrowLeftEndOnRectangleIcon height={32} width={32} />
               <span
                 className={`hidden text-2xl md:flex ${
                   isProfileActive ? "font-bold" : ""

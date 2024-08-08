@@ -1,6 +1,6 @@
 import { Listbox, ListboxItem, ListboxSection, cn } from "@nextui-org/react";
 import {
-  ArrowRightOnRectangleIcon,
+  ArrowRightStartOnRectangleIcon,
   BuildingStorefrontIcon,
   Cog6ToothIcon,
   UserIcon,
@@ -73,7 +73,7 @@ const SettingsPage = () => {
               description="Log out of Shopstr"
               classNames={listBoxClassnames}
               startContent={
-                <ArrowRightOnRectangleIcon
+                <ArrowRightStartOnRectangleIcon
                   className={"text-color-red-900 " + "h-5 w-5"}
                   color="red"
                 />

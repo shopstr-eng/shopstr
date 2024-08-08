@@ -15,15 +15,15 @@ export interface ChatObject {
 export interface ShopSettings {
   pubkey: string;
   content: {
-    name?: string;
-    about?: string;
+    name: string;
+    about: string;
     ui: {
-      picture?: string;
-      banner?: string;
-      theme?: string;
+      picture: string;
+      banner: string;
+      theme: string;
       darkMode: boolean;
     };
-    merchants?: string[];
+    merchants: string[];
   };
   created_at: number;
 }
