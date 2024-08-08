@@ -42,6 +42,7 @@ const Transactions = ({ transactions }: { transactions: WalletTx[]}) => {
 
   const txs = transactions?.map((tx) => {
     return {
+      txIdUnblindedUrl: tx.unblindedUrl("https://blockstream.info/liquidtestnet/"),
       txId: tx.txid().toString(),
       txAmount: tx.balance().values().next().value as bigint,
       txDate: (typeof tx.timestamp() === 'undefined') ? "unconfirmed" : elapsedFrom(tx.timestamp())
@@ -75,7 +76,7 @@ const Transactions = ({ transactions }: { transactions: WalletTx[]}) => {
                   {tx.txAmount > 0 ? `+ ${tx.txAmount.toLocaleString()}` : `- ${tx.txAmount.toLocaleString()}`} Sats
                 </td>
                 <td className="px-6 py-4">
-                  <a href={`https://blockstream.info/liquidtestnet/tx/${tx.txId}`} className="text-cyan-300" target="_blank">{shortenString(tx.txId, 6, 6)}</a>
+                  <a href={`${tx.txIdUnblindedUrl}`} className="text-cyan-300" target="_blank">{shortenString(tx.txId, 6, 6)}</a>
                 </td>
                 <td className="px-6 py-4 break-word">{tx.txDate}</td>
               </tr>
