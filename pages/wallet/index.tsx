@@ -35,6 +35,33 @@ const Wallet = () => {
     navigator.clipboard.writeText(val);
   }
 
+  const handleDisconnectWallet = () => {
+    const confirm = window.confirm("Really disconnect wallet?");
+    if (!confirm) return;
+    let isPassphraseValid = false;
+
+      while(!isPassphraseValid) {
+        const passphrase = window.prompt("Enter your passphrase: ") || "";
+        try {
+          isPassphraseValid = isValidPassphraseWallet(passphrase);
+        } catch (_) {
+          isPassphraseValid = false;
+        }
+        
+        if (isPassphraseValid) {
+          localStorage.removeItem("liquid-wallet-ct-descriptor");
+          setBalance(0n);
+          setTransactions([])
+          changeDescriptor("");
+          changePassphrase(passphrase);
+          toggleWalletExists(false);
+          break;
+        } else {
+          alert("Incorrect passphrase.");
+        }
+      }
+  }
+
   useEffect(() => {
     const walletDescriptor = window.localStorage.getItem("liquid-wallet-ct-descriptor");
     if (walletDescriptor) { 
@@ -103,8 +130,14 @@ const Wallet = () => {
                   <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={() => handleCopyToClipboard(receiveAddress?.toString()!)}>Copy Receive Address</Button>
                   <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={() => handleCopyToClipboard(descriptor)}>Copy CT Descriptor</Button>
                 </div>
+                <Button className="bg-red-500 rounded px-2 py-[2px] h-min text-xs" onClick={() => handleDisconnectWallet()}>Disconnect Wallet</Button>
               </div>
-              <img src={receiveAddress?.QRCodeUri()} style={{ imageRendering: "pixelated"}} className="w-32 mx-auto"/>
+              <img 
+                src={receiveAddress?.QRCodeUri()} 
+                style={{ imageRendering: "pixelated"}} 
+                className="w-32 mx-auto p-2 bg-white"
+                onClick={() => handleCopyToClipboard(receiveAddress?.toString()!)}
+              />
             </div>
           </center>
           <center>
