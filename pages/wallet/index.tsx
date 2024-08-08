@@ -6,7 +6,7 @@ import { WolletDescriptor } from "lwk_wasm";
 import Transactions from "@/components/wallet/transactions";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
 import { Button } from "@nextui-org/react";
-import { shortenString } from "@/components/utility/wallet-helper";
+import { BitcoinPriceResponse, fetchBitcoinPrice, formatFiatBalance, shortenString } from "@/components/utility/wallet-helper";
 import { RecoverWallet } from "@/components/wallet/recover-wallet";
 
 const Wallet = () => {
@@ -14,6 +14,8 @@ const Wallet = () => {
   const { descriptor, passphrase, changeDescriptor, changePassphrase } = useWalletContext();
   const [balance, setBalance] = useState(0n);
   const [transactions, setTransactions] = useState<any>();
+  const [bitcoinPrice, setBitcoinPrice] = useState<BitcoinPriceResponse>();
+  const [fiatCurrency, setFiatCurrency] = useState<BitcoinPriceResponse['bpi']['USD']['code']>("USD");
   
   const receiveAddress = useMemo(() => {
     if (descriptor) {
@@ -33,6 +35,12 @@ const Wallet = () => {
 
   const handleCopyToClipboard = (val: string) => {
     navigator.clipboard.writeText(val);
+  }
+
+  const handleCycleFiat = () => {
+    const fiats = ['USD', 'EUR', 'GBP'];
+    const newFiatCurrency = fiats.filter(fiat => fiat !== fiatCurrency)[Math.floor(Math.random() * (fiats.length - 1))] as "USD" | "EUR" | "GBP";
+    setFiatCurrency(newFiatCurrency)
   }
 
   const handleDisconnectWallet = () => {
@@ -90,6 +98,9 @@ const Wallet = () => {
               setBalance(BigInt(balance));
               setTransactions(value?.transactions)
             })
+            fetchBitcoinPrice().then((value) => {
+              setBitcoinPrice(value);
+            });
           }
           break;
         } else {
@@ -114,6 +125,16 @@ const Wallet = () => {
 
     return () => clearInterval(interval);
   }, [descriptor])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchBitcoinPrice().then((value) => {
+        setBitcoinPrice(value);
+      });
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [])
 
   return (
     <div className="flex min-h-screen flex-col bg-light-bg pb-20 pt-6 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
@@ -140,8 +161,15 @@ const Wallet = () => {
               />
             </div>
           </center>
-          <center>
-            <strong>Balance: </strong><span>{balance.toLocaleString()} sats</span>
+          <center className="flex flex-col">
+            <strong className="text-xl">Balance</strong>
+            <span className="text-2xl">{balance.toLocaleString()} sats</span>
+            <span 
+              onClick={() => handleCycleFiat()} 
+              className="text-lg text-grey-50 select-none cursor-pointer"
+            >
+              {formatFiatBalance(fiatCurrency, bitcoinPrice?.bpi[fiatCurrency].rate_float ?? 0, balance).display_string}
+            </span>
           </center>
           <center>
             <Transactions transactions={transactions}/>
