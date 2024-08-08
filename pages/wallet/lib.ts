@@ -98,6 +98,26 @@ export const isValidDescriptor = (descriptorInput: string) => {
   }
 }
 
+export const recoverDescriptorByMnemonic = (str_mnemonic: string) => {
+  const network = getNetwork();
+  const signer = generateNewSigner(str_mnemonic, network);
+  return generateLiquidDescriptor(signer);
+}
+
+export const getRecoveryTypeIfValid = (input: string) => {
+  try {
+    new lwk.WolletDescriptor(input);
+    return "descriptor";
+  } catch (_) {
+    try {
+      new lwk.Mnemonic(input);
+      return "mnemonic";
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
 export function mapBalance(map: any) {
   map.forEach((value: bigint, key: any) => {
       map.set(key, mapAssetPrecision(key, value))
