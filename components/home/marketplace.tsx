@@ -78,7 +78,6 @@ export function MarketplacePage() {
         shopMapContext.shopData.get(focusedPubkey);
       if (shopSettings) {
         setShopBannerURL(shopSettings.content.ui.banner);
-        console.log(shopSettings.content.ui.banner)
       }
     }
     setIsFetchingShop(false);
@@ -107,13 +106,13 @@ export function MarketplacePage() {
     <div className="mx-auto w-full">
       <div className="flex max-w-[100%] flex-col bg-light-bg px-3 pb-2 dark:bg-dark-bg">
         {shopBannerURL != "" && (
-            <Image
-              alt={"Shop banner image"}
-              src={shopBannerURL}
-              className="h-40 w-full rounded-lg object-cover object-fill"
-              style={{ width: "100%", height: "auto", objectFit: "cover" }}
-            />
-          )}
+          <Image
+            alt={"Shop banner image"}
+            src={shopBannerURL}
+            className="h-40 w-full rounded-lg object-cover object-fill"
+            style={{ width: "100%", height: "auto", objectFit: "cover" }}
+          />
+        )}
         <div className="flex flex-row gap-2 pb-3">
           <Input
             className="mt-2 text-light-text dark:text-dark-text"

@@ -66,7 +66,7 @@ const ShopSettingsPage = () => {
           name: shop.content.name,
           about: shop.content.about,
           picture: shop.content.ui.picture,
-          banner: shop.content.ui.banner
+          banner: shop.content.ui.banner,
         };
         reset(mappedContent);
       }
@@ -90,7 +90,7 @@ const ShopSettingsPage = () => {
     let response = await createNostrShopEvent(
       userPubkey,
       JSON.stringify(transformedData),
-      passphrase
+      passphrase,
     );
     shopContext.updateShopData({
       pubkey: userPubkey,

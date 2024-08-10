@@ -88,10 +88,8 @@ const TopNav = () => {
   };
 
   return (
-    <div
-      className="fixed top-0 z-50 w-full border-b border-zinc-200 bg-light-fg shadow-lg dark:border-zinc-800 dark:bg-dark-fg"
-    >
-      <div className="flex items-center justify-between pr-4 py-2">
+    <div className="fixed top-0 z-50 w-full border-b border-zinc-200 bg-light-fg shadow-lg dark:border-zinc-800 dark:bg-dark-fg">
+      <div className="flex items-center justify-between py-2 pr-4">
         <div className="flex items-center">
           <Button
             onClick={() => router.push("/")}

@@ -74,7 +74,7 @@ const Wallet = () => {
 
   return (
     <>
-      <div className="pt-[8rem] flex min-h-screen flex-col bg-light-bg dark:bg-dark-bg">
+      <div className="flex min-h-screen flex-col bg-light-bg pt-[8rem] dark:bg-dark-bg">
         <center>
           <p className="mb-2 break-words text-center text-6xl text-light-text dark:text-dark-text">
             {totalBalance} sats
