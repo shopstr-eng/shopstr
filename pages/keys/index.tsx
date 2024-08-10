@@ -64,7 +64,7 @@ const Keys = () => {
   };
 
   return (
-    <div className="flex h-[100vh] flex-col bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
+    <div className="flex h-[100vh] flex-col bg-light-bg pt-24 dark:bg-dark-bg">
       <div className="p-4">
         <Card>
           <CardBody>

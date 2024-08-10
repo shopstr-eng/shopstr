@@ -6,6 +6,7 @@ const pathMap: { [key: string]: string } = {
   settings: "Settings",
   "user-profile": "User Profile",
   preferences: "Preferences",
+  "shop-settings": "Shop Settings",
 };
 
 export const SettingsBreadCrumbs = () => {

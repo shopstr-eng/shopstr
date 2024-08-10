@@ -161,7 +161,7 @@ export const fetchShopSettings = async (
             editShopContext(shopSettings, false);
             resolve({ shopSettingsMap: shopSettings });
           } else {
-            throw new Error("No shop settings found.");
+            reject();
           }
         },
       });

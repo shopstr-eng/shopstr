@@ -22,7 +22,13 @@ import {
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 
-type DropDownKeys = "shop" | "shop_settings" | "message" | "settings" | "user_profile" | "logout";
+type DropDownKeys =
+  | "shop"
+  | "shop_settings"
+  | "message"
+  | "settings"
+  | "user_profile"
+  | "logout";
 
 export const ProfileWithDropdown = ({
   pubkey,

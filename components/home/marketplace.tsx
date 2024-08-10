@@ -7,12 +7,14 @@ import {
   Select,
   SelectItem,
   SelectSection,
+  Image,
   Input,
   useDisclosure,
 } from "@nextui-org/react";
 import { useRouter } from "next/router";
 import { nip19 } from "nostr-tools";
-import React, { useEffect, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
+import { ShopMapContext } from "@/utils/context/context";
 import DisplayEvents from "../display-products";
 import LocationDropdown from "../utility-components/dropdowns/location-dropdown";
 import {
@@ -22,6 +24,7 @@ import {
 import { isUserLoggedIn } from "../utility/nostr-helper-functions";
 import SignInModal from "../sign-in/SignInModal";
 import ShopstrSwitch from "../utility-components/shopstr-switch";
+import { ShopSettings } from "../../utils/types/types";
 
 export function MarketplacePage() {
   const router = useRouter();
@@ -34,6 +37,11 @@ export function MarketplacePage() {
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   const [wotFilter, setWotFilter] = useState(false);
+
+  const [shopBannerURL, setShopBannerURL] = useState("");
+  const [isFetchingShop, setIsFetchingShop] = useState(false);
+
+  const shopMapContext = useContext(ShopMapContext);
 
   // Update focusedPubkey when pubkey in url changes
   useEffect(() => {
@@ -59,6 +67,23 @@ export function MarketplacePage() {
     }
   });
 
+  useEffect(() => {
+    setIsFetchingShop(true);
+    if (
+      focusedPubkey &&
+      shopMapContext.shopData.has(focusedPubkey) &&
+      typeof shopMapContext.shopData.get(focusedPubkey) != "undefined"
+    ) {
+      const shopSettings: ShopSettings | undefined =
+        shopMapContext.shopData.get(focusedPubkey);
+      if (shopSettings) {
+        setShopBannerURL(shopSettings.content.ui.banner);
+        console.log(shopSettings.content.ui.banner)
+      }
+    }
+    setIsFetchingShop(false);
+  }, [focusedPubkey, shopMapContext, shopBannerURL]);
+
   const routeToShop = (npubkey: string) => {
     npubkey = encodeURIComponent(npubkey);
     if (npubkey === "") {
@@ -77,9 +102,18 @@ export function MarketplacePage() {
     }
   };
 
+  // get rid of item filters when custom shop view is set
   return (
     <div className="mx-auto w-full">
       <div className="flex max-w-[100%] flex-col bg-light-bg px-3 pb-2 dark:bg-dark-bg">
+        {shopBannerURL != "" && (
+            <Image
+              alt={"Shop banner image"}
+              src={shopBannerURL}
+              className="h-40 w-full rounded-lg object-cover object-fill"
+              style={{ width: "100%", height: "auto", objectFit: "cover" }}
+            />
+          )}
         <div className="flex flex-row gap-2 pb-3">
           <Input
             className="mt-2 text-light-text dark:text-dark-text"

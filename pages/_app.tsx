@@ -43,8 +43,7 @@ import {
   ShopSettings,
 } from "../utils/types/types";
 import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
-import BottomNav from "@/components/nav-bottom";
-import SideNav from "@/components/nav-side";
+import TopNav from "@/components/nav-top";
 import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
 
 function App({ Component, pageProps }: AppProps) {
@@ -409,13 +408,12 @@ function App({ Component, pageProps }: AppProps) {
                   <ChatsContext.Provider value={chatsContext}>
                     <NextUIProvider>
                       <NextThemesProvider attribute="class">
+                        <TopNav />
                         <div className="flex">
-                          <SideNav />
                           <main className="flex-1">
                             <Component {...pageProps} />
                           </main>
                         </div>
-                        <BottomNav />
                       </NextThemesProvider>
                     </NextUIProvider>
                   </ChatsContext.Provider>
