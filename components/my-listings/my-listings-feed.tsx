@@ -2,22 +2,20 @@
 
 import React, { useEffect, useState } from "react";
 
-import MarketplacePage from "./marketplace";
+import useScrollingEffect from "@/components/hooks/use-scroll";
+import MyListingsPage from "./my-listings";
 import ProductForm from "../product-form";
 import { useRouter } from "next/router";
 import { useSearchParams } from "next/navigation";
 import { isUserLoggedIn } from "../utility/nostr-helper-functions";
 
-const HomeFeed = ({
-  focusedPubkey,
-  setFocusedPubkey,
-}: {
-  focusedPubkey: string;
-  setFocusedPubkey: (value: string) => void;
-}) => {
+const MyListingsFeed = () => {
+  const scrollDirection = useScrollingEffect();
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const headerClass =
+    scrollDirection === "up" ? "translate-y-0" : "translate-y-[-100%]";
   const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
@@ -32,11 +30,8 @@ const HomeFeed = ({
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="flex h-screen flex-1">
-        <MarketplacePage
-          focusedPubkey={focusedPubkey}
-          setFocusedPubkey={setFocusedPubkey}
-        />
+      <div className="flex h-screen flex-1 pt-10">
+        <MyListingsPage />
       </div>
 
       <ProductForm
@@ -47,4 +42,4 @@ const HomeFeed = ({
   );
 };
 
-export default HomeFeed;
+export default MyListingsFeed;

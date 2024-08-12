@@ -2,7 +2,13 @@ import React from "react";
 import Head from "next/head";
 import HomeFeed from "@/components/home/home-feed";
 
-export default function SellerView() {
+export default function SellerView({
+  focusedPubkey,
+  setFocusedPubkey,
+}: {
+  focusedPubkey: string;
+  setFocusedPubkey: (value: string) => void;
+}) {
   return (
     <>
       <Head>
@@ -32,7 +38,10 @@ export default function SellerView() {
         <meta name="twitter:image" content="/shopstr-2000x2000.png" />
       </Head>
       <div className="flex h-full min-h-screen flex-col bg-light-bg pt-24 dark:bg-dark-bg">
-        <HomeFeed />
+        <HomeFeed
+          focusedPubkey={focusedPubkey}
+          setFocusedPubkey={setFocusedPubkey}
+        />
       </div>
     </>
   );

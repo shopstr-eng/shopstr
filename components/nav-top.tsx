@@ -1,12 +1,9 @@
 import React, { useContext, useEffect, useState } from "react";
-
 import useNavigation from "@/components/hooks/use-navigation";
-
 import { Button, Image, useDisclosure } from "@nextui-org/react";
 import { countNumberOfUnreadMessagesFromChatsContext } from "@/utils/messages/utils";
 import { ChatsContext, ShopMapContext } from "@/utils/context/context";
 import { db } from "../pages/api/nostr/cache-service";
-
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   getLocalStorageData,
@@ -17,7 +14,11 @@ import SignInModal from "./sign-in/SignInModal";
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
 import { ShopSettings } from "../utils/types/types";
 
-const TopNav = () => {
+const TopNav = ({
+  setFocusedPubkey,
+}: {
+  setFocusedPubkey: (value: string) => void;
+}) => {
   const {
     isHomeActive,
     isMessagesActive,
@@ -87,23 +88,28 @@ const TopNav = () => {
     }
   };
 
+  const handleHomeClick = () => {
+    setFocusedPubkey("");
+    router.push("/");
+  };
+
   return (
     <div className="fixed top-0 z-50 w-full border-b border-zinc-200 bg-light-fg shadow-lg dark:border-zinc-800 dark:bg-dark-fg">
       <div className="flex items-center justify-between py-2 pr-4">
         <div className="flex items-center">
           <Button
-            onClick={() => router.push("/")}
+            onClick={handleHomeClick}
             className={`flex items-center bg-transparent text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text`}
           >
             <Image
               alt="Shopstr logo"
-              height={50}
+              height={40}
               radius="sm"
               src={shopLogoURL != "" ? shopLogoURL : "/shopstr-2000x2000.png"}
-              width={50}
+              width={40}
             />
             <span
-              className={`ml-2 hidden text-2xl md:flex ${
+              className={`ml-2 hidden text-xl md:flex ${
                 isHomeActive ? "font-bold" : ""
               }`}
             >
@@ -111,10 +117,10 @@ const TopNav = () => {
             </span>
           </Button>
         </div>
-        <div className="flex items-center space-x-2 font-bold text-light-text dark:text-dark-text">
+        <div className="flex items-center font-bold text-light-text dark:text-dark-text">
           <Button
             className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-            onClick={() => router.push("/")}
+            onClick={handleHomeClick}
           >
             Home
           </Button>
@@ -135,9 +141,9 @@ const TopNav = () => {
           |
           <Button
             className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-            onClick={() => handleRoute("/metrics")}
+            onClick={() => handleRoute("/my-listings")}
           >
-            Metrics
+            My Listings
           </Button>
           {signedIn ? (
             <>
@@ -158,9 +164,7 @@ const TopNav = () => {
             <>
               |
               <Button
-                onClick={() => {
-                  onOpen();
-                }}
+                onClick={onOpen}
                 className={`bg-transparent text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
                   isProfileActive
                     ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"

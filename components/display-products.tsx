@@ -226,7 +226,7 @@ const DisplayEvents = ({
       <div className="w-full md:pl-4">
         {/* DISPLAYS PRODUCT LISTINGS HERE */}
         {productEvents.length != 0 ? (
-          <div className="grid h-[90%] max-w-full grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-x-hidden">
+          <div className="grid max-w-full grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-x-hidden">
             {productEvents.map((productData: ProductData, index) => {
               return displayProductCard(productData, index, handleSendMessage);
             })}

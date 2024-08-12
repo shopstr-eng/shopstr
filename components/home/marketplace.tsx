@@ -17,18 +17,24 @@ import React, { useContext, useEffect, useState } from "react";
 import { ShopMapContext } from "@/utils/context/context";
 import DisplayEvents from "../display-products";
 import LocationDropdown from "../utility-components/dropdowns/location-dropdown";
+import { CATEGORIES } from "../utility/STATIC-VARIABLES";
 import {
-  CATEGORIES,
-  SHOPSTRBUTTONCLASSNAMES,
-} from "../utility/STATIC-VARIABLES";
-import { isUserLoggedIn } from "../utility/nostr-helper-functions";
+  getLocalStorageData,
+  isUserLoggedIn,
+} from "../utility/nostr-helper-functions";
 import SignInModal from "../sign-in/SignInModal";
 import ShopstrSwitch from "../utility-components/shopstr-switch";
 import { ShopSettings } from "../../utils/types/types";
+import SideShopNav from "./side-shop-nav";
 
-export function MarketplacePage() {
+export function MarketplacePage({
+  focusedPubkey,
+  setFocusedPubkey,
+}: {
+  focusedPubkey: string;
+  setFocusedPubkey: (value: string) => void;
+}) {
   const router = useRouter();
-  const [focusedPubkey, setfocusedPubkey] = useState(""); // pubkey of shop being viewed
   const [selectedCategories, setSelectedCategories] = useState(
     new Set<string>([]),
   );
@@ -39,6 +45,7 @@ export function MarketplacePage() {
   const [wotFilter, setWotFilter] = useState(false);
 
   const [shopBannerURL, setShopBannerURL] = useState("");
+  const [shopAbout, setShopAbout] = useState("");
   const [isFetchingShop, setIsFetchingShop] = useState(false);
 
   const shopMapContext = useContext(ShopMapContext);
@@ -48,7 +55,7 @@ export function MarketplacePage() {
     let focusedPubkeys = router.query.pubkey;
     if (focusedPubkeys && typeof focusedPubkeys[0] === "string") {
       const { data } = nip19.decode(focusedPubkeys[0]);
-      setfocusedPubkey(data as string); // router.query.pubkey returns array of pubkeys
+      setFocusedPubkey(data as string); // router.query.pubkey returns array of pubkeys
     }
   }, [router.query.pubkey]);
 
@@ -78,6 +85,7 @@ export function MarketplacePage() {
         shopMapContext.shopData.get(focusedPubkey);
       if (shopSettings) {
         setShopBannerURL(shopSettings.content.ui.banner);
+        setShopAbout(shopSettings.content.about);
       }
     }
     setIsFetchingShop(false);
@@ -87,109 +95,153 @@ export function MarketplacePage() {
     npubkey = encodeURIComponent(npubkey);
     if (npubkey === "") {
       // handles case where we pass in empty string to clear focusedPubkey
-      setfocusedPubkey("");
+      setFocusedPubkey("");
     }
     router.push("/" + npubkey);
   };
 
-  const handleCreateNewListing = () => {
-    const loggedIn = isUserLoggedIn();
-    if (loggedIn) {
-      router.push("/?addNewListing");
-    } else {
-      onOpen();
+  const handleSendMessage = (pubkeyToOpenChatWith: string) => {
+    let { signInMethod } = getLocalStorageData();
+    if (!signInMethod) {
+      alert("You must be signed in to send a message!");
+      return;
     }
+    router.push({
+      pathname: "/messages",
+      query: { pk: nip19.npubEncode(pubkeyToOpenChatWith) },
+    });
   };
 
   // get rid of item filters when custom shop view is set
   return (
     <div className="mx-auto w-full">
       <div className="flex max-w-[100%] flex-col bg-light-bg px-3 pb-2 dark:bg-dark-bg">
-        {shopBannerURL != "" && (
-          <Image
-            alt={"Shop banner image"}
-            src={shopBannerURL}
-            className="h-40 w-full rounded-lg object-cover object-fill"
-            style={{ width: "100%", height: "auto", objectFit: "cover" }}
-          />
-        )}
-        <div className="flex flex-row gap-2 pb-3">
-          <Input
-            className="mt-2 text-light-text dark:text-dark-text"
-            isClearable
-            label="Listings"
-            placeholder="Type to search..."
-            startContent={<MagnifyingGlassIcon height={"1em"} />}
-            onChange={(event) => {
-              const value = event.target.value;
-              setSelectedSearch(value);
-            }}
-          ></Input>
-          <Select
-            className="mt-2 text-light-text dark:text-dark-text"
-            label="Categories"
-            placeholder="All"
-            selectedKeys={selectedCategories}
-            onChange={(event) => {
-              if (event.target.value === "") {
-                setSelectedCategories(new Set([]));
-              } else {
-                setSelectedCategories(new Set(event.target.value.split(",")));
-              }
-            }}
-            selectionMode="multiple"
-          >
-            <SelectSection className="text-light-text dark:text-dark-text">
-              {CATEGORIES.map((category) => (
-                <SelectItem value={category} key={category}>
-                  {category}
-                </SelectItem>
-              ))}
-            </SelectSection>
-          </Select>
-          <LocationDropdown
-            className="mt-2"
-            placeholder="All"
-            label="Location"
-            value={selectedLocation}
-            onChange={(event: any) => {
-              setSelectedLocation(event.target.value);
-            }}
-          />
-          <ShopstrSwitch wotFilter={wotFilter} setWotFilter={setWotFilter} />
-        </div>
-        <div>
-          <Button
-            className={`${SHOPSTRBUTTONCLASSNAMES} w-full md:hidden`}
-            onClick={() => handleCreateNewListing()}
-          >
-            + Add new listing
-          </Button>
-        </div>
-        {focusedPubkey ? (
-          <div
-            className="mt-2 flex w-fit cursor-pointer flex-row rounded-md px-3 align-middle text-shopstr-purple hover:bg-shopstr-yellow dark:text-shopstr-yellow-light hover:dark:bg-shopstr-purple"
-            onClick={() => {
-              routeToShop("");
-            }}
-          >
-            <div>
-              <ArrowUturnLeftIcon
-                className="h-5 w-5 pr-1 text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light"
+        {shopBannerURL != "" && focusedPubkey != "" ? (
+          <>
+            <div className="flex items-center justify-center ">
+              <Image
+                alt={"Shop banner image"}
+                src={shopBannerURL}
+                className="rounded-lg object-cover object-fill"
+                style={{ width: "100%", height: "auto", objectFit: "cover" }}
+              />
+            </div>
+            <div className="mt-3 flex items-center justify-between font-bold text-light-text dark:text-dark-text">
+              <div className="flex gap-2">
+                <Button
+                  className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                  onClick={() => {
+                    setSelectedCategories(new Set<string>([]));
+                    setSelectedLocation("");
+                    setSelectedSearch("");
+                  }}
+                >
+                  Shop
+                </Button>
+                <Button className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text">
+                  Reviews
+                </Button>
+                <Button className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text">
+                  About
+                </Button>
+                <Button
+                  className="yoytext-light-text bg-transparent text-xl hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                  onClick={() => handleSendMessage(focusedPubkey)}
+                >
+                  Message
+                </Button>
+              </div>
+              <div>
+                <Input
+                  className="text-light-text dark:text-dark-text"
+                  isClearable
+                  placeholder="Search items..."
+                  startContent={<MagnifyingGlassIcon height={"1em"} />}
+                  onChange={(event) => setSelectedSearch(event.target.value)}
+                />
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex flex-row gap-2 pb-3">
+              <Input
+                className="mt-2 text-light-text dark:text-dark-text"
+                isClearable
+                label="Listings"
+                placeholder="Type to search..."
+                startContent={<MagnifyingGlassIcon height={"1em"} />}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setSelectedSearch(value);
+                }}
+              ></Input>
+              <Select
+                className="mt-2 text-light-text dark:text-dark-text"
+                label="Categories"
+                placeholder="All"
+                selectedKeys={selectedCategories}
+                onChange={(event) => {
+                  if (event.target.value === "") {
+                    setSelectedCategories(new Set([]));
+                  } else {
+                    setSelectedCategories(
+                      new Set(event.target.value.split(",")),
+                    );
+                  }
+                }}
+                selectionMode="multiple"
+              >
+                <SelectSection className="text-light-text dark:text-dark-text">
+                  {CATEGORIES.map((category) => (
+                    <SelectItem value={category} key={category}>
+                      {category}
+                    </SelectItem>
+                  ))}
+                </SelectSection>
+              </Select>
+              <LocationDropdown
+                className="mt-2"
+                placeholder="All"
+                label="Location"
+                value={selectedLocation}
+                onChange={(event: any) => {
+                  setSelectedLocation(event.target.value);
+                }}
+              />
+              <ShopstrSwitch
+                wotFilter={wotFilter}
+                setWotFilter={setWotFilter}
+              />
+            </div>
+            {focusedPubkey ? (
+              <div
+                className="mt-2 flex w-fit cursor-pointer flex-row rounded-md px-3 align-middle text-shopstr-purple hover:bg-shopstr-yellow dark:text-shopstr-yellow-light hover:dark:bg-shopstr-purple"
                 onClick={() => {
                   routeToShop("");
                 }}
               >
-                Go Back
-              </ArrowUturnLeftIcon>
-            </div>
+                <div>
+                  <ArrowUturnLeftIcon
+                    className="h-5 w-5 pr-1 text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light"
+                    onClick={() => {
+                      routeToShop("");
+                    }}
+                  >
+                    Go Back
+                  </ArrowUturnLeftIcon>
+                </div>
 
-            <span className="overflow-hidden break-all sm:w-72 md:w-full">
-              {nip19.npubEncode(focusedPubkey)}
-            </span>
-          </div>
-        ) : undefined}
+                <span className="overflow-hidden break-all sm:w-72 md:w-full">
+                  {nip19.npubEncode(focusedPubkey)}
+                </span>
+              </div>
+            ) : undefined}
+          </>
+        )}
       </div>
+      <div className="flex">
+      <SideShopNav focusedPubkey={focusedPubkey} />
       <DisplayEvents
         focusedPubkey={focusedPubkey}
         selectedCategories={selectedCategories}
@@ -198,6 +250,7 @@ export function MarketplacePage() {
         canShowLoadMore={true}
         wotFilter={wotFilter}
       />
+      </div>
       <SignInModal isOpen={isOpen} onClose={onClose} />
     </div>
   );

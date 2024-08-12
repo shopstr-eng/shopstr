@@ -268,6 +268,8 @@ function App({ Component, pageProps }: AppProps) {
     });
   };
 
+  const [focusedPubkey, setFocusedPubkey] = useState("");
+
   const { signInMethod } = getLocalStorageData();
 
   /** FETCH initial FOLLOWS, RELAYS, PRODUCTS, and PROFILES **/
@@ -312,11 +314,13 @@ function App({ Component, pageProps }: AppProps) {
           userPubkey,
           editChatContext,
         );
-        pubkeysToFetchProfilesFor = [
-          userPubkey as string,
-          ...pubkeysToFetchProfilesFor,
-          ...profileSetFromChats,
-        ];
+        if (userPubkey && profileSetFromChats.size != 0) {
+          pubkeysToFetchProfilesFor = [
+            userPubkey as string,
+            ...pubkeysToFetchProfilesFor,
+            ...profileSetFromChats,
+          ];
+        }
         let { profileMap } = await fetchProfile(
           allRelays,
           pubkeysToFetchProfilesFor,
@@ -408,10 +412,14 @@ function App({ Component, pageProps }: AppProps) {
                   <ChatsContext.Provider value={chatsContext}>
                     <NextUIProvider>
                       <NextThemesProvider attribute="class">
-                        <TopNav />
+                        <TopNav setFocusedPubkey={setFocusedPubkey} />
                         <div className="flex">
                           <main className="flex-1">
-                            <Component {...pageProps} />
+                            <Component
+                              {...pageProps}
+                              focusedPubkey={focusedPubkey}
+                              setFocusedPubkey={setFocusedPubkey}
+                            />
                           </main>
                         </div>
                       </NextThemesProvider>
