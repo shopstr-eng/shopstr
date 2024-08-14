@@ -7,8 +7,11 @@ export const generateNewMnemonic = () => {
 };
 
 export const getNetwork = () => {
-  // add logic, now hardcoded
-  return lwk.Network.testnet();
+  if(process.env.NEXT_PUBLIC_NETWORK === "mainnet") {
+    return lwk.Network.mainnet();
+  } else {
+    return lwk.Network.testnet();
+  }
 };
 
 export const generateNewSigner = (mnemonic: string, network: lwk.Network) => {
@@ -71,7 +74,7 @@ export const getAddress = (descriptor: lwk.WolletDescriptor, index?: number) => 
 export const getBalance = (descriptor: lwk.WolletDescriptor) => {
   const doIt = async () => {
     const wollet = new lwk.Wollet(getNetwork(), descriptor);
-    const esploraClient = new lwk.EsploraClient(getNetwork(), "https://waterfalls.liquidwebwallet.org/liquidtestnet/api", true);
+    const esploraClient = new lwk.EsploraClient(getNetwork(), "https://waterfalls.liquidwebwallet.org/liquid/api", true);
     const update = await esploraClient.fullScan(wollet);
 
     if (update instanceof lwk.Update) {

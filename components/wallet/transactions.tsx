@@ -42,7 +42,7 @@ const Transactions = ({ transactions }: { transactions: WalletTx[]}) => {
 
   const txs = transactions?.map((tx) => {
     return {
-      txIdUnblindedUrl: tx.unblindedUrl("https://blockstream.info/liquidtestnet/"),
+      txIdUnblindedUrl: tx.unblindedUrl("https://blockstream.info/liquid/"),
       txId: tx.txid().toString(),
       txAmount: tx.balance().values().next().value as bigint,
       txDate: (typeof tx.timestamp() === 'undefined') ? "unconfirmed" : elapsedFrom(tx.timestamp())
