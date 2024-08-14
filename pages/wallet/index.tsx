@@ -8,6 +8,7 @@ import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
 import { Button } from "@nextui-org/react";
 import { BitcoinPriceResponse, fetchBitcoinPrice, formatFiatBalance, shortenString } from "@/components/utility/wallet-helper";
 import { RecoverWallet } from "@/components/wallet/recover-wallet";
+import { Dialog, DialogContent, DialogFooter, DialogHeader } from "@/components/utility/shadcn/Dialog";
 
 const Wallet = () => {
   const [walletExists, toggleWalletExists] = useState(false);
@@ -16,6 +17,7 @@ const Wallet = () => {
   const [transactions, setTransactions] = useState<any>();
   const [bitcoinPrice, setBitcoinPrice] = useState<BitcoinPriceResponse>();
   const [fiatCurrency, setFiatCurrency] = useState<BitcoinPriceResponse['bpi']['USD']['code']>("USD");
+  const [swapDialogOpen, setSwapDialogOpen] = useState({ open: false, type: ""})
   
   const receiveAddress = useMemo(() => {
     if (descriptor) {
@@ -151,6 +153,10 @@ const Wallet = () => {
                   <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={() => handleCopyToClipboard(receiveAddress?.toString()!)}>Copy Receive Address</Button>
                   <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={() => handleCopyToClipboard(descriptor)}>Copy CT Descriptor</Button>
                 </div>
+                <div className="flex gap-x-4">
+                  <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={() => setSwapDialogOpen({ open: true, type: "receive" })}>Receive LN</Button>
+                  <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={() => setSwapDialogOpen({ open: true, type: "send"})}>Pay LN</Button>
+                </div>
                 <Button className="bg-red-500 rounded px-2 py-[2px] h-min text-xs" onClick={() => handleDisconnectWallet()}>Disconnect Wallet</Button>
               </div>
               <img 
@@ -174,6 +180,17 @@ const Wallet = () => {
           <center>
             <Transactions transactions={transactions}/>
           </center>
+          <Dialog open={swapDialogOpen.open} onOpenChange={(val) => setSwapDialogOpen({ open: val, type: ""})}>
+            <DialogContent>
+              <h5 className="text-2xl font-bold">{swapDialogOpen.type}</h5>
+              <div className="w-full h-full min-w-[450px] min-h-[500px]">
+                <iframe src="https://boltz.exchange" className="w-full h-full"></iframe>
+              </div>
+              <div className="flex gap-x-2 w-full justify-end">
+                <Button className={SHOPSTRBUTTONCLASSNAMES + " w-min"} onClick={() => handleCopyToClipboard(receiveAddress?.toString()!)}>Copy Your Receive Address</Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </section>
       ) : (
         <>
