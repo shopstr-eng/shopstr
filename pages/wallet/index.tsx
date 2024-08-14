@@ -155,7 +155,7 @@ const Wallet = () => {
                 </div>
                 <div className="flex gap-x-4">
                   <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={() => setSwapDialogOpen({ open: true, type: "receive" })}>Receive LN</Button>
-                  <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={() => setSwapDialogOpen({ open: true, type: "send"})}>Pay LN</Button>
+                  {/* <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={() => setSwapDialogOpen({ open: true, type: "send"})}>Pay LN</Button> */}
                 </div>
                 <Button className="bg-red-500 rounded px-2 py-[2px] h-min text-xs" onClick={() => handleDisconnectWallet()}>Disconnect Wallet</Button>
               </div>
