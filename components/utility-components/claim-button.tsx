@@ -22,7 +22,6 @@ import {
   getLocalStorageData,
   publishWalletEvent,
   publishProofEvent,
-  publishSpendingHistoryEvent,
 } from "../utility/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { LightningAddress } from "@getalby/lightning-tools";
