@@ -5,7 +5,7 @@ import {
 import { NostrEvent } from "@/utils/types/types";
 import { removeProductFromCache } from "./cache-service";
 
-export async function DeleteListing(
+export async function DeleteEvent(
   event_ids_to_delete: string[],
   passphrase?: string,
 ) {

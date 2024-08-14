@@ -14,8 +14,16 @@ import {
   XCircleIcon,
 } from "@heroicons/react/24/outline";
 import { useTheme } from "next-themes";
-import { ProfileMapContext } from "../../utils/context/context";
-import { getLocalStorageData } from "../utility/nostr-helper-functions";
+import {
+  ProfileMapContext,
+  CashuWalletContext,
+} from "../../utils/context/context";
+import {
+  getLocalStorageData,
+  publishWalletEvent,
+  publishProofEvent,
+  publishSpendingHistoryEvent,
+} from "../utility/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { LightningAddress } from "@getalby/lightning-tools";
 import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
@@ -35,7 +43,13 @@ function decodeBase64ToJson(base64: string): any {
   }
 }
 
-export default function ClaimButton({ token }: { token: string }) {
+export default function ClaimButton({
+  token,
+  passphrase,
+}: {
+  token: string;
+  passphrase?: string;
+}) {
   const [lnurl, setLnurl] = useState("");
   const profileContext = useContext(ProfileMapContext);
   const { userNPub, userPubkey } = getLocalStorageData();
@@ -58,6 +72,9 @@ export default function ClaimButton({ token }: { token: string }) {
   const [isSpent, setIsSpent] = useState(false);
   const [isInvalidToken, setIsInvalidToken] = useState(false);
   const [isDuplicateToken, setIsDuplicateToken] = useState(false);
+
+  const walletContext = useContext(CashuWalletContext);
+  const [dTag, setDTag] = useState("");
 
   const { mints, tokens, history } = getLocalStorageData();
 
@@ -117,6 +134,16 @@ export default function ClaimButton({ token }: { token: string }) {
     );
   }, [profileContext, tokenMint]);
 
+  useEffect(() => {
+    const walletEvent = walletContext.mostRecentWalletEvent;
+    if (walletEvent?.tags) {
+      const walletTag = walletEvent.tags.find(
+        (tag: string[]) => tag[0] === "d",
+      )?.[1];
+      setDTag(walletTag);
+    }
+  }, [walletContext]);
+
   const handleClaimType = (type: string) => {
     if (type === "receive") {
       receive(false);
@@ -138,9 +165,8 @@ export default function ClaimButton({ token }: { token: string }) {
     setIsInvalidToken(false);
     setIsRedeeming(true);
     try {
-      const wallet = new CashuWallet(new CashuMint(tokenMint));
       const spentProofs = await wallet?.checkProofsSpent(proofs);
-      if (spentProofs.length === 0) {
+      if (spentProofs?.length === 0) {
         const uniqueProofs = proofs.filter(
           (proof: Proof) => !tokens.some((token: Proof) => token.C === proof.C),
         );
@@ -149,6 +175,13 @@ export default function ClaimButton({ token }: { token: string }) {
           setIsRedeeming(false);
           return;
         }
+        await publishProofEvent(
+          tokenMint,
+          uniqueProofs,
+          "in",
+          passphrase,
+          dTag,
+        );
         const tokenArray = [...tokens, ...uniqueProofs];
         localStorage.setItem("tokens", JSON.stringify(tokenArray));
         if (!mints.includes(tokenMint)) {
@@ -172,6 +205,7 @@ export default function ClaimButton({ token }: { token: string }) {
             ...history,
           ]),
         );
+        await publishWalletEvent(passphrase, dTag);
       } else {
         setIsSpent(true);
         setIsRedeeming(false);
@@ -183,6 +217,7 @@ export default function ClaimButton({ token }: { token: string }) {
     }
   };
 
+  // add publishing as a pay out for redemption
   const redeem = async () => {
     setOpenClaimTypeModal(false);
     setOpenRedemptionModal(false);
@@ -209,6 +244,18 @@ export default function ClaimButton({ token }: { token: string }) {
         setClaimChangeAmount(changeAmount);
         setClaimChangeProofs(changeProofs);
       }
+      const eventIds = walletContext.proofEvents.map((event) => event.id);
+      await publishSpendingHistoryEvent(
+        "out",
+        String(newAmount),
+        eventIds,
+        passphrase,
+        dTag,
+      );
+      if (changeProofs && changeProofs.length > 0) {
+        await publishProofEvent(mints[0], changeProofs, "in", passphrase, dTag);
+      }
+      await publishWalletEvent(passphrase, dTag);
       setIsPaid(true);
       setOpenRedemptionModal(true);
       setIsRedeeming(false);

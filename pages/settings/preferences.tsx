@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { useForm, Controller } from "react-hook-form";
 import Link from "next/link";
 import {
@@ -23,12 +23,14 @@ import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABL
 import {
   getLocalStorageData,
   validPassphrase,
+  publishWalletEvent,
 } from "../../components/utility/nostr-helper-functions";
 import { createNostrRelayEvent } from "../api/nostr/crud-service";
 import { useTheme } from "next-themes";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import ShopstrSlider from "../../components/utility-components/shopstr-slider";
 import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
+import { CashuWalletContext } from "../../utils/context/context";
 
 const PreferencesPage = () => {
   const [enterPassphrase, setEnterPassphrase] = useState(false);
@@ -40,16 +42,20 @@ const PreferencesPage = () => {
   const [showRelayModal, setShowRelayModal] = useState(false);
   const [relaysAreChanged, setRelaysAreChanged] = useState(false);
   const [currentRelayType, setCurrentRelayType] = useState<
-    "all" | "read" | "write" | ""
+    "all" | "read" | "write" | "cashu" | ""
   >("");
 
   const [mints, setMints] = useState(Array<string>(0));
+  const [cashuWalletRelays, setCashuWalletRelays] = useState(Array<string>(0));
   const [showMintModal, setShowMintModal] = useState(false);
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
 
   const [isLoaded, setIsLoaded] = useState(false);
 
   const [pubkey, setPubkey] = useState("");
+
+  const walletContext = useContext(CashuWalletContext);
+  const [dTag, setDTag] = useState("");
 
   const { signInMethod } = getLocalStorageData();
 
@@ -62,6 +68,7 @@ const PreferencesPage = () => {
       setReadRelays(getLocalStorageData().readRelays);
       setWriteRelays(getLocalStorageData().writeRelays);
       setPubkey(getLocalStorageData().userPubkey);
+      setCashuWalletRelays(getLocalStorageData().cashuWalletRelays);
     }
     setIsLoaded(true);
   }, [signInMethod, passphrase]);
@@ -71,6 +78,16 @@ const PreferencesPage = () => {
       localStorage.setItem("mints", JSON.stringify(mints));
     }
   }, [mints]);
+
+  useEffect(() => {
+    const walletEvent = walletContext.mostRecentWalletEvent;
+    if (walletEvent?.tags) {
+      const walletTag = walletEvent.tags.find(
+        (tag: string[]) => tag[0] === "d",
+      )?.[1];
+      setDTag(walletTag);
+    }
+  }, [walletContext]);
 
   const { theme, setTheme } = useTheme();
 
@@ -136,7 +153,13 @@ const PreferencesPage = () => {
     if (writeRelays.length != 0) {
       localStorage.setItem("writeRelays", JSON.stringify(writeRelays));
     }
-  }, [relays, readRelays, writeRelays]);
+    if (cashuWalletRelays.length != 0) {
+      localStorage.setItem(
+        "cashuWalletRelays",
+        JSON.stringify(cashuWalletRelays),
+      );
+    }
+  }, [relays, readRelays, writeRelays, cashuWalletRelays]);
 
   const {
     handleSubmit: handleRelaySubmit,
@@ -150,7 +173,9 @@ const PreferencesPage = () => {
     await addRelay(relay, currentRelayType);
   };
 
-  const handleToggleRelayModal = (type: "all" | "read" | "write" | "") => {
+  const handleToggleRelayModal = (
+    type: "all" | "read" | "write" | "cashu" | "",
+  ) => {
     setCurrentRelayType(type);
     relayReset();
     setShowRelayModal(!showRelayModal);
@@ -158,7 +183,7 @@ const PreferencesPage = () => {
 
   const addRelay = async (
     newRelay: string,
-    type: "all" | "read" | "write" | "",
+    type: "all" | "read" | "write" | "cashu" | "",
   ) => {
     try {
       const relayTest = await Relay.connect(newRelay);
@@ -168,6 +193,8 @@ const PreferencesPage = () => {
         setWriteRelays([...writeRelays, newRelay]);
       } else if (type === "all") {
         setRelays([...relays, newRelay]);
+      } else if (type === "cashu") {
+        setCashuWalletRelays([...cashuWalletRelays, newRelay]);
       }
       relayTest.close();
       handleToggleRelayModal(type);
@@ -177,13 +204,30 @@ const PreferencesPage = () => {
     }
   };
 
-  const deleteRelay = (relayToDelete: string) => {
-    setRelays(relays.filter((relay) => relay !== relayToDelete));
+  const deleteRelay = (
+    relayToDelete: string,
+    type: "all" | "read" | "write" | "cashu" | "",
+  ) => {
+    if (type === "read") {
+      setReadRelays(readRelays.filter((relay) => relay !== relayToDelete));
+    } else if (type === "write") {
+      setWriteRelays(writeRelays.filter((relay) => relay !== relayToDelete));
+    } else if (type === "all") {
+      setRelays(relays.filter((relay) => relay !== relayToDelete));
+    } else if (type === "cashu") {
+      setCashuWalletRelays(
+        cashuWalletRelays.filter((relay) => relay !== relayToDelete),
+      );
+    }
     setRelaysAreChanged(true);
   };
 
-  const publishRelays = () => {
-    createNostrRelayEvent(pubkey, passphrase);
+  const publishRelays = (isCashu: boolean) => {
+    if (isCashu) {
+      publishWalletEvent(passphrase, dTag);
+    } else {
+      createNostrRelayEvent(pubkey, passphrase);
+    }
     setRelaysAreChanged(false);
   };
 
@@ -336,6 +380,134 @@ const PreferencesPage = () => {
           </div>
 
           <span className="mt-4 flex text-2xl font-bold text-light-text dark:text-dark-text">
+            Cashu Wallet Relays
+          </span>
+
+          {cashuWalletRelays.length === 0 && (
+            <div className="mt-4 flex items-center justify-center">
+              <p className="break-words text-center text-xl dark:text-dark-text">
+                No relays added . . .
+              </p>
+            </div>
+          )}
+          <div className="mt-4 max-h-96 overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
+            {cashuWalletRelays.map((relay) => (
+              <div
+                key={relay}
+                className="mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg"
+              >
+                <div className="max-w-xsm break-all text-light-text dark:text-dark-text ">
+                  {relay}
+                </div>
+                {cashuWalletRelays.length > 1 && (
+                  <MinusCircleIcon
+                    onClick={() => deleteRelay(relay, "cashu")}
+                    className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+            <Button
+              className={SHOPSTRBUTTONCLASSNAMES}
+              onClick={() => handleToggleRelayModal("cashu")}
+            >
+              Add Relay
+            </Button>
+            {relaysAreChanged && (
+              <Button
+                className={SHOPSTRBUTTONCLASSNAMES}
+                onClick={() => publishRelays(true)}
+              >
+                Save
+              </Button>
+            )}
+          </div>
+          <Modal
+            backdrop="blur"
+            isOpen={showRelayModal}
+            onClose={() => handleToggleRelayModal("cashu")}
+            classNames={{
+              body: "py-6",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
+            }}
+            scrollBehavior={"outside"}
+            size="2xl"
+          >
+            <ModalContent>
+              <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+                Add Relay
+              </ModalHeader>
+              <form onSubmit={handleRelaySubmit(onRelaySubmit)}>
+                <ModalBody>
+                  <Controller
+                    name="relay"
+                    control={relayControl}
+                    rules={{
+                      required: "A relay URL is required.",
+                      maxLength: {
+                        value: 500,
+                        message: "This input exceed maxLength of 500.",
+                      },
+                      validate: (value) =>
+                        /^(wss:\/\/|ws:\/\/)/.test(value) ||
+                        "Invalid relay URL, must start with wss:// or ws://.",
+                    }}
+                    render={({
+                      field: { onChange, onBlur, value },
+                      fieldState: { error },
+                    }) => {
+                      let isErrored = error !== undefined;
+                      let errorMessage: string = error?.message
+                        ? error.message
+                        : "";
+                      return (
+                        <Textarea
+                          className="text-light-text dark:text-dark-text"
+                          variant="bordered"
+                          fullWidth={true}
+                          placeholder="wss://..."
+                          isInvalid={isErrored}
+                          errorMessage={errorMessage}
+                          // controller props
+                          onChange={onChange} // send value to hook form
+                          onBlur={onBlur} // notify when input is touched/blur
+                          value={value}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleRelaySubmit(onRelaySubmit)();
+                            }
+                          }}
+                        />
+                      );
+                    }}
+                  />
+                </ModalBody>
+
+                <ModalFooter>
+                  <Button
+                    color="danger"
+                    variant="light"
+                    onClick={() => handleToggleRelayModal("")}
+                  >
+                    Cancel
+                  </Button>
+
+                  <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                    Add Relay
+                  </Button>
+                </ModalFooter>
+              </form>
+            </ModalContent>
+          </Modal>
+
+          <span className="mt-4 flex text-2xl font-bold text-light-text dark:text-dark-text">
             Read/Write Relays
           </span>
 
@@ -357,7 +529,7 @@ const PreferencesPage = () => {
                 </div>
                 {relays.length > 1 && (
                   <MinusCircleIcon
-                    onClick={() => deleteRelay(relay)}
+                    onClick={() => deleteRelay(relay, "all")}
                     className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
                   />
                 )}
@@ -374,7 +546,7 @@ const PreferencesPage = () => {
             {relaysAreChanged && (
               <Button
                 className={SHOPSTRBUTTONCLASSNAMES}
-                onClick={publishRelays}
+                onClick={() => publishRelays(false)}
               >
                 Save
               </Button>
@@ -485,7 +657,7 @@ const PreferencesPage = () => {
                 </div>
                 {readRelays.length > 1 && (
                   <MinusCircleIcon
-                    onClick={() => deleteRelay(relay)}
+                    onClick={() => deleteRelay(relay, "read")}
                     className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
                   />
                 )}
@@ -503,7 +675,7 @@ const PreferencesPage = () => {
               <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
                 <Button
                   className={SHOPSTRBUTTONCLASSNAMES}
-                  onClick={publishRelays}
+                  onClick={() => publishRelays(false)}
                 >
                   Save
                 </Button>
@@ -615,7 +787,7 @@ const PreferencesPage = () => {
                 </div>
                 {writeRelays.length > 1 && (
                   <MinusCircleIcon
-                    onClick={() => deleteRelay(relay)}
+                    onClick={() => deleteRelay(relay, "write")}
                     className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
                   />
                 )}
@@ -633,7 +805,7 @@ const PreferencesPage = () => {
               <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
                 <Button
                   className={SHOPSTRBUTTONCLASSNAMES}
-                  onClick={publishRelays}
+                  onClick={() => publishRelays(false)}
                 >
                   Save
                 </Button>

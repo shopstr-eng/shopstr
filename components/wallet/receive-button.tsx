@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import {
   ArrowDownTrayIcon,
@@ -15,20 +15,28 @@ import {
   Textarea,
 } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
-import { getLocalStorageData } from "../utility/nostr-helper-functions";
+import {
+  getLocalStorageData,
+  publishWalletEvent,
+  publishProofEvent,
+} from "../utility/nostr-helper-functions";
 import {
   CashuMint,
   CashuWallet,
   getDecodedToken,
   Proof,
 } from "@cashu/cashu-ts";
+import { CashuWalletContext } from "../../utils/context/context";
 
-const ReceiveButton = () => {
+const ReceiveButton = ({ passphrase }: { passphrase?: string }) => {
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   const [isClaimed, setIsClaimed] = useState(false);
   const [isSpent, setIsSpent] = useState(false);
   const [isInvalidToken, setIsInvalidToken] = useState(false);
   const [isDuplicateToken, setIsDuplicateToken] = useState(false);
+
+  const walletContext = useContext(CashuWalletContext);
+  const [dTag, setDTag] = useState("");
 
   const { mints, tokens, history } = getLocalStorageData();
 
@@ -38,6 +46,16 @@ const ReceiveButton = () => {
     control: receiveControl,
     reset: receiveReset,
   } = useForm();
+
+  useEffect(() => {
+    const walletEvent = walletContext.mostRecentWalletEvent;
+    if (walletEvent?.tags) {
+      const walletTag = walletEvent.tags.find(
+        (tag: string[]) => tag[0] === "d",
+      )?.[1];
+      setDTag(walletTag);
+    }
+  }, [walletContext]);
 
   const handleToggleReceiveModal = () => {
     receiveReset();
@@ -91,6 +109,14 @@ const ReceiveButton = () => {
             },
             ...history,
           ]),
+        );
+        await publishWalletEvent(passphrase, dTag);
+        await publishProofEvent(
+          tokenMint,
+          uniqueProofs,
+          "in",
+          passphrase,
+          dTag,
         );
       } else {
         setIsSpent(true);

@@ -15,10 +15,13 @@ import {
   FollowsContext,
   RelaysContextInterface,
   RelaysContext,
+  CashuWalletContext,
+  CashuWalletContextInterface,
 } from "../utils/context/context";
 import {
   getLocalStorageData,
   LocalStorageInterface,
+  validPassphrase,
 } from "../components/utility/nostr-helper-functions";
 import { NextUIProvider } from "@nextui-org/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
@@ -28,16 +31,21 @@ import {
   fetchProfile,
   fetchAllFollows,
   fetchAllRelays,
+  fetchCashuWallet,
 } from "./api/nostr/fetch-service";
 import {
   NostrEvent,
   ProfileData,
   NostrMessageEvent,
 } from "../utils/types/types";
+import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
 import BottomNav from "@/components/nav-bottom";
 import SideNav from "@/components/nav-side";
+import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
 
 function App({ Component, pageProps }: AppProps) {
+  const [enterPassphrase, setEnterPassphrase] = useState(false);
+  const [passphrase, setPassphrase] = useState("");
   const [localStorageValues, setLocalStorageValues] =
     useState<LocalStorageInterface>(getLocalStorageData());
   const [productContext, setProductContext] = useState<ProductContextInterface>(
@@ -142,6 +150,15 @@ function App({ Component, pageProps }: AppProps) {
     writeRelayList: [],
     isLoading: true,
   });
+  const [cashuWalletContext, setCashuWalletContext] =
+    useState<CashuWalletContextInterface>({
+      mostRecentWalletEvent: {},
+      proofEvents: [],
+      cashuWalletRelays: [],
+      cashuMints: [],
+      cashuProofs: [],
+      isLoading: true,
+    });
 
   const editProductContext = (
     productEvents: NostrEvent[],
@@ -206,6 +223,26 @@ function App({ Component, pageProps }: AppProps) {
     });
   };
 
+  const editCashuWalletContext = (
+    mostRecentWalletEvent: any,
+    proofEvents: any[],
+    cashuWalletRelays: string[],
+    cashuMints: string[],
+    cashuProofs: Proof[],
+    isLoading: boolean,
+  ) => {
+    setCashuWalletContext({
+      mostRecentWalletEvent,
+      proofEvents,
+      cashuWalletRelays,
+      cashuMints,
+      cashuProofs,
+      isLoading,
+    });
+  };
+
+  const { signInMethod } = getLocalStorageData();
+
   /** FETCH initial FOLLOWS, RELAYS, PRODUCTS, and PROFILES **/
   useEffect(() => {
     async function fetchData() {
@@ -223,23 +260,20 @@ function App({ Component, pageProps }: AppProps) {
       }
       const userPubkey = getLocalStorageData().userPubkey;
       try {
-        if (
-          getLocalStorageData().signInMethod &&
-          getLocalStorageData().signInMethod != "nsec"
-        ) {
-          let { relayList, readRelayList, writeRelayList } =
-            await fetchAllRelays(allRelays, editRelaysContext);
-          if (relayList.length != 0) {
-            localStorage.setItem("relays", JSON.stringify(relayList));
-            localStorage.setItem("readRelays", JSON.stringify(readRelayList));
-            localStorage.setItem("writeRelays", JSON.stringify(writeRelayList));
-            allRelays = [...relayList, ...readRelayList];
-          }
-          let { followList } = await fetchAllFollows(
-            allRelays,
-            editFollowsContext,
-          );
+        let { relayList, readRelayList, writeRelayList } = await fetchAllRelays(
+          allRelays,
+          editRelaysContext,
+        );
+        if (relayList.length != 0) {
+          localStorage.setItem("relays", JSON.stringify(relayList));
+          localStorage.setItem("readRelays", JSON.stringify(readRelayList));
+          localStorage.setItem("writeRelays", JSON.stringify(writeRelayList));
+          allRelays = [...relayList, ...readRelayList];
         }
+        let { followList } = await fetchAllFollows(
+          allRelays,
+          editFollowsContext,
+        );
         let pubkeysToFetchProfilesFor: string[] = [];
         let { profileSetFromProducts } = await fetchAllPosts(
           allRelays,
@@ -261,6 +295,31 @@ function App({ Component, pageProps }: AppProps) {
           pubkeysToFetchProfilesFor,
           editProfileContext,
         );
+        if (
+          (getLocalStorageData().signInMethod === "nsec" && passphrase) ||
+          getLocalStorageData().signInMethod === "extension"
+        ) {
+          let {
+            mostRecentWalletEvent,
+            proofEvents,
+            cashuWalletRelays,
+            cashuMints,
+            cashuProofs,
+          } = await fetchCashuWallet(
+            allRelays,
+            editCashuWalletContext,
+            passphrase,
+          );
+
+          if (cashuWalletRelays.length != 0 && cashuMints.length != 0) {
+            localStorage.setItem(
+              "cashuWalletRelays",
+              JSON.stringify(cashuWalletRelays),
+            );
+            localStorage.setItem("mints", JSON.stringify(cashuMints));
+            localStorage.setItem("tokens", JSON.stringify(cashuProofs));
+          }
+        }
       } catch (error) {
         console.error("Error fetching data:", error);
       }
@@ -268,7 +327,13 @@ function App({ Component, pageProps }: AppProps) {
     fetchData();
     window.addEventListener("storage", fetchData);
     return () => window.removeEventListener("storage", fetchData);
-  }, [localStorageValues.relays]);
+  }, [localStorageValues.relays, passphrase]);
+
+  useEffect(() => {
+    if (signInMethod === "nsec" && !validPassphrase(passphrase)) {
+      setEnterPassphrase(true);
+    }
+  }, [signInMethod, passphrase]);
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
@@ -297,26 +362,35 @@ function App({ Component, pageProps }: AppProps) {
         />
       </Head>
       <RelaysContext.Provider value={relaysContext}>
-        <FollowsContext.Provider value={followsContext}>
-          <ProductContext.Provider value={productContext}>
-            <ProfileMapContext.Provider value={profileContext}>
-              <ChatsContext.Provider value={chatsContext}>
-                <NextUIProvider>
-                  <NextThemesProvider attribute="class">
-                    <div className="flex">
-                      <SideNav />
-                      <main className="flex-1">
-                        <Component {...pageProps} />
-                      </main>
-                    </div>
-                    <BottomNav />
-                  </NextThemesProvider>
-                </NextUIProvider>
-              </ChatsContext.Provider>
-            </ProfileMapContext.Provider>
-          </ProductContext.Provider>
-        </FollowsContext.Provider>
+        <CashuWalletContext.Provider value={cashuWalletContext}>
+          <FollowsContext.Provider value={followsContext}>
+            <ProductContext.Provider value={productContext}>
+              <ProfileMapContext.Provider value={profileContext}>
+                <ChatsContext.Provider value={chatsContext}>
+                  <NextUIProvider>
+                    <NextThemesProvider attribute="class">
+                      <div className="flex">
+                        <SideNav />
+                        <main className="flex-1">
+                          <Component {...pageProps} />
+                        </main>
+                      </div>
+                      <BottomNav />
+                    </NextThemesProvider>
+                  </NextUIProvider>
+                </ChatsContext.Provider>
+              </ProfileMapContext.Provider>
+            </ProductContext.Provider>
+          </FollowsContext.Provider>
+        </CashuWalletContext.Provider>
       </RelaysContext.Provider>
+      <RequestPassphraseModal
+        passphrase={passphrase}
+        setCorrectPassphrase={setPassphrase}
+        isOpen={enterPassphrase}
+        setIsOpen={setEnterPassphrase}
+        onCancelRouteTo="/"
+      />
     </>
   );
 }

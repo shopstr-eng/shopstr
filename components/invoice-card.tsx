@@ -1,6 +1,9 @@
 //TODO: perhaps see if we can abstract away some payment logic into reusable functions
 import React, { useContext, useState, useEffect } from "react";
-import { ProfileMapContext } from "../utils/context/context";
+import {
+  ProfileMapContext,
+  CashuWalletContext,
+} from "../utils/context/context";
 import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
 import {
@@ -39,7 +42,11 @@ import {
 } from "@cashu/cashu-ts";
 import {
   getLocalStorageData,
+  validPassphrase,
   isUserLoggedIn,
+  publishWalletEvent,
+  publishProofEvent,
+  publishSpendingHistoryEvent,
 } from "./utility/nostr-helper-functions";
 import { nip19 } from "nostr-tools";
 import { ProductData } from "./utility/product-parser-functions";
@@ -55,6 +62,7 @@ import {
 import SignInModal from "./sign-in/SignInModal";
 import CountryDropdown from "./utility-components/dropdowns/country-dropdown";
 import currencySelection from "../public/currencySelection.json";
+import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
 
 export default function InvoiceCard({
   productData,
@@ -70,10 +78,13 @@ export default function InvoiceCard({
   setCashuPaymentFailed?: (cashuPaymentFailef: boolean) => void;
 }) {
   const router = useRouter();
-  const { pubkey, currency, totalCost, shippingType } = productData;
+  const { id, pubkey, currency, totalCost, shippingType } = productData;
   const pubkeyOfProductBeingSold = pubkey;
-  const { userNPub, userPubkey, relays, mints, tokens, history } =
+  const { signInMethod, userNPub, userPubkey, relays, mints, tokens, history } =
     getLocalStorageData();
+
+  const [enterPassphrase, setEnterPassphrase] = useState(false);
+  const [passphrase, setPassphrase] = useState("");
 
   const [showInvoiceCard, setShowInvoiceCard] = useState(false);
 
@@ -84,6 +95,8 @@ export default function InvoiceCard({
 
   const [name, setName] = useState("");
   const profileContext = useContext(ProfileMapContext);
+  const walletContext = useContext(CashuWalletContext);
+  const [dTag, setDTag] = useState("");
 
   const [randomNpub, setRandomNpub] = useState<string>("");
   const [randomNsec, setRandomNsec] = useState<string>("");
@@ -110,6 +123,12 @@ export default function InvoiceCard({
   } = useForm();
 
   useEffect(() => {
+    if (signInMethod === "nsec" && !validPassphrase(passphrase)) {
+      setEnterPassphrase(true);
+    }
+  }, [signInMethod, passphrase]);
+
+  useEffect(() => {
     axios({
       method: "GET",
       url: "/api/nostr/generate-keys",
@@ -130,6 +149,16 @@ export default function InvoiceCard({
       : undefined;
     setName(profile && profile.content.name ? profile.content.name : userNPub);
   }, [profileContext]);
+
+  useEffect(() => {
+    const walletEvent = walletContext.mostRecentWalletEvent;
+    if (walletEvent?.tags) {
+      const walletTag = walletEvent.tags.find(
+        (tag: string[]) => tag[0] === "d",
+      )?.[1];
+      setDTag(walletTag);
+    }
+  }, [walletContext]);
 
   const onShippingSubmit = async (data: { [x: string]: any }) => {
     let shippingName = data["Name"];
@@ -590,6 +619,18 @@ export default function InvoiceCard({
           ...history,
         ]),
       );
+      const eventIds = walletContext.proofEvents.map((event) => event.id);
+      await publishSpendingHistoryEvent(
+        "out",
+        String(price),
+        eventIds,
+        passphrase,
+        dTag,
+      );
+      if (changeProofs && changeProofs.length > 0) {
+        await publishProofEvent(mints[0], changeProofs, "in", passphrase, dTag);
+      }
+      await publishWalletEvent(passphrase, dTag);
       if (setCashuPaymentSent) {
         setCashuPaymentSent(true);
       }
@@ -1229,6 +1270,13 @@ export default function InvoiceCard({
         </ModalContent>
       </Modal>
       <SignInModal isOpen={isOpen} onClose={onClose} />
+      <RequestPassphraseModal
+        passphrase={passphrase}
+        setCorrectPassphrase={setPassphrase}
+        isOpen={enterPassphrase}
+        setIsOpen={setEnterPassphrase}
+        onCancelRouteTo={`/${id}`}
+      />
     </>
   );
 }

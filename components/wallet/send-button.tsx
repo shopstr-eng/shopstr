@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import {
   ArrowUpTrayIcon,
@@ -21,20 +21,29 @@ import {
   Input,
 } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
-import { getLocalStorageData } from "../utility/nostr-helper-functions";
+import {
+  getLocalStorageData,
+  publishWalletEvent,
+  publishProofEvent,
+  publishSpendingHistoryEvent,
+} from "../utility/nostr-helper-functions";
 import {
   CashuMint,
   CashuWallet,
   getEncodedToken,
   Proof,
 } from "@cashu/cashu-ts";
+import { CashuWalletContext } from "../../utils/context/context";
 
-const SendButton = () => {
+const SendButton = ({ passphrase }: { passphrase?: string }) => {
   const [showSendModal, setShowSendModal] = useState(false);
   const [showTokenCard, setShowTokenCard] = useState(false);
   const [newToken, setNewToken] = useState("");
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
   const [sendFailed, setSendFailed] = useState(false);
+
+  const walletContext = useContext(CashuWalletContext);
+  const [dTag, setDTag] = useState("");
 
   const { mints, tokens, history } = getLocalStorageData();
 
@@ -44,6 +53,16 @@ const SendButton = () => {
     control: sendControl,
     reset: sendReset,
   } = useForm();
+
+  useEffect(() => {
+    const walletEvent = walletContext.mostRecentWalletEvent;
+    if (walletEvent?.tags) {
+      const walletTag = walletEvent.tags.find(
+        (tag: string[]) => tag[0] === "d",
+      )?.[1];
+      setDTag(walletTag);
+    }
+  }, [walletContext]);
 
   const handleToggleSendModal = () => {
     sendReset();
@@ -97,13 +116,23 @@ const SendButton = () => {
           ...history,
         ]),
       );
+      const eventIds = walletContext.proofEvents.map((event) => event.id);
+      await publishSpendingHistoryEvent(
+        "out",
+        String(numSats),
+        eventIds,
+        passphrase,
+        dTag,
+      );
+      if (changeProofs && changeProofs.length > 0) {
+        await publishProofEvent(mints[0], changeProofs, "in", passphrase, dTag);
+      }
+      await publishWalletEvent(passphrase, dTag);
     } catch (error) {
       console.log(error);
       setSendFailed(true);
     }
   };
-  // store proofs as array of proof objects
-  // or store proofs as array of proof arrays, which are all grouped by mint id
 
   const handleCopyTokenString = () => {
     navigator.clipboard.writeText(newToken);
