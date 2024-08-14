@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import {
   ArrowDownTrayIcon,
@@ -26,6 +26,7 @@ import {
   getDecodedToken,
   Proof,
 } from "@cashu/cashu-ts";
+import { CashuWalletContext } from "../../utils/context/context";
 
 const ReceiveButton = ({ passphrase }: { passphrase?: string }) => {
   const [showReceiveModal, setShowReceiveModal] = useState(false);
@@ -33,6 +34,9 @@ const ReceiveButton = ({ passphrase }: { passphrase?: string }) => {
   const [isSpent, setIsSpent] = useState(false);
   const [isInvalidToken, setIsInvalidToken] = useState(false);
   const [isDuplicateToken, setIsDuplicateToken] = useState(false);
+
+  const walletContext = useContext(CashuWalletContext);
+  const [dTag, setDTag] = useState("");
 
   const { mints, tokens, history } = getLocalStorageData();
 
@@ -42,6 +46,16 @@ const ReceiveButton = ({ passphrase }: { passphrase?: string }) => {
     control: receiveControl,
     reset: receiveReset,
   } = useForm();
+
+  useEffect(() => {
+    const walletEvent = walletContext.mostRecentWalletEvent;
+    if (walletEvent?.tags) {
+      const walletTag = walletEvent.tags.find(
+        (tag: string[]) => tag[0] === "d",
+      )?.[1];
+      setDTag(walletTag);
+    }
+  }, [walletContext]);
 
   const handleToggleReceiveModal = () => {
     receiveReset();
@@ -96,8 +110,14 @@ const ReceiveButton = ({ passphrase }: { passphrase?: string }) => {
             ...history,
           ]),
         );
-        await publishWalletEvent(passphrase);
-        await publishProofEvent(tokenMint, uniqueProofs, "in", passphrase);
+        await publishWalletEvent(passphrase, dTag);
+        await publishProofEvent(
+          tokenMint,
+          uniqueProofs,
+          "in",
+          passphrase,
+          dTag,
+        );
       } else {
         setIsSpent(true);
       }

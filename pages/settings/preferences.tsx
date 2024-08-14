@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { useForm, Controller } from "react-hook-form";
 import Link from "next/link";
 import {
@@ -30,6 +30,7 @@ import { useTheme } from "next-themes";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import ShopstrSlider from "../../components/utility-components/shopstr-slider";
 import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
+import { CashuWalletContext } from "../../utils/context/context";
 
 const PreferencesPage = () => {
   const [enterPassphrase, setEnterPassphrase] = useState(false);
@@ -53,6 +54,9 @@ const PreferencesPage = () => {
 
   const [pubkey, setPubkey] = useState("");
 
+  const walletContext = useContext(CashuWalletContext);
+  const [dTag, setDTag] = useState("");
+
   const { signInMethod } = getLocalStorageData();
 
   useEffect(() => {
@@ -74,6 +78,16 @@ const PreferencesPage = () => {
       localStorage.setItem("mints", JSON.stringify(mints));
     }
   }, [mints]);
+
+  useEffect(() => {
+    const walletEvent = walletContext.mostRecentWalletEvent;
+    if (walletEvent?.tags) {
+      const walletTag = walletEvent.tags.find(
+        (tag: string[]) => tag[0] === "d",
+      )?.[1];
+      setDTag(walletTag);
+    }
+  }, [walletContext]);
 
   const { theme, setTheme } = useTheme();
 
@@ -210,7 +224,7 @@ const PreferencesPage = () => {
 
   const publishRelays = (isCashu: boolean) => {
     if (isCashu) {
-      publishWalletEvent(passphrase);
+      publishWalletEvent(passphrase, dTag);
     } else {
       createNostrRelayEvent(pubkey, passphrase);
     }

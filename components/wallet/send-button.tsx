@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import {
   ArrowUpTrayIcon,
@@ -24,6 +24,8 @@ import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import {
   getLocalStorageData,
   publishWalletEvent,
+  publishProofEvent,
+  publishSpendingHistoryEvent,
 } from "../utility/nostr-helper-functions";
 import {
   CashuMint,
@@ -31,6 +33,7 @@ import {
   getEncodedToken,
   Proof,
 } from "@cashu/cashu-ts";
+import { CashuWalletContext } from "../../utils/context/context";
 
 const SendButton = ({ passphrase }: { passphrase?: string }) => {
   const [showSendModal, setShowSendModal] = useState(false);
@@ -38,6 +41,9 @@ const SendButton = ({ passphrase }: { passphrase?: string }) => {
   const [newToken, setNewToken] = useState("");
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
   const [sendFailed, setSendFailed] = useState(false);
+
+  const walletContext = useContext(CashuWalletContext);
+  const [dTag, setDTag] = useState("");
 
   const { mints, tokens, history } = getLocalStorageData();
 
@@ -47,6 +53,16 @@ const SendButton = ({ passphrase }: { passphrase?: string }) => {
     control: sendControl,
     reset: sendReset,
   } = useForm();
+
+  useEffect(() => {
+    const walletEvent = walletContext.mostRecentWalletEvent;
+    if (walletEvent?.tags) {
+      const walletTag = walletEvent.tags.find(
+        (tag: string[]) => tag[0] === "d",
+      )?.[1];
+      setDTag(walletTag);
+    }
+  }, [walletContext]);
 
   const handleToggleSendModal = () => {
     sendReset();
@@ -100,7 +116,18 @@ const SendButton = ({ passphrase }: { passphrase?: string }) => {
           ...history,
         ]),
       );
-      await publishWalletEvent(passphrase);
+      const eventIds = walletContext.proofEvents.map((event) => event.id);
+      await publishSpendingHistoryEvent(
+        "out",
+        String(numSats),
+        eventIds,
+        passphrase,
+        dTag,
+      );
+      if (changeProofs && changeProofs.length > 0) {
+        await publishProofEvent(mints[0], changeProofs, "in", passphrase, dTag);
+      }
+      await publishWalletEvent(passphrase, dTag);
     } catch (error) {
       console.log(error);
       setSendFailed(true);

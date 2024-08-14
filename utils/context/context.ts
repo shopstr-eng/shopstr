@@ -85,6 +85,8 @@ export const RelaysContext = createContext({
 } as RelaysContextInterface);
 
 export interface CashuWalletContextInterface {
+  mostRecentWalletEvent: any;
+  proofEvents: any[];
   cashuWalletRelays: string[];
   cashuMints: string[];
   cashuProofs: Proof[];
@@ -92,6 +94,8 @@ export interface CashuWalletContextInterface {
 }
 
 export const CashuWalletContext = createContext({
+  mostRecentWalletEvent: {},
+  proofEvents: [],
   cashuWalletRelays: [],
   cashuMints: [],
   cashuProofs: [],

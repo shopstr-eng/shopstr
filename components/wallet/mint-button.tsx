@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import axios from "axios";
 import {
@@ -27,6 +27,7 @@ import {
   publishProofEvent,
 } from "../utility/nostr-helper-functions";
 import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
+import { CashuWalletContext } from "../../utils/context/context";
 
 const MintButton = ({ passphrase }: { passphrase?: string }) => {
   const [showMintModal, setShowMintModal] = useState(false);
@@ -37,6 +38,9 @@ const MintButton = ({ passphrase }: { passphrase?: string }) => {
   const [invoice, setInvoice] = useState("");
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
 
+  const walletContext = useContext(CashuWalletContext);
+  const [dTag, setDTag] = useState("");
+
   const { mints, tokens, history } = getLocalStorageData();
 
   const {
@@ -45,6 +49,16 @@ const MintButton = ({ passphrase }: { passphrase?: string }) => {
     control: mintControl,
     reset: mintReset,
   } = useForm();
+
+  useEffect(() => {
+    const walletEvent = walletContext.mostRecentWalletEvent;
+    if (walletEvent?.tags) {
+      const walletTag = walletEvent.tags.find(
+        (tag: string[]) => tag[0] === "d",
+      )?.[1];
+      setDTag(walletTag);
+    }
+  }, [walletContext]);
 
   const handleToggleMintModal = () => {
     mintReset();
@@ -108,8 +122,8 @@ const MintButton = ({ passphrase }: { passphrase?: string }) => {
               ...history,
             ]),
           );
-          await publishWalletEvent(passphrase);
-          await publishProofEvent(mints[0], proofs, "in", passphrase);
+          await publishWalletEvent(passphrase, dTag);
+          await publishProofEvent(mints[0], proofs, "in", passphrase, dTag);
           // potentially capture a metric for the mint invoice
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
