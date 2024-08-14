@@ -286,6 +286,14 @@ export async function publishProofEvent(
       getLocalStorageData();
     const allWriteRelays = [...relays, ...writeRelays];
 
+    const encoder = new TextEncoder();
+    const dataEncoded = encoder.encode("shopstr" + userPubkey);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", dataEncoded);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+
     if (isProofArrayArray(proof)) {
       proof.forEach(async (proofArray) => {
         const tokenArray = { mint: mint, proofs: proofArray };
@@ -294,7 +302,7 @@ export async function publishProofEvent(
           .reduce((acc, token: Proof) => acc + token.amount, 0)
           .toString();
 
-        let dTagContent = dTag ? ":" + dTag : ":my-shopstr-wallet";
+        let dTagContent = dTag ? ":" + dTag : hashHex;
 
         let signedEvent;
         if (signInMethod === "extension") {
@@ -349,7 +357,7 @@ export async function publishProofEvent(
         .reduce((acc, token: Proof) => acc + token.amount, 0)
         .toString();
 
-      let dTagContent = dTag ? ":" + dTag : ":my-shopstr-wallet";
+      let dTagContent = dTag ? ":" + dTag : hashHex;
 
       let signedEvent;
       if (signInMethod === "extension") {
@@ -428,7 +436,15 @@ export async function publishSpendingHistoryEvent(
       ]);
     });
 
-    let dTagContent = dTag ? ":" + dTag : ":my-shopstr-wallet";
+    const encoder = new TextEncoder();
+    const dataEncoded = encoder.encode("shopstr" + userPubkey);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", dataEncoded);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+
+    let dTagContent = dTag ? ":" + dTag : hashHex;
 
     let signedEvent;
     if (signInMethod === "extension") {

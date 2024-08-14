@@ -1,5 +1,5 @@
 import { createContext } from "react";
-import { NostrEvent, NostrMessageEvent, ProfileData } from "../types/types";
+import { NostrMessageEvent, ProfileData } from "../types/types";
 import { Proof } from "@cashu/cashu-ts";
 
 export interface ProfileContextInterface {
