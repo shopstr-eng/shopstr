@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { useTheme } from "next-themes";
 import {
@@ -19,10 +19,13 @@ import {
 import {
   getLocalStorageData,
   publishWalletEvent,
+  publishProofEvent,
+  publishSpendingHistoryEvent,
 } from "../utility/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
 import { formatWithCommas } from "../utility-components/display-monetary-info";
+import { CashuWalletContext } from "../../utils/context/context";
 
 const PayButton = ({ passphrase }: { passphrase?: string }) => {
   const [showPayModal, setShowPayModal] = useState(false);
@@ -37,6 +40,9 @@ const PayButton = ({ passphrase }: { passphrase?: string }) => {
 
   const { theme, setTheme } = useTheme();
 
+  const walletContext = useContext(CashuWalletContext);
+  const [dTag, setDTag] = useState("");
+
   const {
     handleSubmit: handlePaySubmit,
     formState: { errors },
@@ -46,6 +52,16 @@ const PayButton = ({ passphrase }: { passphrase?: string }) => {
 
   const getMint = () => new CashuMint(mints[0]);
   const getWallet = () => new CashuWallet(getMint());
+
+  useEffect(() => {
+    const walletEvent = walletContext.mostRecentWalletEvent;
+    if (walletEvent?.tags) {
+      const walletTag = walletEvent.tags.find(
+        (tag: string[]) => tag[0] === "d",
+      )?.[1];
+      setDTag(walletTag);
+    }
+  }, [walletContext]);
 
   const handleTogglePayModal = () => {
     payReset();
@@ -123,7 +139,18 @@ const PayButton = ({ passphrase }: { passphrase?: string }) => {
           ...history,
         ]),
       );
-      await publishWalletEvent(passphrase);
+      const eventIds = walletContext.proofEvents.map((event) => event.id);
+      await publishSpendingHistoryEvent(
+        "out",
+        String(transactionAmount),
+        eventIds,
+        passphrase,
+        dTag,
+      );
+      if (changeProofs && changeProofs.length > 0) {
+        await publishProofEvent(mints[0], changeProofs, "in", passphrase, dTag);
+      }
+      await publishWalletEvent(passphrase, dTag);
       setIsPaid(true);
       setIsRedeeming(false);
       handleTogglePayModal();

@@ -152,6 +152,8 @@ function App({ Component, pageProps }: AppProps) {
   });
   const [cashuWalletContext, setCashuWalletContext] =
     useState<CashuWalletContextInterface>({
+      mostRecentWalletEvent: {},
+      proofEvents: [],
       cashuWalletRelays: [],
       cashuMints: [],
       cashuProofs: [],
@@ -222,18 +224,20 @@ function App({ Component, pageProps }: AppProps) {
   };
 
   const editCashuWalletContext = (
+    mostRecentWalletEvent: any,
+    proofEvents: any[],
     cashuWalletRelays: string[],
     cashuMints: string[],
     cashuProofs: Proof[],
     isLoading: boolean,
   ) => {
-    setCashuWalletContext((cashuWalletContext) => {
-      return {
-        cashuWalletRelays,
-        cashuMints,
-        cashuProofs,
-        isLoading,
-      };
+    setCashuWalletContext({
+      mostRecentWalletEvent,
+      proofEvents,
+      cashuWalletRelays,
+      cashuMints,
+      cashuProofs,
+      isLoading,
     });
   };
 
@@ -295,30 +299,24 @@ function App({ Component, pageProps }: AppProps) {
           (getLocalStorageData().signInMethod === "nsec" && passphrase) ||
           getLocalStorageData().signInMethod === "extension"
         ) {
-          let { cashuWalletRelays, cashuMints, cashuProofs } =
-            await fetchCashuWallet(
-              allRelays,
-              editCashuWalletContext,
-              passphrase,
-            );
-          // add transactions state
-          if (
-            cashuWalletRelays.length != 0 &&
-            cashuMints.length != 0 &&
-            cashuProofs.length != 0
-          ) {
+          let {
+            mostRecentWalletEvent,
+            proofEvents,
+            cashuWalletRelays,
+            cashuMints,
+            cashuProofs,
+          } = await fetchCashuWallet(
+            allRelays,
+            editCashuWalletContext,
+            passphrase,
+          );
+
+          if (cashuWalletRelays.length != 0 && cashuMints.length != 0) {
             localStorage.setItem(
               "cashuWalletRelays",
               JSON.stringify(cashuWalletRelays),
             );
             localStorage.setItem("mints", JSON.stringify(cashuMints));
-            cashuMints.forEach(async (mint) => {
-              let wallet = new CashuWallet(new CashuMint(mint));
-              let spentProofs = await wallet?.checkProofsSpent(cashuProofs);
-              cashuProofs = cashuProofs.filter(
-                (proof) => !spentProofs.includes(proof),
-              );
-            });
             localStorage.setItem("tokens", JSON.stringify(cashuProofs));
           }
         }

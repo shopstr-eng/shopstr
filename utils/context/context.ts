@@ -1,5 +1,5 @@
 import { createContext } from "react";
-import { NostrMessageEvent, ProfileData } from "../types/types";
+import { NostrEvent, NostrMessageEvent, ProfileData } from "../types/types";
 import { Proof } from "@cashu/cashu-ts";
 
 export interface ProfileContextInterface {
@@ -74,6 +74,8 @@ export const RelaysContext = createContext({
 } as RelaysContextInterface);
 
 export interface CashuWalletContextInterface {
+  mostRecentWalletEvent: any;
+  proofEvents: any[];
   cashuWalletRelays: string[];
   cashuMints: string[];
   cashuProofs: Proof[];
@@ -81,6 +83,8 @@ export interface CashuWalletContextInterface {
 }
 
 export const CashuWalletContext = createContext({
+  mostRecentWalletEvent: {},
+  proofEvents: [],
   cashuWalletRelays: [],
   cashuMints: [],
   cashuProofs: [],

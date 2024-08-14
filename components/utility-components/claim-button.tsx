@@ -14,11 +14,15 @@ import {
   XCircleIcon,
 } from "@heroicons/react/24/outline";
 import { useTheme } from "next-themes";
-import { ProfileMapContext } from "../../utils/context/context";
+import {
+  ProfileMapContext,
+  CashuWalletContext,
+} from "../../utils/context/context";
 import {
   getLocalStorageData,
   publishWalletEvent,
   publishProofEvent,
+  publishSpendingHistoryEvent,
 } from "../utility/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { LightningAddress } from "@getalby/lightning-tools";
@@ -68,6 +72,9 @@ export default function ClaimButton({
   const [isSpent, setIsSpent] = useState(false);
   const [isInvalidToken, setIsInvalidToken] = useState(false);
   const [isDuplicateToken, setIsDuplicateToken] = useState(false);
+
+  const walletContext = useContext(CashuWalletContext);
+  const [dTag, setDTag] = useState("");
 
   const { mints, tokens, history } = getLocalStorageData();
 
@@ -127,6 +134,16 @@ export default function ClaimButton({
     );
   }, [profileContext, tokenMint]);
 
+  useEffect(() => {
+    const walletEvent = walletContext.mostRecentWalletEvent;
+    if (walletEvent?.tags) {
+      const walletTag = walletEvent.tags.find(
+        (tag: string[]) => tag[0] === "d",
+      )?.[1];
+      setDTag(walletTag);
+    }
+  }, [walletContext]);
+
   const handleClaimType = (type: string) => {
     if (type === "receive") {
       receive(false);
@@ -158,7 +175,13 @@ export default function ClaimButton({
           setIsRedeeming(false);
           return;
         }
-        await publishProofEvent(tokenMint, uniqueProofs, "in");
+        await publishProofEvent(
+          tokenMint,
+          uniqueProofs,
+          "in",
+          passphrase,
+          dTag,
+        );
         const tokenArray = [...tokens, ...uniqueProofs];
         localStorage.setItem("tokens", JSON.stringify(tokenArray));
         if (!mints.includes(tokenMint)) {
@@ -182,7 +205,7 @@ export default function ClaimButton({
             ...history,
           ]),
         );
-        await publishWalletEvent(passphrase);
+        await publishWalletEvent(passphrase, dTag);
       } else {
         setIsSpent(true);
         setIsRedeeming(false);
@@ -194,6 +217,7 @@ export default function ClaimButton({
     }
   };
 
+  // add publishing as a pay out for redemption
   const redeem = async () => {
     setOpenClaimTypeModal(false);
     setOpenRedemptionModal(false);
@@ -220,6 +244,18 @@ export default function ClaimButton({
         setClaimChangeAmount(changeAmount);
         setClaimChangeProofs(changeProofs);
       }
+      const eventIds = walletContext.proofEvents.map((event) => event.id);
+      await publishSpendingHistoryEvent(
+        "out",
+        String(newAmount),
+        eventIds,
+        passphrase,
+        dTag,
+      );
+      if (changeProofs && changeProofs.length > 0) {
+        await publishProofEvent(mints[0], changeProofs, "in", passphrase, dTag);
+      }
+      await publishWalletEvent(passphrase, dTag);
       setIsPaid(true);
       setOpenRedemptionModal(true);
       setIsRedeeming(false);
