@@ -65,7 +65,7 @@ export default function RedemptionModal({
   }, [opened]);
 
   const sendChange = async (pubkey: string) => {
-    if (changeAmount >= 1) {
+    if (changeAmount >= 1 && changeProofs.length > 0) {
       const decryptedRandomNpub = nip19.decode(randomNpub);
       const decryptedRandomNsec = nip19.decode(randomNsec);
       let encodedChange = getEncodedToken({

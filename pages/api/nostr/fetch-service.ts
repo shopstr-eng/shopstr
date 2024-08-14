@@ -1,4 +1,4 @@
-import { Filter, nip04, nip44, SimplePool } from "nostr-tools";
+import { Filter, nip44, SimplePool } from "nostr-tools";
 import {
   addChatMessageToCache,
   addProductToCache,
