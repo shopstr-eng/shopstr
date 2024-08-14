@@ -217,7 +217,6 @@ export default function ClaimButton({
     }
   };
 
-  // add publishing as a pay out for redemption
   const redeem = async () => {
     setOpenClaimTypeModal(false);
     setOpenRedemptionModal(false);
@@ -244,18 +243,6 @@ export default function ClaimButton({
         setClaimChangeAmount(changeAmount);
         setClaimChangeProofs(changeProofs);
       }
-      const eventIds = walletContext.proofEvents.map((event) => event.id);
-      await publishSpendingHistoryEvent(
-        "out",
-        String(newAmount),
-        eventIds,
-        passphrase,
-        dTag,
-      );
-      if (changeProofs && changeProofs.length > 0) {
-        await publishProofEvent(mints[0], changeProofs, "in", passphrase, dTag);
-      }
-      await publishWalletEvent(passphrase, dTag);
       setIsPaid(true);
       setOpenRedemptionModal(true);
       setIsRedeeming(false);
