@@ -8,7 +8,7 @@ import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
 import { Button } from "@nextui-org/react";
 import { BitcoinPriceResponse, fetchBitcoinPrice, formatFiatBalance, shortenString } from "@/components/utility/wallet-helper";
 import { RecoverWallet } from "@/components/wallet/recover-wallet";
-import { Dialog, DialogContent, DialogFooter, DialogHeader } from "@/components/utility/shadcn/Dialog";
+import { Dialog, DialogContent } from "@/components/utility/shadcn/Dialog";
 
 const Wallet = () => {
   const [walletExists, toggleWalletExists] = useState(false);
@@ -18,6 +18,7 @@ const Wallet = () => {
   const [bitcoinPrice, setBitcoinPrice] = useState<BitcoinPriceResponse>();
   const [fiatCurrency, setFiatCurrency] = useState<BitcoinPriceResponse['bpi']['USD']['code']>("USD");
   const [swapDialogOpen, setSwapDialogOpen] = useState({ open: false, type: ""})
+  const [syncing, setSyncing] = useState(false);
   
   const receiveAddress = useMemo(() => {
     if (descriptor) {
@@ -72,6 +73,24 @@ const Wallet = () => {
       }
   }
 
+  const handleSyncWallet = () => {
+    if (descriptor) {
+      const wolletDescriptor = new WolletDescriptor(descriptor);
+      setSyncing(true);
+      getBalance(wolletDescriptor).then((value) => {
+        const balanceMap: Map<string, string> = value?.balance;
+        const balance = balanceMap.values().next().value;
+        setBalance(BigInt(balance));
+        setTransactions(value?.transactions)
+        
+        fetchBitcoinPrice().then((value) => {
+          setBitcoinPrice(value);
+          setSyncing(false);
+        });
+      })
+    }
+  }
+
   useEffect(() => {
     const walletDescriptor = window.localStorage.getItem("liquid-wallet-ct-descriptor");
     if (walletDescriptor) { 
@@ -112,32 +131,6 @@ const Wallet = () => {
     };
   }, [])
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (descriptor) {
-        const wolletDescriptor = new WolletDescriptor(descriptor);
-        getBalance(wolletDescriptor).then((value) => {
-          const balanceMap: Map<string, string> = value?.balance;
-          const balance = balanceMap.values().next().value;
-          setBalance(BigInt(balance));
-          setTransactions(value?.transactions)
-        })
-      }
-    }, 15 * 1000);
-
-    return () => clearInterval(interval);
-  }, [descriptor])
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchBitcoinPrice().then((value) => {
-        setBitcoinPrice(value);
-      });
-    }, 5 * 60 * 1000);
-
-    return () => clearInterval(interval);
-  }, [])
-
   return (
     <div className="flex min-h-screen flex-col bg-light-bg pb-20 pt-6 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
       { walletExists ? (
@@ -155,7 +148,6 @@ const Wallet = () => {
                 </div>
                 <div className="flex gap-x-4">
                   <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={() => setSwapDialogOpen({ open: true, type: "receive" })}>Receive LN</Button>
-                  {/* <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={() => setSwapDialogOpen({ open: true, type: "send"})}>Pay LN</Button> */}
                 </div>
                 <Button className="bg-red-500 rounded px-2 py-[2px] h-min text-xs" onClick={() => handleDisconnectWallet()}>Disconnect Wallet</Button>
               </div>
@@ -176,6 +168,9 @@ const Wallet = () => {
             >
               {formatFiatBalance(fiatCurrency, bitcoinPrice?.bpi[fiatCurrency].rate_float ?? 0, balance).display_string}
             </span>
+          </center>
+          <center>
+            <Button className="rounded h-min px-6 py-1 bg-cyan-500 font-normal text-black" onClick={() => handleSyncWallet()} disabled={syncing}>{!syncing ? `Sync Wallet ${String.fromCodePoint(8634)}` : 'Syncing...'}</Button>
           </center>
           <center>
             <Transactions transactions={transactions}/>
