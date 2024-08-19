@@ -6,6 +6,8 @@ import { useWalletContext } from "./wallet-context";
 import { Dialog, DialogContent } from "../utility/shadcn/Dialog";
 import { useState } from "react";
 import { DialogTitle } from "@radix-ui/react-dialog";
+import Icon from "@mdi/react";
+import { mdiAlert } from "@mdi/js";
 
 interface GenerateWalletProps {
   onGenerateSuccess: (passphrase: string) => void;
@@ -57,9 +59,10 @@ export const GenerateWallet = ({ onGenerateSuccess }: GenerateWalletProps ) => {
         Generate a New Wallet
       </Button>
       <Dialog open={showSeedDialog} onOpenChange={(val) => setShowSeedDialog(val)}>
-        <DialogContent>
-          <DialogTitle className="flex flex-col gap-y-3">
-            <p className="text-2xl font-bold text-white">Secure your recovery phrase</p>
+        <DialogContent className="border-shopstr-yellow text-center px-2">
+          <DialogTitle className="flex flex-col gap-y-3 items-center">
+            <Icon path={mdiAlert} className="w-24 text-shopstr-yellow-light" />
+            <p className="text-4xl font-bold text-white text-center">Secure your recovery phrase</p>
             <p className="text-muted">
               The combination of words bellow are called your recovery phrase. The recovery phrase allows you to
               access and restore your wallet. Write them down on a piece of paper in the exact order.
@@ -69,13 +72,13 @@ export const GenerateWallet = ({ onGenerateSuccess }: GenerateWalletProps ) => {
             <section className="grid grid-cols-2 gap-x-4">
               <div className="flex flex-col gap-y-2">
                 { mnemonic && mnemonic?.slice(0, 6)?.map((word, i) => (
-                    <span className="text-lg font-bold text-white" key={i}>{i + 1}: {word}</span>
+                    <span className="text-md font-bold text-white" key={i}><span className="font-light text-md">{i + 1}: </span> {word}</span>
                   ))
                 }
               </div>
               <div className="flex flex-col gap-y-2">
                 { mnemonic && mnemonic?.slice(6)?.map((word, i) => (
-                    <span className="text-lg font-bold text-white" key={i}>{i + 6 + 1}: {word}</span>
+                    <span className="text-md font-bold text-white" key={i}><span className="font-light text-md">{i + 6 + 1}: </span> {word}</span>
                   ))
                 }
               </div>
@@ -88,7 +91,7 @@ export const GenerateWallet = ({ onGenerateSuccess }: GenerateWalletProps ) => {
               <p className="text-lg font-bold">The recovery phrase IS NOT stored on our servers, and we cannot help you recover it.</p>
             </section>
             <footer>
-              <Button className="text-lg h-min px-6 py-2 rounded bg-cyan-500" onClick={() => handleConfirm()}>I have written it down safely!</Button>
+              <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={() => handleConfirm()}>I have written it down safely!</Button>
             </footer>
           </main>
         </DialogContent>
