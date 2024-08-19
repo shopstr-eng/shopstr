@@ -50,7 +50,7 @@ const Transactions = ({ transactions }: { transactions: WalletTx[]}) => {
   });
 
   return (
-    <div className="relative mt-4 overflow-x-auto rounded-lg shadow-md">
+    <div className="relative mt-4 overflow-x-auto rounded-lg">
       <div className="max-h-[50vh] px-3">
         <table className="w-full min-w-[50vw] text-left text-sm text-gray-500 dark:text-gray-400 max-w-3xl">
           <thead className="bg-gray-50 text-xs uppercase text-gray-700 dark:bg-gray-700 dark:text-gray-400">
@@ -83,6 +83,9 @@ const Transactions = ({ transactions }: { transactions: WalletTx[]}) => {
             ))}
           </tbody>
         </table>
+        { txs?.length === 0 && (
+          <span className="flex w-full justify-center items-cente text-muted py-10">No transaction history, yet. <br></br> Deposit some funds, to see your transactions. </span>
+        )}
       </div>
     </div>
   );
