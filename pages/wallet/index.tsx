@@ -9,6 +9,7 @@ import { Button } from "@nextui-org/react";
 import { BitcoinPriceResponse, fetchBitcoinPrice, formatFiatBalance, shortenString } from "@/components/utility/wallet-helper";
 import { RecoverWallet } from "@/components/wallet/recover-wallet";
 import { Dialog, DialogContent } from "@/components/utility/shadcn/Dialog";
+import QRCode from "react-qr-code";
 
 const Wallet = () => {
   const [walletExists, toggleWalletExists] = useState(false);
@@ -151,12 +152,9 @@ const Wallet = () => {
                 </div>
                 <Button className="bg-red-500 rounded px-2 py-[2px] h-min text-xs" onClick={() => handleDisconnectWallet()}>Disconnect Wallet</Button>
               </div>
-              <img 
-                src={receiveAddress?.QRCodeUri()} 
-                style={{ imageRendering: "pixelated"}} 
-                className="w-32 mx-auto p-2 bg-white"
-                onClick={() => handleCopyToClipboard(receiveAddress?.toString()!)}
-              />
+              <div className="p-2 bg-white scale-75">
+                <QRCode value={receiveAddress?.toString() ?? ""} />
+              </div>
             </div>
           </center>
           <center className="flex flex-col">

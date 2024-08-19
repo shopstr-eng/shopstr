@@ -34,7 +34,7 @@
     "knex": "^3.1.0",
     "lucide-react": "^0.427.0",
     "luxon": "^3.4.4",
-    "lwk_wasm": "^0.7.0",
+    "lwk_wasm": "^0.7.1",
     "next": "^14.2.3",
     "next-pwa": "^5.6.0",
     "next-themes": "^0.2.1",
@@ -45,6 +45,7 @@
     "qrcode": "^1.5.3",
     "react": "^18",
     "react-hook-form": "^7.47.0",
+    "react-qr-code": "^2.0.15",
     "react-responsive-carousel": "^3.2.23",
     "tailwindcss": "3.3.1",
     "uuid": "^9.0.0"

@@ -73,7 +73,7 @@ const Transactions = ({ transactions }: { transactions: WalletTx[]}) => {
                 className="border-b bg-white dark:border-gray-700 dark:bg-gray-800 px-0 mx-0"
               >
                 <td className={`px-6 py-4 ${tx.txAmount > 0 ? 'text-lime-200' : 'text-red-200'}`}>
-                  {tx.txAmount > 0 ? `+ ${tx.txAmount.toLocaleString()}` : `- ${tx.txAmount.toLocaleString()}`} Sats
+                  {tx.txAmount > 0 ? `+${tx.txAmount.toLocaleString()}` : `${tx.txAmount.toLocaleString()}`} Sats
                 </td>
                 <td className="px-6 py-4">
                   <a href={`${tx.txIdUnblindedUrl}`} className="text-cyan-300" target="_blank">{shortenString(tx.txId, 6, 6)}</a>
