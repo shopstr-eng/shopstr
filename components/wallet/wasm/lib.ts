@@ -61,6 +61,13 @@ export const isValidPassphraseWallet = (passphrase: string) => {
     return false;
   }
 
+  // special case, where user signed not with nsec
+  // but via extension and this results in passphrase
+  // being accepted as new one without collisions
+  if (!localStorage.getItem("encryptedPrivateKey")) {
+    return true;
+  }
+
   const bool =
     !!getDecryptedDescriptorFromLocalStorage(passphrase)?.startsWith("ct");
   return bool;
