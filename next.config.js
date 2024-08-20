@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 
 const nextConfig = {
-  reactStrictMode: false,
+  reactStrictMode: true,
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback.fs = false;
@@ -11,11 +11,27 @@ const nextConfig = {
       };
     }
 
+    if (isServer) {
+      config.output.webassemblyModuleFilename =
+        './../static/wasm/[modulehash].wasm';
+    } else {
+      config.output.webassemblyModuleFilename =
+        'static/wasm/[modulehash].wasm';
+    }
+
     config.experiments = {
       asyncWebAssembly: true,
       syncWebAssembly: true,
       layers: true,
     };
+
+    config.optimization.moduleIds = 'named';
+
+    // Ensure WASM files are output correctly
+    config.module.rules.push({
+      test: /\.wasm$/,
+      type: 'webassembly/async',
+    });
 
     return config;
   },
