@@ -53,28 +53,58 @@ export const RecoverWallet = ({ onRecoverSuccess }: RecoverWalletProps ) => {
   const handleRecoverFromJade = async () => {
     let isPassphraseValid = false;
     const nsecExists = localStorage.getItem("encryptedPrivateKey");
+    let jade: Jade | null | unknown = null;
+    
+    try {
+      jade = await Promise.race([
+        new Jade(getNetwork(), false),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout: No device selected")), 5000))
+      ]).catch(() => {
+        throw new Error("problem")
+      })
+      console.log("jade initialized successfully");
+    } catch (e) {
+      console.error(`Error: ${e}`);
+    }
+
+    if (!jade) return;
 
     if (nsecExists) {
       while (!isPassphraseValid) {
         const passphrase = window.prompt("Enter passphrase for wallet:");
         
-        if (!passphrase || !getNsecWithPassphrase(passphrase ?? "")) {
+        if (!getNsecWithPassphrase(passphrase ?? "")) {
           return;
         } else {
           try {
-            const jade = new Jade(getNetwork(), true);
-            
             if (jade) {
+              console.log({jade})
+              // @ts-expect-error
               const descriptorJade = await jade.wpkh();
               changeDescriptor(descriptorJade.toString());
-              encryptWalletToLocalStorageWithPassphrase(passphrase, descriptorJade.toString());
-              onRecoverSuccess(passphrase);
+              encryptWalletToLocalStorageWithPassphrase(passphrase!, descriptorJade.toString());
+              onRecoverSuccess(passphrase!);
             }
           } catch (e) {
             console.error(`${e}`)
           }
 
         }
+      }
+    } else {
+      const passphrase = window.prompt("Enter new passphrase: ") ?? "";
+
+      try {
+        const jade = new Jade(getNetwork(), true);
+        
+        if (jade) {
+          const descriptorJade = await jade.wpkh();
+          changeDescriptor(descriptorJade.toString());
+          encryptWalletToLocalStorageWithPassphrase(passphrase, descriptorJade.toString());
+          onRecoverSuccess(passphrase);
+        }
+      } catch (e) {
+        console.error(`${e}`)
       }
     }
   }
