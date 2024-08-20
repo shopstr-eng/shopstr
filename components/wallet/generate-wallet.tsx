@@ -1,7 +1,7 @@
 import { Button } from "@nextui-org/react"
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES"
 import { validPassphrase } from "../utility/nostr-helper-functions";
-import { encryptWalletToLocalStorageWithPassphrase, generateLiquidDescriptor, generateNewMnemonic, generateNewSigner, getNetwork } from "@/pages/wallet/lib";
+import { encryptWalletToLocalStorageWithPassphrase, generateLiquidDescriptor, generateNewMnemonic, generateNewSigner, getNetwork } from "@/components/wallet/wasm/lib";
 import { useWalletContext } from "./wallet-context";
 import { Dialog, DialogContent } from "../utility/shadcn/Dialog";
 import { useState } from "react";
@@ -51,7 +51,7 @@ export const GenerateWallet = ({ onGenerateSuccess }: GenerateWalletProps ) => {
 
   return (
     <div className="w-max mx-auto flex flex-col items-center">
-      <h2 className="text-4xl font-bold">You don't have a wallet yet!</h2>
+      <h2 className="text-4xl font-bold">You don&apos;t have a wallet yet!</h2>
       <Button
         className={SHOPSTRBUTTONCLASSNAMES + " m-2"}
         onClick={() => handleGenerateWallet() }

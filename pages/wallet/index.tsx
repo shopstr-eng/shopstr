@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { getAddress, getBalance, getDecryptedDescriptorFromLocalStorage, isValidPassphraseWallet } from "./lib";
+import { getAddress, getBalance, getDecryptedDescriptorFromLocalStorage, isValidPassphraseWallet } from "../../components/wallet/wasm/lib";
 import { GenerateWallet } from "@/components/wallet/generate-wallet";
 import { useWalletContext } from "@/components/wallet/wallet-context";
 import { WolletDescriptor } from "lwk_wasm";

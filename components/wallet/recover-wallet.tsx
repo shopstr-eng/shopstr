@@ -1,7 +1,7 @@
 import { Button } from "@nextui-org/react"
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES"
 import { validPassphrase } from "../utility/nostr-helper-functions";
-import { encryptWalletToLocalStorageWithPassphrase, getRecoveryTypeIfValid, recoverDescriptorByMnemonic } from "@/pages/wallet/lib";
+import { encryptWalletToLocalStorageWithPassphrase, getRecoveryTypeIfValid, recoverDescriptorByMnemonic } from "@/components/wallet/wasm/lib";
 import { useWalletContext } from "./wallet-context";
 import { useState } from "react";
 
