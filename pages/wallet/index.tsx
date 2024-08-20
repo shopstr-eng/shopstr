@@ -174,14 +174,18 @@ const Wallet = () => {
             <Transactions transactions={transactions}/>
           </center>
           <Dialog open={swapDialogOpen.open} onOpenChange={(val) => setSwapDialogOpen({ open: val, type: ""})}>
-            <DialogContent>
-              <h5 className="text-2xl font-bold">{swapDialogOpen.type}</h5>
+            <DialogContent className="border-1 border-shopstr-yellow">
+              <h5 className="text-2xl font-bold">{swapDialogOpen.type.toUpperCase()}</h5>
               <div className="w-full h-full min-w-[450px] min-h-[500px]">
-                <iframe src="https://boltz.exchange" className="w-full h-full"></iframe>
+                <iframe 
+                  src={`https://beta.boltz.exchange?embed=1&destination=${receiveAddress?.toString()}&sendAsset=LN&receiveAsset=L-BTC`} 
+                  className="w-full h-full"
+                >
+                </iframe>
               </div>
-              <div className="flex gap-x-2 w-full justify-end">
+              {/* <div className="flex gap-x-2 w-full justify-end">
                 <Button className={SHOPSTRBUTTONCLASSNAMES + " w-min"} onClick={() => handleCopyToClipboard(receiveAddress?.toString()!)}>Copy Your Receive Address</Button>
-              </div>
+              </div> */}
             </DialogContent>
           </Dialog>
         </section>
