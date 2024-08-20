@@ -1,9 +1,10 @@
 import { Button } from "@nextui-org/react"
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES"
-import { validPassphrase } from "../utility/nostr-helper-functions";
-import { encryptWalletToLocalStorageWithPassphrase, getRecoveryTypeIfValid, recoverDescriptorByMnemonic } from "@/components/wallet/wasm/lib";
+import { getNsecWithPassphrase, validPassphrase } from "../utility/nostr-helper-functions";
+import { encryptWalletToLocalStorageWithPassphrase, getNetwork, getRecoveryTypeIfValid, recoverDescriptorByMnemonic } from "@/components/wallet/wasm/lib";
 import { useWalletContext } from "./wallet-context";
 import { useState } from "react";
+import { Jade, WolletDescriptor } from "lwk_wasm";
 
 interface RecoverWalletProps {
   onRecoverSuccess: (passphrase: string) => void;
@@ -48,6 +49,36 @@ export const RecoverWallet = ({ onRecoverSuccess }: RecoverWalletProps ) => {
       }
     }
   }
+
+  const handleRecoverFromJade = async () => {
+    let isPassphraseValid = false;
+    const nsecExists = localStorage.getItem("encryptedPrivateKey");
+
+    if (nsecExists) {
+      while (!isPassphraseValid) {
+        const passphrase = window.prompt("Enter passphrase for wallet:");
+        
+        if (!passphrase || !getNsecWithPassphrase(passphrase ?? "")) {
+          return;
+        } else {
+          try {
+            const jade = new Jade(getNetwork(), true);
+            
+            if (jade) {
+              const descriptorJade = await jade.wpkh();
+              changeDescriptor(descriptorJade.toString());
+              encryptWalletToLocalStorageWithPassphrase(passphrase, descriptorJade.toString());
+              onRecoverSuccess(passphrase);
+            }
+          } catch (e) {
+            console.error(`${e}`)
+          }
+
+        }
+      }
+    }
+  }
+
   return (
     <div className="w-max mx-auto flex flex-col items-center justify-center gap-y-6 pt-12">
         <textarea 
@@ -60,6 +91,12 @@ export const RecoverWallet = ({ onRecoverSuccess }: RecoverWalletProps ) => {
             onClick={() => handleRecoverWallet() }
         >
             Recover Wallet
+        </Button>
+        <Button
+            className={SHOPSTRBUTTONCLASSNAMES}
+            onClick={() => handleRecoverFromJade() }
+        >
+            Connect JADE
         </Button>
     </div>
   )
