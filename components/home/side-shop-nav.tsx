@@ -74,7 +74,7 @@ const SideShopNav = ({ focusedPubkey }: { focusedPubkey: string }) => {
   // pass categories of sellers products, make a clickable list of categories to replace "home" button (i.e; All Items (#), Electronics(#), Crafts(#), etc.)
   return (
     <>
-      <div className="hidden w-[120px] flex-col items-center bg-light-bg py-8 px-6 dark:bg-dark-bg sm:flex md:w-[250px] md:items-start">
+      <div className="hidden w-[120px] flex-col items-center bg-light-bg px-6 py-8 dark:bg-dark-bg sm:flex md:w-[250px] md:items-start">
         <Button
           onClick={() => router.push("/")}
           className={`flex w-full flex-row justify-start bg-transparent py-8 text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${

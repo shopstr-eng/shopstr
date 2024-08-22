@@ -18,14 +18,14 @@ export default function ImageCarousel({
 }: ImageCarouselProps) {
   /** SHARED STYLES **/
   const PREVNEXTBUTTONSTYLES =
-    " absolute z-10 top-[calc(50%-(.5*50%/2))] cursor-pointer h-[30%] w-[8%] rounded-sm bg-purple-300 opacity-20 hover:bg-purple-500 hover:opacity-80 flex items-center ";
+    "absolute z-10 top-[calc(50%-(.5*50%/2))] cursor-pointer h-[30%] w-[8%] rounded-sm bg-purple-300 opacity-20 hover:bg-purple-500 hover:opacity-80 flex items-center";
 
   const displayImages = () => {
     let className = "flex items-center justify-center " + classname + "";
     if (!images || images.length == 0)
       return [
         <div className={className} key={"image" + 0}>
-          <img
+          <Image
             src="/no-image-placeholder.png"
             className="h-full w-full object-contain"
             alt="No image placeholder"

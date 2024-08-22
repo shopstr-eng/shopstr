@@ -13,6 +13,7 @@ export const MyListingsPage = () => {
   const handleCreateNewListing = () => {
     const loggedIn = getLocalStorageData().userPubkey;
 
+    // don't route to home page when adding a new listing
     if (loggedIn) {
       router.push("/?addNewListing");
     } else {
@@ -24,7 +25,7 @@ export const MyListingsPage = () => {
       <div className="flex max-w-[100%] flex-col bg-light-bg px-3 pb-2 dark:bg-dark-bg">
         <div>
           <Button
-            className={`${SHOPSTRBUTTONCLASSNAMES} w-full md:hidden`}
+            className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
             onClick={() => handleCreateNewListing()}
           >
             + Add new listing

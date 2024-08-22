@@ -118,12 +118,11 @@ export function MarketplacePage({
       <div className="flex max-w-[100%] flex-col bg-light-bg px-3 pb-2 dark:bg-dark-bg">
         {shopBannerURL != "" && focusedPubkey != "" ? (
           <>
-            <div className="flex items-center justify-center ">
+            <div className="min-w-screen flex items-center justify-center">
               <Image
                 alt={"Shop banner image"}
                 src={shopBannerURL}
-                className="rounded-lg object-cover object-fill"
-                style={{ width: "100%", height: "auto", objectFit: "cover" }}
+                className="rounded-lg object-fill"
               />
             </div>
             <div className="mt-3 flex items-center justify-between font-bold text-light-text dark:text-dark-text">
@@ -241,15 +240,15 @@ export function MarketplacePage({
         )}
       </div>
       <div className="flex">
-      <SideShopNav focusedPubkey={focusedPubkey} />
-      <DisplayEvents
-        focusedPubkey={focusedPubkey}
-        selectedCategories={selectedCategories}
-        selectedLocation={selectedLocation}
-        selectedSearch={selectedSearch}
-        canShowLoadMore={true}
-        wotFilter={wotFilter}
-      />
+        {focusedPubkey && <SideShopNav focusedPubkey={focusedPubkey} />}
+        <DisplayEvents
+          focusedPubkey={focusedPubkey}
+          selectedCategories={selectedCategories}
+          selectedLocation={selectedLocation}
+          selectedSearch={selectedSearch}
+          canShowLoadMore={true}
+          wotFilter={wotFilter}
+        />
       </div>
       <SignInModal isOpen={isOpen} onClose={onClose} />
     </div>

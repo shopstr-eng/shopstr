@@ -161,68 +161,132 @@ export default function InvoiceCard({
   }, [walletContext]);
 
   const onShippingSubmit = async (data: { [x: string]: any }) => {
-    let shippingName = data["Name"];
-    let shippingAddress = data["Address"];
-    let shippingUnitNo = data["Unit"];
-    let shippingCity = data["City"];
-    let shippingPostalCode = data["Postal Code"];
-    let shippingState = data["State/Province"];
-    let shippingCountry = data["Country"];
-    setShowShippingModal(false);
-    if (isCashuPayment) {
-      await handleCashuPayment(
-        shippingName,
-        shippingAddress,
-        shippingUnitNo,
-        shippingCity,
-        shippingPostalCode,
-        shippingState,
-        shippingCountry,
-      );
-    } else {
-      await handleLightningPayment(
-        shippingName,
-        shippingAddress,
-        shippingUnitNo,
-        shippingCity,
-        shippingPostalCode,
-        shippingState,
-        shippingCountry,
-      );
+    try {
+      let price = totalCost;
+      if (!currencySelection.hasOwnProperty(currency)) {
+        throw new Error(`${currency} is not a supported currency.`);
+      } else if (
+        currencySelection.hasOwnProperty(currency) &&
+        currency.toLowerCase() !== "sats" &&
+        currency.toLowerCase() !== "sat"
+      ) {
+        try {
+          const currencyData = { amount: price, currency: currency };
+          const numSats = await fiat.getSatoshiValue(currencyData);
+          price = Math.round(numSats);
+        } catch (err) {
+          console.error("ERROR", err);
+        }
+      } else if (currency.toLowerCase() === "btc") {
+        price = price * 100000000;
+      }
+
+      if (price < 1) {
+        throw new Error("Listing price is less than 1 sat.");
+      }
+
+      let shippingName = data["Name"];
+      let shippingAddress = data["Address"];
+      let shippingUnitNo = data["Unit"];
+      let shippingCity = data["City"];
+      let shippingPostalCode = data["Postal Code"];
+      let shippingState = data["State/Province"];
+      let shippingCountry = data["Country"];
+      setShowShippingModal(false);
+      if (isCashuPayment) {
+        await handleCashuPayment(
+          price,
+          shippingName,
+          shippingAddress,
+          shippingUnitNo,
+          shippingCity,
+          shippingPostalCode,
+          shippingState,
+          shippingCountry,
+        );
+      } else {
+        await handleLightningPayment(
+          price,
+          shippingName,
+          shippingAddress,
+          shippingUnitNo,
+          shippingCity,
+          shippingPostalCode,
+          shippingState,
+          shippingCountry,
+        );
+      }
+    } catch (error) {
+      console.error(error);
+      if (setCashuPaymentFailed) {
+        setCashuPaymentFailed(true);
+      }
     }
   };
 
   const onContactSubmit = async (data: { [x: string]: any }) => {
-    let contact = data["Contact"];
-    let contactType = data["Contact Type"];
-    let contactInstructions = data["Instructions"];
-    setShowContactModal(false);
-    if (isCashuPayment) {
-      await handleCashuPayment(
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        contact,
-        contactType,
-        contactInstructions,
-      );
-    } else {
-      await handleLightningPayment(
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        contact,
-        contactType,
-        contactInstructions,
-      );
+    try {
+      let price = totalCost;
+      if (!currencySelection.hasOwnProperty(currency)) {
+        throw new Error(`${currency} is not a supported currency.`);
+      } else if (
+        currencySelection.hasOwnProperty(currency) &&
+        currency.toLowerCase() !== "sats" &&
+        currency.toLowerCase() !== "sat"
+      ) {
+        try {
+          const currencyData = { amount: price, currency: currency };
+          const numSats = await fiat.getSatoshiValue(currencyData);
+          price = Math.round(numSats);
+        } catch (err) {
+          console.error("ERROR", err);
+        }
+      } else if (currency.toLowerCase() === "btc") {
+        price = price * 100000000;
+      }
+
+      if (price < 1) {
+        throw new Error("Listing price is less than 1 sat.");
+      }
+
+      let contact = data["Contact"];
+      let contactType = data["Contact Type"];
+      let contactInstructions = data["Instructions"];
+      setShowContactModal(false);
+      if (isCashuPayment) {
+        await handleCashuPayment(
+          price,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          contact,
+          contactType,
+          contactInstructions,
+        );
+      } else {
+        await handleLightningPayment(
+          price,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          contact,
+          contactType,
+          contactInstructions,
+        );
+      }
+    } catch (error) {
+      console.error(error);
+      if (setCashuPaymentFailed) {
+        setCashuPaymentFailed(true);
+      }
     }
   };
 
@@ -237,6 +301,7 @@ export default function InvoiceCard({
   };
 
   const handleLightningPayment = async (
+    newPrice: number,
     shippingName?: string,
     shippingAddress?: string,
     shippingUnitNo?: string,
@@ -250,29 +315,7 @@ export default function InvoiceCard({
   ) => {
     try {
       setShowInvoiceCard(true);
-      let newPrice = totalCost;
       const wallet = new CashuWallet(new CashuMint(mints[0]));
-      if (!currencySelection.hasOwnProperty(currency)) {
-        throw new Error(`${currency} is not a supported currency.`);
-      } else if (
-        currencySelection.hasOwnProperty(currency) &&
-        currency.toLowerCase() !== "sats" &&
-        currency.toLowerCase() !== "sat"
-      ) {
-        try {
-          const currencyData = { amount: newPrice, currency: currency };
-          const numSats = await fiat.getSatoshiValue(currencyData);
-          newPrice = Math.round(numSats);
-        } catch (err) {
-          console.error("ERROR", err);
-        }
-      } else if (currency.toLowerCase() === "btc") {
-        newPrice = newPrice * 100000000;
-      }
-
-      if (newPrice < 1) {
-        throw new Error("Listing price is less than 1 sat.");
-      }
 
       const invoiceMinted = await axios.post("/api/cashu/request-mint", {
         mintUrl: mints[0],
@@ -535,6 +578,7 @@ export default function InvoiceCard({
   const formattedTotalCost = formatWithCommas(totalCost, currency);
 
   const handleCashuPayment = async (
+    price: number,
     shippingName?: string,
     shippingAddress?: string,
     shippingUnitNo?: string,
@@ -547,29 +591,8 @@ export default function InvoiceCard({
     contactInstructions?: string,
   ) => {
     try {
-      let price = totalCost;
       const mint = new CashuMint(mints[0]);
       const wallet = new CashuWallet(mint);
-      if (!currencySelection.hasOwnProperty(currency)) {
-        throw new Error(`${currency} is not a supported currency.`);
-      } else if (
-        currencySelection.hasOwnProperty(currency) &&
-        currency.toLowerCase() !== "sats" &&
-        currency.toLowerCase() !== "sat"
-      ) {
-        try {
-          const currencyData = { amount: price, currency: currency };
-          const numSats = await fiat.getSatoshiValue(currencyData);
-          price = Math.round(numSats);
-        } catch (err) {
-          console.error("ERROR", err);
-        }
-      } else if (currency.toLowerCase() === "btc") {
-        price = price * 100000000;
-      }
-      if (price < 1) {
-        throw new Error("Listing price is less than 1 sat.");
-      }
       const mintKeySetResponse = await mint.getKeySets();
       const mintKeySetIds = mintKeySetResponse?.keysets;
       const filteredProofs = tokens.filter(

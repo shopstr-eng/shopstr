@@ -103,55 +103,37 @@ export default function ProductCard({
     "hover:shadow-lg hover:shadow-shopstr-purple dark:hover:shadow-shopstr-yellow";
 
   return (
-    <Card
-      className={
-        "mx-[2.5px] my-3 w-80 rounded-lg bg-light-fg dark:bg-dark-fg " +
-        cardHoverStyle
-      }
-      key={uniqueKey}
-    >
-      <CardBody
-        className={"cursor-pointer overflow-x-hidden"}
+    <div className="mx-[2.5px] my-3 w-80" key={uniqueKey}>
+      <div
+        className="cursor-pointer"
         onClick={() => {
           onProductClick && onProductClick(productData);
         }}
       >
-        <div className="z-10 mb-2 flex w-full justify-between">
-          <ProfileWithDropdown
-            pubkey={productData.pubkey}
-            dropDownKeys={
-              productData.pubkey === getLocalStorageData().userPubkey
-                ? ["shop_settings"]
-                : ["shop", "message"]
-            }
-          />
-          <div className="flex flex-col justify-center">
-            <CompactCategories categories={categories} />
-          </div>
-        </div>
-        <div className="mb-5">
+        <div className="mb-2">
           <ImageCarousel
             images={images}
             classname="w-full h-[300px]"
             showThumbs={false}
           />
-          <div className="mt-3 flex flex-row justify-between">
-            <Chip key={location} startContent={locationAvatar(location)}>
-              {location
-                ? location.length > 20
-                  ? location.slice(0, 20) + "..."
-                  : location
-                : ""}
-            </Chip>
-            <CompactPriceDisplay monetaryInfo={productData} />
-          </div>
         </div>
-        <Divider />
-        <div className="mt-5 flex w-full flex-col items-center ">
-          <h2 className="mb-4 text-2xl font-bold">{title}</h2>
+        <div className="justify left flex flex-col">
+          <h2 className="mb-2 text-2xl font-bold">{title}</h2>
         </div>
-      </CardBody>
-      {footerContent && <CardFooter>{footerContent}</CardFooter>}
-    </Card>
+        <div className="z-10 mb-2 flex w-full justify-between">
+          <ProfileWithDropdown
+            pubkey={pubkey}
+            dropDownKeys={
+              pubkey === getLocalStorageData().userPubkey
+                ? ["shop_settings"]
+                : ["shop", "message"]
+            }
+          />
+        </div>
+        <div className="justify-left flex">
+          <CompactPriceDisplay monetaryInfo={productData} />
+        </div>
+      </div>
+    </div>
   );
 }
