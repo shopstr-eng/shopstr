@@ -36,8 +36,11 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
         }}
         className="text-light-text dark:text-dark-text"
       >
-        <SelectItem key={"Bitcoin 2024 Nashville"}>
-          Bitcoin 2024 Nashville
+        <SelectItem key={"Nostriga"}>
+          Nostriga
+        </SelectItem>
+        <SelectItem key={"Baltic Honeybadger 2024"}>
+          Baltic Honeybadger 2024
         </SelectItem>
       </SelectSection>
     );
