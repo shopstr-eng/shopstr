@@ -2,19 +2,13 @@ import React, { useEffect, useState, useContext, useMemo } from "react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { ProfileMapContext } from "@/utils/context/context";
 import { useForm, Controller } from "react-hook-form";
-import {
-  Button,
-  Textarea,
-  Input,
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-  Image,
-} from "@nextui-org/react";
+import { Button, Textarea, Input, Image } from "@nextui-org/react";
 import {
   ArrowUpOnSquareIcon,
   CheckIcon,
   ClipboardIcon,
+  EyeSlashIcon,
+  EyeIcon,
 } from "@heroicons/react/24/outline";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
 
@@ -34,8 +28,10 @@ const UserProfilePage = () => {
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
   const [isFetchingProfile, setIsFetchingProfile] = useState(false);
   const [userPubkey, setUserPubkey] = useState("");
-  const [isCopyPopoverOpen, setIsCopyPopoverOpen] = React.useState(false);
+  const [isNPubCopied, setIsNPubCopied] = useState(false);
+  const [isNSecCopied, setIsNSecCopied] = useState(false);
   const [userNSec, setUserNSec] = useState("");
+  const [viewState, setViewState] = useState<"shown" | "hidden">("hidden");
 
   const { signInMethod, userNPub } = getLocalStorageData();
 
@@ -184,97 +180,84 @@ const UserProfilePage = () => {
                 </div>
               </div>
 
-              <Popover
-                placement="bottom"
-                showArrow={true}
-                isOpen={isCopyPopoverOpen}
-                onOpenChange={(open) => setIsCopyPopoverOpen(open)}
+              <div
+                className="mb-2 flex w-full cursor-pointer flex-row items-center justify-center rounded-lg border-2 border-light-fg p-2 hover:opacity-60 dark:border-dark-fg"
+                onClick={() => {
+                  // copy to clipboard
+                  navigator.clipboard.writeText(userNPub);
+                  setIsNPubCopied(true);
+                  setTimeout(() => {
+                    setIsNPubCopied(false);
+                  }, 1000);
+                }}
               >
-                <PopoverTrigger>
-                  <div
-                    className="mb-2 flex w-full cursor-pointer flex-row items-center justify-center rounded-lg border-2 border-light-fg p-2 hover:opacity-60 dark:border-dark-fg"
-                    onClick={() => {
-                      // copy to clipboard
-                      navigator.clipboard.writeText(userNPub);
-                      setIsCopyPopoverOpen(true);
-                      setTimeout(() => {
-                        setIsCopyPopoverOpen(false);
-                      }, 1000);
-                    }}
-                  >
-                    <span
-                      className="text-xxs box-border flex max-w-full overflow-hidden text-ellipsis whitespace-nowrap pr-3 text-center font-bold text-light-text dark:text-dark-text"
-                      suppressHydrationWarning
-                    >
-                      {userNPub}
-                    </span>
-                    {isCopyPopoverOpen ? (
-                      <CheckIcon
-                        width={25}
-                        height={25}
-                        className="text-light-text dark:text-dark-text"
-                      />
-                    ) : (
-                      <ClipboardIcon
-                        width={15}
-                        height={15}
-                        className="text-light-text dark:text-dark-text"
-                      />
-                    )}
-                  </div>
-                </PopoverTrigger>
-                <PopoverContent>
-                  <div className="w-full px-1 py-2 text-light-text dark:text-dark-text">
-                    Successfully copied npub to clipboard
-                  </div>
-                </PopoverContent>
-              </Popover>
+                <span
+                  className="text-xxs box-border flex max-w-full overflow-hidden text-ellipsis whitespace-nowrap pr-3 text-center font-bold text-light-text dark:text-dark-text"
+                  suppressHydrationWarning
+                >
+                  {userNPub}
+                </span>
+                {isNPubCopied ? (
+                  <CheckIcon
+                    width={15}
+                    height={15}
+                    className="text-light-text dark:text-dark-text"
+                  />
+                ) : (
+                  <ClipboardIcon
+                    width={15}
+                    height={15}
+                    className="text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
+                  />
+                )}
+              </div>
 
-              <Popover
-                placement="bottom"
-                showArrow={true}
-                isOpen={isCopyPopoverOpen}
-                onOpenChange={(open) => setIsCopyPopoverOpen(open)}
-              >
-                <PopoverTrigger>
-                  <div
-                    className="mb-12 flex w-full cursor-pointer flex-row items-center justify-center rounded-lg border-2 border-light-fg p-2 hover:opacity-60 dark:border-dark-fg"
+              <div className="mb-12 flex w-full cursor-pointer flex-row items-center justify-center rounded-lg border-2 border-light-fg p-2 dark:border-dark-fg">
+                <span
+                  className="text-xxs box-border flex max-w-full overflow-hidden text-ellipsis whitespace-nowrap pr-3 text-center font-bold text-light-text dark:text-dark-text"
+                  suppressHydrationWarning
+                >
+                  {viewState === "shown"
+                    ? userNSec
+                    : "***************************************************************"}
+                </span>
+                {isNSecCopied ? (
+                  <CheckIcon
+                    width={15}
+                    height={15}
+                    className="text-light-text dark:text-dark-text"
+                  />
+                ) : (
+                  <ClipboardIcon
+                    width={15}
+                    height={15}
+                    className="text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
                     onClick={() => {
                       // copy to clipboard
                       navigator.clipboard.writeText(userNSec);
-                      setIsCopyPopoverOpen(true);
+                      setIsNSecCopied(true);
                       setTimeout(() => {
-                        setIsCopyPopoverOpen(false);
+                        setIsNSecCopied(false);
                       }, 1000);
                     }}
-                  >
-                    <span
-                      className="text-xxs box-border flex max-w-full overflow-hidden text-ellipsis whitespace-nowrap pr-3 text-center font-bold text-light-text dark:text-dark-text"
-                      suppressHydrationWarning
-                    >
-                      {userNSec}
-                    </span>
-                    {isCopyPopoverOpen ? (
-                      <CheckIcon
-                        width={25}
-                        height={25}
-                        className="text-light-text dark:text-dark-text"
-                      />
-                    ) : (
-                      <ClipboardIcon
-                        width={15}
-                        height={15}
-                        className="text-light-text dark:text-dark-text"
-                      />
-                    )}
-                  </div>
-                </PopoverTrigger>
-                <PopoverContent>
-                  <div className="w-full px-1 py-2 text-light-text dark:text-dark-text">
-                    Successfully copied nsec to clipboard
-                  </div>
-                </PopoverContent>
-              </Popover>
+                  />
+                )}
+                {viewState === "shown" ? (
+                  <EyeSlashIcon
+                    className="h-6 w-6 flex-shrink-0 px-1 text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
+                    onClick={() => {
+                      setViewState("hidden");
+                    }}
+                  />
+                ) : (
+                  <EyeIcon
+                    className="h-6 w-6 flex-shrink-0 px-1 text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
+                    onClick={() => {
+                      setViewState("shown");
+                    }}
+                  />
+                )}
+              </div>
 
               <form onSubmit={handleSubmit(onSubmit as any)}>
                 <Controller

@@ -101,7 +101,10 @@ export default function CheckoutCard({
         </div>
       )} */}
       {!isBeingPaid ? (
-        <div className="mx-[2.5px] my-3 flex w-full flex-row w-[99%] h-[99%]" key={uniqueKey}>
+        <div
+          className="mx-[2.5px] my-3 flex h-[99%] w-[99%] w-full flex-row"
+          key={uniqueKey}
+        >
           <div className="w-2/3 pr-4">
             <div className="flex w-full flex-row">
               <div className="flex w-1/4 flex-col pr-4">

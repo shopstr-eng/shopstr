@@ -104,14 +104,14 @@ const Keys = () => {
                   </div>
                   {viewState === "shown" ? (
                     <EyeSlashIcon
-                      className="h-6 w-6 flex-shrink-0 px-1 hover:text-purple-700"
+                      className="h-6 w-6 flex-shrink-0 px-1 hover:text-purple-700 dark:hover:text-yellow-700"
                       onClick={() => {
                         setViewState("hidden");
                       }}
                     />
                   ) : (
                     <EyeIcon
-                      className="h-6 w-6 flex-shrink-0 px-1 hover:text-purple-700"
+                      className="h-6 w-6 flex-shrink-0 px-1 hover:text-purple-700 dark:hover:text-yellow-700"
                       onClick={() => {
                         setViewState("shown");
                       }}
