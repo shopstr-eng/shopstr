@@ -56,3 +56,9 @@ body {
 .text-xxs {
   font-size: 0.63rem; /* Example of a smaller font size than text-xs */
 }
+
+.break-words-all {
+  word-break: break-all;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
