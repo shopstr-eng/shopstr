@@ -25,6 +25,7 @@ const DisplayEvents = ({
   canShowLoadMore,
   wotFilter,
   isMyListings,
+  setCategories,
 }: {
   focusedPubkey?: string;
   selectedCategories: Set<string>;
@@ -33,6 +34,7 @@ const DisplayEvents = ({
   canShowLoadMore?: boolean;
   wotFilter?: boolean;
   isMyListings?: boolean;
+  setCategories?: (categories: string[]) => void;
 }) => {
   const [productEvents, setProductEvents] = useState<ProductData[]>([]);
   const [isProductsLoading, setIsProductLoading] = useState(true);
@@ -74,6 +76,18 @@ const DisplayEvents = ({
       setIsProductLoading(false);
     }
   }, [productEventContext, wotFilter]);
+
+  useEffect(() => {
+    if (focusedPubkey && setCategories) {
+      let productCategories: string[] = [];
+      productEvents.forEach((event) => {
+        if (event.pubkey === focusedPubkey) {
+          productCategories.push(...event.categories);
+        }
+      });
+      setCategories(productCategories);
+    }
+  }, [productEvents, focusedPubkey]);
 
   const isThereAFilter = () => {
     return (

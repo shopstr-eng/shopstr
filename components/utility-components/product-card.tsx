@@ -103,35 +103,41 @@ export default function ProductCard({
     "hover:shadow-lg hover:shadow-shopstr-purple dark:hover:shadow-shopstr-yellow";
 
   return (
-    <div className="mx-[2.5px] my-3 w-80" key={uniqueKey}>
-      <div
-        className="cursor-pointer"
-        onClick={() => {
-          onProductClick && onProductClick(productData);
-        }}
-      >
-        <div className="mb-2">
-          <ImageCarousel
-            images={images}
-            classname="w-full h-[300px]"
-            showThumbs={false}
-          />
-        </div>
-        <div className="justify left flex flex-col">
-          <h2 className="mb-2 text-2xl font-bold">{title}</h2>
-        </div>
-        <div className="z-10 mb-2 flex w-full justify-between">
-          <ProfileWithDropdown
-            pubkey={pubkey}
-            dropDownKeys={
-              pubkey === getLocalStorageData().userPubkey
-                ? ["shop_settings"]
-                : ["shop", "message"]
-            }
-          />
-        </div>
-        <div className="justify-left flex">
-          <CompactPriceDisplay monetaryInfo={productData} />
+    <div
+      className={`${cardHoverStyle} mx-2 my-4 rounded-lg duration-300 transition-shadow`}
+    >
+      <div className="w-80 overflow-hidden rounded-lg">
+        <div
+          className="cursor-pointer"
+          onClick={() => {
+            onProductClick && onProductClick(productData);
+          }}
+        >
+          <div className="mb-2">
+            <ImageCarousel
+              images={images}
+              classname="w-full h-[300px]"
+              showThumbs={false}
+            />
+          </div>
+          <div className="justify left flex flex-col p-4">
+            <h2 className="mb-2 text-2xl font-bold text-light-text dark:text-dark-text">
+              {title}
+            </h2>
+            <div className="z-10 mb-2 flex w-full justify-between">
+              <ProfileWithDropdown
+                pubkey={pubkey}
+                dropDownKeys={
+                  pubkey === getLocalStorageData().userPubkey
+                    ? ["shop_settings"]
+                    : ["shop", "message"]
+                }
+              />
+            </div>
+            <div className="justify-left flex">
+              <CompactPriceDisplay monetaryInfo={productData} />
+            </div>
+          </div>
         </div>
       </div>
     </div>

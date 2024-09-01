@@ -747,7 +747,7 @@ export default function InvoiceCard({
         </>
       )}
       {showInvoiceCard && (
-        <Card className="mt-3 max-w-[700px]">
+        <Card className="mt-3 w-3/4">
           <CardHeader className="flex justify-center gap-3">
             <span className="text-xl font-bold">Lightning Invoice</span>
           </CardHeader>

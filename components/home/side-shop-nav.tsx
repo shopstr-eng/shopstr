@@ -7,43 +7,34 @@ import { nip19 } from "nostr-tools";
 import useNavigation from "@/components/hooks/use-navigation";
 
 import { ShopMapContext } from "@/utils/context/context";
-import { Button, DropdownItem, Image, useDisclosure } from "@nextui-org/react";
+import { Button, useDisclosure } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { useRouter } from "next/router";
 import SignInModal from "../sign-in/SignInModal";
-import {
-  getLocalStorageData,
-  isUserLoggedIn,
-} from "../utility/nostr-helper-functions";
+import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import { ShopSettings } from "../../utils/types/types";
 
-const SideShopNav = ({ focusedPubkey }: { focusedPubkey: string }) => {
-  const {
-    isHomeActive,
-    isMessagesActive,
-    isWalletActive,
-    isMetricsActive,
-    isProfileActive,
-  } = useNavigation();
+const SideShopNav = ({
+  focusedPubkey,
+  categories,
+  setSelectedCategories,
+}: {
+  focusedPubkey: string;
+  categories?: string[];
+  setSelectedCategories: (value: Set<string>) => void;
+}) => {
+  const { isMessagesActive } = useNavigation();
   const router = useRouter();
 
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   const shopMapContext = useContext(ShopMapContext);
 
-  const [signedIn, setSignedIn] = useState(false);
-
   const [shopAbout, setShopAbout] = useState("");
 
-  useEffect(() => {
-    const getSignedInStatus = () => {
-      const loggedIn = isUserLoggedIn();
-      setSignedIn(loggedIn);
-    };
-    getSignedInStatus();
-    window.addEventListener("storage", getSignedInStatus);
-    return () => window.removeEventListener("storage", getSignedInStatus);
-  }, []);
+  const [talliedCategories, setTalliedCategories] = useState<
+    Record<string, number>
+  >({});
 
   useEffect(() => {
     if (
@@ -59,6 +50,12 @@ const SideShopNav = ({ focusedPubkey }: { focusedPubkey: string }) => {
     }
   }, [shopMapContext, focusedPubkey]);
 
+  useEffect(() => {
+    if (categories) {
+      setTalliedCategories(tallyCategories(categories));
+    }
+  }, [categories]);
+
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
     let { signInMethod } = getLocalStorageData();
     if (!signInMethod) {
@@ -71,26 +68,40 @@ const SideShopNav = ({ focusedPubkey }: { focusedPubkey: string }) => {
     });
   };
 
-  // pass categories of sellers products, make a clickable list of categories to replace "home" button (i.e; All Items (#), Electronics(#), Crafts(#), etc.)
+  const tallyCategories = (categories: string[]): Record<string, number> => {
+    return categories.reduce(
+      (acc, category) => {
+        acc[category] = (acc[category] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
+  };
+
   return (
     <>
       <div className="hidden w-[120px] flex-col items-center bg-light-bg px-6 py-8 dark:bg-dark-bg sm:flex md:w-[250px] md:items-start">
         <Button
-          onClick={() => router.push("/")}
-          className={`flex w-full flex-row justify-start bg-transparent py-8 text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
-            isHomeActive
-              ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
-              : ""
-          }`}
+          onClick={() => setSelectedCategories(new Set<string>([]))}
+          className="flex w-full flex-row justify-start bg-transparent py-8 text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
         >
-          <span
-            className={`hidden pt-2 text-2xl md:flex ${
-              isHomeActive ? "font-bold" : ""
-            }`}
-          >
-            Home
-          </span>
+          <span className="hidden pt-2 text-2xl md:flex">All listings</span>
         </Button>
+        {Object.keys(talliedCategories).length > 0 && (
+          <>
+            {Object.entries(talliedCategories).map(([category, count]) => (
+              <Button
+                key={category}
+                onClick={() =>
+                  setSelectedCategories(new Set<string>([category]))
+                }
+                className="flex w-full flex-row justify-start bg-transparent py-2 text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+              >
+                <span className="text-xl">{`- ${category} (${count})`}</span>
+              </Button>
+            ))}
+          </>
+        )}
         <Button
           onClick={() => handleSendMessage(focusedPubkey)}
           className={`${SHOPSTRBUTTONCLASSNAMES} flex flex-row items-center py-7 ${
@@ -100,7 +111,7 @@ const SideShopNav = ({ focusedPubkey }: { focusedPubkey: string }) => {
           }`}
         >
           <span
-            className={`hidden pt-2 text-2xl md:flex ${
+            className={`hidden text-2xl md:flex ${
               isMessagesActive ? "font-bold" : ""
             }`}
           >

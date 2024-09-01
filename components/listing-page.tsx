@@ -1,8 +1,6 @@
 import React from "react";
 import { ProductData } from "./utility/product-parser-functions";
-import { Divider } from "@nextui-org/react";
 import CheckoutCard from "./utility-components/checkout-card";
-import InvoiceCard from "./invoice-card";
 
 export default function ListingPage({
   productData,
@@ -19,23 +17,9 @@ export default function ListingPage({
 }) {
   if (!productData) return null;
 
-  const invoiceDisplay = () => {
-    return (
-      <div className="flex w-full flex-col items-center">
-        <Divider />
-        <InvoiceCard
-          productData={productData}
-          setInvoiceIsPaid={setInvoiceIsPaid}
-          setInvoiceGenerationFailed={setInvoiceGenerationFailed}
-          setCashuPaymentSent={setCashuPaymentSent}
-          setCashuPaymentFailed={setCashuPaymentFailed}
-        />
-      </div>
-    );
-  };
   return (
     <div className="flex w-full items-center justify-center bg-light-bg dark:bg-dark-bg">
-      <div className="flex w-full flex-col md:w-[50%]">
+      <div className="flex flex-col">
         <CheckoutCard
           productData={productData}
           setInvoiceIsPaid={setInvoiceIsPaid}

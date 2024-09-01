@@ -41,12 +41,15 @@ export function MarketplacePage({
   const [selectedLocation, setSelectedLocation] = useState("");
   const [selectedSearch, setSelectedSearch] = useState("");
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const [selectedSection, setSelectedSection] = useState("Shop");
 
   const [wotFilter, setWotFilter] = useState(false);
 
   const [shopBannerURL, setShopBannerURL] = useState("");
   const [shopAbout, setShopAbout] = useState("");
   const [isFetchingShop, setIsFetchingShop] = useState(false);
+
+  const [categories, setCategories] = useState([""]);
 
   const shopMapContext = useContext(ShopMapContext);
 
@@ -112,35 +115,40 @@ export function MarketplacePage({
     });
   };
 
-  // get rid of item filters when custom shop view is set
   return (
     <div className="mx-auto w-full">
       <div className="flex max-w-[100%] flex-col bg-light-bg px-3 pb-2 dark:bg-dark-bg">
-        {shopBannerURL != "" && focusedPubkey != "" ? (
+        {shopBannerURL != "" && focusedPubkey != "" && !isFetchingShop ? (
           <>
-            <div className="min-w-screen flex items-center justify-center">
-              <Image
-                alt={"Shop banner image"}
+            <div className="flex h-auto w-full items-center justify-center bg-cover bg-center">
+              <img
                 src={shopBannerURL}
-                className="rounded-lg object-fill"
+                alt="Shop Banner"
+                className="flex max-h-[310.5px] w-full items-center justify-center object-cover"
               />
             </div>
             <div className="mt-3 flex items-center justify-between font-bold text-light-text dark:text-dark-text">
-              <div className="flex gap-2">
+              <div className="flex gap-1">
                 <Button
                   className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
                   onClick={() => {
                     setSelectedCategories(new Set<string>([]));
                     setSelectedLocation("");
                     setSelectedSearch("");
+                    setSelectedSection("Shop");
                   }}
                 >
                   Shop
                 </Button>
-                <Button className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text">
+                {/* <Button className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text">
                   Reviews
-                </Button>
-                <Button className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text">
+                </Button> */}
+                <Button
+                  className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                  onClick={() => {
+                    setSelectedSection("About");
+                  }}
+                >
                   About
                 </Button>
                 <Button
@@ -240,15 +248,30 @@ export function MarketplacePage({
         )}
       </div>
       <div className="flex">
-        {focusedPubkey && <SideShopNav focusedPubkey={focusedPubkey} />}
-        <DisplayEvents
-          focusedPubkey={focusedPubkey}
-          selectedCategories={selectedCategories}
-          selectedLocation={selectedLocation}
-          selectedSearch={selectedSearch}
-          canShowLoadMore={true}
-          wotFilter={wotFilter}
-        />
+        {focusedPubkey && (
+          <SideShopNav
+            focusedPubkey={focusedPubkey}
+            categories={categories}
+            setSelectedCategories={setSelectedCategories}
+          />
+        )}
+        {selectedSection === "Shop" && (
+          <DisplayEvents
+            focusedPubkey={focusedPubkey}
+            selectedCategories={selectedCategories}
+            selectedLocation={selectedLocation}
+            selectedSearch={selectedSearch}
+            canShowLoadMore={true}
+            wotFilter={wotFilter}
+            setCategories={setCategories}
+          />
+        )}
+        {selectedSection === "About" && shopAbout && (
+          <div className="flex w-full flex-col justify-start bg-transparent px-4 py-8 text-light-text dark:text-dark-text">
+            <h2 className="pb-2 text-2xl font-bold">About</h2>
+            <p className="text-base">{shopAbout}</p>
+          </div>
+        )}
       </div>
       <SignInModal isOpen={isOpen} onClose={onClose} />
     </div>
