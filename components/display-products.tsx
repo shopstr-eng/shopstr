@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from "react";
-import { Filter, SimplePool, nip19 } from "nostr-tools";
+import { Filter, SimplePool } from "nostr-tools";
 import { getLocalStorageData } from "./utility/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
 import {

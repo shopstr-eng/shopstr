@@ -52,7 +52,7 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
         }}
         className="text-light-text dark:text-dark-text"
       >
-        {locations.countries.map((country, index) => {
+        {locations.countries.map((country) => {
           return (
             <SelectItem
               key={country.country}
@@ -83,7 +83,7 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
         }}
         className="text-light-text dark:text-dark-text"
       >
-        {locations.states.map((state, index) => {
+        {locations.states.map((state) => {
           return (
             <SelectItem
               key={state.state}

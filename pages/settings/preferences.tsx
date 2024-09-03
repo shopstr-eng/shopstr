@@ -93,7 +93,6 @@ const PreferencesPage = () => {
 
   const {
     handleSubmit: handleMintSubmit,
-    formState: { errors },
     control: mintControl,
     reset: mintReset,
   } = useForm();
@@ -131,9 +130,9 @@ const PreferencesPage = () => {
     }
   };
 
-  const deleteMint = (mintToDelete: string) => {
-    setMints(mints.filter((mint) => mint !== mintToDelete));
-  };
+  // const deleteMint = (mintToDelete: string) => {
+  //   setMints(mints.filter((mint) => mint !== mintToDelete));
+  // };
 
   const handleCopyMint = () => {
     navigator.clipboard.writeText(mints[0]);
@@ -163,7 +162,6 @@ const PreferencesPage = () => {
 
   const {
     handleSubmit: handleRelaySubmit,
-    formState: { errors: errorsRelay },
     control: relayControl,
     reset: relayReset,
   } = useForm();

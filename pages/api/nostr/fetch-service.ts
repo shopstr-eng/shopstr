@@ -239,7 +239,6 @@ export const fetchChatsAndMessages = async (
   userPubkey: string,
   editChatContext: (chatsMap: ChatsMap, isLoading: boolean) => void,
   since?: number,
-  until?: number,
 ): Promise<{
   profileSetFromChats: Set<string>;
 }> => {
@@ -271,7 +270,7 @@ export const fetchChatsAndMessages = async (
       const onEOSE = () => {
         if (incomingChatsReachedEOSE && outgoingChatsReachedEOSE) {
           //sort chats by created_at
-          chatsMap.forEach((value, key) => {
+          chatsMap.forEach((value) => {
             value.sort(
               (a: NostrMessageEvent, b: NostrMessageEvent) =>
                 a.created_at - b.created_at,
@@ -364,6 +363,7 @@ export const fetchChatsAndMessages = async (
       );
     } catch (error) {
       console.log("Failed to fetch chats and messages: ", error);
+      reject(error);
     }
   });
 };

@@ -7,7 +7,6 @@ import {
   Select,
   SelectItem,
   SelectSection,
-  Image,
   Input,
   useDisclosure,
 } from "@nextui-org/react";
@@ -40,7 +39,7 @@ export function MarketplacePage({
   );
   const [selectedLocation, setSelectedLocation] = useState("");
   const [selectedSearch, setSelectedSearch] = useState("");
-  const { isOpen, onOpen, onClose } = useDisclosure();
+  const { isOpen, onClose } = useDisclosure();
   const [selectedSection, setSelectedSection] = useState("Shop");
 
   const [wotFilter, setWotFilter] = useState(false);

@@ -15,7 +15,7 @@ const CountryDropdown = ({ value, ...props }: { [x: string]: any }) => {
         }}
         className="text-light-text dark:text-dark-text"
       >
-        {locations.countries.map((country, index) => {
+        {locations.countries.map((country) => {
           return (
             <SelectItem
               key={country.country}

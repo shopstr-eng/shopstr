@@ -22,14 +22,12 @@ const ShopSettingsPage = () => {
   const [isUploadingShopSettings, setIsUploadingShopSettings] = useState(false);
   const [isFetchingShop, setIsFetchingShop] = useState(false);
   const [userPubkey, setUserPubkey] = useState("");
-  const [isCopyPopoverOpen, setIsCopyPopoverOpen] = React.useState(false);
 
-  const { signInMethod, userNPub } = getLocalStorageData();
+  const { signInMethod } = getLocalStorageData();
 
   const shopContext = useContext(ShopMapContext);
   const {
     handleSubmit,
-    formState: { errors },
     control,
     reset,
     watch,
@@ -87,7 +85,7 @@ const ShopSettingsPage = () => {
       },
       merchants: [userPubkey],
     };
-    let response = await createNostrShopEvent(
+    await createNostrShopEvent(
       userPubkey,
       JSON.stringify(transformedData),
       passphrase,
@@ -259,7 +257,6 @@ const ShopSettingsPage = () => {
                 <Button
                   className={buttonClassName}
                   type="submit"
-                  onClick={(e) => {}}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !isButtonDisabled) {
                       e.preventDefault(); // Prevent default to avoid submitting the form again

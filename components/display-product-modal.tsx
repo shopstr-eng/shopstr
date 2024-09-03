@@ -1,7 +1,5 @@
 import React from "react";
 import {
-  BoltIcon,
-  EnvelopeIcon,
   PencilSquareIcon,
   ShareIcon,
   TrashIcon,

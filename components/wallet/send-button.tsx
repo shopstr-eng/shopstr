@@ -49,7 +49,6 @@ const SendButton = ({ passphrase }: { passphrase?: string }) => {
 
   const {
     handleSubmit: handleSendSubmit,
-    formState: { errors },
     control: sendControl,
     reset: sendReset,
   } = useForm();

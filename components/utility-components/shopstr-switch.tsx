@@ -10,7 +10,7 @@ const ShopstrSwitch = ({
   setWotFilter: (value: boolean) => void;
 }) => {
   const router = useRouter();
-  const { theme, setTheme } = useTheme();
+  const { theme } = useTheme();
 
   const handleTrustClick = () => {
     router.push("/settings/preferences");

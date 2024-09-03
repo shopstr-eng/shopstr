@@ -1,7 +1,7 @@
 import { useState, useEffect, useContext } from "react";
 import { withRouter, NextRouter } from "next/router";
 import { nip19, getPublicKey } from "nostr-tools";
-import * as CryptoJS from "crypto-js";
+import CryptoJS from "crypto-js";
 import { validateNSecKey } from "../../components/utility/nostr-helper-functions";
 import { RelaysContext, CashuWalletContext } from "../../utils/context/context";
 import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";

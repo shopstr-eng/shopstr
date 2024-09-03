@@ -38,14 +38,13 @@ const PayButton = ({ passphrase }: { passphrase?: string }) => {
 
   const { mints, tokens, history } = getLocalStorageData();
 
-  const { theme, setTheme } = useTheme();
+  const { theme } = useTheme();
 
   const walletContext = useContext(CashuWalletContext);
   const [dTag, setDTag] = useState("");
 
   const {
     handleSubmit: handlePaySubmit,
-    formState: { errors },
     control: payControl,
     reset: payReset,
   } = useForm();

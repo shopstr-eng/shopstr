@@ -42,7 +42,7 @@ import {
   NostrMessageEvent,
   ShopSettings,
 } from "../utils/types/types";
-import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
+import { Proof } from "@cashu/cashu-ts";
 import TopNav from "@/components/nav-top";
 import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
 

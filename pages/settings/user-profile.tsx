@@ -38,7 +38,6 @@ const UserProfilePage = () => {
   const profileContext = useContext(ProfileMapContext);
   const {
     handleSubmit,
-    formState: { errors },
     control,
     reset,
     watch,
@@ -90,7 +89,7 @@ const UserProfilePage = () => {
 
   const onSubmit = async (data: { [x: string]: string }) => {
     setIsUploadingProfile(true);
-    let response = await createNostrProfileEvent(
+    await createNostrProfileEvent(
       userPubkey,
       JSON.stringify(data),
       passphrase,
@@ -500,7 +499,6 @@ const UserProfilePage = () => {
                 <Button
                   className={buttonClassName}
                   type="submit"
-                  onClick={(e) => {}}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !isButtonDisabled) {
                       e.preventDefault(); // Prevent default to avoid submitting the form again

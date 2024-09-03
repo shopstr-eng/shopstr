@@ -21,9 +21,6 @@ const TopNav = ({
 }) => {
   const {
     isHomeActive,
-    isMessagesActive,
-    isWalletActive,
-    isMetricsActive,
     isProfileActive,
   } = useNavigation();
   const router = useRouter();

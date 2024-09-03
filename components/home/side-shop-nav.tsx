@@ -26,7 +26,7 @@ const SideShopNav = ({
   const { isMessagesActive } = useNavigation();
   const router = useRouter();
 
-  const { isOpen, onOpen, onClose } = useDisclosure();
+  const { isOpen, onClose } = useDisclosure();
 
   const shopMapContext = useContext(ShopMapContext);
 

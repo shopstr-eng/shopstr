@@ -42,7 +42,6 @@ const ReceiveButton = ({ passphrase }: { passphrase?: string }) => {
 
   const {
     handleSubmit: handleReceiveSubmit,
-    formState: { errors },
     control: receiveControl,
     reset: receiveReset,
   } = useForm();

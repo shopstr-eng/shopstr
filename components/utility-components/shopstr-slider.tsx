@@ -7,7 +7,7 @@ import { getLocalStorageData } from "../../components/utility/nostr-helper-funct
 import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
 
 const ShopstrSlider = () => {
-  const { theme, setTheme } = useTheme();
+  const { theme } = useTheme();
 
   const followsContext = useContext(FollowsContext);
 
