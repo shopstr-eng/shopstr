@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { nip19 } from "nostr-tools";
 import { ProductData } from "../utility/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
@@ -6,6 +7,7 @@ import CompactPriceDisplay, {
   DisplayCostBreakdown,
 } from "./display-monetary-info";
 import InvoiceCard from "../invoice-card";
+import { useRouter } from "next/router";
 import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
 import { Button } from "@nextui-org/react";
 import { InformationCircleIcon } from "@heroicons/react/24/outline";
@@ -31,6 +33,10 @@ export default function CheckoutCard({
 }) {
   if (!productData) return null;
   const { title, images, pubkey, summary } = productData;
+
+  const { userPubkey } = getLocalStorageData();
+
+  const router = useRouter();
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [isBeingPaid, setIsBeingPaid] = useState(false);
@@ -75,6 +81,37 @@ export default function CheckoutCard({
 
   const toggleBuyNow = () => {
     setIsBeingPaid(!isBeingPaid);
+  };
+
+  const handleShare = async () => {
+    // The content you want to share
+    const shareData = {
+      title: title,
+      url: `${window.location.origin}/listing/${productData.id}`,
+    };
+    // Check if the Web Share API is available
+    if (navigator.share) {
+      // Use the share API
+      await navigator.share(shareData);
+    } else {
+      // Fallback for browsers that do not support the Web Share API
+      navigator.clipboard.writeText(
+        `${window.location.origin}/listing/${productData.id}`,
+      );
+      alert("Listing URL copied to clipboard!");
+    }
+  };
+
+  const handleSendMessage = (pubkeyToOpenChatWith: string) => {
+    let { signInMethod } = getLocalStorageData();
+    if (!signInMethod) {
+      alert("You must be signed in to send a message!");
+      return;
+    }
+    router.push({
+      pathname: "/messages",
+      query: { pk: nip19.npubEncode(pubkeyToOpenChatWith) },
+    });
   };
 
   return (
@@ -135,7 +172,7 @@ export default function CheckoutCard({
               <ProfileWithDropdown
                 pubkey={pubkey}
                 dropDownKeys={
-                  pubkey === getLocalStorageData().userPubkey
+                  pubkey === userPubkey
                     ? ["shop_settings"]
                     : ["shop", "message"]
                 }
@@ -159,12 +196,35 @@ export default function CheckoutCard({
               <div className="mt-4">
                 <CompactPriceDisplay monetaryInfo={productData} />
               </div>
-              <Button
-                className={SHOPSTRBUTTONCLASSNAMES}
-                onClick={toggleBuyNow}
-              >
-                Buy Now
-              </Button>
+              <div className="flex w-full gap-2">
+                <Button
+                  className={SHOPSTRBUTTONCLASSNAMES}
+                  onClick={toggleBuyNow}
+                >
+                  Buy Now
+                </Button>
+                <Button
+                  type="submit"
+                  className={SHOPSTRBUTTONCLASSNAMES}
+                  onClick={handleShare}
+                >
+                  Share
+                </Button>
+              </div>
+              {pubkey !== userPubkey && (
+                <span
+                  onClick={() => {
+                    handleSendMessage(productData.pubkey);
+                  }}
+                  className="cursor-pointer text-gray-500"
+                >
+                  or{" "}
+                  <span className="underline hover:text-light-text dark:hover:text-dark-text">
+                    contact
+                  </span>{" "}
+                  seller
+                </span>
+              )}
             </div>
           </div>
           <div className="max-w-screen mx-3 my-3 max-w-full overflow-hidden whitespace-normal break-words sm:hidden">

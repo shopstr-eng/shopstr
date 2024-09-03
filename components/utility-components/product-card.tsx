@@ -21,16 +21,14 @@ export default function ProductCard({
   onProductClick,
   isReview,
   footerContent,
-  uniqueKey,
 }: {
   productData: ProductData;
   onProductClick?: (productId: any) => void;
   isReview?: boolean;
   footerContent?: ReactNode;
-  uniqueKey?: string;
 }) {
   if (!productData) return null;
-  const { id, pubkey, title, images, categories, location } = productData;
+  const { pubkey, title, images, categories, location } = productData;
   if (isReview)
     return (
       <Card className={"mx-[2.5px] my-3 w-[100%] rounded-lg"}>

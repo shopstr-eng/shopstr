@@ -212,52 +212,56 @@ const UserProfilePage = () => {
                 )}
               </div>
 
-              <div className="mb-12 flex w-full cursor-pointer flex-row items-center justify-center rounded-lg border-2 border-light-fg p-2 dark:border-dark-fg">
-                <span
-                  className="text-xxs box-border flex max-w-full overflow-hidden text-ellipsis whitespace-nowrap pr-3 text-center font-bold text-light-text dark:text-dark-text"
-                  suppressHydrationWarning
-                >
-                  {viewState === "shown"
-                    ? userNSec
-                    : "***************************************************************"}
-                </span>
-                {isNSecCopied ? (
-                  <CheckIcon
-                    width={15}
-                    height={15}
-                    className="text-light-text dark:text-dark-text"
-                  />
-                ) : (
-                  <ClipboardIcon
-                    width={15}
-                    height={15}
-                    className="text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
-                    onClick={() => {
-                      // copy to clipboard
-                      navigator.clipboard.writeText(userNSec);
-                      setIsNSecCopied(true);
-                      setTimeout(() => {
-                        setIsNSecCopied(false);
-                      }, 1000);
-                    }}
-                  />
-                )}
-                {viewState === "shown" ? (
-                  <EyeSlashIcon
-                    className="h-6 w-6 flex-shrink-0 px-1 text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
-                    onClick={() => {
-                      setViewState("hidden");
-                    }}
-                  />
-                ) : (
-                  <EyeIcon
-                    className="h-6 w-6 flex-shrink-0 px-1 text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
-                    onClick={() => {
-                      setViewState("shown");
-                    }}
-                  />
-                )}
-              </div>
+              {signInMethod === "nsec" ? (
+                <div className="mb-12 flex w-full cursor-pointer flex-row items-center justify-center rounded-lg border-2 border-light-fg p-2 dark:border-dark-fg">
+                  <span
+                    className="text-xxs box-border flex max-w-full overflow-hidden text-ellipsis whitespace-nowrap pr-3 text-center font-bold text-light-text dark:text-dark-text"
+                    suppressHydrationWarning
+                  >
+                    {viewState === "shown"
+                      ? userNSec
+                      : "***************************************************************"}
+                  </span>
+                  {isNSecCopied ? (
+                    <CheckIcon
+                      width={15}
+                      height={15}
+                      className="text-light-text dark:text-dark-text"
+                    />
+                  ) : (
+                    <ClipboardIcon
+                      width={15}
+                      height={15}
+                      className="text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
+                      onClick={() => {
+                        // copy to clipboard
+                        navigator.clipboard.writeText(userNSec);
+                        setIsNSecCopied(true);
+                        setTimeout(() => {
+                          setIsNSecCopied(false);
+                        }, 1000);
+                      }}
+                    />
+                  )}
+                  {viewState === "shown" ? (
+                    <EyeSlashIcon
+                      className="h-6 w-6 flex-shrink-0 px-1 text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
+                      onClick={() => {
+                        setViewState("hidden");
+                      }}
+                    />
+                  ) : (
+                    <EyeIcon
+                      className="h-6 w-6 flex-shrink-0 px-1 text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
+                      onClick={() => {
+                        setViewState("shown");
+                      }}
+                    />
+                  )}
+                </div>
+              ) : (
+                <div className="mb-12" />
+              )}
 
               <form onSubmit={handleSubmit(onSubmit as any)}>
                 <Controller

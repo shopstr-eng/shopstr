@@ -113,25 +113,12 @@ const DisplayEvents = ({
 
   const onProductClick = (product: any) => {
     setFocusedProduct(product);
-    setShowModal(true);
-  };
-
-  const handleSendMessage = (pubkeyToOpenChatWith: string) => {
-    let { signInMethod } = getLocalStorageData();
-    if (!signInMethod) {
-      alert("You must be signed in to send a message!");
-      return;
+    if (product.pubkey === userPubkey) {
+      setShowModal(true);
+    } else {
+      setShowModal(false);
+      router.push(`/listing/${product.id}`);
     }
-    setShowModal(false);
-    router.push({
-      pathname: "/messages",
-      query: { pk: nip19.npubEncode(pubkeyToOpenChatWith) },
-    });
-  };
-
-  const handleReviewAndPurchase = (productId: string) => {
-    setShowModal(false);
-    router.push(`/listing/${productId}`);
   };
 
   const productSatisfiesCategoryFilter = (productData: ProductData) => {
@@ -165,11 +152,7 @@ const DisplayEvents = ({
     );
   };
 
-  const displayProductCard = (
-    productData: ProductData,
-    index: number,
-    handleSendMessage: (pubkeyToOpenChatWith: string) => void,
-  ) => {
+  const displayProductCard = (productData: ProductData, index: number) => {
     if (focusedPubkey && productData.pubkey !== focusedPubkey) return;
     if (!productSatisfiesAllFilters(productData)) return;
     if (productData.images.length === 0) return;
@@ -189,7 +172,6 @@ const DisplayEvents = ({
     return (
       <ProductCard
         key={productData.id + "-" + index}
-        uniqueKey={productData.id + "-" + index}
         productData={productData}
         onProductClick={onProductClick}
       />
@@ -242,7 +224,7 @@ const DisplayEvents = ({
         {productEvents.length != 0 ? (
           <div className="grid max-w-full grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-x-hidden">
             {productEvents.map((productData: ProductData, index) => {
-              return displayProductCard(productData, index, handleSendMessage);
+              return displayProductCard(productData, index);
             })}
           </div>
         ) : (
@@ -297,8 +279,6 @@ const DisplayEvents = ({
         productData={focusedProduct}
         showModal={showModal}
         handleModalToggle={handleToggleModal}
-        handleSendMessage={handleSendMessage}
-        handleReviewAndPurchase={handleReviewAndPurchase}
         handleDelete={handleDelete}
       />
     </>

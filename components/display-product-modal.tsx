@@ -30,8 +30,6 @@ interface ProductModalProps {
   productData: any;
   handleModalToggle: () => void;
   showModal: boolean;
-  handleSendMessage: (pubkeyToOpenChatWith: string) => void;
-  handleReviewAndPurchase: (productId: string) => void;
   handleDelete: (productId: string, passphrase?: string) => void;
 }
 
@@ -39,20 +37,10 @@ export default function DisplayProductModal({
   productData,
   showModal,
   handleModalToggle,
-  handleSendMessage,
-  handleReviewAndPurchase,
   handleDelete,
 }: ProductModalProps) {
-  const {
-    pubkey,
-    createdAt,
-    title,
-    images,
-    categories,
-    location,
-    currency,
-    totalCost,
-  } = productData;
+  const { pubkey, createdAt, title, images, categories, location } =
+    productData;
   const { signInMethod, userPubkey } = getLocalStorageData();
 
   const [requestPassphrase, setRequestPassphrase] = React.useState(false);
@@ -101,7 +89,7 @@ export default function DisplayProductModal({
     // only used for when signInMethod === "nsec"
     setDeleteLoading(true);
     handleModalToggle(); // closes product detail modal
-    await handleDelete(productData.id, passphrase); // delete listing
+    handleDelete(productData.id, passphrase); // delete listing
     setDeleteLoading(false);
   };
 
@@ -204,32 +192,6 @@ export default function DisplayProductModal({
                       Delete Listing
                     </Button>
                   </ConfirmActionDropdown>
-                </>
-              )}
-              {userPubkey !== pubkey && (
-                <>
-                  <Button
-                    onClick={() => {
-                      handleSendMessage(productData.pubkey);
-                    }}
-                    type="submit"
-                    className={SHOPSTRBUTTONCLASSNAMES}
-                    startContent={
-                      <EnvelopeIcon className="h-6 w-6 hover:text-yellow-500" />
-                    }
-                  >
-                    Message
-                  </Button>
-                  <Button
-                    type="submit"
-                    onClick={() => handleReviewAndPurchase(productData.id)}
-                    className={SHOPSTRBUTTONCLASSNAMES}
-                    startContent={
-                      <BoltIcon className="h-6 w-6 hover:text-yellow-500" />
-                    }
-                  >
-                    Review & Purchase
-                  </Button>
                 </>
               )}
             </div>
