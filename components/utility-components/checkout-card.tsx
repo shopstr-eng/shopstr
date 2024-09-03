@@ -31,7 +31,6 @@ export default function CheckoutCard({
   setCashuPaymentFailed?: (cashuPaymentFailef: boolean) => void;
   uniqueKey?: string;
 }) {
-  if (!productData) return null;
   const { title, images, pubkey, summary } = productData;
 
   const { userPubkey } = getLocalStorageData();
