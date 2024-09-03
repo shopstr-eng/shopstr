@@ -26,13 +26,7 @@ const ShopSettingsPage = () => {
   const { signInMethod } = getLocalStorageData();
 
   const shopContext = useContext(ShopMapContext);
-  const {
-    handleSubmit,
-    control,
-    reset,
-    watch,
-    setValue,
-  } = useForm({
+  const { handleSubmit, control, reset, watch, setValue } = useForm({
     defaultValues: {
       banner: "",
       picture: "",

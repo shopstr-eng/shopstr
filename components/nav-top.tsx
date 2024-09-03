@@ -19,10 +19,7 @@ const TopNav = ({
 }: {
   setFocusedPubkey: (value: string) => void;
 }) => {
-  const {
-    isHomeActive,
-    isProfileActive,
-  } = useNavigation();
+  const { isHomeActive, isProfileActive } = useNavigation();
   const router = useRouter();
 
   const chatsContext = useContext(ChatsContext);

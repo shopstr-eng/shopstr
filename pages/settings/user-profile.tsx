@@ -36,13 +36,7 @@ const UserProfilePage = () => {
   const { signInMethod, userNPub } = getLocalStorageData();
 
   const profileContext = useContext(ProfileMapContext);
-  const {
-    handleSubmit,
-    control,
-    reset,
-    watch,
-    setValue,
-  } = useForm({
+  const { handleSubmit, control, reset, watch, setValue } = useForm({
     defaultValues: {
       banner: "",
       picture: "",
@@ -89,11 +83,7 @@ const UserProfilePage = () => {
 
   const onSubmit = async (data: { [x: string]: string }) => {
     setIsUploadingProfile(true);
-    await createNostrProfileEvent(
-      userPubkey,
-      JSON.stringify(data),
-      passphrase,
-    );
+    await createNostrProfileEvent(userPubkey, JSON.stringify(data), passphrase);
     profileContext.updateProfileData({
       pubkey: userPubkey,
       content: data,
