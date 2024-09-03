@@ -108,16 +108,17 @@ export default function InvoiceCard({
   const [showShippingOption, setShowShippingOption] = useState(false);
   const [isCashuPayment, setIsCashuPayment] = useState(false);
 
+  const [showPurchaseTypeOption, setShowPurchaseTypeOption] = useState(false);
+  const [needsShippingInfo, setNeedsShippingInfo] = useState(false);
+
   const {
     handleSubmit: handleShippingSubmit,
-    formState: shippingFormState,
     control: shippingControl,
     reset: shippingReset,
   } = useForm();
 
   const {
     handleSubmit: handleContactSubmit,
-    formState: contactFormState,
     control: contactControl,
     reset: contactReset,
   } = useForm();
@@ -467,90 +468,105 @@ export default function InvoiceCard({
       },
     });
     if (
-      shippingName &&
-      shippingAddress &&
-      shippingUnitNo &&
-      shippingCity &&
-      shippingPostalCode &&
-      shippingState &&
-      shippingCountry
+      !(
+        shippingName &&
+        shippingAddress &&
+        shippingUnitNo &&
+        shippingCity &&
+        shippingPostalCode &&
+        shippingState &&
+        shippingCountry &&
+        contact &&
+        contactType &&
+        contactInstructions
+      )
     ) {
-      let contactMessage;
-      if (!shippingUnitNo) {
-        contactMessage =
-          "Please ship the product to " +
-          shippingName +
-          " at " +
-          shippingAddress +
-          ", " +
-          shippingCity +
-          ", " +
-          shippingPostalCode +
-          ", " +
-          shippingState +
-          ", " +
-          shippingCountry +
-          ".";
-      } else {
-        contactMessage =
-          "Please ship the product to " +
-          shippingName +
-          " at " +
-          shippingAddress +
-          " " +
-          shippingUnitNo +
-          ", " +
-          shippingCity +
-          ", " +
-          shippingPostalCode +
-          ", " +
-          shippingState +
-          ", " +
-          shippingCountry +
-          ".";
+      if (
+        shippingName &&
+        shippingAddress &&
+        shippingUnitNo &&
+        shippingCity &&
+        shippingPostalCode &&
+        shippingState &&
+        shippingCountry
+      ) {
+        let contactMessage;
+        if (!shippingUnitNo) {
+          contactMessage =
+            "Please ship the product to " +
+            shippingName +
+            " at " +
+            shippingAddress +
+            ", " +
+            shippingCity +
+            ", " +
+            shippingPostalCode +
+            ", " +
+            shippingState +
+            ", " +
+            shippingCountry +
+            ".";
+        } else {
+          contactMessage =
+            "Please ship the product to " +
+            shippingName +
+            " at " +
+            shippingAddress +
+            " " +
+            shippingUnitNo +
+            ", " +
+            shippingCity +
+            ", " +
+            shippingPostalCode +
+            ", " +
+            shippingState +
+            ", " +
+            shippingCountry +
+            ".";
+        }
+        axios({
+          method: "POST",
+          url: "/api/nostr/post-event",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          data: {
+            pubkey: decryptedRandomNpub.data,
+            privkey: decryptedRandomNsec.data,
+            created_at: Math.floor(Date.now() / 1000),
+            kind: 4,
+            tags: [["p", pubkeyOfProductBeingSold]],
+            content: contactMessage,
+            relays: relays,
+          },
+        });
+      } else if (contact && contactType && contactInstructions) {
+        const contactMessage =
+          "To finalize the sale of your " +
+          title +
+          " listing on Shopstr, please contact " +
+          contact +
+          " over " +
+          contactType +
+          " using the following instructions: " +
+          contactInstructions;
+        axios({
+          method: "POST",
+          url: "/api/nostr/post-event",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          data: {
+            pubkey: decryptedRandomNpub.data,
+            privkey: decryptedRandomNsec.data,
+            created_at: Math.floor(Date.now() / 1000),
+            kind: 4,
+            tags: [["p", pubkeyOfProductBeingSold]],
+            content: contactMessage,
+            relays: relays,
+          },
+        });
       }
-      axios({
-        method: "POST",
-        url: "/api/nostr/post-event",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        data: {
-          pubkey: decryptedRandomNpub.data,
-          privkey: decryptedRandomNsec.data,
-          created_at: Math.floor(Date.now() / 1000),
-          kind: 4,
-          tags: [["p", pubkeyOfProductBeingSold]],
-          content: contactMessage,
-          relays: relays,
-        },
-      });
-    } else if (contact && contactType && contactInstructions) {
-      const contactMessage =
-        "To finalize the sale of your " +
-        title +
-        " listing on Shopstr, please contact " +
-        contact +
-        " over " +
-        contactType +
-        " using the following instructions: " +
-        contactInstructions;
-      axios({
-        method: "POST",
-        url: "/api/nostr/post-event",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        data: {
-          pubkey: decryptedRandomNpub.data,
-          privkey: decryptedRandomNsec.data,
-          created_at: Math.floor(Date.now() / 1000),
-          kind: 4,
-          tags: [["p", pubkeyOfProductBeingSold]],
-          content: contactMessage,
-          relays: relays,
-        },
-      });
     }
   };
 
@@ -688,19 +704,22 @@ export default function InvoiceCard({
               if (randomNsec !== "") {
                 if (shippingType === "Free" || shippingType === "Added Cost") {
                   setIsCashuPayment(false);
-                  handleToggleShippingModal();
+                  setNeedsShippingInfo(true);
+                  setShowPurchaseTypeOption(true);
                 } else if (
                   shippingType === "N/A" ||
                   shippingType === "Pickup"
                 ) {
                   setIsCashuPayment(false);
-                  handleToggleContactModal();
+                  setNeedsShippingInfo(false);
+                  setShowPurchaseTypeOption(true);
                 } else if (shippingType === "Free/Pickup") {
                   setIsCashuPayment(false);
                   setShowShippingOption(true);
                 } else {
                   setIsCashuPayment(false);
-                  handleToggleContactModal();
+                  setNeedsShippingInfo(false);
+                  setShowPurchaseTypeOption(true);
                 }
               }
             }}
@@ -722,19 +741,22 @@ export default function InvoiceCard({
               if (randomNsec !== "") {
                 if (shippingType === "Free" || shippingType === "Added Cost") {
                   setIsCashuPayment(true);
-                  handleToggleShippingModal();
+                  setNeedsShippingInfo(true);
+                  setShowPurchaseTypeOption(true);
                 } else if (
                   shippingType === "N/A" ||
                   shippingType === "Pickup"
                 ) {
                   setIsCashuPayment(true);
-                  handleToggleContactModal();
+                  setNeedsShippingInfo(false);
+                  setShowPurchaseTypeOption(true);
                 } else if (shippingType === "Free/Pickup") {
                   setIsCashuPayment(true);
                   setShowShippingOption(true);
                 } else {
                   setIsCashuPayment(true);
-                  handleToggleContactModal();
+                  setNeedsShippingInfo(false);
+                  setShowPurchaseTypeOption(true);
                 }
               }
             }}
@@ -831,11 +853,26 @@ export default function InvoiceCard({
           <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
             Select your delivery option:
           </ModalHeader>
-          <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+          <ModalBody className="flex flex-col overflow-hidden">
             <div className="flex items-center justify-center">
               <Select label="Delivery Method" className="max-w-xs">
                 <SelectItem
+                  key="in-person"
+                  className="text-light-text dark:text-dark-text"
+                  onClick={async () => {
+                    setShowShippingOption(false);
+                    if (isCashuPayment) {
+                      await handleCashuPayment(totalCost);
+                    } else {
+                      await handleLightningPayment(totalCost);
+                    }
+                  }}
+                >
+                  In-person
+                </SelectItem>
+                <SelectItem
                   key="free"
+                  className="text-light-text dark:text-dark-text"
                   onClick={() => {
                     handleToggleShippingModal();
                     setShowShippingOption(false);
@@ -845,6 +882,7 @@ export default function InvoiceCard({
                 </SelectItem>
                 <SelectItem
                   key="pickup"
+                  className="text-light-text dark:text-dark-text"
                   onClick={() => {
                     handleToggleContactModal();
                     setShowShippingOption(false);
@@ -857,6 +895,66 @@ export default function InvoiceCard({
           </ModalBody>
         </ModalContent>
       </Modal>
+
+      <Modal
+        backdrop="blur"
+        isOpen={showPurchaseTypeOption}
+        onClose={() => {
+          setShowPurchaseTypeOption(false);
+        }}
+        classNames={{
+          body: "py-6 ",
+          backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+          header: "border-b-[1px] border-[#292f46]",
+          footer: "border-t-[1px] border-[#292f46]",
+          closeButton: "hover:bg-black/5 active:bg-white/10",
+        }}
+        isDismissable={true}
+        scrollBehavior={"normal"}
+        placement={"center"}
+        size="2xl"
+      >
+        <ModalContent>
+          <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+            Select your purchase type:
+          </ModalHeader>
+          <ModalBody className="flex flex-col overflow-hidden">
+            <div className="flex items-center justify-center">
+              <Select label="Purchase Type" className="max-w-xs">
+                <SelectItem
+                  key="in-person"
+                  className="text-light-text dark:text-dark-text"
+                  onClick={async () => {
+                    setShowPurchaseTypeOption(false);
+                    if (isCashuPayment) {
+                      await handleCashuPayment(totalCost);
+                    } else {
+                      await handleLightningPayment(totalCost);
+                    }
+                  }}
+                >
+                  In-person
+                </SelectItem>
+                <SelectItem
+                  key="online-order"
+                  className="text-light-text dark:text-dark-text"
+                  onClick={() => {
+                    if (needsShippingInfo) {
+                      handleToggleShippingModal();
+                    } else {
+                      handleToggleContactModal();
+                    }
+                    setShowPurchaseTypeOption(false);
+                  }}
+                >
+                  Online order
+                </SelectItem>
+              </Select>
+            </div>
+          </ModalBody>
+        </ModalContent>
+      </Modal>
+
       <Modal
         backdrop="blur"
         isOpen={showShippingModal}
