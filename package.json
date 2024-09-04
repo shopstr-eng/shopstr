@@ -11,6 +11,7 @@
     "knex:migrate": "node --loader ts-node/esm ./node_modules/.bin/knex --knexfile ./knexfile.ts migrate:latest"
   },
   "dependencies": {
+    "@braintree/sanitize-url": "^7.1.0",
     "@cashu/cashu-ts": "^0.8.1",
     "@getalby/lightning-tools": "^5.0.1",
     "@heroicons/react": "^2.1.1",

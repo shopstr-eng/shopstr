@@ -25,6 +25,7 @@ import SignInModal from "../sign-in/SignInModal";
 import ShopstrSwitch from "../utility-components/shopstr-switch";
 import { ShopSettings } from "../../utils/types/types";
 import SideShopNav from "./side-shop-nav";
+import { sanitizeUrl } from "@braintree/sanitize-url";
 
 export function MarketplacePage({
   focusedPubkey,
@@ -121,7 +122,7 @@ export function MarketplacePage({
           <>
             <div className="flex h-auto w-full items-center justify-center bg-cover bg-center">
               <img
-                src={shopBannerURL}
+                src={sanitizeUrl(shopBannerURL)}
                 alt="Shop Banner"
                 className="flex max-h-[310.5px] w-full items-center justify-center object-cover"
               />
