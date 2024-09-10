@@ -101,7 +101,8 @@ export const parseTags = (productEvent: NostrEvent) => {
         const [size, quantity] = values;
         if (parsedData.sizes === undefined) parsedData.sizes = [];
         parsedData.sizes?.push(size);
-        if (parsedData.sizeQuantities === undefined) parsedData.sizeQuantities = [];
+        if (parsedData.sizeQuantities === undefined)
+          parsedData.sizeQuantities = [];
         parsedData.sizeQuantities?.push(Number(quantity));
         break;
       case "condition":
