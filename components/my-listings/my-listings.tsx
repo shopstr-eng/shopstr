@@ -1,6 +1,6 @@
 import router from "next/router";
 import React from "react";
-import DisplayEvents from "../display-products";
+import DisplayProducts from "../display-products";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import { Button, useDisclosure } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
@@ -32,7 +32,7 @@ export const MyListingsPage = () => {
           </Button>
         </div>
         {usersPubkey ? (
-          <DisplayEvents
+          <DisplayProducts
             focusedPubkey={usersPubkey}
             selectedCategories={new Set<string>([])}
             selectedLocation={""}

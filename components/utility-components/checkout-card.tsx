@@ -116,12 +116,12 @@ export default function CheckoutCard({
   return (
     <>
       {!isBeingPaid ? (
-        <div className="h-[100%] w-[100%]">
+        <div className="max-w-screen">
           <div
             className="max-w-screen mx-3 my-3 flex flex-row whitespace-normal break-words"
             key={uniqueKey}
           >
-            <div className="w-2/3 pr-4">
+            <div className="w-1/2 pr-4">
               <div className="flex w-full flex-row">
                 <div className="flex w-1/4 flex-col pr-4">
                   <div ref={containerRef} className="flex-1 overflow-hidden">
@@ -167,7 +167,7 @@ export default function CheckoutCard({
                 </div>
               </div>
             </div>
-            <div className="w-1/3 p-3">
+            <div className="w-1/2 px-3">
               <ProfileWithDropdown
                 pubkey={pubkey}
                 dropDownKeys={

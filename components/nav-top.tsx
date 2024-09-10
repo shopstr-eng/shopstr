@@ -1,6 +1,7 @@
 import React, { useContext, useEffect, useState } from "react";
 import useNavigation from "@/components/hooks/use-navigation";
 import { Button, Image, useDisclosure } from "@nextui-org/react";
+import { Bars3Icon } from "@heroicons/react/24/outline";
 import { countNumberOfUnreadMessagesFromChatsContext } from "@/utils/messages/utils";
 import { ChatsContext, ShopMapContext } from "@/utils/context/context";
 import { db } from "../pages/api/nostr/cache-service";
@@ -31,6 +32,8 @@ const TopNav = ({
 
   const [shopLogoURL, setShopLogoURL] = useState("");
   const [shopName, setShopName] = useState("");
+
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const liveChatMessagesFromCache = useLiveQuery(
     async () => await db.table("chatMessages").toArray(),
@@ -87,6 +90,41 @@ const TopNav = ({
     router.push("/");
   };
 
+  const MobileMenu = () => (
+    <div className="absolute top-full left-0 w-full bg-light-fg dark:bg-dark-fg shadow-lg">
+      <Button
+        className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+        onClick={handleHomeClick}
+      >
+        Home
+      </Button>
+      <Button
+        className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+        onClick={() => handleRoute("/messages")}
+      >
+        Messages {unreadMsgCount > 0 && `(${unreadMsgCount})`}
+      </Button>
+      <Button
+        className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+        onClick={() => handleRoute("/wallet")}
+      >
+        Wallet
+      </Button>
+      <Button
+        className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+        onClick={() => handleRoute("/my-listings")}
+      >
+        My Listings
+      </Button>
+      <Button
+        className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+        onClick={() => handleRoute("/metrics")}
+      >
+        Metrics
+      </Button>
+    </div>
+  );
+
   return (
     <div className="fixed top-0 z-50 w-full border-b border-zinc-200 bg-light-fg shadow-lg dark:border-zinc-800 dark:bg-dark-fg">
       <div className="flex items-center justify-between py-2 pr-4">
@@ -103,7 +141,7 @@ const TopNav = ({
               width={40}
             />
             <span
-              className={`ml-2 hidden text-xl md:flex ${
+              className={`ml-2 text-xl md:flex ${
                 isHomeActive ? "font-bold" : ""
               }`}
             >
@@ -111,7 +149,35 @@ const TopNav = ({
             </span>
           </Button>
         </div>
-        <div className="flex items-center font-bold text-light-text dark:text-dark-text">
+        <div className="md:hidden flex flex-row items-center">
+          <Button
+            className="bg-transparent"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          >
+            <Bars3Icon className="h-6 w-6 text-light-text dark:text-dark-text" />
+          </Button>
+          {signedIn ? (
+            <ProfileWithDropdown
+              pubkey={getLocalStorageData().userPubkey}
+              baseClassname="w-full dark:hover:shopstr-yellow-light rounded-3xl hover:scale-105 hover:bg-light-bg hover:shadow-lg dark:hover:bg-dark-bg"
+              dropDownKeys={[
+                "shop_settings",
+                "user_profile",
+                "settings",
+                "logout",
+              ]}
+              nameClassname="md:block"
+            />
+          ) : (
+            <Button
+              onClick={onOpen}
+              className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+            >
+              Sign In
+            </Button>
+          )}
+        </div>
+        <div className="hidden md:flex items-center font-bold text-light-text dark:text-dark-text">
           <Button
             className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
             onClick={handleHomeClick}
@@ -138,6 +204,13 @@ const TopNav = ({
             onClick={() => handleRoute("/my-listings")}
           >
             My Listings
+          </Button>
+          |
+          <Button
+            className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+            onClick={() => handleRoute("/metrics")}
+          >
+            Metrics
           </Button>
           {signedIn ? (
             <>
@@ -171,6 +244,7 @@ const TopNav = ({
           )}
         </div>
       </div>
+      {isMobileMenuOpen && <MobileMenu />}
       <SignInModal isOpen={isOpen} onClose={onClose} />
     </div>
   );

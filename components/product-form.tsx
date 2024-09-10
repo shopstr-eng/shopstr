@@ -1,4 +1,3 @@
-3; // TODO componentarize file uploader
 import React, { useMemo, useRef, useEffect, useState, useContext } from "react";
 import Link from "next/link";
 import { useForm, Controller } from "react-hook-form";
@@ -68,10 +67,11 @@ export default function NewForm({
   const [isEdit, setIsEdit] = useState(false);
   const [isPostingOrUpdatingProduct, setIsPostingOrUpdatingProduct] =
     useState(false);
+  const [showOptionalTags, setShowOptionalTags] = useState(false);
+  const [sizeQuantities, setSizeQuantities] = useState<Record<string, number>>({});
   const productEventContext = useContext(ProductContext);
   const {
     handleSubmit,
-    formState: { errors },
     control,
     reset,
     watch,
@@ -86,6 +86,15 @@ export default function NewForm({
           "Shipping Option": oldValues.shippingType,
           "Shipping Cost": oldValues.shippingCost,
           Category: oldValues.categories ? oldValues.categories.join(",") : "",
+          Sizes: oldValues.sizes ? oldValues.sizes.join(",") : "",
+          sizeQuantities: oldValues.sizes && oldValues.sizeQuantities
+          ? oldValues.sizes.reduce((acc, size, index) => {
+              acc[size] = oldValues.sizeQuantities ? oldValues.sizeQuantities[index] : 0;
+              return acc;
+            }, {} as Record<string, number>)
+          : {},
+          Condition: oldValues.condition ? oldValues.condition : "",
+          Status: oldValues.status ? oldValues.status : "",
         }
       : {
           Currency: "SATS",
@@ -151,6 +160,24 @@ export default function NewForm({
     data["Category"].split(",").forEach((category) => {
       tags.push(["t", category]);
     });
+
+    if (data["Sizes"]) {
+      data["Sizes"].split(",").forEach((size) => {
+        const quantity = sizeQuantities[size] || 0;
+        tags.push(["size", size, quantity.toString()]);
+      });
+    }
+
+    if (data["Condition"]) {
+      tags.push(["condition", data["Condition"]]);
+    }
+
+    if (data["Status"]) {
+      tags.push(["status", data["Status"]]);
+    } else {
+      tags.push(["status", "active"]);
+    }
+    
     let newListing = await PostListing(tags, passphrase);
 
     capturePostListingMetric(newListing.id, tags);
@@ -165,6 +192,7 @@ export default function NewForm({
     productEventContext.addNewlyCreatedProductEvent(newListing);
     addProductToCache(newListing);
     setIsPostingOrUpdatingProduct(false);
+    setSizeQuantities({});
     if (onSubmitCallback) {
       onSubmitCallback();
     }
@@ -403,7 +431,6 @@ export default function NewForm({
                         }}
                         render={({
                           field: { onChange, onBlur, value },
-                          fieldState: { error },
                         }) => {
                           return (
                             <div className="flex items-center">
@@ -617,6 +644,195 @@ export default function NewForm({
                 );
               }}
             />
+            <div className="w-full max-w-xs">
+              <Button
+                className="mt-4 mb-2 text-shopstr-purple-light dark:text-shopstr-yellow-light pl-2 w-full justify-start rounded-md"
+                variant="light"
+                onClick={() => setShowOptionalTags(!showOptionalTags)}
+              >
+                <div className="flex items-center py-2">
+                  <span>Additional options</span>
+                  <span className="ml-2">{showOptionalTags ? "↑" : "↓"}</span>
+                </div>
+              </Button>
+            </div>
+
+            {showOptionalTags && (
+              <>
+                <Controller
+                  name="Sizes"
+                  control={control}
+                  render={({
+                    field: { onChange, onBlur, value },
+                    fieldState: { error },
+                  }) => {
+                    let isErrored = error !== undefined;
+                    let errorMessage: string = error?.message ? error.message : "";
+
+                    // Convert value to an array of strings
+                    const selectedSizes = Array.isArray(value) 
+                      ? value 
+                      : (typeof value === 'string' ? value.split(',').filter(Boolean) : []);
+
+                    // Initialize sizeQuantities state with pre-populated values
+                    const [localSizeQuantities, setLocalSizeQuantities] = useState<Record<string, number>>(
+                      () => {
+                        const defaultSizeQuantities = watch('sizeQuantities');
+                        return selectedSizes.reduce((acc, size) => {
+                          acc[size] = defaultSizeQuantities ? defaultSizeQuantities[size] : 0;
+                          return acc;
+                        }, {} as Record<string, number>);
+                      }
+                    );
+
+                    const handleSizeChange = (newValue: string | string[]) => {
+                      const newSizes = Array.isArray(newValue) ? newValue : newValue.split(',').filter(Boolean);
+                      onChange(newSizes);
+
+                      // Update localSizeQuantities state
+                      setLocalSizeQuantities(prev => {
+                        const newSizeQuantities = { ...prev };
+                        newSizes.forEach(size => {
+                          if (!newSizeQuantities[size]) {
+                            newSizeQuantities[size] = 0;
+                          }
+                        });
+                        return newSizeQuantities;
+                      });
+                    };
+
+                    const handleQuantityChange = (size: string, quantity: number) => {
+                      setSizeQuantities(prev => ({ ...prev, [size]: quantity }));
+                    };
+
+                    useEffect(() => {
+                      onChange(selectedSizes);
+                      setSizeQuantities(localSizeQuantities);
+                    }, [localSizeQuantities, selectedSizes]);
+
+                    return (
+                      <div>
+                        <Select
+                          variant="bordered"
+                          isMultiline={true}
+                          autoFocus
+                          aria-label="Sizes"
+                          label="Sizes"
+                          labelPlacement="inside"
+                          selectionMode="multiple"
+                          isInvalid={isErrored}
+                          errorMessage={errorMessage}
+                          onChange={(e) => handleSizeChange(e.target.value)}
+                          onBlur={onBlur}
+                          value={selectedSizes}
+                          defaultSelectedKeys={new Set(selectedSizes)}
+                          classNames={{
+                            base: "mt-4",
+                            trigger: "min-h-unit-12 py-2",
+                          }}
+                        >
+                          <SelectSection className="text-light-text dark:text-dark-text">
+                            <SelectItem key="XS" value="XS">XS</SelectItem>
+                            <SelectItem key="SM" value="SM">SM</SelectItem>
+                            <SelectItem key="MD" value="MD">MD</SelectItem>
+                            <SelectItem key="LG" value="LG">LG</SelectItem>
+                            <SelectItem key="XL" value="XL">XL</SelectItem>
+                            <SelectItem key="XXL" value="XXL">XXL</SelectItem>
+                          </SelectSection>
+                        </Select>
+                        <div className="flex flex-wrap gap-4 mt-4">
+                          {selectedSizes.map((size) => (
+                            <div key={size} className="flex items-center">
+                              <span className="mr-2">{size}:</span>
+                              <Input
+                                type="number"
+                                min="0"
+                                value={(localSizeQuantities[size] || 0).toString()}
+                                onChange={(e) => handleQuantityChange(size, parseInt(e.target.value) || 0)}
+                                className="w-20"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
+
+                <Controller
+                  name="Condition"
+                  control={control}
+                  render={({
+                    field: { onChange, onBlur, value },
+                    fieldState: { error },
+                  }) => {
+                    let isErrored = error !== undefined;
+                    let errorMessage: string = error?.message ? error.message : "";
+                    return (
+                        <Select
+                          className="text-light-text dark:text-dark-text"
+                          autoFocus
+                          variant="bordered"
+                          aria-label="Condition"
+                          label="Condition"
+                          labelPlacement="inside"
+                          isInvalid={isErrored}
+                          errorMessage={errorMessage}
+                          disallowEmptySelection={true}
+                          // controller props
+                          onChange={onChange} // send value to hook form
+                          onBlur={onBlur} // notify when input is touched/blur
+                          selectedKeys={[value as string]}
+                        >
+                        <SelectSection className="text-light-text dark:text-dark-text">
+                          <SelectItem key="New" value="New">New</SelectItem>
+                          <SelectItem key="Renewed" value="Renewed">Renewed</SelectItem>
+                          <SelectItem key="Used - Like New" value="Used - Like New">Used - Like New</SelectItem>
+                          <SelectItem key="Used - Very Good" value="Used - Very Good">Used - Very Good</SelectItem>
+                          <SelectItem key="Used - Good" value="Used - Good">Used - Good</SelectItem>
+                          <SelectItem key="Used - Acceptable" value="Used - Acceptable">Used - Acceptable</SelectItem>
+                        </SelectSection>
+                      </Select>
+                    );
+                  }}
+                />
+
+                <Controller
+                  name="Status"
+                  control={control}
+                  render={({
+                    field: { onChange, onBlur, value },
+                    fieldState: { error },
+                  }) => {
+                    let isErrored = error !== undefined;
+                    let errorMessage: string = error?.message ? error.message : "";
+                    return (
+                        <Select
+                          className="text-light-text dark:text-dark-text"
+                          autoFocus
+                          variant="bordered"
+                          aria-label="Status"
+                          label="Status"
+                          labelPlacement="inside"
+                          isInvalid={isErrored}
+                          errorMessage={errorMessage}
+                          disallowEmptySelection={true}
+                          // controller props
+                          onChange={onChange} // send value to hook form
+                          onBlur={onBlur} // notify when input is touched/blur
+                          selectedKeys={[value as string]}
+                        >
+                        <SelectSection className="text-light-text dark:text-dark-text">
+                          <SelectItem key="active" value="active">Active</SelectItem>
+                          <SelectItem key="sold" value="sold">Sold</SelectItem>
+                        </SelectSection>
+                      </Select>
+                    );
+                  }}
+                />
+              </>
+            )}
+            
             {signIn === "nsec" && (
               <Input
                 autoFocus

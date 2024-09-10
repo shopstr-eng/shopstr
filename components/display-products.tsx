@@ -17,7 +17,7 @@ import { Button } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
 import { DateTime } from "luxon";
 
-const DisplayEvents = ({
+const DisplayProducts = ({
   focusedPubkey,
   selectedCategories,
   selectedLocation,
@@ -285,4 +285,4 @@ const DisplayEvents = ({
   );
 };
 
-export default DisplayEvents;
+export default DisplayProducts;

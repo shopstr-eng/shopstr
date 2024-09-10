@@ -14,7 +14,7 @@ import { useRouter } from "next/router";
 import { nip19 } from "nostr-tools";
 import React, { useContext, useEffect, useState } from "react";
 import { ShopMapContext } from "@/utils/context/context";
-import DisplayEvents from "../display-products";
+import DisplayProducts from "../display-products";
 import LocationDropdown from "../utility-components/dropdowns/location-dropdown";
 import { CATEGORIES } from "../utility/STATIC-VARIABLES";
 import {
@@ -221,34 +221,11 @@ export function MarketplacePage({
                 setWotFilter={setWotFilter}
               />
             </div>
-            {focusedPubkey ? (
-              <div
-                className="mt-2 flex w-fit cursor-pointer flex-row rounded-md px-3 align-middle text-shopstr-purple hover:bg-shopstr-yellow dark:text-shopstr-yellow-light hover:dark:bg-shopstr-purple"
-                onClick={() => {
-                  routeToShop("");
-                }}
-              >
-                <div>
-                  <ArrowUturnLeftIcon
-                    className="h-5 w-5 pr-1 text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light"
-                    onClick={() => {
-                      routeToShop("");
-                    }}
-                  >
-                    Go Back
-                  </ArrowUturnLeftIcon>
-                </div>
-
-                <span className="overflow-hidden break-all sm:w-72 md:w-full">
-                  {nip19.npubEncode(focusedPubkey)}
-                </span>
-              </div>
-            ) : undefined}
           </>
         )}
       </div>
       <div className="flex">
-        {focusedPubkey && (
+        {focusedPubkey && shopBannerURL && shopAbout && (
           <SideShopNav
             focusedPubkey={focusedPubkey}
             categories={categories}
@@ -256,7 +233,7 @@ export function MarketplacePage({
           />
         )}
         {selectedSection === "Shop" && (
-          <DisplayEvents
+          <DisplayProducts
             focusedPubkey={focusedPubkey}
             selectedCategories={selectedCategories}
             selectedLocation={selectedLocation}
