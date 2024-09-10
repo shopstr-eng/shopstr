@@ -91,7 +91,7 @@ const TopNav = ({
   };
 
   const MobileMenu = () => (
-    <div className="absolute left-0 top-full w-full bg-light-fg shadow-lg dark:bg-dark-fg">
+    <div className="absolute top-full left-0 w-full bg-light-fg dark:bg-dark-fg shadow-lg">
       <Button
         className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
         onClick={handleHomeClick}
@@ -149,7 +149,7 @@ const TopNav = ({
             </span>
           </Button>
         </div>
-        <div className="flex flex-row items-center md:hidden">
+        <div className="md:hidden flex flex-row items-center">
           <Button
             className="bg-transparent"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -177,7 +177,7 @@ const TopNav = ({
             </Button>
           )}
         </div>
-        <div className="hidden items-center font-bold text-light-text dark:text-dark-text md:flex">
+        <div className="hidden md:flex items-center font-bold text-light-text dark:text-dark-text">
           <Button
             className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
             onClick={handleHomeClick}

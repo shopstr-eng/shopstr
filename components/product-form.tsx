@@ -68,25 +68,21 @@ export default function NewForm({
   const [isPostingOrUpdatingProduct, setIsPostingOrUpdatingProduct] =
     useState(false);
   const [showOptionalTags, setShowOptionalTags] = useState(false);
-  const [sizeQuantities, setSizeQuantities] = useState<Record<string, number>>(
-    {},
-  );
-  const [localSizeQuantities, setLocalSizeQuantities] = useState<
-    Record<string, number>
-  >(() => {
-    const defaultSizeQuantities = watch("sizeQuantities") || {};
-    return (
-      oldValues?.sizes?.reduce(
-        (acc, size, index) => {
-          acc[size] = oldValues.sizeQuantities?.[index] || 0;
-          return acc;
-        },
-        {} as Record<string, number>,
-      ) || defaultSizeQuantities
-    );
+  const [sizeQuantities, setSizeQuantities] = useState<Record<string, number>>({});
+  const [localSizeQuantities, setLocalSizeQuantities] = useState<Record<string, number>>(() => {
+    const defaultSizeQuantities = watch('sizeQuantities') || {};
+    return oldValues?.sizes?.reduce((acc, size, index) => {
+      acc[size] = oldValues.sizeQuantities?.[index] || 0;
+      return acc;
+    }, {} as Record<string, number>) || defaultSizeQuantities;
   });
   const productEventContext = useContext(ProductContext);
-  const { handleSubmit, control, reset, watch } = useForm({
+  const {
+    handleSubmit,
+    control,
+    reset,
+    watch,
+  } = useForm({
     defaultValues: oldValues
       ? {
           "Product Name": oldValues.title,
@@ -98,18 +94,12 @@ export default function NewForm({
           "Shipping Cost": oldValues.shippingCost,
           Category: oldValues.categories ? oldValues.categories.join(",") : "",
           Sizes: oldValues.sizes ? oldValues.sizes.join(",") : "",
-          sizeQuantities:
-            oldValues.sizes && oldValues.sizeQuantities
-              ? oldValues.sizes.reduce(
-                  (acc, size, index) => {
-                    acc[size] = oldValues.sizeQuantities
-                      ? oldValues.sizeQuantities[index]
-                      : 0;
-                    return acc;
-                  },
-                  {} as Record<string, number>,
-                )
-              : {},
+          sizeQuantities: oldValues.sizes && oldValues.sizeQuantities
+          ? oldValues.sizes.reduce((acc, size, index) => {
+              acc[size] = oldValues.sizeQuantities ? oldValues.sizeQuantities[index] : 0;
+              return acc;
+            }, {} as Record<string, number>)
+          : {},
           Condition: oldValues.condition ? oldValues.condition : "",
           Status: oldValues.status ? oldValues.status : "",
         }
@@ -133,7 +123,7 @@ export default function NewForm({
   }, [showModal]);
 
   useEffect(() => {
-    const selectedSizes = watch("Sizes");
+    const selectedSizes = watch('Sizes');
     if (Array.isArray(selectedSizes)) {
       setSizeQuantities(localSizeQuantities);
     }
@@ -201,7 +191,7 @@ export default function NewForm({
     } else {
       tags.push(["status", "active"]);
     }
-
+    
     let newListing = await PostListing(tags, passphrase);
 
     capturePostListingMetric(newListing.id, tags);
@@ -453,7 +443,9 @@ export default function NewForm({
                         rules={{
                           required: "Please specify a currency.",
                         }}
-                        render={({ field: { onChange, onBlur, value } }) => {
+                        render={({
+                          field: { onChange, onBlur, value },
+                        }) => {
                           return (
                             <div className="flex items-center">
                               <select
@@ -668,7 +660,7 @@ export default function NewForm({
             />
             <div className="w-full max-w-xs">
               <Button
-                className="mb-2 mt-4 w-full justify-start rounded-md pl-2 text-shopstr-purple-light dark:text-shopstr-yellow-light"
+                className="mt-4 mb-2 text-shopstr-purple-light dark:text-shopstr-yellow-light pl-2 w-full justify-start rounded-md"
                 variant="light"
                 onClick={() => setShowOptionalTags(!showOptionalTags)}
               >
@@ -689,27 +681,21 @@ export default function NewForm({
                     fieldState: { error },
                   }) => {
                     let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
-                      ? error.message
-                      : "";
+                    let errorMessage: string = error?.message ? error.message : "";
 
                     // Convert value to an array of strings
-                    const selectedSizes = Array.isArray(value)
-                      ? value
-                      : typeof value === "string"
-                        ? value.split(",").filter(Boolean)
-                        : [];
+                    const selectedSizes = Array.isArray(value) 
+                      ? value 
+                      : (typeof value === 'string' ? value.split(',').filter(Boolean) : []);
 
                     const handleSizeChange = (newValue: string | string[]) => {
-                      const newSizes = Array.isArray(newValue)
-                        ? newValue
-                        : newValue.split(",").filter(Boolean);
+                      const newSizes = Array.isArray(newValue) ? newValue : newValue.split(',').filter(Boolean);
                       onChange(newSizes);
 
                       // Update localSizeQuantities state
-                      setLocalSizeQuantities((prev) => {
+                      setLocalSizeQuantities(prev => {
                         const newSizeQuantities = { ...prev };
-                        newSizes.forEach((size) => {
+                        newSizes.forEach(size => {
                           if (!newSizeQuantities[size]) {
                             newSizeQuantities[size] = 0;
                           }
@@ -718,14 +704,8 @@ export default function NewForm({
                       });
                     };
 
-                    const handleQuantityChange = (
-                      size: string,
-                      quantity: number,
-                    ) => {
-                      setSizeQuantities((prev) => ({
-                        ...prev,
-                        [size]: quantity,
-                      }));
+                    const handleQuantityChange = (size: string, quantity: number) => {
+                      setSizeQuantities(prev => ({ ...prev, [size]: quantity }));
                     };
 
                     return (
@@ -750,42 +730,23 @@ export default function NewForm({
                           }}
                         >
                           <SelectSection className="text-light-text dark:text-dark-text">
-                            <SelectItem key="XS" value="XS">
-                              XS
-                            </SelectItem>
-                            <SelectItem key="SM" value="SM">
-                              SM
-                            </SelectItem>
-                            <SelectItem key="MD" value="MD">
-                              MD
-                            </SelectItem>
-                            <SelectItem key="LG" value="LG">
-                              LG
-                            </SelectItem>
-                            <SelectItem key="XL" value="XL">
-                              XL
-                            </SelectItem>
-                            <SelectItem key="XXL" value="XXL">
-                              XXL
-                            </SelectItem>
+                            <SelectItem key="XS" value="XS">XS</SelectItem>
+                            <SelectItem key="SM" value="SM">SM</SelectItem>
+                            <SelectItem key="MD" value="MD">MD</SelectItem>
+                            <SelectItem key="LG" value="LG">LG</SelectItem>
+                            <SelectItem key="XL" value="XL">XL</SelectItem>
+                            <SelectItem key="XXL" value="XXL">XXL</SelectItem>
                           </SelectSection>
                         </Select>
-                        <div className="mt-4 flex flex-wrap gap-4">
+                        <div className="flex flex-wrap gap-4 mt-4">
                           {selectedSizes.map((size) => (
                             <div key={size} className="flex items-center">
                               <span className="mr-2">{size}:</span>
                               <Input
                                 type="number"
                                 min="0"
-                                value={(
-                                  localSizeQuantities[size] || 0
-                                ).toString()}
-                                onChange={(e) =>
-                                  handleQuantityChange(
-                                    size,
-                                    parseInt(e.target.value) || 0,
-                                  )
-                                }
+                                value={(localSizeQuantities[size] || 0).toString()}
+                                onChange={(e) => handleQuantityChange(size, parseInt(e.target.value) || 0)}
                                 className="w-20"
                               />
                             </div>
@@ -804,53 +765,30 @@ export default function NewForm({
                     fieldState: { error },
                   }) => {
                     let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
-                      ? error.message
-                      : "";
+                    let errorMessage: string = error?.message ? error.message : "";
                     return (
-                      <Select
-                        className="text-light-text dark:text-dark-text"
-                        autoFocus
-                        variant="bordered"
-                        aria-label="Condition"
-                        label="Condition"
-                        labelPlacement="inside"
-                        isInvalid={isErrored}
-                        errorMessage={errorMessage}
-                        disallowEmptySelection={true}
-                        // controller props
-                        onChange={onChange} // send value to hook form
-                        onBlur={onBlur} // notify when input is touched/blur
-                        selectedKeys={[value as string]}
-                      >
+                        <Select
+                          className="text-light-text dark:text-dark-text"
+                          autoFocus
+                          variant="bordered"
+                          aria-label="Condition"
+                          label="Condition"
+                          labelPlacement="inside"
+                          isInvalid={isErrored}
+                          errorMessage={errorMessage}
+                          disallowEmptySelection={true}
+                          // controller props
+                          onChange={onChange} // send value to hook form
+                          onBlur={onBlur} // notify when input is touched/blur
+                          selectedKeys={[value as string]}
+                        >
                         <SelectSection className="text-light-text dark:text-dark-text">
-                          <SelectItem key="New" value="New">
-                            New
-                          </SelectItem>
-                          <SelectItem key="Renewed" value="Renewed">
-                            Renewed
-                          </SelectItem>
-                          <SelectItem
-                            key="Used - Like New"
-                            value="Used - Like New"
-                          >
-                            Used - Like New
-                          </SelectItem>
-                          <SelectItem
-                            key="Used - Very Good"
-                            value="Used - Very Good"
-                          >
-                            Used - Very Good
-                          </SelectItem>
-                          <SelectItem key="Used - Good" value="Used - Good">
-                            Used - Good
-                          </SelectItem>
-                          <SelectItem
-                            key="Used - Acceptable"
-                            value="Used - Acceptable"
-                          >
-                            Used - Acceptable
-                          </SelectItem>
+                          <SelectItem key="New" value="New">New</SelectItem>
+                          <SelectItem key="Renewed" value="Renewed">Renewed</SelectItem>
+                          <SelectItem key="Used - Like New" value="Used - Like New">Used - Like New</SelectItem>
+                          <SelectItem key="Used - Very Good" value="Used - Very Good">Used - Very Good</SelectItem>
+                          <SelectItem key="Used - Good" value="Used - Good">Used - Good</SelectItem>
+                          <SelectItem key="Used - Acceptable" value="Used - Acceptable">Used - Acceptable</SelectItem>
                         </SelectSection>
                       </Select>
                     );
@@ -865,32 +803,26 @@ export default function NewForm({
                     fieldState: { error },
                   }) => {
                     let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
-                      ? error.message
-                      : "";
+                    let errorMessage: string = error?.message ? error.message : "";
                     return (
-                      <Select
-                        className="text-light-text dark:text-dark-text"
-                        autoFocus
-                        variant="bordered"
-                        aria-label="Status"
-                        label="Status"
-                        labelPlacement="inside"
-                        isInvalid={isErrored}
-                        errorMessage={errorMessage}
-                        disallowEmptySelection={true}
-                        // controller props
-                        onChange={onChange} // send value to hook form
-                        onBlur={onBlur} // notify when input is touched/blur
-                        selectedKeys={[value as string]}
-                      >
+                        <Select
+                          className="text-light-text dark:text-dark-text"
+                          autoFocus
+                          variant="bordered"
+                          aria-label="Status"
+                          label="Status"
+                          labelPlacement="inside"
+                          isInvalid={isErrored}
+                          errorMessage={errorMessage}
+                          disallowEmptySelection={true}
+                          // controller props
+                          onChange={onChange} // send value to hook form
+                          onBlur={onBlur} // notify when input is touched/blur
+                          selectedKeys={[value as string]}
+                        >
                         <SelectSection className="text-light-text dark:text-dark-text">
-                          <SelectItem key="active" value="active">
-                            Active
-                          </SelectItem>
-                          <SelectItem key="sold" value="sold">
-                            Sold
-                          </SelectItem>
+                          <SelectItem key="active" value="active">Active</SelectItem>
+                          <SelectItem key="sold" value="sold">Sold</SelectItem>
                         </SelectSection>
                       </Select>
                     );
@@ -898,7 +830,7 @@ export default function NewForm({
                 />
               </>
             )}
-
+            
             {signIn === "nsec" && (
               <Input
                 autoFocus

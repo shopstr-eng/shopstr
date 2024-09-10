@@ -1,5 +1,5 @@
 import router from "next/router";
-import React, { useState, useEffect } from "react";
+import React from "react";
 import DisplayProducts from "../display-products";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import { Button, useDisclosure } from "@nextui-org/react";
@@ -7,22 +7,19 @@ import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import SignInModal from "../sign-in/SignInModal";
 
 export const MyListingsPage = () => {
-  const [usersPubkey, setUsersPubkey] = useState<string | null>(null);
+  let usersPubkey = getLocalStorageData().userPubkey;
   const { isOpen, onOpen, onClose } = useDisclosure();
 
-  useEffect(() => {
-    const { userPubkey } = getLocalStorageData();
-    setUsersPubkey(userPubkey);
-  }, []);
-
   const handleCreateNewListing = () => {
-    if (usersPubkey) {
+    const loggedIn = getLocalStorageData().userPubkey;
+
+    // don't route to home page when adding a new listing
+    if (loggedIn) {
       router.push("/?addNewListing");
     } else {
       onOpen();
     }
   };
-
   return (
     <div className="mx-auto h-full w-full">
       <div className="flex max-w-[100%] flex-col bg-light-bg px-3 pb-2 dark:bg-dark-bg">
@@ -34,7 +31,7 @@ export const MyListingsPage = () => {
             + Add new listing
           </Button>
         </div>
-        {usersPubkey && (
+        {usersPubkey ? (
           <DisplayProducts
             focusedPubkey={usersPubkey}
             selectedCategories={new Set<string>([])}
@@ -43,7 +40,7 @@ export const MyListingsPage = () => {
             canShowLoadMore={true}
             isMyListings={true}
           />
-        )}
+        ) : null}
       </div>
       <SignInModal isOpen={isOpen} onClose={onClose} />
     </div>
