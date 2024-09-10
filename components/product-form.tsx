@@ -69,6 +69,13 @@ export default function NewForm({
     useState(false);
   const [showOptionalTags, setShowOptionalTags] = useState(false);
   const [sizeQuantities, setSizeQuantities] = useState<Record<string, number>>({});
+  const [localSizeQuantities, setLocalSizeQuantities] = useState<Record<string, number>>(() => {
+    const defaultSizeQuantities = watch('sizeQuantities') || {};
+    return oldValues?.sizes?.reduce((acc, size, index) => {
+      acc[size] = oldValues.sizeQuantities?.[index] || 0;
+      return acc;
+    }, {} as Record<string, number>) || defaultSizeQuantities;
+  });
   const productEventContext = useContext(ProductContext);
   const {
     handleSubmit,
@@ -114,6 +121,13 @@ export default function NewForm({
     setImages(oldValues?.images || []);
     setIsEdit(oldValues ? true : false);
   }, [showModal]);
+
+  useEffect(() => {
+    const selectedSizes = watch('Sizes');
+    if (Array.isArray(selectedSizes)) {
+      setSizeQuantities(localSizeQuantities);
+    }
+  }, [localSizeQuantities, watch, control]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
     if (images.length === 0) {
@@ -674,17 +688,6 @@ export default function NewForm({
                       ? value 
                       : (typeof value === 'string' ? value.split(',').filter(Boolean) : []);
 
-                    // Initialize sizeQuantities state with pre-populated values
-                    const [localSizeQuantities, setLocalSizeQuantities] = useState<Record<string, number>>(
-                      () => {
-                        const defaultSizeQuantities = watch('sizeQuantities');
-                        return selectedSizes.reduce((acc, size) => {
-                          acc[size] = defaultSizeQuantities ? defaultSizeQuantities[size] : 0;
-                          return acc;
-                        }, {} as Record<string, number>);
-                      }
-                    );
-
                     const handleSizeChange = (newValue: string | string[]) => {
                       const newSizes = Array.isArray(newValue) ? newValue : newValue.split(',').filter(Boolean);
                       onChange(newSizes);
@@ -704,11 +707,6 @@ export default function NewForm({
                     const handleQuantityChange = (size: string, quantity: number) => {
                       setSizeQuantities(prev => ({ ...prev, [size]: quantity }));
                     };
-
-                    useEffect(() => {
-                      onChange(selectedSizes);
-                      setSizeQuantities(localSizeQuantities);
-                    }, [localSizeQuantities, selectedSizes]);
 
                     return (
                       <div>
