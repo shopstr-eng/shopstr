@@ -602,6 +602,24 @@ export default function InvoiceCard({
           },
         });
       }
+    } else if (selectedSize) {
+      let contactMessage = "This purchase was for a size " + selectedSize + ".";
+      axios({
+        method: "POST",
+        url: "/api/nostr/post-event",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        data: {
+          pubkey: decryptedRandomNpub.data,
+          privkey: decryptedRandomNsec.data,
+          created_at: Math.floor(Date.now() / 1000),
+          kind: 4,
+          tags: [["p", pubkeyOfProductBeingSold]],
+          content: contactMessage,
+          relays: relays,
+        },
+      });
     }
   };
 
