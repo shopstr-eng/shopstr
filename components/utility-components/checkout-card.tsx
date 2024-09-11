@@ -47,6 +47,7 @@ export default function CheckoutCard({
   const [selectedSize, setSelectedSize] = useState<string | undefined>(
     undefined,
   );
+  const [hasSizes, setHasSizes] = useState(false);
 
   const toggleExpand = () => {
     setIsExpanded(!isExpanded);
@@ -82,6 +83,16 @@ export default function CheckoutCard({
       };
     }
   }, [selectedImage]);
+
+  useEffect(() => {
+    setHasSizes(
+      !!(
+        sizes &&
+        sizes.length > 0 &&
+        sizes.some((size) => (sizeQuantities?.get(size) || 0) > 0)
+      ),
+    );
+  }, [sizes, sizeQuantities]);
 
   const toggleBuyNow = () => {
     setIsBeingPaid(!isBeingPaid);
@@ -230,8 +241,13 @@ export default function CheckoutCard({
               </div>
               <div className="flex w-full gap-2">
                 <Button
-                  className={SHOPSTRBUTTONCLASSNAMES}
+                  className={`${SHOPSTRBUTTONCLASSNAMES} ${
+                    hasSizes && !selectedSize
+                      ? "cursor-not-allowed opacity-50"
+                      : ""
+                  }`}
                   onClick={toggleBuyNow}
+                  disabled={hasSizes && !selectedSize}
                 >
                   Buy Now
                 </Button>
