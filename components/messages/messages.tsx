@@ -175,7 +175,12 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         );
         if (
           (isPayment && plainText?.includes("cashuA")) ||
-          (!isPayment && !plainText?.includes("cashuA"))
+          (isPayment && plainText?.includes("To finalize the sale of your")) ||
+          (isPayment && plainText?.includes("Please ship the product to")) ||
+          (!isPayment &&
+            !plainText?.includes("cashuA") &&
+            !plainText?.includes("To finalize the sale of your") &&
+            !plainText?.includes("Please ship the product to"))
         ) {
           plainText &&
             decryptedChat.push({ ...messageEvent, content: plainText });

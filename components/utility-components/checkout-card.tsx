@@ -9,7 +9,8 @@ import CompactPriceDisplay, {
 import InvoiceCard from "../invoice-card";
 import { useRouter } from "next/router";
 import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
-import { Button } from "@nextui-org/react";
+import { Button, Chip } from "@nextui-org/react";
+import { locationAvatar } from "./dropdowns/location-dropdown";
 import { InformationCircleIcon } from "@heroicons/react/24/outline";
 import Link from "next/link";
 
@@ -31,7 +32,8 @@ export default function CheckoutCard({
   setCashuPaymentFailed?: (cashuPaymentFailef: boolean) => void;
   uniqueKey?: string;
 }) {
-  const { title, images, pubkey, summary } = productData;
+  const { title, images, pubkey, summary, location, sizes, sizeQuantities } =
+    productData;
 
   const { userPubkey } = getLocalStorageData();
 
@@ -42,6 +44,9 @@ export default function CheckoutCard({
   const [visibleImages, setVisibleImages] = useState<string[]>([]);
   const [showAllImages, setShowAllImages] = useState(false);
   const [selectedImage, setSelectedImage] = useState(images[0]);
+  const [selectedSize, setSelectedSize] = useState<string | undefined>(
+    undefined,
+  );
 
   const toggleExpand = () => {
     setIsExpanded(!isExpanded);
@@ -111,6 +116,28 @@ export default function CheckoutCard({
       pathname: "/messages",
       query: { pk: nip19.npubEncode(pubkeyToOpenChatWith) },
     });
+  };
+
+  const renderSizeGrid = () => {
+    return (
+      <div className="grid grid-cols-3 gap-2 py-1">
+        {sizes?.map((size) =>
+          (sizeQuantities?.get(size) || 0) > 0 ? (
+            <button
+              key={size}
+              className={`rounded-md border p-2 text-sm ${
+                selectedSize === size
+                  ? "bg-shopstr-purple text-white dark:bg-shopstr-yellow dark:text-black"
+                  : "bg-white text-black dark:bg-black dark:text-white"
+              }`}
+              onClick={() => setSelectedSize(size)}
+            >
+              {size}
+            </button>
+          ) : null,
+        )}
+      </div>
+    );
   };
 
   return (
@@ -195,6 +222,12 @@ export default function CheckoutCard({
               <div className="mt-4">
                 <CompactPriceDisplay monetaryInfo={productData} />
               </div>
+              {renderSizeGrid()}
+              <div className="py-1">
+                <Chip key={location} startContent={locationAvatar(location)}>
+                  {location}
+                </Chip>
+              </div>
               <div className="flex w-full gap-2">
                 <Button
                   className={SHOPSTRBUTTONCLASSNAMES}
@@ -270,6 +303,7 @@ export default function CheckoutCard({
               setInvoiceGenerationFailed={setInvoiceGenerationFailed}
               setCashuPaymentSent={setCashuPaymentSent}
               setCashuPaymentFailed={setCashuPaymentFailed}
+              selectedSize={selectedSize}
             />
           </div>
         </>

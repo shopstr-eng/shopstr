@@ -9,10 +9,6 @@ export default function SellerView({
   focusedPubkey: string;
   setFocusedPubkey: (value: string) => void;
 }) {
-  if (typeof window === "undefined") {
-    return null; // Return null on the server-side
-  }
-
   return (
     <>
       <Head>

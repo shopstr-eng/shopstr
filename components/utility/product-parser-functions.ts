@@ -19,7 +19,7 @@ export type ProductData = {
   totalCost: number;
   d?: string;
   sizes?: string[];
-  sizeQuantities?: number[];
+  sizeQuantities?: Map<string, number>;
   condition?: string;
   status?: string;
 };
@@ -102,8 +102,8 @@ export const parseTags = (productEvent: NostrEvent) => {
         if (parsedData.sizes === undefined) parsedData.sizes = [];
         parsedData.sizes?.push(size);
         if (parsedData.sizeQuantities === undefined)
-          parsedData.sizeQuantities = [];
-        parsedData.sizeQuantities?.push(Number(quantity));
+          parsedData.sizeQuantities = new Map<string, number>();
+        parsedData.sizeQuantities.set(size, Number(quantity));
         break;
       case "condition":
         parsedData.condition = values[0];

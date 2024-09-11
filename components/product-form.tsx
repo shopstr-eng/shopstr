@@ -68,23 +68,6 @@ export default function NewForm({
   const [isPostingOrUpdatingProduct, setIsPostingOrUpdatingProduct] =
     useState(false);
   const [showOptionalTags, setShowOptionalTags] = useState(false);
-  const [sizeQuantities, setSizeQuantities] = useState<Record<string, number>>(
-    {},
-  );
-  const [localSizeQuantities, setLocalSizeQuantities] = useState<
-    Record<string, number>
-  >(() => {
-    const defaultSizeQuantities = watch("sizeQuantities") || {};
-    return (
-      oldValues?.sizes?.reduce(
-        (acc, size, index) => {
-          acc[size] = oldValues.sizeQuantities?.[index] || 0;
-          return acc;
-        },
-        {} as Record<string, number>,
-      ) || defaultSizeQuantities
-    );
-  });
   const productEventContext = useContext(ProductContext);
   const { handleSubmit, control, reset, watch } = useForm({
     defaultValues: oldValues
@@ -98,18 +81,9 @@ export default function NewForm({
           "Shipping Cost": oldValues.shippingCost,
           Category: oldValues.categories ? oldValues.categories.join(",") : "",
           Sizes: oldValues.sizes ? oldValues.sizes.join(",") : "",
-          sizeQuantities:
-            oldValues.sizes && oldValues.sizeQuantities
-              ? oldValues.sizes.reduce(
-                  (acc, size, index) => {
-                    acc[size] = oldValues.sizeQuantities
-                      ? oldValues.sizeQuantities[index]
-                      : 0;
-                    return acc;
-                  },
-                  {} as Record<string, number>,
-                )
-              : {},
+          "Size Quantities": oldValues.sizeQuantities
+            ? oldValues.sizeQuantities
+            : new Map<string, number>(),
           Condition: oldValues.condition ? oldValues.condition : "",
           Status: oldValues.status ? oldValues.status : "",
         }
@@ -132,14 +106,9 @@ export default function NewForm({
     setIsEdit(oldValues ? true : false);
   }, [showModal]);
 
-  useEffect(() => {
-    const selectedSizes = watch("Sizes");
-    if (Array.isArray(selectedSizes)) {
-      setSizeQuantities(localSizeQuantities);
-    }
-  }, [localSizeQuantities, watch, control]);
-
-  const onSubmit = async (data: { [x: string]: string }) => {
+  const onSubmit = async (data: {
+    [x: string]: string | Map<string, number> | string[];
+  }) => {
     if (images.length === 0) {
       setImageError("At least one image is required.");
       return;
@@ -149,7 +118,7 @@ export default function NewForm({
 
     setIsPostingOrUpdatingProduct(true);
     const encoder = new TextEncoder();
-    const dataEncoded = encoder.encode(data["Product Name"]);
+    const dataEncoded = encoder.encode(data["Product Name"] as string);
     const hashBuffer = await crypto.subtle.digest("SHA-256", dataEncoded);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     const hashHex = hashArray
@@ -158,22 +127,22 @@ export default function NewForm({
 
     let tags: ProductFormValues = [
       ["d", oldValues?.d || hashHex],
-      ["alt", "Classified listing: " + data["Product Name"]],
+      ["alt", ("Classified listing: " + data["Product Name"]) as string],
       [
         "client",
         "Shopstr",
         "31990:" + pubkey + ":" + (oldValues?.d || hashHex),
         "wss://relay.damus.io",
       ],
-      ["title", data["Product Name"]],
-      ["summary", data["Description"]],
-      ["price", data["Price"], data["Currency"]],
-      ["location", data["Location"]],
+      ["title", data["Product Name"] as string],
+      ["summary", data["Description"] as string],
+      ["price", data["Price"] as string, data["Currency"] as string],
+      ["location", data["Location"] as string],
       [
         "shipping",
-        data["Shipping Option"],
-        data["Shipping Cost"] ? data["Shipping Cost"] : "0",
-        data["Currency"],
+        data["Shipping Option"] as string,
+        data["Shipping Cost"] ? (data["Shipping Cost"] as string) : "0",
+        data["Currency"] as string,
       ],
     ];
 
@@ -181,23 +150,24 @@ export default function NewForm({
       tags.push(["image", image]);
     });
 
-    data["Category"].split(",").forEach((category) => {
+    (data["Category"] as string).split(",").forEach((category) => {
       tags.push(["t", category]);
     });
 
     if (data["Sizes"]) {
-      data["Sizes"].split(",").forEach((size) => {
-        const quantity = sizeQuantities[size] || 0;
+      (data["Sizes"] as string[]).forEach((size) => {
+        const quantity =
+          (data["Size Quantities"] as Map<string, number>).get(size) || 0;
         tags.push(["size", size, quantity.toString()]);
       });
     }
 
     if (data["Condition"]) {
-      tags.push(["condition", data["Condition"]]);
+      tags.push(["condition", data["Condition"] as string]);
     }
 
     if (data["Status"]) {
-      tags.push(["status", data["Status"]]);
+      tags.push(["status", data["Status"] as string]);
     } else {
       tags.push(["status", "active"]);
     }
@@ -216,7 +186,6 @@ export default function NewForm({
     productEventContext.addNewlyCreatedProductEvent(newListing);
     addProductToCache(newListing);
     setIsPostingOrUpdatingProduct(false);
-    setSizeQuantities({});
     if (onSubmitCallback) {
       onSubmitCallback();
     }
@@ -689,11 +658,8 @@ export default function NewForm({
                     fieldState: { error },
                   }) => {
                     let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
-                      ? error.message
-                      : "";
+                    let errorMessage = error?.message || "";
 
-                    // Convert value to an array of strings
                     const selectedSizes = Array.isArray(value)
                       ? value
                       : typeof value === "string"
@@ -705,92 +671,94 @@ export default function NewForm({
                         ? newValue
                         : newValue.split(",").filter(Boolean);
                       onChange(newSizes);
-
-                      // Update localSizeQuantities state
-                      setLocalSizeQuantities((prev) => {
-                        const newSizeQuantities = { ...prev };
-                        newSizes.forEach((size) => {
-                          if (!newSizeQuantities[size]) {
-                            newSizeQuantities[size] = 0;
-                          }
-                        });
-                        return newSizeQuantities;
-                      });
                     };
 
+                    return (
+                      <Select
+                        variant="bordered"
+                        isMultiline={true}
+                        autoFocus
+                        aria-label="Sizes"
+                        label="Sizes"
+                        labelPlacement="inside"
+                        selectionMode="multiple"
+                        isInvalid={isErrored}
+                        errorMessage={errorMessage}
+                        onChange={(e) => handleSizeChange(e.target.value)}
+                        onBlur={onBlur}
+                        value={selectedSizes}
+                        defaultSelectedKeys={new Set(selectedSizes)}
+                        classNames={{
+                          base: "mt-4",
+                          trigger: "min-h-unit-12 py-2",
+                        }}
+                      >
+                        <SelectSection className="text-light-text dark:text-dark-text">
+                          <SelectItem key="XS" value="XS">
+                            XS
+                          </SelectItem>
+                          <SelectItem key="SM" value="SM">
+                            SM
+                          </SelectItem>
+                          <SelectItem key="MD" value="MD">
+                            MD
+                          </SelectItem>
+                          <SelectItem key="LG" value="LG">
+                            LG
+                          </SelectItem>
+                          <SelectItem key="XL" value="XL">
+                            XL
+                          </SelectItem>
+                          <SelectItem key="XXL" value="XXL">
+                            XXL
+                          </SelectItem>
+                        </SelectSection>
+                      </Select>
+                    );
+                  }}
+                />
+
+                <Controller
+                  name="Size Quantities"
+                  control={control}
+                  render={({
+                    field: { onChange, value = new Map<string, number>() },
+                  }) => {
                     const handleQuantityChange = (
                       size: string,
                       quantity: number,
                     ) => {
-                      setSizeQuantities((prev) => ({
-                        ...prev,
-                        [size]: quantity,
-                      }));
+                      const newQuantities = new Map(value);
+                      newQuantities.set(size, quantity);
+                      onChange(newQuantities);
                     };
 
+                    const sizes = watch("Sizes");
+                    const sizeArray = Array.isArray(sizes)
+                      ? sizes
+                      : sizes?.split(",").filter(Boolean) || [];
+
                     return (
-                      <div>
-                        <Select
-                          variant="bordered"
-                          isMultiline={true}
-                          autoFocus
-                          aria-label="Sizes"
-                          label="Sizes"
-                          labelPlacement="inside"
-                          selectionMode="multiple"
-                          isInvalid={isErrored}
-                          errorMessage={errorMessage}
-                          onChange={(e) => handleSizeChange(e.target.value)}
-                          onBlur={onBlur}
-                          value={selectedSizes}
-                          defaultSelectedKeys={new Set(selectedSizes)}
-                          classNames={{
-                            base: "mt-4",
-                            trigger: "min-h-unit-12 py-2",
-                          }}
-                        >
-                          <SelectSection className="text-light-text dark:text-dark-text">
-                            <SelectItem key="XS" value="XS">
-                              XS
-                            </SelectItem>
-                            <SelectItem key="SM" value="SM">
-                              SM
-                            </SelectItem>
-                            <SelectItem key="MD" value="MD">
-                              MD
-                            </SelectItem>
-                            <SelectItem key="LG" value="LG">
-                              LG
-                            </SelectItem>
-                            <SelectItem key="XL" value="XL">
-                              XL
-                            </SelectItem>
-                            <SelectItem key="XXL" value="XXL">
-                              XXL
-                            </SelectItem>
-                          </SelectSection>
-                        </Select>
-                        <div className="mt-4 flex flex-wrap gap-4">
-                          {selectedSizes.map((size) => (
-                            <div key={size} className="flex items-center">
-                              <span className="mr-2">{size}:</span>
-                              <Input
-                                type="number"
-                                min="0"
-                                value={(
-                                  localSizeQuantities[size] || 0
-                                ).toString()}
-                                onChange={(e) =>
-                                  handleQuantityChange(
-                                    size,
-                                    parseInt(e.target.value) || 0,
-                                  )
-                                }
-                                className="w-20"
-                              />
-                            </div>
-                          ))}
-                        </div>
+                      <div className="mt-4 flex flex-wrap gap-4">
+                        {sizeArray.map((size: string) => (
+                          <div key={size} className="flex items-center">
+                            <span className="mr-2 text-light-text dark:text-dark-text">
+                              {size}:
+                            </span>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={(value.get(size) || 0).toString()}
+                              onChange={(e) =>
+                                handleQuantityChange(
+                                  size,
+                                  parseInt(e.target.value) || 0,
+                                )
+                              }
+                              className="w-20"
+                            />
+                          </div>
+                        ))}
                       </div>
                     );
                   }}

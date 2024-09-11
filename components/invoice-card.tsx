@@ -70,12 +70,14 @@ export default function InvoiceCard({
   setInvoiceGenerationFailed,
   setCashuPaymentSent,
   setCashuPaymentFailed,
+  selectedSize,
 }: {
   productData: ProductData;
   setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
   setInvoiceGenerationFailed?: (invoiceGenerationFailed: boolean) => void;
   setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
   setCashuPaymentFailed?: (cashuPaymentFailef: boolean) => void;
+  selectedSize?: string;
 }) {
   const router = useRouter();
   const { id, pubkey, currency, totalCost, shippingType } = productData;
@@ -491,6 +493,24 @@ export default function InvoiceCard({
         shippingCountry
       ) {
         let contactMessage;
+        if (selectedSize) {
+          contactMessage =
+            "Please ship the product in a " +
+            selectedSize +
+            " size to " +
+            shippingName +
+            " at " +
+            shippingAddress +
+            ", " +
+            shippingCity +
+            ", " +
+            shippingPostalCode +
+            ", " +
+            shippingState +
+            ", " +
+            shippingCountry +
+            ".";
+        }
         if (!shippingUnitNo) {
           contactMessage =
             "Please ship the product to " +
@@ -541,15 +561,30 @@ export default function InvoiceCard({
           },
         });
       } else if (contact && contactType && contactInstructions) {
-        const contactMessage =
-          "To finalize the sale of your " +
-          title +
-          " listing on Shopstr, please contact " +
-          contact +
-          " over " +
-          contactType +
-          " using the following instructions: " +
-          contactInstructions;
+        let contactMessage;
+        if (selectedSize) {
+          contactMessage =
+            "To finalize the sale of your " +
+            title +
+            " listing in a size " +
+            selectedSize +
+            " on Shopstr, please contact " +
+            contact +
+            " over " +
+            contactType +
+            " using the following instructions: " +
+            contactInstructions;
+        } else {
+          contactMessage =
+            "To finalize the sale of your " +
+            title +
+            " listing on Shopstr, please contact " +
+            contact +
+            " over " +
+            contactType +
+            " using the following instructions: " +
+            contactInstructions;
+        }
         axios({
           method: "POST",
           url: "/api/nostr/post-event",
