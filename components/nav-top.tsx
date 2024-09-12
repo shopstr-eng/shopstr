@@ -80,6 +80,7 @@ const TopNav = ({
   const handleRoute = (path: string) => {
     if (signedIn) {
       router.push(path);
+      setIsMobileMenuOpen(false);
     } else {
       onOpen();
     }
@@ -88,6 +89,7 @@ const TopNav = ({
   const handleHomeClick = () => {
     setFocusedPubkey("");
     router.push("/");
+    setIsMobileMenuOpen(false);
   };
 
   const MobileMenu = () => (

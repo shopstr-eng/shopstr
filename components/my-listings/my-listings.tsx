@@ -17,7 +17,7 @@ export const MyListingsPage = () => {
 
   const handleCreateNewListing = () => {
     if (usersPubkey) {
-      router.push("/?addNewListing");
+      router.push("?addNewListing");
     } else {
       onOpen();
     }
@@ -26,14 +26,6 @@ export const MyListingsPage = () => {
   return (
     <div className="mx-auto h-full w-full">
       <div className="flex max-w-[100%] flex-col bg-light-bg px-3 pb-2 dark:bg-dark-bg">
-        <div>
-          <Button
-            className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
-            onClick={() => handleCreateNewListing()}
-          >
-            + Add new listing
-          </Button>
-        </div>
         {usersPubkey && (
           <DisplayProducts
             focusedPubkey={usersPubkey}
@@ -44,6 +36,14 @@ export const MyListingsPage = () => {
             isMyListings={true}
           />
         )}
+        <div>
+          <Button
+            className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
+            onClick={() => handleCreateNewListing()}
+          >
+            + Add new listing
+          </Button>
+        </div>
       </div>
       <SignInModal isOpen={isOpen} onClose={onClose} />
     </div>

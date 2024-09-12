@@ -20,7 +20,7 @@ const MyListingsFeed = () => {
 
   const handleProductModalToggle = () => {
     setShowModal(!showModal);
-    router.push("/");
+    router.push("");
   };
 
   return (

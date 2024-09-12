@@ -261,7 +261,7 @@ const DisplayProducts = ({
         productEventContext.isLoading ||
         isProductsLoading ||
         isLoadingMore ? (
-          <div className="mt-8 flex items-center justify-center">
+          <div className="mt-6 mb-6 flex items-center justify-center">
             <ShopstrSpinner />
           </div>
         ) : canShowLoadMore && productEvents.length != 0 ? (

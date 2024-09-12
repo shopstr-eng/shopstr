@@ -1,12 +1,8 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React from "react";
 
 import MarketplacePage from "./marketplace";
-import ProductForm from "../product-form";
-import { useRouter } from "next/router";
-import { useSearchParams } from "next/navigation";
-import { isUserLoggedIn } from "../utility/nostr-helper-functions";
 
 const HomeFeed = ({
   focusedPubkey,
@@ -15,21 +11,6 @@ const HomeFeed = ({
   focusedPubkey: string;
   setFocusedPubkey: (value: string) => void;
 }) => {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-
-  const [showModal, setShowModal] = useState(false);
-
-  useEffect(() => {
-    if (!searchParams || !isUserLoggedIn()) return;
-    setShowModal(searchParams.has("addNewListing"));
-  }, [searchParams]);
-
-  const handleProductModalToggle = () => {
-    setShowModal(!showModal);
-    router.push("/");
-  };
-
   return (
     <div className="flex flex-1 flex-col">
       <div className="flex h-screen flex-1">
@@ -38,11 +19,6 @@ const HomeFeed = ({
           setFocusedPubkey={setFocusedPubkey}
         />
       </div>
-
-      <ProductForm
-        showModal={showModal}
-        handleModalToggle={handleProductModalToggle}
-      />
     </div>
   );
 };
