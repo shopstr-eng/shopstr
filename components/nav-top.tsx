@@ -63,6 +63,7 @@ const TopNav = ({
     const npub = router.pathname
       .split("/")
       .find((segment) => segment.includes("npub"));
+    const userPubkey = getLocalStorageData().userPubkey;
     if (
       npub &&
       shopMapContext.shopData.has(npub) &&
@@ -70,6 +71,18 @@ const TopNav = ({
     ) {
       const shopSettings: ShopSettings | undefined =
         shopMapContext.shopData.get(npub);
+      if (shopSettings) {
+        setShopLogoURL(shopSettings.content.ui.picture);
+        setShopName(shopSettings.content.name);
+      }
+    } else if (
+      router.pathname.includes("my-listings") &&
+      userPubkey &&
+      shopMapContext.shopData.has(userPubkey) &&
+      typeof shopMapContext.shopData.get(userPubkey) != "undefined"
+    ) {
+      const shopSettings: ShopSettings | undefined =
+        shopMapContext.shopData.get(userPubkey);
       if (shopSettings) {
         setShopLogoURL(shopSettings.content.ui.picture);
         setShopName(shopSettings.content.name);

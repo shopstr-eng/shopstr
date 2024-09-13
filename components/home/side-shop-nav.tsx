@@ -145,25 +145,33 @@ const SideShopNav = ({
           </>
         ) : (
           <>
-            <Button
-              onClick={() => setSelectedCategories(new Set<string>([]))}
-              className="flex w-full flex-row justify-start bg-transparent py-8 text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-            >
-              <span className="hidden pt-2 text-2xl md:flex">All listings</span>
-            </Button>
-            {Object.keys(talliedCategories).length > 0 && (
+            {categories && categories?.length > 0 && (
               <>
-                {Object.entries(talliedCategories).map(([category, count]) => (
-                  <Button
-                    key={category}
-                    onClick={() =>
-                      setSelectedCategories(new Set<string>([category]))
-                    }
-                    className="flex w-full flex-row justify-start bg-transparent py-2 text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                  >
-                    <span className="text-xl">{`- ${category} (${count})`}</span>
-                  </Button>
-                ))}
+                <Button
+                  onClick={() => setSelectedCategories(new Set<string>([]))}
+                  className="flex w-full flex-row justify-start bg-transparent py-8 text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                >
+                  <span className="hidden pt-2 text-2xl md:flex">
+                    All listings
+                  </span>
+                </Button>
+                {Object.keys(talliedCategories).length > 0 && (
+                  <>
+                    {Object.entries(talliedCategories).map(
+                      ([category, count]) => (
+                        <Button
+                          key={category}
+                          onClick={() =>
+                            setSelectedCategories(new Set<string>([category]))
+                          }
+                          className="flex w-full flex-row justify-start bg-transparent py-2 text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                        >
+                          <span className="text-xl">{`- ${category} (${count})`}</span>
+                        </Button>
+                      ),
+                    )}
+                  </>
+                )}
               </>
             )}
             <Button
