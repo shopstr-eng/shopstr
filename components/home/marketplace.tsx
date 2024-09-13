@@ -1,7 +1,4 @@
-import {
-  MagnifyingGlassIcon,
-  ArrowUturnLeftIcon,
-} from "@heroicons/react/24/outline";
+import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import {
   Button,
   Select,
@@ -93,15 +90,6 @@ export function MarketplacePage({
     }
     setIsFetchingShop(false);
   }, [focusedPubkey, shopMapContext, shopBannerURL]);
-
-  const routeToShop = (npubkey: string) => {
-    npubkey = encodeURIComponent(npubkey);
-    if (npubkey === "") {
-      // handles case where we pass in empty string to clear focusedPubkey
-      setFocusedPubkey("");
-    }
-    router.push("/" + npubkey);
-  };
 
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
     let { signInMethod } = getLocalStorageData();

@@ -90,6 +90,7 @@ export default function NewForm({
       : {
           Currency: "SATS",
           "Shipping Option": "N/A",
+          Status: "active",
         },
   });
 
@@ -168,8 +169,6 @@ export default function NewForm({
 
     if (data["Status"]) {
       tags.push(["status", data["Status"] as string]);
-    } else {
-      tags.push(["status", "active"]);
     }
 
     let newListing = await PostListing(tags, passphrase);

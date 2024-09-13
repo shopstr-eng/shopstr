@@ -486,7 +486,6 @@ export default function InvoiceCard({
       if (
         shippingName &&
         shippingAddress &&
-        shippingUnitNo &&
         shippingCity &&
         shippingPostalCode &&
         shippingState &&
@@ -495,9 +494,9 @@ export default function InvoiceCard({
         let contactMessage;
         if (selectedSize) {
           contactMessage =
-            "Please ship the product in a " +
+            "Please ship the product in a size " +
             selectedSize +
-            " size to " +
+            " to " +
             shippingName +
             " at " +
             shippingAddress +
@@ -510,8 +509,7 @@ export default function InvoiceCard({
             ", " +
             shippingCountry +
             ".";
-        }
-        if (!shippingUnitNo) {
+        } else if (!shippingUnitNo) {
           contactMessage =
             "Please ship the product to " +
             shippingName +

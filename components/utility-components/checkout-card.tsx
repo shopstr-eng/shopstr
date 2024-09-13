@@ -32,8 +32,16 @@ export default function CheckoutCard({
   setCashuPaymentFailed?: (cashuPaymentFailef: boolean) => void;
   uniqueKey?: string;
 }) {
-  const { title, images, pubkey, summary, location, sizes, sizeQuantities } =
-    productData;
+  const {
+    title,
+    images,
+    pubkey,
+    summary,
+    location,
+    sizes,
+    sizeQuantities,
+    condition,
+  } = productData;
 
   const { userPubkey } = getLocalStorageData();
 
@@ -217,6 +225,11 @@ export default function CheckoutCard({
               <h2 className="mt-4 w-full text-left text-2xl font-bold text-light-text dark:text-dark-text">
                 {title}
               </h2>
+              {condition && (
+                <div className="text-left text-xs text-light-text dark:text-dark-text">
+                  <span>Condition: {condition}</span>
+                </div>
+              )}
               <div className="hidden sm:block">
                 <p className="mt-4 w-full text-left text-lg text-light-text dark:text-dark-text">
                   {renderSummary()}
@@ -293,7 +306,10 @@ export default function CheckoutCard({
         <>
           <div className="p-4 text-light-text dark:text-dark-text">
             <h2 className="mb-4 text-2xl font-bold">{title}</h2>
-            <span className="mt-4 text-xl font-semibold">Cost Breakdown: </span>
+            {selectedSize && (
+              <p className="mb-4 text-lg">Size: {selectedSize}</p>
+            )}
+            {/* <span className="mt-4 text-xl font-semibold">Cost Breakdown: </span> */}
             <DisplayCostBreakdown monetaryInfo={productData} />
             <div className="mx-4 mt-2 flex items-center justify-center text-center">
               <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
