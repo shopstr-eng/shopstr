@@ -87,6 +87,14 @@ export const MyListingsPage = () => {
                 >
                   About
                 </Button>
+                <Button
+                  className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                  onClick={() => {
+                    router.push("/messages");
+                  }}
+                >
+                  Messages
+                </Button>
               </div>
               <div className="mt-3 flex items-center justify-end font-bold text-light-text dark:text-dark-text md:hidden">
                 <div className="flex gap-2">
@@ -128,6 +136,14 @@ export const MyListingsPage = () => {
                   }}
                 >
                   About
+                </Button>
+                <Button
+                  className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                  onClick={() => {
+                    router.push("/messages");
+                  }}
+                >
+                  Messages
                 </Button>
               </div>
               <div className="mt-3 flex items-center justify-end font-bold text-light-text dark:text-dark-text md:hidden">

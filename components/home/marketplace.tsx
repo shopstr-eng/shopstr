@@ -107,56 +107,47 @@ export function MarketplacePage({
     <div className="mx-auto w-full">
       <div className="flex max-w-[100%] flex-col bg-light-bg px-3 pb-2 dark:bg-dark-bg">
         {shopBannerURL != "" && focusedPubkey != "" && !isFetchingShop ? (
-          <>
-            <div className="flex h-auto w-full items-center justify-center bg-cover bg-center">
-              <img
-                src={sanitizeUrl(shopBannerURL)}
-                alt="Shop Banner"
-                className="flex max-h-[310.5px] w-full items-center justify-center object-cover"
-              />
-            </div>
-            <div className="mt-3 flex items-center justify-between font-bold text-light-text dark:text-dark-text">
-              <div className="flex gap-1">
-                <Button
-                  className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                  onClick={() => {
-                    setSelectedCategories(new Set<string>([]));
-                    setSelectedLocation("");
-                    setSelectedSearch("");
-                    setSelectedSection("Shop");
-                  }}
-                >
-                  Shop
-                </Button>
-                {/* <Button className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text">
+          <div className="mt-3 flex items-center justify-between font-bold text-light-text dark:text-dark-text">
+            <div className="flex gap-1">
+              <Button
+                className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                onClick={() => {
+                  setSelectedCategories(new Set<string>([]));
+                  setSelectedLocation("");
+                  setSelectedSearch("");
+                  setSelectedSection("Shop");
+                }}
+              >
+                Shop
+              </Button>
+              {/* <Button className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text">
                   Reviews
                 </Button> */}
-                <Button
-                  className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                  onClick={() => {
-                    setSelectedSection("About");
-                  }}
-                >
-                  About
-                </Button>
-                <Button
-                  className="yoytext-light-text bg-transparent text-xl hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                  onClick={() => handleSendMessage(focusedPubkey)}
-                >
-                  Message
-                </Button>
-              </div>
-              <div>
-                <Input
-                  className="text-light-text dark:text-dark-text"
-                  isClearable
-                  placeholder="Search items..."
-                  startContent={<MagnifyingGlassIcon height={"1em"} />}
-                  onChange={(event) => setSelectedSearch(event.target.value)}
-                />
-              </div>
+              <Button
+                className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                onClick={() => {
+                  setSelectedSection("About");
+                }}
+              >
+                About
+              </Button>
+              <Button
+                className="yoytext-light-text bg-transparent text-xl hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                onClick={() => handleSendMessage(focusedPubkey)}
+              >
+                Message
+              </Button>
             </div>
-          </>
+            <div>
+              <Input
+                className="text-light-text dark:text-dark-text"
+                isClearable
+                placeholder="Search items..."
+                startContent={<MagnifyingGlassIcon height={"1em"} />}
+                onChange={(event) => setSelectedSearch(event.target.value)}
+              />
+            </div>
+          </div>
         ) : (
           <>
             <div className="flex flex-row gap-2 pb-3">

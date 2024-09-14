@@ -37,7 +37,20 @@ export default function SellerView({
         />
         <meta name="twitter:image" content="/shopstr-2000x2000.png" />
       </Head>
-      <div className="flex h-full min-h-screen flex-col bg-light-bg pt-24 dark:bg-dark-bg">
+      {!focusedPubkey && (
+        <div className="flex h-auto w-full items-center justify-center bg-cover bg-center pt-20">
+          <img
+            src="/shop-freely-dark.png"
+            alt="Shopstr Banner"
+            className="flex max-h-[210px] w-full items-center justify-center object-cover"
+          />
+        </div>
+      )}
+      <div
+        className={`flex h-full min-h-screen flex-col bg-light-bg dark:bg-dark-bg ${
+          focusedPubkey ? "pt-24" : ""
+        }`}
+      >
         <HomeFeed
           focusedPubkey={focusedPubkey}
           setFocusedPubkey={setFocusedPubkey}

@@ -25,7 +25,7 @@ const MyListingsFeed = () => {
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="flex h-screen flex-1 pt-10">
+      <div className="flex h-screen flex-1">
         <MyListingsPage />
       </div>
 

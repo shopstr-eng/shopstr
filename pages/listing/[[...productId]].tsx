@@ -82,7 +82,7 @@ const Listing = () => {
         <meta name="twitter:description" content={productData?.title} />
         <meta name="twitter:image" content={imageUrl} />
       </Head>
-      <div className="flex h-full min-h-screen flex-col bg-light-bg pt-24 dark:bg-dark-bg">
+      <div className="flex h-full min-h-screen flex-col bg-light-bg pt-20 dark:bg-dark-bg">
         {productData && (
           <ListingPage
             productData={productData}
