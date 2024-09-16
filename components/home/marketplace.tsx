@@ -10,7 +10,7 @@ import {
 import { useRouter } from "next/router";
 import { nip19 } from "nostr-tools";
 import React, { useContext, useEffect, useState } from "react";
-import { ShopMapContext } from "@/utils/context/context";
+import { ShopMapContext, FollowsContext } from "@/utils/context/context";
 import DisplayProducts from "../display-products";
 import LocationDropdown from "../utility-components/dropdowns/location-dropdown";
 import { CATEGORIES } from "../utility/STATIC-VARIABLES";
@@ -45,9 +45,12 @@ export function MarketplacePage({
   const [shopAbout, setShopAbout] = useState("");
   const [isFetchingShop, setIsFetchingShop] = useState(false);
 
+  const [isFetchingFollows, setIsFetchingFollows] = useState(false);
+
   const [categories, setCategories] = useState([""]);
 
   const shopMapContext = useContext(ShopMapContext);
+  const followsContext = useContext(FollowsContext);
 
   // Update focusedPubkey when pubkey in url changes
   useEffect(() => {
@@ -89,6 +92,13 @@ export function MarketplacePage({
     }
     setIsFetchingShop(false);
   }, [focusedPubkey, shopMapContext, shopBannerURL]);
+
+  useEffect(() => {
+    setIsFetchingFollows(true);
+    if (followsContext.followList.length && !followsContext.isLoading) {
+      setIsFetchingFollows(false);
+    }
+  }, [followsContext]);
 
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
     let { signInMethod } = getLocalStorageData();
@@ -194,10 +204,12 @@ export function MarketplacePage({
                   setSelectedLocation(event.target.value);
                 }}
               />
-              <ShopstrSwitch
-                wotFilter={wotFilter}
-                setWotFilter={setWotFilter}
-              />
+              {!isFetchingFollows ? (
+                <ShopstrSwitch
+                  wotFilter={wotFilter}
+                  setWotFilter={setWotFilter}
+                />
+              ) : null}
             </div>
           </>
         )}

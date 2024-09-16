@@ -46,7 +46,7 @@ const HomeFeed = ({
   return (
     <>
       {focusedPubkey && shopBannerURL && !isFetchingShop && (
-        <div className="flex h-auto w-full items-center justify-center bg-white dark:bg-black bg-cover bg-center">
+        <div className="flex h-auto w-full items-center justify-center bg-light-bg bg-cover bg-center dark:bg-dark-bg">
           <img
             src={sanitizeUrl(shopBannerURL)}
             alt="Shop Banner"

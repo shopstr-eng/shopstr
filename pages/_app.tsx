@@ -331,10 +331,6 @@ function App({ Component, pageProps }: AppProps) {
           pubkeysToFetchProfilesFor,
           editProfileContext,
         );
-        let { followList } = await fetchAllFollows(
-          allRelays,
-          editFollowsContext,
-        );
         if (
           (getLocalStorageData().signInMethod === "nsec" && passphrase) ||
           getLocalStorageData().signInMethod === "extension"
@@ -360,6 +356,10 @@ function App({ Component, pageProps }: AppProps) {
             localStorage.setItem("tokens", JSON.stringify(cashuProofs));
           }
         }
+        let { followList } = await fetchAllFollows(
+          allRelays,
+          editFollowsContext,
+        );
       } catch (error) {
         console.error("Error fetching data:", error);
       }
