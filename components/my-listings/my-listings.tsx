@@ -62,11 +62,11 @@ export const MyListingsPage = () => {
       <div className="flex max-w-[100%] flex-col bg-light-bg px-3 pb-2 dark:bg-dark-bg">
         {shopBannerURL != "" && !isFetchingShop ? (
           <>
-            <div className="flex h-auto w-full items-center justify-center bg-cover bg-center">
+            <div className="flex h-auto w-full items-center justify-center bg-white dark:bg-black bg-cover bg-center">
               <img
                 src={sanitizeUrl(shopBannerURL)}
                 alt="Shop Banner"
-                className="flex max-h-[310.5px] w-full items-center justify-center object-cover"
+                className="max-h-[210px] w-full items-center justify-center object-cover"
               />
             </div>
             <div className="mt-3 flex items-center justify-between font-bold text-light-text dark:text-dark-text">
@@ -102,13 +102,13 @@ export const MyListingsPage = () => {
                     className={`${SHOPSTRBUTTONCLASSNAMES}`}
                     onClick={() => handleCreateNewListing()}
                   >
-                    Add listing
+                    Add Listing
                   </Button>
                   <Button
                     className={`${SHOPSTRBUTTONCLASSNAMES}`}
                     onClick={() => router.push("settings/shop-settings")}
                   >
-                    Edit shop
+                    Edit Shop
                   </Button>
                   {/* <Button className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text">
               Reviews
@@ -152,13 +152,13 @@ export const MyListingsPage = () => {
                     className={`${SHOPSTRBUTTONCLASSNAMES}`}
                     onClick={() => handleCreateNewListing()}
                   >
-                    Add listing
+                    Add Listing
                   </Button>
                   <Button
                     className={`${SHOPSTRBUTTONCLASSNAMES}`}
                     onClick={() => router.push("settings/shop-settings")}
                   >
-                    Edit shop
+                    Edit Shop
                   </Button>
                   {/* <Button className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text">
                 Reviews

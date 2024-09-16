@@ -188,15 +188,15 @@ export default function CheckoutCard({
       {!isBeingPaid ? (
         <>
           {shopBannerURL && !isFetchingShop && (
-            <div className="flex h-auto w-full items-center justify-center bg-cover bg-center">
+            <div className="flex h-auto w-full items-center justify-center bg-white dark:bg-black bg-cover bg-center">
               <img
                 src={sanitizeUrl(shopBannerURL)}
                 alt="Shop Banner"
-                className="flex max-h-[210px] w-full items-center justify-center object-cover"
+                className="max-h-[210px] w-full items-center justify-center object-cover"
               />
             </div>
           )}
-          <div className="max-w-screen">
+          <div className="max-w-screen pt-4">
             <div
               className="max-w-screen mx-3 my-3 flex flex-row whitespace-normal break-words"
               key={uniqueKey}

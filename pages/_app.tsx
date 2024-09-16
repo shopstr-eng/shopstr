@@ -303,10 +303,6 @@ function App({ Component, pageProps }: AppProps) {
           localStorage.setItem("writeRelays", JSON.stringify(writeRelayList));
           allRelays = [...relayList, ...readRelayList];
         }
-        let { followList } = await fetchAllFollows(
-          allRelays,
-          editFollowsContext,
-        );
         let pubkeysToFetchProfilesFor: string[] = [];
         let { profileSetFromProducts } = await fetchAllPosts(
           allRelays,
@@ -325,15 +321,19 @@ function App({ Component, pageProps }: AppProps) {
             ...profileSetFromChats,
           ];
         }
+        let { shopSettingsMap } = await fetchShopSettings(
+          allRelays,
+          pubkeysToFetchProfilesFor,
+          editShopContext,
+        );
         let { profileMap } = await fetchProfile(
           allRelays,
           pubkeysToFetchProfilesFor,
           editProfileContext,
         );
-        let { shopSettingsMap } = await fetchShopSettings(
+        let { followList } = await fetchAllFollows(
           allRelays,
-          pubkeysToFetchProfilesFor,
-          editShopContext,
+          editFollowsContext,
         );
         if (
           (getLocalStorageData().signInMethod === "nsec" && passphrase) ||

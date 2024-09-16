@@ -22,7 +22,6 @@ import SignInModal from "../sign-in/SignInModal";
 import ShopstrSwitch from "../utility-components/shopstr-switch";
 import { ShopSettings } from "../../utils/types/types";
 import SideShopNav from "./side-shop-nav";
-import { sanitizeUrl } from "@braintree/sanitize-url";
 
 export function MarketplacePage({
   focusedPubkey,

@@ -178,13 +178,13 @@ const SideShopNav = ({
               className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
               onClick={() => handleCreateNewListing()}
             >
-              Add listing
+              Add Listing
             </Button>
             <Button
               className={`${SHOPSTRBUTTONCLASSNAMES} mt-2 w-full`}
               onClick={() => router.push("settings/shop-settings")}
             >
-              Edit shop
+              Edit Shop
             </Button>
             {shopAbout && (
               <div className="flex w-full flex-col justify-start bg-transparent py-8 text-light-text dark:text-dark-text">
