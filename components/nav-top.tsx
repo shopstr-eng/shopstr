@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, useState } from "react";
 import useNavigation from "@/components/hooks/use-navigation";
 import { Button, Image, useDisclosure } from "@nextui-org/react";
-import { Bars3Icon } from "@heroicons/react/24/outline";
+import { Bars4Icon } from "@heroicons/react/24/outline";
 import { countNumberOfUnreadMessagesFromChatsContext } from "@/utils/messages/utils";
 import { ChatsContext, ShopMapContext } from "@/utils/context/context";
 import { db } from "../pages/api/nostr/cache-service";
@@ -169,7 +169,7 @@ const TopNav = ({
             className="bg-transparent"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           >
-            <Bars3Icon className="h-6 w-6 text-light-text dark:text-dark-text" />
+            <Bars4Icon className="h-6 w-6 text-light-text dark:text-dark-text" />
           </Button>
           {signedIn ? (
             <ProfileWithDropdown
