@@ -1,8 +1,9 @@
 import router from "next/router";
-import React, { useContext, useState, useEffect } from "react";
+import React, { useContext, useState, useEffect, useRef } from "react";
 import DisplayProducts from "../display-products";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import { Button, useDisclosure } from "@nextui-org/react";
+import { Bars3Icon } from "@heroicons/react/24/outline";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import SignInModal from "../sign-in/SignInModal";
 import { ShopMapContext } from "@/utils/context/context";
@@ -25,11 +26,28 @@ export const MyListingsPage = () => {
   );
   const [categories, setCategories] = useState([""]);
 
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   const shopMapContext = useContext(ShopMapContext);
+
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const { userPubkey } = getLocalStorageData();
     setUsersPubkey(userPubkey);
+  }, []);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMobileMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
   }, []);
 
   useEffect(() => {
@@ -57,6 +75,40 @@ export const MyListingsPage = () => {
     }
   };
 
+  const MobileMenu = () => (
+    <div className="absolute left-0 top-full z-10 mt-2 w-48 rounded-md bg-light-fg shadow-lg dark:bg-dark-fg md:hidden">
+      <div className="py-1">
+        <Button
+          className="w-full bg-transparent px-4 py-2 text-left text-sm text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+          onClick={() => {
+            setSelectedSection("Listings");
+            setIsMobileMenuOpen(false);
+          }}
+        >
+          Listings
+        </Button>
+        <Button
+          className="w-full bg-transparent px-4 py-2 text-left text-sm text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+          onClick={() => {
+            setSelectedSection("About");
+            setIsMobileMenuOpen(false);
+          }}
+        >
+          About
+        </Button>
+        <Button
+          className="w-full bg-transparent px-4 py-2 text-left text-sm text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+          onClick={() => {
+            router.push("/messages");
+            setIsMobileMenuOpen(false);
+          }}
+        >
+          Messages
+        </Button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="mx-auto h-full w-full">
       <div className="flex max-w-[100%] flex-col bg-light-bg px-3 pb-2 dark:bg-dark-bg">
@@ -70,100 +122,100 @@ export const MyListingsPage = () => {
               />
             </div>
             <div className="mt-3 flex items-center justify-between font-bold text-light-text dark:text-dark-text">
-              <div className="flex gap-1">
-                <Button
-                  className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                  onClick={() => {
-                    setSelectedSection("Listings");
-                  }}
-                >
-                  Listings
-                </Button>
-                <Button
-                  className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                  onClick={() => {
-                    setSelectedSection("About");
-                  }}
-                >
-                  About
-                </Button>
-                <Button
-                  className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                  onClick={() => {
-                    router.push("/messages");
-                  }}
-                >
-                  Messages
-                </Button>
-              </div>
-              <div className="mt-3 flex items-center justify-end font-bold text-light-text dark:text-dark-text md:hidden">
-                <div className="flex gap-2">
+              <div className="flex items-center gap-2">
+                <div className="relative md:hidden" ref={menuRef}>
                   <Button
-                    className={`${SHOPSTRBUTTONCLASSNAMES}`}
-                    onClick={() => handleCreateNewListing()}
+                    className="bg-transparent p-1"
+                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                   >
-                    Add Listing
+                    <Bars3Icon className="h-6 w-6 text-light-text dark:text-dark-text" />
                   </Button>
-                  <Button
-                    className={`${SHOPSTRBUTTONCLASSNAMES}`}
-                    onClick={() => router.push("settings/shop-settings")}
-                  >
-                    Edit Shop
-                  </Button>
-                  {/* <Button className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text">
-              Reviews
-            </Button> */}
+                  {isMobileMenuOpen && <MobileMenu />}
                 </div>
+                <div className="hidden gap-2 md:flex">
+                  <Button
+                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                    onClick={() => setSelectedSection("Listings")}
+                  >
+                    Listings
+                  </Button>
+                  <Button
+                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                    onClick={() => setSelectedSection("About")}
+                  >
+                    About
+                  </Button>
+                  <Button
+                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                    onClick={() => router.push("/messages")}
+                  >
+                    Messages
+                  </Button>
+                </div>
+              </div>
+              <div className="flex gap-2 md:hidden">
+                <Button
+                  className={`${SHOPSTRBUTTONCLASSNAMES}`}
+                  onClick={() => handleCreateNewListing()}
+                >
+                  Add Listing
+                </Button>
+                <Button
+                  className={`${SHOPSTRBUTTONCLASSNAMES}`}
+                  onClick={() => router.push("settings/shop-settings")}
+                >
+                  Edit Shop
+                </Button>
               </div>
             </div>
           </>
         ) : (
           <>
             <div className="mt-3 flex items-center justify-between font-bold text-light-text dark:text-dark-text">
-              <div className="flex gap-1">
-                <Button
-                  className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                  onClick={() => {
-                    setSelectedSection("Listings");
-                  }}
-                >
-                  Listings
-                </Button>
-                <Button
-                  className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                  onClick={() => {
-                    setSelectedSection("About");
-                  }}
-                >
-                  About
-                </Button>
-                <Button
-                  className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                  onClick={() => {
-                    router.push("/messages");
-                  }}
-                >
-                  Messages
-                </Button>
-              </div>
-              <div className="mt-3 flex items-center justify-end font-bold text-light-text dark:text-dark-text md:hidden">
-                <div className="flex gap-2">
+              <div className="flex items-center gap-2">
+                <div className="relative md:hidden" ref={menuRef}>
                   <Button
-                    className={`${SHOPSTRBUTTONCLASSNAMES}`}
-                    onClick={() => handleCreateNewListing()}
+                    className="bg-transparent p-1"
+                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                   >
-                    Add Listing
+                    <Bars3Icon className="h-6 w-6 text-light-text dark:text-dark-text" />
                   </Button>
-                  <Button
-                    className={`${SHOPSTRBUTTONCLASSNAMES}`}
-                    onClick={() => router.push("settings/shop-settings")}
-                  >
-                    Edit Shop
-                  </Button>
-                  {/* <Button className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text">
-                Reviews
-              </Button> */}
+                  {isMobileMenuOpen && <MobileMenu />}
                 </div>
+                <div className="hidden gap-2 md:flex">
+                  <Button
+                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                    onClick={() => setSelectedSection("Listings")}
+                  >
+                    Listings
+                  </Button>
+                  <Button
+                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                    onClick={() => setSelectedSection("About")}
+                  >
+                    About
+                  </Button>
+                  <Button
+                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                    onClick={() => router.push("/messages")}
+                  >
+                    Messages
+                  </Button>
+                </div>
+              </div>
+              <div className="flex gap-2 md:hidden">
+                <Button
+                  className={`${SHOPSTRBUTTONCLASSNAMES}`}
+                  onClick={() => handleCreateNewListing()}
+                >
+                  Add Listing
+                </Button>
+                <Button
+                  className={`${SHOPSTRBUTTONCLASSNAMES}`}
+                  onClick={() => router.push("settings/shop-settings")}
+                >
+                  Edit Shop
+                </Button>
               </div>
             </div>
           </>
