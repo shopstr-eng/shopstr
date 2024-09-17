@@ -1,4 +1,3 @@
-3; // TODO componentarize file uploader
 import React, { useMemo, useRef, useEffect, useState, useContext } from "react";
 import Link from "next/link";
 import { useForm, Controller } from "react-hook-form";
@@ -68,14 +67,9 @@ export default function NewForm({
   const [isEdit, setIsEdit] = useState(false);
   const [isPostingOrUpdatingProduct, setIsPostingOrUpdatingProduct] =
     useState(false);
+  const [showOptionalTags, setShowOptionalTags] = useState(false);
   const productEventContext = useContext(ProductContext);
-  const {
-    handleSubmit,
-    formState: { errors },
-    control,
-    reset,
-    watch,
-  } = useForm({
+  const { handleSubmit, control, reset, watch } = useForm({
     defaultValues: oldValues
       ? {
           "Product Name": oldValues.title,
@@ -86,10 +80,17 @@ export default function NewForm({
           "Shipping Option": oldValues.shippingType,
           "Shipping Cost": oldValues.shippingCost,
           Category: oldValues.categories ? oldValues.categories.join(",") : "",
+          Sizes: oldValues.sizes ? oldValues.sizes.join(",") : "",
+          "Size Quantities": oldValues.sizeQuantities
+            ? oldValues.sizeQuantities
+            : new Map<string, number>(),
+          Condition: oldValues.condition ? oldValues.condition : "",
+          Status: oldValues.status ? oldValues.status : "",
         }
       : {
           Currency: "SATS",
           "Shipping Option": "N/A",
+          Status: "active",
         },
   });
 
@@ -106,7 +107,9 @@ export default function NewForm({
     setIsEdit(oldValues ? true : false);
   }, [showModal]);
 
-  const onSubmit = async (data: { [x: string]: string }) => {
+  const onSubmit = async (data: {
+    [x: string]: string | Map<string, number> | string[];
+  }) => {
     if (images.length === 0) {
       setImageError("At least one image is required.");
       return;
@@ -116,7 +119,7 @@ export default function NewForm({
 
     setIsPostingOrUpdatingProduct(true);
     const encoder = new TextEncoder();
-    const dataEncoded = encoder.encode(data["Product Name"]);
+    const dataEncoded = encoder.encode(data["Product Name"] as string);
     const hashBuffer = await crypto.subtle.digest("SHA-256", dataEncoded);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     const hashHex = hashArray
@@ -125,22 +128,22 @@ export default function NewForm({
 
     let tags: ProductFormValues = [
       ["d", oldValues?.d || hashHex],
-      ["alt", "Classified listing: " + data["Product Name"]],
+      ["alt", ("Classified listing: " + data["Product Name"]) as string],
       [
         "client",
         "Shopstr",
         "31990:" + pubkey + ":" + (oldValues?.d || hashHex),
         "wss://relay.damus.io",
       ],
-      ["title", data["Product Name"]],
-      ["summary", data["Description"]],
-      ["price", data["Price"], data["Currency"]],
-      ["location", data["Location"]],
+      ["title", data["Product Name"] as string],
+      ["summary", data["Description"] as string],
+      ["price", data["Price"] as string, data["Currency"] as string],
+      ["location", data["Location"] as string],
       [
         "shipping",
-        data["Shipping Option"],
-        data["Shipping Cost"] ? data["Shipping Cost"] : "0",
-        data["Currency"],
+        data["Shipping Option"] as string,
+        data["Shipping Cost"] ? (data["Shipping Cost"] as string) : "0",
+        data["Currency"] as string,
       ],
     ];
 
@@ -148,9 +151,26 @@ export default function NewForm({
       tags.push(["image", image]);
     });
 
-    data["Category"].split(",").forEach((category) => {
+    (data["Category"] as string).split(",").forEach((category) => {
       tags.push(["t", category]);
     });
+
+    if (data["Sizes"]) {
+      (data["Sizes"] as string[]).forEach((size) => {
+        const quantity =
+          (data["Size Quantities"] as Map<string, number>).get(size) || 0;
+        tags.push(["size", size, quantity.toString()]);
+      });
+    }
+
+    if (data["Condition"]) {
+      tags.push(["condition", data["Condition"] as string]);
+    }
+
+    if (data["Status"]) {
+      tags.push(["status", data["Status"] as string]);
+    }
+
     let newListing = await PostListing(tags, passphrase);
 
     capturePostListingMetric(newListing.id, tags);
@@ -401,10 +421,7 @@ export default function NewForm({
                         rules={{
                           required: "Please specify a currency.",
                         }}
-                        render={({
-                          field: { onChange, onBlur, value },
-                          fieldState: { error },
-                        }) => {
+                        render={({ field: { onChange, onBlur, value } }) => {
                           return (
                             <div className="flex items-center">
                               <select
@@ -617,6 +634,238 @@ export default function NewForm({
                 );
               }}
             />
+            <div className="w-full max-w-xs">
+              <Button
+                className="mb-2 mt-4 w-full justify-start rounded-md pl-2 text-shopstr-purple-light dark:text-shopstr-yellow-light"
+                variant="light"
+                onClick={() => setShowOptionalTags(!showOptionalTags)}
+              >
+                <div className="flex items-center py-2">
+                  <span>Additional options</span>
+                  <span className="ml-2">{showOptionalTags ? "↑" : "↓"}</span>
+                </div>
+              </Button>
+            </div>
+
+            {showOptionalTags && (
+              <>
+                <Controller
+                  name="Sizes"
+                  control={control}
+                  render={({
+                    field: { onChange, onBlur, value },
+                    fieldState: { error },
+                  }) => {
+                    let isErrored = error !== undefined;
+                    let errorMessage = error?.message || "";
+
+                    const selectedSizes = Array.isArray(value)
+                      ? value
+                      : typeof value === "string"
+                        ? value.split(",").filter(Boolean)
+                        : [];
+
+                    const handleSizeChange = (newValue: string | string[]) => {
+                      const newSizes = Array.isArray(newValue)
+                        ? newValue
+                        : newValue.split(",").filter(Boolean);
+                      onChange(newSizes);
+                    };
+
+                    return (
+                      <Select
+                        variant="bordered"
+                        isMultiline={true}
+                        autoFocus
+                        aria-label="Sizes"
+                        label="Sizes"
+                        labelPlacement="inside"
+                        selectionMode="multiple"
+                        isInvalid={isErrored}
+                        errorMessage={errorMessage}
+                        onChange={(e) => handleSizeChange(e.target.value)}
+                        onBlur={onBlur}
+                        value={selectedSizes}
+                        defaultSelectedKeys={new Set(selectedSizes)}
+                        classNames={{
+                          base: "mt-4",
+                          trigger: "min-h-unit-12 py-2",
+                        }}
+                      >
+                        <SelectSection className="text-light-text dark:text-dark-text">
+                          <SelectItem key="XS" value="XS">
+                            XS
+                          </SelectItem>
+                          <SelectItem key="SM" value="SM">
+                            SM
+                          </SelectItem>
+                          <SelectItem key="MD" value="MD">
+                            MD
+                          </SelectItem>
+                          <SelectItem key="LG" value="LG">
+                            LG
+                          </SelectItem>
+                          <SelectItem key="XL" value="XL">
+                            XL
+                          </SelectItem>
+                          <SelectItem key="XXL" value="XXL">
+                            XXL
+                          </SelectItem>
+                        </SelectSection>
+                      </Select>
+                    );
+                  }}
+                />
+
+                <Controller
+                  name="Size Quantities"
+                  control={control}
+                  render={({
+                    field: { onChange, value = new Map<string, number>() },
+                  }) => {
+                    const handleQuantityChange = (
+                      size: string,
+                      quantity: number,
+                    ) => {
+                      const newQuantities = new Map(value);
+                      newQuantities.set(size, quantity);
+                      onChange(newQuantities);
+                    };
+
+                    const sizes = watch("Sizes");
+                    const sizeArray = Array.isArray(sizes)
+                      ? sizes
+                      : sizes?.split(",").filter(Boolean) || [];
+
+                    return (
+                      <div className="mt-4 flex flex-wrap gap-4">
+                        {sizeArray.map((size: string) => (
+                          <div key={size} className="flex items-center">
+                            <span className="mr-2 text-light-text dark:text-dark-text">
+                              {size}:
+                            </span>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={(value.get(size) || 0).toString()}
+                              onChange={(e) =>
+                                handleQuantityChange(
+                                  size,
+                                  parseInt(e.target.value) || 0,
+                                )
+                              }
+                              className="w-20"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  }}
+                />
+
+                <Controller
+                  name="Condition"
+                  control={control}
+                  render={({
+                    field: { onChange, onBlur, value },
+                    fieldState: { error },
+                  }) => {
+                    let isErrored = error !== undefined;
+                    let errorMessage: string = error?.message
+                      ? error.message
+                      : "";
+                    return (
+                      <Select
+                        className="text-light-text dark:text-dark-text"
+                        autoFocus
+                        variant="bordered"
+                        aria-label="Condition"
+                        label="Condition"
+                        labelPlacement="inside"
+                        isInvalid={isErrored}
+                        errorMessage={errorMessage}
+                        disallowEmptySelection={true}
+                        // controller props
+                        onChange={onChange} // send value to hook form
+                        onBlur={onBlur} // notify when input is touched/blur
+                        selectedKeys={[value as string]}
+                      >
+                        <SelectSection className="text-light-text dark:text-dark-text">
+                          <SelectItem key="New" value="New">
+                            New
+                          </SelectItem>
+                          <SelectItem key="Renewed" value="Renewed">
+                            Renewed
+                          </SelectItem>
+                          <SelectItem
+                            key="Used - Like New"
+                            value="Used - Like New"
+                          >
+                            Used - Like New
+                          </SelectItem>
+                          <SelectItem
+                            key="Used - Very Good"
+                            value="Used - Very Good"
+                          >
+                            Used - Very Good
+                          </SelectItem>
+                          <SelectItem key="Used - Good" value="Used - Good">
+                            Used - Good
+                          </SelectItem>
+                          <SelectItem
+                            key="Used - Acceptable"
+                            value="Used - Acceptable"
+                          >
+                            Used - Acceptable
+                          </SelectItem>
+                        </SelectSection>
+                      </Select>
+                    );
+                  }}
+                />
+
+                <Controller
+                  name="Status"
+                  control={control}
+                  render={({
+                    field: { onChange, onBlur, value },
+                    fieldState: { error },
+                  }) => {
+                    let isErrored = error !== undefined;
+                    let errorMessage: string = error?.message
+                      ? error.message
+                      : "";
+                    return (
+                      <Select
+                        className="text-light-text dark:text-dark-text"
+                        autoFocus
+                        variant="bordered"
+                        aria-label="Status"
+                        label="Status"
+                        labelPlacement="inside"
+                        isInvalid={isErrored}
+                        errorMessage={errorMessage}
+                        disallowEmptySelection={true}
+                        // controller props
+                        onChange={onChange} // send value to hook form
+                        onBlur={onBlur} // notify when input is touched/blur
+                        selectedKeys={[value as string]}
+                      >
+                        <SelectSection className="text-light-text dark:text-dark-text">
+                          <SelectItem key="active" value="active">
+                            Active
+                          </SelectItem>
+                          <SelectItem key="sold" value="sold">
+                            Sold
+                          </SelectItem>
+                        </SelectSection>
+                      </Select>
+                    );
+                  }}
+                />
+              </>
+            )}
+
             {signIn === "nsec" && (
               <Input
                 autoFocus

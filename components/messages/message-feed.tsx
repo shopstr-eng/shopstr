@@ -13,17 +13,17 @@ const MessageFeed = () => {
   const [hookProps] = useState({
     tabs: [
       {
+        label: "Orders",
+        children: <Messages isPayment={true} />,
+        id: "orders",
+      },
+      {
         label: "Inquiries",
         children: <Messages isPayment={false} />,
         id: "inquiries",
       },
-      {
-        label: "Payments",
-        children: <Messages isPayment={true} />,
-        id: "payments",
-      },
     ],
-    initialTabId: "inquiries",
+    initialTabId: "orders",
   });
   const framer = useTabs(hookProps);
 

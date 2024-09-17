@@ -64,6 +64,26 @@ export async function createNostrProfileEvent(
   return msg;
 }
 
+export async function createNostrShopEvent(
+  pubkey: string,
+  content: string,
+  passphrase: string,
+) {
+  let msg = {
+    kind: 30019, // NIP-15 - Stall Metadata
+    content: content,
+    tags: [],
+    created_at: 0,
+    pubkey: pubkey,
+    id: "",
+    sig: "",
+  } as NostrEvent;
+
+  msg.created_at = Math.floor(new Date().getTime() / 1000);
+  await finalizeAndSendNostrEvent(msg, passphrase);
+  return msg;
+}
+
 export async function createNostrRelayEvent(
   pubkey: string,
   passphrase: string,

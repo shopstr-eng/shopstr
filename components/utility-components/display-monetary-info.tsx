@@ -55,7 +55,7 @@ export function DisplayCostBreakdown({
   return (
     <div>
       <p>
-        <strong className="font-semibold">Price:</strong> {formattedPrice}
+        <strong className="font-semibold">Subtotal:</strong> {formattedPrice}
       </p>
       {shippingType && (
         <p>
@@ -66,8 +66,7 @@ export function DisplayCostBreakdown({
 
       {totalCost !== undefined && (
         <p>
-          <strong className="font-semibold">Total Cost:</strong>{" "}
-          {formattedTotalCost}
+          <strong className="font-bold">Total:</strong> {formattedTotalCost}
         </p>
       )}
     </div>

@@ -1,74 +1,68 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-
-import useScrollingEffect from "@/components/hooks/use-scroll";
-import { useTabs } from "@/components/hooks/use-tabs";
-import { Framer } from "@/components/framer";
+import React, { useContext, useEffect, useState } from "react";
+import { ShopMapContext } from "@/utils/context/context";
+import { ShopSettings } from "../../utils/types/types";
+import { sanitizeUrl } from "@braintree/sanitize-url";
+import { useRouter } from "next/router";
 
 import MarketplacePage from "./marketplace";
-import MyListingsPage from "./my-listings";
-import ProductForm from "../product-form";
-import { useRouter } from "next/router";
-import { useSearchParams } from "next/navigation";
-import { isUserLoggedIn } from "../utility/nostr-helper-functions";
 
-const HomeFeed = () => {
-  const scrollDirection = useScrollingEffect();
+const HomeFeed = ({
+  focusedPubkey,
+  setFocusedPubkey,
+}: {
+  focusedPubkey: string;
+  setFocusedPubkey: (value: string) => void;
+}) => {
   const router = useRouter();
 
-  const searchParams = useSearchParams();
+  const [shopBannerURL, setShopBannerURL] = useState("");
+  const [isFetchingShop, setIsFetchingShop] = useState(false);
 
-  const headerClass =
-    scrollDirection === "up" ? "translate-y-0" : "translate-y-[-100%]";
-  const [showModal, setShowModal] = useState(false);
+  const [isHome, setIsHome] = useState(false);
 
-  const [hookProps] = useState({
-    tabs: [
-      {
-        label: "Marketplace",
-        children: <MarketplacePage />,
-        id: "marketplace",
-      },
-      {
-        label: "My Listings",
-        children: <MyListingsPage />,
-        id: "my-listings",
-      },
-    ],
-    initialTabId: "marketplace",
-  });
-  const framer = useTabs(hookProps);
+  const shopMapContext = useContext(ShopMapContext);
 
   useEffect(() => {
-    if (!searchParams || !isUserLoggedIn()) return;
-    setShowModal(searchParams.has("addNewListing"));
-  }, [searchParams]);
-
-  const handleProductModalToggle = () => {
-    setShowModal(!showModal);
-    router.push("/");
-  };
+    if (!router.pathname.includes("npub")) {
+      setIsHome(true);
+    }
+    setIsFetchingShop(true);
+    if (
+      focusedPubkey &&
+      shopMapContext.shopData.has(focusedPubkey) &&
+      typeof shopMapContext.shopData.get(focusedPubkey) != "undefined"
+    ) {
+      const shopSettings: ShopSettings | undefined =
+        shopMapContext.shopData.get(focusedPubkey);
+      if (shopSettings) {
+        setShopBannerURL(shopSettings.content.ui.banner);
+      }
+    }
+    setIsFetchingShop(false);
+  }, [focusedPubkey, shopMapContext, shopBannerURL, router.pathname]);
 
   return (
-    <div className="flex flex-1 flex-col">
-      <div
-        className={`sticky inset-x-0 top-0 z-30 flex w-full translate-y-0 flex-col border-0 backdrop-blur-xl transition-all ${headerClass} md:translate-y-0`}
-      >
-        <div className="flex w-full flex-row items-center justify-around">
-          <Framer.Tabs {...framer.tabProps} />
+    <>
+      {focusedPubkey && shopBannerURL && !isFetchingShop && (
+        <div className="flex h-auto w-full items-center justify-center bg-light-bg bg-cover bg-center dark:bg-dark-bg">
+          <img
+            src={sanitizeUrl(shopBannerURL)}
+            alt="Shop Banner"
+            className="max-h-[210px] w-full items-center justify-center object-cover"
+          />
+        </div>
+      )}
+      <div className="flex flex-1 flex-col">
+        <div className="flex h-screen flex-1">
+          <MarketplacePage
+            focusedPubkey={focusedPubkey}
+            setFocusedPubkey={setFocusedPubkey}
+          />
         </div>
       </div>
-
-      <div className="flex h-screen flex-1 pt-10">
-        {framer.selectedTab.children}
-      </div>
-
-      <ProductForm
-        showModal={showModal}
-        handleModalToggle={handleProductModalToggle}
-      />
-    </div>
+    </>
   );
 };
 

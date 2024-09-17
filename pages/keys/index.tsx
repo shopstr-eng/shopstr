@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { useRouter } from "next/router";
-import * as CryptoJS from "crypto-js";
+import CryptoJS from "crypto-js";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
@@ -64,7 +64,7 @@ const Keys = () => {
   };
 
   return (
-    <div className="flex h-[100vh] flex-col bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
+    <div className="flex h-[100vh] flex-col bg-light-bg pt-24 dark:bg-dark-bg">
       <div className="p-4">
         <Card>
           <CardBody>
@@ -104,14 +104,14 @@ const Keys = () => {
                   </div>
                   {viewState === "shown" ? (
                     <EyeSlashIcon
-                      className="h-6 w-6 flex-shrink-0 px-1 hover:text-purple-700"
+                      className="h-6 w-6 flex-shrink-0 px-1 hover:text-purple-700 dark:hover:text-yellow-700"
                       onClick={() => {
                         setViewState("hidden");
                       }}
                     />
                   ) : (
                     <EyeIcon
-                      className="h-6 w-6 flex-shrink-0 px-1 hover:text-purple-700"
+                      className="h-6 w-6 flex-shrink-0 px-1 hover:text-purple-700 dark:hover:text-yellow-700"
                       onClick={() => {
                         setViewState("shown");
                       }}

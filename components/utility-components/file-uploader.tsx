@@ -9,25 +9,19 @@ import {
 import { finalizeEvent } from "nostr-tools";
 
 export const FileUploaderButton = ({
-  uploadImage,
   disabled,
-  passphraseInputRef,
   isIconOnly,
   className,
   children,
   passphrase,
   imgCallbackOnUpload,
-  isMultiple = false,
 }: {
-  uploadImage?: any;
   disabled?: any;
-  passphraseInputRef?: React.RefObject<HTMLInputElement>;
   isIconOnly: boolean;
   className: any;
   children: React.ReactNode;
   passphrase: string;
   imgCallbackOnUpload: (imgUrl: string) => void;
-  isMultiple?: boolean;
 }) => {
   const [loading, setLoading] = useState(false);
   // Create a reference to the hidden file input element
@@ -68,7 +62,7 @@ export const FileUploaderButton = ({
 
   // Programatically click the hidden file input element
   // when the Button component is clicked
-  const handleClick = (event: any) => {
+  const handleClick = () => {
     if (disabled || loading) {
       // if button is disabled or loading, return
       return;

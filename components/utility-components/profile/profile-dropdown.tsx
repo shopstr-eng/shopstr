@@ -14,7 +14,7 @@ import {
 import { nip19 } from "nostr-tools";
 import { useContext, useEffect, useState } from "react";
 import {
-  ArrowRightOnRectangleIcon,
+  ArrowRightStartOnRectangleIcon,
   BuildingStorefrontIcon,
   ChatBubbleBottomCenterIcon,
   Cog6ToothIcon,
@@ -22,7 +22,13 @@ import {
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 
-type DropDownKeys = "shop" | "message" | "settings" | "user_profile" | "logout";
+type DropDownKeys =
+  | "shop"
+  | "shop_settings"
+  | "message"
+  | "settings"
+  | "user_profile"
+  | "logout";
 
 export const ProfileWithDropdown = ({
   pubkey,
@@ -73,6 +79,16 @@ export const ProfileWithDropdown = ({
       },
       label: "Visit Seller",
     },
+    shop_settings: {
+      key: "shop_settings",
+      color: "default",
+      className: "text-light-text dark:text-dark-text",
+      startContent: <BuildingStorefrontIcon className={"h-5 w-5"} />,
+      onClick: () => {
+        router.push("/settings/shop-settings");
+      },
+      label: "Shop Settings",
+    },
     message: {
       key: "message",
       color: "default",
@@ -90,16 +106,6 @@ export const ProfileWithDropdown = ({
       },
       label: "Send Message",
     },
-    settings: {
-      key: "settings",
-      color: "default",
-      className: "text-light-text dark:text-dark-text",
-      startContent: <Cog6ToothIcon className={"h-5 w-5"} />,
-      onClick: () => {
-        router.push("/settings");
-      },
-      label: "Settings",
-    },
     user_profile: {
       key: "user_profile",
       color: "default",
@@ -110,12 +116,22 @@ export const ProfileWithDropdown = ({
       },
       label: "Profile",
     },
+    settings: {
+      key: "settings",
+      color: "default",
+      className: "text-light-text dark:text-dark-text",
+      startContent: <Cog6ToothIcon className={"h-5 w-5"} />,
+      onClick: () => {
+        router.push("/settings");
+      },
+      label: "Settings",
+    },
     logout: {
       key: "logout",
       color: "danger",
       className: "text-light-text dark:text-dark-text",
       startContent: (
-        <ArrowRightOnRectangleIcon
+        <ArrowRightStartOnRectangleIcon
           className={"text-color-red-900 " + "h-5 w-5"}
           color="red"
         />

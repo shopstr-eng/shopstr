@@ -4,7 +4,7 @@ import { Spinner } from "@nextui-org/react";
 import { useTheme } from "next-themes";
 
 export default function ShopstrSpinner() {
-  const { theme, setTheme } = useTheme();
+  const { theme } = useTheme();
   return (
     <>
       {theme === "dark" ? (

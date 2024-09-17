@@ -6,6 +6,8 @@ import { useState, useEffect } from "react";
 import {
   ProfileMapContext,
   ProfileContextInterface,
+  ShopMapContext,
+  ShopContextInterface,
   ProductContext,
   ProductContextInterface,
   ChatsContextInterface,
@@ -28,6 +30,7 @@ import { ThemeProvider as NextThemesProvider } from "next-themes";
 import {
   fetchAllPosts,
   fetchChatsAndMessages,
+  fetchShopSettings,
   fetchProfile,
   fetchAllFollows,
   fetchAllRelays,
@@ -37,10 +40,10 @@ import {
   NostrEvent,
   ProfileData,
   NostrMessageEvent,
+  ShopSettings,
 } from "../utils/types/types";
-import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
-import BottomNav from "@/components/nav-bottom";
-import SideNav from "@/components/nav-side";
+import { Proof } from "@cashu/cashu-ts";
+import TopNav from "@/components/nav-top";
 import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
 
 function App({ Component, pageProps }: AppProps) {
@@ -80,6 +83,21 @@ function App({ Component, pageProps }: AppProps) {
       },
     },
   );
+  const [shopContext, setShopContext] = useState<ShopContextInterface>({
+    shopData: new Map(),
+    isLoading: true,
+    updateShopData: (shopData: ShopSettings) => {
+      setShopContext((shopContext) => {
+        let shopDataMap = new Map(shopContext.shopData);
+        shopDataMap.set(shopData.pubkey, shopData);
+        return {
+          shopData: shopDataMap,
+          isLoading: false,
+          updateShopData: shopContext.updateShopData,
+        };
+      });
+    },
+  });
   const [profileContext, setProfileContext] = useState<ProfileContextInterface>(
     {
       profileData: new Map(),
@@ -174,6 +192,19 @@ function App({ Component, pageProps }: AppProps) {
     });
   };
 
+  const editShopContext = (
+    shopData: Map<string, ShopSettings>,
+    isLoading: boolean,
+  ) => {
+    setShopContext((shopContext) => {
+      return {
+        shopData,
+        isLoading,
+        updateShopData: shopContext.updateShopData,
+      };
+    });
+  };
+
   const editProfileContext = (
     profileData: Map<string, any>,
     isLoading: boolean,
@@ -241,6 +272,8 @@ function App({ Component, pageProps }: AppProps) {
     });
   };
 
+  const [focusedPubkey, setFocusedPubkey] = useState("");
+
   const { signInMethod } = getLocalStorageData();
 
   /** FETCH initial FOLLOWS, RELAYS, PRODUCTS, and PROFILES **/
@@ -270,10 +303,6 @@ function App({ Component, pageProps }: AppProps) {
           localStorage.setItem("writeRelays", JSON.stringify(writeRelayList));
           allRelays = [...relayList, ...readRelayList];
         }
-        let { followList } = await fetchAllFollows(
-          allRelays,
-          editFollowsContext,
-        );
         let pubkeysToFetchProfilesFor: string[] = [];
         let { profileSetFromProducts } = await fetchAllPosts(
           allRelays,
@@ -285,11 +314,18 @@ function App({ Component, pageProps }: AppProps) {
           userPubkey,
           editChatContext,
         );
-        pubkeysToFetchProfilesFor = [
-          userPubkey as string,
-          ...pubkeysToFetchProfilesFor,
-          ...profileSetFromChats,
-        ];
+        if (userPubkey && profileSetFromChats.size != 0) {
+          pubkeysToFetchProfilesFor = [
+            userPubkey as string,
+            ...pubkeysToFetchProfilesFor,
+            ...profileSetFromChats,
+          ];
+        }
+        let { shopSettingsMap } = await fetchShopSettings(
+          allRelays,
+          pubkeysToFetchProfilesFor,
+          editShopContext,
+        );
         let { profileMap } = await fetchProfile(
           allRelays,
           pubkeysToFetchProfilesFor,
@@ -320,6 +356,10 @@ function App({ Component, pageProps }: AppProps) {
             localStorage.setItem("tokens", JSON.stringify(cashuProofs));
           }
         }
+        let { followList } = await fetchAllFollows(
+          allRelays,
+          editFollowsContext,
+        );
       } catch (error) {
         console.error("Error fetching data:", error);
       }
@@ -366,19 +406,24 @@ function App({ Component, pageProps }: AppProps) {
           <FollowsContext.Provider value={followsContext}>
             <ProductContext.Provider value={productContext}>
               <ProfileMapContext.Provider value={profileContext}>
-                <ChatsContext.Provider value={chatsContext}>
-                  <NextUIProvider>
-                    <NextThemesProvider attribute="class">
-                      <div className="flex">
-                        <SideNav />
-                        <main className="flex-1">
-                          <Component {...pageProps} />
-                        </main>
-                      </div>
-                      <BottomNav />
-                    </NextThemesProvider>
-                  </NextUIProvider>
-                </ChatsContext.Provider>
+                <ShopMapContext.Provider value={shopContext}>
+                  <ChatsContext.Provider value={chatsContext}>
+                    <NextUIProvider>
+                      <NextThemesProvider attribute="class">
+                        <TopNav setFocusedPubkey={setFocusedPubkey} />
+                        <div className="flex">
+                          <main className="flex-1">
+                            <Component
+                              {...pageProps}
+                              focusedPubkey={focusedPubkey}
+                              setFocusedPubkey={setFocusedPubkey}
+                            />
+                          </main>
+                        </div>
+                      </NextThemesProvider>
+                    </NextUIProvider>
+                  </ChatsContext.Provider>
+                </ShopMapContext.Provider>
               </ProfileMapContext.Provider>
             </ProductContext.Provider>
           </FollowsContext.Provider>

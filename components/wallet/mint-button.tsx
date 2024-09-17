@@ -45,7 +45,6 @@ const MintButton = ({ passphrase }: { passphrase?: string }) => {
 
   const {
     handleSubmit: handleMintSubmit,
-    formState: { errors },
     control: mintControl,
     reset: mintReset,
   } = useForm();
@@ -82,7 +81,7 @@ const MintButton = ({ passphrase }: { passphrase?: string }) => {
       currency: "SATS",
     });
 
-    const { id, pr, hash } = mintInvoice.data;
+    const { pr, hash } = mintInvoice.data;
 
     setInvoice(pr);
 
@@ -96,7 +95,7 @@ const MintButton = ({ passphrase }: { passphrase?: string }) => {
         console.error("ERROR", err);
       });
 
-    invoiceHasBeenPaid(wallet, numSats, hash, id);
+    invoiceHasBeenPaid(wallet, numSats, hash);
   };
 
   /** CHECKS WHETHER INVOICE HAS BEEN PAID */
@@ -104,10 +103,7 @@ const MintButton = ({ passphrase }: { passphrase?: string }) => {
     wallet: CashuWallet,
     numSats: number,
     hash: string,
-    metricsInvoiceId: string,
   ) {
-    let encoded;
-
     while (true) {
       try {
         const { proofs } = await wallet.requestTokens(numSats, hash);

@@ -3,7 +3,6 @@ import { DateTime } from "luxon";
 import { v4 as uuid } from "uuid";
 import repo from "../../../utils/metrics/repo";
 import {
-  getLocationFromAddress,
   getLocationFromReqHeaders,
   locationToSqlGeo,
 } from "@/utils/metrics/geo";

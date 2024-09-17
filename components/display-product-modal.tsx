@@ -1,7 +1,5 @@
 import React from "react";
 import {
-  BoltIcon,
-  EnvelopeIcon,
   PencilSquareIcon,
   ShareIcon,
   TrashIcon,
@@ -30,8 +28,6 @@ interface ProductModalProps {
   productData: any;
   handleModalToggle: () => void;
   showModal: boolean;
-  handleSendMessage: (pubkeyToOpenChatWith: string) => void;
-  handleReviewAndPurchase: (productId: string) => void;
   handleDelete: (productId: string, passphrase?: string) => void;
 }
 
@@ -39,8 +35,6 @@ export default function DisplayProductModal({
   productData,
   showModal,
   handleModalToggle,
-  handleSendMessage,
-  handleReviewAndPurchase,
   handleDelete,
 }: ProductModalProps) {
   const {
@@ -50,8 +44,10 @@ export default function DisplayProductModal({
     images,
     categories,
     location,
-    currency,
-    totalCost,
+    sizes,
+    sizeQuantities,
+    condition,
+    status,
   } = productData;
   const { signInMethod, userPubkey } = getLocalStorageData();
 
@@ -101,7 +97,7 @@ export default function DisplayProductModal({
     // only used for when signInMethod === "nsec"
     setDeleteLoading(true);
     handleModalToggle(); // closes product detail modal
-    await handleDelete(productData.id, passphrase); // delete listing
+    handleDelete(productData.id, passphrase); // delete listing
     setDeleteLoading(false);
   };
 
@@ -126,8 +122,24 @@ export default function DisplayProductModal({
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
-            {title}{" "}
+          <ModalHeader className="flex flex-col text-light-text dark:text-dark-text">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
+                {title}
+              </h2>
+              <div>
+                {status === "active" && (
+                  <span className="mr-2 rounded-full bg-green-500 px-2 py-1 text-xs font-semibold text-white">
+                    Active
+                  </span>
+                )}
+                {status === "sold" && (
+                  <span className="mr-2 rounded-full bg-red-500 px-2 py-1 text-xs font-semibold text-white">
+                    Sold
+                  </span>
+                )}
+              </div>
+            </div>
           </ModalHeader>
           <ModalBody className="text-light-text dark:text-dark-text">
             {images ? (
@@ -137,11 +149,20 @@ export default function DisplayProductModal({
                 classname="max-h-[80vh]"
               />
             ) : null}
+            {condition && (
+              <div className="text-left text-xs text-light-text dark:text-dark-text">
+                <span>Condition: {condition}</span>
+              </div>
+            )}
             <Divider />
             <div className="flex h-fit w-full flex-row flex-wrap items-center justify-between gap-2">
               <ProfileWithDropdown
                 pubkey={productData.pubkey}
-                dropDownKeys={["shop", "message"]}
+                dropDownKeys={
+                  productData.pubkey === userPubkey
+                    ? ["shop_settings"]
+                    : ["shop", "message"]
+                }
               />
               <Chip key={location} startContent={locationAvatar(location)}>
                 {location}
@@ -157,6 +178,31 @@ export default function DisplayProductModal({
             <span className="whitespace-break-spaces break-all">
               {productData.summary}
             </span>
+            {sizes && sizes.length > 0 ? (
+              <>
+                <span className="text-xl font-semibold">Sizes: </span>
+                <div className="flex flex-wrap items-center">
+                  {sizes && sizes.length > 0
+                    ? sizes.map((size: string) => (
+                        <span
+                          key={size}
+                          className="mb-2 mr-4 text-light-text dark:text-dark-text"
+                        >
+                          {size}: {sizeQuantities?.get(size) || 0}
+                        </span>
+                      ))
+                    : null}
+                </div>
+              </>
+            ) : null}
+            {condition && (
+              <>
+                <div className="text-left text-xs text-light-text dark:text-dark-text">
+                  <span className="text-xl font-semibold">Condition: </span>
+                  <span className="text-xl">{condition}</span>
+                </div>
+              </>
+            )}
           </ModalBody>
 
           <ModalFooter>
@@ -200,32 +246,6 @@ export default function DisplayProductModal({
                       Delete Listing
                     </Button>
                   </ConfirmActionDropdown>
-                </>
-              )}
-              {userPubkey !== pubkey && (
-                <>
-                  <Button
-                    onClick={() => {
-                      handleSendMessage(productData.pubkey);
-                    }}
-                    type="submit"
-                    className={SHOPSTRBUTTONCLASSNAMES}
-                    startContent={
-                      <EnvelopeIcon className="h-6 w-6 hover:text-yellow-500" />
-                    }
-                  >
-                    Message
-                  </Button>
-                  <Button
-                    type="submit"
-                    onClick={() => handleReviewAndPurchase(productData.id)}
-                    className={SHOPSTRBUTTONCLASSNAMES}
-                    startContent={
-                      <BoltIcon className="h-6 w-6 hover:text-yellow-500" />
-                    }
-                  >
-                    Review & Purchase
-                  </Button>
                 </>
               )}
             </div>

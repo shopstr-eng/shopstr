@@ -41,7 +41,6 @@ export default async function GetMetrics(
   const params = getParamsFromURI(req.url || "");
   const startDate = params.get("startDate");
   const endDate = params.get("endDate");
-  let merchantId = params.get("merchantId");
 
   if (!startDate || !endDate) {
     return res.status(400).json({ error: "Missing startDate and/or endDate" });

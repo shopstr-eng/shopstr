@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from "react";
-import { Filter, SimplePool, nip19 } from "nostr-tools";
+import { Filter, SimplePool } from "nostr-tools";
 import { getLocalStorageData } from "./utility/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
 import {
@@ -17,7 +17,7 @@ import { Button } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
 import { DateTime } from "luxon";
 
-const DisplayEvents = ({
+const DisplayProducts = ({
   focusedPubkey,
   selectedCategories,
   selectedLocation,
@@ -25,6 +25,7 @@ const DisplayEvents = ({
   canShowLoadMore,
   wotFilter,
   isMyListings,
+  setCategories,
 }: {
   focusedPubkey?: string;
   selectedCategories: Set<string>;
@@ -33,6 +34,7 @@ const DisplayEvents = ({
   canShowLoadMore?: boolean;
   wotFilter?: boolean;
   isMyListings?: boolean;
+  setCategories?: (categories: string[]) => void;
 }) => {
   const [productEvents, setProductEvents] = useState<ProductData[]>([]);
   const [isProductsLoading, setIsProductLoading] = useState(true);
@@ -75,6 +77,18 @@ const DisplayEvents = ({
     }
   }, [productEventContext, wotFilter]);
 
+  useEffect(() => {
+    if (focusedPubkey && setCategories) {
+      let productCategories: string[] = [];
+      productEvents.forEach((event) => {
+        if (event.pubkey === focusedPubkey) {
+          productCategories.push(...event.categories);
+        }
+      });
+      setCategories(productCategories);
+    }
+  }, [productEvents, focusedPubkey]);
+
   const isThereAFilter = () => {
     return (
       selectedCategories.size > 0 ||
@@ -99,25 +113,12 @@ const DisplayEvents = ({
 
   const onProductClick = (product: any) => {
     setFocusedProduct(product);
-    setShowModal(true);
-  };
-
-  const handleSendMessage = (pubkeyToOpenChatWith: string) => {
-    let { signInMethod } = getLocalStorageData();
-    if (!signInMethod) {
-      alert("You must be signed in to send a message!");
-      return;
+    if (product.pubkey === userPubkey) {
+      setShowModal(true);
+    } else {
+      setShowModal(false);
+      router.push(`/listing/${product.id}`);
     }
-    setShowModal(false);
-    router.push({
-      pathname: "/messages",
-      query: { pk: nip19.npubEncode(pubkeyToOpenChatWith) },
-    });
-  };
-
-  const handleReviewAndPurchase = (productId: string) => {
-    setShowModal(false);
-    router.push(`/listing/${productId}`);
   };
 
   const productSatisfiesCategoryFilter = (productData: ProductData) => {
@@ -151,11 +152,7 @@ const DisplayEvents = ({
     );
   };
 
-  const displayProductCard = (
-    productData: ProductData,
-    index: number,
-    handleSendMessage: (pubkeyToOpenChatWith: string) => void,
-  ) => {
+  const displayProductCard = (productData: ProductData, index: number) => {
     if (focusedPubkey && productData.pubkey !== focusedPubkey) return;
     if (!productSatisfiesAllFilters(productData)) return;
     if (productData.images.length === 0) return;
@@ -175,7 +172,6 @@ const DisplayEvents = ({
     return (
       <ProductCard
         key={productData.id + "-" + index}
-        uniqueKey={productData.id + "-" + index}
         productData={productData}
         onProductClick={onProductClick}
       />
@@ -226,9 +222,9 @@ const DisplayEvents = ({
       <div className="w-full md:pl-4">
         {/* DISPLAYS PRODUCT LISTINGS HERE */}
         {productEvents.length != 0 ? (
-          <div className="grid h-[90%] max-w-full grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-x-hidden">
+          <div className="grid max-w-full grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-x-hidden">
             {productEvents.map((productData: ProductData, index) => {
-              return displayProductCard(productData, index, handleSendMessage);
+              return displayProductCard(productData, index);
             })}
           </div>
         ) : (
@@ -265,7 +261,7 @@ const DisplayEvents = ({
         productEventContext.isLoading ||
         isProductsLoading ||
         isLoadingMore ? (
-          <div className="mt-8 flex items-center justify-center">
+          <div className="mb-6 mt-6 flex items-center justify-center">
             <ShopstrSpinner />
           </div>
         ) : canShowLoadMore && productEvents.length != 0 ? (
@@ -283,12 +279,10 @@ const DisplayEvents = ({
         productData={focusedProduct}
         showModal={showModal}
         handleModalToggle={handleToggleModal}
-        handleSendMessage={handleSendMessage}
-        handleReviewAndPurchase={handleReviewAndPurchase}
         handleDelete={handleDelete}
       />
     </>
   );
 };
 
-export default DisplayEvents;
+export default DisplayProducts;

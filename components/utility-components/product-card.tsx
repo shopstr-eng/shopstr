@@ -1,4 +1,4 @@
-import React, { ReactNode, useEffect, useState } from "react";
+import React, { ReactNode } from "react";
 import Link from "next/link";
 import { InformationCircleIcon } from "@heroicons/react/24/outline";
 import { Card, CardBody, Divider, Chip, CardFooter } from "@nextui-org/react";
@@ -10,6 +10,7 @@ import CompactPriceDisplay, {
 } from "./display-monetary-info";
 import { ProductData } from "../utility/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
+import { getLocalStorageData } from "../utility/nostr-helper-functions";
 
 const cardWidth = 380;
 const cardxMargin = 2.5;
@@ -20,16 +21,14 @@ export default function ProductCard({
   onProductClick,
   isReview,
   footerContent,
-  uniqueKey,
 }: {
   productData: ProductData;
   onProductClick?: (productId: any) => void;
   isReview?: boolean;
   footerContent?: ReactNode;
-  uniqueKey?: string;
 }) {
   if (!productData) return null;
-  const { id, pubkey, title, images, categories, location } = productData;
+  const { pubkey, title, images, categories, location, status } = productData;
   if (isReview)
     return (
       <Card className={"mx-[2.5px] my-3 w-[100%] rounded-lg"}>
@@ -42,7 +41,11 @@ export default function ProductCard({
           <div className="z-10 flex w-full justify-between pb-3">
             <ProfileWithDropdown
               pubkey={productData.pubkey}
-              dropDownKeys={["shop", "message"]}
+              dropDownKeys={
+                productData.pubkey === getLocalStorageData().userPubkey
+                  ? ["shop_settings"]
+                  : ["shop", "message"]
+              }
             />
             <div className="flex flex-col justify-center">
               <CompactCategories categories={categories} />
@@ -98,51 +101,57 @@ export default function ProductCard({
     "hover:shadow-lg hover:shadow-shopstr-purple dark:hover:shadow-shopstr-yellow";
 
   return (
-    <Card
-      className={
-        "mx-[2.5px] my-3 w-80 rounded-lg bg-light-fg dark:bg-dark-fg " +
-        cardHoverStyle
-      }
-      key={uniqueKey}
+    <div
+      className={`${cardHoverStyle} mx-2 my-4 rounded-lg duration-300 transition-shadow`}
     >
-      <CardBody
-        className={"cursor-pointer overflow-x-hidden"}
-        onClick={() => {
-          onProductClick && onProductClick(productData);
-        }}
-      >
-        <div className="z-10 mb-2 flex w-full justify-between">
-          <ProfileWithDropdown
-            pubkey={productData.pubkey}
-            dropDownKeys={["shop", "message"]}
-          />
-          <div className="flex flex-col justify-center">
-            <CompactCategories categories={categories} />
+      <div className="w-80 overflow-hidden rounded-lg">
+        <div
+          className="cursor-pointer"
+          onClick={() => {
+            onProductClick && onProductClick(productData);
+          }}
+        >
+          <div className="mb-2">
+            <ImageCarousel
+              images={images}
+              classname="w-full h-[300px]"
+              showThumbs={false}
+            />
+          </div>
+          <div className="justify-left flex flex-col p-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
+                {title}
+              </h2>
+              <div>
+                {status === "active" && (
+                  <span className="mr-2 rounded-full bg-green-500 px-2 py-1 text-xs font-semibold text-white">
+                    Active
+                  </span>
+                )}
+                {status === "sold" && (
+                  <span className="mr-2 rounded-full bg-red-500 px-2 py-1 text-xs font-semibold text-white">
+                    Sold
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="z-10 mb-2 flex w-full justify-between">
+              <ProfileWithDropdown
+                pubkey={pubkey}
+                dropDownKeys={
+                  pubkey === getLocalStorageData().userPubkey
+                    ? ["shop_settings"]
+                    : ["shop", "message"]
+                }
+              />
+            </div>
+            <div className="justify-left flex">
+              <CompactPriceDisplay monetaryInfo={productData} />
+            </div>
           </div>
         </div>
-        <div className="mb-5">
-          <ImageCarousel
-            images={images}
-            classname="w-full h-[300px]"
-            showThumbs={false}
-          />
-          <div className="mt-3 flex flex-row justify-between">
-            <Chip key={location} startContent={locationAvatar(location)}>
-              {location
-                ? location.length > 20
-                  ? location.slice(0, 20) + "..."
-                  : location
-                : ""}
-            </Chip>
-            <CompactPriceDisplay monetaryInfo={productData} />
-          </div>
-        </div>
-        <Divider />
-        <div className="mt-5 flex w-full flex-col items-center ">
-          <h2 className="mb-4 text-2xl font-bold">{title}</h2>
-        </div>
-      </CardBody>
-      {footerContent && <CardFooter>{footerContent}</CardFooter>}
-    </Card>
+      </div>
+    </div>
   );
 }

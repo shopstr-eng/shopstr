@@ -8,10 +8,7 @@ import {
   Input,
   Button,
 } from "@nextui-org/react";
-import {
-  getNsecWithPassphrase,
-  validPassphrase,
-} from "../utility/nostr-helper-functions";
+import { validPassphrase } from "../utility/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { useRouter } from "next/router";
 

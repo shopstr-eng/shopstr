@@ -70,12 +70,14 @@ export default function InvoiceCard({
   setInvoiceGenerationFailed,
   setCashuPaymentSent,
   setCashuPaymentFailed,
+  selectedSize,
 }: {
   productData: ProductData;
   setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
   setInvoiceGenerationFailed?: (invoiceGenerationFailed: boolean) => void;
   setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
   setCashuPaymentFailed?: (cashuPaymentFailef: boolean) => void;
+  selectedSize?: string;
 }) {
   const router = useRouter();
   const { id, pubkey, currency, totalCost, shippingType } = productData;
@@ -108,16 +110,17 @@ export default function InvoiceCard({
   const [showShippingOption, setShowShippingOption] = useState(false);
   const [isCashuPayment, setIsCashuPayment] = useState(false);
 
+  const [showPurchaseTypeOption, setShowPurchaseTypeOption] = useState(false);
+  const [needsShippingInfo, setNeedsShippingInfo] = useState(false);
+
   const {
     handleSubmit: handleShippingSubmit,
-    formState: shippingFormState,
     control: shippingControl,
     reset: shippingReset,
   } = useForm();
 
   const {
     handleSubmit: handleContactSubmit,
-    formState: contactFormState,
     control: contactControl,
     reset: contactReset,
   } = useForm();
@@ -161,68 +164,132 @@ export default function InvoiceCard({
   }, [walletContext]);
 
   const onShippingSubmit = async (data: { [x: string]: any }) => {
-    let shippingName = data["Name"];
-    let shippingAddress = data["Address"];
-    let shippingUnitNo = data["Unit"];
-    let shippingCity = data["City"];
-    let shippingPostalCode = data["Postal Code"];
-    let shippingState = data["State/Province"];
-    let shippingCountry = data["Country"];
-    setShowShippingModal(false);
-    if (isCashuPayment) {
-      await handleCashuPayment(
-        shippingName,
-        shippingAddress,
-        shippingUnitNo,
-        shippingCity,
-        shippingPostalCode,
-        shippingState,
-        shippingCountry,
-      );
-    } else {
-      await handleLightningPayment(
-        shippingName,
-        shippingAddress,
-        shippingUnitNo,
-        shippingCity,
-        shippingPostalCode,
-        shippingState,
-        shippingCountry,
-      );
+    try {
+      let price = totalCost;
+      if (!currencySelection.hasOwnProperty(currency)) {
+        throw new Error(`${currency} is not a supported currency.`);
+      } else if (
+        currencySelection.hasOwnProperty(currency) &&
+        currency.toLowerCase() !== "sats" &&
+        currency.toLowerCase() !== "sat"
+      ) {
+        try {
+          const currencyData = { amount: price, currency: currency };
+          const numSats = await fiat.getSatoshiValue(currencyData);
+          price = Math.round(numSats);
+        } catch (err) {
+          console.error("ERROR", err);
+        }
+      } else if (currency.toLowerCase() === "btc") {
+        price = price * 100000000;
+      }
+
+      if (price < 1) {
+        throw new Error("Listing price is less than 1 sat.");
+      }
+
+      let shippingName = data["Name"];
+      let shippingAddress = data["Address"];
+      let shippingUnitNo = data["Unit"];
+      let shippingCity = data["City"];
+      let shippingPostalCode = data["Postal Code"];
+      let shippingState = data["State/Province"];
+      let shippingCountry = data["Country"];
+      setShowShippingModal(false);
+      if (isCashuPayment) {
+        await handleCashuPayment(
+          price,
+          shippingName,
+          shippingAddress,
+          shippingUnitNo,
+          shippingCity,
+          shippingPostalCode,
+          shippingState,
+          shippingCountry,
+        );
+      } else {
+        await handleLightningPayment(
+          price,
+          shippingName,
+          shippingAddress,
+          shippingUnitNo,
+          shippingCity,
+          shippingPostalCode,
+          shippingState,
+          shippingCountry,
+        );
+      }
+    } catch (error) {
+      console.error(error);
+      if (setCashuPaymentFailed) {
+        setCashuPaymentFailed(true);
+      }
     }
   };
 
   const onContactSubmit = async (data: { [x: string]: any }) => {
-    let contact = data["Contact"];
-    let contactType = data["Contact Type"];
-    let contactInstructions = data["Instructions"];
-    setShowContactModal(false);
-    if (isCashuPayment) {
-      await handleCashuPayment(
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        contact,
-        contactType,
-        contactInstructions,
-      );
-    } else {
-      await handleLightningPayment(
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        contact,
-        contactType,
-        contactInstructions,
-      );
+    try {
+      let price = totalCost;
+      if (!currencySelection.hasOwnProperty(currency)) {
+        throw new Error(`${currency} is not a supported currency.`);
+      } else if (
+        currencySelection.hasOwnProperty(currency) &&
+        currency.toLowerCase() !== "sats" &&
+        currency.toLowerCase() !== "sat"
+      ) {
+        try {
+          const currencyData = { amount: price, currency: currency };
+          const numSats = await fiat.getSatoshiValue(currencyData);
+          price = Math.round(numSats);
+        } catch (err) {
+          console.error("ERROR", err);
+        }
+      } else if (currency.toLowerCase() === "btc") {
+        price = price * 100000000;
+      }
+
+      if (price < 1) {
+        throw new Error("Listing price is less than 1 sat.");
+      }
+
+      let contact = data["Contact"];
+      let contactType = data["Contact Type"];
+      let contactInstructions = data["Instructions"];
+      setShowContactModal(false);
+      if (isCashuPayment) {
+        await handleCashuPayment(
+          price,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          contact,
+          contactType,
+          contactInstructions,
+        );
+      } else {
+        await handleLightningPayment(
+          price,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          contact,
+          contactType,
+          contactInstructions,
+        );
+      }
+    } catch (error) {
+      console.error(error);
+      if (setCashuPaymentFailed) {
+        setCashuPaymentFailed(true);
+      }
     }
   };
 
@@ -237,6 +304,7 @@ export default function InvoiceCard({
   };
 
   const handleLightningPayment = async (
+    newPrice: number,
     shippingName?: string,
     shippingAddress?: string,
     shippingUnitNo?: string,
@@ -250,29 +318,7 @@ export default function InvoiceCard({
   ) => {
     try {
       setShowInvoiceCard(true);
-      let newPrice = totalCost;
       const wallet = new CashuWallet(new CashuMint(mints[0]));
-      if (!currencySelection.hasOwnProperty(currency)) {
-        throw new Error(`${currency} is not a supported currency.`);
-      } else if (
-        currencySelection.hasOwnProperty(currency) &&
-        currency.toLowerCase() !== "sats" &&
-        currency.toLowerCase() !== "sat"
-      ) {
-        try {
-          const currencyData = { amount: newPrice, currency: currency };
-          const numSats = await fiat.getSatoshiValue(currencyData);
-          newPrice = Math.round(numSats);
-        } catch (err) {
-          console.error("ERROR", err);
-        }
-      } else if (currency.toLowerCase() === "btc") {
-        newPrice = newPrice * 100000000;
-      }
-
-      if (newPrice < 1) {
-        throw new Error("Listing price is less than 1 sat.");
-      }
 
       const invoiceMinted = await axios.post("/api/cashu/request-mint", {
         mintUrl: mints[0],
@@ -424,74 +470,138 @@ export default function InvoiceCard({
       },
     });
     if (
-      shippingName &&
-      shippingAddress &&
-      shippingUnitNo &&
-      shippingCity &&
-      shippingPostalCode &&
-      shippingState &&
-      shippingCountry
+      !(
+        shippingName &&
+        shippingAddress &&
+        shippingUnitNo &&
+        shippingCity &&
+        shippingPostalCode &&
+        shippingState &&
+        shippingCountry &&
+        contact &&
+        contactType &&
+        contactInstructions
+      )
     ) {
-      let contactMessage;
-      if (!shippingUnitNo) {
-        contactMessage =
-          "Please ship the product to " +
-          shippingName +
-          " at " +
-          shippingAddress +
-          ", " +
-          shippingCity +
-          ", " +
-          shippingPostalCode +
-          ", " +
-          shippingState +
-          ", " +
-          shippingCountry +
-          ".";
-      } else {
-        contactMessage =
-          "Please ship the product to " +
-          shippingName +
-          " at " +
-          shippingAddress +
-          " " +
-          shippingUnitNo +
-          ", " +
-          shippingCity +
-          ", " +
-          shippingPostalCode +
-          ", " +
-          shippingState +
-          ", " +
-          shippingCountry +
-          ".";
+      if (
+        shippingName &&
+        shippingAddress &&
+        shippingCity &&
+        shippingPostalCode &&
+        shippingState &&
+        shippingCountry
+      ) {
+        let contactMessage;
+        if (selectedSize) {
+          contactMessage =
+            "Please ship the product in a size " +
+            selectedSize +
+            " to " +
+            shippingName +
+            " at " +
+            shippingAddress +
+            ", " +
+            shippingCity +
+            ", " +
+            shippingPostalCode +
+            ", " +
+            shippingState +
+            ", " +
+            shippingCountry +
+            ".";
+        } else if (!shippingUnitNo) {
+          contactMessage =
+            "Please ship the product to " +
+            shippingName +
+            " at " +
+            shippingAddress +
+            ", " +
+            shippingCity +
+            ", " +
+            shippingPostalCode +
+            ", " +
+            shippingState +
+            ", " +
+            shippingCountry +
+            ".";
+        } else {
+          contactMessage =
+            "Please ship the product to " +
+            shippingName +
+            " at " +
+            shippingAddress +
+            " " +
+            shippingUnitNo +
+            ", " +
+            shippingCity +
+            ", " +
+            shippingPostalCode +
+            ", " +
+            shippingState +
+            ", " +
+            shippingCountry +
+            ".";
+        }
+        axios({
+          method: "POST",
+          url: "/api/nostr/post-event",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          data: {
+            pubkey: decryptedRandomNpub.data,
+            privkey: decryptedRandomNsec.data,
+            created_at: Math.floor(Date.now() / 1000),
+            kind: 4,
+            tags: [["p", pubkeyOfProductBeingSold]],
+            content: contactMessage,
+            relays: relays,
+          },
+        });
+      } else if (contact && contactType && contactInstructions) {
+        let contactMessage;
+        if (selectedSize) {
+          contactMessage =
+            "To finalize the sale of your " +
+            title +
+            " listing in a size " +
+            selectedSize +
+            " on Shopstr, please contact " +
+            contact +
+            " over " +
+            contactType +
+            " using the following instructions: " +
+            contactInstructions;
+        } else {
+          contactMessage =
+            "To finalize the sale of your " +
+            title +
+            " listing on Shopstr, please contact " +
+            contact +
+            " over " +
+            contactType +
+            " using the following instructions: " +
+            contactInstructions;
+        }
+        axios({
+          method: "POST",
+          url: "/api/nostr/post-event",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          data: {
+            pubkey: decryptedRandomNpub.data,
+            privkey: decryptedRandomNsec.data,
+            created_at: Math.floor(Date.now() / 1000),
+            kind: 4,
+            tags: [["p", pubkeyOfProductBeingSold]],
+            content: contactMessage,
+            relays: relays,
+          },
+        });
       }
-      axios({
-        method: "POST",
-        url: "/api/nostr/post-event",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        data: {
-          pubkey: decryptedRandomNpub.data,
-          privkey: decryptedRandomNsec.data,
-          created_at: Math.floor(Date.now() / 1000),
-          kind: 4,
-          tags: [["p", pubkeyOfProductBeingSold]],
-          content: contactMessage,
-          relays: relays,
-        },
-      });
-    } else if (contact && contactType && contactInstructions) {
-      const contactMessage =
-        "To finalize the sale of your " +
-        title +
-        " listing on Shopstr, please contact " +
-        contact +
-        " over " +
-        contactType +
-        " using the following instructions: " +
-        contactInstructions;
+    } else if (selectedSize) {
+      let contactMessage = "This purchase was for a size " + selectedSize + ".";
       axios({
         method: "POST",
         url: "/api/nostr/post-event",
@@ -535,6 +645,7 @@ export default function InvoiceCard({
   const formattedTotalCost = formatWithCommas(totalCost, currency);
 
   const handleCashuPayment = async (
+    price: number,
     shippingName?: string,
     shippingAddress?: string,
     shippingUnitNo?: string,
@@ -547,29 +658,8 @@ export default function InvoiceCard({
     contactInstructions?: string,
   ) => {
     try {
-      let price = totalCost;
       const mint = new CashuMint(mints[0]);
       const wallet = new CashuWallet(mint);
-      if (!currencySelection.hasOwnProperty(currency)) {
-        throw new Error(`${currency} is not a supported currency.`);
-      } else if (
-        currencySelection.hasOwnProperty(currency) &&
-        currency.toLowerCase() !== "sats" &&
-        currency.toLowerCase() !== "sat"
-      ) {
-        try {
-          const currencyData = { amount: price, currency: currency };
-          const numSats = await fiat.getSatoshiValue(currencyData);
-          price = Math.round(numSats);
-        } catch (err) {
-          console.error("ERROR", err);
-        }
-      } else if (currency.toLowerCase() === "btc") {
-        price = price * 100000000;
-      }
-      if (price < 1) {
-        throw new Error("Listing price is less than 1 sat.");
-      }
       const mintKeySetResponse = await mint.getKeySets();
       const mintKeySetIds = mintKeySetResponse?.keysets;
       const filteredProofs = tokens.filter(
@@ -665,19 +755,22 @@ export default function InvoiceCard({
               if (randomNsec !== "") {
                 if (shippingType === "Free" || shippingType === "Added Cost") {
                   setIsCashuPayment(false);
-                  handleToggleShippingModal();
+                  setNeedsShippingInfo(true);
+                  setShowPurchaseTypeOption(true);
                 } else if (
                   shippingType === "N/A" ||
                   shippingType === "Pickup"
                 ) {
                   setIsCashuPayment(false);
-                  handleToggleContactModal();
+                  setNeedsShippingInfo(false);
+                  setShowPurchaseTypeOption(true);
                 } else if (shippingType === "Free/Pickup") {
                   setIsCashuPayment(false);
                   setShowShippingOption(true);
                 } else {
                   setIsCashuPayment(false);
-                  handleToggleContactModal();
+                  setNeedsShippingInfo(false);
+                  setShowPurchaseTypeOption(true);
                 }
               }
             }}
@@ -699,19 +792,22 @@ export default function InvoiceCard({
               if (randomNsec !== "") {
                 if (shippingType === "Free" || shippingType === "Added Cost") {
                   setIsCashuPayment(true);
-                  handleToggleShippingModal();
+                  setNeedsShippingInfo(true);
+                  setShowPurchaseTypeOption(true);
                 } else if (
                   shippingType === "N/A" ||
                   shippingType === "Pickup"
                 ) {
                   setIsCashuPayment(true);
-                  handleToggleContactModal();
+                  setNeedsShippingInfo(false);
+                  setShowPurchaseTypeOption(true);
                 } else if (shippingType === "Free/Pickup") {
                   setIsCashuPayment(true);
                   setShowShippingOption(true);
                 } else {
                   setIsCashuPayment(true);
-                  handleToggleContactModal();
+                  setNeedsShippingInfo(false);
+                  setShowPurchaseTypeOption(true);
                 }
               }
             }}
@@ -724,7 +820,7 @@ export default function InvoiceCard({
         </>
       )}
       {showInvoiceCard && (
-        <Card className="mt-3 max-w-[700px]">
+        <Card className="mt-3 w-3/4">
           <CardHeader className="flex justify-center gap-3">
             <span className="text-xl font-bold">Lightning Invoice</span>
           </CardHeader>
@@ -808,11 +904,26 @@ export default function InvoiceCard({
           <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
             Select your delivery option:
           </ModalHeader>
-          <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+          <ModalBody className="flex flex-col overflow-hidden">
             <div className="flex items-center justify-center">
               <Select label="Delivery Method" className="max-w-xs">
                 <SelectItem
+                  key="in-person"
+                  className="text-light-text dark:text-dark-text"
+                  onClick={async () => {
+                    setShowShippingOption(false);
+                    if (isCashuPayment) {
+                      await handleCashuPayment(totalCost);
+                    } else {
+                      await handleLightningPayment(totalCost);
+                    }
+                  }}
+                >
+                  In-person
+                </SelectItem>
+                <SelectItem
                   key="free"
+                  className="text-light-text dark:text-dark-text"
                   onClick={() => {
                     handleToggleShippingModal();
                     setShowShippingOption(false);
@@ -822,6 +933,7 @@ export default function InvoiceCard({
                 </SelectItem>
                 <SelectItem
                   key="pickup"
+                  className="text-light-text dark:text-dark-text"
                   onClick={() => {
                     handleToggleContactModal();
                     setShowShippingOption(false);
@@ -834,6 +946,66 @@ export default function InvoiceCard({
           </ModalBody>
         </ModalContent>
       </Modal>
+
+      <Modal
+        backdrop="blur"
+        isOpen={showPurchaseTypeOption}
+        onClose={() => {
+          setShowPurchaseTypeOption(false);
+        }}
+        classNames={{
+          body: "py-6 ",
+          backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+          header: "border-b-[1px] border-[#292f46]",
+          footer: "border-t-[1px] border-[#292f46]",
+          closeButton: "hover:bg-black/5 active:bg-white/10",
+        }}
+        isDismissable={true}
+        scrollBehavior={"normal"}
+        placement={"center"}
+        size="2xl"
+      >
+        <ModalContent>
+          <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+            Select your purchase type:
+          </ModalHeader>
+          <ModalBody className="flex flex-col overflow-hidden">
+            <div className="flex items-center justify-center">
+              <Select label="Purchase Type" className="max-w-xs">
+                <SelectItem
+                  key="in-person"
+                  className="text-light-text dark:text-dark-text"
+                  onClick={async () => {
+                    setShowPurchaseTypeOption(false);
+                    if (isCashuPayment) {
+                      await handleCashuPayment(totalCost);
+                    } else {
+                      await handleLightningPayment(totalCost);
+                    }
+                  }}
+                >
+                  In-person
+                </SelectItem>
+                <SelectItem
+                  key="online-order"
+                  className="text-light-text dark:text-dark-text"
+                  onClick={() => {
+                    if (needsShippingInfo) {
+                      handleToggleShippingModal();
+                    } else {
+                      handleToggleContactModal();
+                    }
+                    setShowPurchaseTypeOption(false);
+                  }}
+                >
+                  Online order
+                </SelectItem>
+              </Select>
+            </div>
+          </ModalBody>
+        </ModalContent>
+      </Modal>
+
       <Modal
         backdrop="blur"
         isOpen={showShippingModal}

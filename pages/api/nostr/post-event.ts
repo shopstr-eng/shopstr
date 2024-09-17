@@ -162,7 +162,6 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
       };
     } else if (kind === 30018) {
       event.content.stall_id = event.pubkey; // using users public key as stall id
-      const productId = event.content.id;
       event.content = JSON.stringify(event.content);
       signedEvent = finalizeEvent(event, privkey);
     } else if (kind === 30402) {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useContext } from "react";
 import { withRouter, NextRouter } from "next/router";
 import { nip19, getPublicKey } from "nostr-tools";
-import * as CryptoJS from "crypto-js";
+import CryptoJS from "crypto-js";
 import { validateNSecKey } from "../../components/utility/nostr-helper-functions";
 import { RelaysContext, CashuWalletContext } from "../../utils/context/context";
 import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
@@ -176,7 +176,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
   }, [privateKey]);
 
   return (
-    <div className="flex h-full flex-col bg-light-bg pb-20 pt-4 dark:bg-dark-bg sm:ml-[120px] md:ml-[250px]">
+    <div className="flex h-full flex-col bg-light-bg pt-24 dark:bg-dark-bg">
       <div className="flex max-h-screen flex-row items-center justify-center">
         <Card>
           <CardBody>

@@ -1,4 +1,4 @@
-import * as CryptoJS from "crypto-js";
+import CryptoJS from "crypto-js";
 import {
   finalizeEvent,
   nip04,
@@ -588,17 +588,6 @@ export function validateNPubKey(publicKey: string) {
 export function validateNSecKey(privateKey: string) {
   const validPrivKey = /^nsec[a-zA-Z0-9]{59}$/;
   return privateKey.match(validPrivKey) !== null;
-}
-
-async function sha256Hex(string: string | undefined) {
-  const utf8 = new TextEncoder().encode(string);
-
-  const hashBuffer = await crypto.subtle.digest("SHA-256", utf8);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray
-    .map((bytes) => bytes.toString(16).padStart(2, "0"))
-    .join("");
-  return hashHex;
 }
 
 export function validPassphrase(passphrase: string) {

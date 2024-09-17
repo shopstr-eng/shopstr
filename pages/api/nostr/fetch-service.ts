@@ -8,7 +8,11 @@ import {
   fetchProfileDataFromCache,
   removeProductFromCache,
 } from "./cache-service";
-import { NostrEvent, NostrMessageEvent } from "@/utils/types/types";
+import {
+  NostrEvent,
+  NostrMessageEvent,
+  ShopSettings,
+} from "@/utils/types/types";
 import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
 import { ChatsMap } from "@/utils/context/context";
 import { DateTime } from "luxon";
@@ -104,6 +108,69 @@ export const fetchAllPosts = async (
   });
 };
 
+export const fetchShopSettings = async (
+  relays: string[],
+  pubkeyShopSettingsToFetch: string[],
+  editShopContext: (
+    shopEvents: Map<string, ShopSettings>,
+    isLoading: boolean,
+  ) => void,
+): Promise<{
+  shopSettingsMap: Map<string, ShopSettings>;
+}> => {
+  return new Promise(async function (resolve, reject) {
+    try {
+      let shopEvents: NostrEvent[] = [];
+      let shopSettings: Map<string, ShopSettings | any> = new Map(
+        pubkeyShopSettingsToFetch.map((pubkey) => [pubkey, null]),
+      );
+      const pool = new SimplePool();
+      let shopFilter: Filter = {
+        kinds: [30019],
+        authors: pubkeyShopSettingsToFetch,
+      };
+      let h = pool.subscribeMany(relays, [shopFilter], {
+        onevent(event) {
+          shopEvents.push(event);
+        },
+        oneose: async () => {
+          h.close();
+          if (shopEvents.length > 0) {
+            shopEvents.sort((a, b) => b.created_at - a.created_at);
+            const latestEventsMap: Map<string, NostrEvent> = new Map();
+            shopEvents.forEach((event) => {
+              if (!latestEventsMap.has(event.pubkey)) {
+                latestEventsMap.set(event.pubkey, event);
+              }
+            });
+            latestEventsMap.forEach((event, pubkey) => {
+              try {
+                const shopSetting = {
+                  pubkey: event.pubkey,
+                  content: JSON.parse(event.content),
+                  created_at: event.created_at,
+                };
+                shopSettings.set(pubkey, shopSetting);
+              } catch (error) {
+                console.error(
+                  `Failed to parse shop setting for pubkey: ${pubkey}`,
+                  error,
+                );
+              }
+            });
+            editShopContext(shopSettings, false);
+            resolve({ shopSettingsMap: shopSettings });
+          } else {
+            reject();
+          }
+        },
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
 export const fetchProfile = async (
   relays: string[],
   pubkeyProfilesToFetch: string[],
@@ -172,7 +239,6 @@ export const fetchChatsAndMessages = async (
   userPubkey: string,
   editChatContext: (chatsMap: ChatsMap, isLoading: boolean) => void,
   since?: number,
-  until?: number,
 ): Promise<{
   profileSetFromChats: Set<string>;
 }> => {
@@ -204,7 +270,7 @@ export const fetchChatsAndMessages = async (
       const onEOSE = () => {
         if (incomingChatsReachedEOSE && outgoingChatsReachedEOSE) {
           //sort chats by created_at
-          chatsMap.forEach((value, key) => {
+          chatsMap.forEach((value) => {
             value.sort(
               (a: NostrMessageEvent, b: NostrMessageEvent) =>
                 a.created_at - b.created_at,
@@ -297,6 +363,7 @@ export const fetchChatsAndMessages = async (
       );
     } catch (error) {
       console.log("Failed to fetch chats and messages: ", error);
+      reject(error);
     }
   });
 };
