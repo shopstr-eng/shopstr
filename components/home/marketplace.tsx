@@ -186,6 +186,17 @@ export function MarketplacePage({
                   }
                 }}
                 selectionMode="multiple"
+                isSearchable={true} // Add this line
+                filterOptions={(
+                  options,
+                  search, // Add this function
+                ) =>
+                  options.filter((option) =>
+                    option.children
+                      .toLowerCase()
+                      .includes(search.toLowerCase()),
+                  )
+                }
               >
                 <SelectSection className="text-light-text dark:text-dark-text">
                   {CATEGORIES.map((category) => (

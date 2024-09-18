@@ -123,6 +123,12 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
       startContent={locationAvatar(value)}
       {...props}
       className="mt-2 text-light-text dark:text-dark-text"
+      isSearchable={true}
+      filterOptions={(options, search) =>
+        options.filter((option) =>
+          option.children.toLowerCase().includes(search.toLowerCase()),
+        )
+      }
     >
       {locationOptions}
     </Select>

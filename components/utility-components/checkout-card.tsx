@@ -3,8 +3,9 @@ import { nip19 } from "nostr-tools";
 import { ProductData } from "../utility/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
-import CompactPriceDisplay, {
+import {
   DisplayCostBreakdown,
+  DisplayCheckoutCost,
 } from "./display-monetary-info";
 import InvoiceCard from "../invoice-card";
 import { useRouter } from "next/router";
@@ -278,7 +279,7 @@ export default function CheckoutCard({
                   )}
                 </div>
                 <div className="mt-4">
-                  <CompactPriceDisplay monetaryInfo={productData} />
+                  <DisplayCheckoutCost monetaryInfo={productData} />
                 </div>
                 {renderSizeGrid()}
                 <div className="py-1">

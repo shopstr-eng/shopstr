@@ -73,6 +73,29 @@ export function DisplayCostBreakdown({
   );
 }
 
+export function DisplayCheckoutCost({
+  monetaryInfo,
+}: {
+  monetaryInfo: ProductMonetaryInfo;
+}) {
+  const { shippingType, price, currency } = monetaryInfo;
+
+  const formattedPrice = formatWithCommas(price, currency);
+
+  return (
+    <div>
+      <p className="text-lg font-semibold text-light-text dark:text-dark-text">
+        {formattedPrice}
+      </p>
+      {shippingType && (
+        <p className="mb-4 text-sm text-light-text dark:text-dark-text">
+          Shipping: {shippingType}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export const calculateTotalCost = (
   productMonetaryInfo: ProductMonetaryInfo,
 ) => {
