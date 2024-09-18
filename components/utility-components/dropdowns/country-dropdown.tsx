@@ -34,16 +34,7 @@ const CountryDropdown = ({ value, ...props }: { [x: string]: any }) => {
   }, []);
 
   return (
-    <Select
-      {...props}
-      className="mt-2 text-light-text dark:text-dark-text"
-      isSearchable={true}
-      filterOptions={(options, search) =>
-        options.filter((option) =>
-          option.children.toLowerCase().includes(search.toLowerCase()),
-        )
-      }
-    >
+    <Select {...props} className="mt-2 text-light-text dark:text-dark-text">
       {countryOptions}
     </Select>
   );
