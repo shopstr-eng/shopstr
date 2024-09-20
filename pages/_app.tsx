@@ -286,7 +286,7 @@ function App({ Component, pageProps }: AppProps) {
         allRelays = [
           "wss://relay.damus.io",
           "wss://nos.lol",
-          "wss://nostr.mutinywallet.com",
+          "wss://sendit.nosflare.com",
           "wss://purplepag.es",
         ];
         localStorage.setItem("relays", JSON.stringify(allRelays));

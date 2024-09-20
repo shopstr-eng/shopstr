@@ -73,7 +73,7 @@ export async function PostListing(
     const pool = new SimplePool();
 
     const allWriteRelays = [...writeRelays, ...relays];
-    const blastrRelay = "wss://nostr.mutinywallet.com";
+    const blastrRelay = "wss://sendit.nosflare.com";
     if (!containsRelay(allWriteRelays, blastrRelay)) {
       allWriteRelays.push(blastrRelay);
     }
@@ -84,7 +84,7 @@ export async function PostListing(
     return signedEvent;
   } else {
     const allWriteRelays = [...writeRelays, ...relays];
-    const blastrRelay = "wss://nostr.mutinywallet.com";
+    const blastrRelay = "wss://sendit.nosflare.com";
     if (!containsRelay(allWriteRelays, blastrRelay)) {
       allWriteRelays.push(blastrRelay);
     }
@@ -173,7 +173,7 @@ export async function sendEncryptedMessage(
   }
   const pool = new SimplePool();
   const allWriteRelays = [...writeRelays, ...relays];
-  const blastrRelay = "wss://nostr.mutinywallet.com";
+  const blastrRelay = "wss://sendit.nosflare.com";
   if (!containsRelay(allWriteRelays, blastrRelay)) {
     allWriteRelays.push(blastrRelay);
   }
@@ -508,7 +508,7 @@ export async function finalizeAndSendNostrEvent(
     }
     const pool = new SimplePool();
     const allWriteRelays = [...writeRelays, ...relays];
-    const blastrRelay = "wss://nostr.mutinywallet.com";
+    const blastrRelay = "wss://sendit.nosflare.com";
     if (!containsRelay(allWriteRelays, blastrRelay)) {
       allWriteRelays.push(blastrRelay);
     }
@@ -675,7 +675,7 @@ export const setLocalStorageDataOnSignIn = ({
         : [
             "wss://relay.damus.io",
             "wss://nos.lol",
-            "wss://nostr.mutinywallet.com",
+            "wss://sendit.nosflare.com",
             "wss://purplepag.es",
           ],
     ),
@@ -772,7 +772,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     const defaultRelays = [
       "wss://relay.damus.io",
       "wss://nos.lol",
-      "wss://nostr.mutinywallet.com",
+      "wss://sendit.nosflare.com",
       "wss://purplepag.es",
     ];
 

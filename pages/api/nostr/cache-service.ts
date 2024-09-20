@@ -2,6 +2,17 @@ import { NostrEvent } from "../../../utils/types/types";
 import Dexie, { Table } from "dexie";
 import { ItemType, NostrMessageEvent } from "../../../utils/types/types";
 
+export let db: ItemsFetchedFromRelays | null = null;
+let indexedDBWorking = false;
+
+// In-memory fallback storage
+const inMemoryStorage = {
+  products: new Map<string, NostrEvent>(),
+  profiles: new Map<string, any>(),
+  chatMessages: new Map<string, NostrMessageEvent>(),
+  lastFetchedTime: new Map<string, number>(),
+};
+
 class ItemsFetchedFromRelays extends Dexie {
   public products!: Table<{ id: string; product: NostrEvent }>;
   public profiles!: Table<{ id: string; profile: {} }>;
@@ -11,112 +22,216 @@ class ItemsFetchedFromRelays extends Dexie {
   public constructor() {
     super("ItemsFetchedFromRelays");
     this.version(2).stores({
-      products: "id, product", // product: {id, product}
-      profiles: "id, profile", // profile: {pubkey, created_at, content}
-      chatMessages: "id, message", // message: NostrMessageEvent
-      lastFetchedTime: "itemType, time", // item: {products, profiles, chats} time: timestamp
+      products: "id, product",
+      profiles: "id, profile",
+      chatMessages: "id, message",
+      lastFetchedTime: "itemType, time",
     });
   }
 }
 
-let indexedDBWorking = true;
+// Initialize database or fallback storage
+if (typeof indexedDB !== "undefined") {
+  try {
+    db = new ItemsFetchedFromRelays();
+    db.open()
+      .then(() => {
+        console.log("IndexedDB opened successfully");
+        indexedDBWorking = true;
+      })
+      .catch((e) => {
+        console.error("IndexDB Open failed: " + e.stack);
+      });
+  } catch (error) {
+    console.error("Error initializing IndexedDB:", error);
+  }
+} else {
+  console.warn(
+    "IndexedDB is not available. Using in-memory storage as fallback.",
+  );
+}
 
-export const db = new ItemsFetchedFromRelays();
+export const getMinutesSinceLastFetch = async (
+  itemType: ItemType,
+): Promise<number> => {
+  try {
+    let lastFetchTime: number | { itemType: string; time: number } | undefined;
+    if (indexedDBWorking && db) {
+      lastFetchTime = await db.lastFetchedTime.get({ itemType });
+    } else {
+      lastFetchTime = inMemoryStorage.lastFetchedTime.get(itemType);
+    }
 
-db.open().catch(function (e) {
-  console.error("IndexDB Open failed: " + e.stack);
-  indexedDBWorking = false;
-});
+    let lastFetchTimeValue: number;
+    if (!lastFetchTime) {
+      lastFetchTimeValue = 0;
+    } else if (typeof lastFetchTime === "number") {
+      lastFetchTimeValue = lastFetchTime;
+    } else {
+      lastFetchTimeValue = lastFetchTime.time;
+    }
 
-const { products, profiles, chatMessages, lastFetchedTime } = db;
-
-/**
- * returns the minutes lapsed since last fetch 60000ms = 1 minute
- */
-export const getMinutesSinceLastFetch = async (itemType: ItemType) => {
-  let lastFetchTime = await lastFetchedTime.get({ itemType });
-  if (!lastFetchTime) lastFetchTime = { itemType, time: 0 };
-  let timelapsedInMinutes = (Date.now() - lastFetchTime.time) / 60000;
-  return timelapsedInMinutes;
+    return (Date.now() - lastFetchTimeValue) / 60000;
+  } catch (error) {
+    console.error("Error getting minutes since last fetch:", error);
+    return 0;
+  }
 };
 
 export const didXMinutesElapseSinceLastFetch = async (
   itemType: ItemType,
   minutes: number,
-) => {
-  let timelapsedInMinutes = await getMinutesSinceLastFetch(itemType);
+): Promise<boolean> => {
+  const timelapsedInMinutes = await getMinutesSinceLastFetch(itemType);
   return timelapsedInMinutes > minutes;
 };
 
-export const addProductToCache = async (product: NostrEvent) => {
-  await products.put({ id: product.id, product });
+export const addProductToCache = async (product: NostrEvent): Promise<void> => {
+  try {
+    if (indexedDBWorking && db) {
+      await db.products.put({ id: product.id, product });
+    } else {
+      inMemoryStorage.products.set(product.id, product);
+    }
+  } catch (error) {
+    console.error("Error adding product to cache:", error);
+  }
 };
 
-export const addProductsToCache = async (productsArray: NostrEvent[]) => {
-  productsArray.forEach(async (product) => {
-    await addProductToCache(product);
-  });
-  await lastFetchedTime.put({ itemType: "products", time: Date.now() });
+export const addProductsToCache = async (
+  productsArray: NostrEvent[],
+): Promise<void> => {
+  try {
+    for (const product of productsArray) {
+      await addProductToCache(product);
+    }
+    await updateLastFetchedTime("products");
+  } catch (error) {
+    console.error("Error adding products to cache:", error);
+  }
 };
 
-export const addProfilesToCache = async (profileMap: Map<string, any>) => {
-  Array.from(profileMap.entries()).forEach(async ([pubkey, profile]) => {
-    if (profile === null) return;
-    await profiles.put({ id: pubkey, profile });
-  });
-  await lastFetchedTime.put({ itemType: "profiles", time: Date.now() });
+export const addProfilesToCache = async (
+  profileMap: Map<string, any>,
+): Promise<void> => {
+  try {
+    for (const [pubkey, profile] of profileMap.entries()) {
+      if (profile === null) continue;
+      if (indexedDBWorking && db) {
+        await db.profiles.put({ id: pubkey, profile });
+      } else {
+        inMemoryStorage.profiles.set(pubkey, profile);
+      }
+    }
+    await updateLastFetchedTime("profiles");
+  } catch (error) {
+    console.error("Error adding profiles to cache:", error);
+  }
 };
 
-export const addChatMessageToCache = async (chat: NostrMessageEvent) => {
-  await chatMessages.put({ id: chat.id, message: chat });
+export const addChatMessageToCache = async (
+  chat: NostrMessageEvent,
+): Promise<void> => {
+  try {
+    if (indexedDBWorking && db) {
+      await db.chatMessages.put({ id: chat.id, message: chat });
+    } else {
+      inMemoryStorage.chatMessages.set(chat.id, chat);
+    }
+  } catch (error) {
+    console.error("Error adding chat message to cache:", error);
+  }
 };
 
-export const addChatMessagesToCache = async (chats: NostrMessageEvent[]) => {
-  chats?.forEach(async (chat) => {
-    await addChatMessageToCache(chat);
-  });
+export const addChatMessagesToCache = async (
+  chats: NostrMessageEvent[],
+): Promise<void> => {
+  try {
+    for (const chat of chats) {
+      await addChatMessageToCache(chat);
+    }
+  } catch (error) {
+    console.error("Error adding chat messages to cache:", error);
+  }
 };
 
-export const removeProductFromCache = async (productIds: string[]) => {
-  await products.bulkDelete(productIds);
+export const removeProductFromCache = async (
+  productIds: string[],
+): Promise<void> => {
+  try {
+    if (indexedDBWorking && db) {
+      await db.products.bulkDelete(productIds);
+    } else {
+      for (const id of productIds) {
+        inMemoryStorage.products.delete(id);
+      }
+    }
+  } catch (error) {
+    console.error("Error removing products from cache:", error);
+  }
 };
 
-export const fetchAllProductsFromCache = async () => {
-  let productsFromCache = await products.toArray();
-  let productsArray = productsFromCache.map(
-    (productFromCache: { id: string; product: NostrEvent }) =>
-      productFromCache.product,
-  );
-  return productsArray;
+export const fetchAllProductsFromCache = async (): Promise<NostrEvent[]> => {
+  try {
+    if (indexedDBWorking && db) {
+      const productsFromCache = await db.products.toArray();
+      return productsFromCache.map(({ product }) => product);
+    } else {
+      return Array.from(inMemoryStorage.products.values());
+    }
+  } catch (error) {
+    console.error("Error fetching products from cache:", error);
+    return [];
+  }
 };
 
-export const fetchProfileDataFromCache = async () => {
-  let cache = await profiles.toArray();
-  let productMap = new Map();
-  cache.forEach(({ id, profile }) => {
-    productMap.set(id, profile);
-  });
-  return productMap;
+export const fetchProfileDataFromCache = async (): Promise<
+  Map<string, any>
+> => {
+  try {
+    if (indexedDBWorking && db) {
+      const cache = await db.profiles.toArray();
+      return new Map(cache.map(({ id, profile }) => [id, profile]));
+    } else {
+      return new Map(inMemoryStorage.profiles);
+    }
+  } catch (error) {
+    console.error("Error fetching profile data from cache:", error);
+    return new Map();
+  }
 };
 
-export const fetchAllChatsFromCache = async () => {
-  let cache = await chatMessages.toArray();
-  let chatsMap = new Map();
-  cache.forEach(({ id, message }) => {
-    chatsMap.set(id, message);
-  });
-  return chatsMap;
+export const fetchAllChatsFromCache = async (): Promise<
+  Map<string, NostrMessageEvent>
+> => {
+  try {
+    if (indexedDBWorking && db) {
+      const cache = await db.chatMessages.toArray();
+      return new Map(cache.map(({ id, message }) => [id, message]));
+    } else {
+      return new Map(inMemoryStorage.chatMessages);
+    }
+  } catch (error) {
+    console.error("Error fetching all chats from cache:", error);
+    return new Map();
+  }
 };
 
 export const fetchChatMessagesFromCache = async (): Promise<
   Map<string, NostrMessageEvent>
 > => {
-  let chatMessagesFromCache = await chatMessages.toArray();
-  let chatMessagesMap = new Map();
-  chatMessagesFromCache.forEach(
-    ({ id, message }: { id: string; message: NostrMessageEvent }) => {
-      chatMessagesMap.set(id, message);
-    },
-  );
-  return chatMessagesMap;
+  return fetchAllChatsFromCache();
+};
+
+const updateLastFetchedTime = async (itemType: string): Promise<void> => {
+  try {
+    const time = Date.now();
+    if (indexedDBWorking && db) {
+      await db.lastFetchedTime.put({ itemType, time });
+    } else {
+      inMemoryStorage.lastFetchedTime.set(itemType, time);
+    }
+  } catch (error) {
+    console.error("Error updating last fetched time:", error);
+  }
 };

@@ -35,9 +35,11 @@ const TopNav = ({
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const liveChatMessagesFromCache = useLiveQuery(
-    async () => await db.table("chatMessages").toArray(),
-  );
+  const liveChatMessagesFromCache = useLiveQuery(async () => {
+    if (db) {
+      await db.table("chatMessages").toArray();
+    }
+  });
 
   useEffect(() => {
     const getSignedInStatus = () => {

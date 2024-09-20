@@ -59,7 +59,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
             JSON.stringify([
               "wss://relay.damus.io",
               "wss://nos.lol",
-              "wss://nostr.mutinywallet.com",
+              "wss://sendit.nosflare.com",
               "wss://purplepag.es",
             ]),
           );
@@ -134,7 +134,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
           JSON.stringify([
             "wss://relay.damus.io",
             "wss://nos.lol",
-            "wss://nostr.mutinywallet.com",
+            "wss://sendit.nosflare.com",
             "wss://purplepag.es",
           ]),
         );
