@@ -721,6 +721,43 @@ export const fetchCashuWallet = async (
                     conversationKey,
                   );
                   cashuWalletEventContent = JSON.parse(eventContent);
+                } else if (signInMethod === "amber") {
+                  const amberSignerUrl = `nostrsigner:${event.content}?pubKey=${
+                    getLocalStorageData().userPubkey
+                  }&compressionType=none&returnType=signature&type=nip44_decrypt`;
+
+                  window.open(amberSignerUrl, "_blank");
+
+                  const checkClipboard = async () => {
+                    try {
+                      if (!document.hasFocus()) {
+                        console.log(
+                          "Document not focused, waiting for focus...",
+                        );
+                        return;
+                      }
+
+                      const clipboardContent =
+                        await navigator.clipboard.readText();
+
+                      let eventContent = clipboardContent;
+
+                      let parsedContent = JSON.parse(eventContent);
+
+                      cashuWalletEventContent = parsedContent[0];
+                    } catch (error) {
+                      console.error("Error reading clipboard:", error);
+                    }
+                  };
+
+                  checkClipboard();
+                  const intervalId = setInterval(checkClipboard, 1000);
+
+                  setTimeout(() => {
+                    clearInterval(intervalId);
+                    console.log("Amber decryption timeout");
+                    alert("Amber decryption timed out. Please try again.");
+                  }, 60000);
                 }
                 if (
                   event.kind === 7375 &&

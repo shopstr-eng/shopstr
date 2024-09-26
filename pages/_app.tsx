@@ -333,7 +333,8 @@ function App({ Component, pageProps }: AppProps) {
         );
         if (
           (getLocalStorageData().signInMethod === "nsec" && passphrase) ||
-          getLocalStorageData().signInMethod === "extension"
+          getLocalStorageData().signInMethod === "extension" ||
+          getLocalStorageData().signInMethod === "amber"
         ) {
           let {
             mostRecentWalletEvent,

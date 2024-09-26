@@ -23,6 +23,7 @@ const DisplayProducts = ({
   selectedLocation,
   selectedSearch,
   canShowLoadMore,
+  setCanShowLoadMore,
   wotFilter,
   isMyListings,
   setCategories,
@@ -32,6 +33,7 @@ const DisplayProducts = ({
   selectedLocation: string;
   selectedSearch: string;
   canShowLoadMore?: boolean;
+  setCanShowLoadMore?: (canShowLoadMore: boolean) => void;
   wotFilter?: boolean;
   isMyListings?: boolean;
   setCategories?: (categories: string[]) => void;
@@ -44,6 +46,9 @@ const DisplayProducts = ({
   const [focusedProduct, setFocusedProduct] = useState(""); // product being viewed in modal
   const [showModal, setShowModal] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
+
+  const [loadMoreClickCount, setLoadMoreClickCount] = useState(0);
+
   const router = useRouter();
 
   const { userPubkey } = getLocalStorageData();
@@ -183,6 +188,7 @@ const DisplayProducts = ({
       setIsLoadingMore(true);
       if (productEventContext.isLoading) return;
       productEventContext.isLoading = true;
+
       const oldestListing =
         productEvents.length > 0
           ? productEvents[productEvents.length - 1]
@@ -190,11 +196,23 @@ const DisplayProducts = ({
       const oldestListingCreatedAt = oldestListing
         ? oldestListing.createdAt
         : Math.trunc(DateTime.now().toSeconds());
+
+      const daysToSubtract = 14 * Math.pow(2, loadMoreClickCount);
       const since = Math.trunc(
         DateTime.fromSeconds(oldestListingCreatedAt)
-          .minus({ days: 14 })
+          .minus({ days: daysToSubtract })
           .toSeconds(),
       );
+
+      // Check if the new timestamp is before January 1, 2022
+      const jan2022 = DateTime.fromObject({
+        year: 2022,
+        month: 1,
+        day: 1,
+      }).toSeconds();
+      if (since < jan2022 && setCanShowLoadMore) {
+        setCanShowLoadMore(false);
+      }
 
       const pool = new SimplePool();
       const filter: Filter = {
@@ -202,12 +220,15 @@ const DisplayProducts = ({
         since,
         until: oldestListingCreatedAt,
       };
+
       const events = await pool.querySync(getLocalStorageData().relays, filter);
       events.forEach((event) => {
         if (event.id !== oldestListing?.id) {
           productEventContext.addNewlyCreatedProductEvent(event);
         }
       });
+
+      setLoadMoreClickCount((prevCount) => prevCount + 1);
       productEventContext.isLoading = false;
       setIsLoadingMore(false);
     } catch (err) {

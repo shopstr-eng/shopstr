@@ -48,6 +48,50 @@ export const FileUploaderButton = ({
           imageFiles,
           async (e) => await window.nostr.signEvent(e),
         );
+      } else if (signInMethod === "amber") {
+        console.log("uploading");
+        response = await nostrBuildUploadImages(imageFiles, async (e) => {
+          // const eventJson = encodeURIComponent(JSON.stringify(e));
+          const eventJson = encodeURIComponent(JSON.stringify(e));
+          console.log(eventJson);
+          const amberSignerUrl = `nostrsigner:${eventJson}?compressionType=none&returnType=signature&type=sign_event`;
+          console.log(amberSignerUrl);
+
+          window.open(amberSignerUrl, "_blank");
+
+          const checkClipboard = async () => {
+            try {
+              if (!document.hasFocus()) {
+                console.log("Document not focused, waiting for focus...");
+                return;
+              }
+
+              const clipboardContent = await navigator.clipboard.readText();
+
+              if (clipboardContent) {
+                return clipboardContent;
+              }
+            } catch (error) {
+              console.error("Error reading clipboard:", error);
+            }
+          };
+
+          const intervalId = setInterval(async () => {
+            const result = await checkClipboard();
+            if (result) {
+              clearInterval(intervalId);
+              return result;
+            }
+          }, 60000);
+
+          return new Promise(() => {
+            setTimeout(() => {
+              clearInterval(intervalId);
+              console.log("Amber signing timeout");
+              alert("Amber signing timed out! Please try again.");
+            }, 60000);
+          });
+        });
       }
       const imageUrls = response?.map((i) => i.url);
       if (imageUrls && imageUrls[0]) {
