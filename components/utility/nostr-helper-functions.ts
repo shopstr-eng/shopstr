@@ -12,14 +12,68 @@ import { NostrEvent } from "@/utils/types/types";
 import { Proof } from "@cashu/cashu-ts";
 import { ProductFormValues } from "@/pages/api/nostr/post-event";
 import { DeleteEvent } from "@/pages/api/nostr/crud-service";
+import { gunzipSync } from "zlib";
+import { Buffer } from "buffer";
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
 }
 
+function decryptBase64Gzip(encodedString: string): string {
+  try {
+    // Step 1: Decode base64
+    const decodedData = Buffer.from(encodedString, "base64");
+
+    // Step 2: Decompress gzip
+    const decompressedData = gunzipSync(decodedData);
+
+    // Return the decompressed data as a string
+    return decompressedData.toString("utf-8");
+  } catch (error) {
+    console.error("Error decrypting base64 gzip:", error);
+    throw error;
+  }
+}
+
 async function amberSignEvent(event: any): Promise<any> {
   const encodedJson = encodeURIComponent(JSON.stringify(event));
-  const amberSignerUrl = `nostrsigner:${encodedJson}?compressionType=none&returnType=signature&type=sign_event`;
+  const amberSignerUrl = `nostrsigner:${encodedJson}?compressionType=gzip&returnType=event&type=sign_event`;
+
+  window.open(amberSignerUrl, "_blank");
+
+  return new Promise((resolve, reject) => {
+    const checkClipboard = async () => {
+      try {
+        if (!document.hasFocus()) {
+          console.log("Document not focused, waiting for focus...");
+          return;
+        }
+        const clipboardContent = await navigator.clipboard.readText();
+        let signedEvent = JSON.parse(clipboardContent);
+        resolve(signedEvent);
+      } catch (error) {
+        console.error("Error reading clipboard:", error);
+      }
+    };
+
+    checkClipboard();
+    const intervalId = setInterval(checkClipboard, 21000);
+
+    setTimeout(() => {
+      clearInterval(intervalId);
+      console.log("Amber signing timeout");
+      reject(new Error("Amber signing timed out. Please try again."));
+    }, 21000);
+  });
+}
+
+async function amberNip44Encrypt(
+  content: any,
+  userPubkey: string,
+): Promise<string> {
+  const amberSignerUrl = `nostrsigner:${JSON.stringify(
+    content,
+  )}?pubKey=${userPubkey}&compressionType=none&returnType=signature&type=nip44_encrypt`;
 
   window.open(amberSignerUrl, "_blank");
 
@@ -32,20 +86,56 @@ async function amberSignEvent(event: any): Promise<any> {
         }
 
         const clipboardContent = await navigator.clipboard.readText();
-        let signedEvent = JSON.parse(clipboardContent);
-        resolve(signedEvent);
+        resolve(clipboardContent);
       } catch (error) {
         console.error("Error reading clipboard:", error);
       }
     };
 
+    checkClipboard();
+    const intervalId = setInterval(checkClipboard, 21000);
+
+    setTimeout(() => {
+      clearInterval(intervalId);
+      console.log("Amber encryption timeout");
+      reject(new Error("Amber encryption timed out. Please try again."));
+    }, 21000);
+  });
+}
+
+async function amberNip04Encrypt(
+  message: string,
+  recipientPubkey: string,
+): Promise<string> {
+  console.log(message);
+  const amberSignerUrl = `nostrsigner:${message}?pubKey=${recipientPubkey}&compressionType=none&returnType=signature&type=nip04_encrypt`;
+
+  window.open(amberSignerUrl, "_blank");
+
+  return new Promise((resolve, reject) => {
+    const checkClipboard = async () => {
+      try {
+        if (!document.hasFocus()) {
+          console.log("Document not focused, waiting for focus...");
+          return;
+        }
+
+        const clipboardContent = await navigator.clipboard.readText();
+        console.log(clipboardContent);
+        resolve(clipboardContent);
+      } catch (error) {
+        console.error("Error reading clipboard:", error);
+      }
+    };
+
+    checkClipboard();
     const intervalId = setInterval(checkClipboard, 1000);
 
     setTimeout(() => {
       clearInterval(intervalId);
-      console.log("Amber signing timeout");
-      reject(new Error("Amber signing timed out. Please try again."));
-    }, 60000);
+      console.log("Amber encryption timeout");
+      reject(new Error("Amber encryption timed out. Please try again."));
+    }, 21000);
   });
 }
 
@@ -107,14 +197,14 @@ export async function PostListing(
       signedRecEvent = await window.nostr.signEvent(recEvent);
       signedHandlerEvent = await window.nostr.signEvent(handlerEvent);
     } else if (signInMethod === "amber") {
-        try {
-          signedEvent = await amberSignEvent(event);
-          signedRecEvent = await amberSignEvent(recEvent);
-          signedHandlerEvent = await amberSignEvent(handlerEvent);
-        } catch (error) {
-          alert(error.message);
-          return;
-        }
+      try {
+        signedEvent = await amberSignEvent(event);
+        signedRecEvent = await amberSignEvent(recEvent);
+        signedHandlerEvent = await amberSignEvent(handlerEvent);
+      } catch (error) {
+        console.log(error);
+        return;
+      }
     }
 
     const pool = new SimplePool();
@@ -195,34 +285,7 @@ export async function constructEncryptedMessageEvent(
       message,
     );
   } else if (signInMethod === "amber") {
-    const amberSignerUrl = `nostrsigner:${message}?pubKey=${recipientPubkey}&compressionType=none&returnType=signature&type=nip04_encrypt`;;
-
-    window.open(amberSignerUrl, "_blank");
-
-    const checkClipboard = async () => {
-      try {
-        if (!document.hasFocus()) {
-          console.log("Document not focused, waiting for focus...");
-          return;
-        }
-
-        const clipboardContent = await navigator.clipboard.readText();
-
-        encryptedContent = clipboardContent;
-
-      } catch (error) {
-        console.error("Error reading clipboard:", error);
-      }
-    }
-
-    checkClipboard();
-    const intervalId = setInterval(checkClipboard, 1000);
-
-    setTimeout(() => {
-      clearInterval(intervalId);
-      console.log("Amber decryption timeout");
-      alert("Amber decryption timed out. Please try again.");
-    }, 60000);
+    encryptedContent = await amberNip04Encrypt(message, recipientPubkey);
   }
   let encryptedMessageEvent = {
     pubkey: senderPubkey,
@@ -243,12 +306,7 @@ export async function sendEncryptedMessage(
   if (signInMethod === "extension") {
     signedEvent = await window.nostr.signEvent(encryptedMessageEvent);
   } else if (signInMethod === "amber") {
-    try {
-      signedEvent = await amberSignEvent(encryptedMessageEvent);
-    } catch (error) {
-      alert(error.message);
-      return;
-    }
+    signedEvent = await amberSignEvent(encryptedMessageEvent);
   } else {
     if (!passphrase) throw new Error("Passphrase is required");
     let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
@@ -317,36 +375,11 @@ export async function publishWalletEvent(passphrase?: string, dTag?: string) {
       };
       signedEvent = await window.nostr.signEvent(cashuWalletEvent);
     } else if (signInMethod === "amber") {
-      let encryptedContent = "";
-      const amberSignerUrl = `nostrsigner:${JSON.stringify(walletContent)}?pubKey=${userPubkey}&compressionType=none&returnType=signature&type=nip44_encrypt`;;
+      const encryptedContent = await amberNip44Encrypt(
+        walletContent,
+        userPubkey,
+      );
 
-      window.open(amberSignerUrl, "_blank");
-
-      const checkClipboard = async () => {
-        try {
-          if (!document.hasFocus()) {
-            console.log("Document not focused, waiting for focus...");
-            return;
-          }
-
-          const clipboardContent = await navigator.clipboard.readText();
-
-          encryptedContent = clipboardContent;
-
-        } catch (error) {
-          console.error("Error reading clipboard:", error);
-        }
-      }
-
-      checkClipboard();
-      const intervalId = setInterval(checkClipboard, 1000);
-
-      setTimeout(() => {
-        clearInterval(intervalId);
-        console.log("Amber decryption timeout");
-        alert("Amber decryption timed out. Please try again.");
-      }, 60000);
-      
       const cashuWalletEvent = {
         kind: 37375,
         tags: [
@@ -444,36 +477,11 @@ export async function publishProofEvent(
             created_at: Math.floor(Date.now() / 1000),
           };
           signedEvent = await window.nostr.signEvent(cashuProofEvent);
-        } else if (signInMethod === "amber" {
-          let encryptedContent = "";
-          const amberSignerUrl = `nostrsigner:${JSON.stringify(tokenArray)}?pubKey=${userPubkey}&compressionType=none&returnType=signature&type=nip44_encrypt`;;
-
-          window.open(amberSignerUrl, "_blank");
-
-          const checkClipboard = async () => {
-            try {
-              if (!document.hasFocus()) {
-                console.log("Document not focused, waiting for focus...");
-                return;
-              }
-
-              const clipboardContent = await navigator.clipboard.readText();
-
-              encryptedContent = clipboardContent;
-
-            } catch (error) {
-              console.error("Error reading clipboard:", error);
-            }
-          }
-
-          checkClipboard();
-          const intervalId = setInterval(checkClipboard, 1000);
-
-          setTimeout(() => {
-            clearInterval(intervalId);
-            console.log("Amber decryption timeout");
-            alert("Amber decryption timed out. Please try again.");
-          }, 60000);
+        } else if (signInMethod === "amber") {
+          const encryptedContent = await amberNip44Encrypt(
+            tokenArray,
+            userPubkey,
+          );
 
           const cashuProofEvent = {
             kind: 7375,
@@ -537,36 +545,11 @@ export async function publishProofEvent(
           created_at: Math.floor(Date.now() / 1000),
         };
         signedEvent = await window.nostr.signEvent(cashuProofEvent);
-      } else if (signInMethod === "amber" {
-        let encryptedContent = "";
-        const amberSignerUrl = `nostrsigner:${JSON.stringify(tokenArray)}?pubKey=${userPubkey}&compressionType=none&returnType=signature&type=nip44_encrypt`;;
-
-        window.open(amberSignerUrl, "_blank");
-
-        const checkClipboard = async () => {
-          try {
-            if (!document.hasFocus()) {
-              console.log("Document not focused, waiting for focus...");
-              return;
-            }
-
-            const clipboardContent = await navigator.clipboard.readText();
-
-            encryptedContent = clipboardContent;
-
-          } catch (error) {
-            console.error("Error reading clipboard:", error);
-          }
-        }
-
-        checkClipboard();
-        const intervalId = setInterval(checkClipboard, 1000);
-
-        setTimeout(() => {
-          clearInterval(intervalId);
-          console.log("Amber decryption timeout");
-          alert("Amber decryption timed out. Please try again.");
-        }, 60000);
+      } else if (signInMethod === "amber") {
+        const encryptedContent = await amberNip44Encrypt(
+          tokenArray,
+          userPubkey,
+        );
 
         const cashuProofEvent = {
           kind: 7375,
@@ -663,35 +646,10 @@ export async function publishSpendingHistoryEvent(
       };
       signedEvent = await window.nostr.signEvent(cashuSpendingHistoryEvent);
     } else if (signInMethod === "amber") {
-      let encryptedContent = "";
-      const amberSignerUrl = `nostrsigner:${JSON.stringify(eventContent)}?pubKey=${userPubkey}&compressionType=none&returnType=signature&type=nip44_encrypt`;;
-
-      window.open(amberSignerUrl, "_blank");
-
-      const checkClipboard = async () => {
-        try {
-          if (!document.hasFocus()) {
-            console.log("Document not focused, waiting for focus...");
-            return;
-          }
-
-          const clipboardContent = await navigator.clipboard.readText();
-
-          encryptedContent = clipboardContent;
-
-        } catch (error) {
-          console.error("Error reading clipboard:", error);
-        }
-      }
-
-      checkClipboard();
-      const intervalId = setInterval(checkClipboard, 1000);
-
-      setTimeout(() => {
-        clearInterval(intervalId);
-        console.log("Amber decryption timeout");
-        alert("Amber decryption timed out. Please try again.");
-      }, 60000);
+      const encryptedContent = await amberNip44Encrypt(
+        eventContent,
+        userPubkey,
+      );
 
       const cashuSpendingHistoryEvent = {
         kind: 7376,
