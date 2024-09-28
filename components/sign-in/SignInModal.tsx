@@ -73,6 +73,8 @@ export default function SignInModal({
       const amberSignerUrl =
         "nostrsigner:?compressionType=none&returnType=signature&type=get_public_key";
 
+      const initialClipboardContent = await navigator.clipboard.readText();
+
       window.open(amberSignerUrl, "_blank");
 
       const checkClipboard = async () => {
@@ -84,7 +86,11 @@ export default function SignInModal({
 
           const clipboardContent = await navigator.clipboard.readText();
 
-          if (clipboardContent && clipboardContent.startsWith("npub")) {
+          if (
+            clipboardContent &&
+            clipboardContent !== initialClipboardContent &&
+            clipboardContent.startsWith("npub")
+          ) {
             const pk = clipboardContent;
 
             if (pk) {

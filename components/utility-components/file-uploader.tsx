@@ -49,13 +49,12 @@ export const FileUploaderButton = ({
           async (e) => await window.nostr.signEvent(e),
         );
       } else if (signInMethod === "amber") {
-        console.log("uploading");
         response = await nostrBuildUploadImages(imageFiles, async (e) => {
           // const eventJson = encodeURIComponent(JSON.stringify(e));
           const eventJson = encodeURIComponent(JSON.stringify(e));
-          console.log(eventJson);
           const amberSignerUrl = `nostrsigner:${eventJson}?compressionType=none&returnType=signature&type=sign_event`;
-          console.log(amberSignerUrl);
+
+          const initialClipboardContent = await navigator.clipboard.readText();
 
           window.open(amberSignerUrl, "_blank");
 
@@ -68,7 +67,11 @@ export const FileUploaderButton = ({
 
               const clipboardContent = await navigator.clipboard.readText();
 
-              if (clipboardContent) {
+              if (
+                clipboardContent &&
+                clipboardContent !== initialClipboardContent
+              ) {
+                clearInterval(intervalId);
                 return clipboardContent;
               }
             } catch (error) {
@@ -82,7 +85,7 @@ export const FileUploaderButton = ({
               clearInterval(intervalId);
               return result;
             }
-          }, 60000);
+          }, 1000);
 
           return new Promise(() => {
             setTimeout(() => {

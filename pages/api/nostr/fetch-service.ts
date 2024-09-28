@@ -726,6 +726,9 @@ export const fetchCashuWallet = async (
                     getLocalStorageData().userPubkey
                   }&compressionType=none&returnType=signature&type=nip44_decrypt`;
 
+                  const initialClipboardContent =
+                    await navigator.clipboard.readText();
+
                   window.open(amberSignerUrl, "_blank");
 
                   const checkClipboard = async () => {
@@ -740,11 +743,16 @@ export const fetchCashuWallet = async (
                       const clipboardContent =
                         await navigator.clipboard.readText();
 
-                      let eventContent = clipboardContent;
+                      if (clipboardContent !== initialClipboardContent) {
+                        clearInterval(intervalId);
+                        let eventContent = clipboardContent;
 
-                      let parsedContent = JSON.parse(eventContent);
+                        let parsedContent = JSON.parse(eventContent);
 
-                      cashuWalletEventContent = parsedContent[0];
+                        cashuWalletEventContent = parsedContent[0];
+                      } else {
+                        console.log("Waiting for new clipboard content...");
+                      }
                     } catch (error) {
                       console.error("Error reading clipboard:", error);
                     }

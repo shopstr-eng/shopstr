@@ -179,6 +179,8 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
       const amberSignerUrl =
         "nostrsigner:?compressionType=none&returnType=signature&type=get_public_key";
 
+      const initialClipboardContent = await navigator.clipboard.readText();
+
       window.open(amberSignerUrl, "_blank");
 
       const checkClipboard = async () => {
@@ -190,7 +192,11 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
 
           const clipboardContent = await navigator.clipboard.readText();
 
-          if (clipboardContent && clipboardContent.startsWith("npub")) {
+          if (
+            clipboardContent &&
+            clipboardContent !== initialClipboardContent &&
+            clipboardContent.startsWith("npub")
+          ) {
             const pk = clipboardContent;
 
             if (pk) {

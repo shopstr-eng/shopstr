@@ -39,6 +39,8 @@ async function amberSignEvent(event: any): Promise<any> {
   const encodedJson = encodeURIComponent(JSON.stringify(event));
   const amberSignerUrl = `nostrsigner:${encodedJson}?compressionType=gzip&returnType=event&type=sign_event`;
 
+  const initialClipboardContent = await navigator.clipboard.readText();
+
   window.open(amberSignerUrl, "_blank");
 
   return new Promise((resolve, reject) => {
@@ -49,21 +51,27 @@ async function amberSignEvent(event: any): Promise<any> {
           return;
         }
         const clipboardContent = await navigator.clipboard.readText();
-        let signedEvent = JSON.parse(clipboardContent);
-        resolve(signedEvent);
+
+        if (clipboardContent !== initialClipboardContent) {
+          let signedEvent = JSON.parse(clipboardContent);
+          clearInterval(intervalId);
+          resolve(signedEvent);
+        } else {
+          console.log("Waiting for new clipboard content...");
+        }
       } catch (error) {
         console.error("Error reading clipboard:", error);
       }
     };
 
     checkClipboard();
-    const intervalId = setInterval(checkClipboard, 21000);
+    const intervalId = setInterval(checkClipboard, 1000);
 
     setTimeout(() => {
       clearInterval(intervalId);
       console.log("Amber signing timeout");
       reject(new Error("Amber signing timed out. Please try again."));
-    }, 21000);
+    }, 60000);
   });
 }
 
@@ -75,40 +83,7 @@ async function amberNip44Encrypt(
     content,
   )}?pubKey=${userPubkey}&compressionType=none&returnType=signature&type=nip44_encrypt`;
 
-  window.open(amberSignerUrl, "_blank");
-
-  return new Promise((resolve, reject) => {
-    const checkClipboard = async () => {
-      try {
-        if (!document.hasFocus()) {
-          console.log("Document not focused, waiting for focus...");
-          return;
-        }
-
-        const clipboardContent = await navigator.clipboard.readText();
-        resolve(clipboardContent);
-      } catch (error) {
-        console.error("Error reading clipboard:", error);
-      }
-    };
-
-    checkClipboard();
-    const intervalId = setInterval(checkClipboard, 21000);
-
-    setTimeout(() => {
-      clearInterval(intervalId);
-      console.log("Amber encryption timeout");
-      reject(new Error("Amber encryption timed out. Please try again."));
-    }, 21000);
-  });
-}
-
-async function amberNip04Encrypt(
-  message: string,
-  recipientPubkey: string,
-): Promise<string> {
-  console.log(message);
-  const amberSignerUrl = `nostrsigner:${message}?pubKey=${recipientPubkey}&compressionType=none&returnType=signature&type=nip04_encrypt`;
+  const initialClipboardContent = await navigator.clipboard.readText();
 
   window.open(amberSignerUrl, "_blank");
 
@@ -121,8 +96,13 @@ async function amberNip04Encrypt(
         }
 
         const clipboardContent = await navigator.clipboard.readText();
-        console.log(clipboardContent);
-        resolve(clipboardContent);
+
+        if (clipboardContent !== initialClipboardContent) {
+          clearInterval(intervalId);
+          resolve(clipboardContent);
+        } else {
+          console.log("Waiting for new clipboard content...");
+        }
       } catch (error) {
         console.error("Error reading clipboard:", error);
       }
@@ -135,7 +115,50 @@ async function amberNip04Encrypt(
       clearInterval(intervalId);
       console.log("Amber encryption timeout");
       reject(new Error("Amber encryption timed out. Please try again."));
-    }, 21000);
+    }, 60000);
+  });
+}
+
+async function amberNip04Encrypt(
+  message: string,
+  recipientPubkey: string,
+): Promise<string> {
+  const amberSignerUrl = `nostrsigner:${message}?pubKey=${recipientPubkey}&compressionType=none&returnType=signature&type=nip04_encrypt`;
+
+  // Store the current clipboard content
+  const initialClipboardContent = await navigator.clipboard.readText();
+
+  window.open(amberSignerUrl, "_blank");
+
+  return new Promise((resolve, reject) => {
+    const checkClipboard = async () => {
+      try {
+        if (!document.hasFocus()) {
+          console.log("Document not focused, waiting for focus...");
+          return;
+        }
+
+        const clipboardContent = await navigator.clipboard.readText();
+
+        // Only resolve if the clipboard content has changed
+        if (clipboardContent !== initialClipboardContent) {
+          clearInterval(intervalId);
+          resolve(clipboardContent);
+        } else {
+          console.log("Waiting for new clipboard content...");
+        }
+      } catch (error) {
+        console.error("Error reading clipboard:", error);
+      }
+    };
+
+    const intervalId = setInterval(checkClipboard, 1000);
+
+    setTimeout(() => {
+      clearInterval(intervalId);
+      console.log("Amber encryption timeout");
+      reject(new Error("Amber encryption timed out. Please try again."));
+    }, 60000); // 60 seconds timeout
   });
 }
 

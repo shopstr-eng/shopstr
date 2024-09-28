@@ -149,6 +149,8 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       } else if (signInMethod === "amber") {
         const amberSignerUrl = `nostrsigner:${messageEvent.content}?pubKey=${chatPubkey}&compressionType=none&returnType=signature&type=nip04_decrypt`;
 
+        const initialClipboardContent = await navigator.clipboard.readText();
+
         window.open(amberSignerUrl, "_blank");
 
         const checkClipboard = async () => {
@@ -160,9 +162,13 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
 
             const clipboardContent = await navigator.clipboard.readText();
 
-            let eventContent = clipboardContent;
-
-            plaintext = JSON.parse(eventContent);
+            if (clipboardContent !== initialClipboardContent) {
+              clearInterval(intervalId);
+              let eventContent = clipboardContent;
+              plaintext = JSON.parse(eventContent);
+            } else {
+              console.log("Waiting for new clipboard content...");
+            }
           } catch (error) {
             console.error("Error reading clipboard:", error);
           }
