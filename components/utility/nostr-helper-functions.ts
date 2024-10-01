@@ -389,6 +389,7 @@ export async function publishWalletEvent(passphrase?: string, dTag?: string) {
           ["unit", "sat"],
           ["description", "a wallet for shopstr sales and purchases"],
           ...relayTags,
+          ["alt", "Shopstr Cashu wallet"],
         ],
         content: await window.nostr.nip44.encrypt(
           userPubkey,
@@ -412,6 +413,7 @@ export async function publishWalletEvent(passphrase?: string, dTag?: string) {
           ["unit", "sat"],
           ["description", "a wallet for shopstr sales and purchases"],
           ...relayTags,
+          ["alt", "Shopstr Cashu wallet"],
         ],
         content: encryptedContent,
         created_at: Math.floor(Date.now() / 1000),
@@ -433,6 +435,7 @@ export async function publishWalletEvent(passphrase?: string, dTag?: string) {
           ["unit", "sat"],
           ["description", "a wallet for shopstr sales and purchases"],
           ...relayTags,
+          ["alt", "Shopstr Cashu wallet"],
         ],
         content: nip44.encrypt(JSON.stringify(walletContent), conversationKey),
         created_at: Math.floor(Date.now() / 1000),

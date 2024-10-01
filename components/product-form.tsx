@@ -260,13 +260,6 @@ export default function NewForm({
             <Controller
               name="Product Name"
               control={control}
-              rules={{
-                required: "A product name is required.",
-                maxLength: {
-                  value: 50,
-                  message: "This input exceed maxLength of 50.",
-                },
-              }}
               render={({
                 field: { onChange, onBlur, value },
                 fieldState: { error },

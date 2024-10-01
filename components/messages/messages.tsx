@@ -164,8 +164,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
 
             if (clipboardContent !== initialClipboardContent) {
               clearInterval(intervalId);
-              let eventContent = clipboardContent;
-              plaintext = JSON.parse(eventContent);
+              plaintext = clipboardContent;
             } else {
               console.log("Waiting for new clipboard content...");
             }

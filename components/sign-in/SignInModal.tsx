@@ -51,7 +51,7 @@ export default function SignInModal({
         const writeRelays = relaysContext.writeRelayList;
         setLocalStorageDataOnSignIn({
           signInMethod: "extension",
-          npub: pk,
+          pubkey: pk,
           relays: generalRelays,
           readRelays: readRelays,
           writeRelays: writeRelays,
