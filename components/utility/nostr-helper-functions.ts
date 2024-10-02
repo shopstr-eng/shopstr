@@ -39,7 +39,7 @@ async function amberSignEvent(event: any): Promise<any> {
   const encodedJson = encodeURIComponent(JSON.stringify(event));
   const amberSignerUrl = `nostrsigner:${encodedJson}?compressionType=gzip&returnType=event&type=sign_event`;
 
-  const initialClipboardContent = await navigator.clipboard.readText();
+  await navigator.clipboard.writeText("");
 
   window.open(amberSignerUrl, "_blank");
 
@@ -52,7 +52,7 @@ async function amberSignEvent(event: any): Promise<any> {
         }
         const clipboardContent = await navigator.clipboard.readText();
 
-        if (clipboardContent !== initialClipboardContent) {
+        if (clipboardContent && clipboardContent !== "") {
           let signedEvent = JSON.parse(clipboardContent);
           clearInterval(intervalId);
           resolve(signedEvent);
@@ -83,7 +83,7 @@ async function amberNip44Encrypt(
     content,
   )}?pubKey=${userPubkey}&compressionType=none&returnType=signature&type=nip44_encrypt`;
 
-  const initialClipboardContent = await navigator.clipboard.readText();
+  await navigator.clipboard.writeText("");
 
   window.open(amberSignerUrl, "_blank");
 
@@ -97,7 +97,7 @@ async function amberNip44Encrypt(
 
         const clipboardContent = await navigator.clipboard.readText();
 
-        if (clipboardContent !== initialClipboardContent) {
+        if (clipboardContent && clipboardContent !== "") {
           clearInterval(intervalId);
           resolve(clipboardContent);
         } else {
@@ -126,7 +126,7 @@ async function amberNip04Encrypt(
   const amberSignerUrl = `nostrsigner:${message}?pubKey=${recipientPubkey}&compressionType=none&returnType=signature&type=nip04_encrypt`;
 
   // Store the current clipboard content
-  const initialClipboardContent = await navigator.clipboard.readText();
+  await navigator.clipboard.writeText("");
 
   window.open(amberSignerUrl, "_blank");
 
@@ -141,7 +141,7 @@ async function amberNip04Encrypt(
         const clipboardContent = await navigator.clipboard.readText();
 
         // Only resolve if the clipboard content has changed
-        if (clipboardContent !== initialClipboardContent) {
+        if (clipboardContent && clipboardContent !== "") {
           clearInterval(intervalId);
           resolve(clipboardContent);
         } else {

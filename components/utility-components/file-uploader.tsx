@@ -54,7 +54,7 @@ export const FileUploaderButton = ({
           const eventJson = encodeURIComponent(JSON.stringify(e));
           const amberSignerUrl = `nostrsigner:${eventJson}?compressionType=gzip&returnType=event&type=sign_event`;
 
-          const initialClipboardContent = await navigator.clipboard.readText();
+          await navigator.clipboard.writeText("");
 
           window.open(amberSignerUrl, "_blank");
 
@@ -68,10 +68,7 @@ export const FileUploaderButton = ({
 
                 const clipboardContent = await navigator.clipboard.readText();
 
-                if (
-                  clipboardContent &&
-                  clipboardContent !== initialClipboardContent
-                ) {
+                if (clipboardContent && clipboardContent !== "") {
                   clearInterval(intervalId);
                   resolve(JSON.parse(clipboardContent));
                 }
