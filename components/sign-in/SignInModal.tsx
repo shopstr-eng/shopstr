@@ -17,6 +17,7 @@ import { RelaysContext } from "../../utils/context/context";
 import { getPublicKey, nip19 } from "nostr-tools";
 import CryptoJS from "crypto-js";
 import { useRouter } from "next/router";
+import { isAndroid } from "../../utils/platform-detection";
 
 export default function SignInModal({
   isOpen,
@@ -32,9 +33,15 @@ export default function SignInModal({
 
   const [showNsecSignIn, setShowNsecSignIn] = useState(false);
 
+  const [isAndroidDevice, setIsAndroidDevice] = useState(false);
+
   const relaysContext = useContext(RelaysContext);
 
   const router = useRouter();
+
+  useEffect(() => {
+    setIsAndroidDevice(isAndroid());
+  }, []);
 
   const startExtensionLogin = async () => {
     try {
@@ -263,13 +270,17 @@ export default function SignInModal({
                   Extension Sign In
                 </Button>
                 <div className="text-center">------ or ------</div>
-                <Button
-                  className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
-                  onClick={startAmberLogin}
-                >
-                  Amber Sign In
-                </Button>
-                <div className="text-center">------ or ------</div>
+                {isAndroidDevice && (
+                  <>
+                    <Button
+                      className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
+                      onClick={startAmberLogin}
+                    >
+                      Amber Sign In
+                    </Button>
+                    <div className="text-center">------ or ------</div>
+                  </>
+                )}
               </div>
               <div className="flex flex-col	">
                 <div className="">

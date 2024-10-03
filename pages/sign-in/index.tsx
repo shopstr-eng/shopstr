@@ -9,6 +9,7 @@ import {
 import { RelaysContext, CashuWalletContext } from "../../utils/context/context";
 import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
+import { isAndroid } from "../../utils/platform-detection";
 
 const LoginPage = ({ router }: { router: NextRouter }) => {
   const [privateKey, setPrivateKey] = useState<string>("");
@@ -16,8 +17,14 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
   const [validPrivateKey, setValidPrivateKey] = useState<boolean>(false);
   const [passphrase, setPassphrase] = useState<string>("");
 
+  const [isAndroidDevice, setIsAndroidDevice] = useState(false);
+
   const relaysContext = useContext(RelaysContext);
   const cashuWalletContext = useContext(CashuWalletContext);
+
+  useEffect(() => {
+    setIsAndroidDevice(isAndroid());
+  }, []);
 
   const handleSignIn = async () => {
     if (validPrivateKey) {
@@ -344,12 +351,14 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
               >
                 Extension Sign In
               </Button>
-              <Button
-                className={SHOPSTRBUTTONCLASSNAMES}
-                onClick={startAmberLogin}
-              >
-                Amber Sign In
-              </Button>
+              {isAndroidDevice && (
+                <Button
+                  className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
+                  onClick={startAmberLogin}
+                >
+                  Amber Sign In
+                </Button>
+              )}
               <Button
                 className={SHOPSTRBUTTONCLASSNAMES}
                 onClick={handleSignIn}
