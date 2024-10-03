@@ -46,15 +46,15 @@ export default function SignInModal({
         relaysContext.readRelayList &&
         relaysContext.writeRelayList
       ) {
-        const allRelays = [
-          ...relaysContext.relayList,
-          ...relaysContext.readRelayList,
-          ...relaysContext.writeRelayList,
-        ];
+        const generalRelays = relaysContext.relayList;
+        const readRelays = relaysContext.readRelayList;
+        const writeRelays = relaysContext.writeRelayList;
         setLocalStorageDataOnSignIn({
           signInMethod: "extension",
           pubkey: pk,
-          relays: allRelays,
+          relays: generalRelays,
+          readRelays: readRelays,
+          writeRelays: writeRelays,
         });
       } else {
         setLocalStorageDataOnSignIn({
@@ -67,6 +67,81 @@ export default function SignInModal({
       alert("Extension sign in failed!");
     }
   };
+
+  const startAmberLogin = async () => {
+    try {
+      const amberSignerUrl =
+        "nostrsigner:?compressionType=none&returnType=signature&type=get_public_key";
+
+      await navigator.clipboard.writeText("");
+
+      window.open(amberSignerUrl, "_blank");
+
+      const checkClipboard = async () => {
+        try {
+          if (!document.hasFocus()) {
+            console.log("Document not focused, waiting for focus...");
+            return;
+          }
+
+          const clipboardContent = await navigator.clipboard.readText();
+
+          if (
+            clipboardContent &&
+            clipboardContent !== "" &&
+            clipboardContent.startsWith("npub")
+          ) {
+            const pk = clipboardContent;
+
+            if (pk) {
+              if (
+                !relaysContext.isLoading &&
+                relaysContext.relayList.length >= 0 &&
+                relaysContext.readRelayList &&
+                relaysContext.writeRelayList
+              ) {
+                const generalRelays = relaysContext.relayList;
+                const readRelays = relaysContext.readRelayList;
+                const writeRelays = relaysContext.writeRelayList;
+                setLocalStorageDataOnSignIn({
+                  signInMethod: "amber",
+                  npub: pk,
+                  relays: generalRelays,
+                  readRelays: readRelays,
+                  writeRelays: writeRelays,
+                });
+              } else {
+                setLocalStorageDataOnSignIn({
+                  signInMethod: "amber",
+                  npub: pk,
+                });
+              }
+
+              await navigator.clipboard.writeText("");
+
+              clearInterval(intervalId);
+              onClose();
+            }
+          }
+        } catch (error) {
+          console.error("Error reading clipboard:", error);
+        }
+      };
+
+      checkClipboard();
+      const intervalId = setInterval(checkClipboard, 1000);
+
+      setTimeout(() => {
+        clearInterval(intervalId);
+        console.log("Amber sign in timeout");
+        alert("Amber sign in timed out. Please try again.");
+      }, 60000);
+    } catch (error) {
+      console.error("Amber sign in failed:", error);
+      alert("Amber sign in failed!");
+    }
+  };
+
   const handleGenerateKeys = () => {
     router.push("/keys");
     onClose();
@@ -186,6 +261,13 @@ export default function SignInModal({
                   onClick={startExtensionLogin}
                 >
                   Extension Sign In
+                </Button>
+                <div className="text-center">------ or ------</div>
+                <Button
+                  className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
+                  onClick={startAmberLogin}
+                >
+                  Amber Sign In
                 </Button>
                 <div className="text-center">------ or ------</div>
               </div>

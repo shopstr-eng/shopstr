@@ -1,9 +1,6 @@
 //TODO: perhaps see if we can abstract away some payment logic into reusable functions
 import React, { useContext, useState, useEffect } from "react";
-import {
-  ProfileMapContext,
-  CashuWalletContext,
-} from "../utils/context/context";
+import { CashuWalletContext } from "../utils/context/context";
 import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
 import {
@@ -82,7 +79,7 @@ export default function InvoiceCard({
   const router = useRouter();
   const { id, pubkey, currency, totalCost, shippingType } = productData;
   const pubkeyOfProductBeingSold = pubkey;
-  const { signInMethod, userNPub, userPubkey, relays, mints, tokens, history } =
+  const { signInMethod, relays, mints, tokens, history } =
     getLocalStorageData();
 
   const [enterPassphrase, setEnterPassphrase] = useState(false);
@@ -95,8 +92,6 @@ export default function InvoiceCard({
   const [invoice, setInvoice] = useState("");
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
 
-  const [name, setName] = useState("");
-  const profileContext = useContext(ProfileMapContext);
   const walletContext = useContext(CashuWalletContext);
   const [dTag, setDTag] = useState("");
 
@@ -144,14 +139,6 @@ export default function InvoiceCard({
         console.error(error);
       });
   }, []);
-
-  useEffect(() => {
-    const profileMap = profileContext.profileData;
-    const profile = profileMap.has(userPubkey)
-      ? profileMap.get(userPubkey)
-      : undefined;
-    setName(profile && profile.content.name ? profile.content.name : userNPub);
-  }, [profileContext]);
 
   useEffect(() => {
     const walletEvent = walletContext.mostRecentWalletEvent;
@@ -447,9 +434,7 @@ export default function InvoiceCard({
     const decryptedRandomNpub = nip19.decode(randomNpub);
     const decryptedRandomNsec = nip19.decode(randomNsec);
     const paymentMessage =
-      "This is a Cashu token payment from " +
-      name +
-      " for your " +
+      "This is a Cashu token payment for your " +
       title +
       " listing on Shopstr: " +
       token;
@@ -638,7 +623,7 @@ export default function InvoiceCard({
     }
     router.push({
       pathname: "/messages",
-      query: { pk: nip19.npubEncode(pubkeyToOpenChatWith) },
+      query: { pk: nip19.npubEncode(pubkeyToOpenChatWith), isInquiry: true },
     });
   };
 

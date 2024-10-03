@@ -12,9 +12,154 @@ import { NostrEvent } from "@/utils/types/types";
 import { Proof } from "@cashu/cashu-ts";
 import { ProductFormValues } from "@/pages/api/nostr/post-event";
 import { DeleteEvent } from "@/pages/api/nostr/crud-service";
+import { gunzipSync } from "zlib";
+import { Buffer } from "buffer";
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
+}
+
+function decryptBase64Gzip(encodedString: string): string {
+  try {
+    // Step 1: Decode base64
+    const decodedData = Buffer.from(encodedString, "base64");
+
+    // Step 2: Decompress gzip
+    const decompressedData = gunzipSync(decodedData);
+
+    // Return the decompressed data as a string
+    return decompressedData.toString("utf-8");
+  } catch (error) {
+    console.error("Error decrypting base64 gzip:", error);
+    throw error;
+  }
+}
+
+async function amberSignEvent(event: any): Promise<any> {
+  const encodedJson = encodeURIComponent(JSON.stringify(event));
+  const amberSignerUrl = `nostrsigner:${encodedJson}?compressionType=gzip&returnType=event&type=sign_event`;
+
+  await navigator.clipboard.writeText("");
+
+  window.open(amberSignerUrl, "_blank");
+
+  return new Promise((resolve, reject) => {
+    const checkClipboard = async () => {
+      try {
+        if (!document.hasFocus()) {
+          console.log("Document not focused, waiting for focus...");
+          return;
+        }
+        const clipboardContent = await navigator.clipboard.readText();
+
+        if (clipboardContent && clipboardContent !== "") {
+          let signedEvent = JSON.parse(clipboardContent);
+          clearInterval(intervalId);
+          resolve(signedEvent);
+        } else {
+          console.log("Waiting for new clipboard content...");
+        }
+      } catch (error) {
+        console.error("Error reading clipboard:", error);
+      }
+    };
+
+    checkClipboard();
+    const intervalId = setInterval(checkClipboard, 1000);
+
+    setTimeout(() => {
+      clearInterval(intervalId);
+      console.log("Amber signing timeout");
+      reject(new Error("Amber signing timed out. Please try again."));
+    }, 60000);
+  });
+}
+
+async function amberNip44Encrypt(
+  content: any,
+  userPubkey: string,
+): Promise<string> {
+  const amberSignerUrl = `nostrsigner:${JSON.stringify(
+    content,
+  )}?pubKey=${userPubkey}&compressionType=none&returnType=signature&type=nip44_encrypt`;
+
+  await navigator.clipboard.writeText("");
+
+  window.open(amberSignerUrl, "_blank");
+
+  return new Promise((resolve, reject) => {
+    const checkClipboard = async () => {
+      try {
+        if (!document.hasFocus()) {
+          console.log("Document not focused, waiting for focus...");
+          return;
+        }
+
+        const clipboardContent = await navigator.clipboard.readText();
+
+        if (clipboardContent && clipboardContent !== "") {
+          clearInterval(intervalId);
+          resolve(clipboardContent);
+        } else {
+          console.log("Waiting for new clipboard content...");
+        }
+      } catch (error) {
+        console.error("Error reading clipboard:", error);
+      }
+    };
+
+    checkClipboard();
+    const intervalId = setInterval(checkClipboard, 1000);
+
+    setTimeout(() => {
+      clearInterval(intervalId);
+      console.log("Amber encryption timeout");
+      reject(new Error("Amber encryption timed out. Please try again."));
+    }, 60000);
+  });
+}
+
+async function amberNip04Encrypt(
+  message: string,
+  recipientPubkey: string,
+): Promise<string> {
+  const amberSignerUrl = `nostrsigner:${message}?pubKey=${recipientPubkey}&compressionType=none&returnType=signature&type=nip04_encrypt`;
+
+  // Store the current clipboard content
+  await navigator.clipboard.writeText("");
+
+  window.open(amberSignerUrl, "_blank");
+
+  return new Promise((resolve, reject) => {
+    const checkClipboard = async () => {
+      try {
+        if (!document.hasFocus()) {
+          console.log("Document not focused, waiting for focus...");
+          return;
+        }
+
+        const clipboardContent = await navigator.clipboard.readText();
+
+        // Only resolve if the clipboard content has changed
+        if (clipboardContent && clipboardContent !== "") {
+          clearInterval(intervalId);
+          resolve(clipboardContent);
+        } else {
+          console.log("Waiting for new clipboard content...");
+        }
+      } catch (error) {
+        console.error("Error reading clipboard:", error);
+      }
+    };
+
+    const intervalId = setInterval(checkClipboard, 1000);
+
+    setTimeout(() => {
+      clearInterval(intervalId);
+      console.log("Amber encryption timeout");
+      reject(new Error("Amber encryption timed out. Please try again."));
+    }, 60000); // 60 seconds timeout
+  });
 }
 
 export async function PostListing(
@@ -31,7 +176,7 @@ export async function PostListing(
   // Add "published_at" key
   const updatedValues = [...values, ["published_at", String(created_at)]];
 
-  if (signInMethod === "extension") {
+  if (signInMethod === "extension" || signInMethod === "amber") {
     const event = {
       created_at: created_at,
       kind: 30402,
@@ -66,9 +211,24 @@ export async function PostListing(
       created_at: Math.floor(Date.now() / 1000),
     };
 
-    const signedEvent = await window.nostr.signEvent(event);
-    const signedRecEvent = await window.nostr.signEvent(recEvent);
-    const signedHandlerEvent = await window.nostr.signEvent(handlerEvent);
+    let signedEvent;
+    let signedRecEvent;
+    let signedHandlerEvent;
+
+    if (signInMethod === "extension") {
+      signedEvent = await window.nostr.signEvent(event);
+      signedRecEvent = await window.nostr.signEvent(recEvent);
+      signedHandlerEvent = await window.nostr.signEvent(handlerEvent);
+    } else if (signInMethod === "amber") {
+      try {
+        signedEvent = await amberSignEvent(event);
+        signedRecEvent = await amberSignEvent(recEvent);
+        signedHandlerEvent = await amberSignEvent(handlerEvent);
+      } catch (error) {
+        console.log(error);
+        return;
+      }
+    }
 
     const pool = new SimplePool();
 
@@ -147,6 +307,8 @@ export async function constructEncryptedMessageEvent(
       recipientPubkey,
       message,
     );
+  } else if (signInMethod === "amber") {
+    encryptedContent = await amberNip04Encrypt(message, recipientPubkey);
   }
   let encryptedMessageEvent = {
     pubkey: senderPubkey,
@@ -166,6 +328,8 @@ export async function sendEncryptedMessage(
   let signedEvent;
   if (signInMethod === "extension") {
     signedEvent = await window.nostr.signEvent(encryptedMessageEvent);
+  } else if (signInMethod === "amber") {
+    signedEvent = await amberSignEvent(encryptedMessageEvent);
   } else {
     if (!passphrase) throw new Error("Passphrase is required");
     let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
@@ -225,6 +389,7 @@ export async function publishWalletEvent(passphrase?: string, dTag?: string) {
           ["unit", "sat"],
           ["description", "a wallet for shopstr sales and purchases"],
           ...relayTags,
+          ["alt", "Shopstr Cashu wallet"],
         ],
         content: await window.nostr.nip44.encrypt(
           userPubkey,
@@ -233,6 +398,27 @@ export async function publishWalletEvent(passphrase?: string, dTag?: string) {
         created_at: Math.floor(Date.now() / 1000),
       };
       signedEvent = await window.nostr.signEvent(cashuWalletEvent);
+    } else if (signInMethod === "amber") {
+      const encryptedContent = await amberNip44Encrypt(
+        walletContent,
+        userPubkey,
+      );
+
+      const cashuWalletEvent = {
+        kind: 37375,
+        tags: [
+          ["d", dTag ? dTag : "my-shopstr-wallet"],
+          ...mintTags,
+          ["name", "Shopstr Wallet"],
+          ["unit", "sat"],
+          ["description", "a wallet for shopstr sales and purchases"],
+          ...relayTags,
+          ["alt", "Shopstr Cashu wallet"],
+        ],
+        content: encryptedContent,
+        created_at: Math.floor(Date.now() / 1000),
+      };
+      signedEvent = await amberSignEvent(cashuWalletEvent);
     } else {
       if (!passphrase) throw new Error("Passphrase is required");
       let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
@@ -249,6 +435,7 @@ export async function publishWalletEvent(passphrase?: string, dTag?: string) {
           ["unit", "sat"],
           ["description", "a wallet for shopstr sales and purchases"],
           ...relayTags,
+          ["alt", "Shopstr Cashu wallet"],
         ],
         content: nip44.encrypt(JSON.stringify(walletContent), conversationKey),
         created_at: Math.floor(Date.now() / 1000),
@@ -316,6 +503,19 @@ export async function publishProofEvent(
             created_at: Math.floor(Date.now() / 1000),
           };
           signedEvent = await window.nostr.signEvent(cashuProofEvent);
+        } else if (signInMethod === "amber") {
+          const encryptedContent = await amberNip44Encrypt(
+            tokenArray,
+            userPubkey,
+          );
+
+          const cashuProofEvent = {
+            kind: 7375,
+            tags: [["a", "37375:" + userPubkey + dTagContent]],
+            content: encryptedContent,
+            created_at: Math.floor(Date.now() / 1000),
+          };
+          signedEvent = await amberSignEvent(cashuProofEvent);
         } else {
           if (!passphrase) throw new Error("Passphrase is required");
           let senderPrivkey = getPrivKeyWithPassphrase(
@@ -371,6 +571,19 @@ export async function publishProofEvent(
           created_at: Math.floor(Date.now() / 1000),
         };
         signedEvent = await window.nostr.signEvent(cashuProofEvent);
+      } else if (signInMethod === "amber") {
+        const encryptedContent = await amberNip44Encrypt(
+          tokenArray,
+          userPubkey,
+        );
+
+        const cashuProofEvent = {
+          kind: 7375,
+          tags: [["a", "37375:" + userPubkey + dTagContent]],
+          content: encryptedContent,
+          created_at: Math.floor(Date.now() / 1000),
+        };
+        signedEvent = await amberSignEvent(cashuProofEvent);
       } else {
         if (!passphrase) throw new Error("Passphrase is required");
         let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
@@ -458,6 +671,19 @@ export async function publishSpendingHistoryEvent(
         created_at: Math.floor(Date.now() / 1000),
       };
       signedEvent = await window.nostr.signEvent(cashuSpendingHistoryEvent);
+    } else if (signInMethod === "amber") {
+      const encryptedContent = await amberNip44Encrypt(
+        eventContent,
+        userPubkey,
+      );
+
+      const cashuSpendingHistoryEvent = {
+        kind: 7376,
+        tags: [["a", "37375:" + userPubkey + dTagContent]],
+        content: encryptedContent,
+        created_at: Math.floor(Date.now() / 1000),
+      };
+      signedEvent = await amberSignEvent(cashuSpendingHistoryEvent);
     } else {
       if (!passphrase) throw new Error("Passphrase is required");
       let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
@@ -501,6 +727,8 @@ export async function finalizeAndSendNostrEvent(
     let signedEvent;
     if (signInMethod === "extension") {
       signedEvent = await window.nostr.signEvent(nostrEvent);
+    } else if (signInMethod === "amber") {
+      signedEvent = await amberSignEvent(nostrEvent);
     } else {
       if (!passphrase) throw new Error("Passphrase is required");
       let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
@@ -636,6 +864,7 @@ const LOCALSTORAGECONSTANTS = {
 export const setLocalStorageDataOnSignIn = ({
   signInMethod,
   pubkey,
+  npub,
   encryptedPrivateKey,
   relays,
   readRelays,
@@ -645,7 +874,8 @@ export const setLocalStorageDataOnSignIn = ({
   wot,
 }: {
   signInMethod: string;
-  pubkey: string;
+  pubkey?: string;
+  npub?: string;
   encryptedPrivateKey?: string;
   relays?: string[];
   readRelays?: string[];
@@ -655,11 +885,22 @@ export const setLocalStorageDataOnSignIn = ({
   wot?: number;
 }) => {
   localStorage.setItem(LOCALSTORAGECONSTANTS.signInMethod, signInMethod);
-  localStorage.setItem(
-    LOCALSTORAGECONSTANTS.userNPub,
-    nip19.npubEncode(pubkey),
-  );
-  localStorage.setItem(LOCALSTORAGECONSTANTS.userPubkey, pubkey);
+
+  if (pubkey) {
+    localStorage.setItem(
+      LOCALSTORAGECONSTANTS.userNPub,
+      nip19.npubEncode(pubkey),
+    );
+    localStorage.setItem(LOCALSTORAGECONSTANTS.userPubkey, pubkey);
+  }
+
+  if (npub) {
+    localStorage.setItem(LOCALSTORAGECONSTANTS.userNPub, npub);
+    localStorage.setItem(
+      LOCALSTORAGECONSTANTS.userPubkey,
+      nip19.decode(npub).data as string,
+    );
+  }
   if (encryptedPrivateKey) {
     localStorage.setItem(
       LOCALSTORAGECONSTANTS.encryptedPrivateKey,

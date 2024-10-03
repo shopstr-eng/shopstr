@@ -2,7 +2,10 @@ import { useState, useEffect, useContext } from "react";
 import { withRouter, NextRouter } from "next/router";
 import { nip19, getPublicKey } from "nostr-tools";
 import CryptoJS from "crypto-js";
-import { validateNSecKey } from "../../components/utility/nostr-helper-functions";
+import {
+  setLocalStorageDataOnSignIn,
+  validateNSecKey,
+} from "../../components/utility/nostr-helper-functions";
 import { RelaysContext, CashuWalletContext } from "../../utils/context/context";
 import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
@@ -59,8 +62,8 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
             JSON.stringify([
               "wss://relay.damus.io",
               "wss://nos.lol",
-              "wss://sendit.nosflare.com",
               "wss://purplepag.es",
+              "wss://irish.nostr.cafe",
             ]),
           );
         }
@@ -134,8 +137,8 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
           JSON.stringify([
             "wss://relay.damus.io",
             "wss://nos.lol",
-            "wss://sendit.nosflare.com",
             "wss://purplepag.es",
+            "wss://irish.nostr.cafe",
           ]),
         );
       }
@@ -168,6 +171,104 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
       router.push("/");
     } catch (error) {
       alert("Extension sign in failed!");
+    }
+  };
+
+  const startAmberLogin = async () => {
+    try {
+      const amberSignerUrl =
+        "nostrsigner:?compressionType=none&returnType=signature&type=get_public_key";
+
+      await navigator.clipboard.writeText("");
+
+      window.open(amberSignerUrl, "_blank");
+
+      const checkClipboard = async () => {
+        try {
+          if (!document.hasFocus()) {
+            console.log("Document not focused, waiting for focus...");
+            return;
+          }
+
+          const clipboardContent = await navigator.clipboard.readText();
+
+          if (
+            clipboardContent &&
+            clipboardContent !== "" &&
+            clipboardContent.startsWith("npub")
+          ) {
+            const pk = clipboardContent;
+
+            if (pk) {
+              if (
+                !relaysContext.isLoading &&
+                relaysContext.relayList.length >= 0 &&
+                relaysContext.readRelayList &&
+                relaysContext.writeRelayList
+              ) {
+                if (!cashuWalletContext.isLoading) {
+                  const generalRelays = relaysContext.relayList;
+                  const readRelays = relaysContext.readRelayList;
+                  const writeRelays = relaysContext.writeRelayList;
+                  setLocalStorageDataOnSignIn({
+                    signInMethod: "amber",
+                    npub: pk,
+                    relays: generalRelays,
+                    readRelays: readRelays,
+                    writeRelays: writeRelays,
+                    cashuWalletRelays:
+                      cashuWalletContext.cashuWalletRelays.length != 0
+                        ? cashuWalletContext.cashuWalletRelays
+                        : [],
+                    mints:
+                      cashuWalletContext.cashuMints.length != 0
+                        ? cashuWalletContext.cashuMints
+                        : ["https://mint.minibits.cash/Bitcoin"],
+                    wot: 3,
+                  });
+                } else {
+                  const generalRelays = relaysContext.relayList;
+                  const readRelays = relaysContext.readRelayList;
+                  const writeRelays = relaysContext.writeRelayList;
+                  setLocalStorageDataOnSignIn({
+                    signInMethod: "amber",
+                    npub: pk,
+                    relays: generalRelays,
+                    readRelays: readRelays,
+                    writeRelays: writeRelays,
+                    wot: 3,
+                  });
+                }
+              } else {
+                setLocalStorageDataOnSignIn({
+                  signInMethod: "amber",
+                  npub: pk,
+                });
+              }
+
+              await navigator.clipboard.writeText("");
+
+              clearInterval(intervalId);
+
+              router.push("/");
+            }
+          }
+        } catch (error) {
+          console.error("Error reading clipboard:", error);
+        }
+      };
+
+      checkClipboard();
+      const intervalId = setInterval(checkClipboard, 1000);
+
+      setTimeout(() => {
+        clearInterval(intervalId);
+        console.log("Amber sign in timeout");
+        alert("Amber sign in timed out. Please try again.");
+      }, 60000);
+    } catch (error) {
+      console.error("Amber sign in failed:", error);
+      alert("Amber sign in failed!");
     }
   };
 
@@ -242,6 +343,12 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
                 onClick={startExtensionLogin}
               >
                 Extension Sign In
+              </Button>
+              <Button
+                className={SHOPSTRBUTTONCLASSNAMES}
+                onClick={startAmberLogin}
+              >
+                Amber Sign In
               </Button>
               <Button
                 className={SHOPSTRBUTTONCLASSNAMES}

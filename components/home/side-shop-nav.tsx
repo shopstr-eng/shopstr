@@ -72,7 +72,7 @@ const SideShopNav = ({
     }
     router.push({
       pathname: "/messages",
-      query: { pk: nip19.npubEncode(pubkeyToOpenChatWith) },
+      query: { pk: nip19.npubEncode(pubkeyToOpenChatWith), isInquiry: true },
     });
   };
 

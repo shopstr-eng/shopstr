@@ -7,7 +7,7 @@ import { Framer } from "@/components/framer";
 
 import Messages from "./messages";
 
-const MessageFeed = () => {
+const MessageFeed = ({ isInquiry = false }) => {
   const [showSpinner, setShowSpinner] = useState(false);
 
   const [hookProps] = useState({
@@ -25,7 +25,11 @@ const MessageFeed = () => {
     ],
     initialTabId: "orders",
   });
-  const framer = useTabs(hookProps);
+
+  const framer = useTabs({
+    tabs: hookProps.tabs,
+    initialTabId: isInquiry ? "inquiries" : "orders",
+  });
 
   useEffect(() => {
     setShowSpinner(true);

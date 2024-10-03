@@ -146,6 +146,54 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
           chatPubkey,
           messageEvent.content,
         );
+      } else if (signInMethod === "amber") {
+        const amberSignerUrl = `nostrsigner:${messageEvent.content}?pubKey=${chatPubkey}&compressionType=none&returnType=signature&type=nip04_decrypt`;
+
+        await navigator.clipboard.writeText("");
+
+        window.open(amberSignerUrl, "_blank");
+
+        const readClipboard = (): Promise<string> => {
+          return new Promise((resolve, reject) => {
+            const checkClipboard = async () => {
+              try {
+                if (!document.hasFocus()) {
+                  console.log("Document not focused, waiting for focus...");
+                  return;
+                }
+
+                const clipboardContent = await navigator.clipboard.readText();
+
+                if (clipboardContent && clipboardContent !== "") {
+                  clearInterval(intervalId);
+                  resolve(clipboardContent);
+                } else {
+                  console.log("Waiting for new clipboard content...");
+                }
+              } catch (error) {
+                console.error("Error reading clipboard:", error);
+                reject(error);
+              }
+            };
+
+            checkClipboard();
+            const intervalId = setInterval(checkClipboard, 1000);
+
+            setTimeout(() => {
+              clearInterval(intervalId);
+              reject(
+                new Error("Amber decryption timed out. Please try again."),
+              );
+            }, 60000);
+          });
+        };
+
+        try {
+          plaintext = await readClipboard();
+        } catch (error) {
+          console.error("Error reading clipboard:", error);
+          alert("Amber decryption failed. Please try again.");
+        }
       } else {
         let sk2 = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
         plaintext = await nip04.decrypt(sk2, chatPubkey, messageEvent.content);

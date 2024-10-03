@@ -286,8 +286,8 @@ function App({ Component, pageProps }: AppProps) {
         allRelays = [
           "wss://relay.damus.io",
           "wss://nos.lol",
-          "wss://sendit.nosflare.com",
           "wss://purplepag.es",
+          "wss://irish.nostr.cafe",
         ];
         localStorage.setItem("relays", JSON.stringify(allRelays));
       }
@@ -320,6 +320,11 @@ function App({ Component, pageProps }: AppProps) {
             ...pubkeysToFetchProfilesFor,
             ...profileSetFromChats,
           ];
+        } else if (userPubkey) {
+          pubkeysToFetchProfilesFor = [
+            userPubkey as string,
+            ...pubkeysToFetchProfilesFor,
+          ];
         }
         let { shopSettingsMap } = await fetchShopSettings(
           allRelays,
@@ -333,7 +338,8 @@ function App({ Component, pageProps }: AppProps) {
         );
         if (
           (getLocalStorageData().signInMethod === "nsec" && passphrase) ||
-          getLocalStorageData().signInMethod === "extension"
+          getLocalStorageData().signInMethod === "extension" ||
+          getLocalStorageData().signInMethod === "amber"
         ) {
           let {
             mostRecentWalletEvent,

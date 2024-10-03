@@ -721,6 +721,62 @@ export const fetchCashuWallet = async (
                     conversationKey,
                   );
                   cashuWalletEventContent = JSON.parse(eventContent);
+                } else if (signInMethod === "amber") {
+                  const amberSignerUrl = `nostrsigner:${event.content}?pubKey=${
+                    getLocalStorageData().userPubkey
+                  }&compressionType=none&returnType=signature&type=nip44_decrypt`;
+
+                  await navigator.clipboard.writeText("");
+
+                  window.open(amberSignerUrl, "_blank");
+
+                  const readClipboard = (): Promise<string> => {
+                    return new Promise((resolve, reject) => {
+                      const checkClipboard = async () => {
+                        try {
+                          if (!document.hasFocus()) {
+                            console.log(
+                              "Document not focused, waiting for focus...",
+                            );
+                            return;
+                          }
+
+                          const clipboardContent =
+                            await navigator.clipboard.readText();
+
+                          if (clipboardContent && clipboardContent !== "") {
+                            clearInterval(intervalId);
+                            let eventContent = clipboardContent;
+
+                            let parsedContent = JSON.parse(eventContent);
+
+                            resolve(parsedContent);
+                          } else {
+                            console.log("Waiting for new clipboard content...");
+                          }
+                        } catch (error) {
+                          console.error("Error reading clipboard:", error);
+                          reject(error);
+                        }
+                      };
+
+                      checkClipboard();
+                      const intervalId = setInterval(checkClipboard, 1000);
+
+                      setTimeout(() => {
+                        clearInterval(intervalId);
+                        console.log("Amber decryption timeout");
+                        alert("Amber decryption timed out. Please try again.");
+                      }, 60000);
+                    });
+                  };
+
+                  try {
+                    cashuWalletEventContent = await readClipboard();
+                  } catch (error) {
+                    console.error("Error reading clipboard:", error);
+                    alert("Amber decryption failed. Please try again.");
+                  }
                 }
                 if (
                   event.kind === 7375 &&

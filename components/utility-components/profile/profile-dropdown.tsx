@@ -101,7 +101,7 @@ export const ProfileWithDropdown = ({
         }
         router.push({
           pathname: "/messages",
-          query: { pk: npub },
+          query: { pk: npub, isInquiry: true },
         });
       },
       label: "Send Message",

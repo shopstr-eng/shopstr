@@ -93,7 +93,7 @@ const UserProfilePage = () => {
   };
 
   const isButtonDisabled = useMemo(() => {
-    if (signInMethod === "extension") return false; // extension can upload without passphrase
+    if (signInMethod === "extension" || signInMethod === "amber") return false; // extension can upload without passphrase
     if (passphrase === "") return true; // nsec needs passphrase
     try {
       let nsec = getNsecWithPassphrase(passphrase);
@@ -256,12 +256,6 @@ const UserProfilePage = () => {
                 <Controller
                   name="display_name"
                   control={control}
-                  rules={{
-                    maxLength: {
-                      value: 50,
-                      message: "This input exceed maxLength of 50.",
-                    },
-                  }}
                   render={({
                     field: { onChange, onBlur, value },
                     fieldState: { error },
@@ -295,12 +289,6 @@ const UserProfilePage = () => {
                 <Controller
                   name="name"
                   control={control}
-                  rules={{
-                    maxLength: {
-                      value: 50,
-                      message: "This input exceed maxLength of 50.",
-                    },
-                  }}
                   render={({
                     field: { onChange, onBlur, value },
                     fieldState: { error },
@@ -334,12 +322,6 @@ const UserProfilePage = () => {
                 <Controller
                   name="about"
                   control={control}
-                  rules={{
-                    maxLength: {
-                      value: 500,
-                      message: "This input exceed maxLength of 500.",
-                    },
-                  }}
                   render={({
                     field: { onChange, onBlur, value },
                     fieldState: { error },
@@ -373,12 +355,6 @@ const UserProfilePage = () => {
                 <Controller
                   name="website"
                   control={control}
-                  rules={{
-                    maxLength: {
-                      value: 50,
-                      message: "This input exceed maxLength of 50.",
-                    },
-                  }}
                   render={({
                     field: { onChange, onBlur, value },
                     fieldState: { error },
@@ -411,12 +387,6 @@ const UserProfilePage = () => {
                 <Controller
                   name="nip05"
                   control={control}
-                  rules={{
-                    maxLength: {
-                      value: 50,
-                      message: "This input exceed maxLength of 50.",
-                    },
-                  }}
                   render={({
                     field: { onChange, onBlur, value },
                     fieldState: { error },
@@ -450,12 +420,6 @@ const UserProfilePage = () => {
                 <Controller
                   name="lud16"
                   control={control}
-                  rules={{
-                    maxLength: {
-                      value: 50,
-                      message: "This input exceed maxLength of 50.",
-                    },
-                  }}
                   render={({
                     field: { onChange, onBlur, value },
                     fieldState: { error },
