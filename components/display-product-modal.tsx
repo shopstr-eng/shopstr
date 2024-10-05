@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   PencilSquareIcon,
   ShareIcon,
@@ -23,6 +23,7 @@ import RequestPassphraseModal from "./utility-components/request-passphrase-moda
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 import { getLocalStorageData } from "./utility/nostr-helper-functions";
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
+import SuccessModal from "./utility-components/success-modal";
 
 interface ProductModalProps {
   productData: any;
@@ -51,9 +52,11 @@ export default function DisplayProductModal({
   } = productData;
   const { signInMethod, userPubkey } = getLocalStorageData();
 
-  const [requestPassphrase, setRequestPassphrase] = React.useState(false);
-  const [deleteLoading, setDeleteLoading] = React.useState(false);
-  const [showProductForm, setShowProductForm] = React.useState(false);
+  const [requestPassphrase, setRequestPassphrase] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [showProductForm, setShowProductForm] = useState(false);
+
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const displayDate = (timestamp: number): [string, string] => {
     if (timestamp == 0 || !timestamp) return ["", ""];
@@ -78,7 +81,7 @@ export default function DisplayProductModal({
       navigator.clipboard.writeText(
         `${window.location.origin}/listing/${productData.id}`,
       );
-      alert("Listing URL copied to clipboard!");
+      setShowSuccessModal(true);
     }
   };
 
@@ -266,6 +269,11 @@ export default function DisplayProductModal({
           onSubmitCallback={handleModalToggle}
         />
       )}
+      <SuccessModal
+        bodyText="Listing URL copied to clipboard!"
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+      />
     </>
   );
 }

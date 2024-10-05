@@ -7,6 +7,7 @@ import {
   nostrBuildUploadImages,
 } from "../utility/nostr-helper-functions";
 import { finalizeEvent } from "nostr-tools";
+import FailureModal from "./failure-modal";
 
 export const FileUploaderButton = ({
   disabled,
@@ -24,6 +25,10 @@ export const FileUploaderButton = ({
   imgCallbackOnUpload: (imgUrl: string) => void;
 }) => {
   const [loading, setLoading] = useState(false);
+
+  const [showFailureModal, setShowFailureModal] = useState(false);
+  const [failureText, setFailureText] = useState("");
+
   // Create a reference to the hidden file input element
   const hiddenFileInput = useRef<HTMLInputElement>(null);
   const { signInMethod } = getLocalStorageData();
@@ -92,10 +97,14 @@ export const FileUploaderButton = ({
       if (imageUrls && imageUrls[0]) {
         imgCallbackOnUpload(imageUrls[0]);
       } else {
-        alert("Image upload failed to yield img URL");
+        setFailureText("Image upload failed to yield img URL!");
+        setShowFailureModal(true);
       }
     } catch (e) {
-      if (e instanceof Error) alert("Failed to upload image! " + e.message);
+      if (e instanceof Error) {
+        setFailureText("Failed to upload image! " + e.message);
+        setShowFailureModal(true);
+      }
     }
   };
 
@@ -134,6 +143,14 @@ export const FileUploaderButton = ({
         ref={hiddenFileInput}
         onInput={handleChange}
         className="hidden"
+      />
+      <FailureModal
+        bodyText={failureText}
+        isOpen={showFailureModal}
+        onClose={() => {
+          setShowFailureModal(false);
+          setFailureText("");
+        }}
       />
     </>
   );

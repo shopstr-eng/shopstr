@@ -10,6 +10,7 @@ import { RelaysContext, CashuWalletContext } from "../../utils/context/context";
 import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
 import { isAndroid } from "../../utils/platform-detection";
+import FailureModal from "../../components/utility-components/failure-modal";
 
 const LoginPage = ({ router }: { router: NextRouter }) => {
   const [privateKey, setPrivateKey] = useState<string>("");
@@ -18,6 +19,9 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
   const [passphrase, setPassphrase] = useState<string>("");
 
   const [isAndroidDevice, setIsAndroidDevice] = useState(false);
+
+  const [showFailureModal, setShowFailureModal] = useState(false);
+  const [failureText, setFailureText] = useState("");
 
   const relaysContext = useContext(RelaysContext);
   const cashuWalletContext = useContext(CashuWalletContext);
@@ -29,7 +33,8 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
   const handleSignIn = async () => {
     if (validPrivateKey) {
       if (passphrase === "" || passphrase === null) {
-        alert("No passphrase provided!");
+        setFailureText("No passphrase provided!");
+        setShowFailureModal(true);
       } else {
         let { data: sk } = nip19.decode(privateKey);
         let pk = getPublicKey(sk as Uint8Array);
@@ -177,7 +182,8 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
       localStorage.setItem("wot", "3");
       router.push("/");
     } catch (error) {
-      alert("Extension sign in failed!");
+      setFailureText("Extension sign in failed!");
+      setShowFailureModal(true);
     }
   };
 
@@ -271,11 +277,13 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
       setTimeout(() => {
         clearInterval(intervalId);
         console.log("Amber sign in timeout");
-        alert("Amber sign in timed out. Please try again.");
+        setFailureText("Amber sign in timed out. Please try again.");
+        setShowFailureModal(true);
       }, 60000);
     } catch (error) {
       console.error("Amber sign in failed:", error);
-      alert("Amber sign in failed!");
+      setFailureText("Amber sign in failed!");
+      setShowFailureModal(true);
     }
   };
 
@@ -284,93 +292,103 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
   }, [privateKey]);
 
   return (
-    <div className="flex h-full flex-col bg-light-bg pt-24 dark:bg-dark-bg">
-      <div className="flex max-h-screen flex-row items-center justify-center">
-        <Card>
-          <CardBody>
-            <div className="mb-4 flex flex-row items-center justify-center">
-              <Image
-                alt="Shopstr logo"
-                height={50}
-                radius="sm"
-                src="/shopstr-2000x2000.png"
-                width={50}
-              />
-              <h1
-                onClick={() => {
-                  router.push("/");
-                }}
-                className="cursor-pointer text-center text-3xl font-bold text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light"
-              >
-                Shopstr
-              </h1>
-            </div>
-            {errorMessage && (
-              <div className="mb-4 rounded bg-red-500 px-4 py-2 text-light-text dark:text-dark-text">
-                {errorMessage}
-              </div>
-            )}
-            <div className="mb-4 flex flex-col">
-              <label className="text-xl">Private Key:</label>
-              <Input
-                color={validPrivateKey ? "success" : "danger"}
-                type="password"
-                width="100%"
-                size="lg"
-                value={privateKey}
-                placeholder="nsec..."
-                onChange={(e) => setPrivateKey(e.target.value)}
-              />
-            </div>
-            <div className="mb-4 flex flex-col">
-              <label className="text-xl">
-                Encryption Passphrase:<span className="text-red-500">*</span>
-              </label>
-              <Input
-                type="password"
-                width="100%"
-                size="lg"
-                value={passphrase}
-                placeholder="Enter a passphrase of your choice..."
-                onChange={(e) => setPassphrase(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && validPrivateKey) handleSignIn();
-                }}
-              />
-            </div>
-            <div className="flex flex-row justify-between space-x-2">
-              <Button
-                className={SHOPSTRBUTTONCLASSNAMES}
-                onClick={handleGenerateKeys}
-              >
-                Create Account
-              </Button>
-              <Button
-                className={SHOPSTRBUTTONCLASSNAMES}
-                onClick={startExtensionLogin}
-              >
-                Extension Sign In
-              </Button>
-              {isAndroidDevice && (
-                <Button
-                  className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
-                  onClick={startAmberLogin}
+    <>
+      <div className="flex h-full flex-col bg-light-bg pt-24 dark:bg-dark-bg">
+        <div className="flex max-h-screen flex-row items-center justify-center">
+          <Card>
+            <CardBody>
+              <div className="mb-4 flex flex-row items-center justify-center">
+                <Image
+                  alt="Shopstr logo"
+                  height={50}
+                  radius="sm"
+                  src="/shopstr-2000x2000.png"
+                  width={50}
+                />
+                <h1
+                  onClick={() => {
+                    router.push("/");
+                  }}
+                  className="cursor-pointer text-center text-3xl font-bold text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light"
                 >
-                  Amber Sign In
-                </Button>
+                  Shopstr
+                </h1>
+              </div>
+              {errorMessage && (
+                <div className="mb-4 rounded bg-red-500 px-4 py-2 text-light-text dark:text-dark-text">
+                  {errorMessage}
+                </div>
               )}
-              <Button
-                className={SHOPSTRBUTTONCLASSNAMES}
-                onClick={handleSignIn}
-                disabled={!validPrivateKey} // Disable the button only if both key strings are invalid or the button has already been clicked
-              >
-                Sign In
-              </Button>
-            </div>
-          </CardBody>
-        </Card>
+              <div className="mb-4 flex flex-col">
+                <label className="text-xl">Private Key:</label>
+                <Input
+                  color={validPrivateKey ? "success" : "danger"}
+                  type="password"
+                  width="100%"
+                  size="lg"
+                  value={privateKey}
+                  placeholder="nsec..."
+                  onChange={(e) => setPrivateKey(e.target.value)}
+                />
+              </div>
+              <div className="mb-4 flex flex-col">
+                <label className="text-xl">
+                  Encryption Passphrase:<span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="password"
+                  width="100%"
+                  size="lg"
+                  value={passphrase}
+                  placeholder="Enter a passphrase of your choice..."
+                  onChange={(e) => setPassphrase(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && validPrivateKey) handleSignIn();
+                  }}
+                />
+              </div>
+              <div className="flex flex-row justify-between space-x-2">
+                <Button
+                  className={SHOPSTRBUTTONCLASSNAMES}
+                  onClick={handleGenerateKeys}
+                >
+                  Create Account
+                </Button>
+                <Button
+                  className={SHOPSTRBUTTONCLASSNAMES}
+                  onClick={startExtensionLogin}
+                >
+                  Extension Sign In
+                </Button>
+                {isAndroidDevice && (
+                  <Button
+                    className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
+                    onClick={startAmberLogin}
+                  >
+                    Amber Sign In
+                  </Button>
+                )}
+                <Button
+                  className={SHOPSTRBUTTONCLASSNAMES}
+                  onClick={handleSignIn}
+                  disabled={!validPrivateKey} // Disable the button only if both key strings are invalid or the button has already been clicked
+                >
+                  Sign In
+                </Button>
+              </div>
+            </CardBody>
+          </Card>
+        </div>
       </div>
-    </div>
+      <FailureModal
+        bodyText={failureText}
+        isOpen={showFailureModal}
+        onClose={() => {
+          setShowFailureModal(false);
+          setFailureText("");
+        }}
+      />
+    </>
   );
 };
 

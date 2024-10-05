@@ -12,6 +12,7 @@ import { useRouter } from "next/router";
 import SignInModal from "../sign-in/SignInModal";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import { ShopSettings } from "../../utils/types/types";
+import FailureModal from "../utility-components/failure-modal";
 
 const SideShopNav = ({
   focusedPubkey,
@@ -38,6 +39,8 @@ const SideShopNav = ({
   >({});
 
   const [usersPubkey, setUsersPubkey] = useState<string | null>(null);
+
+  const [showFailureModal, setShowFailureModal] = useState(false);
 
   useEffect(() => {
     if (
@@ -67,7 +70,7 @@ const SideShopNav = ({
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
     let { signInMethod } = getLocalStorageData();
     if (!signInMethod) {
-      alert("You must be signed in to send a message!");
+      setShowFailureModal(true);
       return;
     }
     router.push({
@@ -196,6 +199,11 @@ const SideShopNav = ({
         )}
       </div>
       <SignInModal isOpen={isOpen} onClose={onClose} />
+      <FailureModal
+        bodyText="You must be signed in to send a message!"
+        isOpen={showFailureModal}
+        onClose={() => setShowFailureModal(false)}
+      />
     </>
   );
 };

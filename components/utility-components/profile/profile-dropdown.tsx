@@ -21,6 +21,7 @@ import {
   UserIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
+import FailureModal from "../failure-modal";
 
 type DropDownKeys =
   | "shop"
@@ -43,6 +44,7 @@ export const ProfileWithDropdown = ({
 }) => {
   const [pfp, setPfp] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [showFailureModal, setShowFailureModal] = useState(false);
   const profileContext = useContext(ProfileMapContext);
   const npub = pubkey ? nip19.npubEncode(pubkey) : "";
   const router = useRouter();
@@ -96,7 +98,7 @@ export const ProfileWithDropdown = ({
       startContent: <ChatBubbleBottomCenterIcon className={"h-5 w-5"} />,
       onClick: () => {
         if (!isUserLoggedIn()) {
-          alert("You must be signed in to send a message!");
+          setShowFailureModal(true);
           return;
         }
         router.push({
@@ -145,40 +147,47 @@ export const ProfileWithDropdown = ({
   };
 
   return (
-    <Dropdown placement="bottom-start">
-      <DropdownTrigger>
-        <User
-          as="button"
-          avatarProps={{
-            src: pfp,
+    <>
+      <Dropdown placement="bottom-start">
+        <DropdownTrigger>
+          <User
+            as="button"
+            avatarProps={{
+              src: pfp,
+            }}
+            className={"transition-transform"}
+            classNames={{
+              name: `overflow-hidden text-ellipsis whitespace-nowrap text-light-text dark:text-dark-text hidden ${nameClassname}`,
+              base: `${baseClassname}`,
+            }}
+            name={displayName}
+          />
+        </DropdownTrigger>
+        <DropdownMenu
+          aria-label="User Actions"
+          variant="flat"
+          items={dropDownKeys.map((key) => DropDownItems[key])}
+        >
+          {(item) => {
+            return (
+              <DropdownItem
+                key={item.key}
+                color={item.color}
+                className={item.className}
+                startContent={item.startContent}
+                onClick={item.onClick}
+              >
+                {item.label}
+              </DropdownItem>
+            );
           }}
-          className={"transition-transform"}
-          classNames={{
-            name: `overflow-hidden text-ellipsis whitespace-nowrap text-light-text dark:text-dark-text hidden ${nameClassname}`,
-            base: `${baseClassname}`,
-          }}
-          name={displayName}
-        />
-      </DropdownTrigger>
-      <DropdownMenu
-        aria-label="User Actions"
-        variant="flat"
-        items={dropDownKeys.map((key) => DropDownItems[key])}
-      >
-        {(item) => {
-          return (
-            <DropdownItem
-              key={item.key}
-              color={item.color}
-              className={item.className}
-              startContent={item.startContent}
-              onClick={item.onClick}
-            >
-              {item.label}
-            </DropdownItem>
-          );
-        }}
-      </DropdownMenu>
-    </Dropdown>
+        </DropdownMenu>
+      </Dropdown>
+      <FailureModal
+        bodyText="You must be signed in to send a message!"
+        isOpen={showFailureModal}
+        onClose={() => setShowFailureModal(false)}
+      />
+    </>
   );
 };

@@ -17,6 +17,8 @@ import Link from "next/link";
 import { ShopMapContext } from "@/utils/context/context";
 import { ShopSettings } from "../../utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
+import FailureModal from "../utility-components/failure-modal";
+import SuccessModal from "../utility-components/success-modal";
 
 export const TOTALPRODUCTCARDWIDTH = 380 + 5;
 const SUMMARY_CHARACTER_LIMIT = 100;
@@ -63,6 +65,9 @@ export default function CheckoutCard({
 
   const [shopBannerURL, setShopBannerURL] = useState("");
   const [isFetchingShop, setIsFetchingShop] = useState(false);
+
+  const [showFailureModal, setShowFailureModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const shopMapContext = useContext(ShopMapContext);
 
@@ -146,14 +151,14 @@ export default function CheckoutCard({
       navigator.clipboard.writeText(
         `${window.location.origin}/listing/${productData.id}`,
       );
-      alert("Listing URL copied to clipboard!");
+      setShowSuccessModal(true);
     }
   };
 
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
     let { signInMethod } = getLocalStorageData();
     if (!signInMethod) {
-      alert("You must be signed in to send a message!");
+      setShowFailureModal(true);
       return;
     }
     router.push({
@@ -376,6 +381,16 @@ export default function CheckoutCard({
           </div>
         </>
       )}
+      <FailureModal
+        bodyText="You must be signed in to send a message!"
+        isOpen={showFailureModal}
+        onClose={() => setShowFailureModal(false)}
+      />
+      <SuccessModal
+        bodyText="Listing URL copied to clipboard!"
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(true)}
+      />
     </>
   );
 }

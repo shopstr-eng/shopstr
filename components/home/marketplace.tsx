@@ -22,6 +22,7 @@ import SignInModal from "../sign-in/SignInModal";
 import ShopstrSwitch from "../utility-components/shopstr-switch";
 import { ShopSettings } from "../../utils/types/types";
 import SideShopNav from "./side-shop-nav";
+import FailureModal from "../utility-components/failure-modal";
 
 export function MarketplacePage({
   focusedPubkey,
@@ -48,6 +49,8 @@ export function MarketplacePage({
   const [isFetchingFollows, setIsFetchingFollows] = useState(false);
 
   const [categories, setCategories] = useState([""]);
+
+  const [showFailureModal, setShowFailureModal] = useState(false);
 
   const shopMapContext = useContext(ShopMapContext);
   const followsContext = useContext(FollowsContext);
@@ -103,7 +106,7 @@ export function MarketplacePage({
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
     let { signInMethod } = getLocalStorageData();
     if (!signInMethod) {
-      alert("You must be signed in to send a message!");
+      setShowFailureModal(true);
       return;
     }
     router.push({
@@ -241,6 +244,11 @@ export function MarketplacePage({
         )}
       </div>
       <SignInModal isOpen={isOpen} onClose={onClose} />
+      <FailureModal
+        bodyText="You must be signed in to send a message!"
+        isOpen={showFailureModal}
+        onClose={() => setShowFailureModal(false)}
+      />
     </div>
   );
 }

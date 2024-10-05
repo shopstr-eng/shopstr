@@ -24,6 +24,7 @@ import {
 } from "../../pages/api/nostr/cache-service";
 import { useKeyPress } from "../utility/functions";
 import { DateTime } from "luxon";
+import FailureModal from "../utility-components/failure-modal";
 
 const Messages = ({ isPayment }: { isPayment: boolean }) => {
   const router = useRouter();
@@ -49,6 +50,9 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
   const { signInMethod, userPubkey } = getLocalStorageData();
 
   const [isClient, setIsClient] = useState(false);
+
+  const [showFailureModal, setShowFailureModal] = useState(false);
+  const [failureText, setFailureText] = useState("");
 
   useEffect(() => {
     setIsClient(true);
@@ -192,7 +196,8 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
           plaintext = await readClipboard();
         } catch (error) {
           console.error("Error reading clipboard:", error);
-          alert("Amber decryption failed. Please try again.");
+          setFailureText("Amber decryption failed. Please try again.");
+          setShowFailureModal(true);
         }
       } else {
         let sk2 = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
@@ -308,7 +313,8 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       setIsSendingDMLoading(false);
     } catch (e) {
       console.log("handleSendMessage errored", e);
-      alert("Error sending message.");
+      setFailureText("Error sending message.");
+      setShowFailureModal(true);
       setIsSendingDMLoading(false);
     }
     router.replace(`/messages`);
@@ -499,6 +505,14 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         setCorrectPassphrase={setPassphrase}
         isOpen={enterPassphrase}
         setIsOpen={setEnterPassphrase}
+      />
+      <FailureModal
+        bodyText={failureText}
+        isOpen={showFailureModal}
+        onClose={() => {
+          setShowFailureModal(false);
+          setFailureText("");
+        }}
       />
     </div>
   );

@@ -31,6 +31,7 @@ import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs
 import ShopstrSlider from "../../components/utility-components/shopstr-slider";
 import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
 import { CashuWalletContext } from "../../utils/context/context";
+import FailureModal from "../../components/utility-components/failure-modal";
 
 const PreferencesPage = () => {
   const [enterPassphrase, setEnterPassphrase] = useState(false);
@@ -56,6 +57,9 @@ const PreferencesPage = () => {
 
   const walletContext = useContext(CashuWalletContext);
   const [dTag, setDTag] = useState("");
+
+  const [showFailureModal, setShowFailureModal] = useState(false);
+  const [failureText, setFailureText] = useState("");
 
   const { signInMethod } = getLocalStorageData();
 
@@ -120,13 +124,16 @@ const PreferencesPage = () => {
         }
         handleToggleMintModal();
       } else {
-        alert(
-          `Failed to add mint!. Could not fetch keys from ${newMint}/keys.`,
+        setFailureText(
+          `Failed to add mint! Could not fetch keys from ${newMint}/keys.`,
         );
+        setShowFailureModal(true);
       }
     } catch {
-      // If the fetch fails, alert the user
-      alert(`Failed to add mint!. Could not fetch keys from ${newMint}/keys.`);
+      setFailureText(
+        `Failed to add mint! Could not fetch keys from ${newMint}/keys.`,
+      );
+      setShowFailureModal(true);
     }
   };
 
@@ -198,7 +205,8 @@ const PreferencesPage = () => {
       handleToggleRelayModal(type);
       setRelaysAreChanged(true);
     } catch {
-      alert(`Relay ${newRelay} was unable to connect!`);
+      setFailureText(`Relay ${newRelay} was unable to connect!`);
+      setShowFailureModal(true);
     }
   };
 
@@ -945,6 +953,14 @@ const PreferencesPage = () => {
         isOpen={enterPassphrase}
         setIsOpen={setEnterPassphrase}
         onCancelRouteTo="/settings"
+      />
+      <FailureModal
+        bodyText={failureText}
+        isOpen={showFailureModal}
+        onClose={() => {
+          setShowFailureModal(false);
+          setFailureText("");
+        }}
       />
     </>
   );
