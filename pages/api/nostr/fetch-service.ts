@@ -368,6 +368,213 @@ export const fetchChatsAndMessages = async (
   });
 };
 
+export const fetchGiftWrappedChatsAndMessages = async (
+  relays: string[],
+  userPubkey: string,
+  editChatContext: (chatsMap: ChatsMap, isLoading: boolean) => void,
+  passphrase?: string,
+  since?: number,
+): Promise<{
+  profileSetFromChats: Set<string>;
+}> => {
+  return new Promise(async function (resolve, reject) {
+    // if no userPubkey, user is not signed in
+    if (!userPubkey) {
+      editChatContext(new Map(), false);
+      resolve({ profileSetFromChats: new Set() });
+    }
+    const { signInMethod } = getLocalStorageData();
+    let chatMessagesFromCache: Map<string, NostrMessageEvent> =
+      await fetchChatMessagesFromCache();
+    try {
+      let chatsMap = new Map();
+      let incomingChatsReachedEOSE = false;
+      let outgoingChatsReachedEOSE = false;
+
+      const addToChatsMap = (
+        pubkeyOfChat: string,
+        event: NostrMessageEvent,
+      ) => {
+        // pubkeyOfChat is the person you are chatting with if incoming, or the person you are sending to if outgoing
+        if (!chatsMap.has(pubkeyOfChat)) {
+          chatsMap.set(pubkeyOfChat, [event]);
+        } else {
+          chatsMap.get(pubkeyOfChat).push(event);
+        }
+      };
+
+      const onEOSE = () => {
+        if (incomingChatsReachedEOSE && outgoingChatsReachedEOSE) {
+          //sort chats by created_at
+          chatsMap.forEach((value) => {
+            value.sort(
+              (a: NostrMessageEvent, b: NostrMessageEvent) =>
+                a.created_at - b.created_at,
+            );
+          });
+          resolve({ profileSetFromChats: new Set(chatsMap.keys()) });
+          editChatContext(chatsMap, false);
+        }
+      };
+
+      if (!since) {
+        since = Math.trunc(DateTime.now().minus({ days: 14 }).toSeconds());
+      }
+
+      new SimplePool().subscribeMany(
+        relays,
+        [
+          {
+            kinds: [1059],
+            "#p": [userPubkey],
+            since,
+          },
+        ],
+        {
+          async onevent(event) {
+            let messageEvent;
+
+            if (signInMethod === "extension") {
+              let sealEventString = await window.nostr.nip44.decrypt(
+                userPubkey,
+                event.content,
+              );
+              let sealEvent = JSON.parse(sealEventString);
+              let messageEventString = await window.nostr.nip44.decrypt(
+                userPubkey,
+                sealEvent.content,
+              );
+              messageEvent = JSON.parse(messageEventString);
+            } else if (signInMethod === "amber") {
+              if (!passphrase) throw new Error("Passphrase is required");
+              let senderPrivkey = getPrivKeyWithPassphrase(
+                passphrase,
+              ) as Uint8Array;
+              const conversationKey = nip44.getConversationKey(
+                senderPrivkey,
+                userPubkey,
+              );
+              let sealEventString = nip44.decrypt(
+                event.content,
+                conversationKey,
+              );
+              let sealEvent = JSON.parse(sealEventString);
+              let messageEventString = nip44.decrypt(
+                sealEvent.content,
+                conversationKey,
+              );
+              messageEvent = JSON.parse(messageEventString);
+            } else if (signInMethod === "nsec") {
+              const readClipboard = (): Promise<string> => {
+                return new Promise((resolve, reject) => {
+                  const checkClipboard = async () => {
+                    try {
+                      if (!document.hasFocus()) {
+                        console.log(
+                          "Document not focused, waiting for focus...",
+                        );
+                        return;
+                      }
+
+                      const clipboardContent =
+                        await navigator.clipboard.readText();
+
+                      if (clipboardContent && clipboardContent !== "") {
+                        clearInterval(intervalId);
+                        let eventContent = clipboardContent;
+
+                        let parsedContent = JSON.parse(eventContent);
+
+                        resolve(parsedContent);
+                      } else {
+                        console.log("Waiting for new clipboard content...");
+                      }
+                    } catch (error) {
+                      console.error("Error reading clipboard:", error);
+                      reject(error);
+                    }
+                  };
+
+                  checkClipboard();
+                  const intervalId = setInterval(checkClipboard, 1000);
+
+                  setTimeout(() => {
+                    clearInterval(intervalId);
+                    console.log("Amber decryption timeout");
+                    alert("Amber decryption timed out. Please try again.");
+                  }, 60000);
+                });
+              };
+
+              try {
+                const giftWrapAmberSignerUrl = `nostrsigner:${event.content}?pubKey=${userPubkey}&compressionType=none&returnType=signature&type=nip44_decrypt`;
+
+                await navigator.clipboard.writeText("");
+
+                window.open(giftWrapAmberSignerUrl, "_blank");
+
+                let sealEventString = await readClipboard();
+                let sealEvent = JSON.parse(sealEventString);
+
+                const sealAmberSignerUrl = `nostrsigner:${sealEvent.content}?pubKey=${userPubkey}&compressionType=none&returnType=signature&type=nip44_decrypt`;
+
+                await navigator.clipboard.writeText("");
+
+                window.open(sealAmberSignerUrl, "_blank");
+
+                let messageEventString = await readClipboard();
+                messageEvent = JSON.parse(messageEventString);
+              } catch (error) {
+                console.error("Error reading clipboard:", error);
+                alert("Amber decryption failed. Please try again.");
+              }
+            }
+            let senderPubkey = messageEvent.pubkey;
+            let tagsMap: Map<string, string> = new Map(
+              messageEvent.tags.map(([k, v]) => [k, v]),
+            );
+            let receipientPubkey = tagsMap.get("p") ? tagsMap.get("p") : null; // pubkey you sent the message to
+            if (typeof receipientPubkey !== "string") {
+              console.error(
+                `fetchAllOutgoingChats: Failed to get receipientPubkey from tagsMap",
+                    ${tagsMap},
+                    ${event}`,
+              );
+              alert(
+                `fetchAllOutgoingChats: Failed to get receipientPubkey from tagsMap`,
+              );
+              return;
+            }
+            let chatMessage = chatMessagesFromCache.get(messageEvent.id);
+            if (!chatMessage) {
+              chatMessage = { ...event, sig: "", read: false }; // false because the user received it and it wasn't in the cache
+              addChatMessageToCache(chatMessage);
+            }
+            if (senderPubkey === userPubkey) {
+              addToChatsMap(receipientPubkey, chatMessage);
+            } else {
+              addToChatsMap(senderPubkey, chatMessage);
+            }
+            if (incomingChatsReachedEOSE && outgoingChatsReachedEOSE) {
+              editChatContext(chatsMap, false);
+            }
+          },
+          async oneose() {
+            outgoingChatsReachedEOSE = true;
+            onEOSE();
+          },
+          onclose(reasons) {
+            console.log(reasons);
+          },
+        },
+      );
+    } catch (error) {
+      console.log("Failed to fetch chats and messages: ", error);
+      reject(error);
+    }
+  });
+};
+
 export const fetchAllFollows = async (
   relays: string[],
   editFollowsContext: (

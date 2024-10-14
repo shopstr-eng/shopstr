@@ -14,6 +14,7 @@ import { ProductFormValues } from "@/pages/api/nostr/post-event";
 import { DeleteEvent } from "@/pages/api/nostr/crud-service";
 import { gunzipSync } from "zlib";
 import { Buffer } from "buffer";
+import crypto from "crypto";
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
@@ -33,6 +34,46 @@ function decryptBase64Gzip(encodedString: string): string {
     console.error("Error decrypting base64 gzip:", error);
     throw error;
   }
+}
+
+function generateRandomTimestamp(): number {
+  const now = Math.floor(Date.now() / 1000);
+  const twoDaysInMilliseconds = 172800;
+  const randomSeconds = Math.floor(Math.random() * (twoDaysInMilliseconds + 1));
+  const randomTimestamp = now - randomSeconds;
+  return randomTimestamp;
+}
+
+function generateEventId(event: EncryptedMessageEvent) {
+  // Step 1: Create the array structure
+  const eventArray = [
+    0,
+    event.pubkey.toLowerCase(),
+    event.created_at,
+    event.kind,
+    event.tags,
+    event.content,
+  ];
+
+  // Step 2: JSON stringify the array with custom replacer for proper escaping
+  const serialized = JSON.stringify(eventArray, (key, value) => {
+    if (typeof value === "string") {
+      return value
+        .replace(/\n/g, "\\n")
+        .replace(/"/g, '\\"')
+        .replace(/\\/g, "\\\\")
+        .replace(/\r/g, "\\r")
+        .replace(/\t/g, "\\t")
+        .replace(/\b/g, "\\b")
+        .replace(/\f/g, "\\f");
+    }
+    return value;
+  });
+
+  // Step 3: Create SHA256 hash of the serialized string
+  const hash = crypto.createHash("sha256");
+  hash.update(serialized);
+  return hash.digest("hex");
 }
 
 async function amberSignEvent(event: any): Promise<any> {
@@ -284,6 +325,15 @@ interface EncryptedMessageEvent {
   tags: string[][];
 }
 
+interface GiftWrappedMessageEvent {
+  id: string;
+  pubkey: string;
+  created_at: number;
+  content: string;
+  kind: number;
+  tags: string[][];
+}
+
 export async function constructEncryptedMessageEvent(
   senderPubkey: string,
   message: string,
@@ -320,6 +370,83 @@ export async function constructEncryptedMessageEvent(
   return encryptedMessageEvent;
 }
 
+export async function constructGiftWrappedMessageEvent(
+  senderPubkey: string,
+  recipientPubkey: string,
+  message: string,
+  listingId?: string,
+  relayHint?: string,
+): Promise<GiftWrappedMessageEvent> {
+  let tags = [
+    ["p", recipientPubkey],
+    ["subject", "shopstr-inquiry"],
+  ];
+
+  if (listingId && relayHint) {
+    tags.push(["e", listingId, relayHint]);
+  }
+
+  let bareGiftWrappedMessageEvent = {
+    pubkey: senderPubkey,
+    created_at: Math.floor(Date.now() / 1000),
+    content: message,
+    kind: 14,
+    tags: tags,
+  };
+  let giftWrappedMessageEventId = generateEventId(bareGiftWrappedMessageEvent);
+  let giftWrappedMessageEvent = {
+    id: giftWrappedMessageEventId,
+    ...bareGiftWrappedMessageEvent,
+  };
+  return giftWrappedMessageEvent;
+}
+
+export async function constructMessageSeal(
+  messageEvent: GiftWrappedMessageEvent,
+  randomPubkey: string,
+  randomPrivkey: Uint8Array,
+  recipientPubkey: string,
+): Promise<NostrEvent> {
+  let stringifiedEvent = JSON.stringify(messageEvent);
+  let conversationKey = nip44.getConversationKey(
+    randomPrivkey as Uint8Array,
+    recipientPubkey,
+  );
+  let encryptedEvent = nip44.encrypt(stringifiedEvent, conversationKey);
+  let sealEvent = {
+    pubkey: randomPubkey,
+    created_at: generateRandomTimestamp(),
+    content: encryptedEvent,
+    kind: 13,
+    tags: [],
+  };
+  let signedEvent = finalizeEvent(sealEvent, randomPrivkey);
+  return signedEvent;
+}
+
+export async function constructMessageGiftWrap(
+  sealEvent: NostrEvent,
+  randomPubkey: string,
+  randomPrivkey: Uint8Array,
+  recipientPubkey: string,
+): Promise<NostrEvent> {
+  let stringifiedEvent = JSON.stringify(sealEvent);
+  let conversationKey = nip44.getConversationKey(
+    randomPrivkey,
+    recipientPubkey,
+  );
+  let encryptedEvent = nip44.encrypt(stringifiedEvent, conversationKey);
+  let giftWrapEvent = {
+    pubkey: randomPubkey,
+    created_at: generateRandomTimestamp(),
+    content: encryptedEvent,
+    kind: 1059,
+    tags: [],
+  };
+  let signedEvent = finalizeEvent(giftWrapEvent, randomPrivkey);
+  return signedEvent;
+}
+
 export async function sendEncryptedMessage(
   encryptedMessageEvent: EncryptedMessageEvent,
   passphrase?: string,
@@ -343,6 +470,19 @@ export async function sendEncryptedMessage(
   }
   await Promise.any(pool.publish(allWriteRelays, signedEvent));
   return signedEvent;
+}
+
+export async function sendGiftWrappedMessageEvent(
+  giftWrappedMessageEvent: NostrEvent,
+) {
+  const { relays, writeRelays } = getLocalStorageData();
+  const pool = new SimplePool();
+  const allWriteRelays = [...writeRelays, ...relays];
+  const blastrRelay = "wss://sendit.nosflare.com";
+  if (!containsRelay(allWriteRelays, blastrRelay)) {
+    allWriteRelays.push(blastrRelay);
+  }
+  await Promise.any(pool.publish(allWriteRelays, giftWrappedMessageEvent));
 }
 
 export async function publishWalletEvent(passphrase?: string, dTag?: string) {

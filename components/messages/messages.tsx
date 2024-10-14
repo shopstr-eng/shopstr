@@ -1,8 +1,12 @@
 import { useState, useEffect, useContext } from "react";
-import { Filter, nip04, SimplePool } from "nostr-tools";
+import { Filter, nip04, nip19, SimplePool } from "nostr-tools";
 import { useRouter } from "next/router";
 import {
   constructEncryptedMessageEvent,
+  constructGiftWrappedMessageEvent,
+  constructMessageSeal,
+  constructMessageGiftWrap,
+  sendGiftWrappedMessageEvent,
   decryptNpub,
   getLocalStorageData,
   getPrivKeyWithPassphrase,
@@ -53,6 +57,38 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
 
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
+
+  const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
+  const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
+  const [randomNpubForReceiver, setRandomNpubForReceiver] =
+    useState<string>("");
+  const [randomNsecForReceiver, setRandomNsecForReceiver] =
+    useState<string>("");
+
+  useEffect(() => {
+    axios({
+      method: "GET",
+      url: "/api/nostr/generate-keys",
+    })
+      .then((response) => {
+        setRandomNpubForSender(response.data.npub);
+        setRandomNsecForSender(response.data.nsec);
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+    axios({
+      method: "GET",
+      url: "/api/nostr/generate-keys",
+    })
+      .then((response) => {
+        setRandomNpubForReceiver(response.data.npub);
+        setRandomNsecForReceiver(response.data.nsec);
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+  }, []);
 
   useEffect(() => {
     setIsClient(true);
@@ -291,6 +327,73 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         passphrase,
       );
       await sendEncryptedMessage(encryptedMessageEvent, passphrase);
+      if (
+        chatsMap.get(currentChatPubkey) != undefined &&
+        chatsMap.get(currentChatPubkey)?.decryptedChat.length === 0
+      ) {
+        // only logs if this is the first msg, aka an iniquiry
+        axios({
+          method: "POST",
+          url: "/api/metrics/post-inquiry",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          data: {
+            customer_id: userPubkey,
+            merchant_id: currentChatPubkey,
+            // listing_id: "TODO"
+            // relays: relays,
+          },
+        });
+      }
+      setIsSendingDMLoading(false);
+    } catch (e) {
+      console.log("handleSendMessage errored", e);
+      setFailureText("Error sending message.");
+      setShowFailureModal(true);
+      setIsSendingDMLoading(false);
+    }
+    router.replace(`/messages`);
+  };
+
+  const handleSendGiftWrappedMessage = async (message: string) => {
+    setIsSendingDMLoading(true);
+    try {
+      let decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
+      let decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
+      let decodedRandomPubkeyForReceiver = nip19.decode(randomNpubForReceiver);
+      let decodedRandomPrivkeyForReceiver = nip19.decode(randomNsecForReceiver);
+      let giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
+        userPubkey,
+        message,
+        currentChatPubkey,
+      );
+      let senderSealedEvent = await constructMessageSeal(
+        giftWrappedMessageEvent,
+        decodedRandomPubkeyForSender.data as string,
+        decodedRandomPrivkeyForSender.data as Uint8Array,
+        userPubkey,
+      );
+      let receiverSealedEvent = await constructMessageSeal(
+        giftWrappedMessageEvent,
+        decodedRandomPubkeyForReceiver.data as string,
+        decodedRandomPrivkeyForReceiver.data as Uint8Array,
+        currentChatPubkey,
+      );
+      let senderGiftWrappedEvent = await constructMessageGiftWrap(
+        senderSealedEvent,
+        decodedRandomPubkeyForSender.data as string,
+        decodedRandomPrivkeyForSender.data as Uint8Array,
+        userPubkey,
+      );
+      let receiverGiftWrappedEvent = await constructMessageGiftWrap(
+        receiverSealedEvent,
+        decodedRandomPubkeyForReceiver.data as string,
+        decodedRandomPrivkeyForReceiver.data as Uint8Array,
+        currentChatPubkey,
+      );
+      await sendGiftWrappedMessageEvent(senderGiftWrappedEvent);
+      await sendGiftWrappedMessageEvent(receiverGiftWrappedEvent);
       if (
         chatsMap.get(currentChatPubkey) != undefined &&
         chatsMap.get(currentChatPubkey)?.decryptedChat.length === 0
