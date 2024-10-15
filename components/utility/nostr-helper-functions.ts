@@ -1,7 +1,6 @@
 import CryptoJS from "crypto-js";
 import {
   finalizeEvent,
-  nip04,
   nip19,
   nip44,
   nip98,
@@ -160,49 +159,6 @@ async function amberNip44Encrypt(
   });
 }
 
-async function amberNip04Encrypt(
-  message: string,
-  recipientPubkey: string,
-): Promise<string> {
-  const amberSignerUrl = `nostrsigner:${message}?pubKey=${recipientPubkey}&compressionType=none&returnType=signature&type=nip04_encrypt`;
-
-  // Store the current clipboard content
-  await navigator.clipboard.writeText("");
-
-  window.open(amberSignerUrl, "_blank");
-
-  return new Promise((resolve, reject) => {
-    const checkClipboard = async () => {
-      try {
-        if (!document.hasFocus()) {
-          console.log("Document not focused, waiting for focus...");
-          return;
-        }
-
-        const clipboardContent = await navigator.clipboard.readText();
-
-        // Only resolve if the clipboard content has changed
-        if (clipboardContent && clipboardContent !== "") {
-          clearInterval(intervalId);
-          resolve(clipboardContent);
-        } else {
-          console.log("Waiting for new clipboard content...");
-        }
-      } catch (error) {
-        console.error("Error reading clipboard:", error);
-      }
-    };
-
-    const intervalId = setInterval(checkClipboard, 1000);
-
-    setTimeout(() => {
-      clearInterval(intervalId);
-      console.log("Amber encryption timeout");
-      reject(new Error("Amber encryption timed out. Please try again."));
-    }, 60000); // 60 seconds timeout
-  });
-}
-
 export async function PostListing(
   values: ProductFormValues,
   passphrase: string,
@@ -334,42 +290,6 @@ interface GiftWrappedMessageEvent {
   tags: string[][];
 }
 
-export async function constructEncryptedMessageEvent(
-  senderPubkey: string,
-  message: string,
-  recipientPubkey: string,
-  passphrase?: string,
-): Promise<EncryptedMessageEvent> {
-  let encryptedContent = "";
-  let signInMethod = getLocalStorageData().signInMethod;
-  if (signInMethod === "extension") {
-    encryptedContent = await window.nostr.nip04.encrypt(
-      recipientPubkey,
-      message,
-    );
-  } else if (signInMethod === "nsec") {
-    if (!passphrase) {
-      throw new Error("Passphrase is required");
-    }
-    let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
-    encryptedContent = await nip04.encrypt(
-      senderPrivkey,
-      recipientPubkey,
-      message,
-    );
-  } else if (signInMethod === "amber") {
-    encryptedContent = await amberNip04Encrypt(message, recipientPubkey);
-  }
-  let encryptedMessageEvent = {
-    pubkey: senderPubkey,
-    created_at: Math.floor(Date.now() / 1000),
-    content: encryptedContent,
-    kind: 4,
-    tags: [["p", recipientPubkey]],
-  };
-  return encryptedMessageEvent;
-}
-
 export async function constructGiftWrappedMessageEvent(
   senderPubkey: string,
   recipientPubkey: string,
@@ -379,7 +299,7 @@ export async function constructGiftWrappedMessageEvent(
 ): Promise<GiftWrappedMessageEvent> {
   let tags = [
     ["p", recipientPubkey],
-    ["subject", "shopstr-inquiry"],
+    ["subject", "listing-inquiry"],
   ];
 
   if (listingId && relayHint) {
@@ -444,31 +364,6 @@ export async function constructMessageGiftWrap(
     tags: [],
   };
   let signedEvent = finalizeEvent(giftWrapEvent, randomPrivkey);
-  return signedEvent;
-}
-
-export async function sendEncryptedMessage(
-  encryptedMessageEvent: EncryptedMessageEvent,
-  passphrase?: string,
-): Promise<NostrEvent> {
-  const { signInMethod, relays, writeRelays } = getLocalStorageData();
-  let signedEvent;
-  if (signInMethod === "extension") {
-    signedEvent = await window.nostr.signEvent(encryptedMessageEvent);
-  } else if (signInMethod === "amber") {
-    signedEvent = await amberSignEvent(encryptedMessageEvent);
-  } else {
-    if (!passphrase) throw new Error("Passphrase is required");
-    let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
-    signedEvent = finalizeEvent(encryptedMessageEvent, senderPrivkey);
-  }
-  const pool = new SimplePool();
-  const allWriteRelays = [...writeRelays, ...relays];
-  const blastrRelay = "wss://sendit.nosflare.com";
-  if (!containsRelay(allWriteRelays, blastrRelay)) {
-    allWriteRelays.push(blastrRelay);
-  }
-  await Promise.any(pool.publish(allWriteRelays, signedEvent));
   return signedEvent;
 }
 

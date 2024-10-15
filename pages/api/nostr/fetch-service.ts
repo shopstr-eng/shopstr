@@ -531,8 +531,12 @@ export const fetchGiftWrappedChatsAndMessages = async (
             }
             let senderPubkey = messageEvent.pubkey;
             let tagsMap: Map<string, string> = new Map(
-              messageEvent.tags.map(([k, v]) => [k, v]),
+              messageEvent.tags.map(([k, v]: [string, string]) => [k, v]),
             );
+            let subject = tagsMap.get("subject") ? tagsMap.get("subject") : null;
+            if (subject !== "listing-inquiry") {
+              return;
+            }
             let receipientPubkey = tagsMap.get("p") ? tagsMap.get("p") : null; // pubkey you sent the message to
             if (typeof receipientPubkey !== "string") {
               console.error(

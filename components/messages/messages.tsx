@@ -2,16 +2,14 @@ import { useState, useEffect, useContext } from "react";
 import { Filter, nip04, nip19, SimplePool } from "nostr-tools";
 import { useRouter } from "next/router";
 import {
-  constructEncryptedMessageEvent,
   constructGiftWrappedMessageEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
   decryptNpub,
   getLocalStorageData,
-  getPrivKeyWithPassphrase,
-  sendEncryptedMessage,
   validPassphrase,
+  getPrivKeyWithPassphrase,
 } from "../utility/nostr-helper-functions";
 import { ChatsContext } from "../../utils/context/context";
 import RequestPassphraseModal from "../utility-components/request-passphrase-modal";
@@ -258,10 +256,15 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       let unreadCount = 0;
 
       for (let messageEvent of chat) {
-        let plainText = await decryptEncryptedMessageContent(
-          messageEvent,
-          chatPubkey,
-        );
+        let plainText;
+        if (messageEvent.kind === 4) {
+          plainText = await decryptEncryptedMessageContent(
+            messageEvent,
+            chatPubkey,
+          );
+        } else {
+          plainText = messageEvent.content;
+        }
         if (
           (isPayment && plainText?.includes("cashuA")) ||
           (isPayment && plainText?.includes("To finalize the sale")) ||
@@ -315,45 +318,6 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
   const goBackFromChatRoom = () => {
     // used when in chatroom on smaller devices
     setCurrentChatPubkey("");
-  };
-
-  const handleSendMessage = async (message: string) => {
-    setIsSendingDMLoading(true);
-    try {
-      let encryptedMessageEvent = await constructEncryptedMessageEvent(
-        userPubkey,
-        message,
-        currentChatPubkey,
-        passphrase,
-      );
-      await sendEncryptedMessage(encryptedMessageEvent, passphrase);
-      if (
-        chatsMap.get(currentChatPubkey) != undefined &&
-        chatsMap.get(currentChatPubkey)?.decryptedChat.length === 0
-      ) {
-        // only logs if this is the first msg, aka an iniquiry
-        axios({
-          method: "POST",
-          url: "/api/metrics/post-inquiry",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          data: {
-            customer_id: userPubkey,
-            merchant_id: currentChatPubkey,
-            // listing_id: "TODO"
-            // relays: relays,
-          },
-        });
-      }
-      setIsSendingDMLoading(false);
-    } catch (e) {
-      console.log("handleSendMessage errored", e);
-      setFailureText("Error sending message.");
-      setShowFailureModal(true);
-      setIsSendingDMLoading(false);
-    }
-    router.replace(`/messages`);
   };
 
   const handleSendGiftWrappedMessage = async (message: string) => {
@@ -596,7 +560,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
               chatsMap={chatsMap}
               currentChatPubkey={currentChatPubkey}
               isSendingDMLoading={isSendingDMLoading}
-              handleSendMessage={handleSendMessage}
+              handleSendMessage={handleSendGiftWrappedMessage}
               isPayment={isPayment}
               passphrase={passphrase}
             />
