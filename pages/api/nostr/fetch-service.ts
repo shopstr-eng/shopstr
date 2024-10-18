@@ -553,7 +553,12 @@ export const fetchGiftWrappedChatsAndMessages = async (
             let subject = tagsMap.get("subject")
               ? tagsMap.get("subject")
               : null;
-            if (subject !== "listing-inquiry") {
+            if (
+              subject !== "listing-inquiry" &&
+              subject !== "order-payment" &&
+              subject !== "order-info" &&
+              subject != "payment-change"
+            ) {
               return;
             }
             let recipientPubkey = tagsMap.get("p") ? tagsMap.get("p") : null; // pubkey you sent the message to

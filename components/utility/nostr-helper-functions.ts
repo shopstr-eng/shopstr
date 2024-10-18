@@ -52,9 +52,9 @@ function generateEventId(event: EncryptedMessageEvent) {
   const serialized = JSON.stringify(eventArray, (key, value) => {
     if (typeof value === "string") {
       return value
+        .replace(/\\/g, "\\\\")
         .replace(/\n/g, "\\n")
         .replace(/"/g, '\\"')
-        .replace(/\\/g, "\\\\")
         .replace(/\r/g, "\\r")
         .replace(/\t/g, "\\t")
         .replace(/\b/g, "\\b")
@@ -288,12 +288,13 @@ export async function constructGiftWrappedMessageEvent(
   senderPubkey: string,
   recipientPubkey: string,
   message: string,
+  subject: string,
   listingId?: string,
   relayHint?: string,
 ): Promise<GiftWrappedMessageEvent> {
   let tags = [
     ["p", recipientPubkey, "wss://nos.lol"],
-    ["subject", "listing-inquiry"],
+    ["subject", subject],
   ];
 
   if (listingId && relayHint) {

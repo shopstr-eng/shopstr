@@ -104,6 +104,7 @@ export default function RedemptionModal({
         decodedRandomPubkeyForSender.data as string,
         pubkey,
         paymentMessage,
+        "payment-change",
       );
       let sealedEvent = await constructMessageSeal(
         giftWrappedMessageEvent,

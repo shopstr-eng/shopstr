@@ -257,6 +257,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
 
       for (let messageEvent of chat) {
         let plainText;
+        let tagsMap: Map<string, string> = new Map();
         if (messageEvent.kind === 4) {
           plainText = await decryptEncryptedMessageContent(
             messageEvent,
@@ -264,15 +265,32 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
           );
         } else {
           plainText = messageEvent.content;
+          tagsMap = new Map(
+            messageEvent.tags
+              .filter((tag): tag is [string, string] => tag.length === 2)
+              .map(([k, v]) => [k, v]),
+          );
         }
+        let subject = tagsMap.get("subject") ? tagsMap.get("subject") : null;
         if (
-          (isPayment && plainText?.includes("cashuA")) ||
-          (isPayment && plainText?.includes("To finalize the sale")) ||
-          (isPayment && plainText?.includes("Please ship the product")) ||
+          (isPayment &&
+            (plainText?.includes("cashuA") ||
+              plainText?.includes("To finalize the sale") ||
+              plainText?.includes("Please ship the product") ||
+              plainText?.includes("This purchase was for a size"))) ||
           (!isPayment &&
             !plainText?.includes("cashuA") &&
             !plainText?.includes("To finalize the sale") &&
-            !plainText?.includes("Please ship the product"))
+            !plainText?.includes("Please ship the product") &&
+            !plainText?.includes("This purchase was for a size")) ||
+          (subject &&
+            (subject === "order-payment" ||
+              subject === "order-info" ||
+              subject === "payment-change")) ||
+          (!subject &&
+            subject !== "order-payment" &&
+            subject !== "order-info" &&
+            subject !== "payment-change")
         ) {
           plainText &&
             decryptedChat.push({ ...messageEvent, content: plainText });
@@ -331,6 +349,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         userPubkey,
         currentChatPubkey,
         message,
+        "listing-inquiry",
       );
       let receiverSealedEvent = await constructMessageSeal(
         giftWrappedMessageEvent,

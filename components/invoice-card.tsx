@@ -171,17 +171,29 @@ export default function InvoiceCard({
   const sendPaymentAndContactMessage = async (
     pubkeyOfProduct: string,
     message: string,
+    isPayment: boolean,
   ) => {
     let decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
     let decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
     let decodedRandomPubkeyForReceiver = nip19.decode(randomNpubForReceiver);
     let decodedRandomPrivkeyForReceiver = nip19.decode(randomNsecForReceiver);
 
-    let giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
-      decodedRandomPubkeyForSender.data as string,
-      pubkeyOfProduct,
-      message,
-    );
+    let giftWrappedMessageEvent;
+    if (isPayment) {
+      giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
+        decodedRandomPubkeyForSender.data as string,
+        pubkeyOfProduct,
+        message,
+        "order-payment",
+      );
+    } else {
+      giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
+        decodedRandomPubkeyForSender.data as string,
+        pubkeyOfProduct,
+        message,
+        "order-info",
+      );
+    }
     let sealedEvent = await constructMessageSeal(
       giftWrappedMessageEvent,
       decodedRandomPubkeyForSender.data as string,
@@ -487,6 +499,7 @@ export default function InvoiceCard({
     await sendPaymentAndContactMessage(
       pubkeyOfProductBeingSold,
       paymentMessage,
+      true,
     );
     if (
       !(
@@ -564,6 +577,7 @@ export default function InvoiceCard({
         await sendPaymentAndContactMessage(
           pubkeyOfProductBeingSold,
           contactMessage,
+          false,
         );
       } else if (contact && contactType && contactInstructions) {
         let contactMessage;
@@ -593,6 +607,7 @@ export default function InvoiceCard({
         await sendPaymentAndContactMessage(
           pubkeyOfProductBeingSold,
           contactMessage,
+          false,
         );
       }
     } else if (selectedSize) {
@@ -600,6 +615,7 @@ export default function InvoiceCard({
       await sendPaymentAndContactMessage(
         pubkeyOfProductBeingSold,
         contactMessage,
+        false,
       );
     }
   };
