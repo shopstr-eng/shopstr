@@ -13,7 +13,13 @@ import {
   ArrowDownTrayIcon,
   XCircleIcon,
 } from "@heroicons/react/24/outline";
-import { getLocalStorageData } from "../utility/nostr-helper-functions";
+import {
+  constructGiftWrappedMessageEvent,
+  constructMessageSeal,
+  constructMessageGiftWrap,
+  sendGiftWrappedMessageEvent,
+  getLocalStorageData,
+} from "../utility/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { nip19 } from "nostr-tools";
 import { getEncodedToken } from "@cashu/cashu-ts";
@@ -39,8 +45,12 @@ export default function RedemptionModal({
 
   const [formattedChangeAmount, setFormattedChangeAmount] = useState("");
 
-  const [randomNpub, setRandomNpub] = useState<string>("");
-  const [randomNsec, setRandomNsec] = useState<string>("");
+  const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
+  const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
+  const [randomNpubForReceiver, setRandomNpubForReceiver] =
+    useState<string>("");
+  const [randomNsecForReceiver, setRandomNsecForReceiver] =
+    useState<string>("");
 
   useEffect(() => {
     axios({
@@ -48,8 +58,19 @@ export default function RedemptionModal({
       url: "/api/nostr/generate-keys",
     })
       .then((response) => {
-        setRandomNpub(response.data.npub);
-        setRandomNsec(response.data.nsec);
+        setRandomNpubForSender(response.data.npub);
+        setRandomNsecForSender(response.data.nsec);
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+    axios({
+      method: "GET",
+      url: "/api/nostr/generate-keys",
+    })
+      .then((response) => {
+        setRandomNpubForReceiver(response.data.npub);
+        setRandomNsecForReceiver(response.data.nsec);
       })
       .catch((error) => {
         console.error(error);
@@ -66,8 +87,10 @@ export default function RedemptionModal({
 
   const sendChange = async (pubkey: string) => {
     if (changeAmount >= 1 && changeProofs.length > 0) {
-      const decryptedRandomNpub = nip19.decode(randomNpub);
-      const decryptedRandomNsec = nip19.decode(randomNsec);
+      let decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
+      let decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
+      let decodedRandomPubkeyForReceiver = nip19.decode(randomNpubForReceiver);
+      let decodedRandomPrivkeyForReceiver = nip19.decode(randomNsecForReceiver);
       let encodedChange = getEncodedToken({
         token: [
           {
@@ -77,22 +100,26 @@ export default function RedemptionModal({
         ],
       });
       const paymentMessage = "Overpaid fee change: " + encodedChange;
-      axios({
-        method: "POST",
-        url: "/api/nostr/post-event",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        data: {
-          pubkey: decryptedRandomNpub.data,
-          privkey: decryptedRandomNsec.data,
-          created_at: Math.floor(Date.now() / 1000),
-          kind: 4,
-          tags: [["p", pubkey]],
-          content: paymentMessage,
-          relays: relays,
-        },
-      });
+      let giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
+        decodedRandomPubkeyForSender.data as string,
+        pubkey,
+        paymentMessage,
+        "payment-change",
+      );
+      let sealedEvent = await constructMessageSeal(
+        giftWrappedMessageEvent,
+        decodedRandomPubkeyForSender.data as string,
+        pubkey,
+        undefined,
+        decodedRandomPrivkeyForSender.data as Uint8Array,
+      );
+      let giftWrappedEvent = await constructMessageGiftWrap(
+        sealedEvent,
+        decodedRandomPubkeyForReceiver.data as string,
+        decodedRandomPrivkeyForReceiver.data as Uint8Array,
+        pubkey,
+      );
+      await sendGiftWrappedMessageEvent(giftWrappedEvent);
     }
     setShowModal(false);
   };

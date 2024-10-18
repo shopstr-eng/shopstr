@@ -1,13 +1,15 @@
 import { useState, useEffect, useContext } from "react";
-import { Filter, nip04, SimplePool } from "nostr-tools";
+import { Filter, nip04, nip19, nip44, SimplePool } from "nostr-tools";
 import { useRouter } from "next/router";
 import {
-  constructEncryptedMessageEvent,
+  constructGiftWrappedMessageEvent,
+  constructMessageSeal,
+  constructMessageGiftWrap,
+  sendGiftWrappedMessageEvent,
   decryptNpub,
   getLocalStorageData,
-  getPrivKeyWithPassphrase,
-  sendEncryptedMessage,
   validPassphrase,
+  getPrivKeyWithPassphrase,
 } from "../utility/nostr-helper-functions";
 import { ChatsContext } from "../../utils/context/context";
 import RequestPassphraseModal from "../utility-components/request-passphrase-modal";
@@ -53,6 +55,38 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
 
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
+
+  const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
+  const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
+  const [randomNpubForReceiver, setRandomNpubForReceiver] =
+    useState<string>("");
+  const [randomNsecForReceiver, setRandomNsecForReceiver] =
+    useState<string>("");
+
+  useEffect(() => {
+    axios({
+      method: "GET",
+      url: "/api/nostr/generate-keys",
+    })
+      .then((response) => {
+        setRandomNpubForSender(response.data.npub);
+        setRandomNsecForSender(response.data.nsec);
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+    axios({
+      method: "GET",
+      url: "/api/nostr/generate-keys",
+    })
+      .then((response) => {
+        setRandomNpubForReceiver(response.data.npub);
+        setRandomNsecForReceiver(response.data.nsec);
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+  }, []);
 
   useEffect(() => {
     setIsClient(true);
@@ -222,18 +256,41 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       let unreadCount = 0;
 
       for (let messageEvent of chat) {
-        let plainText = await decryptEncryptedMessageContent(
-          messageEvent,
-          chatPubkey,
-        );
+        let plainText;
+        let tagsMap: Map<string, string> = new Map();
+        if (messageEvent.kind === 4) {
+          plainText = await decryptEncryptedMessageContent(
+            messageEvent,
+            chatPubkey,
+          );
+        } else {
+          plainText = messageEvent.content;
+          tagsMap = new Map(
+            messageEvent.tags
+              .filter((tag): tag is [string, string] => tag.length === 2)
+              .map(([k, v]) => [k, v]),
+          );
+        }
+        let subject = tagsMap.get("subject") ? tagsMap.get("subject") : null;
         if (
-          (isPayment && plainText?.includes("cashuA")) ||
-          (isPayment && plainText?.includes("To finalize the sale")) ||
-          (isPayment && plainText?.includes("Please ship the product")) ||
+          (isPayment &&
+            (plainText?.includes("cashuA") ||
+              plainText?.includes("To finalize the sale") ||
+              plainText?.includes("Please ship the product") ||
+              plainText?.includes("This purchase was for a size"))) ||
           (!isPayment &&
             !plainText?.includes("cashuA") &&
             !plainText?.includes("To finalize the sale") &&
-            !plainText?.includes("Please ship the product"))
+            !plainText?.includes("Please ship the product") &&
+            !plainText?.includes("This purchase was for a size")) ||
+          (subject &&
+            (subject === "order-payment" ||
+              subject === "order-info" ||
+              subject === "payment-change")) ||
+          (!subject &&
+            subject !== "order-payment" &&
+            subject !== "order-info" &&
+            subject !== "payment-change")
         ) {
           plainText &&
             decryptedChat.push({ ...messageEvent, content: plainText });
@@ -281,16 +338,45 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
     setCurrentChatPubkey("");
   };
 
-  const handleSendMessage = async (message: string) => {
+  const handleSendGiftWrappedMessage = async (message: string) => {
     setIsSendingDMLoading(true);
     try {
-      let encryptedMessageEvent = await constructEncryptedMessageEvent(
+      let decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
+      let decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
+      let decodedRandomPubkeyForReceiver = nip19.decode(randomNpubForReceiver);
+      let decodedRandomPrivkeyForReceiver = nip19.decode(randomNsecForReceiver);
+      let giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
         userPubkey,
+        currentChatPubkey,
         message,
+        "listing-inquiry",
+      );
+      let receiverSealedEvent = await constructMessageSeal(
+        giftWrappedMessageEvent,
+        userPubkey,
         currentChatPubkey,
         passphrase,
       );
-      await sendEncryptedMessage(encryptedMessageEvent, passphrase);
+      let senderSealedEvent = await constructMessageSeal(
+        giftWrappedMessageEvent,
+        userPubkey,
+        userPubkey,
+        passphrase,
+      );
+      let senderGiftWrappedEvent = await constructMessageGiftWrap(
+        senderSealedEvent,
+        decodedRandomPubkeyForSender.data as string,
+        decodedRandomPrivkeyForSender.data as Uint8Array,
+        userPubkey,
+      );
+      let receiverGiftWrappedEvent = await constructMessageGiftWrap(
+        receiverSealedEvent,
+        decodedRandomPubkeyForReceiver.data as string,
+        decodedRandomPrivkeyForReceiver.data as Uint8Array,
+        currentChatPubkey,
+      );
+      await sendGiftWrappedMessageEvent(senderGiftWrappedEvent);
+      await sendGiftWrappedMessageEvent(receiverGiftWrappedEvent);
       if (
         chatsMap.get(currentChatPubkey) != undefined &&
         chatsMap.get(currentChatPubkey)?.decryptedChat.length === 0
@@ -377,7 +463,144 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
           ...event,
           read: false,
         }));
-      const olderMessages = [...sentMessages, ...receivedMessages];
+      const giftWrapFilter: Filter = {
+        kinds: [1095],
+        "#p": [userPubkey],
+        since,
+        until: oldestMessageCreatedAt,
+      };
+      const giftWrapEvents = await pool.querySync(
+        allReadRelays,
+        giftWrapFilter,
+      );
+      let giftWrapMessageEvents: NostrMessageEvent[] = [];
+      for (const event of giftWrapEvents) {
+        if (signInMethod === "extension") {
+          let sealEventString = await window.nostr.nip44.decrypt(
+            event.pubkey,
+            event.content,
+          );
+          let sealEvent = JSON.parse(sealEventString);
+          if (sealEvent.kind === 13) {
+            let messageEventString = await window.nostr.nip44.decrypt(
+              sealEvent.pubkey,
+              sealEvent.content,
+            );
+            let messageEventCheck = JSON.parse(messageEventString);
+            if (messageEventCheck.pubkey === sealEvent.pubkey) {
+              giftWrapMessageEvents.push({
+                ...messageEventCheck,
+                sig: "",
+                read: false,
+              });
+            }
+          }
+        } else if (signInMethod === "nsec") {
+          if (!passphrase) throw new Error("Passphrase is required");
+          let userPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
+          const giftWrapConversationKey = nip44.getConversationKey(
+            userPrivkey,
+            event.pubkey,
+          );
+          let sealEventString = nip44.decrypt(
+            event.content,
+            giftWrapConversationKey,
+          );
+          let sealEvent = JSON.parse(sealEventString);
+          if (sealEvent.kind === 13) {
+            let sealConversationKey = nip44.getConversationKey(
+              userPrivkey,
+              sealEvent.pubkey,
+            );
+            let messageEventString = nip44.decrypt(
+              sealEvent.content,
+              sealConversationKey,
+            );
+            let messageEventCheck = JSON.parse(messageEventString);
+            if (messageEventCheck.pubkey === sealEvent.pubkey) {
+              giftWrapMessageEvents.push({
+                ...messageEventCheck,
+                sig: "",
+                read: false,
+              });
+            }
+          }
+        } else if (signInMethod === "amber") {
+          const readClipboard = (): Promise<string> => {
+            return new Promise((resolve, reject) => {
+              const checkClipboard = async () => {
+                try {
+                  if (!document.hasFocus()) {
+                    console.log("Document not focused, waiting for focus...");
+                    return;
+                  }
+
+                  const clipboardContent = await navigator.clipboard.readText();
+
+                  if (clipboardContent && clipboardContent !== "") {
+                    clearInterval(intervalId);
+                    let eventContent = clipboardContent;
+
+                    let parsedContent = JSON.parse(eventContent);
+
+                    resolve(parsedContent);
+                  } else {
+                    console.log("Waiting for new clipboard content...");
+                  }
+                } catch (error) {
+                  console.error("Error reading clipboard:", error);
+                  reject(error);
+                }
+              };
+
+              checkClipboard();
+              const intervalId = setInterval(checkClipboard, 1000);
+
+              setTimeout(() => {
+                clearInterval(intervalId);
+                console.log("Amber decryption timeout");
+                alert("Amber decryption timed out. Please try again.");
+              }, 60000);
+            });
+          };
+
+          try {
+            const giftWrapAmberSignerUrl = `nostrsigner:${event.content}?pubKey=${event.pubkey}&compressionType=none&returnType=signature&type=nip44_decrypt`;
+
+            await navigator.clipboard.writeText("");
+
+            window.open(giftWrapAmberSignerUrl, "_blank");
+
+            let sealEventString = await readClipboard();
+            let sealEvent = JSON.parse(sealEventString);
+            if (sealEvent.kind == 13) {
+              const sealAmberSignerUrl = `nostrsigner:${sealEvent.content}?pubKey=${event.pubkey}&compressionType=none&returnType=signature&type=nip44_decrypt`;
+
+              await navigator.clipboard.writeText("");
+
+              window.open(sealAmberSignerUrl, "_blank");
+
+              let messageEventString = await readClipboard();
+              let messageEventCheck = JSON.parse(messageEventString);
+              if (messageEventCheck.pubkey === sealEvent.pubkey) {
+                giftWrapMessageEvents.push({
+                  ...messageEventCheck,
+                  sig: "",
+                  read: false,
+                });
+              }
+            }
+          } catch (error) {
+            console.error("Error reading clipboard:", error);
+            alert("Amber decryption failed. Please try again.");
+          }
+        }
+      }
+      const olderMessages = [
+        ...sentMessages,
+        ...receivedMessages,
+        ...giftWrapMessageEvents,
+      ];
       olderMessages.sort((a, b) => b.created_at - a.created_at);
       // Combine the newly fetched messages with the existing chatsMap
       const combinedChatsMap = new Map(chatsMap);
@@ -493,7 +716,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
               chatsMap={chatsMap}
               currentChatPubkey={currentChatPubkey}
               isSendingDMLoading={isSendingDMLoading}
-              handleSendMessage={handleSendMessage}
+              handleSendMessage={handleSendGiftWrappedMessage}
               isPayment={isPayment}
               passphrase={passphrase}
             />

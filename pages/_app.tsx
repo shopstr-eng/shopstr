@@ -35,6 +35,7 @@ import {
   fetchAllFollows,
   fetchAllRelays,
   fetchCashuWallet,
+  fetchGiftWrappedChatsAndMessages,
 } from "./api/nostr/fetch-service";
 import {
   NostrEvent,
@@ -309,11 +310,26 @@ function App({ Component, pageProps }: AppProps) {
           editProductContext,
         );
         pubkeysToFetchProfilesFor = [...profileSetFromProducts];
-        let { profileSetFromChats } = await fetchChatsAndMessages(
-          allRelays,
-          userPubkey,
-          editChatContext,
-        );
+        let profileSetFromChats = new Set<string>();
+        let { profileSetFromChats: initialProfileSet } =
+          await fetchChatsAndMessages(allRelays, userPubkey, editChatContext);
+        profileSetFromChats = new Set(initialProfileSet);
+        if (
+          (getLocalStorageData().signInMethod === "nsec" && passphrase) ||
+          getLocalStorageData().signInMethod === "extension" ||
+          getLocalStorageData().signInMethod === "amber"
+        ) {
+          let { profileSetFromChats: newProfileSetFromChats } =
+            await fetchGiftWrappedChatsAndMessages(
+              allRelays,
+              userPubkey,
+              editChatContext,
+              passphrase,
+            );
+          newProfileSetFromChats.forEach((profile) =>
+            profileSetFromChats.add(profile),
+          );
+        }
         if (userPubkey && profileSetFromChats.size != 0) {
           pubkeysToFetchProfilesFor = [
             userPubkey as string,

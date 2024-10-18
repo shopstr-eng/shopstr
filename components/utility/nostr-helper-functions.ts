@@ -1,12 +1,5 @@
 import CryptoJS from "crypto-js";
-import {
-  finalizeEvent,
-  nip04,
-  nip19,
-  nip44,
-  nip98,
-  SimplePool,
-} from "nostr-tools";
+import { finalizeEvent, nip19, nip44, nip98, SimplePool } from "nostr-tools";
 import axios from "axios";
 import { NostrEvent } from "@/utils/types/types";
 import { Proof } from "@cashu/cashu-ts";
@@ -14,6 +7,7 @@ import { ProductFormValues } from "@/pages/api/nostr/post-event";
 import { DeleteEvent } from "@/pages/api/nostr/crud-service";
 import { gunzipSync } from "zlib";
 import { Buffer } from "buffer";
+import crypto from "crypto";
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
@@ -33,6 +27,46 @@ function decryptBase64Gzip(encodedString: string): string {
     console.error("Error decrypting base64 gzip:", error);
     throw error;
   }
+}
+
+function generateRandomTimestamp(): number {
+  const now = Math.floor(Date.now() / 1000);
+  const twoDaysInMilliseconds = 172800;
+  const randomSeconds = Math.floor(Math.random() * (twoDaysInMilliseconds + 1));
+  const randomTimestamp = now - randomSeconds;
+  return randomTimestamp;
+}
+
+function generateEventId(event: EncryptedMessageEvent) {
+  // Step 1: Create the array structure
+  const eventArray = [
+    0,
+    event.pubkey.toLowerCase(),
+    event.created_at,
+    event.kind,
+    event.tags,
+    event.content,
+  ];
+
+  // Step 2: JSON stringify the array with custom replacer for proper escaping
+  const serialized = JSON.stringify(eventArray, (key, value) => {
+    if (typeof value === "string") {
+      return value
+        .replace(/\\/g, "\\\\")
+        .replace(/\n/g, "\\n")
+        .replace(/"/g, '\\"')
+        .replace(/\r/g, "\\r")
+        .replace(/\t/g, "\\t")
+        .replace(/\b/g, "\\b")
+        .replace(/\f/g, "\\f");
+    }
+    return value;
+  });
+
+  // Step 3: Create SHA256 hash of the serialized string
+  const hash = crypto.createHash("sha256");
+  hash.update(serialized);
+  return hash.digest("hex");
 }
 
 async function amberSignEvent(event: any): Promise<any> {
@@ -116,49 +150,6 @@ async function amberNip44Encrypt(
       console.log("Amber encryption timeout");
       reject(new Error("Amber encryption timed out. Please try again."));
     }, 60000);
-  });
-}
-
-async function amberNip04Encrypt(
-  message: string,
-  recipientPubkey: string,
-): Promise<string> {
-  const amberSignerUrl = `nostrsigner:${message}?pubKey=${recipientPubkey}&compressionType=none&returnType=signature&type=nip04_encrypt`;
-
-  // Store the current clipboard content
-  await navigator.clipboard.writeText("");
-
-  window.open(amberSignerUrl, "_blank");
-
-  return new Promise((resolve, reject) => {
-    const checkClipboard = async () => {
-      try {
-        if (!document.hasFocus()) {
-          console.log("Document not focused, waiting for focus...");
-          return;
-        }
-
-        const clipboardContent = await navigator.clipboard.readText();
-
-        // Only resolve if the clipboard content has changed
-        if (clipboardContent && clipboardContent !== "") {
-          clearInterval(intervalId);
-          resolve(clipboardContent);
-        } else {
-          console.log("Waiting for new clipboard content...");
-        }
-      } catch (error) {
-        console.error("Error reading clipboard:", error);
-      }
-    };
-
-    const intervalId = setInterval(checkClipboard, 1000);
-
-    setTimeout(() => {
-      clearInterval(intervalId);
-      console.log("Amber encryption timeout");
-      reject(new Error("Amber encryption timed out. Please try again."));
-    }, 60000); // 60 seconds timeout
   });
 }
 
@@ -284,65 +275,143 @@ interface EncryptedMessageEvent {
   tags: string[][];
 }
 
-export async function constructEncryptedMessageEvent(
-  senderPubkey: string,
-  message: string,
-  recipientPubkey: string,
-  passphrase?: string,
-): Promise<EncryptedMessageEvent> {
-  let encryptedContent = "";
-  let signInMethod = getLocalStorageData().signInMethod;
-  if (signInMethod === "extension") {
-    encryptedContent = await window.nostr.nip04.encrypt(
-      recipientPubkey,
-      message,
-    );
-  } else if (signInMethod === "nsec") {
-    if (!passphrase) {
-      throw new Error("Passphrase is required");
-    }
-    let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
-    encryptedContent = await nip04.encrypt(
-      senderPrivkey,
-      recipientPubkey,
-      message,
-    );
-  } else if (signInMethod === "amber") {
-    encryptedContent = await amberNip04Encrypt(message, recipientPubkey);
-  }
-  let encryptedMessageEvent = {
-    pubkey: senderPubkey,
-    created_at: Math.floor(Date.now() / 1000),
-    content: encryptedContent,
-    kind: 4,
-    tags: [["p", recipientPubkey]],
-  };
-  return encryptedMessageEvent;
+interface GiftWrappedMessageEvent {
+  id: string;
+  pubkey: string;
+  created_at: number;
+  content: string;
+  kind: number;
+  tags: string[][];
 }
 
-export async function sendEncryptedMessage(
-  encryptedMessageEvent: EncryptedMessageEvent,
+export async function constructGiftWrappedMessageEvent(
+  senderPubkey: string,
+  recipientPubkey: string,
+  message: string,
+  subject: string,
+  listingId?: string,
+  relayHint?: string,
+): Promise<GiftWrappedMessageEvent> {
+  let tags = [
+    ["p", recipientPubkey, "wss://nos.lol"],
+    ["subject", subject],
+  ];
+
+  if (listingId && relayHint) {
+    tags.push(["e", listingId, relayHint]);
+  }
+
+  let bareGiftWrappedMessageEvent = {
+    pubkey: senderPubkey,
+    created_at: Math.floor(Date.now() / 1000),
+    content: message,
+    kind: 14,
+    tags: tags,
+  };
+  let giftWrappedMessageEventId = generateEventId(bareGiftWrappedMessageEvent);
+  let giftWrappedMessageEvent = {
+    id: giftWrappedMessageEventId,
+    ...bareGiftWrappedMessageEvent,
+  };
+  return giftWrappedMessageEvent;
+}
+
+export async function constructMessageSeal(
+  messageEvent: GiftWrappedMessageEvent,
+  senderPubkey: string,
+  recipientPubkey: string,
   passphrase?: string,
+  randomPrivkey?: Uint8Array,
 ): Promise<NostrEvent> {
-  const { signInMethod, relays, writeRelays } = getLocalStorageData();
-  let signedEvent;
-  if (signInMethod === "extension") {
-    signedEvent = await window.nostr.signEvent(encryptedMessageEvent);
-  } else if (signInMethod === "amber") {
-    signedEvent = await amberSignEvent(encryptedMessageEvent);
+  let stringifiedEvent = JSON.stringify(messageEvent);
+  let encryptedContent = "";
+  const { signInMethod, userPubkey } = getLocalStorageData();
+  if (randomPrivkey) {
+    let conversationKey = nip44.getConversationKey(
+      randomPrivkey,
+      recipientPubkey,
+    );
+    encryptedContent = nip44.encrypt(stringifiedEvent, conversationKey);
   } else {
+    if (signInMethod === "extension") {
+      encryptedContent = await window.nostr.nip44.encrypt(
+        recipientPubkey,
+        stringifiedEvent,
+      );
+    } else if (signInMethod === "nsec") {
+      if (!passphrase) {
+        throw new Error("Passphrase is required");
+      }
+      let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
+      let conversationKey = nip44.getConversationKey(
+        senderPrivkey,
+        recipientPubkey,
+      );
+      encryptedContent = nip44.encrypt(stringifiedEvent, conversationKey);
+    } else if (signInMethod === "amber") {
+      encryptedContent = await amberNip44Encrypt(
+        stringifiedEvent,
+        recipientPubkey,
+      );
+    }
+  }
+
+  let sealEvent = {
+    pubkey: senderPubkey,
+    created_at: generateRandomTimestamp(),
+    content: encryptedContent,
+    kind: 13,
+    tags: [],
+  };
+  let signedEvent;
+  if (randomPrivkey) {
+    signedEvent = finalizeEvent(sealEvent, randomPrivkey);
+  } else if (signInMethod === "extension") {
+    signedEvent = await window.nostr.signEvent(sealEvent);
+  } else if (signInMethod === "amber") {
+    signedEvent = await amberSignEvent(sealEvent);
+  } else if (signInMethod === "nsec") {
     if (!passphrase) throw new Error("Passphrase is required");
     let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
-    signedEvent = finalizeEvent(encryptedMessageEvent, senderPrivkey);
+    signedEvent = finalizeEvent(sealEvent, senderPrivkey);
   }
+  return signedEvent;
+}
+
+export async function constructMessageGiftWrap(
+  sealEvent: NostrEvent,
+  randomPubkey: string,
+  randomPrivkey: Uint8Array,
+  recipientPubkey: string,
+): Promise<NostrEvent> {
+  let stringifiedEvent = JSON.stringify(sealEvent);
+  let conversationKey = nip44.getConversationKey(
+    randomPrivkey,
+    recipientPubkey,
+  );
+  let encryptedEvent = nip44.encrypt(stringifiedEvent, conversationKey);
+  let giftWrapEvent = {
+    pubkey: randomPubkey,
+    created_at: generateRandomTimestamp(),
+    content: encryptedEvent,
+    kind: 1059,
+    tags: [["p", recipientPubkey, "wss://nos.lol"]],
+  };
+  let signedEvent = finalizeEvent(giftWrapEvent, randomPrivkey);
+  return signedEvent;
+}
+
+export async function sendGiftWrappedMessageEvent(
+  giftWrappedMessageEvent: NostrEvent,
+) {
+  const { relays, writeRelays } = getLocalStorageData();
   const pool = new SimplePool();
   const allWriteRelays = [...writeRelays, ...relays];
   const blastrRelay = "wss://sendit.nosflare.com";
   if (!containsRelay(allWriteRelays, blastrRelay)) {
     allWriteRelays.push(blastrRelay);
   }
-  await Promise.any(pool.publish(allWriteRelays, signedEvent));
-  return signedEvent;
+  await Promise.any(pool.publish(allWriteRelays, giftWrappedMessageEvent));
 }
 
 export async function publishWalletEvent(passphrase?: string, dTag?: string) {
