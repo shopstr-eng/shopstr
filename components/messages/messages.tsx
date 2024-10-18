@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from "react";
-import { Filter, nip04, nip19, SimplePool } from "nostr-tools";
+import { Filter, nip04, nip19, nip44, SimplePool } from "nostr-tools";
 import { useRouter } from "next/router";
 import {
   constructGiftWrappedMessageEvent,
@@ -444,7 +444,144 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
           ...event,
           read: false,
         }));
-      const olderMessages = [...sentMessages, ...receivedMessages];
+      const giftWrapFilter: Filter = {
+        kinds: [1095],
+        "#p": [userPubkey],
+        since,
+        until: oldestMessageCreatedAt,
+      };
+      const giftWrapEvents = await pool.querySync(
+        allReadRelays,
+        giftWrapFilter,
+      );
+      let giftWrapMessageEvents: NostrMessageEvent[] = [];
+      for (const event of giftWrapEvents) {
+        if (signInMethod === "extension") {
+          let sealEventString = await window.nostr.nip44.decrypt(
+            event.pubkey,
+            event.content,
+          );
+          let sealEvent = JSON.parse(sealEventString);
+          if (sealEvent.kind === 13) {
+            let messageEventString = await window.nostr.nip44.decrypt(
+              sealEvent.pubkey,
+              sealEvent.content,
+            );
+            let messageEventCheck = JSON.parse(messageEventString);
+            if (messageEventCheck.pubkey === sealEvent.pubkey) {
+              giftWrapMessageEvents.push({
+                ...messageEventCheck,
+                sig: "",
+                read: false,
+              });
+            }
+          }
+        } else if (signInMethod === "nsec") {
+          if (!passphrase) throw new Error("Passphrase is required");
+          let userPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
+          const giftWrapConversationKey = nip44.getConversationKey(
+            userPrivkey,
+            event.pubkey,
+          );
+          let sealEventString = nip44.decrypt(
+            event.content,
+            giftWrapConversationKey,
+          );
+          let sealEvent = JSON.parse(sealEventString);
+          if (sealEvent.kind === 13) {
+            let sealConversationKey = nip44.getConversationKey(
+              userPrivkey,
+              sealEvent.pubkey,
+            );
+            let messageEventString = nip44.decrypt(
+              sealEvent.content,
+              sealConversationKey,
+            );
+            let messageEventCheck = JSON.parse(messageEventString);
+            if (messageEventCheck.pubkey === sealEvent.pubkey) {
+              giftWrapMessageEvents.push({
+                ...messageEventCheck,
+                sig: "",
+                read: false,
+              });
+            }
+          }
+        } else if (signInMethod === "amber") {
+          const readClipboard = (): Promise<string> => {
+            return new Promise((resolve, reject) => {
+              const checkClipboard = async () => {
+                try {
+                  if (!document.hasFocus()) {
+                    console.log("Document not focused, waiting for focus...");
+                    return;
+                  }
+
+                  const clipboardContent = await navigator.clipboard.readText();
+
+                  if (clipboardContent && clipboardContent !== "") {
+                    clearInterval(intervalId);
+                    let eventContent = clipboardContent;
+
+                    let parsedContent = JSON.parse(eventContent);
+
+                    resolve(parsedContent);
+                  } else {
+                    console.log("Waiting for new clipboard content...");
+                  }
+                } catch (error) {
+                  console.error("Error reading clipboard:", error);
+                  reject(error);
+                }
+              };
+
+              checkClipboard();
+              const intervalId = setInterval(checkClipboard, 1000);
+
+              setTimeout(() => {
+                clearInterval(intervalId);
+                console.log("Amber decryption timeout");
+                alert("Amber decryption timed out. Please try again.");
+              }, 60000);
+            });
+          };
+
+          try {
+            const giftWrapAmberSignerUrl = `nostrsigner:${event.content}?pubKey=${event.pubkey}&compressionType=none&returnType=signature&type=nip44_decrypt`;
+
+            await navigator.clipboard.writeText("");
+
+            window.open(giftWrapAmberSignerUrl, "_blank");
+
+            let sealEventString = await readClipboard();
+            let sealEvent = JSON.parse(sealEventString);
+            if (sealEvent.kind == 13) {
+              const sealAmberSignerUrl = `nostrsigner:${sealEvent.content}?pubKey=${event.pubkey}&compressionType=none&returnType=signature&type=nip44_decrypt`;
+
+              await navigator.clipboard.writeText("");
+
+              window.open(sealAmberSignerUrl, "_blank");
+
+              let messageEventString = await readClipboard();
+              let messageEventCheck = JSON.parse(messageEventString);
+              if (messageEventCheck.pubkey === sealEvent.pubkey) {
+                giftWrapMessageEvents.push({
+                  ...messageEventCheck,
+                  sig: "",
+                  read: false,
+                });
+              }
+            }
+          } catch (error) {
+            console.error("Error reading clipboard:", error);
+            alert("Amber decryption failed. Please try again.");
+          }
+        }
+      }
+      const olderMessages = [
+        ...sentMessages,
+        ...receivedMessages,
+        ...giftWrapMessageEvents,
+      ];
       olderMessages.sort((a, b) => b.created_at - a.created_at);
       // Combine the newly fetched messages with the existing chatsMap
       const combinedChatsMap = new Map(chatsMap);
