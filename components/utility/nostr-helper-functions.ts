@@ -363,11 +363,13 @@ export async function constructMessageSeal(
     tags: [],
   };
   let signedEvent;
-  if (signInMethod === "extension") {
+  if (randomPrivkey) {
+    signedEvent = finalizeEvent(sealEvent, randomPrivkey);
+  } else if (signInMethod === "extension") {
     signedEvent = await window.nostr.signEvent(sealEvent);
   } else if (signInMethod === "amber") {
     signedEvent = await amberSignEvent(sealEvent);
-  } else {
+  } else if (signInMethod === "nsec") {
     if (!passphrase) throw new Error("Passphrase is required");
     let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
     signedEvent = finalizeEvent(sealEvent, senderPrivkey);
