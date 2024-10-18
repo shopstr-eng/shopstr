@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useEffect, useState, useContext } from "react";
 import Link from "next/link";
+import CryptoKS from "crypto-js";
 import { useForm, Controller } from "react-hook-form";
 import {
   Modal,
@@ -118,13 +119,9 @@ export default function NewForm({
     }
 
     setIsPostingOrUpdatingProduct(true);
-    const encoder = new TextEncoder();
-    const dataEncoded = encoder.encode(data["Product Name"] as string);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", dataEncoded);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
+    const hashHex = CryptoJS.SHA256(data["Product Name"] as string).toString(
+      CryptoJS.enc.Hex,
+    );
 
     let tags: ProductFormValues = [
       ["d", oldValues?.d || hashHex],

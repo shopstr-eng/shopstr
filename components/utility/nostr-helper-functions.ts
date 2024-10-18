@@ -542,13 +542,9 @@ export async function publishProofEvent(
       getLocalStorageData();
     const allWriteRelays = [...relays, ...writeRelays];
 
-    const encoder = new TextEncoder();
-    const dataEncoded = encoder.encode("shopstr" + userPubkey);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", dataEncoded);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
+    const hashHex = CryptoJS.SHA256("shopstr" + userPubkey).toString(
+      CryptoJS.enc.Hex,
+    );
 
     if (isProofArrayArray(proof)) {
       proof.forEach(async (proofArray) => {
@@ -718,13 +714,9 @@ export async function publishSpendingHistoryEvent(
       ]);
     });
 
-    const encoder = new TextEncoder();
-    const dataEncoded = encoder.encode("shopstr" + userPubkey);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", dataEncoded);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
+    const hashHex = CryptoJS.SHA256("shopstr" + userPubkey).toString(
+      CryptoJS.enc.Hex,
+    );
 
     let dTagContent = dTag ? ":" + dTag : hashHex;
 
