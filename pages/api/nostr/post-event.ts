@@ -2,7 +2,6 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import {
   SimplePool,
   finalizeEvent, // this assigns the pubkey, calculates the event id and signs the event in a single step
-  nip04,
 } from "nostr-tools";
 
 type ProductFormValue = [key: string, ...values: string[]];
@@ -148,19 +147,7 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
     let signedHandlerEvent;
 
     // if (kind === 1 || kind === 5 #deletion event) { do nothing and just sign event
-    if (kind === 4) {
-      let sk1 = privkey;
-      let pk1 = event.pubkey;
-      let pk2 = event.tags[0][1];
-      let ciphertext = await nip04.encrypt(sk1, pk2, event.content);
-      signedEvent = {
-        kind: kind,
-        pubkey: pk1,
-        tags: [["p", pk2]],
-        content: ciphertext,
-        created_at: Math.floor(Date.now() / 1000),
-      };
-    } else if (kind === 30018) {
+    if (kind === 30018) {
       event.content.stall_id = event.pubkey; // using users public key as stall id
       event.content = JSON.stringify(event.content);
       signedEvent = finalizeEvent(event, privkey);

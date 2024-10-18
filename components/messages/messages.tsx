@@ -329,20 +329,20 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       let decodedRandomPrivkeyForReceiver = nip19.decode(randomNsecForReceiver);
       let giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
         userPubkey,
-        message,
         currentChatPubkey,
-      );
-      let senderSealedEvent = await constructMessageSeal(
-        giftWrappedMessageEvent,
-        decodedRandomPubkeyForSender.data as string,
-        decodedRandomPrivkeyForSender.data as Uint8Array,
-        userPubkey,
+        message,
       );
       let receiverSealedEvent = await constructMessageSeal(
         giftWrappedMessageEvent,
-        decodedRandomPubkeyForReceiver.data as string,
-        decodedRandomPrivkeyForReceiver.data as Uint8Array,
+        userPubkey,
         currentChatPubkey,
+        passphrase,
+      );
+      let senderSealedEvent = await constructMessageSeal(
+        giftWrappedMessageEvent,
+        userPubkey,
+        userPubkey,
+        passphrase,
       );
       let senderGiftWrappedEvent = await constructMessageGiftWrap(
         senderSealedEvent,

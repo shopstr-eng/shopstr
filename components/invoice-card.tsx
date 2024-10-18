@@ -38,6 +38,10 @@ import {
   Proof,
 } from "@cashu/cashu-ts";
 import {
+  constructGiftWrappedMessageEvent,
+  constructMessageSeal,
+  constructMessageGiftWrap,
+  sendGiftWrappedMessageEvent,
   getLocalStorageData,
   validPassphrase,
   isUserLoggedIn,
@@ -79,8 +83,7 @@ export default function InvoiceCard({
   const router = useRouter();
   const { id, pubkey, currency, totalCost, shippingType } = productData;
   const pubkeyOfProductBeingSold = pubkey;
-  const { signInMethod, relays, mints, tokens, history } =
-    getLocalStorageData();
+  const { signInMethod, mints, tokens, history } = getLocalStorageData();
 
   const [enterPassphrase, setEnterPassphrase] = useState(false);
   const [passphrase, setPassphrase] = useState("");
@@ -95,8 +98,12 @@ export default function InvoiceCard({
   const walletContext = useContext(CashuWalletContext);
   const [dTag, setDTag] = useState("");
 
-  const [randomNpub, setRandomNpub] = useState<string>("");
-  const [randomNsec, setRandomNsec] = useState<string>("");
+  const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
+  const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
+  const [randomNpubForReceiver, setRandomNpubForReceiver] =
+    useState<string>("");
+  const [randomNsecForReceiver, setRandomNsecForReceiver] =
+    useState<string>("");
 
   const { isOpen, onOpen, onClose } = useDisclosure();
 
@@ -132,8 +139,19 @@ export default function InvoiceCard({
       url: "/api/nostr/generate-keys",
     })
       .then((response) => {
-        setRandomNpub(response.data.npub);
-        setRandomNsec(response.data.nsec);
+        setRandomNpubForSender(response.data.npub);
+        setRandomNsecForSender(response.data.nsec);
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+    axios({
+      method: "GET",
+      url: "/api/nostr/generate-keys",
+    })
+      .then((response) => {
+        setRandomNpubForReceiver(response.data.npub);
+        setRandomNsecForReceiver(response.data.nsec);
       })
       .catch((error) => {
         console.error(error);
@@ -149,6 +167,36 @@ export default function InvoiceCard({
       setDTag(walletTag);
     }
   }, [walletContext]);
+
+  const sendPaymentAndContactMessage = async (
+    pubkeyOfProduct: string,
+    message: string,
+  ) => {
+    let decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
+    let decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
+    let decodedRandomPubkeyForReceiver = nip19.decode(randomNpubForReceiver);
+    let decodedRandomPrivkeyForReceiver = nip19.decode(randomNsecForReceiver);
+
+    let giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
+      decodedRandomPubkeyForSender.data as string,
+      pubkeyOfProduct,
+      message,
+    );
+    let sealedEvent = await constructMessageSeal(
+      giftWrappedMessageEvent,
+      decodedRandomPubkeyForSender.data as string,
+      pubkeyOfProduct,
+      undefined,
+      decodedRandomPrivkeyForSender.data as Uint8Array,
+    );
+    let giftWrappedEvent = await constructMessageGiftWrap(
+      sealedEvent,
+      decodedRandomPubkeyForReceiver.data as string,
+      decodedRandomPrivkeyForReceiver.data as Uint8Array,
+      pubkeyOfProduct,
+    );
+    await sendGiftWrappedMessageEvent(giftWrappedEvent);
+  };
 
   const onShippingSubmit = async (data: { [x: string]: any }) => {
     try {
@@ -431,29 +479,15 @@ export default function InvoiceCard({
     contactInstructions?: string,
   ) => {
     const { title } = productData;
-    const decryptedRandomNpub = nip19.decode(randomNpub);
-    const decryptedRandomNsec = nip19.decode(randomNsec);
     const paymentMessage =
       "This is a Cashu token payment for your " +
       title +
       " listing on Shopstr: " +
       token;
-    axios({
-      method: "POST",
-      url: "/api/nostr/post-event",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      data: {
-        pubkey: decryptedRandomNpub.data,
-        privkey: decryptedRandomNsec.data,
-        created_at: Math.floor(Date.now() / 1000),
-        kind: 4,
-        tags: [["p", pubkeyOfProductBeingSold]],
-        content: paymentMessage,
-        relays: relays,
-      },
-    });
+    await sendPaymentAndContactMessage(
+      pubkeyOfProductBeingSold,
+      paymentMessage,
+    );
     if (
       !(
         shippingName &&
@@ -527,22 +561,10 @@ export default function InvoiceCard({
             shippingCountry +
             ".";
         }
-        axios({
-          method: "POST",
-          url: "/api/nostr/post-event",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          data: {
-            pubkey: decryptedRandomNpub.data,
-            privkey: decryptedRandomNsec.data,
-            created_at: Math.floor(Date.now() / 1000),
-            kind: 4,
-            tags: [["p", pubkeyOfProductBeingSold]],
-            content: contactMessage,
-            relays: relays,
-          },
-        });
+        await sendPaymentAndContactMessage(
+          pubkeyOfProductBeingSold,
+          contactMessage,
+        );
       } else if (contact && contactType && contactInstructions) {
         let contactMessage;
         if (selectedSize) {
@@ -568,41 +590,17 @@ export default function InvoiceCard({
             " using the following instructions: " +
             contactInstructions;
         }
-        axios({
-          method: "POST",
-          url: "/api/nostr/post-event",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          data: {
-            pubkey: decryptedRandomNpub.data,
-            privkey: decryptedRandomNsec.data,
-            created_at: Math.floor(Date.now() / 1000),
-            kind: 4,
-            tags: [["p", pubkeyOfProductBeingSold]],
-            content: contactMessage,
-            relays: relays,
-          },
-        });
+        await sendPaymentAndContactMessage(
+          pubkeyOfProductBeingSold,
+          contactMessage,
+        );
       }
     } else if (selectedSize) {
       let contactMessage = "This purchase was for a size " + selectedSize + ".";
-      axios({
-        method: "POST",
-        url: "/api/nostr/post-event",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        data: {
-          pubkey: decryptedRandomNpub.data,
-          privkey: decryptedRandomNsec.data,
-          created_at: Math.floor(Date.now() / 1000),
-          kind: 4,
-          tags: [["p", pubkeyOfProductBeingSold]],
-          content: contactMessage,
-          relays: relays,
-        },
-      });
+      await sendPaymentAndContactMessage(
+        pubkeyOfProductBeingSold,
+        contactMessage,
+      );
     }
   };
 
@@ -737,7 +735,7 @@ export default function InvoiceCard({
             type="submit"
             className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
             onClick={() => {
-              if (randomNsec !== "") {
+              if (randomNsecForReceiver !== "" && randomNpubForSender !== "") {
                 if (shippingType === "Free" || shippingType === "Added Cost") {
                   setIsCashuPayment(false);
                   setNeedsShippingInfo(true);
@@ -774,7 +772,7 @@ export default function InvoiceCard({
                 onOpen();
                 return;
               }
-              if (randomNsec !== "") {
+              if (randomNsecForReceiver !== "" && randomNpubForSender !== "") {
                 if (shippingType === "Free" || shippingType === "Added Cost") {
                   setIsCashuPayment(true);
                   setNeedsShippingInfo(true);

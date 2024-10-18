@@ -311,24 +311,24 @@ function App({ Component, pageProps }: AppProps) {
         );
         pubkeysToFetchProfilesFor = [...profileSetFromProducts];
         let profileSetFromChats = new Set<string>();
-        let { profileSetFromChats: initialProfileSet } = await fetchChatsAndMessages(
-          allRelays,
-          userPubkey,
-          editChatContext,
-        );
+        let { profileSetFromChats: initialProfileSet } =
+          await fetchChatsAndMessages(allRelays, userPubkey, editChatContext);
         profileSetFromChats = new Set(initialProfileSet);
         if (
           (getLocalStorageData().signInMethod === "nsec" && passphrase) ||
           getLocalStorageData().signInMethod === "extension" ||
           getLocalStorageData().signInMethod === "amber"
         ) {
-          let { profileSetFromChats: newProfileSetFromChats } = await fetchGiftWrappedChatsAndMessages(
-            allRelays,
-            userPubkey,
-            editChatContext,
-            passphrase,
+          let { profileSetFromChats: newProfileSetFromChats } =
+            await fetchGiftWrappedChatsAndMessages(
+              allRelays,
+              userPubkey,
+              editChatContext,
+              passphrase,
+            );
+          newProfileSetFromChats.forEach((profile) =>
+            profileSetFromChats.add(profile),
           );
-          newProfileSetFromChats.forEach(profile => profileSetFromChats.add(profile));
         }
         if (userPubkey && profileSetFromChats.size != 0) {
           pubkeysToFetchProfilesFor = [

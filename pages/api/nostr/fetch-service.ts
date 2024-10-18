@@ -299,15 +299,15 @@ export const fetchChatsAndMessages = async (
             let tagsMap: Map<string, string> = new Map(
               event.tags.map(([k, v]) => [k, v]),
             );
-            let receipientPubkey = tagsMap.get("p") ? tagsMap.get("p") : null; // pubkey you sent the message to
-            if (typeof receipientPubkey !== "string") {
+            let recipientPubkey = tagsMap.get("p") ? tagsMap.get("p") : null; // pubkey you sent the message to
+            if (typeof recipientPubkey !== "string") {
               console.error(
-                `fetchAllOutgoingChats: Failed to get receipientPubkey from tagsMap",
+                `fetchAllOutgoingChats: Failed to get recipientPubkey from tagsMap",
                     ${tagsMap},
                     ${event}`,
               );
               alert(
-                `fetchAllOutgoingChats: Failed to get receipientPubkey from tagsMap`,
+                `fetchAllOutgoingChats: Failed to get recipientPubkey from tagsMap`,
               );
               return;
             }
@@ -316,7 +316,7 @@ export const fetchChatsAndMessages = async (
               chatMessage = { ...event, read: true }; // true because the user sent it himself
               addChatMessageToCache(chatMessage);
             }
-            addToChatsMap(receipientPubkey, chatMessage);
+            addToChatsMap(recipientPubkey, chatMessage);
             if (incomingChatsReachedEOSE && outgoingChatsReachedEOSE) {
               editChatContext(chatsMap, false);
             }
@@ -335,7 +335,7 @@ export const fetchChatsAndMessages = async (
         [
           {
             kinds: [4],
-            "#p": [userPubkey], // all chats where you are the receipient
+            "#p": [userPubkey], // all chats where you are the recipient
             since,
           },
         ],
@@ -388,8 +388,7 @@ export const fetchGiftWrappedChatsAndMessages = async (
       await fetchChatMessagesFromCache();
     try {
       let chatsMap = new Map();
-      let incomingChatsReachedEOSE = false;
-      let outgoingChatsReachedEOSE = false;
+      let chatsReachedEOSE = false;
 
       const addToChatsMap = (
         pubkeyOfChat: string,
@@ -404,7 +403,7 @@ export const fetchGiftWrappedChatsAndMessages = async (
       };
 
       const onEOSE = () => {
-        if (incomingChatsReachedEOSE && outgoingChatsReachedEOSE) {
+        if (chatsReachedEOSE) {
           //sort chats by created_at
           chatsMap.forEach((value) => {
             value.sort(
@@ -436,35 +435,49 @@ export const fetchGiftWrappedChatsAndMessages = async (
 
             if (signInMethod === "extension") {
               let sealEventString = await window.nostr.nip44.decrypt(
-                userPubkey,
+                event.pubkey,
                 event.content,
               );
               let sealEvent = JSON.parse(sealEventString);
-              let messageEventString = await window.nostr.nip44.decrypt(
-                userPubkey,
-                sealEvent.content,
-              );
-              messageEvent = JSON.parse(messageEventString);
-            } else if (signInMethod === "amber") {
+              if (sealEvent.kind === 13) {
+                let messageEventString = await window.nostr.nip44.decrypt(
+                  sealEvent.pubkey,
+                  sealEvent.content,
+                );
+                let messageEventCheck = JSON.parse(messageEventString);
+                if (messageEventCheck.pubkey === sealEvent.pubkey) {
+                  messageEvent = messageEventCheck;
+                }
+              }
+            } else if (signInMethod === "nsec") {
               if (!passphrase) throw new Error("Passphrase is required");
-              let senderPrivkey = getPrivKeyWithPassphrase(
+              let userPrivkey = getPrivKeyWithPassphrase(
                 passphrase,
               ) as Uint8Array;
-              const conversationKey = nip44.getConversationKey(
-                senderPrivkey,
-                userPubkey,
+              const giftWrapConversationKey = nip44.getConversationKey(
+                userPrivkey,
+                event.pubkey,
               );
               let sealEventString = nip44.decrypt(
                 event.content,
-                conversationKey,
+                giftWrapConversationKey,
               );
               let sealEvent = JSON.parse(sealEventString);
-              let messageEventString = nip44.decrypt(
-                sealEvent.content,
-                conversationKey,
-              );
-              messageEvent = JSON.parse(messageEventString);
-            } else if (signInMethod === "nsec") {
+              if (sealEvent.kind === 13) {
+                let sealConversationKey = nip44.getConversationKey(
+                  userPrivkey,
+                  sealEvent.pubkey,
+                );
+                let messageEventString = nip44.decrypt(
+                  sealEvent.content,
+                  sealConversationKey,
+                );
+                let messageEventCheck = JSON.parse(messageEventString);
+                if (messageEventCheck.pubkey === sealEvent.pubkey) {
+                  messageEvent = messageEventCheck;
+                }
+              }
+            } else if (signInMethod === "amber") {
               const readClipboard = (): Promise<string> => {
                 return new Promise((resolve, reject) => {
                   const checkClipboard = async () => {
@@ -507,7 +520,7 @@ export const fetchGiftWrappedChatsAndMessages = async (
               };
 
               try {
-                const giftWrapAmberSignerUrl = `nostrsigner:${event.content}?pubKey=${userPubkey}&compressionType=none&returnType=signature&type=nip44_decrypt`;
+                const giftWrapAmberSignerUrl = `nostrsigner:${event.content}?pubKey=${event.pubkey}&compressionType=none&returnType=signature&type=nip44_decrypt`;
 
                 await navigator.clipboard.writeText("");
 
@@ -515,15 +528,19 @@ export const fetchGiftWrappedChatsAndMessages = async (
 
                 let sealEventString = await readClipboard();
                 let sealEvent = JSON.parse(sealEventString);
+                if (sealEvent.kind == 13) {
+                  const sealAmberSignerUrl = `nostrsigner:${sealEvent.content}?pubKey=${event.pubkey}&compressionType=none&returnType=signature&type=nip44_decrypt`;
 
-                const sealAmberSignerUrl = `nostrsigner:${sealEvent.content}?pubKey=${userPubkey}&compressionType=none&returnType=signature&type=nip44_decrypt`;
+                  await navigator.clipboard.writeText("");
 
-                await navigator.clipboard.writeText("");
+                  window.open(sealAmberSignerUrl, "_blank");
 
-                window.open(sealAmberSignerUrl, "_blank");
-
-                let messageEventString = await readClipboard();
-                messageEvent = JSON.parse(messageEventString);
+                  let messageEventString = await readClipboard();
+                  let messageEventCheck = JSON.parse(messageEventString);
+                  if (messageEventCheck.pubkey === sealEvent.pubkey) {
+                    messageEvent = messageEventCheck;
+                  }
+                }
               } catch (error) {
                 console.error("Error reading clipboard:", error);
                 alert("Amber decryption failed. Please try again.");
@@ -533,38 +550,42 @@ export const fetchGiftWrappedChatsAndMessages = async (
             let tagsMap: Map<string, string> = new Map(
               messageEvent.tags.map(([k, v]: [string, string]) => [k, v]),
             );
-            let subject = tagsMap.get("subject") ? tagsMap.get("subject") : null;
+            let subject = tagsMap.get("subject")
+              ? tagsMap.get("subject")
+              : null;
             if (subject !== "listing-inquiry") {
               return;
             }
-            let receipientPubkey = tagsMap.get("p") ? tagsMap.get("p") : null; // pubkey you sent the message to
-            if (typeof receipientPubkey !== "string") {
+            let recipientPubkey = tagsMap.get("p") ? tagsMap.get("p") : null; // pubkey you sent the message to
+            if (typeof recipientPubkey !== "string") {
               console.error(
-                `fetchAllOutgoingChats: Failed to get receipientPubkey from tagsMap",
+                `fetchAllOutgoingChats: Failed to get recipientPubkey from tagsMap",
                     ${tagsMap},
                     ${event}`,
               );
               alert(
-                `fetchAllOutgoingChats: Failed to get receipientPubkey from tagsMap`,
+                `fetchAllOutgoingChats: Failed to get recipientPubkey from tagsMap`,
               );
               return;
             }
             let chatMessage = chatMessagesFromCache.get(messageEvent.id);
             if (!chatMessage) {
-              chatMessage = { ...event, sig: "", read: false }; // false because the user received it and it wasn't in the cache
-              addChatMessageToCache(chatMessage);
+              chatMessage = { ...messageEvent, sig: "", read: false }; // false because the user received it and it wasn't in the cache
+              if (chatMessage) {
+                addChatMessageToCache(chatMessage);
+              }
             }
-            if (senderPubkey === userPubkey) {
-              addToChatsMap(receipientPubkey, chatMessage);
-            } else {
+            if (senderPubkey === userPubkey && chatMessage) {
+              addToChatsMap(recipientPubkey, chatMessage);
+            } else if (chatMessage) {
               addToChatsMap(senderPubkey, chatMessage);
             }
-            if (incomingChatsReachedEOSE && outgoingChatsReachedEOSE) {
+            if (chatsReachedEOSE) {
               editChatContext(chatsMap, false);
             }
           },
           async oneose() {
-            outgoingChatsReachedEOSE = true;
+            chatsReachedEOSE = true;
             onEOSE();
           },
           onclose(reasons) {

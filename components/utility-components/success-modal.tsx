@@ -31,7 +31,7 @@ export default function FailureModal({
       >
         <ModalContent>
           <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
-            <CheckCircleIcon className="h-6 w-6 text-red-500" />
+            <CheckCircleIcon className="h-6 w-6 text-green-500" />
             <div className="ml-2">Success</div>
           </ModalHeader>
           <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">

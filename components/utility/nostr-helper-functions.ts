@@ -1,11 +1,5 @@
 import CryptoJS from "crypto-js";
-import {
-  finalizeEvent,
-  nip19,
-  nip44,
-  nip98,
-  SimplePool,
-} from "nostr-tools";
+import { finalizeEvent, nip19, nip44, nip98, SimplePool } from "nostr-tools";
 import axios from "axios";
 import { NostrEvent } from "@/utils/types/types";
 import { Proof } from "@cashu/cashu-ts";
@@ -298,7 +292,7 @@ export async function constructGiftWrappedMessageEvent(
   relayHint?: string,
 ): Promise<GiftWrappedMessageEvent> {
   let tags = [
-    ["p", recipientPubkey],
+    ["p", recipientPubkey, "wss://nos.lol"],
     ["subject", "listing-inquiry"],
   ];
 
@@ -323,24 +317,61 @@ export async function constructGiftWrappedMessageEvent(
 
 export async function constructMessageSeal(
   messageEvent: GiftWrappedMessageEvent,
-  randomPubkey: string,
-  randomPrivkey: Uint8Array,
+  senderPubkey: string,
   recipientPubkey: string,
+  passphrase?: string,
+  randomPrivkey?: Uint8Array,
 ): Promise<NostrEvent> {
   let stringifiedEvent = JSON.stringify(messageEvent);
-  let conversationKey = nip44.getConversationKey(
-    randomPrivkey as Uint8Array,
-    recipientPubkey,
-  );
-  let encryptedEvent = nip44.encrypt(stringifiedEvent, conversationKey);
+  let encryptedContent = "";
+  const { signInMethod, userPubkey } = getLocalStorageData();
+  if (randomPrivkey) {
+    let conversationKey = nip44.getConversationKey(
+      randomPrivkey,
+      recipientPubkey,
+    );
+    encryptedContent = nip44.encrypt(stringifiedEvent, conversationKey);
+  } else {
+    if (signInMethod === "extension") {
+      encryptedContent = await window.nostr.nip44.encrypt(
+        recipientPubkey,
+        stringifiedEvent,
+      );
+    } else if (signInMethod === "nsec") {
+      if (!passphrase) {
+        throw new Error("Passphrase is required");
+      }
+      let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
+      let conversationKey = nip44.getConversationKey(
+        senderPrivkey,
+        recipientPubkey,
+      );
+      encryptedContent = nip44.encrypt(stringifiedEvent, conversationKey);
+    } else if (signInMethod === "amber") {
+      encryptedContent = await amberNip44Encrypt(
+        stringifiedEvent,
+        recipientPubkey,
+      );
+    }
+  }
+
   let sealEvent = {
-    pubkey: randomPubkey,
+    pubkey: senderPubkey,
     created_at: generateRandomTimestamp(),
-    content: encryptedEvent,
+    content: encryptedContent,
     kind: 13,
     tags: [],
   };
-  let signedEvent = finalizeEvent(sealEvent, randomPrivkey);
+  let signedEvent;
+  if (signInMethod === "extension") {
+    signedEvent = await window.nostr.signEvent(sealEvent);
+  } else if (signInMethod === "amber") {
+    signedEvent = await amberSignEvent(sealEvent);
+  } else {
+    if (!passphrase) throw new Error("Passphrase is required");
+    let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
+    signedEvent = finalizeEvent(sealEvent, senderPrivkey);
+  }
   return signedEvent;
 }
 
@@ -361,7 +392,7 @@ export async function constructMessageGiftWrap(
     created_at: generateRandomTimestamp(),
     content: encryptedEvent,
     kind: 1059,
-    tags: [],
+    tags: [["p", recipientPubkey, "wss://nos.lol"]],
   };
   let signedEvent = finalizeEvent(giftWrapEvent, randomPrivkey);
   return signedEvent;
