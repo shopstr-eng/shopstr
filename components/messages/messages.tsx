@@ -283,11 +283,13 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
             !plainText?.includes("To finalize the sale") &&
             !plainText?.includes("Please ship the product") &&
             !plainText?.includes("This purchase was for a size")) ||
-          (subject &&
+          (isPayment &&
+            subject &&
             (subject === "order-payment" ||
               subject === "order-info" ||
               subject === "payment-change")) ||
-          (!subject &&
+          (!isPayment &&
+            !subject &&
             subject !== "order-payment" &&
             subject !== "order-info" &&
             subject !== "payment-change")
