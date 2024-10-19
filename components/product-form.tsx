@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useEffect, useState, useContext } from "react";
 import Link from "next/link";
-import CryptoKS from "crypto-js";
+import CryptoJS from "crypto-js";
 import { useForm, Controller } from "react-hook-form";
 import {
   Modal,
