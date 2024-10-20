@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import Head from "next/head";
 import { useRouter } from "next/router";
 import { Modal, ModalContent, ModalHeader, ModalBody } from "@nextui-org/react";
 import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/outline";
@@ -55,33 +54,8 @@ const Listing = () => {
     });
   }, [relays]);
 
-  const imageUrl = productData?.images?.length
-    ? productData.images[0]
-    : "/shopstr-2000x2000.png";
-
   return (
     <>
-      <Head>
-        <title>Shopstr</title>
-        <meta name="description" content={productData?.title} />
-        <meta
-          property="og:url"
-          content={`https://shopstr.store/listing/${productData?.id}`}
-        />
-        <meta property="og:type" content="website" />
-        <meta property="og:title" content="Shopstr" />
-        <meta property="og:description" content={productData?.title} />
-        <meta property="og:image" content={imageUrl} />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta property="twitter:domain" content="shopstr.store" />
-        <meta
-          property="twitter:url"
-          content={`https://shopstr.store/listing/${productData?.id}`}
-        />
-        <meta name="twitter:title" content="Shopstr" />
-        <meta name="twitter:description" content={productData?.title} />
-        <meta name="twitter:image" content={imageUrl} />
-      </Head>
       <div className="flex h-full min-h-screen flex-col bg-light-bg pt-20 dark:bg-dark-bg">
         {productData && (
           <ListingPage

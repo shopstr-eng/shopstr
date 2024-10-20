@@ -1,5 +1,4 @@
 import React from "react";
-import Head from "next/head";
 import HomeFeed from "@/components/home/home-feed";
 
 export default function SellerView({
@@ -11,32 +10,6 @@ export default function SellerView({
 }) {
   return (
     <>
-      <Head>
-        <title>Shopstr</title>
-        <meta
-          name="description"
-          content="Buy and sell anything, anywhere, anytime."
-        />
-
-        <meta property="og:url" content="https://shopstr.store" />
-        <meta property="og:type" content="website" />
-        <meta property="og:title" content="Shopstr" />
-        <meta
-          property="og:description"
-          content="Buy and sell anything, anywhere, anytime."
-        />
-        <meta property="og:image" content="/shopstr-2000x2000.png" />
-
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta property="twitter:domain" content="shopstr.store" />
-        <meta property="twitter:url" content="https://shopstr.store" />
-        <meta name="twitter:title" content="Shopstr" />
-        <meta
-          name="twitter:description"
-          content="Buy and sell anything, anywhere, anytime."
-        />
-        <meta name="twitter:image" content="/shopstr-2000x2000.png" />
-      </Head>
       {!focusedPubkey && (
         <div className="flex h-auto w-full items-center justify-center bg-white bg-cover bg-center pt-20 dark:bg-black">
           <img
