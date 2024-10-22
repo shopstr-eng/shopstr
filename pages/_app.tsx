@@ -46,7 +46,7 @@ import {
 import { Proof } from "@cashu/cashu-ts";
 import TopNav from "@/components/nav-top";
 import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
-import DynamicHead from '../components/dynamic-meta-head';
+import DynamicHead from "../components/dynamic-meta-head";
 
 function App({ Component, pageProps }: AppProps) {
   const [enterPassphrase, setEnterPassphrase] = useState(false);
@@ -418,7 +418,10 @@ function App({ Component, pageProps }: AppProps) {
 
   return (
     <>
-      <DynamicHead productEvents={productContext.productEvents} shopEvents={shopContext.shopData} />
+      <DynamicHead
+        productEvents={productContext.productEvents}
+        shopEvents={shopContext.shopData}
+      />
       <RelaysContext.Provider value={relaysContext}>
         <CashuWalletContext.Provider value={cashuWalletContext}>
           <FollowsContext.Provider value={followsContext}>

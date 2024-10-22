@@ -62,12 +62,15 @@ export default function CheckoutCard({
     undefined,
   );
   const [hasSizes, setHasSizes] = useState(false);
+  const [isAdded, setIsAdded] = useState(false);
 
   const [shopBannerURL, setShopBannerURL] = useState("");
   const [isFetchingShop, setIsFetchingShop] = useState(false);
 
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+
+  const [cart, setCart] = useState<ProductData[]>([]);
 
   const shopMapContext = useContext(ShopMapContext);
 
@@ -89,6 +92,26 @@ export default function CheckoutCard({
   };
 
   const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      let cartList = localStorage.getItem("cart")
+        ? JSON.parse(localStorage.getItem("cart") as string)
+        : [];
+      if (cartList && cartList.length > 0) {
+        setCart(cartList);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const productExists = cart.some(
+      (item: ProductData) => item.id === productData.id,
+    );
+    if (productExists) {
+      setIsAdded(true);
+    }
+  }, [cart]);
 
   useEffect(() => {
     setIsFetchingShop(true);
@@ -134,6 +157,12 @@ export default function CheckoutCard({
 
   const toggleBuyNow = () => {
     setIsBeingPaid(!isBeingPaid);
+  };
+
+  const handleAddToCart = () => {
+    let updatedCart = [...cart, productData];
+    setCart(updatedCart);
+    localStorage.setItem("cart", JSON.stringify(updatedCart));
   };
 
   const handleShare = async () => {
@@ -303,6 +332,15 @@ export default function CheckoutCard({
                     disabled={hasSizes && !selectedSize}
                   >
                     Buy Now
+                  </Button>
+                  <Button
+                    className={`${SHOPSTRBUTTONCLASSNAMES} ${
+                      isAdded ? "cursor-not-allowed opacity-50" : ""
+                    }`}
+                    onClick={handleAddToCart}
+                    disabled={isAdded}
+                  >
+                    Add To Cart
                   </Button>
                   <Button
                     type="submit"

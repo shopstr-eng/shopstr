@@ -81,6 +81,7 @@ export default function NewForm({
           "Shipping Option": oldValues.shippingType,
           "Shipping Cost": oldValues.shippingCost,
           Category: oldValues.categories ? oldValues.categories.join(",") : "",
+          Quantity: oldValues.quantity ? oldValues.quantity : "",
           Sizes: oldValues.sizes ? oldValues.sizes.join(",") : "",
           "Size Quantities": oldValues.sizeQuantities
             ? oldValues.sizeQuantities
@@ -151,6 +152,10 @@ export default function NewForm({
     (data["Category"] as string).split(",").forEach((category) => {
       tags.push(["t", category]);
     });
+
+    if (data["Quantity"]) {
+      tags.push(["quantity", data["Quantity"] as string]);
+    }
 
     if (data["Sizes"]) {
       (data["Sizes"] as string[]).forEach((size) => {
@@ -639,6 +644,38 @@ export default function NewForm({
 
             {showOptionalTags && (
               <>
+                <Controller
+                  name="Quantity"
+                  control={control}
+                  defaultValue="1"
+                  rules={{
+                    min: { value: 1, message: "Quantity must be at least 1" },
+                  }}
+                  render={({
+                    field: { onChange, value },
+                    fieldState: { error },
+                  }) => {
+                    return (
+                      <div className="flex flex-col">
+                        <Input
+                          id="quantity"
+                          type="number"
+                          min="1"
+                          label="Quantity"
+                          labelPlacement="inside"
+                          value={value}
+                          onChange={(e) =>
+                            onChange(parseInt(e.target.value) || 1)
+                          }
+                          className="w-full"
+                          isInvalid={!!error}
+                          errorMessage={error?.message}
+                        />
+                      </div>
+                    );
+                  }}
+                />
+
                 <Controller
                   name="Sizes"
                   control={control}

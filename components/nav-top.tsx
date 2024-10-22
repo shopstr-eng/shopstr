@@ -135,6 +135,12 @@ const TopNav = ({
       </Button>
       <Button
         className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+        onClick={() => handleRoute("/cart")}
+      >
+        Cart
+      </Button>
+      <Button
+        className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
         onClick={() => handleRoute("/metrics")}
       >
         Metrics
@@ -221,6 +227,13 @@ const TopNav = ({
             onClick={() => handleRoute("/my-listings")}
           >
             My Listings
+          </Button>
+          |
+          <Button
+            className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+            onClick={() => handleRoute("/cart")}
+          >
+            Cart
           </Button>
           |
           <Button
