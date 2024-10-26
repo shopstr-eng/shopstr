@@ -40,37 +40,78 @@ export default function CompactPriceDisplay({
 
 export function DisplayCostBreakdown({
   monetaryInfo,
+  subtotal,
+  shippingCost,
+  total,
 }: {
-  monetaryInfo: ProductMonetaryInfo;
+  monetaryInfo?: ProductMonetaryInfo;
+  subtotal?: number;
+  shippingCost?: number;
+  total?: number;
 }) {
-  const { shippingType, shippingCost, price, currency } = monetaryInfo;
+  if (monetaryInfo) {
+    const { shippingType, shippingCost, price, currency } = monetaryInfo;
 
-  const formattedPrice = formatWithCommas(price, currency);
-  const formattedShippingCost = shippingCost
-    ? formatWithCommas(shippingCost, currency)
-    : `0 ${currency}`;
-  const totalCost = calculateTotalCost(monetaryInfo);
-  const formattedTotalCost = formatWithCommas(totalCost, currency);
+    const formattedPrice = formatWithCommas(price, currency);
+    const formattedShippingCost = shippingCost
+      ? formatWithCommas(shippingCost, currency)
+      : `0 ${currency}`;
+    const totalCost = calculateTotalCost(monetaryInfo);
+    const formattedTotalCost = formatWithCommas(totalCost, currency);
 
-  return (
-    <div>
-      <p>
-        <strong className="font-semibold">Subtotal:</strong> {formattedPrice}
-      </p>
-      {shippingType && (
+    return (
+      <div>
         <p>
-          <strong className="font-semibold">Shipping:</strong>
-          {` ${shippingType} - ${formattedShippingCost}`}
+          <strong className="font-semibold">Subtotal:</strong> {formattedPrice}
         </p>
-      )}
+        {shippingType && (
+          <p>
+            <strong className="font-semibold">Shipping:</strong>
+            {` ${shippingType} - ${formattedShippingCost}`}
+          </p>
+        )}
 
-      {totalCost !== undefined && (
-        <p>
-          <strong className="font-bold">Total:</strong> {formattedTotalCost}
-        </p>
-      )}
-    </div>
-  );
+        {totalCost !== undefined && (
+          <p>
+            <strong className="font-bold">Total:</strong> {formattedTotalCost}
+          </p>
+        )}
+      </div>
+    );
+  } else {
+    const formattedSubtotal = subtotal
+      ? formatWithCommas(subtotal, "sats")
+      : "0 sats";
+    const formattedShippingCost = shippingCost
+      ? formatWithCommas(shippingCost, "sats")
+      : "0 sats";
+    const formattedTotalCost = total
+      ? formatWithCommas(total, "sats")
+      : "0 sats";
+
+    return (
+      <div>
+        {subtotal && (
+          <p>
+            <strong className="font-semibold">Subtotal:</strong>{" "}
+            {formattedSubtotal}
+          </p>
+        )}
+        {shippingCost && (
+          <p>
+            <strong className="font-semibold">Shipping:</strong>
+            {` ${formattedShippingCost}`}
+          </p>
+        )}
+
+        {total && (
+          <p>
+            <strong className="font-bold">Total:</strong> {formattedTotalCost}
+          </p>
+        )}
+      </div>
+    );
+  }
 }
 
 export function DisplayCheckoutCost({

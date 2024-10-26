@@ -13,7 +13,7 @@ export default function ListingPage({
   setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
   setInvoiceGenerationFailed?: (invoiceGenerationFailed: boolean) => void;
   setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
-  setCashuPaymentFailed?: (cashuPaymentFailef: boolean) => void;
+  setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
 }) {
   if (!productData) return null;
 

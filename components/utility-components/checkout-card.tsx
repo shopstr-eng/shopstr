@@ -7,7 +7,7 @@ import {
   DisplayCostBreakdown,
   DisplayCheckoutCost,
 } from "./display-monetary-info";
-import InvoiceCard from "../invoice-card";
+import ProductInvoiceCard from "../product-invoice-card";
 import { useRouter } from "next/router";
 import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
 import { Button, Chip } from "@nextui-org/react";
@@ -35,7 +35,7 @@ export default function CheckoutCard({
   setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
   setInvoiceGenerationFailed?: (invoiceGenerationFailed: boolean) => void;
   setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
-  setCashuPaymentFailed?: (cashuPaymentFailef: boolean) => void;
+  setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
   uniqueKey?: string;
 }) {
   const {
@@ -160,7 +160,13 @@ export default function CheckoutCard({
   };
 
   const handleAddToCart = () => {
-    let updatedCart = [...cart, productData];
+    let updatedCart = [];
+    if (selectedSize) {
+      let productWithSize = { ...productData, selectedSize: selectedSize };
+      updatedCart = [...cart, productWithSize];
+    } else {
+      updatedCart = [...cart, productData];
+    }
     setCart(updatedCart);
     localStorage.setItem("cart", JSON.stringify(updatedCart));
   };
@@ -335,10 +341,12 @@ export default function CheckoutCard({
                   </Button>
                   <Button
                     className={`${SHOPSTRBUTTONCLASSNAMES} ${
-                      isAdded ? "cursor-not-allowed opacity-50" : ""
+                      isAdded || (hasSizes && !selectedSize)
+                        ? "cursor-not-allowed opacity-50"
+                        : ""
                     }`}
                     onClick={handleAddToCart}
-                    disabled={isAdded}
+                    disabled={isAdded || (hasSizes && !selectedSize)}
                   >
                     Add To Cart
                   </Button>
@@ -408,7 +416,7 @@ export default function CheckoutCard({
             </div>
           </div>
           <div className="flex flex-col items-center">
-            <InvoiceCard
+            <ProductInvoiceCard
               productData={productData}
               setInvoiceIsPaid={setInvoiceIsPaid}
               setInvoiceGenerationFailed={setInvoiceGenerationFailed}

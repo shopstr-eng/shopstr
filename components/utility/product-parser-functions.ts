@@ -23,6 +23,7 @@ export type ProductData = {
   sizeQuantities?: Map<string, number>;
   condition?: string;
   status?: string;
+  selectedSize?: string;
 };
 
 export const parseTags = (productEvent: NostrEvent) => {
