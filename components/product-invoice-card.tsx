@@ -1018,7 +1018,7 @@ export default function ProductInvoiceCard({
         onContactSubmit={onContactSubmit}
         contactControl={contactControl}
       />
-      
+
       <SignInModal isOpen={isOpen} onClose={onClose} />
       <RequestPassphraseModal
         passphrase={passphrase}
