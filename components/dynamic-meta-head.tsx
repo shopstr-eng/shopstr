@@ -21,7 +21,7 @@ const DynamicHead = ({
 
   useEffect(() => {
     if (!router.isReady) return;
-    
+
     if (router.pathname.startsWith("/listing/")) {
       const productId = router.query.productId?.[0];
       const product = productEvents.find((event) => event.id === productId);
@@ -56,7 +56,8 @@ const DynamicHead = ({
       if (shopInfo) {
         setMetaTags({
           title: `${shopInfo.content.name} Shop` || "Shopstr Shop",
-          description: `${shopInfo.content.about}` || "Check out this shop on Shopstr!",
+          description:
+            `${shopInfo.content.about}` || "Check out this shop on Shopstr!",
           image: `${shopInfo.content.ui.picture}` || "/shopstr-2000x2000.png",
           url: `https://shopstr.store/${pubkey}`,
         });
