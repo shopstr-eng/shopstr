@@ -91,16 +91,13 @@ export const fetchAllPosts = async (
         },
         oneose() {
           h.close();
-          returnCall();
+          resolve({
+            profileSetFromProducts,
+          });
+          editProductContext(productArrayFromRelay, false);
+          removeProductFromCache(Array.from(deletedProductsInCacheSet));
         },
       });
-      const returnCall = () => {
-        resolve({
-          profileSetFromProducts,
-        });
-        editProductContext(productArrayFromRelay, false);
-        removeProductFromCache(Array.from(deletedProductsInCacheSet));
-      };
     } catch (error) {
       console.log("Failed to fetch all listings from relays: ", error);
       reject(error);
@@ -648,7 +645,7 @@ export const fetchAllFollows = async (
               );
             secondDegreeFollowsArrayFromRelay.push(...validFollowTags);
           },
-          oneose() {
+          oneose: async () => {
             second.close();
             // Filter second degree follows based on count
             const pubkeyCount: Map<string, number> = new Map();
@@ -665,7 +662,7 @@ export const fetchAllFollows = async (
                 followsArrayFromRelay.concat(secondDegreeFollowsArrayFromRelay),
               ),
             );
-            returnCall(
+            await returnCall(
               relays,
               followsArrayFromRelay,
               followsSet,
@@ -764,12 +761,6 @@ export const fetchAllFollows = async (
         });
         editFollowsContext(followsArray, firstDegreeFollowsLength, false);
       };
-      returnCall(
-        relays,
-        followsArrayFromRelay,
-        followsSet,
-        firstDegreeFollowsLength,
-      );
     } catch (error) {
       console.log("Failed to fetch follow list: ", error);
       reject(error);
@@ -829,9 +820,9 @@ export const fetchAllRelays = async (
           validWriteRelays.forEach((tag) => writeRelaySet.add(tag[1]));
           writeRelayList.push(...validWriteRelays.map((tag) => tag[1]));
         },
-        oneose() {
+        oneose: async () => {
           h.close();
-          returnCall(relayList, readRelayList, writeRelayList);
+          await returnCall(relayList, readRelayList, writeRelayList);
         },
       });
       const returnCall = async (
@@ -846,7 +837,6 @@ export const fetchAllRelays = async (
         });
         editRelaysContext(relayList, readRelayList, writeRelayList, false);
       };
-      returnCall(relayList, readRelayList, writeRelayList);
     } catch (error) {
       console.log("failed to fetch follow list: ", error);
       reject(error);
