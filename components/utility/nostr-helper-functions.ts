@@ -325,7 +325,7 @@ export async function constructMessageSeal(
 ): Promise<NostrEvent> {
   let stringifiedEvent = JSON.stringify(messageEvent);
   let encryptedContent = "";
-  const { signInMethod, userPubkey } = getLocalStorageData();
+  const { signInMethod } = getLocalStorageData();
   if (randomPrivkey) {
     let conversationKey = nip44.getConversationKey(
       randomPrivkey,
@@ -437,6 +437,10 @@ export async function publishWalletEvent(passphrase?: string, dTag?: string) {
       0,
     );
     const allWriteRelays = [...relays, ...writeRelays];
+    const blastrRelay = "wss://sendit.nosflare.com";
+    if (!containsRelay(allWriteRelays, blastrRelay)) {
+      allWriteRelays.push(blastrRelay);
+    }
     cashuWalletRelays.forEach((relay) => relayTagsSet.add(relay));
     walletRelays = Array.from(relayTagsSet);
     const relayTags =
@@ -541,6 +545,10 @@ export async function publishProofEvent(
     const { userPubkey, signInMethod, relays, writeRelays, cashuWalletRelays } =
       getLocalStorageData();
     const allWriteRelays = [...relays, ...writeRelays];
+    const blastrRelay = "wss://sendit.nosflare.com";
+    if (!containsRelay(allWriteRelays, blastrRelay)) {
+      allWriteRelays.push(blastrRelay);
+    }
 
     const hashHex = CryptoJS.SHA256("shopstr" + userPubkey).toString(
       CryptoJS.enc.Hex,
@@ -698,6 +706,10 @@ export async function publishSpendingHistoryEvent(
     const { userPubkey, signInMethod, relays, writeRelays, cashuWalletRelays } =
       getLocalStorageData();
     const allWriteRelays = [...relays, ...writeRelays];
+    const blastrRelay = "wss://sendit.nosflare.com";
+    if (!containsRelay(allWriteRelays, blastrRelay)) {
+      allWriteRelays.push(blastrRelay);
+    }
     const eventContent = [
       ["direction", direction],
       ["amount", amount, "sats"],
