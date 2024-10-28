@@ -28,7 +28,6 @@ import {
   CheckCircleIcon,
   XCircleIcon,
 } from "@heroicons/react/24/outline";
-import { fiat } from "@getalby/lightning-tools";
 import {
   CashuMint,
   CashuWallet,
@@ -59,7 +58,6 @@ import {
   captureInvoicePaidmetric,
 } from "./utility/metrics-helper-functions";
 import SignInModal from "./sign-in/SignInModal";
-import currencySelection from "../public/currencySelection.json";
 import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
 import ShippingForm from "./shipping-form";
 import ContactForm from "./contact-form";
@@ -67,24 +65,21 @@ import CombinedContactForm from "./combined-contact-form";
 
 export default function CartInvoiceCard({
   products,
-  quantities,
   shippingTypes,
+  totalCostsInSats,
   subtotal,
+  totalShippingCost,
+  totalCost,
 }: {
   products: ProductData[];
-  quantities: { [key: string]: number };
   shippingTypes: { [key: string]: string };
+  totalCostsInSats: { [key: string]: number };
   subtotal: number;
+  totalShippingCost: number;
+  totalCost: number;
 }) {
   const { signInMethod, mints, tokens, history } = getLocalStorageData();
   const router = useRouter();
-
-  const [totalCost, setTotalCost] = useState(0);
-  const [totalShippingCost, setTotalShippingCost] = useState(0);
-
-  const [totalCostsInSats, setTotalCostsInSats] = useState<{
-    [key: string]: number;
-  }>({});
 
   const [enterPassphrase, setEnterPassphrase] = useState(false);
   const [passphrase, setPassphrase] = useState("");
@@ -185,137 +180,6 @@ export default function CartInvoiceCard({
       setDTag(walletTag);
     }
   }, [walletContext]);
-
-  useEffect(() => {
-    const fetchSatPrices = async () => {
-      const totalCostsMap: { [key: string]: number } = {};
-      let total = 0;
-
-      for (const product of products) {
-        try {
-          let individualTotal = 0;
-          const satPrice = await convertTotalToSats(product);
-
-          if (satPrice !== null) {
-            if (quantities[product.id]) {
-              total += satPrice * quantities[product.id];
-              individualTotal = satPrice * quantities[product.id];
-            } else {
-              total += satPrice;
-              individualTotal = satPrice;
-            }
-            totalCostsMap[product.pubkey] = individualTotal;
-          }
-        } catch (error) {
-          console.error(
-            `Error converting price for product ${product.id}:`,
-            error,
-          );
-        }
-      }
-
-      setTotalCostsInSats(totalCostsMap);
-      setTotalCost(total);
-    };
-
-    fetchSatPrices();
-  }, [products, quantities]);
-
-  useEffect(() => {
-    const fetchSatShippingCost = async () => {
-      let total = 0;
-
-      for (const product of products) {
-        try {
-          const satShippingCost = await convertShippingToSats(product);
-
-          if (satShippingCost !== null) {
-            if (quantities[product.id]) {
-              total += satShippingCost * quantities[product.id];
-            } else {
-              total += satShippingCost;
-            }
-          }
-        } catch (error) {
-          console.error(
-            `Error converting price for product ${product.id}:`,
-            error,
-          );
-        }
-      }
-
-      setTotalShippingCost(total);
-    };
-
-    fetchSatShippingCost();
-  }, [products, quantities]);
-
-  const convertTotalToSats = async (product: ProductData): Promise<number> => {
-    if (
-      product.currency.toLowerCase() === "sats" ||
-      product.currency.toLowerCase() === "sat"
-    ) {
-      return product.totalCost;
-    }
-    let price = 0;
-    if (!currencySelection.hasOwnProperty(product.currency)) {
-      throw new Error(`${product.currency} is not a supported currency.`);
-    } else if (
-      currencySelection.hasOwnProperty(product.currency) &&
-      product.currency.toLowerCase() !== "sats" &&
-      product.currency.toLowerCase() !== "sat"
-    ) {
-      try {
-        const currencyData = {
-          amount: product.totalCost,
-          currency: product.currency,
-        };
-        const numSats = await fiat.getSatoshiValue(currencyData);
-        price = Math.round(numSats);
-      } catch (err) {
-        console.error("ERROR", err);
-      }
-    } else if (product.currency.toLowerCase() === "btc") {
-      price = product.price * 100000000;
-    }
-    return price;
-  };
-
-  const convertShippingToSats = async (
-    product: ProductData,
-  ): Promise<number> => {
-    let cost = 0;
-    if (product.shippingCost) {
-      if (
-        product.currency.toLowerCase() === "sats" ||
-        product.currency.toLowerCase() === "sat"
-      ) {
-        return product.shippingCost;
-      }
-      if (!currencySelection.hasOwnProperty(product.currency)) {
-        throw new Error(`${product.currency} is not a supported currency.`);
-      } else if (
-        currencySelection.hasOwnProperty(product.currency) &&
-        product.currency.toLowerCase() !== "sats" &&
-        product.currency.toLowerCase() !== "sat"
-      ) {
-        try {
-          const currencyData = {
-            amount: product.shippingCost,
-            currency: product.currency,
-          };
-          const numSats = await fiat.getSatoshiValue(currencyData);
-          cost = Math.round(numSats);
-        } catch (err) {
-          console.error("ERROR", err);
-        }
-      } else if (product.currency.toLowerCase() === "btc") {
-        cost = product.shippingCost * 100000000;
-      }
-    }
-
-    return cost;
-  };
 
   const sendPaymentAndContactMessage = async (
     pubkeyOfProduct: string,
@@ -1008,7 +872,6 @@ export default function CartInvoiceCard({
             <DisplayCostBreakdown
               subtotal={subtotal}
               shippingCost={totalShippingCost}
-              total={totalCost}
             />
           </CardBody>
           <CardFooter className="flex flex-col items-center">

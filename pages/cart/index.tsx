@@ -12,17 +12,35 @@ import {
   ShippingOptionsType,
 } from "../../components/utility/STATIC-VARIABLES";
 import { ProductData } from "../../components/utility/product-parser-functions";
+// import {
+//   getLocalStorageData,
+//   publishShoppingCartEvent,
+//   validPassphrase,
+// } from "../../components/utility/nostr-helper-functions";
+// import { CartContext } from "@/utils/context/context";
 import { DisplayCostBreakdown } from "../../components/utility-components/display-monetary-info";
 import CartInvoiceCard from "../../components/cart-invoice-card";
 import { fiat } from "@getalby/lightning-tools";
 import currencySelection from "../../public/currencySelection.json";
+// import RequestPassphraseModal from "../../components/utility-components/request-passphrase-modal";
 
 export default function Component() {
+  // const [enterPassphrase, setEnterPassphrase] = useState(false);
+  // const [passphrase, setPassphrase] = useState("");
+
   const [products, setProducts] = useState<ProductData[]>([]);
   const [satPrices, setSatPrices] = useState<{ [key: string]: number | null }>(
     {},
   );
+  const [shippingSatPrices, setShippingSatPrices] = useState<{
+    [key: string]: number | null;
+  }>({});
+  const [totalCostsInSats, setTotalCostsInSats] = useState<{
+    [key: string]: number;
+  }>({});
   const [subtotal, setSubtotal] = useState<number>(0);
+  const [totalShippingCost, setTotalShippingCost] = useState<number>(0);
+  const [totalCost, setTotalCost] = useState<number>(0);
   const [shippingTypes, setShippingTypes] = useState<{
     [key: string]: ShippingOptionsType;
   }>({});
@@ -34,7 +52,17 @@ export default function Component() {
   }>(Object.fromEntries(products.map((product) => [product.id, false])));
   const [isBeingPaid, setIsBeingPaid] = useState(false);
 
+  // const cartContext = useContext(CartContext);
+
   const router = useRouter();
+
+  // const { signInMethod, userPubkey } = getLocalStorageData();
+
+  // useEffect(() => {
+  //   if (signInMethod === "nsec" && !validPassphrase(passphrase)) {
+  //     setEnterPassphrase(true);
+  //   }
+  // }, [signInMethod, passphrase]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -43,6 +71,14 @@ export default function Component() {
         : [];
       if (cartList && cartList.length > 0) {
         setProducts(cartList);
+        for (const item of cartList as ProductData[]) {
+          if (item.selectedQuantity) {
+            setQuantities({
+              ...quantities,
+              [item.id]: item.selectedQuantity,
+            });
+          }
+        }
       }
     }
   }, []);
@@ -50,19 +86,43 @@ export default function Component() {
   useEffect(() => {
     const fetchSatPrices = async () => {
       const prices: { [key: string]: number | null } = {};
-      let total = 0;
+      const shipping: { [key: string]: number | null } = {};
+      const totals: { [key: string]: number } = {};
+      let subtotalAmount = 0;
+      let shippingCostAmount = 0;
+      let totalCostAmount = 0;
 
       for (const product of products) {
         try {
-          const satPrice = await convertToSats(product);
-          prices[product.id] = satPrice;
+          let subtotal = 0;
+          let shippingCost = 0;
+          let totalCost = 0;
+          const subtotalSatPrice = await convertPriceToSats(product);
+          prices[product.id] = subtotalSatPrice;
+          const shippingSatPrice = await convertShippingToSats(product);
+          shipping[product.id] = shippingSatPrice;
+          const totalSatPrice = await convertTotalToSats(product);
+          totals[product.pubkey] = totalSatPrice;
 
-          if (satPrice !== null) {
+          if (subtotalSatPrice !== null || shippingSatPrice !== null) {
             if (quantities[product.id]) {
-              total += satPrice * quantities[product.id];
+              subtotalAmount += subtotalSatPrice * quantities[product.id];
+              subtotal = subtotalSatPrice * quantities[product.id];
+              shippingCostAmount += shippingSatPrice * quantities[product.id];
+              shippingCost = shippingSatPrice * quantities[product.id];
+              totalCostAmount += totalSatPrice * quantities[product.id];
+              totalCost = totalSatPrice * quantities[product.id];
             } else {
-              total += satPrice;
+              subtotalAmount += subtotalSatPrice;
+              subtotal = subtotalSatPrice;
+              shippingCostAmount += shippingSatPrice;
+              shippingCost = shippingSatPrice;
+              totalCostAmount += totalSatPrice;
+              totalCost = totalSatPrice;
             }
+            prices[product.id] = subtotal;
+            shipping[product.id] = shippingCost;
+            totals[product.pubkey] = totalCost;
           }
         } catch (error) {
           console.error(
@@ -70,11 +130,16 @@ export default function Component() {
             error,
           );
           prices[product.id] = null;
+          shipping[product.id] = null;
         }
       }
 
       setSatPrices(prices);
-      setSubtotal(total);
+      setSubtotal(subtotalAmount);
+      setShippingSatPrices(shipping);
+      setTotalShippingCost(shippingCostAmount);
+      setTotalCost(totalCostAmount);
+      setTotalCostsInSats(totals);
     };
 
     fetchSatPrices();
@@ -106,6 +171,7 @@ export default function Component() {
       );
       setProducts(updatedCart);
       localStorage.setItem("cart", JSON.stringify(updatedCart));
+      // publishShoppingCartEvent(userPubkey, cartContext.cartAddresses, productData, -1, passphrase);
     }
   };
 
@@ -124,6 +190,7 @@ export default function Component() {
         ...prevState,
         [id]: newQuantity === availableQuantity && newQuantity !== 1,
       }));
+      // publishShoppingCartEvent(userPubkey, cartContext.cartAddresses, product, newQuantity, passphrase);
 
       return {
         ...prev,
@@ -132,7 +199,7 @@ export default function Component() {
     });
   };
 
-  const convertToSats = async (product: ProductData): Promise<number> => {
+  const convertPriceToSats = async (product: ProductData): Promise<number> => {
     if (
       product.currency.toLowerCase() === "sats" ||
       product.currency.toLowerCase() === "sat"
@@ -142,6 +209,7 @@ export default function Component() {
     let price = 0;
     if (!currencySelection.hasOwnProperty(product.currency)) {
       throw new Error(`${product.currency} is not a supported currency.`);
+      // make sure to restrict adding of product or checkout if currency is unsupported
     } else if (
       currencySelection.hasOwnProperty(product.currency) &&
       product.currency.toLowerCase() !== "sats" &&
@@ -161,6 +229,73 @@ export default function Component() {
       price = product.price * 100000000;
     }
     return price;
+  };
+
+  const convertShippingToSats = async (
+    product: ProductData,
+  ): Promise<number> => {
+    let shippingCost = product.shippingCost ? product.shippingCost : 0;
+    if (
+      product.currency.toLowerCase() === "sats" ||
+      product.currency.toLowerCase() === "sat"
+    ) {
+      return shippingCost;
+    }
+    let cost = 0;
+    if (!currencySelection.hasOwnProperty(product.currency)) {
+      throw new Error(`${product.currency} is not a supported currency.`);
+      // make sure to restrict adding of product or checkout if currency is unsupported
+    } else if (
+      currencySelection.hasOwnProperty(product.currency) &&
+      product.currency.toLowerCase() !== "sats" &&
+      product.currency.toLowerCase() !== "sat"
+    ) {
+      try {
+        const currencyData = {
+          amount: shippingCost,
+          currency: product.currency,
+        };
+        const numSats = await fiat.getSatoshiValue(currencyData);
+        cost = Math.round(numSats);
+      } catch (err) {
+        console.error("ERROR", err);
+      }
+    } else if (product.currency.toLowerCase() === "btc") {
+      cost = shippingCost * 100000000;
+    }
+    return cost;
+  };
+
+  const convertTotalToSats = async (product: ProductData): Promise<number> => {
+    if (
+      product.currency.toLowerCase() === "sats" ||
+      product.currency.toLowerCase() === "sat"
+    ) {
+      return product.totalCost;
+    }
+    let total = 0;
+    if (!currencySelection.hasOwnProperty(product.currency)) {
+      throw new Error(`${product.currency} is not a supported currency.`);
+      // make sure to restrict adding of product or checkout if currency is unsupported
+    } else if (
+      currencySelection.hasOwnProperty(product.currency) &&
+      product.currency.toLowerCase() !== "sats" &&
+      product.currency.toLowerCase() !== "sat"
+    ) {
+      try {
+        const currencyData = {
+          amount: product.totalCost,
+          currency: product.currency,
+        };
+        const numSats = await fiat.getSatoshiValue(currencyData);
+        total = Math.round(numSats);
+      } catch (err) {
+        console.error("ERROR", err);
+      }
+    } else if (product.currency.toLowerCase() === "btc") {
+      total = product.totalCost * 100000000;
+    }
+    return total;
   };
 
   return (
@@ -316,46 +451,88 @@ export default function Component() {
         </div>
       ) : (
         <>
-          {products.length > 0 && (
-            <>
-              {products.map((product) => (
-                <div className="p-4 pt-20 text-light-text dark:text-dark-text">
-                  <h2 className="mb-4 text-2xl font-bold">{product.title}</h2>
-                  {product.selectedSize && (
-                    <p className="mb-4 text-lg">Size: {product.selectedSize}</p>
-                  )}
-                  {/* <span className="mt-4 text-xl font-semibold">Cost Breakdown: </span> */}
-                  <DisplayCostBreakdown monetaryInfo={product} />
-                </div>
-              ))}
-              <div className="mx-4 mt-2 flex items-center justify-center text-center">
-                <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-                <p className="ml-2 text-xs text-light-text dark:text-dark-text">
-                  Once purchased, each seller will receive a message with a{" "}
-                  <Link href="https://cashu.space" passHref legacyBehavior>
-                    <a
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="underline"
-                    >
-                      Cashu
-                    </a>
-                  </Link>{" "}
-                  token containing your payment.
-                </p>
+          <div className="flex w-full items-center justify-center bg-light-bg pt-20 dark:bg-dark-bg">
+            <div className="flex flex-col">
+              {products.length > 0 && (
+                <>
+                  {products.map((product) => (
+                    <div className="p-4 text-light-text dark:text-dark-text">
+                      <h2 className="mb-4 text-2xl font-bold">
+                        {product.title}
+                      </h2>
+                      {product.selectedSize && (
+                        <p className="mb-4 text-lg">
+                          Size: {product.selectedSize}
+                        </p>
+                      )}
+                      {quantities[product.id] > 1 && (
+                        <p className="mb-4 text-lg">
+                          Quantity: {quantities[product.id]}
+                        </p>
+                      )}
+                      {/* <span className="mt-4 text-xl font-semibold">Cost Breakdown: </span> */}
+                      <DisplayCostBreakdown
+                        quantity={
+                          quantities[product.id] ? quantities[product.id] : 1
+                        }
+                        subtotal={
+                          satPrices[product.id]
+                            ? (satPrices[product.id] as number)
+                            : 0
+                        }
+                        shippingType={product.shippingType}
+                        shippingCost={
+                          shippingSatPrices[product.id]
+                            ? (shippingSatPrices[product.id] as number)
+                            : 0
+                        }
+                        totalCost={
+                          totalCostsInSats[product.pubkey]
+                            ? totalCostsInSats[product.pubkey]
+                            : 0
+                        }
+                      />
+                    </div>
+                  ))}
+                  <div className="mx-4 mt-2 flex items-center justify-center text-center">
+                    <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
+                    <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+                      Once purchased, each seller will receive a message with a{" "}
+                      <Link href="https://cashu.space" passHref legacyBehavior>
+                        <a
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline"
+                        >
+                          Cashu
+                        </a>
+                      </Link>{" "}
+                      token containing your payment.
+                    </p>
+                  </div>
+                </>
+              )}
+              <div className="flex flex-col items-center">
+                <CartInvoiceCard
+                  products={products}
+                  shippingTypes={shippingTypes}
+                  totalCostsInSats={totalCostsInSats}
+                  subtotal={subtotal}
+                  totalShippingCost={totalShippingCost}
+                  totalCost={totalCost}
+                />
               </div>
-            </>
-          )}
-          <div className="flex flex-col items-center">
-            <CartInvoiceCard
-              products={products}
-              quantities={quantities}
-              shippingTypes={shippingTypes}
-              subtotal={subtotal}
-            />
+            </div>
           </div>
         </>
       )}
+      {/* <RequestPassphraseModal
+        passphrase={passphrase}
+        setCorrectPassphrase={setPassphrase}
+        isOpen={enterPassphrase}
+        setIsOpen={setEnterPassphrase}
+        onCancelRouteTo="/"
+      /> */}
     </>
   );
 }

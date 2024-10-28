@@ -1,7 +1,15 @@
 import CryptoJS from "crypto-js";
-import { finalizeEvent, nip19, nip44, nip98, SimplePool } from "nostr-tools";
+import {
+  finalizeEvent,
+  nip04,
+  nip19,
+  nip44,
+  nip98,
+  SimplePool,
+} from "nostr-tools";
 import axios from "axios";
 import { NostrEvent } from "@/utils/types/types";
+import { ProductData } from "@/components/utility/product-parser-functions";
 import { Proof } from "@cashu/cashu-ts";
 import { ProductFormValues } from "@/pages/api/nostr/post-event";
 import { DeleteEvent } from "@/pages/api/nostr/crud-service";
@@ -105,6 +113,40 @@ async function amberSignEvent(event: any): Promise<any> {
       clearInterval(intervalId);
       console.log("Amber signing timeout");
       reject(new Error("Amber signing timed out. Please try again."));
+    }, 60000);
+  });
+}
+
+async function amberNip04Encrypt(
+  message: string,
+  recipientPubkey: string,
+): Promise<string> {
+  const amberSignerUrl = `nostrsigner:${message}?pubKey=${recipientPubkey}&compressionType=none&returnType=signature&type=nip04_encrypt`;
+  await navigator.clipboard.writeText("");
+  window.open(amberSignerUrl, "_blank");
+  return new Promise((resolve, reject) => {
+    const checkClipboard = async () => {
+      try {
+        if (!document.hasFocus()) {
+          console.log("Document not focused, waiting for focus...");
+          return;
+        }
+        const clipboardContent = await navigator.clipboard.readText();
+        if (clipboardContent && clipboardContent !== "") {
+          clearInterval(intervalId);
+          resolve(clipboardContent);
+        } else {
+          console.log("Waiting for new clipboard content...");
+        }
+      } catch (error) {
+        console.error("Error reading clipboard:", error);
+      }
+    };
+    const intervalId = setInterval(checkClipboard, 1000);
+    setTimeout(() => {
+      clearInterval(intervalId);
+      console.log("Amber encryption timeout");
+      reject(new Error("Amber encryption timed out. Please try again."));
     }, 60000);
   });
 }
@@ -414,9 +456,11 @@ export async function sendGiftWrappedMessageEvent(
   await Promise.any(pool.publish(allWriteRelays, giftWrappedMessageEvent));
 }
 
-export async function pubishShoppingCartEvent(
+export async function publishShoppingCartEvent(
   userPubkey: string,
-  shoppingCartList: string,
+  cartAddresses: string[][],
+  product: ProductData,
+  quantity?: number,
   passphrase?: string,
 ) {
   try {
@@ -426,21 +470,42 @@ export async function pubishShoppingCartEvent(
     if (!containsRelay(allWriteRelays, blastrRelay)) {
       allWriteRelays.push(blastrRelay);
     }
+    let updatedCartAddresses: string[][] = [];
+    if (quantity && quantity < 0) {
+      updatedCartAddresses = [...cartAddresses].filter(
+        (address) => !address[1].includes(`:${product.d}`),
+      );
+    } else {
+      const productTag = ["a", "30402:" + product.pubkey + ":" + product.d];
+      if (quantity && quantity > 1) {
+        for (let i = 0; i < quantity - 1; i++) {
+          updatedCartAddresses.push(productTag);
+        }
+      }
+      updatedCartAddresses.push(productTag);
+    }
+    let productAddressTags = JSON.stringify(updatedCartAddresses);
     let encryptedContent;
     if (signInMethod === "extension") {
-      encryptedContent = await window.nostr.nip44.encrypt(
+      encryptedContent = await window.nostr.nip04.encrypt(
         userPubkey,
-        shoppingCartList,
+        productAddressTags,
       );
     } else if (signInMethod === "nsec") {
       if (!passphrase) {
         throw new Error("Passphrase is required");
       }
       let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
-      let conversationKey = nip44.getConversationKey(senderPrivkey, userPubkey);
-      encryptedContent = nip44.encrypt(shoppingCartList, conversationKey);
+      encryptedContent = await nip04.encrypt(
+        senderPrivkey,
+        userPubkey,
+        productAddressTags,
+      );
     } else if (signInMethod === "amber") {
-      encryptedContent = await amberNip44Encrypt(shoppingCartList, userPubkey);
+      encryptedContent = await amberNip04Encrypt(
+        productAddressTags,
+        userPubkey,
+      );
     }
     let cartEvent = {
       pubkey: userPubkey,

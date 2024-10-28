@@ -38,6 +38,20 @@ export const ProductContext = createContext({
   removeDeletedProductEvent: (productId: string) => {},
 } as ProductContextInterface);
 
+export interface CartContextInterface {
+  cartAddresses: string[][];
+  isLoading: boolean;
+  addProductToCart: (productData: any) => void;
+  removeProductFromCart: (productData: any) => void;
+}
+
+export const CartContext = createContext({
+  cartAddresses: [],
+  isLoading: true,
+  addProductToCart: (productData: any) => {},
+  removeProductFromCart: (productData: any) => {},
+} as CartContextInterface);
+
 export type ChatsMap = Map<string, NostrMessageEvent[]>;
 
 export interface ChatsContextInterface {

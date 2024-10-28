@@ -27,6 +27,7 @@ const TopNav = ({
   const shopMapContext = useContext(ShopMapContext);
 
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
+  const [cartQuantity, setCartQuantity] = useState(0);
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [signedIn, setSignedIn] = useState(false);
 
@@ -49,6 +50,25 @@ const TopNav = ({
     getSignedInStatus();
     window.addEventListener("storage", getSignedInStatus);
     return () => window.removeEventListener("storage", getSignedInStatus);
+  }, []);
+
+  useEffect(() => {
+    const fetchAndUpdateCartQuantity = async () => {
+      let cartList = localStorage.getItem("cart")
+        ? JSON.parse(localStorage.getItem("cart") as string)
+        : [];
+      if (cartList) {
+        setCartQuantity(cartList.length);
+      }
+    };
+
+    fetchAndUpdateCartQuantity();
+
+    const interval = setInterval(() => {
+      fetchAndUpdateCartQuantity();
+    }, 1000);
+
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -137,7 +157,7 @@ const TopNav = ({
         className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
         onClick={() => handleRoute("/cart")}
       >
-        Cart
+        Cart {cartQuantity > 0 && `(${cartQuantity})`}
       </Button>
       <Button
         className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
@@ -233,7 +253,7 @@ const TopNav = ({
             className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
             onClick={() => handleRoute("/cart")}
           >
-            Cart
+            Cart {cartQuantity > 0 && `(${cartQuantity})`}
           </Button>
           |
           <Button

@@ -40,14 +40,18 @@ export default function CompactPriceDisplay({
 
 export function DisplayCostBreakdown({
   monetaryInfo,
+  quantity,
   subtotal,
+  shippingType,
   shippingCost,
-  total,
+  totalCost,
 }: {
   monetaryInfo?: ProductMonetaryInfo;
+  quantity?: number;
   subtotal?: number;
+  shippingType?: string;
   shippingCost?: number;
-  total?: number;
+  totalCost?: number;
 }) {
   if (monetaryInfo) {
     const { shippingType, shippingCost, price, currency } = monetaryInfo;
@@ -78,37 +82,27 @@ export function DisplayCostBreakdown({
         )}
       </div>
     );
-  } else {
-    const formattedSubtotal = subtotal
-      ? formatWithCommas(subtotal, "sats")
-      : "0 sats";
+  } else if (subtotal && quantity && totalCost) {
+    const formattedSubtotal = formatWithCommas(subtotal * quantity, "SATS");
     const formattedShippingCost = shippingCost
-      ? formatWithCommas(shippingCost, "sats")
-      : "0 sats";
-    const formattedTotalCost = total
-      ? formatWithCommas(total, "sats")
-      : "0 sats";
+      ? formatWithCommas(shippingCost * quantity, "SATS")
+      : "0 SATS";
+    const formattedTotalCost = formatWithCommas(totalCost * quantity, "SATS");
 
     return (
       <div>
-        {subtotal && (
-          <p>
-            <strong className="font-semibold">Subtotal:</strong>{" "}
-            {formattedSubtotal}
-          </p>
-        )}
-        {shippingCost && (
-          <p>
-            <strong className="font-semibold">Shipping:</strong>
-            {` ${formattedShippingCost}`}
-          </p>
-        )}
+        <p>
+          <strong className="font-semibold">Subtotal:</strong>{" "}
+          {formattedSubtotal}
+        </p>
+        <p>
+          <strong className="font-semibold">Shipping:</strong>
+          {` ${shippingType} - ${formattedShippingCost}`}
+        </p>
 
-        {total && (
-          <p>
-            <strong className="font-bold">Total:</strong> {formattedTotalCost}
-          </p>
-        )}
+        <p>
+          <strong className="font-bold">Total:</strong> {formattedTotalCost}
+        </p>
       </div>
     );
   }
