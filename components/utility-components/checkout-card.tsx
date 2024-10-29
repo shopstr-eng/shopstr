@@ -27,6 +27,7 @@ import { sanitizeUrl } from "@braintree/sanitize-url";
 import FailureModal from "../utility-components/failure-modal";
 import SuccessModal from "../utility-components/success-modal";
 // import RequestPassphraseModal from "../utility-components/request-passphrase-modal";
+import currencySelection from "../../public/currencySelection.json";
 
 export const TOTALPRODUCTCARDWIDTH = 380 + 5;
 const SUMMARY_CHARACTER_LIMIT = 100;
@@ -79,6 +80,7 @@ export default function CheckoutCard({
   const [isFetchingShop, setIsFetchingShop] = useState(false);
 
   const [showFailureModal, setShowFailureModal] = useState(false);
+  const [failureText, setFailureText] = useState("");
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const [cart, setCart] = useState<ProductData[]>([]);
@@ -180,6 +182,16 @@ export default function CheckoutCard({
   };
 
   const handleAddToCart = () => {
+    if (
+      !currencySelection.hasOwnProperty(productData.currency) ||
+      productData.totalCost < 1
+    ) {
+      setFailureText(
+        "The price and/or currency set for this listing was invalid.",
+      );
+      setShowFailureModal(true);
+      return;
+    }
     let updatedCart = [];
     if (selectedSize) {
       let productWithSize = { ...productData, selectedSize: selectedSize };
@@ -214,6 +226,7 @@ export default function CheckoutCard({
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
     let { signInMethod } = getLocalStorageData();
     if (!signInMethod) {
+      setFailureText("You must be signed in to send a message!");
       setShowFailureModal(true);
       return;
     }
@@ -449,7 +462,7 @@ export default function CheckoutCard({
         </>
       )}
       <FailureModal
-        bodyText="You must be signed in to send a message!"
+        bodyText={failureText}
         isOpen={showFailureModal}
         onClose={() => setShowFailureModal(false)}
       />

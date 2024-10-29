@@ -40,14 +40,12 @@ export default function CompactPriceDisplay({
 
 export function DisplayCostBreakdown({
   monetaryInfo,
-  quantity,
   subtotal,
   shippingType,
   shippingCost,
   totalCost,
 }: {
   monetaryInfo?: ProductMonetaryInfo;
-  quantity?: number;
   subtotal?: number;
   shippingType?: string;
   shippingCost?: number;
@@ -82,12 +80,12 @@ export function DisplayCostBreakdown({
         )}
       </div>
     );
-  } else if (subtotal && quantity && totalCost) {
-    const formattedSubtotal = formatWithCommas(subtotal * quantity, "SATS");
+  } else if (subtotal && totalCost) {
+    const formattedSubtotal = formatWithCommas(subtotal, "SATS");
     const formattedShippingCost = shippingCost
-      ? formatWithCommas(shippingCost * quantity, "SATS")
+      ? formatWithCommas(shippingCost, "SATS")
       : "0 SATS";
-    const formattedTotalCost = formatWithCommas(totalCost * quantity, "SATS");
+    const formattedTotalCost = formatWithCommas(totalCost, "SATS");
 
     return (
       <div>

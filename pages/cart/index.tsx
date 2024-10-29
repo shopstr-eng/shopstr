@@ -44,8 +44,18 @@ export default function Component() {
   const [shippingTypes, setShippingTypes] = useState<{
     [key: string]: ShippingOptionsType;
   }>({});
-  const [quantities, setQuantities] = useState<{ [key: string]: number }>(
-    Object.fromEntries(products.map((product) => [product.id, 1])),
+  // Initialize quantities state
+  const initializeQuantities = (products: ProductData[]) => {
+    const initialQuantities: { [key: string]: number } = {};
+    products.forEach((product) => {
+      initialQuantities[product.id] = 1; // Default quantity is 1
+    });
+    return initialQuantities;
+  };
+
+  // Use the initialized quantities
+  const [quantities, setQuantities] = useState<{ [key: string]: number }>(() =>
+    initializeQuantities(products),
   );
   const [hasReachedMax, setHasReachedMax] = useState<{
     [key: string]: boolean;
@@ -180,7 +190,7 @@ export default function Component() {
       const product = products.find((p) => p.id === id);
       if (!product || !product.quantity) return prev;
 
-      const availableQuantity = parseInt(product.quantity);
+      const availableQuantity = parseInt(String(product.quantity));
       const newQuantity = Math.max(
         1,
         Math.min(availableQuantity, prev[id] + change),
@@ -352,15 +362,15 @@ export default function Component() {
                               )}
                               <Input
                                 type="number"
-                                value={quantities[product.id].toString()}
+                                value={(quantities[product.id] || 1).toString()}
                                 min="1"
-                                max={product.quantity}
+                                max={String(product.quantity)}
                                 className="mx-2 w-16"
                                 onChange={(e) => {
                                   const newQuantity =
                                     parseInt(e.target.value) || 1;
                                   const maxQuantity = parseInt(
-                                    product.quantity || "1",
+                                    String(product.quantity) || "1",
                                   );
                                   const finalQuantity = Math.min(
                                     newQuantity,
@@ -379,7 +389,7 @@ export default function Component() {
                                 }}
                               />
                               {quantities[product.id] <
-                                parseInt(product.quantity || "1") && (
+                                parseInt(String(product.quantity || "1")) && (
                                 <Button
                                   isIconOnly
                                   size="sm"
@@ -472,9 +482,6 @@ export default function Component() {
                       )}
                       {/* <span className="mt-4 text-xl font-semibold">Cost Breakdown: </span> */}
                       <DisplayCostBreakdown
-                        quantity={
-                          quantities[product.id] ? quantities[product.id] : 1
-                        }
                         subtotal={
                           satPrices[product.id]
                             ? (satPrices[product.id] as number)
@@ -515,6 +522,7 @@ export default function Component() {
               <div className="flex flex-col items-center">
                 <CartInvoiceCard
                   products={products}
+                  quantities={quantities}
                   shippingTypes={shippingTypes}
                   totalCostsInSats={totalCostsInSats}
                   subtotal={subtotal}

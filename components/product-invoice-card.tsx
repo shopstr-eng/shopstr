@@ -521,8 +521,23 @@ export default function ProductInvoiceCard({
         shippingState &&
         shippingCountry
       ) {
-        let contactMessage;
-        if (selectedSize) {
+        let contactMessage = "";
+        if (!shippingUnitNo && !selectedSize) {
+          contactMessage =
+            "Please ship the product to " +
+            shippingName +
+            " at " +
+            shippingAddress +
+            ", " +
+            shippingCity +
+            ", " +
+            shippingPostalCode +
+            ", " +
+            shippingState +
+            ", " +
+            shippingCountry +
+            ".";
+        } else if (!shippingUnitNo && selectedSize) {
           contactMessage =
             "Please ship the product in a size " +
             selectedSize +
@@ -539,12 +554,14 @@ export default function ProductInvoiceCard({
             ", " +
             shippingCountry +
             ".";
-        } else if (!shippingUnitNo) {
+        } else if (shippingUnitNo && !selectedSize) {
           contactMessage =
             "Please ship the product to " +
             shippingName +
             " at " +
             shippingAddress +
+            " " +
+            shippingUnitNo +
             ", " +
             shippingCity +
             ", " +
@@ -554,9 +571,11 @@ export default function ProductInvoiceCard({
             ", " +
             shippingCountry +
             ".";
-        } else {
+        } else if (shippingUnitNo && selectedSize) {
           contactMessage =
-            "Please ship the product to " +
+            "Please ship the product in a size " +
+            selectedSize +
+            " to " +
             shippingName +
             " at " +
             shippingAddress +

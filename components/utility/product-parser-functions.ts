@@ -18,7 +18,7 @@ export type ProductData = {
   shippingCost?: number;
   totalCost: number;
   d?: string;
-  quantity?: string;
+  quantity?: number;
   sizes?: string[];
   sizeQuantities?: Map<string, number>;
   condition?: string;
@@ -101,7 +101,7 @@ export const parseTags = (productEvent: NostrEvent) => {
         parsedData.d = values[0];
         break;
       case "quantity":
-        parsedData.quantity = values[0];
+        parsedData.quantity = Number(values[0]);
         break;
       case "size":
         const [size, quantity] = values;

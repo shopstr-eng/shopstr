@@ -49,6 +49,7 @@ export default function DisplayProductModal({
     sizeQuantities,
     condition,
     status,
+    quantity,
   } = productData;
   const { signInMethod, userPubkey } = getLocalStorageData();
 
@@ -152,11 +153,6 @@ export default function DisplayProductModal({
                 classname="max-h-[80vh]"
               />
             ) : null}
-            {condition && (
-              <div className="text-left text-xs text-light-text dark:text-dark-text">
-                <span>Condition: {condition}</span>
-              </div>
-            )}
             <Divider />
             <div className="flex h-fit w-full flex-row flex-wrap items-center justify-between gap-2">
               <ProfileWithDropdown
@@ -203,6 +199,14 @@ export default function DisplayProductModal({
                 <div className="text-left text-xs text-light-text dark:text-dark-text">
                   <span className="text-xl font-semibold">Condition: </span>
                   <span className="text-xl">{condition}</span>
+                </div>
+              </>
+            )}
+            {quantity && (
+              <>
+                <div className="text-left text-xs text-light-text dark:text-dark-text">
+                  <span className="text-xl font-semibold">Quantity: </span>
+                  <span className="text-xl">{quantity}</span>
                 </div>
               </>
             )}

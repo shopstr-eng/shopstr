@@ -65,6 +65,7 @@ import CombinedContactForm from "./combined-contact-form";
 
 export default function CartInvoiceCard({
   products,
+  quantities,
   shippingTypes,
   totalCostsInSats,
   subtotal,
@@ -72,6 +73,7 @@ export default function CartInvoiceCard({
   totalCost,
 }: {
   products: ProductData[];
+  quantities: { [key: string]: number };
   shippingTypes: { [key: string]: string };
   totalCostsInSats: { [key: string]: number };
   subtotal: number;
@@ -331,7 +333,7 @@ export default function CartInvoiceCard({
       let shippingPostalCode = data["Postal Code"];
       let shippingState = data["State/Province"];
       let shippingCountry = data["Country"];
-      setShowShippingModal(false);
+      setShowCombinedModal(false);
       if (isCashuPayment) {
         await handleCashuPayment(
           totalCost,
@@ -498,6 +500,7 @@ export default function CartInvoiceCard({
             metricsInvoiceId,
           );
           setPaymentConfirmed(true);
+          localStorage.setItem("cart", JSON.stringify([]));
           setQrCodeUrl(null);
           if (setInvoiceIsPaid) {
             setInvoiceIsPaid(true);
@@ -542,11 +545,22 @@ export default function CartInvoiceCard({
         ],
       });
       remainingProofs = tokenToSend.returnChange;
-      const paymentMessage =
-        "This is a Cashu token payment for your " +
-        title +
-        " listing on Shopstr: " +
-        encodedTokenToSend;
+      let paymentMessage = "";
+      if (quantities[product.id] && quantities[product.id] > 1) {
+        paymentMessage =
+          "This is a Cashu token payment for " +
+          quantities[product.id] +
+          " of your " +
+          title +
+          " listing on Shopstr: " +
+          encodedTokenToSend;
+      } else {
+        paymentMessage =
+          "This is a Cashu token payment for your " +
+          title +
+          " listing on Shopstr: " +
+          encodedTokenToSend;
+      }
       await sendPaymentAndContactMessage(pubkey, paymentMessage, true);
       if (metricsInvoiceId) {
         captureInvoicePaidmetric(metricsInvoiceId, product);
@@ -555,29 +569,39 @@ export default function CartInvoiceCard({
       }
 
       if (
-        !(
-          shippingName &&
-          shippingAddress &&
-          shippingUnitNo &&
-          shippingCity &&
-          shippingPostalCode &&
-          shippingState &&
-          shippingCountry &&
-          contact &&
-          contactType &&
-          contactInstructions
-        )
+        shippingName ||
+        shippingAddress ||
+        shippingUnitNo ||
+        shippingCity ||
+        shippingPostalCode ||
+        shippingState ||
+        shippingCountry ||
+        contact ||
+        contactType ||
+        contactInstructions
       ) {
         if (
-          shippingName &&
-          shippingAddress &&
-          shippingCity &&
-          shippingPostalCode &&
-          shippingState &&
-          shippingCountry
+          product.shippingType === "Added Cost" ||
+          product.shippingType === "Free" ||
+          (product.shippingType === "Free/Pickup" && needsShippingInfo === true)
         ) {
-          let contactMessage;
-          if (product.selectedSize) {
+          let contactMessage = "";
+          if (!shippingUnitNo && !product.selectedSize) {
+            contactMessage =
+              "Please ship the product to " +
+              shippingName +
+              " at " +
+              shippingAddress +
+              ", " +
+              shippingCity +
+              ", " +
+              shippingPostalCode +
+              ", " +
+              shippingState +
+              ", " +
+              shippingCountry +
+              ".";
+          } else if (!shippingUnitNo && product.selectedSize) {
             contactMessage =
               "Please ship the product in a size " +
               product.selectedSize +
@@ -594,22 +618,7 @@ export default function CartInvoiceCard({
               ", " +
               shippingCountry +
               ".";
-          } else if (!shippingUnitNo) {
-            contactMessage =
-              "Please ship the product to " +
-              shippingName +
-              " at " +
-              shippingAddress +
-              ", " +
-              shippingCity +
-              ", " +
-              shippingPostalCode +
-              ", " +
-              shippingState +
-              ", " +
-              shippingCountry +
-              ".";
-          } else {
+          } else if (shippingUnitNo && !product.selectedSize) {
             contactMessage =
               "Please ship the product to " +
               shippingName +
@@ -626,9 +635,33 @@ export default function CartInvoiceCard({
               ", " +
               shippingCountry +
               ".";
+          } else if (shippingUnitNo && product.selectedSize) {
+            contactMessage =
+              "Please ship the product in a size " +
+              product.selectedSize +
+              " to " +
+              shippingName +
+              " at " +
+              shippingAddress +
+              " " +
+              shippingUnitNo +
+              ", " +
+              shippingCity +
+              ", " +
+              shippingPostalCode +
+              ", " +
+              shippingState +
+              ", " +
+              shippingCountry +
+              ".";
           }
           await sendPaymentAndContactMessage(pubkey, contactMessage, false);
-        } else if (contact && contactType && contactInstructions) {
+        } else if (
+          product.shippingType === "N/A" ||
+          product.shippingType === "Pickup" ||
+          (product.shippingType === "Free/Pickup" &&
+            needsShippingInfo === false)
+        ) {
           let contactMessage;
           if (product.selectedSize) {
             contactMessage =
@@ -742,6 +775,7 @@ export default function CartInvoiceCard({
       await publishWalletEvent(passphrase, dTag);
       if (setCashuPaymentSent) {
         setCashuPaymentSent(true);
+        localStorage.setItem("cart", JSON.stringify([]));
       }
     } catch (error) {
       console.error(error);

@@ -8,6 +8,7 @@ import {
   Input,
   Textarea,
 } from "@nextui-org/react";
+import { InformationCircleIcon } from "@heroicons/react/24/outline";
 import {
   Controller,
   Control,
@@ -154,6 +155,14 @@ export default function CombinedContactForm({
                 );
               }}
             />
+
+            <div className="mx-4 my-2 flex items-center justify-center text-center">
+              <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
+              <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+                The above information is for purchases not requiring shipping
+                ONLY.
+              </p>
+            </div>
 
             <Controller
               name="Name"

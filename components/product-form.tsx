@@ -81,7 +81,7 @@ export default function NewForm({
           "Shipping Option": oldValues.shippingType,
           "Shipping Cost": oldValues.shippingCost,
           Category: oldValues.categories ? oldValues.categories.join(",") : "",
-          Quantity: oldValues.quantity ? oldValues.quantity : "",
+          Quantity: oldValues.quantity ? String(oldValues.quantity) : "",
           Sizes: oldValues.sizes ? oldValues.sizes.join(",") : "",
           "Size Quantities": oldValues.sizeQuantities
             ? oldValues.sizeQuantities
@@ -154,7 +154,7 @@ export default function NewForm({
     });
 
     if (data["Quantity"]) {
-      tags.push(["quantity", data["Quantity"] as string]);
+      tags.push(["quantity", data["Quantity"].toString()]);
     }
 
     if (data["Sizes"]) {
@@ -647,7 +647,6 @@ export default function NewForm({
                 <Controller
                   name="Quantity"
                   control={control}
-                  defaultValue="1"
                   rules={{
                     min: { value: 1, message: "Quantity must be at least 1" },
                   }}
@@ -655,21 +654,25 @@ export default function NewForm({
                     field: { onChange, value },
                     fieldState: { error },
                   }) => {
+                    let isErrored = error !== undefined;
+                    let errorMessage = error?.message || "";
                     return (
                       <div className="flex flex-col">
                         <Input
-                          id="quantity"
+                          variant="flat"
+                          autoFocus
                           type="number"
                           min="1"
+                          aria-label="Quantity"
                           label="Quantity"
                           labelPlacement="inside"
                           value={value}
                           onChange={(e) =>
                             onChange(parseInt(e.target.value) || 1)
                           }
-                          className="w-full"
-                          isInvalid={!!error}
-                          errorMessage={error?.message}
+                          className="w-20"
+                          isInvalid={isErrored}
+                          errorMessage={errorMessage}
                         />
                       </div>
                     );
