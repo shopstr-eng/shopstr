@@ -2,11 +2,7 @@ import React, { useContext, useEffect, useRef, useState } from "react";
 import { nip19 } from "nostr-tools";
 import { ProductData } from "../utility/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
-import {
-  getLocalStorageData,
-  // publishShoppingCartEvent,
-  // validPassphrase,
-} from "../utility/nostr-helper-functions";
+import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import {
   DisplayCostBreakdown,
   DisplayCheckoutCost,
@@ -18,15 +14,11 @@ import { Button, Chip } from "@nextui-org/react";
 import { locationAvatar } from "./dropdowns/location-dropdown";
 import { InformationCircleIcon } from "@heroicons/react/24/outline";
 import Link from "next/link";
-import {
-  // CartContext,
-  ShopMapContext,
-} from "@/utils/context/context";
+import { ShopMapContext } from "@/utils/context/context";
 import { ShopSettings } from "../../utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import FailureModal from "../utility-components/failure-modal";
 import SuccessModal from "../utility-components/success-modal";
-// import RequestPassphraseModal from "../utility-components/request-passphrase-modal";
 import currencySelection from "../../public/currencySelection.json";
 
 export const TOTALPRODUCTCARDWIDTH = 380 + 5;
@@ -62,9 +54,6 @@ export default function CheckoutCard({
 
   const router = useRouter();
 
-  // const [enterPassphrase, setEnterPassphrase] = useState(false);
-  // const [passphrase, setPassphrase] = useState("");
-
   const [isExpanded, setIsExpanded] = useState(false);
   const [isBeingPaid, setIsBeingPaid] = useState(false);
   const [visibleImages, setVisibleImages] = useState<string[]>([]);
@@ -85,7 +74,6 @@ export default function CheckoutCard({
 
   const [cart, setCart] = useState<ProductData[]>([]);
 
-  // const cartContext = useContext(CartContext);
   const shopMapContext = useContext(ShopMapContext);
 
   const toggleExpand = () => {
@@ -106,14 +94,6 @@ export default function CheckoutCard({
   };
 
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // const { signInMethod } = getLocalStorageData();
-
-  // useEffect(() => {
-  //   if (signInMethod === "nsec" && !validPassphrase(passphrase)) {
-  //     setEnterPassphrase(true);
-  //   }
-  // }, [signInMethod, passphrase]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -201,7 +181,6 @@ export default function CheckoutCard({
     }
     setCart(updatedCart);
     localStorage.setItem("cart", JSON.stringify(updatedCart));
-    // publishShoppingCartEvent(userPubkey, cartContext.cartAddresses, productData, 1, passphrase);
   };
 
   const handleShare = async () => {
@@ -430,7 +409,6 @@ export default function CheckoutCard({
             {selectedSize && (
               <p className="mb-4 text-lg">Size: {selectedSize}</p>
             )}
-            {/* <span className="mt-4 text-xl font-semibold">Cost Breakdown: </span> */}
             <DisplayCostBreakdown monetaryInfo={productData} />
             <div className="mx-4 mt-2 flex items-center justify-center text-center">
               <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
@@ -471,13 +449,6 @@ export default function CheckoutCard({
         isOpen={showSuccessModal}
         onClose={() => setShowSuccessModal(true)}
       />
-      {/* <RequestPassphraseModal
-        passphrase={passphrase}
-        setCorrectPassphrase={setPassphrase}
-        isOpen={enterPassphrase}
-        setIsOpen={setEnterPassphrase}
-        onCancelRouteTo="/"
-      /> */}
     </>
   );
 }

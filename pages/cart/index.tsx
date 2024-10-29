@@ -1,4 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, {
+  // useContext,
+  useEffect,
+  useState,
+} from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { Button, Input } from "@nextui-org/react";
@@ -171,6 +175,32 @@ export default function Component() {
     setIsBeingPaid(!isBeingPaid);
   };
 
+  // const handleSaveForLater = (productId: string) => {
+  //   const product = products.find((p) => p.id === productId);
+  //   if (product) {
+  //     publishShoppingCartEvent(
+  //       userPubkey,
+  //       cartContext.cartAddresses,
+  //       product,
+  //       quantities[productId],
+  //       passphrase,
+  //     );
+  //   }
+  // };
+
+  // const handleRemoveFromSaveForLater = (productId: string) => {
+  //   const product = products.find((p) => p.id === productId);
+  //   if (product) {
+  //     publishShoppingCartEvent(
+  //       userPubkey,
+  //       cartContext.cartAddresses,
+  //       product,
+  //       -1,
+  //       passphrase,
+  //     );
+  //   }
+  // };
+
   const handleRemoveFromCart = (productId: string) => {
     let cartContent = localStorage.getItem("cart")
       ? JSON.parse(localStorage.getItem("cart") as string)
@@ -181,7 +211,6 @@ export default function Component() {
       );
       setProducts(updatedCart);
       localStorage.setItem("cart", JSON.stringify(updatedCart));
-      // publishShoppingCartEvent(userPubkey, cartContext.cartAddresses, productData, -1, passphrase);
     }
   };
 
@@ -200,7 +229,6 @@ export default function Component() {
         ...prevState,
         [id]: newQuantity === availableQuantity && newQuantity !== 1,
       }));
-      // publishShoppingCartEvent(userPubkey, cartContext.cartAddresses, product, newQuantity, passphrase);
 
       return {
         ...prev,
@@ -219,7 +247,6 @@ export default function Component() {
     let price = 0;
     if (!currencySelection.hasOwnProperty(product.currency)) {
       throw new Error(`${product.currency} is not a supported currency.`);
-      // make sure to restrict adding of product or checkout if currency is unsupported
     } else if (
       currencySelection.hasOwnProperty(product.currency) &&
       product.currency.toLowerCase() !== "sats" &&
@@ -254,7 +281,6 @@ export default function Component() {
     let cost = 0;
     if (!currencySelection.hasOwnProperty(product.currency)) {
       throw new Error(`${product.currency} is not a supported currency.`);
-      // make sure to restrict adding of product or checkout if currency is unsupported
     } else if (
       currencySelection.hasOwnProperty(product.currency) &&
       product.currency.toLowerCase() !== "sats" &&
@@ -286,7 +312,6 @@ export default function Component() {
     let total = 0;
     if (!currencySelection.hasOwnProperty(product.currency)) {
       throw new Error(`${product.currency} is not a supported currency.`);
-      // make sure to restrict adding of product or checkout if currency is unsupported
     } else if (
       currencySelection.hasOwnProperty(product.currency) &&
       product.currency.toLowerCase() !== "sats" &&
@@ -412,6 +437,14 @@ export default function Component() {
                       </div>
                     </div>
                     <div className="absolute bottom-4 right-4 flex">
+                      {/* <Button
+                        size="sm"
+                        className="mr-2 text-shopstr-purple-light dark:text-shopstr-yellow-light"
+                        variant="light"
+                        onClick={() => handleSaveForLater(product.id)}
+                      >
+                        Save For Later
+                      </Button> */}
                       <Button
                         size="sm"
                         color="danger"
@@ -421,13 +454,6 @@ export default function Component() {
                       >
                         Remove
                       </Button>
-                      {/* <Button
-                        size="sm"
-                        className="text-shopstr-purple-light dark:text-shopstr-yellow-light"
-                        variant="light"
-                      >
-                        Save For Later
-                      </Button> */}
                     </div>
                   </div>
                 ))}
@@ -483,7 +509,6 @@ export default function Component() {
                           Quantity: {quantities[product.id]}
                         </p>
                       )}
-                      {/* <span className="mt-4 text-xl font-semibold">Cost Breakdown: </span> */}
                       <DisplayCostBreakdown
                         subtotal={
                           satPrices[product.id]
