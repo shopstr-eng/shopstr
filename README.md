@@ -20,6 +20,7 @@ A global, decentralized Nostr marketplace to buy and sell anything, anywhere, an
 - [ ] NIP-47: Wallet Connect
 - [ ] NIP-49: Private Key Encryption
 - [ ] NIP-50: Search Capability
+- [x] NIP-51: Lists
 - [x] NIP-55: Android Signer Application
 - [ ] NIP-56: Reporting
 - [ ] NIP-57: Lightning Zaps

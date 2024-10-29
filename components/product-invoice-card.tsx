@@ -2,7 +2,7 @@
 import React, { useContext, useState, useEffect } from "react";
 import { CashuWalletContext } from "../utils/context/context";
 import { useRouter } from "next/router";
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import {
   Button,
   Card,
@@ -11,16 +11,13 @@ import {
   CardFooter,
   Divider,
   Image,
-  Input,
   useDisclosure,
   Modal,
   ModalContent,
   ModalHeader,
   ModalBody,
-  ModalFooter,
   Select,
   SelectItem,
-  Textarea,
 } from "@nextui-org/react";
 import axios from "axios";
 import {
@@ -61,11 +58,12 @@ import {
   captureInvoicePaidmetric,
 } from "./utility/metrics-helper-functions";
 import SignInModal from "./sign-in/SignInModal";
-import CountryDropdown from "./utility-components/dropdowns/country-dropdown";
 import currencySelection from "../public/currencySelection.json";
 import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
+import ShippingForm from "./shipping-form";
+import ContactForm from "./contact-form";
 
-export default function InvoiceCard({
+export default function ProductInvoiceCard({
   productData,
   setInvoiceIsPaid,
   setInvoiceGenerationFailed,
@@ -77,7 +75,7 @@ export default function InvoiceCard({
   setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
   setInvoiceGenerationFailed?: (invoiceGenerationFailed: boolean) => void;
   setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
-  setCashuPaymentFailed?: (cashuPaymentFailef: boolean) => void;
+  setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
   selectedSize?: string;
 }) {
   const router = useRouter();
@@ -523,8 +521,23 @@ export default function InvoiceCard({
         shippingState &&
         shippingCountry
       ) {
-        let contactMessage;
-        if (selectedSize) {
+        let contactMessage = "";
+        if (!shippingUnitNo && !selectedSize) {
+          contactMessage =
+            "Please ship the product to " +
+            shippingName +
+            " at " +
+            shippingAddress +
+            ", " +
+            shippingCity +
+            ", " +
+            shippingPostalCode +
+            ", " +
+            shippingState +
+            ", " +
+            shippingCountry +
+            ".";
+        } else if (!shippingUnitNo && selectedSize) {
           contactMessage =
             "Please ship the product in a size " +
             selectedSize +
@@ -541,12 +554,14 @@ export default function InvoiceCard({
             ", " +
             shippingCountry +
             ".";
-        } else if (!shippingUnitNo) {
+        } else if (shippingUnitNo && !selectedSize) {
           contactMessage =
             "Please ship the product to " +
             shippingName +
             " at " +
             shippingAddress +
+            " " +
+            shippingUnitNo +
             ", " +
             shippingCity +
             ", " +
@@ -556,9 +571,11 @@ export default function InvoiceCard({
             ", " +
             shippingCountry +
             ".";
-        } else {
+        } else if (shippingUnitNo && selectedSize) {
           contactMessage =
-            "Please ship the product to " +
+            "Please ship the product in a size " +
+            selectedSize +
+            " to " +
             shippingName +
             " at " +
             shippingAddress +
@@ -1005,441 +1022,22 @@ export default function InvoiceCard({
         </ModalContent>
       </Modal>
 
-      <Modal
-        backdrop="blur"
-        isOpen={showShippingModal}
-        onClose={handleToggleShippingModal}
-        classNames={{
-          body: "py-6",
-          backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-          // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
-          header: "border-b-[1px] border-[#292f46]",
-          footer: "border-t-[1px] border-[#292f46]",
-          closeButton: "hover:bg-black/5 active:bg-white/10",
-        }}
-        scrollBehavior={"outside"}
-        size="2xl"
-      >
-        <ModalContent>
-          <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
-            Enter Shipping Info
-          </ModalHeader>
-          <form onSubmit={handleShippingSubmit(onShippingSubmit)}>
-            <ModalBody>
-              <Controller
-                name="Name"
-                control={shippingControl}
-                rules={{
-                  required: "A name is required.",
-                  maxLength: {
-                    value: 50,
-                    message: "This input exceed maxLength of 50.",
-                  },
-                }}
-                render={({
-                  field: { onChange, onBlur, value },
-                  fieldState: { error },
-                }) => {
-                  let isErrored = error !== undefined;
-                  let errorMessage: string = error?.message
-                    ? error.message
-                    : "";
-                  return (
-                    <Input
-                      className="text-light-text dark:text-dark-text"
-                      autoFocus
-                      variant="bordered"
-                      fullWidth={true}
-                      label="Name"
-                      labelPlacement="inside"
-                      isInvalid={isErrored}
-                      errorMessage={errorMessage}
-                      // controller props
-                      onChange={onChange} // send value to hook form
-                      onBlur={onBlur} // notify when input is touched/blur
-                      value={value}
-                    />
-                  );
-                }}
-              />
+      <ShippingForm
+        showShippingModal={showShippingModal}
+        handleToggleShippingModal={handleToggleShippingModal}
+        handleShippingSubmit={handleShippingSubmit}
+        onShippingSubmit={onShippingSubmit}
+        shippingControl={shippingControl}
+      />
 
-              <Controller
-                name="Address"
-                control={shippingControl}
-                rules={{
-                  required: "An address is required.",
-                  maxLength: {
-                    value: 50,
-                    message: "This input exceed maxLength of 50.",
-                  },
-                }}
-                render={({
-                  field: { onChange, onBlur, value },
-                  fieldState: { error },
-                }) => {
-                  let isErrored = error !== undefined;
-                  let errorMessage: string = error?.message
-                    ? error.message
-                    : "";
-                  return (
-                    <Input
-                      className="text-light-text dark:text-dark-text"
-                      autoFocus
-                      variant="bordered"
-                      fullWidth={true}
-                      label="Address"
-                      labelPlacement="inside"
-                      isInvalid={isErrored}
-                      errorMessage={errorMessage}
-                      // controller props
-                      onChange={onChange} // send value to hook form
-                      onBlur={onBlur} // notify when input is touched/blur
-                      value={value}
-                    />
-                  );
-                }}
-              />
+      <ContactForm
+        showContactModal={showContactModal}
+        handleToggleContactModal={handleToggleContactModal}
+        handleContactSubmit={handleContactSubmit}
+        onContactSubmit={onContactSubmit}
+        contactControl={contactControl}
+      />
 
-              <Controller
-                name="Unit"
-                control={shippingControl}
-                rules={{
-                  maxLength: {
-                    value: 50,
-                    message: "This input exceed maxLength of 50.",
-                  },
-                }}
-                render={({
-                  field: { onChange, onBlur, value },
-                  fieldState: { error },
-                }) => {
-                  let isErrored = error !== undefined;
-                  let errorMessage: string = error?.message
-                    ? error.message
-                    : "";
-                  return (
-                    <Input
-                      className="text-light-text dark:text-dark-text"
-                      autoFocus
-                      variant="bordered"
-                      fullWidth={true}
-                      label="Apt, suite, unit, etc."
-                      labelPlacement="inside"
-                      isInvalid={isErrored}
-                      errorMessage={errorMessage}
-                      // controller props
-                      onChange={onChange} // send value to hook form
-                      onBlur={onBlur} // notify when input is touched/blur
-                      value={value}
-                    />
-                  );
-                }}
-              />
-
-              <Controller
-                name="City"
-                control={shippingControl}
-                rules={{
-                  required: "A city is required.",
-                  maxLength: {
-                    value: 50,
-                    message: "This input exceed maxLength of 50.",
-                  },
-                }}
-                render={({
-                  field: { onChange, onBlur, value },
-                  fieldState: { error },
-                }) => {
-                  let isErrored = error !== undefined;
-                  let errorMessage: string = error?.message
-                    ? error.message
-                    : "";
-                  return (
-                    <Input
-                      className="text-light-text dark:text-dark-text"
-                      autoFocus
-                      variant="bordered"
-                      fullWidth={true}
-                      label="City"
-                      labelPlacement="inside"
-                      isInvalid={isErrored}
-                      errorMessage={errorMessage}
-                      // controller props
-                      onChange={onChange} // send value to hook form
-                      onBlur={onBlur} // notify when input is touched/blur
-                      value={value}
-                    />
-                  );
-                }}
-              />
-
-              <Controller
-                name="Postal Code"
-                control={shippingControl}
-                rules={{
-                  required: "A postal code is required.",
-                  maxLength: {
-                    value: 50,
-                    message: "This input exceed maxLength of 50.",
-                  },
-                }}
-                render={({
-                  field: { onChange, onBlur, value },
-                  fieldState: { error },
-                }) => {
-                  let isErrored = error !== undefined;
-                  let errorMessage: string = error?.message
-                    ? error.message
-                    : "";
-                  return (
-                    <Input
-                      className="text-light-text dark:text-dark-text"
-                      autoFocus
-                      variant="bordered"
-                      fullWidth={true}
-                      label="Postal code"
-                      labelPlacement="inside"
-                      isInvalid={isErrored}
-                      errorMessage={errorMessage}
-                      // controller props
-                      onChange={onChange} // send value to hook form
-                      onBlur={onBlur} // notify when input is touched/blur
-                      value={value}
-                    />
-                  );
-                }}
-              />
-
-              <Controller
-                name="State/Province"
-                control={shippingControl}
-                rules={{
-                  required: "A state/province is required.",
-                }}
-                render={({
-                  field: { onChange, onBlur, value },
-                  fieldState: { error },
-                }) => {
-                  let isErrored = error !== undefined;
-                  let errorMessage: string = error?.message
-                    ? error.message
-                    : "";
-                  return (
-                    <Input
-                      className="text-light-text dark:text-dark-text"
-                      autoFocus
-                      variant="bordered"
-                      fullWidth={true}
-                      label="State/Province"
-                      labelPlacement="inside"
-                      isInvalid={isErrored}
-                      errorMessage={errorMessage}
-                      // controller props
-                      onChange={onChange} // send value to hook form
-                      onBlur={onBlur} // notify when input is touched/blur
-                      value={value}
-                    />
-                  );
-                }}
-              />
-
-              <Controller
-                name="Country"
-                control={shippingControl}
-                rules={{
-                  required: "A country is required.",
-                }}
-                render={({
-                  field: { onChange, onBlur, value },
-                  fieldState: { error },
-                }) => {
-                  let isErrored = error !== undefined;
-                  let errorMessage: string = error?.message
-                    ? error.message
-                    : "";
-                  return (
-                    <CountryDropdown
-                      autoFocus
-                      variant="bordered"
-                      aria-label="Select Country"
-                      label="Country"
-                      labelPlacement="inside"
-                      isInvalid={isErrored}
-                      errorMessage={errorMessage}
-                      // controller props
-                      onChange={onChange} // send value to hook form
-                      onBlur={onBlur} // notify when input is touched/blur
-                      value={value}
-                    />
-                  );
-                }}
-              />
-            </ModalBody>
-
-            <ModalFooter>
-              <Button
-                color="danger"
-                variant="light"
-                onClick={handleToggleShippingModal}
-              >
-                Cancel
-              </Button>
-
-              <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
-                Submit
-              </Button>
-            </ModalFooter>
-          </form>
-        </ModalContent>
-      </Modal>
-
-      <Modal
-        backdrop="blur"
-        isOpen={showContactModal}
-        onClose={handleToggleContactModal}
-        classNames={{
-          body: "py-6",
-          backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-          // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
-          header: "border-b-[1px] border-[#292f46]",
-          footer: "border-t-[1px] border-[#292f46]",
-          closeButton: "hover:bg-black/5 active:bg-white/10",
-        }}
-        scrollBehavior={"outside"}
-        size="2xl"
-      >
-        <ModalContent>
-          <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
-            Enter Contact Info
-          </ModalHeader>
-          <form onSubmit={handleContactSubmit(onContactSubmit)}>
-            <ModalBody>
-              <Controller
-                name="Contact"
-                control={contactControl}
-                rules={{
-                  required: "A contact is required.",
-                  maxLength: {
-                    value: 50,
-                    message: "This input exceed maxLength of 50.",
-                  },
-                }}
-                render={({
-                  field: { onChange, onBlur, value },
-                  fieldState: { error },
-                }) => {
-                  let isErrored = error !== undefined;
-                  let errorMessage: string = error?.message
-                    ? error.message
-                    : "";
-                  return (
-                    <Input
-                      className="text-light-text dark:text-dark-text"
-                      autoFocus
-                      variant="bordered"
-                      fullWidth={true}
-                      label="Contact"
-                      labelPlacement="inside"
-                      placeholder="shopstr@shopstr.store"
-                      isInvalid={isErrored}
-                      errorMessage={errorMessage}
-                      // controller props
-                      onChange={onChange} // send value to hook form
-                      onBlur={onBlur} // notify when input is touched/blur
-                      value={value}
-                    />
-                  );
-                }}
-              />
-
-              <Controller
-                name="Contact Type"
-                control={contactControl}
-                rules={{
-                  required: "A contact type is required.",
-                  maxLength: {
-                    value: 50,
-                    message: "This input exceed maxLength of 50.",
-                  },
-                }}
-                render={({
-                  field: { onChange, onBlur, value },
-                  fieldState: { error },
-                }) => {
-                  let isErrored = error !== undefined;
-                  let errorMessage: string = error?.message
-                    ? error.message
-                    : "";
-                  return (
-                    <Input
-                      className="text-light-text dark:text-dark-text"
-                      autoFocus
-                      variant="bordered"
-                      fullWidth={true}
-                      label="Contact type"
-                      labelPlacement="inside"
-                      placeholder="Nostr, Signal, Telegram, email, phone, etc."
-                      isInvalid={isErrored}
-                      errorMessage={errorMessage}
-                      // controller props
-                      onChange={onChange} // send value to hook form
-                      onBlur={onBlur} // notify when input is touched/blur
-                      value={value}
-                    />
-                  );
-                }}
-              />
-
-              <Controller
-                name="Instructions"
-                control={contactControl}
-                rules={{
-                  required: "Delivery instructions are required.",
-                }}
-                render={({
-                  field: { onChange, onBlur, value },
-                  fieldState: { error },
-                }) => {
-                  let isErrored = error !== undefined;
-                  let errorMessage: string = error?.message
-                    ? error.message
-                    : "";
-                  return (
-                    <Textarea
-                      className="text-light-text dark:text-dark-text"
-                      variant="bordered"
-                      fullWidth={true}
-                      label="Delivery instructions"
-                      labelPlacement="inside"
-                      placeholder="Meet me by . . .; Send file to . . ."
-                      isInvalid={isErrored}
-                      errorMessage={errorMessage}
-                      // controller props
-                      onChange={onChange} // send value to hook form
-                      onBlur={onBlur} // notify when input is touched/blur
-                      value={value}
-                    />
-                  );
-                }}
-              />
-            </ModalBody>
-
-            <ModalFooter>
-              <Button
-                color="danger"
-                variant="light"
-                onClick={handleToggleContactModal}
-              >
-                Cancel
-              </Button>
-
-              <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
-                Submit
-              </Button>
-            </ModalFooter>
-          </form>
-        </ModalContent>
-      </Modal>
       <SignInModal isOpen={isOpen} onClose={onClose} />
       <RequestPassphraseModal
         passphrase={passphrase}

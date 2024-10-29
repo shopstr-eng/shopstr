@@ -1,4 +1,4 @@
-import { Filter, nip44, SimplePool } from "nostr-tools";
+import { Filter, nip04, nip44, SimplePool } from "nostr-tools";
 import {
   addChatMessageToCache,
   addProductToCache,
@@ -20,6 +20,10 @@ import {
   getLocalStorageData,
   getPrivKeyWithPassphrase,
 } from "@/components/utility/nostr-helper-functions";
+import {
+  ProductData,
+  parseTags,
+} from "@/components/utility/product-parser-functions";
 import { DeleteEvent } from "../../../pages/api/nostr/crud-service";
 
 function getUniqueProofs(proofs: Proof[]): Proof[] {
@@ -44,6 +48,7 @@ export const fetchAllPosts = async (
   since?: number,
   until?: number,
 ): Promise<{
+  productEvents: NostrEvent[];
   profileSetFromProducts: Set<string>;
 }> => {
   return new Promise(async function (resolve, reject) {
@@ -92,6 +97,7 @@ export const fetchAllPosts = async (
         oneose() {
           h.close();
           resolve({
+            productEvents: productArrayFromRelay,
             profileSetFromProducts,
           });
           editProductContext(productArrayFromRelay, false);
@@ -100,6 +106,193 @@ export const fetchAllPosts = async (
       });
     } catch (error) {
       console.log("Failed to fetch all listings from relays: ", error);
+      reject(error);
+    }
+  });
+};
+
+export const fetchCart = async (
+  relays: string[],
+  editCartContext: (cartAddresses: string[][], isLoading: boolean) => void,
+  products: NostrEvent[],
+  passphrase?: string,
+  since?: number,
+  until?: number,
+): Promise<{
+  cartList: ProductData[];
+}> => {
+  return new Promise(async function (resolve, reject) {
+    try {
+      const { signInMethod, userPubkey } = getLocalStorageData();
+
+      const pool = new SimplePool();
+
+      if (!since) {
+        since = Math.trunc(DateTime.now().minus({ days: 14 }).toSeconds());
+      }
+      if (!until) {
+        until = Math.trunc(DateTime.now().toSeconds());
+      }
+
+      const filter: Filter = {
+        kinds: [10402],
+        authors: [userPubkey],
+        since,
+        until,
+      };
+
+      let cartArrayFromRelay: ProductData[] = [];
+      let cartAddressesArray: string[][] = [];
+
+      let h = pool.subscribeMany(relays, [filter], {
+        onevent: async (event) => {
+          if (signInMethod === "extension") {
+            let eventContent = await window.nostr.nip04.decrypt(
+              userPubkey,
+              event.content,
+            );
+            if (eventContent) {
+              let addressArray = JSON.parse(eventContent);
+              cartAddressesArray = addressArray;
+              for (const addressElement of addressArray) {
+                let address = addressElement[1];
+                const [kind, pubkey, dTag] = address;
+                if (kind === "30402") {
+                  const foundEvent = products.find((event) =>
+                    event.tags.some((tag) => tag[0] === "d" && tag[1] === dTag),
+                  );
+                  if (foundEvent) {
+                    cartArrayFromRelay.push(
+                      parseTags(foundEvent) as ProductData,
+                    );
+                  }
+                }
+              }
+            }
+          } else if (signInMethod === "nsec") {
+            if (!passphrase) throw new Error("Passphrase is required");
+            let senderPrivkey = getPrivKeyWithPassphrase(
+              passphrase,
+            ) as Uint8Array;
+            let eventContent = await nip04.decrypt(
+              senderPrivkey,
+              userPubkey,
+              event.content,
+            );
+            let addressArray = JSON.parse(eventContent);
+            cartAddressesArray = addressArray;
+            for (const addressElement of addressArray) {
+              let address = addressElement[1];
+              const [kind, pubkey, dTag] = address;
+              if (kind === "30402") {
+                const foundEvent = products.find((event) =>
+                  event.tags.some((tag) => tag[0] === "d" && tag[1] === dTag),
+                );
+                if (foundEvent) {
+                  cartArrayFromRelay.push(parseTags(foundEvent) as ProductData);
+                }
+              }
+            }
+          } else if (signInMethod === "amber") {
+            const amberSignerUrl = `nostrsigner:${event.content}?pubKey=${userPubkey}&compressionType=none&returnType=signature&type=nip04_decrypt`;
+
+            await navigator.clipboard.writeText("");
+
+            window.open(amberSignerUrl, "_blank");
+
+            const readClipboard = (): Promise<string[][]> => {
+              return new Promise((resolve, reject) => {
+                const checkClipboard = async () => {
+                  try {
+                    if (!document.hasFocus()) {
+                      console.log("Document not focused, waiting for focus...");
+                      return;
+                    }
+
+                    const clipboardContent =
+                      await navigator.clipboard.readText();
+
+                    if (clipboardContent && clipboardContent !== "") {
+                      clearInterval(intervalId);
+                      let eventContent = clipboardContent;
+
+                      let parsedContent = JSON.parse(eventContent);
+
+                      resolve(parsedContent);
+                    } else {
+                      console.log("Waiting for new clipboard content...");
+                    }
+                  } catch (error) {
+                    console.error("Error reading clipboard:", error);
+                    reject(error);
+                  }
+                };
+
+                checkClipboard();
+                const intervalId = setInterval(checkClipboard, 1000);
+
+                setTimeout(() => {
+                  clearInterval(intervalId);
+                  console.log("Amber decryption timeout");
+                  alert("Amber decryption timed out. Please try again.");
+                }, 60000);
+              });
+            };
+
+            try {
+              let addressArray = await readClipboard();
+              cartAddressesArray = addressArray;
+              for (const addressElement of addressArray) {
+                let address = addressElement[1];
+                const [kind, pubkey, dTag] = address;
+                if (kind === "30402") {
+                  const foundEvent = products.find((event) =>
+                    event.tags.some((tag) => tag[0] === "d" && tag[1] === dTag),
+                  );
+                  if (foundEvent) {
+                    cartArrayFromRelay.push(
+                      parseTags(foundEvent) as ProductData,
+                    );
+                  }
+                }
+              }
+            } catch (error) {
+              console.error("Error reading clipboard:", error);
+              alert("Amber decryption failed. Please try again.");
+            }
+          }
+        },
+        oneose() {
+          h.close();
+          const uniqueProducts = new Map<
+            string,
+            ProductData & { selectedQuantity: number }
+          >();
+
+          cartArrayFromRelay.forEach((product) => {
+            if (uniqueProducts.has(product.id)) {
+              // If product exists, increment quantity
+              const existing = uniqueProducts.get(product.id)!;
+              existing.selectedQuantity += 1;
+            } else {
+              // If new product, add it with quantity 1
+              uniqueProducts.set(product.id, {
+                ...product,
+                selectedQuantity: 1,
+              });
+            }
+          });
+
+          let updatedCartList = Array.from(uniqueProducts.values());
+
+          resolve({
+            cartList: updatedCartList,
+          });
+          editCartContext(cartAddressesArray, false);
+        },
+      });
+    } catch (error) {
+      console.log("Failed to fetch cart: ", error);
       reject(error);
     }
   });

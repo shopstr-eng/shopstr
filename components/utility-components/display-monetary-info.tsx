@@ -40,37 +40,70 @@ export default function CompactPriceDisplay({
 
 export function DisplayCostBreakdown({
   monetaryInfo,
+  subtotal,
+  shippingType,
+  shippingCost,
+  totalCost,
 }: {
-  monetaryInfo: ProductMonetaryInfo;
+  monetaryInfo?: ProductMonetaryInfo;
+  subtotal?: number;
+  shippingType?: string;
+  shippingCost?: number;
+  totalCost?: number;
 }) {
-  const { shippingType, shippingCost, price, currency } = monetaryInfo;
+  if (monetaryInfo) {
+    const { shippingType, shippingCost, price, currency } = monetaryInfo;
 
-  const formattedPrice = formatWithCommas(price, currency);
-  const formattedShippingCost = shippingCost
-    ? formatWithCommas(shippingCost, currency)
-    : `0 ${currency}`;
-  const totalCost = calculateTotalCost(monetaryInfo);
-  const formattedTotalCost = formatWithCommas(totalCost, currency);
+    const formattedPrice = formatWithCommas(price, currency);
+    const formattedShippingCost = shippingCost
+      ? formatWithCommas(shippingCost, currency)
+      : `0 ${currency}`;
+    const totalCost = calculateTotalCost(monetaryInfo);
+    const formattedTotalCost = formatWithCommas(totalCost, currency);
 
-  return (
-    <div>
-      <p>
-        <strong className="font-semibold">Subtotal:</strong> {formattedPrice}
-      </p>
-      {shippingType && (
+    return (
+      <div>
+        <p>
+          <strong className="font-semibold">Subtotal:</strong> {formattedPrice}
+        </p>
+        {shippingType && (
+          <p>
+            <strong className="font-semibold">Shipping:</strong>
+            {` ${shippingType} - ${formattedShippingCost}`}
+          </p>
+        )}
+
+        {totalCost !== undefined && (
+          <p>
+            <strong className="font-bold">Total:</strong> {formattedTotalCost}
+          </p>
+        )}
+      </div>
+    );
+  } else if (subtotal && totalCost) {
+    const formattedSubtotal = formatWithCommas(subtotal, "SATS");
+    const formattedShippingCost = shippingCost
+      ? formatWithCommas(shippingCost, "SATS")
+      : "0 SATS";
+    const formattedTotalCost = formatWithCommas(totalCost, "SATS");
+
+    return (
+      <div>
+        <p>
+          <strong className="font-semibold">Subtotal:</strong>{" "}
+          {formattedSubtotal}
+        </p>
         <p>
           <strong className="font-semibold">Shipping:</strong>
           {` ${shippingType} - ${formattedShippingCost}`}
         </p>
-      )}
 
-      {totalCost !== undefined && (
         <p>
           <strong className="font-bold">Total:</strong> {formattedTotalCost}
         </p>
-      )}
-    </div>
-  );
+      </div>
+    );
+  }
 }
 
 export function DisplayCheckoutCost({

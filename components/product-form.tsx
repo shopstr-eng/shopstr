@@ -81,6 +81,7 @@ export default function NewForm({
           "Shipping Option": oldValues.shippingType,
           "Shipping Cost": oldValues.shippingCost,
           Category: oldValues.categories ? oldValues.categories.join(",") : "",
+          Quantity: oldValues.quantity ? String(oldValues.quantity) : "",
           Sizes: oldValues.sizes ? oldValues.sizes.join(",") : "",
           "Size Quantities": oldValues.sizeQuantities
             ? oldValues.sizeQuantities
@@ -151,6 +152,10 @@ export default function NewForm({
     (data["Category"] as string).split(",").forEach((category) => {
       tags.push(["t", category]);
     });
+
+    if (data["Quantity"]) {
+      tags.push(["quantity", data["Quantity"].toString()]);
+    }
 
     if (data["Sizes"]) {
       (data["Sizes"] as string[]).forEach((size) => {
@@ -639,6 +644,41 @@ export default function NewForm({
 
             {showOptionalTags && (
               <>
+                <Controller
+                  name="Quantity"
+                  control={control}
+                  rules={{
+                    min: { value: 1, message: "Quantity must be at least 1" },
+                  }}
+                  render={({
+                    field: { onChange, value },
+                    fieldState: { error },
+                  }) => {
+                    let isErrored = error !== undefined;
+                    let errorMessage = error?.message || "";
+                    return (
+                      <div className="flex flex-col">
+                        <Input
+                          variant="flat"
+                          autoFocus
+                          type="number"
+                          min="1"
+                          aria-label="Quantity"
+                          label="Quantity"
+                          labelPlacement="inside"
+                          value={value}
+                          onChange={(e) =>
+                            onChange(parseInt(e.target.value) || 1)
+                          }
+                          className="w-20"
+                          isInvalid={isErrored}
+                          errorMessage={errorMessage}
+                        />
+                      </div>
+                    );
+                  }}
+                />
+
                 <Controller
                   name="Sizes"
                   control={control}

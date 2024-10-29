@@ -1,7 +1,7 @@
 {
   "name": "Shopstr",
   "short_name": "Shopstr",
-  "description": "Buy and sell anything, anywhere, anytime.",
+  "description": "Shop freely.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#E8E8E8",
