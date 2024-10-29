@@ -466,7 +466,7 @@ export default function Component() {
               {products.length > 0 && (
                 <>
                   {products.map((product) => (
-                    <div className="p-4 text-light-text dark:text-dark-text">
+                    <div key={product.id} className="p-4 text-light-text dark:text-dark-text">
                       <h2 className="mb-4 text-2xl font-bold">
                         {product.title}
                       </h2>
