@@ -222,12 +222,7 @@ export async function PostListing(
       kind: 31989,
       tags: [
         ["d", "30402"],
-        [
-          "a",
-          "31990:" + userPubkey + ":" + dValue,
-          "wss://relay.damus.io",
-          "web",
-        ],
+        ["a", "31990:" + userPubkey + ":" + dValue, relays[0], "web"],
       ],
       content: "",
       created_at: Math.floor(Date.now() / 1000),
@@ -331,16 +326,20 @@ export async function constructGiftWrappedMessageEvent(
   recipientPubkey: string,
   message: string,
   subject: string,
-  listingId?: string,
-  relayHint?: string,
+  productData?: ProductData,
 ): Promise<GiftWrappedMessageEvent> {
+  const { relays } = getLocalStorageData();
   let tags = [
-    ["p", recipientPubkey, "wss://nos.lol"],
+    ["p", recipientPubkey, relays[0]],
     ["subject", subject],
   ];
 
-  if (listingId && relayHint) {
-    tags.push(["e", listingId, relayHint]);
+  if (productData) {
+    tags.push([
+      "a",
+      "30402:" + productData.pubkey + ":" + productData.d,
+      relays[0],
+    ]);
   }
 
   let bareGiftWrappedMessageEvent = {
@@ -426,6 +425,7 @@ export async function constructMessageGiftWrap(
   randomPrivkey: Uint8Array,
   recipientPubkey: string,
 ): Promise<NostrEvent> {
+  const { relays } = getLocalStorageData();
   let stringifiedEvent = JSON.stringify(sealEvent);
   let conversationKey = nip44.getConversationKey(
     randomPrivkey,
@@ -437,7 +437,7 @@ export async function constructMessageGiftWrap(
     created_at: generateRandomTimestamp(),
     content: encryptedEvent,
     kind: 1059,
-    tags: [["p", recipientPubkey, "wss://nos.lol"]],
+    tags: [["p", recipientPubkey, relays[0]]],
   };
   let signedEvent = finalizeEvent(giftWrapEvent, randomPrivkey);
   return signedEvent;
@@ -454,6 +454,53 @@ export async function sendGiftWrappedMessageEvent(
     allWriteRelays.push(blastrRelay);
   }
   await Promise.any(pool.publish(allWriteRelays, giftWrappedMessageEvent));
+}
+
+export async function publishReviewEvent(
+  productAddress: string,
+  content: string,
+  thumbScore: number,
+  labelMap: Map<string, number>,
+  passphrase?: string,
+) {
+  try {
+    const { userPubkey, relays, writeRelays, signInMethod } =
+      getLocalStorageData();
+    const allWriteRelays = [...relays, ...writeRelays];
+    const blastrRelay = "wss://sendit.nosflare.com";
+    if (!containsRelay(allWriteRelays, blastrRelay)) {
+      allWriteRelays.push(blastrRelay);
+    }
+    const eventTags = [
+      ["d", `a:${productAddress}`],
+      ["rating", thumbScore.toString(), "thumb"],
+    ];
+    labelMap.forEach((value, key) => {
+      eventTags.push(["rating", value.toString(), key]);
+    });
+    let reviewEvent = {
+      pubkey: userPubkey,
+      created_at: Math.floor(Date.now() / 1000),
+      content: content,
+      kind: 31555,
+      tags: eventTags,
+    };
+    let signedEvent;
+    if (signInMethod === "extension") {
+      signedEvent = await window.nostr.signEvent(reviewEvent);
+    } else if (signInMethod === "amber") {
+      signedEvent = await amberSignEvent(reviewEvent);
+    } else if (signInMethod === "nsec") {
+      if (!passphrase) throw new Error("Passphrase is required");
+      let senderPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
+      signedEvent = finalizeEvent(reviewEvent, senderPrivkey);
+    }
+    const pool = new SimplePool();
+    await Promise.any(pool.publish(allWriteRelays, signedEvent));
+  } catch (e: any) {
+    alert("Failed to send event: " + e.message);
+    return { error: e };
+  }
 }
 
 export async function publishShoppingCartEvent(

@@ -334,7 +334,7 @@ function App({ Component, pageProps }: AppProps) {
           "wss://relay.damus.io",
           "wss://nos.lol",
           "wss://purplepag.es",
-          "wss://irish.nostr.cafe",
+          "wss://relay.primal.net",
         ];
         localStorage.setItem("relays", JSON.stringify(allRelays));
       }

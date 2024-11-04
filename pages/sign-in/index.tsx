@@ -75,7 +75,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
               "wss://relay.damus.io",
               "wss://nos.lol",
               "wss://purplepag.es",
-              "wss://irish.nostr.cafe",
+              "wss://relay.primal.net",
             ]),
           );
         }
@@ -150,7 +150,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
             "wss://relay.damus.io",
             "wss://nos.lol",
             "wss://purplepag.es",
-            "wss://irish.nostr.cafe",
+            "wss://relay.primal.net",
           ]),
         );
       }

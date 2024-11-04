@@ -424,140 +424,6 @@ export const fetchProfile = async (
   });
 };
 
-export const fetchChatsAndMessages = async (
-  relays: string[],
-  userPubkey: string,
-  editChatContext: (chatsMap: ChatsMap, isLoading: boolean) => void,
-  since?: number,
-): Promise<{
-  profileSetFromChats: Set<string>;
-}> => {
-  return new Promise(async function (resolve, reject) {
-    // if no userPubkey, user is not signed in
-    if (!userPubkey) {
-      editChatContext(new Map(), false);
-      resolve({ profileSetFromChats: new Set() });
-    }
-    let chatMessagesFromCache: Map<string, NostrMessageEvent> =
-      await fetchChatMessagesFromCache();
-    try {
-      let chatsMap = new Map();
-      let incomingChatsReachedEOSE = false;
-      let outgoingChatsReachedEOSE = false;
-
-      const addToChatsMap = (
-        pubkeyOfChat: string,
-        event: NostrMessageEvent,
-      ) => {
-        // pubkeyOfChat is the person you are chatting with if incoming, or the person you are sending to if outgoing
-        if (!chatsMap.has(pubkeyOfChat)) {
-          chatsMap.set(pubkeyOfChat, [event]);
-        } else {
-          chatsMap.get(pubkeyOfChat).push(event);
-        }
-      };
-
-      const onEOSE = () => {
-        if (incomingChatsReachedEOSE && outgoingChatsReachedEOSE) {
-          //sort chats by created_at
-          chatsMap.forEach((value) => {
-            value.sort(
-              (a: NostrMessageEvent, b: NostrMessageEvent) =>
-                a.created_at - b.created_at,
-            );
-          });
-          resolve({ profileSetFromChats: new Set(chatsMap.keys()) });
-          editChatContext(chatsMap, false);
-        }
-      };
-
-      if (!since) {
-        since = Math.trunc(DateTime.now().minus({ days: 14 }).toSeconds());
-      }
-
-      new SimplePool().subscribeMany(
-        relays,
-        [
-          {
-            kinds: [4],
-            authors: [userPubkey], // all chats where you are the author
-            since,
-          },
-        ],
-        {
-          onevent(event: NostrEvent) {
-            let tagsMap: Map<string, string> = new Map(
-              event.tags.map(([k, v]) => [k, v]),
-            );
-            let recipientPubkey = tagsMap.get("p") ? tagsMap.get("p") : null; // pubkey you sent the message to
-            if (typeof recipientPubkey !== "string") {
-              console.error(
-                `fetchAllOutgoingChats: Failed to get recipientPubkey from tagsMap",
-                    ${tagsMap},
-                    ${event}`,
-              );
-              alert(
-                `fetchAllOutgoingChats: Failed to get recipientPubkey from tagsMap`,
-              );
-              return;
-            }
-            let chatMessage = chatMessagesFromCache.get(event.id);
-            if (!chatMessage) {
-              chatMessage = { ...event, read: true }; // true because the user sent it himself
-              addChatMessageToCache(chatMessage);
-            }
-            addToChatsMap(recipientPubkey, chatMessage);
-            if (incomingChatsReachedEOSE && outgoingChatsReachedEOSE) {
-              editChatContext(chatsMap, false);
-            }
-          },
-          oneose() {
-            incomingChatsReachedEOSE = true;
-            onEOSE();
-          },
-          onclose(reasons) {
-            console.log(reasons);
-          },
-        },
-      );
-      new SimplePool().subscribeMany(
-        relays,
-        [
-          {
-            kinds: [4],
-            "#p": [userPubkey], // all chats where you are the recipient
-            since,
-          },
-        ],
-        {
-          async onevent(event) {
-            let senderPubkey = event.pubkey;
-            let chatMessage = chatMessagesFromCache.get(event.id);
-            if (!chatMessage) {
-              chatMessage = { ...event, read: false }; // false because the user received it and it wasn't in the cache
-              addChatMessageToCache(chatMessage);
-            }
-            addToChatsMap(senderPubkey, chatMessage);
-            if (incomingChatsReachedEOSE && outgoingChatsReachedEOSE) {
-              editChatContext(chatsMap, false);
-            }
-          },
-          async oneose() {
-            outgoingChatsReachedEOSE = true;
-            onEOSE();
-          },
-          onclose(reasons) {
-            console.log(reasons);
-          },
-        },
-      );
-    } catch (error) {
-      console.log("Failed to fetch chats and messages: ", error);
-      reject(error);
-    }
-  });
-};
-
 export const fetchGiftWrappedChatsAndMessages = async (
   relays: string[],
   userPubkey: string,
@@ -747,7 +613,8 @@ export const fetchGiftWrappedChatsAndMessages = async (
               subject !== "listing-inquiry" &&
               subject !== "order-payment" &&
               subject !== "order-info" &&
-              subject != "payment-change"
+              subject !== "payment-change" &&
+              subject !== "order-receipt"
             ) {
               return;
             }

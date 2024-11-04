@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from "react";
-import { Filter, nip04, nip19, nip44, SimplePool } from "nostr-tools";
+import { Filter, nip19, nip44, SimplePool } from "nostr-tools";
 import { useRouter } from "next/router";
 import {
   constructGiftWrappedMessageEvent,
@@ -173,76 +173,6 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
     }
   }, [arrowUpPressed, arrowDownPressed, escapePressed]);
 
-  const decryptEncryptedMessageContent = async (
-    messageEvent: NostrMessageEvent,
-    chatPubkey: string,
-  ) => {
-    try {
-      let plaintext = "";
-      if (signInMethod === "extension") {
-        plaintext = await window.nostr.nip04.decrypt(
-          chatPubkey,
-          messageEvent.content,
-        );
-      } else if (signInMethod === "amber") {
-        const amberSignerUrl = `nostrsigner:${messageEvent.content}?pubKey=${chatPubkey}&compressionType=none&returnType=signature&type=nip04_decrypt`;
-
-        await navigator.clipboard.writeText("");
-
-        window.open(amberSignerUrl, "_blank");
-
-        const readClipboard = (): Promise<string> => {
-          return new Promise((resolve, reject) => {
-            const checkClipboard = async () => {
-              try {
-                if (!document.hasFocus()) {
-                  console.log("Document not focused, waiting for focus...");
-                  return;
-                }
-
-                const clipboardContent = await navigator.clipboard.readText();
-
-                if (clipboardContent && clipboardContent !== "") {
-                  clearInterval(intervalId);
-                  resolve(clipboardContent);
-                } else {
-                  console.log("Waiting for new clipboard content...");
-                }
-              } catch (error) {
-                console.error("Error reading clipboard:", error);
-                reject(error);
-              }
-            };
-
-            checkClipboard();
-            const intervalId = setInterval(checkClipboard, 1000);
-
-            setTimeout(() => {
-              clearInterval(intervalId);
-              reject(
-                new Error("Amber decryption timed out. Please try again."),
-              );
-            }, 60000);
-          });
-        };
-
-        try {
-          plaintext = await readClipboard();
-        } catch (error) {
-          console.error("Error reading clipboard:", error);
-          setFailureText("Amber decryption failed. Please try again.");
-          setShowFailureModal(true);
-        }
-      } else {
-        let sk2 = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
-        plaintext = await nip04.decrypt(sk2, chatPubkey, messageEvent.content);
-      }
-      return plaintext;
-    } catch (e) {
-      console.error(e, "Error decrypting message.", messageEvent);
-    }
-  };
-
   const getDecryptedChatsFromContext: () => Promise<
     Map<string, ChatObject>
   > = async () => {
@@ -258,12 +188,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       for (let messageEvent of chat) {
         let plainText;
         let tagsMap: Map<string, string> = new Map();
-        if (messageEvent.kind === 4) {
-          plainText = await decryptEncryptedMessageContent(
-            messageEvent,
-            chatPubkey,
-          );
-        } else {
+        if (messageEvent.kind === 14) {
           plainText = messageEvent.content;
           tagsMap = new Map(
             messageEvent.tags
@@ -274,25 +199,17 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         let subject = tagsMap.get("subject") ? tagsMap.get("subject") : null;
         if (
           (isPayment &&
-            (plainText?.includes("cashuA") ||
-              plainText?.includes("To finalize the sale") ||
-              plainText?.includes("Please ship the product") ||
-              plainText?.includes("This purchase was for a size"))) ||
-          (!isPayment &&
-            !plainText?.includes("cashuA") &&
-            !plainText?.includes("To finalize the sale") &&
-            !plainText?.includes("Please ship the product") &&
-            !plainText?.includes("This purchase was for a size")) ||
-          (isPayment &&
             subject &&
             (subject === "order-payment" ||
               subject === "order-info" ||
-              subject === "payment-change")) ||
+              subject === "payment-change" ||
+              subject === "order-receipt")) ||
           (!isPayment &&
             !subject &&
             subject !== "order-payment" &&
             subject !== "order-info" &&
-            subject !== "payment-change")
+            subject !== "payment-change" &&
+            subject !== "order-receipt")
         ) {
           plainText &&
             decryptedChat.push({ ...messageEvent, content: plainText });

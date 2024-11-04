@@ -1,15 +1,34 @@
 // initialize new react funcitonal component
 import { Button, Input } from "@nextui-org/react";
 import React, { useEffect, useRef, useState } from "react";
+import { useForm, Controller } from "react-hook-form";
+import axios from "axios";
+import { nip19 } from "nostr-tools";
+import {
+  Modal,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalBody,
+} from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import {
   ArrowUturnLeftIcon,
   ArrowsUpDownIcon,
   ChatBubbleLeftIcon,
+  HandThumbDownIcon,
+  HandThumbUpIcon,
 } from "@heroicons/react/24/outline";
 import { ChatObject, NostrMessageEvent } from "../../utils/types/types";
 import { ChatMessage } from "./chat-message";
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
+import {
+  constructGiftWrappedMessageEvent,
+  constructMessageSeal,
+  constructMessageGiftWrap,
+  sendGiftWrappedMessageEvent,
+  publishReviewEvent,
+} from "../utility/nostr-helper-functions";
 
 export const ChatPanel = ({
   handleGoBack,
@@ -30,8 +49,64 @@ export const ChatPanel = ({
 }) => {
   const [messageInput, setMessageInput] = useState("");
   const [messages, setMessages] = useState<NostrMessageEvent[]>([]); // [chatPubkey, chat]
+  const [showShippingModal, setShowShippingModal] = useState(false);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+
+  const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
+  const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
+  const [randomNpubForReceiver, setRandomNpubForReceiver] =
+    useState<string>("");
+  const [randomNsecForReceiver, setRandomNsecForReceiver] =
+    useState<string>("");
+
+  const [buyerPubkey, setBuyerPubkey] = useState<string>("");
+
+  const [canReview, setCanReview] = useState(false);
+
+  const [selectedThumb, setSelectedThumb] = useState<"up" | "down" | null>(
+    null,
+  );
+  const [reviewOptions, setReviewOptions] = useState<Map<string, number>>(
+    new Map([
+      ["quality", 0],
+      ["delivery", 0],
+      ["communication", 0],
+    ]),
+  );
+  const [productAddress, setProductAddress] = useState<string>("");
+
+  const { handleSubmit: handleShippingSubmit, control: shippingControl } =
+    useForm();
+
+  const { handleSubmit: handleReviewSubmit, control: reviewControl } =
+    useForm();
 
   const bottomDivRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    axios({
+      method: "GET",
+      url: "/api/nostr/generate-keys",
+    })
+      .then((response) => {
+        setRandomNpubForSender(response.data.npub);
+        setRandomNsecForSender(response.data.nsec);
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+    axios({
+      method: "GET",
+      url: "/api/nostr/generate-keys",
+    })
+      .then((response) => {
+        setRandomNpubForReceiver(response.data.npub);
+        setRandomNsecForReceiver(response.data.nsec);
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+  }, []);
 
   useEffect(() => {
     setMessages(chatsMap.get(currentChatPubkey)?.decryptedChat || []);
@@ -41,13 +116,81 @@ export const ChatPanel = ({
     bottomDivRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isSendingDMLoading]);
 
+  const handleToggleShippingModal = () => {
+    setShowShippingModal(!showShippingModal);
+  };
+
+  const handleToggleReviewModal = () => {
+    setShowReviewModal(!showReviewModal);
+  };
+
+  const onShippingSubmit = async (data: { [x: string]: any }) => {
+    try {
+      let decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
+      let decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
+      let decodedRandomPubkeyForReceiver = nip19.decode(randomNpubForReceiver);
+      let decodedRandomPrivkeyForReceiver = nip19.decode(randomNsecForReceiver);
+
+      let deliveryTime = data["Delivery Time"];
+      let trackingUrl = data["Tracking Url"];
+      let productTitle = "";
+      setShowShippingModal(false);
+      let message =
+        "Your " +
+        productTitle +
+        " order is expected to arrive within " +
+        deliveryTime +
+        ". Check the following link to track it: " +
+        trackingUrl;
+      let giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
+        decodedRandomPubkeyForSender.data as string,
+        buyerPubkey,
+        message,
+        "shipping-info",
+      );
+      let sealedEvent = await constructMessageSeal(
+        giftWrappedMessageEvent,
+        decodedRandomPubkeyForSender.data as string,
+        buyerPubkey,
+        undefined,
+        decodedRandomPrivkeyForSender.data as Uint8Array,
+      );
+      let giftWrappedEvent = await constructMessageGiftWrap(
+        sealedEvent,
+        decodedRandomPubkeyForReceiver.data as string,
+        decodedRandomPrivkeyForReceiver.data as Uint8Array,
+        buyerPubkey,
+      );
+      await sendGiftWrappedMessageEvent(giftWrappedEvent);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const onReviewSubmit = async (data: { [x: string]: any }) => {
+    try {
+      await publishReviewEvent(
+        productAddress,
+        data.comment,
+        selectedThumb === "up" ? 0.5 : 0,
+        reviewOptions,
+        passphrase,
+      );
+      handleToggleReviewModal();
+      // Add success notification or handling here
+    } catch (error) {
+      console.error("Error submitting review:", error);
+      // Add error handling here
+    }
+  };
+
   if (!currentChatPubkey)
     return (
       <div className="absolute z-20 hidden h-[85vh] w-full flex-col overflow-clip px-2 dark:bg-dark-bg md:relative md:flex">
         <div className="flex h-full flex-col items-center justify-center">
           <ChatBubbleLeftIcon className="mb-5 mt-[-70px] h-20 w-20 text-light-text dark:text-dark-text" />
           <span className="text-5xl text-light-text dark:text-dark-text">
-            No Chat Selected
+            No chat selected . . .
           </span>
           <div className="flex items-center justify-center gap-3 pt-5 opacity-10">
             <span className="text-2xl text-light-text dark:text-dark-text">
@@ -87,12 +230,15 @@ export const ChatPanel = ({
               index={index}
               currentChatPubkey={currentChatPubkey}
               passphrase={passphrase}
+              setBuyerPubkey={setBuyerPubkey}
+              setCanReview={setCanReview}
+              setProductAddress={setProductAddress}
             />
           );
         })}
         <div ref={bottomDivRef} />
       </div>
-      {!isPayment && (
+      {!isPayment ? (
         <div className="space-x flex items-center p-2">
           <Input
             className="pr-3 text-light-text dark:text-dark-text"
@@ -121,6 +267,253 @@ export const ChatPanel = ({
             Send
           </Button>
         </div>
+      ) : !canReview ? (
+        <>
+          <div className="flex items-center justify-between border-t p-4">
+            <Button
+              className={SHOPSTRBUTTONCLASSNAMES}
+              onClick={handleToggleShippingModal}
+            >
+              Has this product been shipped?
+            </Button>
+          </div>
+          <Modal
+            backdrop="blur"
+            isOpen={showShippingModal}
+            onClose={handleToggleShippingModal}
+            classNames={{
+              body: "py-6",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
+            }}
+            scrollBehavior={"outside"}
+            size="2xl"
+          >
+            <ModalContent>
+              <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+                Enter Shipping Details
+              </ModalHeader>
+              <form onSubmit={handleShippingSubmit(onShippingSubmit)}>
+                <ModalBody>
+                  <Controller
+                    name="Delivery Time"
+                    control={shippingControl}
+                    rules={{
+                      required: "Expected delivery time is required.",
+                    }}
+                    render={({
+                      field: { onChange, onBlur, value },
+                      fieldState: { error },
+                    }) => {
+                      let isErrored = error !== undefined;
+                      let errorMessage: string = error?.message
+                        ? error.message
+                        : "";
+                      return (
+                        <Input
+                          autoFocus
+                          label="Expected Delivery Time"
+                          placeholder="e.g. 3-5 business days"
+                          variant="bordered"
+                          isInvalid={isErrored}
+                          errorMessage={errorMessage}
+                          className="text-light-text dark:text-dark-text"
+                          onChange={onChange}
+                          onBlur={onBlur}
+                          value={value}
+                        />
+                      );
+                    }}
+                  />
+                  <Controller
+                    name="Tracking Url"
+                    control={shippingControl}
+                    rules={{
+                      required: "Tracking URL is required.",
+                      pattern: {
+                        value: /^https?:\/\/.+/i,
+                        message:
+                          "Please enter a valid URL starting with http:// or https://",
+                      },
+                    }}
+                    render={({
+                      field: { onChange, onBlur, value },
+                      fieldState: { error },
+                    }) => {
+                      let isErrored = error !== undefined;
+                      let errorMessage: string = error?.message
+                        ? error.message
+                        : "";
+                      return (
+                        <Input
+                          label="Tracking URL"
+                          placeholder="https://..."
+                          variant="bordered"
+                          isInvalid={isErrored}
+                          errorMessage={errorMessage}
+                          className="text-light-text dark:text-dark-text"
+                          onChange={onChange}
+                          onBlur={onBlur}
+                          value={value}
+                        />
+                      );
+                    }}
+                  />
+                </ModalBody>
+                <ModalFooter>
+                  <Button
+                    color="danger"
+                    variant="light"
+                    onClick={handleToggleShippingModal}
+                  >
+                    Cancel
+                  </Button>
+                  <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                    Confirm Shipping
+                  </Button>
+                </ModalFooter>
+              </form>
+            </ModalContent>
+          </Modal>
+        </>
+      ) : (
+        <>
+          <div className="flex items-center justify-between border-t p-4">
+            <Button
+              className={SHOPSTRBUTTONCLASSNAMES}
+              onClick={handleToggleShippingModal}
+            >
+              Leave a Review
+            </Button>
+          </div>
+          <Modal
+            backdrop="blur"
+            isOpen={showReviewModal}
+            onClose={handleToggleReviewModal}
+            classNames={{
+              body: "py-6",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
+            }}
+            scrollBehavior={"outside"}
+            size="2xl"
+          >
+            <ModalContent>
+              <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+                Leave a Review
+              </ModalHeader>
+              <form onSubmit={handleReviewSubmit(onReviewSubmit)}>
+                <ModalBody>
+                  <div className="mb-4 flex justify-center gap-8">
+                    <HandThumbUpIcon
+                      className={`h-12 w-12 cursor-pointer transition-colors ${
+                        selectedThumb === "up"
+                          ? "text-green-500"
+                          : "text-light-text hover:text-green-500 dark:text-dark-text"
+                      }`}
+                      onClick={() => setSelectedThumb("up")}
+                    />
+                    <HandThumbDownIcon
+                      className={`h-12 w-12 cursor-pointer transition-colors ${
+                        selectedThumb === "down"
+                          ? "text-red-500"
+                          : "text-light-text hover:text-red-500 dark:text-dark-text"
+                      }`}
+                      onClick={() => setSelectedThumb("down")}
+                    />
+                  </div>
+
+                  <div className="mb-4 flex flex-col gap-3">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={reviewOptions.get("quality") === 0.33}
+                        onChange={(e) =>
+                          setReviewOptions((prev) => {
+                            const newMap = new Map(prev);
+                            newMap.set("quality", e.target.checked ? 0.33 : 0);
+                            return newMap;
+                          })
+                        }
+                      />
+                      <span className="text-light-text dark:text-dark-text">
+                        Good Quality
+                      </span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={reviewOptions.get("delivery") === 0.33}
+                        onChange={(e) =>
+                          setReviewOptions((prev) => {
+                            const newMap = new Map(prev);
+                            newMap.set("delivery", e.target.checked ? 0.33 : 0);
+                            return newMap;
+                          })
+                        }
+                      />
+                      <span className="text-light-text dark:text-dark-text">
+                        Quick Delivery
+                      </span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={reviewOptions.get("communication") === 0.33}
+                        onChange={(e) =>
+                          setReviewOptions((prev) => {
+                            const newMap = new Map(prev);
+                            newMap.set(
+                              "communication",
+                              e.target.checked ? 0.33 : 0,
+                            );
+                            return newMap;
+                          })
+                        }
+                      />
+                      <span className="text-light-text dark:text-dark-text">
+                        Good Communication
+                      </span>
+                    </label>
+                  </div>
+
+                  <Controller
+                    name="comment"
+                    control={reviewControl}
+                    render={({ field }) => (
+                      <textarea
+                        {...field}
+                        className="w-full rounded-md border-2 border-light-fg bg-light-bg p-2 text-light-text dark:border-dark-fg dark:bg-dark-bg dark:text-dark-text"
+                        rows={4}
+                        placeholder="Write your review comment here..."
+                      />
+                    )}
+                  />
+                </ModalBody>
+                <ModalFooter>
+                  <Button
+                    color="danger"
+                    variant="light"
+                    onClick={handleToggleReviewModal}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    className={SHOPSTRBUTTONCLASSNAMES}
+                    type="submit"
+                    isDisabled={!selectedThumb}
+                  >
+                    Leave Review
+                  </Button>
+                </ModalFooter>
+              </form>
+            </ModalContent>
+          </Modal>
+        </>
       )}
     </div>
   );

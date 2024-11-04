@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { nip19 } from "nostr-tools";
 import { CheckIcon, ClipboardIcon } from "@heroicons/react/24/outline";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import ClaimButton from "../utility-components/claim-button";
@@ -19,17 +20,49 @@ export const ChatMessage = ({
   index = 0,
   currentChatPubkey,
   passphrase,
+  setBuyerPubkey,
+  setCanReview,
+  setProductAddress,
 }: {
   messageEvent?: NostrMessageEvent;
   index: number;
   currentChatPubkey?: string;
   passphrase?: string;
+  setBuyerPubkey?: (pubkey: string) => void;
+  setCanReview?: (canReview: boolean) => void;
+  setProductAddress?: (productAddress: string) => void;
 }) => {
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
 
   if (!messageEvent || !currentChatPubkey) {
     return null;
   }
+
+  useEffect(() => {
+    if (messageEvent?.content && messageEvent.content.includes("npub")) {
+      // Find word containing npub using regex
+      const npubMatch = messageEvent.content.match(/\S*npub\S*/);
+      if (npubMatch && setBuyerPubkey) {
+        let { data: buyerPubkey } = nip19.decode(npubMatch[0]);
+        setBuyerPubkey(buyerPubkey as string);
+      }
+    }
+  }, [messageEvent?.content, setBuyerPubkey]);
+
+  useEffect(() => {
+    let tagsMap = new Map(
+      messageEvent.tags
+        .filter((tag): tag is [string, string] => tag.length === 2)
+        .map(([k, v]) => [k, v]),
+    );
+    let subject = tagsMap.get("subject") ? tagsMap.get("subject") : null;
+    let productAddress = tagsMap.get("a") ? tagsMap.get("a") : null;
+    setCanReview?.(subject === "order-receipt" || subject === "shipping-info");
+    if (productAddress) {
+      setProductAddress?.(productAddress);
+    }
+  }, [messageEvent]);
+
   const tokenAfterCashuA = messageEvent.content.includes("cashuA")
     ? messageEvent.content.split("cashuA")[1]
     : null;
