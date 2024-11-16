@@ -32,7 +32,6 @@ import { ThemeProvider as NextThemesProvider } from "next-themes";
 import {
   fetchAllPosts,
   // fetchCart,
-  fetchChatsAndMessages,
   fetchShopSettings,
   fetchProfile,
   fetchAllFollows,
@@ -357,9 +356,6 @@ function App({ Component, pageProps }: AppProps) {
         );
         pubkeysToFetchProfilesFor = [...profileSetFromProducts];
         let profileSetFromChats = new Set<string>();
-        let { profileSetFromChats: initialProfileSet } =
-          await fetchChatsAndMessages(allRelays, userPubkey, editChatContext);
-        profileSetFromChats = new Set(initialProfileSet);
         if (
           (getLocalStorageData().signInMethod === "nsec" && passphrase) ||
           getLocalStorageData().signInMethod === "extension" ||

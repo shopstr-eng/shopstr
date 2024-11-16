@@ -614,7 +614,8 @@ export const fetchGiftWrappedChatsAndMessages = async (
               subject !== "order-payment" &&
               subject !== "order-info" &&
               subject !== "payment-change" &&
-              subject !== "order-receipt"
+              subject !== "order-receipt" &&
+              subject !== "shipping-info"
             ) {
               return;
             }

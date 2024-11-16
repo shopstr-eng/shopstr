@@ -251,12 +251,12 @@ const SendButton = ({ passphrase }: { passphrase?: string }) => {
                         </p>
                         <ClipboardIcon
                           onClick={handleCopyTokenString}
-                          className={`ml-2 h-6 w-6 cursor-pointer ${
+                          className={`ml-2 h-6 w-6 cursor-pointer text-light-text dark:text-dark-text ${
                             copiedToClipboard ? "hidden" : ""
                           }`}
                         />
                         <CheckIcon
-                          className={`ml-2 h-6 w-6 cursor-pointer ${
+                          className={`ml-2 h-6 w-6 cursor-pointer text-light-text dark:text-dark-text ${
                             copiedToClipboard ? "" : "hidden"
                           }`}
                         />

@@ -383,7 +383,7 @@ export const ChatPanel = ({
           <div className="flex items-center justify-between border-t p-4">
             <Button
               className={SHOPSTRBUTTONCLASSNAMES}
-              onClick={handleToggleShippingModal}
+              onClick={handleToggleReviewModal}
             >
               Leave a Review
             </Button>
@@ -408,23 +408,33 @@ export const ChatPanel = ({
               </ModalHeader>
               <form onSubmit={handleReviewSubmit(onReviewSubmit)}>
                 <ModalBody>
-                  <div className="mb-4 flex justify-center gap-8">
-                    <HandThumbUpIcon
-                      className={`h-12 w-12 cursor-pointer transition-colors ${
-                        selectedThumb === "up"
-                          ? "text-green-500"
-                          : "text-light-text hover:text-green-500 dark:text-dark-text"
-                      }`}
-                      onClick={() => setSelectedThumb("up")}
-                    />
-                    <HandThumbDownIcon
-                      className={`h-12 w-12 cursor-pointer transition-colors ${
-                        selectedThumb === "down"
-                          ? "text-red-500"
-                          : "text-light-text hover:text-red-500 dark:text-dark-text"
-                      }`}
-                      onClick={() => setSelectedThumb("down")}
-                    />
+                  <div className="mb-4 flex items-center justify-center gap-16">
+                    <div className="flex items-center gap-3">
+                      <span className="text-light-text dark:text-dark-text">
+                        Good
+                      </span>
+                      <HandThumbUpIcon
+                        className={`h-12 w-12 cursor-pointer rounded-lg border-2 p-2 transition-colors ${
+                          selectedThumb === "up"
+                            ? "border-green-500 text-green-500"
+                            : "border-light-text text-light-text hover:border-green-500 hover:text-green-500 dark:border-dark-text dark:text-dark-text"
+                        }`}
+                        onClick={() => setSelectedThumb("up")}
+                      />
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <HandThumbDownIcon
+                        className={`h-12 w-12 cursor-pointer rounded-lg border-2 p-2 transition-colors ${
+                          selectedThumb === "down"
+                            ? "border-red-500 text-red-500"
+                            : "border-light-text text-light-text hover:border-red-500 hover:text-red-500 dark:border-dark-text dark:text-dark-text"
+                        }`}
+                        onClick={() => setSelectedThumb("down")}
+                      />
+                      <span className="text-light-text dark:text-dark-text">
+                        Bad
+                      </span>
+                    </div>
                   </div>
 
                   <div className="mb-4 flex flex-col gap-3">

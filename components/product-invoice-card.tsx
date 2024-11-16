@@ -80,7 +80,7 @@ export default function ProductInvoiceCard({
   const router = useRouter();
   const { id, pubkey, currency, totalCost, shippingType } = productData;
   const pubkeyOfProductBeingSold = pubkey;
-  const { userNPub, signInMethod, mints, tokens, history } =
+  const { userNPub, userPubkey, signInMethod, mints, tokens, history } =
     getLocalStorageData();
 
   const [enterPassphrase, setEnterPassphrase] = useState(false);
@@ -167,7 +167,7 @@ export default function ProductInvoiceCard({
   }, [walletContext]);
 
   const sendPaymentAndContactMessage = async (
-    pubkeyOfProduct: string,
+    pubkeyToReceiveMessage: string,
     message: string,
     isPayment?: boolean,
     isReceipt?: boolean,
@@ -180,7 +180,7 @@ export default function ProductInvoiceCard({
     if (isReceipt) {
       let giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
         decodedRandomPubkeyForSender.data as string,
-        pubkey,
+        userPubkey,
         message,
         "order-receipt",
         productData,
@@ -188,7 +188,7 @@ export default function ProductInvoiceCard({
       let sealedEvent = await constructMessageSeal(
         giftWrappedMessageEvent,
         decodedRandomPubkeyForSender.data as string,
-        pubkey,
+        userPubkey,
         undefined,
         decodedRandomPrivkeyForSender.data as Uint8Array,
       );
@@ -196,7 +196,7 @@ export default function ProductInvoiceCard({
         sealedEvent,
         decodedRandomPubkeyForReceiver.data as string,
         decodedRandomPrivkeyForReceiver.data as Uint8Array,
-        pubkey,
+        userPubkey,
       );
       await sendGiftWrappedMessageEvent(giftWrappedEvent);
     } else {
@@ -204,7 +204,7 @@ export default function ProductInvoiceCard({
       if (isPayment) {
         giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
           decodedRandomPubkeyForSender.data as string,
-          pubkeyOfProduct,
+          pubkeyToReceiveMessage,
           message,
           "order-payment",
           productData,
@@ -212,7 +212,7 @@ export default function ProductInvoiceCard({
       } else {
         giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
           decodedRandomPubkeyForSender.data as string,
-          pubkeyOfProduct,
+          pubkeyToReceiveMessage,
           message,
           "order-info",
           productData,
@@ -221,7 +221,7 @@ export default function ProductInvoiceCard({
       let sealedEvent = await constructMessageSeal(
         giftWrappedMessageEvent,
         decodedRandomPubkeyForSender.data as string,
-        pubkeyOfProduct,
+        pubkeyToReceiveMessage,
         undefined,
         decodedRandomPrivkeyForSender.data as Uint8Array,
       );
@@ -229,7 +229,7 @@ export default function ProductInvoiceCard({
         sealedEvent,
         decodedRandomPubkeyForReceiver.data as string,
         decodedRandomPrivkeyForReceiver.data as Uint8Array,
-        pubkeyOfProduct,
+        pubkeyToReceiveMessage,
       );
       await sendGiftWrappedMessageEvent(giftWrappedEvent);
     }
@@ -631,7 +631,12 @@ export default function ProductInvoiceCard({
           contactMessage,
           false,
         );
-        await sendPaymentAndContactMessage(pubkey, receiptMessage, false, true);
+        await sendPaymentAndContactMessage(
+          userPubkey,
+          receiptMessage,
+          false,
+          true,
+        );
       } else if (contact && contactType && contactInstructions) {
         let contactMessage;
         let receiptMessage =
@@ -668,7 +673,12 @@ export default function ProductInvoiceCard({
           contactMessage,
           false,
         );
-        await sendPaymentAndContactMessage(pubkey, receiptMessage, false, true);
+        await sendPaymentAndContactMessage(
+          userPubkey,
+          receiptMessage,
+          false,
+          true,
+        );
       }
     } else if (selectedSize) {
       let contactMessage = "This purchase was for a size " + selectedSize + ".";
@@ -908,12 +918,12 @@ export default function ProductInvoiceCard({
                       </p>
                       <ClipboardIcon
                         onClick={handleCopyInvoice}
-                        className={`ml-2 h-4 w-4 cursor-pointer ${
+                        className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
                           copiedToClipboard ? "hidden" : ""
                         }`}
                       />
                       <CheckIcon
-                        className={`ml-2 h-4 w-4 cursor-pointer ${
+                        className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
                           copiedToClipboard ? "" : "hidden"
                         }`}
                       />

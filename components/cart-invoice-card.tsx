@@ -976,12 +976,12 @@ export default function CartInvoiceCard({
                       </p>
                       <ClipboardIcon
                         onClick={handleCopyInvoice}
-                        className={`ml-2 h-4 w-4 cursor-pointer ${
+                        className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
                           copiedToClipboard ? "hidden" : ""
                         }`}
                       />
                       <CheckIcon
-                        className={`ml-2 h-4 w-4 cursor-pointer ${
+                        className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
                           copiedToClipboard ? "" : "hidden"
                         }`}
                       />

@@ -203,13 +203,15 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
             (subject === "order-payment" ||
               subject === "order-info" ||
               subject === "payment-change" ||
-              subject === "order-receipt")) ||
+              subject === "order-receipt" ||
+              subject === "shipping-info")) ||
           (!isPayment &&
             !subject &&
             subject !== "order-payment" &&
             subject !== "order-info" &&
             subject !== "payment-change" &&
-            subject !== "order-receipt")
+            subject !== "order-receipt" &&
+            subject !== "shipping-info")
         ) {
           plainText &&
             decryptedChat.push({ ...messageEvent, content: plainText });
