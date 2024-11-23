@@ -14,6 +14,8 @@ import {
   ChatsContextInterface,
   ChatsContext,
   ChatsMap,
+  ReviewsContextInterface,
+  ReviewsContext,
   FollowsContextInterface,
   FollowsContext,
   RelaysContextInterface,
@@ -32,6 +34,7 @@ import { ThemeProvider as NextThemesProvider } from "next-themes";
 import {
   fetchAllPosts,
   // fetchCart,
+  fetchReviews,
   fetchShopSettings,
   fetchProfile,
   fetchAllFollows,
@@ -82,6 +85,23 @@ function App({ Component, pageProps }: AppProps) {
             addNewlyCreatedProductEvent:
               productContext.addNewlyCreatedProductEvent,
             removeDeletedProductEvent: productContext.removeDeletedProductEvent,
+          };
+        });
+      },
+    },
+  );
+  const [reviewsContext, setReviewsContext] = useState<ReviewsContextInterface>(
+    {
+      reviewsData: new Map(),
+      isLoading: true,
+      updateReviewsData: (reviewsData: number) => {
+        setReviewsContext((reviewsContext) => {
+          let reviewsDataMap = new Map(reviewsContext.reviewsData);
+          reviewsDataMap.set(getLocalStorageData().userPubkey, reviewsData);
+          return {
+            reviewsData: reviewsDataMap,
+            isLoading: false,
+            updateReviewsData: reviewsContext.updateReviewsData,
           };
         });
       },
@@ -223,6 +243,19 @@ function App({ Component, pageProps }: AppProps) {
         isLoading: isLoading,
         addNewlyCreatedProductEvent: productContext.addNewlyCreatedProductEvent,
         removeDeletedProductEvent: productContext.removeDeletedProductEvent,
+      };
+    });
+  };
+
+  const editReviewsContext = (
+    reviewsData: Map<string, number>,
+    isLoading: boolean,
+  ) => {
+    setReviewsContext((reviewsContext) => {
+      return {
+        reviewsData,
+        isLoading,
+        updateReviewsData: reviewsContext.updateReviewsData,
       };
     });
   };
@@ -394,6 +427,11 @@ function App({ Component, pageProps }: AppProps) {
           pubkeysToFetchProfilesFor,
           editProfileContext,
         );
+        let { merchantReviewsMap, productReviewsMap } = await fetchReviews(
+          allRelays,
+          productEvents,
+          editReviewsContext,
+        );
         // let { cartList } = await fetchCart(
         //   allRelays,
         //   editCartContext,
@@ -476,28 +514,30 @@ function App({ Component, pageProps }: AppProps) {
         <CashuWalletContext.Provider value={cashuWalletContext}>
           <FollowsContext.Provider value={followsContext}>
             <ProductContext.Provider value={productContext}>
-              {/* <CartContext.Provider value={cartContext}> */}
-              <ProfileMapContext.Provider value={profileContext}>
-                <ShopMapContext.Provider value={shopContext}>
-                  <ChatsContext.Provider value={chatsContext}>
-                    <NextUIProvider>
-                      <NextThemesProvider attribute="class">
-                        <TopNav setFocusedPubkey={setFocusedPubkey} />
-                        <div className="flex">
-                          <main className="flex-1">
-                            <Component
-                              {...pageProps}
-                              focusedPubkey={focusedPubkey}
-                              setFocusedPubkey={setFocusedPubkey}
-                            />
-                          </main>
-                        </div>
-                      </NextThemesProvider>
-                    </NextUIProvider>
-                  </ChatsContext.Provider>
-                </ShopMapContext.Provider>
-              </ProfileMapContext.Provider>
-              {/* </CartContext.Provider> */}
+              <ReviewsContext.Provider value={reviewsContext}>
+                {/* <CartContext.Provider value={cartContext}> */}
+                <ProfileMapContext.Provider value={profileContext}>
+                  <ShopMapContext.Provider value={shopContext}>
+                    <ChatsContext.Provider value={chatsContext}>
+                      <NextUIProvider>
+                        <NextThemesProvider attribute="class">
+                          <TopNav setFocusedPubkey={setFocusedPubkey} />
+                          <div className="flex">
+                            <main className="flex-1">
+                              <Component
+                                {...pageProps}
+                                focusedPubkey={focusedPubkey}
+                                setFocusedPubkey={setFocusedPubkey}
+                              />
+                            </main>
+                          </div>
+                        </NextThemesProvider>
+                      </NextUIProvider>
+                    </ChatsContext.Provider>
+                  </ShopMapContext.Provider>
+                </ProfileMapContext.Provider>
+                {/* </CartContext.Provider> */}
+              </ReviewsContext.Provider>
             </ProductContext.Provider>
           </FollowsContext.Provider>
         </CashuWalletContext.Provider>

@@ -663,6 +663,108 @@ export const fetchGiftWrappedChatsAndMessages = async (
   });
 };
 
+export const fetchReviews = async (
+  relays: string[],
+  products: NostrEvent[],
+  editReviewsContext: (
+    reviewsMap: Map<string, number>,
+    isLoading: boolean,
+  ) => void,
+): Promise<{
+  merchantReviewsMap: Map<string, number>;
+  productReviewsMap: Map<string, number>;
+}> => {
+  return new Promise(async function (resolve, reject) {
+    try {
+      const pool = new SimplePool();
+
+      const addresses = products
+        .map((product) => {
+          const dTag = product.tags.find(
+            (tag: string[]) => tag[0] === "d",
+          )?.[1];
+          if (!dTag) return null;
+          return `a:${product.kind}:${product.pubkey}:${dTag}`;
+        })
+        .filter((address): address is string => address !== null);
+
+      const reviewsFilter: Filter = {
+        kinds: [31555],
+        "#d": addresses,
+      };
+
+      // Maps to store scores
+      const merchantScores = new Map<string, number[]>(); // Map<merchantPubkey, scores[]>
+      const productScores = new Map<string, number[]>(); // Map<productDTag, scores[]>
+      const merchantReviewsMap = new Map<string, number>();
+      const productReviewsMap = new Map<string, number>();
+
+      const getRatingValue = (tags: string[][], type: string): number => {
+        const ratingTag = tags.find(
+          (tag) => tag[0] === "rating" && tag[2] === type,
+        );
+        return ratingTag ? parseFloat(ratingTag[1]) : 0;
+      };
+
+      let h = pool.subscribeMany(relays, [reviewsFilter], {
+        onevent(event) {
+          // Extract address components from the event
+          const addressTag = event.tags.find((tag) => tag[0] === "d")?.[1];
+          if (!addressTag) return;
+
+          const [_, kind, merchantPubkey, productDTag] = addressTag.split(":");
+          if (!merchantPubkey || !productDTag) return;
+
+          // Calculate weighted score for the review
+          const thumbScore = getRatingValue(event.tags, "thumb") * 0.5;
+          const qualityScore = getRatingValue(event.tags, "quality") * (1 / 6);
+          const communicationScore =
+            getRatingValue(event.tags, "communication") * (1 / 6);
+          const deliveryScore =
+            getRatingValue(event.tags, "delivery") * (1 / 6);
+
+          const totalScore =
+            thumbScore + qualityScore + communicationScore + deliveryScore;
+
+          // Add score to merchant's scores (all reviews)
+          if (!merchantScores.has(merchantPubkey)) {
+            merchantScores.set(merchantPubkey, []);
+          }
+          merchantScores.get(merchantPubkey)!.push(totalScore);
+
+          // Add score to product's scores (only reviews for this specific product)
+          if (!productScores.has(productDTag)) {
+            productScores.set(productDTag, []);
+          }
+          productScores.get(productDTag)!.push(totalScore);
+        },
+        oneose() {
+          // Calculate merchant averages (across all their products)
+          for (const [pubkey, scores] of merchantScores.entries()) {
+            const averageScore =
+              scores.reduce((a, b) => a + b, 0) / scores.length;
+            merchantReviewsMap.set(pubkey, averageScore);
+          }
+
+          // Calculate product averages (specific to each product)
+          for (const [dTag, scores] of productScores.entries()) {
+            const averageScore =
+              scores.reduce((a, b) => a + b, 0) / scores.length;
+            productReviewsMap.set(dTag, averageScore);
+          }
+
+          editReviewsContext(merchantReviewsMap, false);
+          h.close();
+          resolve({ merchantReviewsMap, productReviewsMap });
+        },
+      });
+    } catch (error) {
+      console.log("failed to fetch reviews: ", error);
+      reject(error);
+    }
+  });
+};
+
 export const fetchAllFollows = async (
   relays: string[],
   editFollowsContext: (
