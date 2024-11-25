@@ -667,7 +667,8 @@ export const fetchReviews = async (
   relays: string[],
   products: NostrEvent[],
   editReviewsContext: (
-    reviewsMap: Map<string, number>,
+    merchantReviewsMap: Map<string, number>,
+    productReviewsMap: Map<string, number>,
     isLoading: boolean,
   ) => void,
 ): Promise<{
@@ -693,9 +694,8 @@ export const fetchReviews = async (
         "#d": addresses,
       };
 
-      // Maps to store scores
-      const merchantScores = new Map<string, number[]>(); // Map<merchantPubkey, scores[]>
-      const productScores = new Map<string, number[]>(); // Map<productDTag, scores[]>
+      const merchantScores = new Map<string, number[]>();
+      const productScores = new Map<string, number[]>();
       const merchantReviewsMap = new Map<string, number>();
       const productReviewsMap = new Map<string, number>();
 
@@ -706,25 +706,38 @@ export const fetchReviews = async (
         return ratingTag ? parseFloat(ratingTag[1]) : 0;
       };
 
+      const calculateWeightedScore = (tags: string[][]): number => {
+        // Thumb score is always 50% of total
+        const thumbScore = getRatingValue(tags, "thumb") * 0.5;
+
+        // Get all rating tags except thumb
+        const ratingTags = tags
+          .filter((tag) => tag[0] === "rating" && tag[2] !== "thumb")
+          .map((tag) => tag[2]);
+
+        // If no additional ratings, return just thumb score
+        if (ratingTags.length === 0) return thumbScore;
+
+        // Calculate weight for each remaining rating (dividing remaining 50% equally)
+        const individualWeight = 0.5 / ratingTags.length;
+
+        // Calculate score for remaining ratings
+        const remainingScore = ratingTags.reduce((total, ratingType) => {
+          return total + getRatingValue(tags, ratingType) * individualWeight;
+        }, 0);
+
+        return thumbScore + remainingScore;
+      };
+
       let h = pool.subscribeMany(relays, [reviewsFilter], {
         onevent(event) {
-          // Extract address components from the event
           const addressTag = event.tags.find((tag) => tag[0] === "d")?.[1];
           if (!addressTag) return;
 
           const [_, kind, merchantPubkey, productDTag] = addressTag.split(":");
           if (!merchantPubkey || !productDTag) return;
 
-          // Calculate weighted score for the review
-          const thumbScore = getRatingValue(event.tags, "thumb") * 0.5;
-          const qualityScore = getRatingValue(event.tags, "quality") * (1 / 6);
-          const communicationScore =
-            getRatingValue(event.tags, "communication") * (1 / 6);
-          const deliveryScore =
-            getRatingValue(event.tags, "delivery") * (1 / 6);
-
-          const totalScore =
-            thumbScore + qualityScore + communicationScore + deliveryScore;
+          const totalScore = calculateWeightedScore(event.tags);
 
           // Add score to merchant's scores (all reviews)
           if (!merchantScores.has(merchantPubkey)) {
@@ -753,7 +766,7 @@ export const fetchReviews = async (
             productReviewsMap.set(dTag, averageScore);
           }
 
-          editReviewsContext(merchantReviewsMap, false);
+          editReviewsContext(merchantReviewsMap, productReviewsMap, false);
           h.close();
           resolve({ merchantReviewsMap, productReviewsMap });
         },

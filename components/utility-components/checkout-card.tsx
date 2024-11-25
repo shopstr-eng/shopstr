@@ -14,7 +14,7 @@ import { Button, Chip } from "@nextui-org/react";
 import { locationAvatar } from "./dropdowns/location-dropdown";
 import { InformationCircleIcon } from "@heroicons/react/24/outline";
 import Link from "next/link";
-import { ShopMapContext } from "@/utils/context/context";
+import { ShopMapContext, ReviewsContext } from "@/utils/context/context";
 import { ShopSettings } from "../../utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import FailureModal from "../utility-components/failure-modal";
@@ -68,12 +68,17 @@ export default function CheckoutCard({
   const [shopBannerURL, setShopBannerURL] = useState("");
   const [isFetchingShop, setIsFetchingShop] = useState(false);
 
+  const [merchantReview, setMerchantReview] = useState(0);
+  const [productReview, setProductReview] = useState(0);
+  const [isFetchingReviews, setIsFetchingReviews] = useState(false);
+
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const [cart, setCart] = useState<ProductData[]>([]);
 
+  const reviewsContext = useContext(ReviewsContext);
   const shopMapContext = useContext(ShopMapContext);
 
   const toggleExpand = () => {
@@ -130,6 +135,23 @@ export default function CheckoutCard({
     }
     setIsFetchingShop(false);
   }, [pubkey, shopMapContext, shopBannerURL]);
+
+  useEffect(() => {
+    setIsFetchingReviews(true);
+    if (
+      pubkey &&
+      reviewsContext.merchantReviewsData.has(pubkey) &&
+      typeof reviewsContext.merchantReviewsData.get(pubkey) != "undefined" && reviewsContext.productReviewsData.has(pubkey) && typeof reviewsContext.productReviewsData.get(pubkey) != "undefined"
+    ) {
+      const merchantReviewScore = reviewsContext.merchantReviewsData.get(pubkey);
+      const productReviewScore = reviewsContext.productReviewsData.get(pubkey);
+      if (merchantReviewScore && productReviewScore) {
+        setMerchantReview(merchantReviewScore);
+        setProductReview(productReviewScore);
+      }
+    }
+    setIsFetchingReviews(false);
+  }, [pubkey, reviewsContext]);
 
   useEffect(() => {
     if (containerRef.current) {

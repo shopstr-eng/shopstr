@@ -68,6 +68,7 @@ export const ChatPanel = ({
   );
   const [reviewOptions, setReviewOptions] = useState<Map<string, number>>(
     new Map([
+      ["value", 0],
       ["quality", 0],
       ["delivery", 0],
       ["communication", 0],
@@ -274,7 +275,7 @@ export const ChatPanel = ({
               className={SHOPSTRBUTTONCLASSNAMES}
               onClick={handleToggleShippingModal}
             >
-              Has this product been shipped?
+              Send Shipping Info
             </Button>
           </div>
           <Modal
@@ -411,7 +412,7 @@ export const ChatPanel = ({
                   <div className="mb-4 flex items-center justify-center gap-16">
                     <div className="flex items-center gap-3">
                       <span className="text-light-text dark:text-dark-text">
-                        Good
+                        Good Overall
                       </span>
                       <HandThumbUpIcon
                         className={`h-12 w-12 cursor-pointer rounded-lg border-2 p-2 transition-colors ${
@@ -432,7 +433,7 @@ export const ChatPanel = ({
                         onClick={() => setSelectedThumb("down")}
                       />
                       <span className="text-light-text dark:text-dark-text">
-                        Bad
+                        Bad Overall
                       </span>
                     </div>
                   </div>
@@ -441,11 +442,27 @@ export const ChatPanel = ({
                     <label className="flex items-center gap-2">
                       <input
                         type="checkbox"
+                        checked={reviewOptions.get("value") === 0.33}
+                        onChange={(e) =>
+                          setReviewOptions((prev) => {
+                            const newMap = new Map(prev);
+                            newMap.set("value", e.target.checked ? 0.5 : 0);
+                            return newMap;
+                          })
+                        }
+                      />
+                      <span className="text-light-text dark:text-dark-text">
+                        Good Value
+                      </span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
                         checked={reviewOptions.get("quality") === 0.33}
                         onChange={(e) =>
                           setReviewOptions((prev) => {
                             const newMap = new Map(prev);
-                            newMap.set("quality", e.target.checked ? 0.33 : 0);
+                            newMap.set("quality", e.target.checked ? 0.5 : 0);
                             return newMap;
                           })
                         }
@@ -461,7 +478,7 @@ export const ChatPanel = ({
                         onChange={(e) =>
                           setReviewOptions((prev) => {
                             const newMap = new Map(prev);
-                            newMap.set("delivery", e.target.checked ? 0.33 : 0);
+                            newMap.set("delivery", e.target.checked ? 0.5 : 0);
                             return newMap;
                           })
                         }

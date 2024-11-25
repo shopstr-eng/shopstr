@@ -92,16 +92,32 @@ function App({ Component, pageProps }: AppProps) {
   );
   const [reviewsContext, setReviewsContext] = useState<ReviewsContextInterface>(
     {
-      reviewsData: new Map(),
+      merchantReviewsData: new Map(),
+      productReviewsData: new Map(),
       isLoading: true,
-      updateReviewsData: (reviewsData: number) => {
+      updateMerchantReviewsData: (merchantPubkey: string, merchantReviewsData: number) => {
         setReviewsContext((reviewsContext) => {
-          let reviewsDataMap = new Map(reviewsContext.reviewsData);
-          reviewsDataMap.set(getLocalStorageData().userPubkey, reviewsData);
+          let merchantReviewsDataMap = new Map(reviewsContext.merchantReviewsData);
+          merchantReviewsDataMap.set(merchantPubkey, merchantReviewsData);
           return {
-            reviewsData: reviewsDataMap,
+            merchantReviewsData: merchantReviewsDataMap,
+            productReviewsData: reviewsContext.productReviewsData,
             isLoading: false,
-            updateReviewsData: reviewsContext.updateReviewsData,
+            updateMerchantReviewsData: reviewsContext.updateMerchantReviewsData,
+            updateProductReviewsData: reviewsContext.updateProductReviewsData,
+          };
+        });
+      },
+      updateProductReviewsData: (merchantPubkey: string, productReviewsData: number) => {
+        setReviewsContext((reviewsContext) => {
+          let productReviewsDataMap = new Map(reviewsContext.productReviewsData);
+          productReviewsDataMap.set(merchantPubkey, productReviewsData);
+          return {
+            merchantReviewsData: reviewsContext.merchantReviewsData,
+            productReviewsData: productReviewsDataMap,
+            isLoading: false,
+            updateMerchantReviewsData: reviewsContext.updateMerchantReviewsData,
+            updateProductReviewsData: reviewsContext.updateProductReviewsData,
           };
         });
       },
@@ -248,14 +264,17 @@ function App({ Component, pageProps }: AppProps) {
   };
 
   const editReviewsContext = (
-    reviewsData: Map<string, number>,
+    merchantReviewsData: Map<string, number>,
+    productReviewsData: Map<string, number>,
     isLoading: boolean,
   ) => {
     setReviewsContext((reviewsContext) => {
       return {
-        reviewsData,
+        merchantReviewsData,
+        productReviewsData,
         isLoading,
-        updateReviewsData: reviewsContext.updateReviewsData,
+        updateMerchantReviewsData: reviewsContext.updateMerchantReviewsData,
+        updateProductReviewsData: reviewsContext.updateProductReviewsData,
       };
     });
   };
