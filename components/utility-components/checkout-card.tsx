@@ -141,9 +141,12 @@ export default function CheckoutCard({
     if (
       pubkey &&
       reviewsContext.merchantReviewsData.has(pubkey) &&
-      typeof reviewsContext.merchantReviewsData.get(pubkey) != "undefined" && reviewsContext.productReviewsData.has(pubkey) && typeof reviewsContext.productReviewsData.get(pubkey) != "undefined"
+      typeof reviewsContext.merchantReviewsData.get(pubkey) != "undefined" &&
+      reviewsContext.productReviewsData.has(pubkey) &&
+      typeof reviewsContext.productReviewsData.get(pubkey) != "undefined"
     ) {
-      const merchantReviewScore = reviewsContext.merchantReviewsData.get(pubkey);
+      const merchantReviewScore =
+        reviewsContext.merchantReviewsData.get(pubkey);
       const productReviewScore = reviewsContext.productReviewsData.get(pubkey);
       if (merchantReviewScore && productReviewScore) {
         setMerchantReview(merchantReviewScore);

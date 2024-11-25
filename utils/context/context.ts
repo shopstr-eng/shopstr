@@ -42,8 +42,14 @@ export interface ReviewsContextInterface {
   merchantReviewsData: Map<string, number>;
   productReviewsData: Map<string, number>;
   isLoading: boolean;
-  updateMerchantReviewsData: (merchantPubkey: string, merchantReviewsData: number) => void;
-  updateProductReviewsData: (merchantPubkey: string, productReviewsData: number) => void;
+  updateMerchantReviewsData: (
+    merchantPubkey: string,
+    merchantReviewsData: number,
+  ) => void;
+  updateProductReviewsData: (
+    merchantPubkey: string,
+    productReviewsData: number,
+  ) => void;
 }
 
 export const ReviewsContext = createContext({

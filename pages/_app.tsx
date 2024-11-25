@@ -95,9 +95,14 @@ function App({ Component, pageProps }: AppProps) {
       merchantReviewsData: new Map(),
       productReviewsData: new Map(),
       isLoading: true,
-      updateMerchantReviewsData: (merchantPubkey: string, merchantReviewsData: number) => {
+      updateMerchantReviewsData: (
+        merchantPubkey: string,
+        merchantReviewsData: number,
+      ) => {
         setReviewsContext((reviewsContext) => {
-          let merchantReviewsDataMap = new Map(reviewsContext.merchantReviewsData);
+          let merchantReviewsDataMap = new Map(
+            reviewsContext.merchantReviewsData,
+          );
           merchantReviewsDataMap.set(merchantPubkey, merchantReviewsData);
           return {
             merchantReviewsData: merchantReviewsDataMap,
@@ -108,9 +113,14 @@ function App({ Component, pageProps }: AppProps) {
           };
         });
       },
-      updateProductReviewsData: (merchantPubkey: string, productReviewsData: number) => {
+      updateProductReviewsData: (
+        merchantPubkey: string,
+        productReviewsData: number,
+      ) => {
         setReviewsContext((reviewsContext) => {
-          let productReviewsDataMap = new Map(reviewsContext.productReviewsData);
+          let productReviewsDataMap = new Map(
+            reviewsContext.productReviewsData,
+          );
           productReviewsDataMap.set(merchantPubkey, productReviewsData);
           return {
             merchantReviewsData: reviewsContext.merchantReviewsData,
