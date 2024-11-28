@@ -4,9 +4,13 @@ import HomeFeed from "@/components/home/home-feed";
 export default function SellerView({
   focusedPubkey,
   setFocusedPubkey,
+  selectedSection,
+  setSelectedSection,
 }: {
   focusedPubkey: string;
   setFocusedPubkey: (value: string) => void;
+  selectedSection: string;
+  setSelectedSection: (value: string) => void;
 }) {
   return (
     <>
@@ -42,6 +46,8 @@ export default function SellerView({
         <HomeFeed
           focusedPubkey={focusedPubkey}
           setFocusedPubkey={setFocusedPubkey}
+          selectedSection={selectedSection}
+          setSelectedSection={setSelectedSection}
         />
       </div>
     </>

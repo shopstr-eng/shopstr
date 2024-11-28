@@ -617,6 +617,12 @@ export default function CartInvoiceCard({
           product.shippingType === "Free" ||
           (product.shippingType === "Free/Pickup" && needsShippingInfo === true)
         ) {
+          let receiptMessage =
+            "Your order for " +
+            product.title +
+            " was processed successfully. You should be receiving tracking information from " +
+            product.pubkey +
+            " as soon as they claim their payment.";
           let contactMessage = "";
           if (!shippingUnitNo && !product.selectedSize) {
             contactMessage =
@@ -693,12 +699,25 @@ export default function CartInvoiceCard({
             false,
             product,
           );
+          await sendPaymentAndContactMessage(
+            userPubkey,
+            receiptMessage,
+            false,
+            product,
+            true,
+          );
         } else if (
           product.shippingType === "N/A" ||
           product.shippingType === "Pickup" ||
           (product.shippingType === "Free/Pickup" &&
             needsShippingInfo === false)
         ) {
+          let receiptMessage =
+            "Your order for " +
+            product.title +
+            " was processed successfully. You should be receiving delivery information from " +
+            product.pubkey +
+            " as soon as they claim their payment.";
           let contactMessage;
           if (product.selectedSize) {
             contactMessage =
@@ -728,6 +747,13 @@ export default function CartInvoiceCard({
             contactMessage,
             false,
             product,
+          );
+          await sendPaymentAndContactMessage(
+            userPubkey,
+            receiptMessage,
+            false,
+            product,
+            true,
           );
         }
       } else if (product.selectedSize) {

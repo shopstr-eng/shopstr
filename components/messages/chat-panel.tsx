@@ -28,6 +28,7 @@ import {
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
   publishReviewEvent,
+  getLocalStorageData,
 } from "../utility/nostr-helper-functions";
 
 export const ChatPanel = ({
@@ -76,11 +77,19 @@ export const ChatPanel = ({
   );
   const [productAddress, setProductAddress] = useState<string>("");
 
-  const { handleSubmit: handleShippingSubmit, control: shippingControl } =
-    useForm();
+  const {
+    handleSubmit: handleShippingSubmit,
+    control: shippingControl,
+    reset: shippingReset,
+  } = useForm();
 
-  const { handleSubmit: handleReviewSubmit, control: reviewControl } =
-    useForm();
+  const {
+    handleSubmit: handleReviewSubmit,
+    control: reviewControl,
+    reset: reviewReset,
+  } = useForm();
+
+  const { userNPub } = getLocalStorageData();
 
   const bottomDivRef = useRef<HTMLDivElement>(null);
 
@@ -118,10 +127,12 @@ export const ChatPanel = ({
   }, [messages, isSendingDMLoading]);
 
   const handleToggleShippingModal = () => {
+    shippingReset();
     setShowShippingModal(!showShippingModal);
   };
 
   const handleToggleReviewModal = () => {
+    reviewReset();
     setShowReviewModal(!showReviewModal);
   };
 
@@ -134,12 +145,10 @@ export const ChatPanel = ({
 
       let deliveryTime = data["Delivery Time"];
       let trackingUrl = data["Tracking Url"];
-      let productTitle = "";
-      setShowShippingModal(false);
       let message =
-        "Your " +
-        productTitle +
-        " order is expected to arrive within " +
+        "Your order from " +
+        userNPub +
+        " is expected to arrive within " +
         deliveryTime +
         ". Check the following link to track it: " +
         trackingUrl;
@@ -148,6 +157,8 @@ export const ChatPanel = ({
         buyerPubkey,
         message,
         "shipping-info",
+        undefined,
+        productAddress,
       );
       let sealedEvent = await constructMessageSeal(
         giftWrappedMessageEvent,
@@ -163,6 +174,7 @@ export const ChatPanel = ({
         buyerPubkey,
       );
       await sendGiftWrappedMessageEvent(giftWrappedEvent);
+      handleToggleShippingModal();
     } catch (error) {
       console.error(error);
     }
@@ -173,7 +185,7 @@ export const ChatPanel = ({
       await publishReviewEvent(
         productAddress,
         data.comment,
-        selectedThumb === "up" ? 0.5 : 0,
+        selectedThumb === "up" ? 1 : 0,
         reviewOptions,
         passphrase,
       );
@@ -268,7 +280,7 @@ export const ChatPanel = ({
             Send
           </Button>
         </div>
-      ) : !canReview ? (
+      ) : !canReview && buyerPubkey !== "" ? (
         <>
           <div className="flex items-center justify-between border-t p-4">
             <Button
@@ -380,167 +392,169 @@ export const ChatPanel = ({
           </Modal>
         </>
       ) : (
-        <>
-          <div className="flex items-center justify-between border-t p-4">
-            <Button
-              className={SHOPSTRBUTTONCLASSNAMES}
-              onClick={handleToggleReviewModal}
-            >
-              Leave a Review
-            </Button>
-          </div>
-          <Modal
-            backdrop="blur"
-            isOpen={showReviewModal}
-            onClose={handleToggleReviewModal}
-            classNames={{
-              body: "py-6",
-              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-              header: "border-b-[1px] border-[#292f46]",
-              footer: "border-t-[1px] border-[#292f46]",
-              closeButton: "hover:bg-black/5 active:bg-white/10",
-            }}
-            scrollBehavior={"outside"}
-            size="2xl"
-          >
-            <ModalContent>
-              <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+        productAddress !== "" && (
+          <>
+            <div className="flex items-center justify-between border-t p-4">
+              <Button
+                className={SHOPSTRBUTTONCLASSNAMES}
+                onClick={handleToggleReviewModal}
+              >
                 Leave a Review
-              </ModalHeader>
-              <form onSubmit={handleReviewSubmit(onReviewSubmit)}>
-                <ModalBody>
-                  <div className="mb-4 flex items-center justify-center gap-16">
-                    <div className="flex items-center gap-3">
-                      <span className="text-light-text dark:text-dark-text">
-                        Good Overall
-                      </span>
-                      <HandThumbUpIcon
-                        className={`h-12 w-12 cursor-pointer rounded-lg border-2 p-2 transition-colors ${
-                          selectedThumb === "up"
-                            ? "border-green-500 text-green-500"
-                            : "border-light-text text-light-text hover:border-green-500 hover:text-green-500 dark:border-dark-text dark:text-dark-text"
-                        }`}
-                        onClick={() => setSelectedThumb("up")}
-                      />
+              </Button>
+            </div>
+            <Modal
+              backdrop="blur"
+              isOpen={showReviewModal}
+              onClose={handleToggleReviewModal}
+              classNames={{
+                body: "py-6",
+                backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+                header: "border-b-[1px] border-[#292f46]",
+                footer: "border-t-[1px] border-[#292f46]",
+                closeButton: "hover:bg-black/5 active:bg-white/10",
+              }}
+              scrollBehavior={"outside"}
+              size="2xl"
+            >
+              <ModalContent>
+                <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+                  Leave a Review
+                </ModalHeader>
+                <form onSubmit={handleReviewSubmit(onReviewSubmit)}>
+                  <ModalBody>
+                    <div className="mb-4 flex items-center justify-center gap-16">
+                      <div className="flex items-center gap-3">
+                        <span className="text-light-text dark:text-dark-text">
+                          Good Overall
+                        </span>
+                        <HandThumbUpIcon
+                          className={`h-12 w-12 cursor-pointer rounded-lg border-2 p-2 transition-colors ${
+                            selectedThumb === "up"
+                              ? "border-green-500 text-green-500"
+                              : "border-light-text text-light-text hover:border-green-500 hover:text-green-500 dark:border-dark-text dark:text-dark-text"
+                          }`}
+                          onClick={() => setSelectedThumb("up")}
+                        />
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <HandThumbDownIcon
+                          className={`h-12 w-12 cursor-pointer rounded-lg border-2 p-2 transition-colors ${
+                            selectedThumb === "down"
+                              ? "border-red-500 text-red-500"
+                              : "border-light-text text-light-text hover:border-red-500 hover:text-red-500 dark:border-dark-text dark:text-dark-text"
+                          }`}
+                          onClick={() => setSelectedThumb("down")}
+                        />
+                        <span className="text-light-text dark:text-dark-text">
+                          Bad Overall
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <HandThumbDownIcon
-                        className={`h-12 w-12 cursor-pointer rounded-lg border-2 p-2 transition-colors ${
-                          selectedThumb === "down"
-                            ? "border-red-500 text-red-500"
-                            : "border-light-text text-light-text hover:border-red-500 hover:text-red-500 dark:border-dark-text dark:text-dark-text"
-                        }`}
-                        onClick={() => setSelectedThumb("down")}
-                      />
-                      <span className="text-light-text dark:text-dark-text">
-                        Bad Overall
-                      </span>
+
+                    <div className="mb-4 flex flex-col gap-3">
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={reviewOptions.get("value") === 1}
+                          onChange={(e) =>
+                            setReviewOptions((prev) => {
+                              const newMap = new Map(prev);
+                              newMap.set("value", e.target.checked ? 1 : 0);
+                              return newMap;
+                            })
+                          }
+                        />
+                        <span className="text-light-text dark:text-dark-text">
+                          Good Value
+                        </span>
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={reviewOptions.get("quality") === 1}
+                          onChange={(e) =>
+                            setReviewOptions((prev) => {
+                              const newMap = new Map(prev);
+                              newMap.set("quality", e.target.checked ? 1 : 0);
+                              return newMap;
+                            })
+                          }
+                        />
+                        <span className="text-light-text dark:text-dark-text">
+                          Good Quality
+                        </span>
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={reviewOptions.get("delivery") === 1}
+                          onChange={(e) =>
+                            setReviewOptions((prev) => {
+                              const newMap = new Map(prev);
+                              newMap.set("delivery", e.target.checked ? 1 : 0);
+                              return newMap;
+                            })
+                          }
+                        />
+                        <span className="text-light-text dark:text-dark-text">
+                          Quick Delivery
+                        </span>
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={reviewOptions.get("communication") === 1}
+                          onChange={(e) =>
+                            setReviewOptions((prev) => {
+                              const newMap = new Map(prev);
+                              newMap.set(
+                                "communication",
+                                e.target.checked ? 1 : 0,
+                              );
+                              return newMap;
+                            })
+                          }
+                        />
+                        <span className="text-light-text dark:text-dark-text">
+                          Good Communication
+                        </span>
+                      </label>
                     </div>
-                  </div>
 
-                  <div className="mb-4 flex flex-col gap-3">
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={reviewOptions.get("value") === 0.33}
-                        onChange={(e) =>
-                          setReviewOptions((prev) => {
-                            const newMap = new Map(prev);
-                            newMap.set("value", e.target.checked ? 0.5 : 0);
-                            return newMap;
-                          })
-                        }
-                      />
-                      <span className="text-light-text dark:text-dark-text">
-                        Good Value
-                      </span>
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={reviewOptions.get("quality") === 0.33}
-                        onChange={(e) =>
-                          setReviewOptions((prev) => {
-                            const newMap = new Map(prev);
-                            newMap.set("quality", e.target.checked ? 0.5 : 0);
-                            return newMap;
-                          })
-                        }
-                      />
-                      <span className="text-light-text dark:text-dark-text">
-                        Good Quality
-                      </span>
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={reviewOptions.get("delivery") === 0.33}
-                        onChange={(e) =>
-                          setReviewOptions((prev) => {
-                            const newMap = new Map(prev);
-                            newMap.set("delivery", e.target.checked ? 0.5 : 0);
-                            return newMap;
-                          })
-                        }
-                      />
-                      <span className="text-light-text dark:text-dark-text">
-                        Quick Delivery
-                      </span>
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={reviewOptions.get("communication") === 0.33}
-                        onChange={(e) =>
-                          setReviewOptions((prev) => {
-                            const newMap = new Map(prev);
-                            newMap.set(
-                              "communication",
-                              e.target.checked ? 0.33 : 0,
-                            );
-                            return newMap;
-                          })
-                        }
-                      />
-                      <span className="text-light-text dark:text-dark-text">
-                        Good Communication
-                      </span>
-                    </label>
-                  </div>
-
-                  <Controller
-                    name="comment"
-                    control={reviewControl}
-                    render={({ field }) => (
-                      <textarea
-                        {...field}
-                        className="w-full rounded-md border-2 border-light-fg bg-light-bg p-2 text-light-text dark:border-dark-fg dark:bg-dark-bg dark:text-dark-text"
-                        rows={4}
-                        placeholder="Write your review comment here..."
-                      />
-                    )}
-                  />
-                </ModalBody>
-                <ModalFooter>
-                  <Button
-                    color="danger"
-                    variant="light"
-                    onClick={handleToggleReviewModal}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    className={SHOPSTRBUTTONCLASSNAMES}
-                    type="submit"
-                    isDisabled={!selectedThumb}
-                  >
-                    Leave Review
-                  </Button>
-                </ModalFooter>
-              </form>
-            </ModalContent>
-          </Modal>
-        </>
+                    <Controller
+                      name="comment"
+                      control={reviewControl}
+                      render={({ field }) => (
+                        <textarea
+                          {...field}
+                          className="w-full rounded-md border-2 border-light-fg bg-light-bg p-2 text-light-text dark:border-dark-fg dark:bg-dark-bg dark:text-dark-text"
+                          rows={4}
+                          placeholder="Write your review comment here..."
+                        />
+                      )}
+                    />
+                  </ModalBody>
+                  <ModalFooter>
+                    <Button
+                      color="danger"
+                      variant="light"
+                      onClick={handleToggleReviewModal}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      className={SHOPSTRBUTTONCLASSNAMES}
+                      type="submit"
+                      isDisabled={!selectedThumb}
+                    >
+                      Leave Review
+                    </Button>
+                  </ModalFooter>
+                </form>
+              </ModalContent>
+            </Modal>
+          </>
+        )
       )}
     </div>
   );

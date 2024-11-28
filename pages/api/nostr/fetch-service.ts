@@ -668,12 +668,12 @@ export const fetchReviews = async (
   products: NostrEvent[],
   editReviewsContext: (
     merchantReviewsMap: Map<string, number>,
-    productReviewsMap: Map<string, number>,
+    productReviewsMap: Map<string, Map<string, number>>,
     isLoading: boolean,
   ) => void,
 ): Promise<{
   merchantReviewsMap: Map<string, number>;
-  productReviewsMap: Map<string, number>;
+  productReviewsMap: Map<string, Map<string, number>>;
 }> => {
   return new Promise(async function (resolve, reject) {
     try {
@@ -695,9 +695,12 @@ export const fetchReviews = async (
       };
 
       const merchantScores = new Map<string, number[]>();
-      const productScores = new Map<string, number[]>();
+      const productScores = new Map<
+        string,
+        { merchantPubkey: string; score: number }
+      >();
       const merchantReviewsMap = new Map<string, number>();
-      const productReviewsMap = new Map<string, number>();
+      const productReviewsMap = new Map<string, Map<string, number>>();
 
       const getRatingValue = (tags: string[][], type: string): number => {
         const ratingTag = tags.find(
@@ -731,6 +734,7 @@ export const fetchReviews = async (
 
       let h = pool.subscribeMany(relays, [reviewsFilter], {
         onevent(event) {
+          console.log("event", event);
           const addressTag = event.tags.find((tag) => tag[0] === "d")?.[1];
           if (!addressTag) return;
 
@@ -746,10 +750,10 @@ export const fetchReviews = async (
           merchantScores.get(merchantPubkey)!.push(totalScore);
 
           // Add score to product's scores (only reviews for this specific product)
-          if (!productScores.has(productDTag)) {
-            productScores.set(productDTag, []);
-          }
-          productScores.get(productDTag)!.push(totalScore);
+          productScores.set(productDTag, {
+            merchantPubkey,
+            score: totalScore,
+          });
         },
         oneose() {
           // Calculate merchant averages (across all their products)
@@ -759,11 +763,16 @@ export const fetchReviews = async (
             merchantReviewsMap.set(pubkey, averageScore);
           }
 
-          // Calculate product averages (specific to each product)
-          for (const [dTag, scores] of productScores.entries()) {
-            const averageScore =
-              scores.reduce((a, b) => a + b, 0) / scores.length;
-            productReviewsMap.set(dTag, averageScore);
+          // Calculate merchant averages (across all their products)
+          for (const [
+            dTag,
+            { merchantPubkey, score },
+          ] of productScores.entries()) {
+            if (!productReviewsMap.has(merchantPubkey)) {
+              productReviewsMap.set(merchantPubkey, new Map());
+            }
+            const merchantProducts = productReviewsMap.get(merchantPubkey)!;
+            merchantProducts.set(dTag, score);
           }
 
           editReviewsContext(merchantReviewsMap, productReviewsMap, false);

@@ -48,6 +48,7 @@ export default function CheckoutCard({
     sizes,
     sizeQuantities,
     condition,
+    d: dTag,
   } = productData;
 
   const { userPubkey } = getLocalStorageData();
@@ -150,7 +151,12 @@ export default function CheckoutCard({
       const productReviewScore = reviewsContext.productReviewsData.get(pubkey);
       if (merchantReviewScore && productReviewScore) {
         setMerchantReview(merchantReviewScore);
-        setProductReview(productReviewScore);
+        const productReviewValue = dTag
+          ? productReviewScore.get(dTag)
+          : undefined;
+        setProductReview(
+          productReviewValue !== undefined ? productReviewValue : 0,
+        );
       }
     }
     setIsFetchingReviews(false);

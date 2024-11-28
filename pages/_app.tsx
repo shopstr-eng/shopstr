@@ -115,13 +115,20 @@ function App({ Component, pageProps }: AppProps) {
       },
       updateProductReviewsData: (
         merchantPubkey: string,
+        productDTag: string,
         productReviewsData: number,
       ) => {
         setReviewsContext((reviewsContext) => {
           let productReviewsDataMap = new Map(
             reviewsContext.productReviewsData,
           );
-          productReviewsDataMap.set(merchantPubkey, productReviewsData);
+          let productScoreMap = new Map(
+            reviewsContext.productReviewsData.get(merchantPubkey),
+          );
+          productReviewsDataMap.set(
+            merchantPubkey,
+            productScoreMap.set(productDTag, productReviewsData),
+          );
           return {
             merchantReviewsData: reviewsContext.merchantReviewsData,
             productReviewsData: productReviewsDataMap,
@@ -275,7 +282,7 @@ function App({ Component, pageProps }: AppProps) {
 
   const editReviewsContext = (
     merchantReviewsData: Map<string, number>,
-    productReviewsData: Map<string, number>,
+    productReviewsData: Map<string, Map<string, number>>,
     isLoading: boolean,
   ) => {
     setReviewsContext((reviewsContext) => {
@@ -381,6 +388,7 @@ function App({ Component, pageProps }: AppProps) {
   };
 
   const [focusedPubkey, setFocusedPubkey] = useState("");
+  const [selectedSection, setSelectedSection] = useState("");
 
   const { signInMethod } = getLocalStorageData();
 
@@ -550,13 +558,18 @@ function App({ Component, pageProps }: AppProps) {
                     <ChatsContext.Provider value={chatsContext}>
                       <NextUIProvider>
                         <NextThemesProvider attribute="class">
-                          <TopNav setFocusedPubkey={setFocusedPubkey} />
+                          <TopNav
+                            setFocusedPubkey={setFocusedPubkey}
+                            setSelectedSection={setSelectedSection}
+                          />
                           <div className="flex">
                             <main className="flex-1">
                               <Component
                                 {...pageProps}
                                 focusedPubkey={focusedPubkey}
                                 setFocusedPubkey={setFocusedPubkey}
+                                selectedSection={selectedSection}
+                                setSelectedSection={setSelectedSection}
                               />
                             </main>
                           </div>

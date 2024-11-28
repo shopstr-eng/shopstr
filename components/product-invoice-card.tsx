@@ -551,9 +551,9 @@ export default function ProductInvoiceCard({
         shippingCountry
       ) {
         let receiptMessage =
-          "Your " +
+          "Your order for " +
           productData.title +
-          " order was processed successfully. You should be receiving tracking information from " +
+          " was processed successfully. You should be receiving tracking information from " +
           productData.pubkey +
           " as soon as they claim their payment.";
         let contactMessage = "";
@@ -640,9 +640,9 @@ export default function ProductInvoiceCard({
       } else if (contact && contactType && contactInstructions) {
         let contactMessage;
         let receiptMessage =
-          "Your " +
+          "Your order for " +
           productData.title +
-          " order was processed successfully. You should be receiving delivery information from " +
+          " was processed successfully. You should be receiving delivery information from " +
           productData.pubkey +
           " as soon as they claim their payment.";
         if (selectedSize) {

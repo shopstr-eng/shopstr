@@ -327,6 +327,7 @@ export async function constructGiftWrappedMessageEvent(
   message: string,
   subject: string,
   productData?: ProductData,
+  productAddress?: string,
 ): Promise<GiftWrappedMessageEvent> {
   const { relays } = getLocalStorageData();
   let tags = [
@@ -340,6 +341,8 @@ export async function constructGiftWrappedMessageEvent(
       "30402:" + productData.pubkey + ":" + productData.d,
       relays[0],
     ]);
+  } else if (productAddress) {
+    tags.push(["a", productAddress, relays[0]]);
   }
 
   let bareGiftWrappedMessageEvent = {

@@ -10,7 +10,11 @@ import {
 import { useRouter } from "next/router";
 import { nip19 } from "nostr-tools";
 import React, { useContext, useEffect, useState } from "react";
-import { ShopMapContext, FollowsContext } from "@/utils/context/context";
+import {
+  ReviewsContext,
+  ShopMapContext,
+  FollowsContext,
+} from "@/utils/context/context";
 import DisplayProducts from "../display-products";
 import LocationDropdown from "../utility-components/dropdowns/location-dropdown";
 import { CATEGORIES } from "../utility/STATIC-VARIABLES";
@@ -18,6 +22,7 @@ import {
   getLocalStorageData,
   isUserLoggedIn,
 } from "../utility/nostr-helper-functions";
+import { ProductData } from "../utility/product-parser-functions";
 import SignInModal from "../sign-in/SignInModal";
 import ShopstrSwitch from "../utility-components/shopstr-switch";
 import { ShopSettings } from "../../utils/types/types";
@@ -27,9 +32,13 @@ import FailureModal from "../utility-components/failure-modal";
 export function MarketplacePage({
   focusedPubkey,
   setFocusedPubkey,
+  selectedSection,
+  setSelectedSection,
 }: {
   focusedPubkey: string;
   setFocusedPubkey: (value: string) => void;
+  selectedSection: string;
+  setSelectedSection: (value: string) => void;
 }) {
   const router = useRouter();
   const [selectedCategories, setSelectedCategories] = useState(
@@ -38,9 +47,15 @@ export function MarketplacePage({
   const [selectedLocation, setSelectedLocation] = useState("");
   const [selectedSearch, setSelectedSearch] = useState("");
   const { isOpen, onClose } = useDisclosure();
-  const [selectedSection, setSelectedSection] = useState("Shop");
 
   const [wotFilter, setWotFilter] = useState(false);
+
+  const [merchantReview, setMerchantReview] = useState(0);
+  const [filteredProducts, setFilteredProducts] = useState<ProductData[]>([]);
+  const [productReviewMap, setProductReviewMap] = useState(
+    new Map<string, number>(),
+  );
+  const [isFetchingReviews, setIsFetchingReviews] = useState(false);
 
   const [shopBannerURL, setShopBannerURL] = useState("");
   const [shopAbout, setShopAbout] = useState("");
@@ -52,6 +67,7 @@ export function MarketplacePage({
 
   const [showFailureModal, setShowFailureModal] = useState(false);
 
+  const reviewsContext = useContext(ReviewsContext);
   const shopMapContext = useContext(ShopMapContext);
   const followsContext = useContext(FollowsContext);
 
@@ -61,6 +77,7 @@ export function MarketplacePage({
     if (focusedPubkeys && typeof focusedPubkeys[0] === "string") {
       const { data } = nip19.decode(focusedPubkeys[0]);
       setFocusedPubkey(data as string); // router.query.pubkey returns array of pubkeys
+      setSelectedSection("shop");
     }
   }, [router.query.pubkey]);
 
@@ -78,6 +95,28 @@ export function MarketplacePage({
       });
     }
   });
+
+  useEffect(() => {
+    setIsFetchingReviews(true);
+    if (
+      focusedPubkey &&
+      reviewsContext.merchantReviewsData.has(focusedPubkey) &&
+      typeof reviewsContext.merchantReviewsData.get(focusedPubkey) !=
+        "undefined" &&
+      reviewsContext.productReviewsData.has(focusedPubkey) &&
+      typeof reviewsContext.productReviewsData.get(focusedPubkey) != "undefined"
+    ) {
+      const merchantReviewScore =
+        reviewsContext.merchantReviewsData.get(focusedPubkey);
+      const productReviewMap =
+        reviewsContext.productReviewsData.get(focusedPubkey);
+      if (merchantReviewScore && productReviewMap) {
+        setMerchantReview(merchantReviewScore);
+        setProductReviewMap(productReviewMap);
+      }
+    }
+    setIsFetchingReviews(false);
+  }, [focusedPubkey, reviewsContext]);
 
   useEffect(() => {
     setIsFetchingShop(true);
@@ -103,6 +142,10 @@ export function MarketplacePage({
     }
   }, [followsContext]);
 
+  const handleFilteredProductsChange = (products: ProductData[]) => {
+    setFilteredProducts(products);
+  };
+
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
     let { signInMethod } = getLocalStorageData();
     if (!signInMethod) {
@@ -112,6 +155,28 @@ export function MarketplacePage({
     router.push({
       pathname: "/messages",
       query: { pk: nip19.npubEncode(pubkeyToOpenChatWith), isInquiry: true },
+    });
+  };
+
+  const renderProductScores = () => {
+    return filteredProducts.map((product) => {
+      const productScore =
+        typeof product.d === "string"
+          ? productReviewMap.get(product.d) ?? 0
+          : 0;
+      return (
+        <>
+          {focusedPubkey && product.pubkey === focusedPubkey && (
+            <div
+              key={product.id}
+              className="flex items-center justify-between p-2"
+            >
+              <span>{product.title}</span>
+              <span>Score: {productScore}</span>
+            </div>
+          )}
+        </>
+      );
     });
   };
 
@@ -127,18 +192,23 @@ export function MarketplacePage({
                   setSelectedCategories(new Set<string>([]));
                   setSelectedLocation("");
                   setSelectedSearch("");
-                  setSelectedSection("Shop");
+                  setSelectedSection("shop");
                 }}
               >
                 Shop
               </Button>
-              {/* <Button className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text">
-                  Reviews
-                </Button> */}
               <Button
                 className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
                 onClick={() => {
-                  setSelectedSection("About");
+                  setSelectedSection("reviews");
+                }}
+              >
+                Reviews
+              </Button>
+              <Button
+                className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                onClick={() => {
+                  setSelectedSection("about");
                 }}
               >
                 About
@@ -225,7 +295,8 @@ export function MarketplacePage({
             setSelectedCategories={setSelectedCategories}
           />
         )}
-        {selectedSection === "Shop" && (
+        {((selectedSection === "shop" && focusedPubkey !== "") ||
+          selectedSection === "") && (
           <DisplayProducts
             focusedPubkey={focusedPubkey}
             selectedCategories={selectedCategories}
@@ -234,12 +305,19 @@ export function MarketplacePage({
             canShowLoadMore={true}
             wotFilter={wotFilter}
             setCategories={setCategories}
+            onFilteredProductsChange={handleFilteredProductsChange}
           />
         )}
-        {selectedSection === "About" && shopAbout && (
+        {selectedSection === "about" && shopAbout && (
           <div className="flex w-full flex-col justify-start bg-transparent px-4 py-8 text-light-text dark:text-dark-text">
             <h2 className="pb-2 text-2xl font-bold">About</h2>
             <p className="text-base">{shopAbout}</p>
+          </div>
+        )}
+        {selectedSection === "reviews" && !isFetchingReviews && (
+          <div className="flex w-full flex-col justify-start bg-transparent px-4 py-8 text-light-text dark:text-dark-text">
+            <h2 className="pb-2 text-2xl font-bold">Reviews</h2>
+            <p className="text-base">{renderProductScores()}</p>
           </div>
         )}
       </div>

@@ -52,8 +52,11 @@ export const ChatMessage = ({
   useEffect(() => {
     let tagsMap = new Map(
       messageEvent.tags
-        .filter((tag): tag is [string, string] => tag.length === 2)
-        .map(([k, v]) => [k, v]),
+        .map((tag) => [tag[0], tag[1]]) // Take first two elements regardless of length
+        .filter(
+          (pair): pair is [string, string] =>
+            pair[0] !== undefined && pair[1] !== undefined, // Ensure both elements exist
+        ),
     );
     let subject = tagsMap.get("subject") ? tagsMap.get("subject") : null;
     let productAddress = tagsMap.get("a") ? tagsMap.get("a") : null;

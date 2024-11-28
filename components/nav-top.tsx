@@ -17,8 +17,10 @@ import { ShopSettings } from "../utils/types/types";
 
 const TopNav = ({
   setFocusedPubkey,
+  setSelectedSection,
 }: {
   setFocusedPubkey: (value: string) => void;
+  setSelectedSection: (value: string) => void;
 }) => {
   const { isHomeActive, isProfileActive } = useNavigation();
   const router = useRouter();
@@ -109,6 +111,9 @@ const TopNav = ({
         setShopLogoURL(shopSettings.content.ui.picture);
         setShopName(shopSettings.content.name);
       }
+    } else {
+      setShopLogoURL("");
+      setShopName("");
     }
   }, [router.pathname, shopMapContext]);
 
@@ -123,6 +128,7 @@ const TopNav = ({
 
   const handleHomeClick = () => {
     setFocusedPubkey("");
+    setSelectedSection("");
     router.push("/");
     setIsMobileMenuOpen(false);
   };
