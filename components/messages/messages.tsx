@@ -466,7 +466,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
           read: false,
         }));
       const giftWrapFilter: Filter = {
-        kinds: [1095],
+        kinds: [1059],
         "#p": [userPubkey],
         since,
         until: oldestMessageCreatedAt,
