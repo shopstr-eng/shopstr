@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
 import { nip19 } from "nostr-tools";
 import { CheckIcon, ClipboardIcon } from "@heroicons/react/24/outline";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
@@ -32,6 +33,8 @@ export const ChatMessage = ({
   setCanReview?: (canReview: boolean) => void;
   setProductAddress?: (productAddress: string) => void;
 }) => {
+  const router = useRouter();
+
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
 
   if (!messageEvent || !currentChatPubkey) {
@@ -86,6 +89,29 @@ export const ChatMessage = ({
     }, 2000);
   };
 
+  const renderMessageContent = (content: string) => {
+    const words = content.split(/(\s+)/);
+    return words.map((word, index) => {
+      if (word.match(/\S*npub\S*/)) {
+        return (
+          <span
+            key={index}
+            className="cursor-pointer text-shopstr-purple-light hover:underline dark:text-shopstr-yellow-light"
+            onClick={() => {
+              router.push({
+                pathname: "/messages",
+                query: { pk: word, isInquiry: true },
+              });
+            }}
+          >
+            {word}
+          </span>
+        );
+      }
+      return word;
+    });
+  };
+
   return (
     <div
       key={index}
@@ -109,7 +135,7 @@ export const ChatMessage = ({
           canDecodeToken &&
           tokenAfterCashuA ? (
             <>
-              {contentBeforeCashuA}
+              {renderMessageContent(contentBeforeCashuA)}
               <div className="flex items-center">
                 <ClaimButton token={tokenAfterCashuA} passphrase={passphrase} />
                 <ClipboardIcon
@@ -126,7 +152,7 @@ export const ChatMessage = ({
               </div>
             </>
           ) : (
-            <>{messageEvent.content}</>
+            renderMessageContent(messageEvent.content)
           )}
         </p>
         <div className="m-1"></div>

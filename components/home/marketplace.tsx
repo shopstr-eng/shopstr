@@ -1,6 +1,7 @@
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import {
   Button,
+  Chip,
   Select,
   SelectItem,
   SelectSection,
@@ -17,6 +18,7 @@ import {
 } from "@/utils/context/context";
 import DisplayProducts from "../display-products";
 import LocationDropdown from "../utility-components/dropdowns/location-dropdown";
+import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
 import { CATEGORIES } from "../utility/STATIC-VARIABLES";
 import {
   getLocalStorageData,
@@ -53,7 +55,7 @@ export function MarketplacePage({
   const [merchantReview, setMerchantReview] = useState(0);
   const [filteredProducts, setFilteredProducts] = useState<ProductData[]>([]);
   const [productReviewMap, setProductReviewMap] = useState(
-    new Map<string, number>(),
+    new Map<string, Map<string, string[][]>>(),
   );
   const [isFetchingReviews, setIsFetchingReviews] = useState(false);
 
@@ -70,6 +72,8 @@ export function MarketplacePage({
   const reviewsContext = useContext(ReviewsContext);
   const shopMapContext = useContext(ShopMapContext);
   const followsContext = useContext(FollowsContext);
+
+  const { userPubkey } = getLocalStorageData();
 
   // Update focusedPubkey when pubkey in url changes
   useEffect(() => {
@@ -158,26 +162,105 @@ export function MarketplacePage({
     });
   };
 
+  const handleTitleClick = (productId: string) => {
+    router.push(`/listing/${productId}`);
+  };
+
   const renderProductScores = () => {
-    return filteredProducts.map((product) => {
-      const productScore =
-        typeof product.d === "string"
-          ? productReviewMap.get(product.d) ?? 0
-          : 0;
-      return (
-        <>
-          {focusedPubkey && product.pubkey === focusedPubkey && (
-            <div
-              key={product.id}
-              className="flex items-center justify-between p-2"
-            >
-              <span>{product.title}</span>
-              <span>Score: {productScore}</span>
+    return (
+      <div className="space-y-4">
+        {filteredProducts.map((product) => {
+          const productReviews = product.d
+            ? productReviewMap.get(product.d)
+            : undefined;
+
+          if (!productReviews || productReviews.size === 0) return null;
+
+          return (
+            <div key={product.id} className="mt-4 p-4 pt-4">
+              <h3 className="mb-3 text-lg font-semibold text-light-text dark:text-dark-text">
+                <div
+                  onClick={() => handleTitleClick(product.id)}
+                  className="cursor-pointer hover:underline"
+                >
+                  {product.title}
+                </div>
+              </h3>
+              <div className="space-y-3">
+                {Array.from(productReviews.entries()).map(
+                  ([reviewerPubkey, reviewData]) => (
+                    <div key={reviewerPubkey} className="rounded-lg border p-3">
+                      <div className="mb-2 flex items-center gap-2">
+                        <ProfileWithDropdown
+                          pubkey={reviewerPubkey}
+                          dropDownKeys={
+                            reviewerPubkey === userPubkey
+                              ? ["shop_settings"]
+                              : ["shop", "message"]
+                          }
+                        />
+                      </div>
+                      <div className="flex flex-col">
+                        <div className="mb-1 flex flex-wrap gap-2">
+                          {reviewData.map(([_, value, category], index) => {
+                            if (category === undefined) {
+                              // Don't render the comment here; we'll show it later.
+                              return null;
+                            } else if (category === "thumb") {
+                              return (
+                                <Chip
+                                  key={index}
+                                  className={`text-light-text dark:text-dark-text ${
+                                    value === "1"
+                                      ? "bg-green-500"
+                                      : "bg-red-500"
+                                  }`}
+                                >
+                                  {`overall: ${value === "1" ? "👍" : "👎"}`}
+                                </Chip>
+                              );
+                            } else {
+                              // Render chips for other categories
+                              return (
+                                <Chip
+                                  key={index}
+                                  className={`text-light-text dark:text-dark-text ${
+                                    value === "1"
+                                      ? "bg-green-500"
+                                      : "bg-red-500"
+                                  }`}
+                                >
+                                  {`${category}: ${
+                                    value === "1" ? "👍" : "👎"
+                                  }`}
+                                </Chip>
+                              );
+                            }
+                          })}
+                        </div>
+                        {reviewData.map(([category, value], index) => {
+                          if (category === "comment" && value !== "") {
+                            return (
+                              <p
+                                key={index}
+                                className="italic text-light-text dark:text-dark-text"
+                              >
+                                "{value}"
+                              </p>
+                            );
+                          }
+                          return null;
+                        })}
+                      </div>
+                    </div>
+                  ),
+                )}
+              </div>
             </div>
-          )}
-        </>
-      );
-    });
+          );
+        })}
+      </div>
+    );
   };
 
   return (

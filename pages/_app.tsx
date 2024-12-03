@@ -116,7 +116,7 @@ function App({ Component, pageProps }: AppProps) {
       updateProductReviewsData: (
         merchantPubkey: string,
         productDTag: string,
-        productReviewsData: number,
+        productReviewsData: Map<string, string[][]>,
       ) => {
         setReviewsContext((reviewsContext) => {
           let productReviewsDataMap = new Map(
@@ -282,7 +282,7 @@ function App({ Component, pageProps }: AppProps) {
 
   const editReviewsContext = (
     merchantReviewsData: Map<string, number>,
-    productReviewsData: Map<string, Map<string, number>>,
+    productReviewsData: Map<string, Map<string, Map<string, string[][]>>>,
     isLoading: boolean,
   ) => {
     setReviewsContext((reviewsContext) => {

@@ -1,13 +1,13 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-
 import { useTabs } from "@/components/hooks/use-tabs";
 import { Framer } from "@/components/framer";
-
 import Messages from "./messages";
+import { useRouter } from "next/router";
 
 const MessageFeed = ({ isInquiry = false }) => {
+  const router = useRouter();
   const [showSpinner, setShowSpinner] = useState(false);
 
   const [hookProps] = useState({
@@ -38,6 +38,24 @@ const MessageFeed = ({ isInquiry = false }) => {
     }, 1);
     return () => clearTimeout(timeout);
   }, [framer.selectedTab]);
+
+  useEffect(() => {
+    const handleRouteChange = (url: string) => {
+      const isInquiryTab = url.includes("isInquiry=true");
+      const newTab = isInquiryTab ? "inquiries" : "orders";
+
+      const newIndex = hookProps.tabs.findIndex((tab) => tab.id === newTab);
+      if (newIndex !== -1 && framer.tabProps.selectedTabIndex !== newIndex) {
+        framer.tabProps.setSelectedTab([newIndex, 0]);
+      }
+    };
+
+    router.events.on("routeChangeComplete", handleRouteChange);
+
+    return () => {
+      router.events.off("routeChangeComplete", handleRouteChange);
+    };
+  }, [router, framer]);
 
   return (
     <div className="flex flex-1 flex-col">

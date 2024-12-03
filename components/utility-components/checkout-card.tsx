@@ -12,7 +12,11 @@ import { useRouter } from "next/router";
 import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
 import { Button, Chip } from "@nextui-org/react";
 import { locationAvatar } from "./dropdowns/location-dropdown";
-import { InformationCircleIcon } from "@heroicons/react/24/outline";
+import {
+  FaceFrownIcon,
+  FaceSmileIcon,
+  InformationCircleIcon,
+} from "@heroicons/react/24/outline";
 import Link from "next/link";
 import { ShopMapContext, ReviewsContext } from "@/utils/context/context";
 import { ShopSettings } from "../../utils/types/types";
@@ -70,8 +74,11 @@ export default function CheckoutCard({
   const [isFetchingShop, setIsFetchingShop] = useState(false);
 
   const [merchantReview, setMerchantReview] = useState(0);
-  const [productReview, setProductReview] = useState(0);
+  const [productReviews, setProductReviews] =
+    useState<Map<string, string[][]>>();
   const [isFetchingReviews, setIsFetchingReviews] = useState(false);
+
+  const [merchantQuality, setMerchantQuality] = useState("");
 
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
@@ -154,8 +161,10 @@ export default function CheckoutCard({
         const productReviewValue = dTag
           ? productReviewScore.get(dTag)
           : undefined;
-        setProductReview(
-          productReviewValue !== undefined ? productReviewValue : 0,
+        setProductReviews(
+          productReviewValue !== undefined
+            ? productReviewValue
+            : new Map<string, string[][]>(),
         );
       }
     }
@@ -187,6 +196,20 @@ export default function CheckoutCard({
       ),
     );
   }, [sizes, sizeQuantities]);
+
+  useEffect(() => {
+    if (!reviewsContext.merchantReviewsData.has(pubkey)) {
+      setMerchantQuality("");
+    } else if (merchantReview >= 0.75) {
+      setMerchantQuality("Trustworthy");
+    } else if (merchantReview >= 0.5) {
+      setMerchantQuality("Solid");
+    } else if (merchantReview >= 0.25) {
+      setMerchantQuality("Questionable");
+    } else {
+      setMerchantQuality("Don't trust, don't bother verifying");
+    }
+  }, [reviewsContext, merchantReview]);
 
   const toggleBuyNow = () => {
     setIsBeingPaid(!isBeingPaid);
@@ -333,14 +356,47 @@ export default function CheckoutCard({
                 </div>
               </div>
               <div className="w-1/2 px-3">
-                <ProfileWithDropdown
-                  pubkey={pubkey}
-                  dropDownKeys={
-                    pubkey === userPubkey
-                      ? ["shop_settings"]
-                      : ["shop", "message"]
-                  }
-                />
+                <div className="flex items-center gap-4">
+                  <ProfileWithDropdown
+                    pubkey={pubkey}
+                    dropDownKeys={
+                      pubkey === userPubkey
+                        ? ["shop_settings"]
+                        : ["shop", "message"]
+                    }
+                  />
+                  {merchantQuality !== "" && (
+                    <div className="inline-flex items-center gap-1 rounded-lg border-2 px-2">
+                      {merchantReview >= 0.5 ? (
+                        <>
+                          <FaceSmileIcon
+                            className={`h-10 w-10 p-1 ${
+                              merchantReview >= 0.75
+                                ? "text-green-500"
+                                : "text-green-300"
+                            }`}
+                          />
+                          <span className="mr-2 whitespace-nowrap text-sm text-light-text dark:text-dark-text">
+                            {merchantQuality}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <FaceFrownIcon
+                            className={`h-10 w-10 p-1 ${
+                              merchantReview >= 0.25
+                                ? "text-red-300"
+                                : "text-red-500"
+                            }`}
+                          />
+                          <span className="mr-2 whitespace-nowrap text-sm text-light-text dark:text-dark-text">
+                            {merchantQuality}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
                 <h2 className="mt-4 w-full text-left text-2xl font-bold text-light-text dark:text-dark-text">
                   {title}
                 </h2>
@@ -431,6 +487,87 @@ export default function CheckoutCard({
                 </button>
               )}
             </div>
+            {!isFetchingReviews && productReviews && (
+              <div className="mt-4 p-4 pt-4">
+                <h3 className="mb-3 text-lg font-semibold text-light-text dark:text-dark-text">
+                  Product Reviews
+                </h3>
+                <div className="space-y-3">
+                  {Array.from(productReviews.entries()).map(
+                    ([reviewerPubkey, reviewData]) => (
+                      <div
+                        key={reviewerPubkey}
+                        className="rounded-lg border p-3"
+                      >
+                        <div className="mb-2 flex items-center gap-2">
+                          <ProfileWithDropdown
+                            pubkey={reviewerPubkey}
+                            dropDownKeys={
+                              reviewerPubkey === userPubkey
+                                ? ["shop_settings"]
+                                : ["shop", "message"]
+                            }
+                          />
+                        </div>
+                        <div className="flex flex-col">
+                          <div className="mb-1 flex flex-wrap gap-2">
+                            {reviewData.map(([_, value, category], index) => {
+                              if (category === undefined) {
+                                // Don't render the comment here; we'll show it later.
+                                return null;
+                              } else if (category === "thumb") {
+                                return (
+                                  <Chip
+                                    key={index}
+                                    className={`text-light-text dark:text-dark-text ${
+                                      value === "1"
+                                        ? "bg-green-500"
+                                        : "bg-red-500"
+                                    }`}
+                                  >
+                                    {`overall: ${value === "1" ? "👍" : "👎"}`}
+                                  </Chip>
+                                );
+                              } else {
+                                // Render chips for other categories
+                                return (
+                                  <Chip
+                                    key={index}
+                                    className={`text-light-text dark:text-dark-text ${
+                                      value === "1"
+                                        ? "bg-green-500"
+                                        : "bg-red-500"
+                                    }`}
+                                  >
+                                    {`${category}: ${
+                                      value === "1" ? "👍" : "👎"
+                                    }`}
+                                  </Chip>
+                                );
+                              }
+                            })}
+                          </div>
+                          {reviewData.map(([category, value], index) => {
+                            if (category === "comment" && value !== "") {
+                              // Render the comment text below the chips
+                              return (
+                                <p
+                                  key={index}
+                                  className="italic text-light-text dark:text-dark-text"
+                                >
+                                  "{value}"
+                                </p>
+                              );
+                            }
+                            return null;
+                          })}
+                        </div>
+                      </div>
+                    ),
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </>
       ) : (

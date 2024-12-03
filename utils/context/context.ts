@@ -40,7 +40,7 @@ export const ProductContext = createContext({
 
 export interface ReviewsContextInterface {
   merchantReviewsData: Map<string, number>;
-  productReviewsData: Map<string, Map<string, number>>;
+  productReviewsData: Map<string, Map<string, Map<string, string[][]>>>;
   isLoading: boolean;
   updateMerchantReviewsData: (
     merchantPubkey: string,
@@ -49,7 +49,7 @@ export interface ReviewsContextInterface {
   updateProductReviewsData: (
     merchantPubkey: string,
     productDTag: string,
-    productReviewsData: number,
+    productReviewsData: Map<string, string[][]>,
   ) => void;
 }
 

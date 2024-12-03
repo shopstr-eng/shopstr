@@ -1,6 +1,6 @@
 // initialize new react funcitonal component
 import { Button, Input } from "@nextui-org/react";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useContext, useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import axios from "axios";
 import { nip19 } from "nostr-tools";
@@ -30,6 +30,9 @@ import {
   publishReviewEvent,
   getLocalStorageData,
 } from "../utility/nostr-helper-functions";
+import { ReviewsContext } from "../../utils/context/context";
+
+// import ReviewContext and update review map when event is published
 
 export const ChatPanel = ({
   handleGoBack,
@@ -76,6 +79,8 @@ export const ChatPanel = ({
     ]),
   );
   const [productAddress, setProductAddress] = useState<string>("");
+
+  const reviewsContext = useContext(ReviewsContext);
 
   const {
     handleSubmit: handleShippingSubmit,

@@ -668,12 +668,12 @@ export const fetchReviews = async (
   products: NostrEvent[],
   editReviewsContext: (
     merchantReviewsMap: Map<string, number>,
-    productReviewsMap: Map<string, Map<string, number>>,
+    productReviewsMap: Map<string, Map<string, Map<string, string[][]>>>,
     isLoading: boolean,
   ) => void,
 ): Promise<{
   merchantReviewsMap: Map<string, number>;
-  productReviewsMap: Map<string, Map<string, number>>;
+  productReviewsMap: Map<string, Map<string, Map<string, string[][]>>>;
 }> => {
   return new Promise(async function (resolve, reject) {
     try {
@@ -695,12 +695,11 @@ export const fetchReviews = async (
       };
 
       const merchantScores = new Map<string, number[]>();
-      const productScores = new Map<
-        string,
-        { merchantPubkey: string; score: number }
-      >();
       const merchantReviewsMap = new Map<string, number>();
-      const productReviewsMap = new Map<string, Map<string, number>>();
+      const productReviewsMap = new Map<
+        string,
+        Map<string, Map<string, string[][]>>
+      >();
 
       const getRatingValue = (tags: string[][], type: string): number => {
         const ratingTag = tags.find(
@@ -741,19 +740,55 @@ export const fetchReviews = async (
           const [_, kind, merchantPubkey, productDTag] = addressTag.split(":");
           if (!merchantPubkey || !productDTag) return;
 
-          const totalScore = calculateWeightedScore(event.tags);
+          const ratingTags = event.tags.filter((tag) => tag[0] === "rating");
+          const commentArray = ["comment", event.content];
+          ratingTags.unshift(commentArray);
 
           // Add score to merchant's scores (all reviews)
           if (!merchantScores.has(merchantPubkey)) {
             merchantScores.set(merchantPubkey, []);
           }
-          merchantScores.get(merchantPubkey)!.push(totalScore);
+          merchantScores
+            .get(merchantPubkey)!
+            .push(calculateWeightedScore(event.tags));
 
-          // Add score to product's scores (only reviews for this specific product)
-          productScores.set(productDTag, {
-            merchantPubkey,
-            score: totalScore,
-          });
+          // Initialize merchant map if doesn't exist
+          if (!productReviewsMap.has(merchantPubkey)) {
+            productReviewsMap.set(merchantPubkey, new Map());
+          }
+
+          // Initialize product map if doesn't exist
+          const merchantProducts = productReviewsMap.get(merchantPubkey)!;
+          if (!merchantProducts.has(productDTag)) {
+            merchantProducts.set(productDTag, new Map());
+          }
+
+          // Add or update review
+          const productReviews = merchantProducts.get(productDTag)!;
+
+          const createdAt = event.created_at;
+
+          // Only update if this is a newer review from this pubkey
+          const existingReview = productReviews.get(event.pubkey);
+          if (
+            !existingReview ||
+            createdAt >
+              Number(
+                existingReview.find((item) => item[0] === "created_at")?.[1],
+              )
+          ) {
+            // Replace the existing created_at or set a new entry
+            const updatedReview = existingReview
+              ? existingReview.map((item) => {
+                  if (item[0] === "created_at") {
+                    return ["created_at", createdAt.toString()]; // Replace the created_at entry
+                  }
+                  return item; // Keep existing items
+                })
+              : [...ratingTags, ["created_at", createdAt.toString()]]; // Initialize if it's a new review
+
+            productReviews.set(event.pubkey, updatedReview);
+          }
         },
         oneose() {
           // Calculate merchant averages (across all their products)
@@ -763,17 +798,19 @@ export const fetchReviews = async (
             merchantReviewsMap.set(pubkey, averageScore);
           }
 
-          // Calculate merchant averages (across all their products)
-          for (const [
-            dTag,
-            { merchantPubkey, score },
-          ] of productScores.entries()) {
-            if (!productReviewsMap.has(merchantPubkey)) {
-              productReviewsMap.set(merchantPubkey, new Map());
-            }
-            const merchantProducts = productReviewsMap.get(merchantPubkey)!;
-            merchantProducts.set(dTag, score);
-          }
+          productReviewsMap.forEach((merchantProducts, merchantPubkey) => {
+            merchantProducts.forEach((productReviews, productDTag) => {
+              productReviews.forEach((review, reviewerPubkey) => {
+                // Filter out the created_at entries
+                const cleanedReview = review.filter(
+                  (item) => item[0] !== "created_at",
+                );
+                if (cleanedReview.length > 0) {
+                  productReviews.set(reviewerPubkey, cleanedReview);
+                }
+              });
+            });
+          });
 
           editReviewsContext(merchantReviewsMap, productReviewsMap, false);
           h.close();
