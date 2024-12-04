@@ -97,7 +97,7 @@ function App({ Component, pageProps }: AppProps) {
       isLoading: true,
       updateMerchantReviewsData: (
         merchantPubkey: string,
-        merchantReviewsData: number,
+        merchantReviewsData: number[],
       ) => {
         setReviewsContext((reviewsContext) => {
           let merchantReviewsDataMap = new Map(
@@ -281,7 +281,7 @@ function App({ Component, pageProps }: AppProps) {
   };
 
   const editReviewsContext = (
-    merchantReviewsData: Map<string, number>,
+    merchantReviewsData: Map<string, number[]>,
     productReviewsData: Map<string, Map<string, Map<string, string[][]>>>,
     isLoading: boolean,
   ) => {
@@ -464,7 +464,7 @@ function App({ Component, pageProps }: AppProps) {
           pubkeysToFetchProfilesFor,
           editProfileContext,
         );
-        let { merchantReviewsMap, productReviewsMap } = await fetchReviews(
+        let { merchantScoresMap, productReviewsMap } = await fetchReviews(
           allRelays,
           productEvents,
           editReviewsContext,

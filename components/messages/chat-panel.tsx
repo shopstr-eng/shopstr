@@ -30,9 +30,8 @@ import {
   publishReviewEvent,
   getLocalStorageData,
 } from "../utility/nostr-helper-functions";
+import { calculateWeightedScore } from "../utility/review-parser-functions";
 import { ReviewsContext } from "../../utils/context/context";
-
-// import ReviewContext and update review map when event is published
 
 export const ChatPanel = ({
   handleGoBack,
@@ -94,7 +93,7 @@ export const ChatPanel = ({
     reset: reviewReset,
   } = useForm();
 
-  const { userNPub } = getLocalStorageData();
+  const { userPubkey, userNPub } = getLocalStorageData();
 
   const bottomDivRef = useRef<HTMLDivElement>(null);
 
@@ -187,18 +186,33 @@ export const ChatPanel = ({
 
   const onReviewSubmit = async (data: { [x: string]: any }) => {
     try {
+      const [_, kind, merchantPubkey, dTag] = productAddress.split(":");
+      const eventTags = [
+        ["d", `a:${productAddress}`],
+        ["rating", (selectedThumb === "up" ? 1 : 0).toString(), "thumb"],
+      ];
+      reviewOptions.forEach((value, key) => {
+        eventTags.push(["rating", value.toString(), key]);
+      });
+      const productReviewsData = new Map<string, string[][]>();
+      productReviewsData.set(userPubkey, eventTags);
       await publishReviewEvent(
-        productAddress,
         data.comment,
-        selectedThumb === "up" ? 1 : 0,
-        reviewOptions,
+        eventTags,
         passphrase,
       );
+      reviewsContext.updateProductReviewsData(merchantPubkey, dTag, productReviewsData);
+      const merchantScoresMap = reviewsContext.merchantReviewsData;
+      if (!merchantScoresMap.has(merchantPubkey)) {
+        merchantScoresMap.set(merchantPubkey, []);
+      }
+      merchantScoresMap
+        .get(merchantPubkey)!
+        .push(calculateWeightedScore(eventTags));
+      reviewsContext.updateMerchantReviewsData(merchantPubkey, merchantScoresMap.get(merchantPubkey) || [calculateWeightedScore(eventTags)]);
       handleToggleReviewModal();
-      // Add success notification or handling here
     } catch (error) {
       console.error("Error submitting review:", error);
-      // Add error handling here
     }
   };
 

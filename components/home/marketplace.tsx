@@ -8,6 +8,7 @@ import {
   Input,
   useDisclosure,
 } from "@nextui-org/react";
+import { FaceFrownIcon, FaceSmileIcon } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import { nip19 } from "nostr-tools";
 import React, { useContext, useEffect, useState } from "react";
@@ -53,6 +54,7 @@ export function MarketplacePage({
   const [wotFilter, setWotFilter] = useState(false);
 
   const [merchantReview, setMerchantReview] = useState(0);
+  const [merchantQuality, setMerchantQuality] = useState("");
   const [filteredProducts, setFilteredProducts] = useState<ProductData[]>([]);
   const [productReviewMap, setProductReviewMap] = useState(
     new Map<string, Map<string, string[][]>>(),
@@ -110,17 +112,36 @@ export function MarketplacePage({
       reviewsContext.productReviewsData.has(focusedPubkey) &&
       typeof reviewsContext.productReviewsData.get(focusedPubkey) != "undefined"
     ) {
-      const merchantReviewScore =
-        reviewsContext.merchantReviewsData.get(focusedPubkey);
+      const merchantScoresMap = reviewsContext.merchantReviewsData;
       const productReviewMap =
         reviewsContext.productReviewsData.get(focusedPubkey);
-      if (merchantReviewScore && productReviewMap) {
-        setMerchantReview(merchantReviewScore);
+      if (merchantScoresMap && productReviewMap) {
+        for (const [pubkey, scores] of merchantScoresMap.entries()) {
+          if (pubkey === focusedPubkey) {
+            const averageScore =
+              scores.reduce((a, b) => a + b, 0) / scores.length;
+            setMerchantReview(averageScore);
+          }
+        }
         setProductReviewMap(productReviewMap);
       }
     }
     setIsFetchingReviews(false);
   }, [focusedPubkey, reviewsContext]);
+
+  useEffect(() => {
+    if (!reviewsContext.merchantReviewsData.has(focusedPubkey)) {
+      setMerchantQuality("");
+    } else if (merchantReview >= 0.75) {
+      setMerchantQuality("Trustworthy");
+    } else if (merchantReview >= 0.5) {
+      setMerchantQuality("Solid");
+    } else if (merchantReview >= 0.25) {
+      setMerchantQuality("Questionable");
+    } else {
+      setMerchantQuality("Don't trust, don't bother verifying");
+    }
+  }, [reviewsContext, merchantReview]);
 
   useEffect(() => {
     setIsFetchingShop(true);
@@ -400,6 +421,42 @@ export function MarketplacePage({
         {selectedSection === "reviews" && !isFetchingReviews && (
           <div className="flex w-full flex-col justify-start bg-transparent px-4 py-8 text-light-text dark:text-dark-text">
             <h2 className="pb-2 text-2xl font-bold">Reviews</h2>
+            {merchantQuality !== "" && (
+              <div className="mt-4 p-4 pt-4">
+                <h3 className="mb-3 text-lg font-semibold text-light-text dark:text-dark-text">
+                  Merchant Quality
+                </h3>
+                <div className="inline-flex items-center gap-1 rounded-lg border-2 px-2">
+                  {merchantReview && merchantReview >= 0.5 ? (
+                    <>
+                      <FaceSmileIcon
+                        className={`h-10 w-10 p-1 ${
+                          merchantReview >= 0.75
+                            ? "text-green-500"
+                            : "text-green-300"
+                        }`}
+                      />
+                      <span className="mr-2 whitespace-nowrap text-sm text-light-text dark:text-dark-text">
+                        {merchantQuality}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <FaceFrownIcon
+                        className={`h-10 w-10 p-1 ${
+                          merchantReview >= 0.25
+                            ? "text-red-300"
+                            : "text-red-500"
+                        }`}
+                      />
+                      <span className="mr-2 whitespace-nowrap text-sm text-light-text dark:text-dark-text">
+                        {merchantQuality}
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
             <p className="text-base">{renderProductScores()}</p>
           </div>
         )}

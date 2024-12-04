@@ -554,7 +554,7 @@ export default function ProductInvoiceCard({
           "Your order for " +
           productData.title +
           " was processed successfully. You should be receiving tracking information from " +
-          productData.pubkey +
+          nip19.npubEncode(productData.pubkey) +
           " as soon as they claim their payment.";
         let contactMessage = "";
         if (!shippingUnitNo && !selectedSize) {
@@ -643,7 +643,7 @@ export default function ProductInvoiceCard({
           "Your order for " +
           productData.title +
           " was processed successfully. You should be receiving delivery information from " +
-          productData.pubkey +
+          nip19.npubEncode(productData.pubkey) +
           " as soon as they claim their payment.";
         if (selectedSize) {
           contactMessage =

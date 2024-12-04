@@ -24,6 +24,7 @@ import {
   ProductData,
   parseTags,
 } from "@/components/utility/product-parser-functions";
+import { calculateWeightedScore } from "@/components/utility/review-parser-functions";
 import { DeleteEvent } from "../../../pages/api/nostr/crud-service";
 
 function getUniqueProofs(proofs: Proof[]): Proof[] {
@@ -667,12 +668,12 @@ export const fetchReviews = async (
   relays: string[],
   products: NostrEvent[],
   editReviewsContext: (
-    merchantReviewsMap: Map<string, number>,
+    merchantReviewsMap: Map<string, number[]>,
     productReviewsMap: Map<string, Map<string, Map<string, string[][]>>>,
     isLoading: boolean,
   ) => void,
 ): Promise<{
-  merchantReviewsMap: Map<string, number>;
+  merchantScoresMap: Map<string, number[]>;
   productReviewsMap: Map<string, Map<string, Map<string, string[][]>>>;
 }> => {
   return new Promise(async function (resolve, reject) {
@@ -694,46 +695,14 @@ export const fetchReviews = async (
         "#d": addresses,
       };
 
-      const merchantScores = new Map<string, number[]>();
-      const merchantReviewsMap = new Map<string, number>();
+      const merchantScoresMap = new Map<string, number[]>();
       const productReviewsMap = new Map<
         string,
         Map<string, Map<string, string[][]>>
       >();
 
-      const getRatingValue = (tags: string[][], type: string): number => {
-        const ratingTag = tags.find(
-          (tag) => tag[0] === "rating" && tag[2] === type,
-        );
-        return ratingTag ? parseFloat(ratingTag[1]) : 0;
-      };
-
-      const calculateWeightedScore = (tags: string[][]): number => {
-        // Thumb score is always 50% of total
-        const thumbScore = getRatingValue(tags, "thumb") * 0.5;
-
-        // Get all rating tags except thumb
-        const ratingTags = tags
-          .filter((tag) => tag[0] === "rating" && tag[2] !== "thumb")
-          .map((tag) => tag[2]);
-
-        // If no additional ratings, return just thumb score
-        if (ratingTags.length === 0) return thumbScore;
-
-        // Calculate weight for each remaining rating (dividing remaining 50% equally)
-        const individualWeight = 0.5 / ratingTags.length;
-
-        // Calculate score for remaining ratings
-        const remainingScore = ratingTags.reduce((total, ratingType) => {
-          return total + getRatingValue(tags, ratingType) * individualWeight;
-        }, 0);
-
-        return thumbScore + remainingScore;
-      };
-
       let h = pool.subscribeMany(relays, [reviewsFilter], {
         onevent(event) {
-          console.log("event", event);
           const addressTag = event.tags.find((tag) => tag[0] === "d")?.[1];
           if (!addressTag) return;
 
@@ -745,10 +714,10 @@ export const fetchReviews = async (
           ratingTags.unshift(commentArray);
 
           // Add score to merchant's scores (all reviews)
-          if (!merchantScores.has(merchantPubkey)) {
-            merchantScores.set(merchantPubkey, []);
+          if (!merchantScoresMap.has(merchantPubkey)) {
+            merchantScoresMap.set(merchantPubkey, []);
           }
-          merchantScores
+          merchantScoresMap
             .get(merchantPubkey)!
             .push(calculateWeightedScore(event.tags));
 
@@ -791,13 +760,6 @@ export const fetchReviews = async (
           }
         },
         oneose() {
-          // Calculate merchant averages (across all their products)
-          for (const [pubkey, scores] of merchantScores.entries()) {
-            const averageScore =
-              scores.reduce((a, b) => a + b, 0) / scores.length;
-            merchantReviewsMap.set(pubkey, averageScore);
-          }
-
           productReviewsMap.forEach((merchantProducts, merchantPubkey) => {
             merchantProducts.forEach((productReviews, productDTag) => {
               productReviews.forEach((review, reviewerPubkey) => {
@@ -812,9 +774,9 @@ export const fetchReviews = async (
             });
           });
 
-          editReviewsContext(merchantReviewsMap, productReviewsMap, false);
+          editReviewsContext(merchantScoresMap, productReviewsMap, false);
           h.close();
-          resolve({ merchantReviewsMap, productReviewsMap });
+          resolve({ merchantScoresMap, productReviewsMap });
         },
       });
     } catch (error) {

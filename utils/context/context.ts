@@ -39,12 +39,12 @@ export const ProductContext = createContext({
 } as ProductContextInterface);
 
 export interface ReviewsContextInterface {
-  merchantReviewsData: Map<string, number>;
+  merchantReviewsData: Map<string, number[]>;
   productReviewsData: Map<string, Map<string, Map<string, string[][]>>>;
   isLoading: boolean;
   updateMerchantReviewsData: (
     merchantPubkey: string,
-    merchantReviewsData: number,
+    merchantReviewsData: number[],
   ) => void;
   updateProductReviewsData: (
     merchantPubkey: string,

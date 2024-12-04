@@ -460,10 +460,8 @@ export async function sendGiftWrappedMessageEvent(
 }
 
 export async function publishReviewEvent(
-  productAddress: string,
   content: string,
-  thumbScore: number,
-  labelMap: Map<string, number>,
+  eventTags: string[][],
   passphrase?: string,
 ) {
   try {
@@ -474,13 +472,6 @@ export async function publishReviewEvent(
     if (!containsRelay(allWriteRelays, blastrRelay)) {
       allWriteRelays.push(blastrRelay);
     }
-    const eventTags = [
-      ["d", `a:${productAddress}`],
-      ["rating", thumbScore.toString(), "thumb"],
-    ];
-    labelMap.forEach((value, key) => {
-      eventTags.push(["rating", value.toString(), key]);
-    });
     let reviewEvent = {
       pubkey: userPubkey,
       created_at: Math.floor(Date.now() / 1000),
