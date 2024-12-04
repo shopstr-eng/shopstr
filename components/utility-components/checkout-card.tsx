@@ -447,7 +447,7 @@ export default function CheckoutCard({
       <SuccessModal
         bodyText="Listing URL copied to clipboard!"
         isOpen={showSuccessModal}
-        onClose={() => setShowSuccessModal(true)}
+        onClose={() => setShowSuccessModal(false)}
       />
     </>
   );
