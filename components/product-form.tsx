@@ -158,7 +158,8 @@ export default function NewForm({
     }
 
     if (data["Sizes"]) {
-      (data["Sizes"] as string[]).forEach((size) => {
+      const sizesArray = Array.isArray(data["Sizes"]) ? data["Sizes"] : (data["Sizes"] as string).split(',').filter(Boolean);
+      sizesArray.forEach((size) => {
         const quantity =
           (data["Size Quantities"] as Map<string, number>).get(size) || 0;
         tags.push(["size", size, quantity.toString()]);
