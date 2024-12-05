@@ -372,7 +372,7 @@ export default function CheckoutCard({
                       }
                     />
                     {merchantQuality !== "" && (
-                      <div className="inline-flex items-center gap-1 rounded-lg border-2 px-2">
+                      <div className="inline-flex items-center gap-1 rounded-lg border-2 border-black px-2 dark:border-white">
                         {merchantReview >= 0.5 ? (
                           <>
                             <FaceSmileIcon
@@ -506,7 +506,7 @@ export default function CheckoutCard({
                     ([reviewerPubkey, reviewData]) => (
                       <div
                         key={reviewerPubkey}
-                        className="rounded-lg border p-3"
+                        className="rounded-lg border-2 border-black p-3 dark:border-white"
                       >
                         <div className="mb-2 flex items-center gap-2">
                           <ProfileWithDropdown

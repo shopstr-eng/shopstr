@@ -210,7 +210,10 @@ export function MarketplacePage({
               <div className="space-y-3">
                 {Array.from(productReviews.entries()).map(
                   ([reviewerPubkey, reviewData]) => (
-                    <div key={reviewerPubkey} className="rounded-lg border p-3">
+                    <div
+                      key={reviewerPubkey}
+                      className="rounded-lg border-2 border-black p-3 dark:border-white"
+                    >
                       <div className="mb-2 flex items-center gap-2">
                         <ProfileWithDropdown
                           pubkey={reviewerPubkey}
@@ -429,7 +432,7 @@ export function MarketplacePage({
                 <h3 className="mb-3 text-lg font-semibold text-light-text dark:text-dark-text">
                   Merchant Quality
                 </h3>
-                <div className="inline-flex items-center gap-1 rounded-lg border-2 px-2">
+                <div className="inline-flex items-center gap-1 rounded-lg border-2 border-black px-2 dark:border-white">
                   {merchantReview && merchantReview >= 0.5 ? (
                     <>
                       <FaceSmileIcon
