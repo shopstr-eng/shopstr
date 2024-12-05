@@ -58,6 +58,7 @@ import {
 } from "./utility/metrics-helper-functions";
 import SignInModal from "./sign-in/SignInModal";
 import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
+import FailureModal from "@/components/utility-components/failure-modal";
 import ShippingForm from "./shipping-form";
 import ContactForm from "./contact-form";
 import CombinedContactForm from "./combined-contact-form";
@@ -96,13 +97,6 @@ export default function CartInvoiceCard({
   const walletContext = useContext(CashuWalletContext);
   const [dTag, setDTag] = useState("");
 
-  const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
-  const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
-  const [randomNpubForReceiver, setRandomNpubForReceiver] =
-    useState<string>("");
-  const [randomNsecForReceiver, setRandomNsecForReceiver] =
-    useState<string>("");
-
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   const [showShippingModal, setShowShippingModal] = useState(false);
@@ -119,6 +113,9 @@ export default function CartInvoiceCard({
   const [showPurchaseTypeOption, setShowPurchaseTypeOption] = useState(false);
   const [needsShippingInfo, setNeedsShippingInfo] = useState(false);
   const [needsCombinedInfo, setNeedsCombinedInfo] = useState(false);
+
+  const [showFailureModal, setShowFailureModal] = useState(false);
+  const [failureText, setFailureText] = useState("");
 
   const uniqueShippingTypes = useMemo(() => {
     return Array.from(new Set(Object.values(shippingTypes)));
@@ -149,31 +146,6 @@ export default function CartInvoiceCard({
   }, [signInMethod, passphrase]);
 
   useEffect(() => {
-    axios({
-      method: "GET",
-      url: "/api/nostr/generate-keys",
-    })
-      .then((response) => {
-        setRandomNpubForSender(response.data.npub);
-        setRandomNsecForSender(response.data.nsec);
-      })
-      .catch((error) => {
-        console.error(error);
-      });
-    axios({
-      method: "GET",
-      url: "/api/nostr/generate-keys",
-    })
-      .then((response) => {
-        setRandomNpubForReceiver(response.data.npub);
-        setRandomNsecForReceiver(response.data.nsec);
-      })
-      .catch((error) => {
-        console.error(error);
-      });
-  }, []);
-
-  useEffect(() => {
     const walletEvent = walletContext.mostRecentWalletEvent;
     if (walletEvent?.tags) {
       const walletTag = walletEvent.tags.find(
@@ -183,6 +155,29 @@ export default function CartInvoiceCard({
     }
   }, [walletContext]);
 
+  const generateNewKeys = async () => {
+    try {
+      const senderResponse = await axios({
+        method: "GET",
+        url: "/api/nostr/generate-keys",
+      });
+      const receiverResponse = await axios({
+        method: "GET",
+        url: "/api/nostr/generate-keys",
+      });
+
+      return {
+        senderNpub: senderResponse.data.npub,
+        senderNsec: senderResponse.data.nsec,
+        receiverNpub: receiverResponse.data.npub,
+        receiverNsec: receiverResponse.data.nsec,
+      };
+    } catch (error) {
+      console.error(error);
+      return null;
+    }
+  };
+
   const sendPaymentAndContactMessage = async (
     pubkeyOfProduct: string,
     message: string,
@@ -190,10 +185,17 @@ export default function CartInvoiceCard({
     product: ProductData,
     isReceipt?: boolean,
   ) => {
-    let decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
-    let decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
-    let decodedRandomPubkeyForReceiver = nip19.decode(randomNpubForReceiver);
-    let decodedRandomPrivkeyForReceiver = nip19.decode(randomNsecForReceiver);
+    const newKeys = await generateNewKeys();
+    if (!newKeys) {
+      setFailureText("Failed to generate new keys for messages!");
+      setShowFailureModal(true);
+      return;
+    }
+
+    let decodedRandomPubkeyForSender = nip19.decode(newKeys.senderNpub);
+    let decodedRandomPrivkeyForSender = nip19.decode(newKeys.senderNsec);
+    let decodedRandomPubkeyForReceiver = nip19.decode(newKeys.receiverNpub);
+    let decodedRandomPrivkeyForReceiver = nip19.decode(newKeys.receiverNsec);
 
     if (isReceipt) {
       let giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
@@ -866,46 +868,44 @@ export default function CartInvoiceCard({
             type="submit"
             className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
             onClick={() => {
-              if (randomNsecForReceiver !== "" && randomNpubForSender !== "") {
-                if (
-                  uniqueShippingTypes.length === 1 &&
-                  uniqueShippingTypes.includes("Free/Pickup")
-                ) {
-                  setIsCashuPayment(false);
-                  setShowShippingOption(true);
-                } else if (
-                  !uniqueShippingTypes.includes("N/A") &&
-                  !uniqueShippingTypes.includes("Pickup")
-                ) {
-                  setIsCashuPayment(false);
-                  setNeedsShippingInfo(true);
-                  setNeedsCombinedInfo(false);
-                  setShowPurchaseTypeOption(true);
-                } else if (
-                  !uniqueShippingTypes.includes("Free") &&
-                  !uniqueShippingTypes.includes("Added Cost")
-                ) {
-                  setIsCashuPayment(false);
-                  setNeedsShippingInfo(false);
-                  setNeedsCombinedInfo(false);
-                  setShowPurchaseTypeOption(true);
-                } else if (
-                  !uniqueShippingTypes.includes("Free") &&
-                  !uniqueShippingTypes.includes("Added Cost") &&
-                  !uniqueShippingTypes.includes("N/A") &&
-                  !uniqueShippingTypes.includes("Pickup") &&
-                  !uniqueShippingTypes.includes("Free/Pickup")
-                ) {
-                  setIsCashuPayment(false);
-                  setNeedsShippingInfo(false);
-                  setNeedsCombinedInfo(false);
-                  setShowPurchaseTypeOption(true);
-                } else {
-                  setIsCashuPayment(false);
-                  setNeedsShippingInfo(false);
-                  setNeedsCombinedInfo(true);
-                  setShowPurchaseTypeOption(true);
-                }
+              if (
+                uniqueShippingTypes.length === 1 &&
+                uniqueShippingTypes.includes("Free/Pickup")
+              ) {
+                setIsCashuPayment(false);
+                setShowShippingOption(true);
+              } else if (
+                !uniqueShippingTypes.includes("N/A") &&
+                !uniqueShippingTypes.includes("Pickup")
+              ) {
+                setIsCashuPayment(false);
+                setNeedsShippingInfo(true);
+                setNeedsCombinedInfo(false);
+                setShowPurchaseTypeOption(true);
+              } else if (
+                !uniqueShippingTypes.includes("Free") &&
+                !uniqueShippingTypes.includes("Added Cost")
+              ) {
+                setIsCashuPayment(false);
+                setNeedsShippingInfo(false);
+                setNeedsCombinedInfo(false);
+                setShowPurchaseTypeOption(true);
+              } else if (
+                !uniqueShippingTypes.includes("Free") &&
+                !uniqueShippingTypes.includes("Added Cost") &&
+                !uniqueShippingTypes.includes("N/A") &&
+                !uniqueShippingTypes.includes("Pickup") &&
+                !uniqueShippingTypes.includes("Free/Pickup")
+              ) {
+                setIsCashuPayment(false);
+                setNeedsShippingInfo(false);
+                setNeedsCombinedInfo(false);
+                setShowPurchaseTypeOption(true);
+              } else {
+                setIsCashuPayment(false);
+                setNeedsShippingInfo(false);
+                setNeedsCombinedInfo(true);
+                setShowPurchaseTypeOption(true);
               }
             }}
             startContent={
@@ -923,42 +923,40 @@ export default function CartInvoiceCard({
                 onOpen();
                 return;
               }
-              if (randomNsecForReceiver !== "" && randomNpubForSender !== "") {
-                if (
-                  uniqueShippingTypes.length === 1 &&
-                  uniqueShippingTypes.includes("Free/Pickup")
-                ) {
-                  setIsCashuPayment(true);
-                  setShowShippingOption(true);
-                } else if (
-                  !uniqueShippingTypes.includes("N/A") &&
-                  !uniqueShippingTypes.includes("Pickup")
-                ) {
-                  setIsCashuPayment(true);
-                  setNeedsShippingInfo(true);
-                  setShowPurchaseTypeOption(true);
-                } else if (
-                  !uniqueShippingTypes.includes("Free") &&
-                  !uniqueShippingTypes.includes("Added Cost")
-                ) {
-                  setIsCashuPayment(true);
-                  setNeedsShippingInfo(false);
-                  setShowPurchaseTypeOption(true);
-                } else if (
-                  !uniqueShippingTypes.includes("Free") &&
-                  !uniqueShippingTypes.includes("Added Cost") &&
-                  !uniqueShippingTypes.includes("N/A") &&
-                  !uniqueShippingTypes.includes("Pickup") &&
-                  !uniqueShippingTypes.includes("Free/Pickup")
-                ) {
-                  setIsCashuPayment(true);
-                  setNeedsShippingInfo(false);
-                  setShowPurchaseTypeOption(true);
-                } else {
-                  setIsCashuPayment(true);
-                  setNeedsShippingInfo(false);
-                  setShowPurchaseTypeOption(true);
-                }
+              if (
+                uniqueShippingTypes.length === 1 &&
+                uniqueShippingTypes.includes("Free/Pickup")
+              ) {
+                setIsCashuPayment(true);
+                setShowShippingOption(true);
+              } else if (
+                !uniqueShippingTypes.includes("N/A") &&
+                !uniqueShippingTypes.includes("Pickup")
+              ) {
+                setIsCashuPayment(true);
+                setNeedsShippingInfo(true);
+                setShowPurchaseTypeOption(true);
+              } else if (
+                !uniqueShippingTypes.includes("Free") &&
+                !uniqueShippingTypes.includes("Added Cost")
+              ) {
+                setIsCashuPayment(true);
+                setNeedsShippingInfo(false);
+                setShowPurchaseTypeOption(true);
+              } else if (
+                !uniqueShippingTypes.includes("Free") &&
+                !uniqueShippingTypes.includes("Added Cost") &&
+                !uniqueShippingTypes.includes("N/A") &&
+                !uniqueShippingTypes.includes("Pickup") &&
+                !uniqueShippingTypes.includes("Free/Pickup")
+              ) {
+                setIsCashuPayment(true);
+                setNeedsShippingInfo(false);
+                setShowPurchaseTypeOption(true);
+              } else {
+                setIsCashuPayment(true);
+                setNeedsShippingInfo(false);
+                setShowPurchaseTypeOption(true);
               }
             }}
             startContent={
@@ -1297,6 +1295,14 @@ export default function CartInvoiceCard({
         isOpen={enterPassphrase}
         setIsOpen={setEnterPassphrase}
         onCancelRouteTo={"/cart"}
+      />
+      <FailureModal
+        bodyText={failureText}
+        isOpen={showFailureModal}
+        onClose={() => {
+          setShowFailureModal(false);
+          setFailureText("");
+        }}
       />
     </>
   );
