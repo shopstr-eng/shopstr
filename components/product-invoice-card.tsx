@@ -706,7 +706,7 @@ export default function ProductInvoiceCard({
       return;
     }
     router.push({
-      pathname: "/messages",
+      pathname: "/orders",
       query: { pk: nip19.npubEncode(pubkeyToOpenChatWith), isInquiry: true },
     });
   };

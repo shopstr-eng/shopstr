@@ -118,7 +118,7 @@ const TopNav = ({
   }, [router.pathname, shopMapContext]);
 
   const handleRoute = (path: string) => {
-    if (signedIn) {
+    if (signedIn || (!signedIn && path === "/metrics")) {
       router.push(path);
       setIsMobileMenuOpen(false);
     } else {
@@ -143,7 +143,7 @@ const TopNav = ({
       </Button>
       <Button
         className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-        onClick={() => handleRoute("/messages")}
+        onClick={() => handleRoute("/orders")}
       >
         Orders {unreadMsgCount > 0 && `(${unreadMsgCount})`}
       </Button>
@@ -236,7 +236,7 @@ const TopNav = ({
           |
           <Button
             className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-            onClick={() => handleRoute("/messages")}
+            onClick={() => handleRoute("/orders")}
           >
             Orders {unreadMsgCount > 0 && `(${unreadMsgCount})`}
           </Button>

@@ -178,7 +178,7 @@ export function MarketplacePage({
       return;
     }
     router.push({
-      pathname: "/messages",
+      pathname: "/orders",
       query: { pk: nip19.npubEncode(pubkeyToOpenChatWith), isInquiry: true },
     });
   };
@@ -217,7 +217,7 @@ export function MarketplacePage({
                           dropDownKeys={
                             reviewerPubkey === userPubkey
                               ? ["shop_settings"]
-                              : ["shop", "message"]
+                              : ["shop", "inquiry"]
                           }
                         />
                       </div>

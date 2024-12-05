@@ -95,7 +95,7 @@ export const ChatMessage = ({
             className="cursor-pointer text-shopstr-purple-light hover:underline dark:text-shopstr-yellow-light"
             onClick={() => {
               router.replace({
-                pathname: "/messages",
+                pathname: "/orders",
                 query: { pk: word, isInquiry: true },
               });
             }}

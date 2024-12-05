@@ -26,7 +26,7 @@ import FailureModal from "../failure-modal";
 type DropDownKeys =
   | "shop"
   | "shop_settings"
-  | "message"
+  | "inquiry"
   | "settings"
   | "user_profile"
   | "logout";
@@ -91,8 +91,8 @@ export const ProfileWithDropdown = ({
       },
       label: "Shop Settings",
     },
-    message: {
-      key: "message",
+    inquiry: {
+      key: "inquiry",
       color: "default",
       className: "text-light-text dark:text-dark-text",
       startContent: <ChatBubbleBottomCenterIcon className={"h-5 w-5"} />,
@@ -102,11 +102,11 @@ export const ProfileWithDropdown = ({
           return;
         }
         router.push({
-          pathname: "/messages",
+          pathname: "/orders",
           query: { pk: npub, isInquiry: true },
         });
       },
-      label: "Send Message",
+      label: "Send Inquiry",
     },
     user_profile: {
       key: "user_profile",

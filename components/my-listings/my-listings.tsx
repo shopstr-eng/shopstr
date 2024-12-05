@@ -101,7 +101,7 @@ export const MyListingsPage = () => {
         <Button
           className="w-full bg-transparent px-4 py-2 text-left text-sm text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
           onClick={() => {
-            router.push("/messages");
+            router.push("/orders");
             setIsMobileMenuOpen(false);
           }}
         >
@@ -149,7 +149,7 @@ export const MyListingsPage = () => {
                   </Button>
                   <Button
                     className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                    onClick={() => router.push("/messages")}
+                    onClick={() => router.push("/orders")}
                   >
                     Messages
                   </Button>
@@ -199,7 +199,7 @@ export const MyListingsPage = () => {
                   </Button>
                   <Button
                     className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                    onClick={() => router.push("/messages")}
+                    onClick={() => router.push("/orders")}
                   >
                     Messages
                   </Button>

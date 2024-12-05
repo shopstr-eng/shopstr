@@ -312,7 +312,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       setIsSendingDMLoading(false);
     } catch (e) {
       console.log("handleSendMessage errored", e);
-      setFailureText("Error sending message.");
+      setFailureText("Error sending inquiry.");
       setShowFailureModal(true);
       setIsSendingDMLoading(false);
     }

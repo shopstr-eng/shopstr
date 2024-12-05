@@ -80,8 +80,8 @@ export default function MetricsPage() {
     <div className="flex h-full min-h-screen flex-col bg-light-bg pt-24 dark:bg-dark-bg">
       <div className="p-4">
         <Callout title="Work In Progress - Analytics" color="purple">
-          This is a global metrics of all of Shopstr. We are working on a
-          personalized Analytics page for every Shopstr merchant!
+          This is a global metrics page for all of Shopstr. We are working on a
+          personalized metrics page for every Shopstr merchant!
         </Callout>
         <DateRangePicker
           className="my-5"

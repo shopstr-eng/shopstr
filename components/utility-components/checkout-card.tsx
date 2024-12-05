@@ -264,12 +264,12 @@ export default function CheckoutCard({
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
     let { signInMethod } = getLocalStorageData();
     if (!signInMethod) {
-      setFailureText("You must be signed in to send a message!");
+      setFailureText("You must be signed in to send an inquiry!");
       setShowFailureModal(true);
       return;
     }
     router.push({
-      pathname: "/messages",
+      pathname: "/orders",
       query: { pk: nip19.npubEncode(pubkeyToOpenChatWith), isInquiry: true },
     });
   };
@@ -368,7 +368,7 @@ export default function CheckoutCard({
                       dropDownKeys={
                         pubkey === userPubkey
                           ? ["shop_settings"]
-                          : ["shop", "message"]
+                          : ["shop", "inquiry"]
                       }
                     />
                     {merchantQuality !== "" && (
@@ -514,7 +514,7 @@ export default function CheckoutCard({
                             dropDownKeys={
                               reviewerPubkey === userPubkey
                                 ? ["shop_settings"]
-                                : ["shop", "message"]
+                                : ["shop", "inquiry"]
                             }
                           />
                         </div>

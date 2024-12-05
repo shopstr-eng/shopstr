@@ -9,6 +9,7 @@ const useNavigation = () => {
   const [isHomeActive, setIsHomeActive] = useState(false);
   const [isMessagesActive, setIsMessagesActive] = useState(false);
   const [isWalletActive, setIsWalletActive] = useState(false);
+  const [isMyListingsActive, setIsMyListingsActive] = useState(false);
   const [isMetricsActive, setIsMetricsActive] = useState(false);
   const [isProfileActive, setIsProfileActive] = useState(false);
 
@@ -16,6 +17,7 @@ const useNavigation = () => {
     setIsHomeActive(false);
     setIsMessagesActive(false);
     setIsWalletActive(false);
+    setIsMyListingsActive(false);
     setIsMetricsActive(false);
     setIsProfileActive(false);
 
@@ -23,11 +25,14 @@ const useNavigation = () => {
       case "/":
         setIsHomeActive(true);
         break;
-      case "/messages":
+      case "/orders":
         setIsMessagesActive(true);
         break;
       case "/wallet":
         setIsWalletActive(true);
+        break;
+      case "/my-listings":
+        setIsMyListingsActive(true);
         break;
       case "/metrics":
         setIsMetricsActive(true);
@@ -45,6 +50,7 @@ const useNavigation = () => {
     isHomeActive,
     isMessagesActive,
     isWalletActive,
+    isMyListingsActive,
     isMetricsActive,
     isProfileActive,
   };

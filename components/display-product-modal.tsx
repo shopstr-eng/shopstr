@@ -160,7 +160,7 @@ export default function DisplayProductModal({
                 dropDownKeys={
                   productData.pubkey === userPubkey
                     ? ["shop_settings"]
-                    : ["shop", "message"]
+                    : ["shop", "inquiry"]
                 }
               />
               <Chip key={location} startContent={locationAvatar(location)}>
