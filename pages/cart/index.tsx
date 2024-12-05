@@ -487,8 +487,8 @@ export default function Component() {
         </div>
       ) : (
         <>
-          <div className="flex w-full items-center justify-center bg-light-bg pt-20 dark:bg-dark-bg">
-            <div className="flex flex-col">
+          <div className="flex min-h-screen w-full bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text">
+            <div className="flex flex-col pt-20">
               {products.length > 0 && (
                 <>
                   {products.map((product) => (
