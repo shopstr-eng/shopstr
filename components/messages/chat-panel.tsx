@@ -196,12 +196,12 @@ export const ChatPanel = ({
       });
       const productReviewsData = new Map<string, string[][]>();
       productReviewsData.set(userPubkey, eventTags);
-      await publishReviewEvent(
-        data.comment,
-        eventTags,
-        passphrase,
+      await publishReviewEvent(data.comment, eventTags, passphrase);
+      reviewsContext.updateProductReviewsData(
+        merchantPubkey,
+        dTag,
+        productReviewsData,
       );
-      reviewsContext.updateProductReviewsData(merchantPubkey, dTag, productReviewsData);
       const merchantScoresMap = reviewsContext.merchantReviewsData;
       if (!merchantScoresMap.has(merchantPubkey)) {
         merchantScoresMap.set(merchantPubkey, []);
@@ -209,7 +209,12 @@ export const ChatPanel = ({
       merchantScoresMap
         .get(merchantPubkey)!
         .push(calculateWeightedScore(eventTags));
-      reviewsContext.updateMerchantReviewsData(merchantPubkey, merchantScoresMap.get(merchantPubkey) || [calculateWeightedScore(eventTags)]);
+      reviewsContext.updateMerchantReviewsData(
+        merchantPubkey,
+        merchantScoresMap.get(merchantPubkey) || [
+          calculateWeightedScore(eventTags),
+        ],
+      );
       handleToggleReviewModal();
     } catch (error) {
       console.error("Error submitting review:", error);

@@ -266,7 +266,7 @@ export function MarketplacePage({
                                 key={index}
                                 className="italic text-light-text dark:text-dark-text"
                               >
-                                "{value}"
+                                &ldquo;{value}&rdquo;
                               </p>
                             );
                           }
@@ -288,10 +288,22 @@ export function MarketplacePage({
     <div className="mx-auto w-full">
       <div className="flex max-w-[100%] flex-col bg-light-bg px-3 pb-2 dark:bg-dark-bg">
         {shopBannerURL != "" && focusedPubkey != "" && !isFetchingShop ? (
-          <div className="mt-3 flex items-center justify-between font-bold text-light-text dark:text-dark-text">
-            <div className="flex gap-1">
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            {/* Search input - appears on top for small screens */}
+            <div className="w-full sm:order-2 sm:w-auto">
+              <Input
+                className="text-light-text dark:text-dark-text"
+                isClearable
+                placeholder="Search items..."
+                startContent={<MagnifyingGlassIcon height={"1em"} />}
+                onChange={(event) => setSelectedSearch(event.target.value)}
+              />
+            </div>
+
+            {/* Navigation buttons */}
+            <div className="flex gap-1 sm:order-1">
               <Button
-                className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                className="bg-transparent text-lg text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text sm:text-xl"
                 onClick={() => {
                   setSelectedCategories(new Set<string>([]));
                   setSelectedLocation("");
@@ -302,7 +314,7 @@ export function MarketplacePage({
                 Shop
               </Button>
               <Button
-                className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                className="bg-transparent text-lg text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text sm:text-xl"
                 onClick={() => {
                   setSelectedSection("reviews");
                 }}
@@ -310,7 +322,7 @@ export function MarketplacePage({
                 Reviews
               </Button>
               <Button
-                className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                className="bg-transparent text-lg text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text sm:text-xl"
                 onClick={() => {
                   setSelectedSection("about");
                 }}
@@ -318,20 +330,11 @@ export function MarketplacePage({
                 About
               </Button>
               <Button
-                className="yoytext-light-text bg-transparent text-xl hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                className="bg-transparent text-lg text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text sm:text-xl"
                 onClick={() => handleSendMessage(focusedPubkey)}
               >
                 Message
               </Button>
-            </div>
-            <div>
-              <Input
-                className="text-light-text dark:text-dark-text"
-                isClearable
-                placeholder="Search items..."
-                startContent={<MagnifyingGlassIcon height={"1em"} />}
-                onChange={(event) => setSelectedSearch(event.target.value)}
-              />
             </div>
           </div>
         ) : (

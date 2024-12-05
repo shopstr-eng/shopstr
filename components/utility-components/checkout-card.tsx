@@ -361,46 +361,48 @@ export default function CheckoutCard({
                 </div>
               </div>
               <div className="w-1/2 px-3">
-                <div className="flex items-center gap-4">
-                  <ProfileWithDropdown
-                    pubkey={pubkey}
-                    dropDownKeys={
-                      pubkey === userPubkey
-                        ? ["shop_settings"]
-                        : ["shop", "message"]
-                    }
-                  />
-                  {merchantQuality !== "" && (
-                    <div className="inline-flex items-center gap-1 rounded-lg border-2 px-2">
-                      {merchantReview >= 0.5 ? (
-                        <>
-                          <FaceSmileIcon
-                            className={`h-10 w-10 p-1 ${
-                              merchantReview >= 0.75
-                                ? "text-green-500"
-                                : "text-green-300"
-                            }`}
-                          />
-                          <span className="mr-2 whitespace-nowrap text-sm text-light-text dark:text-dark-text">
-                            {merchantQuality}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <FaceFrownIcon
-                            className={`h-10 w-10 p-1 ${
-                              merchantReview >= 0.25
-                                ? "text-red-300"
-                                : "text-red-500"
-                            }`}
-                          />
-                          <span className="mr-2 whitespace-nowrap text-sm text-light-text dark:text-dark-text">
-                            {merchantQuality}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  )}
+                <div className="flex w-full flex-col gap-4">
+                  <div className="flex flex-wrap items-center gap-4">
+                    <ProfileWithDropdown
+                      pubkey={pubkey}
+                      dropDownKeys={
+                        pubkey === userPubkey
+                          ? ["shop_settings"]
+                          : ["shop", "message"]
+                      }
+                    />
+                    {merchantQuality !== "" && (
+                      <div className="inline-flex items-center gap-1 rounded-lg border-2 px-2">
+                        {merchantReview >= 0.5 ? (
+                          <>
+                            <FaceSmileIcon
+                              className={`h-10 w-10 p-1 ${
+                                merchantReview >= 0.75
+                                  ? "text-green-500"
+                                  : "text-green-300"
+                              }`}
+                            />
+                            <span className="mr-2 whitespace-nowrap text-sm text-light-text dark:text-dark-text">
+                              {merchantQuality}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <FaceFrownIcon
+                              className={`h-10 w-10 p-1 ${
+                                merchantReview >= 0.25
+                                  ? "text-red-300"
+                                  : "text-red-500"
+                              }`}
+                            />
+                            <span className="mr-2 whitespace-nowrap text-sm text-light-text dark:text-dark-text">
+                              {merchantQuality}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <h2 className="mt-4 w-full text-left text-2xl font-bold text-light-text dark:text-dark-text">
                   {title}
@@ -432,36 +434,38 @@ export default function CheckoutCard({
                     {location}
                   </Chip>
                 </div>
-                <div className="flex w-full gap-2">
-                  <Button
-                    className={`${SHOPSTRBUTTONCLASSNAMES} ${
-                      hasSizes && !selectedSize
-                        ? "cursor-not-allowed opacity-50"
-                        : ""
-                    }`}
-                    onClick={toggleBuyNow}
-                    disabled={hasSizes && !selectedSize}
-                  >
-                    Buy Now
-                  </Button>
-                  <Button
-                    className={`${SHOPSTRBUTTONCLASSNAMES} ${
-                      isAdded || (hasSizes && !selectedSize)
-                        ? "cursor-not-allowed opacity-50"
-                        : ""
-                    }`}
-                    onClick={handleAddToCart}
-                    disabled={isAdded || (hasSizes && !selectedSize)}
-                  >
-                    Add To Cart
-                  </Button>
-                  <Button
-                    type="submit"
-                    className={SHOPSTRBUTTONCLASSNAMES}
-                    onClick={handleShare}
-                  >
-                    Share
-                  </Button>
+                <div className="flex w-full flex-col gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      className={`${SHOPSTRBUTTONCLASSNAMES} ${
+                        hasSizes && !selectedSize
+                          ? "cursor-not-allowed opacity-50"
+                          : ""
+                      }`}
+                      onClick={toggleBuyNow}
+                      disabled={hasSizes && !selectedSize}
+                    >
+                      Buy Now
+                    </Button>
+                    <Button
+                      className={`${SHOPSTRBUTTONCLASSNAMES} ${
+                        isAdded || (hasSizes && !selectedSize)
+                          ? "cursor-not-allowed opacity-50"
+                          : ""
+                      }`}
+                      onClick={handleAddToCart}
+                      disabled={isAdded || (hasSizes && !selectedSize)}
+                    >
+                      Add To Cart
+                    </Button>
+                    <Button
+                      type="submit"
+                      className={SHOPSTRBUTTONCLASSNAMES}
+                      onClick={handleShare}
+                    >
+                      Share
+                    </Button>
+                  </div>
                 </div>
                 {pubkey !== userPubkey && (
                   <span
@@ -493,7 +497,7 @@ export default function CheckoutCard({
               )}
             </div>
             {!isFetchingReviews && productReviews && (
-              <div className="mt-4 p-4 pt-4">
+              <div className="mt-4 max-w-full p-4 pt-4">
                 <h3 className="mb-3 text-lg font-semibold text-light-text dark:text-dark-text">
                   Product Reviews
                 </h3>
@@ -560,7 +564,7 @@ export default function CheckoutCard({
                                   key={index}
                                   className="italic text-light-text dark:text-dark-text"
                                 >
-                                  "{value}"
+                                  &ldquo;{value}&rdquo;
                                 </p>
                               );
                             }
