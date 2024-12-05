@@ -1,4 +1,3 @@
-//TODO: perhaps see if we can abstract away some payment logic into reusable functions
 import React, { useContext, useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/router";
 import { CashuWalletContext } from "../utils/context/context";
@@ -80,7 +79,8 @@ export default function CartInvoiceCard({
   totalShippingCost: number;
   totalCost: number;
 }) {
-  const { signInMethod, mints, tokens, history } = getLocalStorageData();
+  const { userPubkey, userNPub, signInMethod, mints, tokens, history } =
+    getLocalStorageData();
   const router = useRouter();
 
   const [enterPassphrase, setEnterPassphrase] = useState(false);
@@ -187,42 +187,70 @@ export default function CartInvoiceCard({
     pubkeyOfProduct: string,
     message: string,
     isPayment: boolean,
+    product: ProductData,
+    isReceipt?: boolean,
   ) => {
     let decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
     let decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
     let decodedRandomPubkeyForReceiver = nip19.decode(randomNpubForReceiver);
     let decodedRandomPrivkeyForReceiver = nip19.decode(randomNsecForReceiver);
 
-    let giftWrappedMessageEvent;
-    if (isPayment) {
-      giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
+    if (isReceipt) {
+      let giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
         decodedRandomPubkeyForSender.data as string,
-        pubkeyOfProduct,
+        userPubkey,
         message,
-        "order-payment",
+        "order-receipt",
+        product,
       );
+      let sealedEvent = await constructMessageSeal(
+        giftWrappedMessageEvent,
+        decodedRandomPubkeyForSender.data as string,
+        userPubkey,
+        undefined,
+        decodedRandomPrivkeyForSender.data as Uint8Array,
+      );
+      let giftWrappedEvent = await constructMessageGiftWrap(
+        sealedEvent,
+        decodedRandomPubkeyForReceiver.data as string,
+        decodedRandomPrivkeyForReceiver.data as Uint8Array,
+        userPubkey,
+      );
+      await sendGiftWrappedMessageEvent(giftWrappedEvent);
     } else {
-      giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
+      let giftWrappedMessageEvent;
+      if (isPayment) {
+        giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
+          decodedRandomPubkeyForSender.data as string,
+          pubkeyOfProduct,
+          message,
+          "order-payment",
+          product,
+        );
+      } else {
+        giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
+          decodedRandomPubkeyForSender.data as string,
+          pubkeyOfProduct,
+          message,
+          "order-info",
+          product,
+        );
+      }
+      let sealedEvent = await constructMessageSeal(
+        giftWrappedMessageEvent,
         decodedRandomPubkeyForSender.data as string,
         pubkeyOfProduct,
-        message,
-        "order-info",
+        undefined,
+        decodedRandomPrivkeyForSender.data as Uint8Array,
       );
+      let giftWrappedEvent = await constructMessageGiftWrap(
+        sealedEvent,
+        decodedRandomPubkeyForReceiver.data as string,
+        decodedRandomPrivkeyForReceiver.data as Uint8Array,
+        pubkeyOfProduct,
+      );
+      await sendGiftWrappedMessageEvent(giftWrappedEvent);
     }
-    let sealedEvent = await constructMessageSeal(
-      giftWrappedMessageEvent,
-      decodedRandomPubkeyForSender.data as string,
-      pubkeyOfProduct,
-      undefined,
-      decodedRandomPrivkeyForSender.data as Uint8Array,
-    );
-    let giftWrappedEvent = await constructMessageGiftWrap(
-      sealedEvent,
-      decodedRandomPubkeyForReceiver.data as string,
-      decodedRandomPrivkeyForReceiver.data as Uint8Array,
-      pubkeyOfProduct,
-    );
-    await sendGiftWrappedMessageEvent(giftWrappedEvent);
   };
 
   const onShippingSubmit = async (data: { [x: string]: any }) => {
@@ -548,7 +576,9 @@ export default function CartInvoiceCard({
       let paymentMessage = "";
       if (quantities[product.id] && quantities[product.id] > 1) {
         paymentMessage =
-          "This is a Cashu token payment for " +
+          "This is a Cashu token payment from " +
+          userNPub +
+          " for " +
           quantities[product.id] +
           " of your " +
           title +
@@ -556,12 +586,14 @@ export default function CartInvoiceCard({
           encodedTokenToSend;
       } else {
         paymentMessage =
-          "This is a Cashu token payment for your " +
+          "This is a Cashu token payment from " +
+          userNPub +
+          " for your " +
           title +
           " listing on Shopstr: " +
           encodedTokenToSend;
       }
-      await sendPaymentAndContactMessage(pubkey, paymentMessage, true);
+      await sendPaymentAndContactMessage(pubkey, paymentMessage, true, product);
       if (metricsInvoiceId) {
         captureInvoicePaidmetric(metricsInvoiceId, product);
       } else {
@@ -585,6 +617,12 @@ export default function CartInvoiceCard({
           product.shippingType === "Free" ||
           (product.shippingType === "Free/Pickup" && needsShippingInfo === true)
         ) {
+          let receiptMessage =
+            "Your order for " +
+            product.title +
+            " was processed successfully. You should be receiving tracking information from " +
+            nip19.npubEncode(product.pubkey) +
+            " as soon as they claim their payment.";
           let contactMessage = "";
           if (!shippingUnitNo && !product.selectedSize) {
             contactMessage =
@@ -655,13 +693,31 @@ export default function CartInvoiceCard({
               shippingCountry +
               ".";
           }
-          await sendPaymentAndContactMessage(pubkey, contactMessage, false);
+          await sendPaymentAndContactMessage(
+            pubkey,
+            contactMessage,
+            false,
+            product,
+          );
+          await sendPaymentAndContactMessage(
+            userPubkey,
+            receiptMessage,
+            false,
+            product,
+            true,
+          );
         } else if (
           product.shippingType === "N/A" ||
           product.shippingType === "Pickup" ||
           (product.shippingType === "Free/Pickup" &&
             needsShippingInfo === false)
         ) {
+          let receiptMessage =
+            "Your order for " +
+            product.title +
+            " was processed successfully. You should be receiving delivery information from " +
+            nip19.npubEncode(product.pubkey) +
+            " as soon as they claim their payment.";
           let contactMessage;
           if (product.selectedSize) {
             contactMessage =
@@ -686,12 +742,29 @@ export default function CartInvoiceCard({
               " using the following instructions: " +
               contactInstructions;
           }
-          await sendPaymentAndContactMessage(pubkey, contactMessage, false);
+          await sendPaymentAndContactMessage(
+            pubkey,
+            contactMessage,
+            false,
+            product,
+          );
+          await sendPaymentAndContactMessage(
+            userPubkey,
+            receiptMessage,
+            false,
+            product,
+            true,
+          );
         }
       } else if (product.selectedSize) {
         let contactMessage =
           "This purchase was for a size " + product.selectedSize + ".";
-        await sendPaymentAndContactMessage(pubkey, contactMessage, false);
+        await sendPaymentAndContactMessage(
+          pubkey,
+          contactMessage,
+          false,
+          product,
+        );
       }
     }
   };
@@ -929,12 +1002,12 @@ export default function CartInvoiceCard({
                       </p>
                       <ClipboardIcon
                         onClick={handleCopyInvoice}
-                        className={`ml-2 h-4 w-4 cursor-pointer ${
+                        className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
                           copiedToClipboard ? "hidden" : ""
                         }`}
                       />
                       <CheckIcon
-                        className={`ml-2 h-4 w-4 cursor-pointer ${
+                        className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
                           copiedToClipboard ? "" : "hidden"
                         }`}
                       />

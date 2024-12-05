@@ -11,9 +11,13 @@ import MarketplacePage from "./marketplace";
 const HomeFeed = ({
   focusedPubkey,
   setFocusedPubkey,
+  selectedSection,
+  setSelectedSection,
 }: {
   focusedPubkey: string;
   setFocusedPubkey: (value: string) => void;
+  selectedSection: string;
+  setSelectedSection: (value: string) => void;
 }) => {
   const router = useRouter();
 
@@ -59,6 +63,8 @@ const HomeFeed = ({
           <MarketplacePage
             focusedPubkey={focusedPubkey}
             setFocusedPubkey={setFocusedPubkey}
+            selectedSection={selectedSection}
+            setSelectedSection={setSelectedSection}
           />
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from "react";
-import { Filter, nip04, nip19, nip44, SimplePool } from "nostr-tools";
+import { Filter, nip19, nip44, SimplePool } from "nostr-tools";
 import { useRouter } from "next/router";
 import {
   constructGiftWrappedMessageEvent,
@@ -100,7 +100,11 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       }
       if (signInMethod === "nsec" && !validPassphrase(passphrase)) {
         setEnterPassphrase(true); // prompt for passphrase when chatsContext is loaded
-      } else if (!chatsContext.isLoading && chatsContext.chatsMap) {
+      } else if (
+        !chatsContext.isLoading &&
+        chatsContext.chatsMap &&
+        !isLoadingMore
+      ) {
         // comes here only if signInMethod is extension or its nsec and passphrase is valid
         let decryptedChats = await getDecryptedChatsFromContext();
         const passedNPubkey = router.query.pk ? router.query.pk : null;
@@ -173,76 +177,6 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
     }
   }, [arrowUpPressed, arrowDownPressed, escapePressed]);
 
-  const decryptEncryptedMessageContent = async (
-    messageEvent: NostrMessageEvent,
-    chatPubkey: string,
-  ) => {
-    try {
-      let plaintext = "";
-      if (signInMethod === "extension") {
-        plaintext = await window.nostr.nip04.decrypt(
-          chatPubkey,
-          messageEvent.content,
-        );
-      } else if (signInMethod === "amber") {
-        const amberSignerUrl = `nostrsigner:${messageEvent.content}?pubKey=${chatPubkey}&compressionType=none&returnType=signature&type=nip04_decrypt`;
-
-        await navigator.clipboard.writeText("");
-
-        window.open(amberSignerUrl, "_blank");
-
-        const readClipboard = (): Promise<string> => {
-          return new Promise((resolve, reject) => {
-            const checkClipboard = async () => {
-              try {
-                if (!document.hasFocus()) {
-                  console.log("Document not focused, waiting for focus...");
-                  return;
-                }
-
-                const clipboardContent = await navigator.clipboard.readText();
-
-                if (clipboardContent && clipboardContent !== "") {
-                  clearInterval(intervalId);
-                  resolve(clipboardContent);
-                } else {
-                  console.log("Waiting for new clipboard content...");
-                }
-              } catch (error) {
-                console.error("Error reading clipboard:", error);
-                reject(error);
-              }
-            };
-
-            checkClipboard();
-            const intervalId = setInterval(checkClipboard, 1000);
-
-            setTimeout(() => {
-              clearInterval(intervalId);
-              reject(
-                new Error("Amber decryption timed out. Please try again."),
-              );
-            }, 60000);
-          });
-        };
-
-        try {
-          plaintext = await readClipboard();
-        } catch (error) {
-          console.error("Error reading clipboard:", error);
-          setFailureText("Amber decryption failed. Please try again.");
-          setShowFailureModal(true);
-        }
-      } else {
-        let sk2 = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
-        plaintext = await nip04.decrypt(sk2, chatPubkey, messageEvent.content);
-      }
-      return plaintext;
-    } catch (e) {
-      console.error(e, "Error decrypting message.", messageEvent);
-    }
-  };
-
   const getDecryptedChatsFromContext: () => Promise<
     Map<string, ChatObject>
   > = async () => {
@@ -258,12 +192,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       for (let messageEvent of chat) {
         let plainText;
         let tagsMap: Map<string, string> = new Map();
-        if (messageEvent.kind === 4) {
-          plainText = await decryptEncryptedMessageContent(
-            messageEvent,
-            chatPubkey,
-          );
-        } else {
+        if (messageEvent.kind === 14) {
           plainText = messageEvent.content;
           tagsMap = new Map(
             messageEvent.tags
@@ -274,25 +203,13 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         let subject = tagsMap.get("subject") ? tagsMap.get("subject") : null;
         if (
           (isPayment &&
-            (plainText?.includes("cashuA") ||
-              plainText?.includes("To finalize the sale") ||
-              plainText?.includes("Please ship the product") ||
-              plainText?.includes("This purchase was for a size"))) ||
-          (!isPayment &&
-            !plainText?.includes("cashuA") &&
-            !plainText?.includes("To finalize the sale") &&
-            !plainText?.includes("Please ship the product") &&
-            !plainText?.includes("This purchase was for a size")) ||
-          (isPayment &&
             subject &&
             (subject === "order-payment" ||
               subject === "order-info" ||
-              subject === "payment-change")) ||
-          (!isPayment &&
-            !subject &&
-            subject !== "order-payment" &&
-            subject !== "order-info" &&
-            subject !== "payment-change")
+              subject === "payment-change" ||
+              subject === "order-receipt" ||
+              subject === "shipping-info")) ||
+          (!isPayment && subject && subject === "listing-inquiry")
         ) {
           plainText &&
             decryptedChat.push({ ...messageEvent, content: plainText });
@@ -379,25 +296,19 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       );
       await sendGiftWrappedMessageEvent(senderGiftWrappedEvent);
       await sendGiftWrappedMessageEvent(receiverGiftWrappedEvent);
-      if (
-        chatsMap.get(currentChatPubkey) != undefined &&
-        chatsMap.get(currentChatPubkey)?.decryptedChat.length === 0
-      ) {
-        // only logs if this is the first msg, aka an iniquiry
-        axios({
-          method: "POST",
-          url: "/api/metrics/post-inquiry",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          data: {
-            customer_id: userPubkey,
-            merchant_id: currentChatPubkey,
-            // listing_id: "TODO"
-            // relays: relays,
-          },
-        });
-      }
+      axios({
+        method: "POST",
+        url: "/api/metrics/post-inquiry",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        data: {
+          customer_id: userPubkey,
+          merchant_id: currentChatPubkey,
+          // listing_id: "TODO"
+          // relays: relays,
+        },
+      });
       setIsSendingDMLoading(false);
     } catch (e) {
       console.log("handleSendMessage errored", e);
@@ -405,21 +316,18 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       setShowFailureModal(true);
       setIsSendingDMLoading(false);
     }
-    router.replace(`/messages`);
   };
 
   const loadMoreMessages = async () => {
     try {
       setIsLoadingMore(true);
-      if (chatsContext.isLoading) return;
-      chatsContext.isLoading = true;
+      if (isChatsLoading) return;
+      setIsChatsLoading(true);
       let oldestMessageCreatedAt = Math.trunc(DateTime.now().toSeconds());
-      let oldestMessageId = "";
       for (const [chatPubkey, chatObject] of chatsMap.entries()) {
         for (const messageEvent of chatObject.decryptedChat) {
           if (messageEvent.created_at < oldestMessageCreatedAt) {
             oldestMessageCreatedAt = messageEvent.created_at;
-            oldestMessageId = messageEvent.id;
           }
         }
       }
@@ -436,35 +344,6 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       const readRelays = getLocalStorageData().readRelays;
       const allReadRelays = [...relays, ...readRelays];
       const pool = new SimplePool();
-      const sentFilter: Filter = {
-        kinds: [4],
-        authors: [userPubkey],
-        since,
-        until: oldestMessageCreatedAt,
-      };
-      const sentEvents = await pool.querySync(allReadRelays, sentFilter);
-      const sentMessages: NostrMessageEvent[] = sentEvents
-        .filter((event) => event.id !== oldestMessageId)
-        .map((event) => ({
-          ...event,
-          read: false,
-        }));
-      const receivedFilter: Filter = {
-        kinds: [4],
-        "#p": [userPubkey],
-        since,
-        until: oldestMessageCreatedAt,
-      };
-      const receivedEvents = await pool.querySync(
-        allReadRelays,
-        receivedFilter,
-      );
-      const receivedMessages: NostrMessageEvent[] = receivedEvents
-        .filter((event) => event.id !== oldestMessageId)
-        .map((event) => ({
-          ...event,
-          read: false,
-        }));
       const giftWrapFilter: Filter = {
         kinds: [1059],
         "#p": [userPubkey],
@@ -489,12 +368,25 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
               sealEvent.content,
             );
             let messageEventCheck = JSON.parse(messageEventString);
-            if (messageEventCheck.pubkey === sealEvent.pubkey) {
-              giftWrapMessageEvents.push({
-                ...messageEventCheck,
-                sig: "",
-                read: false,
-              });
+            if (
+              messageEventCheck.kind === 14 &&
+              messageEventCheck.pubkey === sealEvent.pubkey
+            ) {
+              let pubkeyChats = chatsMap.get(messageEventCheck.pubkey)
+                ?.decryptedChat;
+              if (
+                (pubkeyChats &&
+                  pubkeyChats.length > 0 &&
+                  pubkeyChats.some((msg) => msg.id != messageEventCheck.id)) ||
+                !pubkeyChats ||
+                (pubkeyChats && pubkeyChats.length === 0)
+              ) {
+                giftWrapMessageEvents.push({
+                  ...messageEventCheck,
+                  sig: "",
+                  read: false,
+                });
+              }
             }
           }
         } else if (signInMethod === "nsec") {
@@ -519,12 +411,25 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
               sealConversationKey,
             );
             let messageEventCheck = JSON.parse(messageEventString);
-            if (messageEventCheck.pubkey === sealEvent.pubkey) {
-              giftWrapMessageEvents.push({
-                ...messageEventCheck,
-                sig: "",
-                read: false,
-              });
+            if (
+              messageEventCheck.kind === 14 &&
+              messageEventCheck.pubkey === sealEvent.pubkey
+            ) {
+              let pubkeyChats = chatsMap.get(messageEventCheck.pubkey)
+                ?.decryptedChat;
+              if (
+                (pubkeyChats &&
+                  pubkeyChats.length > 0 &&
+                  pubkeyChats.some((msg) => msg.id != messageEventCheck.id)) ||
+                !pubkeyChats ||
+                (pubkeyChats && pubkeyChats.length === 0)
+              ) {
+                giftWrapMessageEvents.push({
+                  ...messageEventCheck,
+                  sig: "",
+                  read: false,
+                });
+              }
             }
           }
         } else if (signInMethod === "amber") {
@@ -584,12 +489,27 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
 
               let messageEventString = await readClipboard();
               let messageEventCheck = JSON.parse(messageEventString);
-              if (messageEventCheck.pubkey === sealEvent.pubkey) {
-                giftWrapMessageEvents.push({
-                  ...messageEventCheck,
-                  sig: "",
-                  read: false,
-                });
+              if (
+                messageEventCheck.kind === 14 &&
+                messageEventCheck.pubkey === sealEvent.pubkey
+              ) {
+                let pubkeyChats = chatsMap.get(messageEventCheck.pubkey)
+                  ?.decryptedChat;
+                if (
+                  (pubkeyChats &&
+                    pubkeyChats.length > 0 &&
+                    pubkeyChats.some(
+                      (msg) => msg.id != messageEventCheck.id,
+                    )) ||
+                  !pubkeyChats ||
+                  (pubkeyChats && pubkeyChats.length === 0)
+                ) {
+                  giftWrapMessageEvents.push({
+                    ...messageEventCheck,
+                    sig: "",
+                    read: false,
+                  });
+                }
               }
             }
           } catch (error) {
@@ -598,11 +518,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
           }
         }
       }
-      const olderMessages = [
-        ...sentMessages,
-        ...receivedMessages,
-        ...giftWrapMessageEvents,
-      ];
+      const olderMessages = giftWrapMessageEvents;
       olderMessages.sort((a, b) => b.created_at - a.created_at);
       // Combine the newly fetched messages with the existing chatsMap
       const combinedChatsMap = new Map(chatsMap);
@@ -633,11 +549,11 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         chatsContext.addNewlyCreatedMessageEvent(messageEvent);
       });
       setChatsMap(combinedChatsMap);
-      chatsContext.isLoading = false;
+      setIsChatsLoading(false);
       setIsLoadingMore(false);
     } catch (err) {
       console.log(err);
-      chatsContext.isLoading = false;
+      setIsChatsLoading(false);
       setIsLoadingMore(false);
     }
   };
@@ -661,7 +577,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
                     Just logged in?
                     <br></br>
                     Try reloading the page, or load more!
-                    {chatsContext.isLoading || isLoadingMore ? (
+                    {isChatsLoading || isLoadingMore ? (
                       <div className="mt-8 flex items-center justify-center">
                         <ShopstrSpinner />
                       </div>
@@ -698,7 +614,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
                   );
                 },
               )}
-              {chatsContext.isLoading || isLoadingMore ? (
+              {isChatsLoading || isLoadingMore ? (
                 <div className="mt-8 flex items-center justify-center">
                   <ShopstrSpinner />
                 </div>

@@ -24,6 +24,7 @@ import {
   ProductData,
   parseTags,
 } from "@/components/utility/product-parser-functions";
+import { calculateWeightedScore } from "@/components/utility/review-parser-functions";
 import { DeleteEvent } from "../../../pages/api/nostr/crud-service";
 
 function getUniqueProofs(proofs: Proof[]): Proof[] {
@@ -424,140 +425,6 @@ export const fetchProfile = async (
   });
 };
 
-export const fetchChatsAndMessages = async (
-  relays: string[],
-  userPubkey: string,
-  editChatContext: (chatsMap: ChatsMap, isLoading: boolean) => void,
-  since?: number,
-): Promise<{
-  profileSetFromChats: Set<string>;
-}> => {
-  return new Promise(async function (resolve, reject) {
-    // if no userPubkey, user is not signed in
-    if (!userPubkey) {
-      editChatContext(new Map(), false);
-      resolve({ profileSetFromChats: new Set() });
-    }
-    let chatMessagesFromCache: Map<string, NostrMessageEvent> =
-      await fetchChatMessagesFromCache();
-    try {
-      let chatsMap = new Map();
-      let incomingChatsReachedEOSE = false;
-      let outgoingChatsReachedEOSE = false;
-
-      const addToChatsMap = (
-        pubkeyOfChat: string,
-        event: NostrMessageEvent,
-      ) => {
-        // pubkeyOfChat is the person you are chatting with if incoming, or the person you are sending to if outgoing
-        if (!chatsMap.has(pubkeyOfChat)) {
-          chatsMap.set(pubkeyOfChat, [event]);
-        } else {
-          chatsMap.get(pubkeyOfChat).push(event);
-        }
-      };
-
-      const onEOSE = () => {
-        if (incomingChatsReachedEOSE && outgoingChatsReachedEOSE) {
-          //sort chats by created_at
-          chatsMap.forEach((value) => {
-            value.sort(
-              (a: NostrMessageEvent, b: NostrMessageEvent) =>
-                a.created_at - b.created_at,
-            );
-          });
-          resolve({ profileSetFromChats: new Set(chatsMap.keys()) });
-          editChatContext(chatsMap, false);
-        }
-      };
-
-      if (!since) {
-        since = Math.trunc(DateTime.now().minus({ days: 14 }).toSeconds());
-      }
-
-      new SimplePool().subscribeMany(
-        relays,
-        [
-          {
-            kinds: [4],
-            authors: [userPubkey], // all chats where you are the author
-            since,
-          },
-        ],
-        {
-          onevent(event: NostrEvent) {
-            let tagsMap: Map<string, string> = new Map(
-              event.tags.map(([k, v]) => [k, v]),
-            );
-            let recipientPubkey = tagsMap.get("p") ? tagsMap.get("p") : null; // pubkey you sent the message to
-            if (typeof recipientPubkey !== "string") {
-              console.error(
-                `fetchAllOutgoingChats: Failed to get recipientPubkey from tagsMap",
-                    ${tagsMap},
-                    ${event}`,
-              );
-              alert(
-                `fetchAllOutgoingChats: Failed to get recipientPubkey from tagsMap`,
-              );
-              return;
-            }
-            let chatMessage = chatMessagesFromCache.get(event.id);
-            if (!chatMessage) {
-              chatMessage = { ...event, read: true }; // true because the user sent it himself
-              addChatMessageToCache(chatMessage);
-            }
-            addToChatsMap(recipientPubkey, chatMessage);
-            if (incomingChatsReachedEOSE && outgoingChatsReachedEOSE) {
-              editChatContext(chatsMap, false);
-            }
-          },
-          oneose() {
-            incomingChatsReachedEOSE = true;
-            onEOSE();
-          },
-          onclose(reasons) {
-            console.log(reasons);
-          },
-        },
-      );
-      new SimplePool().subscribeMany(
-        relays,
-        [
-          {
-            kinds: [4],
-            "#p": [userPubkey], // all chats where you are the recipient
-            since,
-          },
-        ],
-        {
-          async onevent(event) {
-            let senderPubkey = event.pubkey;
-            let chatMessage = chatMessagesFromCache.get(event.id);
-            if (!chatMessage) {
-              chatMessage = { ...event, read: false }; // false because the user received it and it wasn't in the cache
-              addChatMessageToCache(chatMessage);
-            }
-            addToChatsMap(senderPubkey, chatMessage);
-            if (incomingChatsReachedEOSE && outgoingChatsReachedEOSE) {
-              editChatContext(chatsMap, false);
-            }
-          },
-          async oneose() {
-            outgoingChatsReachedEOSE = true;
-            onEOSE();
-          },
-          onclose(reasons) {
-            console.log(reasons);
-          },
-        },
-      );
-    } catch (error) {
-      console.log("Failed to fetch chats and messages: ", error);
-      reject(error);
-    }
-  });
-};
-
 export const fetchGiftWrappedChatsAndMessages = async (
   relays: string[],
   userPubkey: string,
@@ -747,7 +614,9 @@ export const fetchGiftWrappedChatsAndMessages = async (
               subject !== "listing-inquiry" &&
               subject !== "order-payment" &&
               subject !== "order-info" &&
-              subject != "payment-change"
+              subject !== "payment-change" &&
+              subject !== "order-receipt" &&
+              subject !== "shipping-info"
             ) {
               return;
             }
@@ -790,6 +659,128 @@ export const fetchGiftWrappedChatsAndMessages = async (
       );
     } catch (error) {
       console.log("Failed to fetch chats and messages: ", error);
+      reject(error);
+    }
+  });
+};
+
+export const fetchReviews = async (
+  relays: string[],
+  products: NostrEvent[],
+  editReviewsContext: (
+    merchantReviewsMap: Map<string, number[]>,
+    productReviewsMap: Map<string, Map<string, Map<string, string[][]>>>,
+    isLoading: boolean,
+  ) => void,
+): Promise<{
+  merchantScoresMap: Map<string, number[]>;
+  productReviewsMap: Map<string, Map<string, Map<string, string[][]>>>;
+}> => {
+  return new Promise(async function (resolve, reject) {
+    try {
+      const pool = new SimplePool();
+
+      const addresses = products
+        .map((product) => {
+          const dTag = product.tags.find(
+            (tag: string[]) => tag[0] === "d",
+          )?.[1];
+          if (!dTag) return null;
+          return `a:${product.kind}:${product.pubkey}:${dTag}`;
+        })
+        .filter((address): address is string => address !== null);
+
+      const reviewsFilter: Filter = {
+        kinds: [31555],
+        "#d": addresses,
+      };
+
+      const merchantScoresMap = new Map<string, number[]>();
+      const productReviewsMap = new Map<
+        string,
+        Map<string, Map<string, string[][]>>
+      >();
+
+      let h = pool.subscribeMany(relays, [reviewsFilter], {
+        onevent(event) {
+          const addressTag = event.tags.find((tag) => tag[0] === "d")?.[1];
+          if (!addressTag) return;
+
+          const [_, kind, merchantPubkey, productDTag] = addressTag.split(":");
+          if (!merchantPubkey || !productDTag) return;
+
+          const ratingTags = event.tags.filter((tag) => tag[0] === "rating");
+          const commentArray = ["comment", event.content];
+          ratingTags.unshift(commentArray);
+
+          // Add score to merchant's scores (all reviews)
+          if (!merchantScoresMap.has(merchantPubkey)) {
+            merchantScoresMap.set(merchantPubkey, []);
+          }
+          merchantScoresMap
+            .get(merchantPubkey)!
+            .push(calculateWeightedScore(event.tags));
+
+          // Initialize merchant map if doesn't exist
+          if (!productReviewsMap.has(merchantPubkey)) {
+            productReviewsMap.set(merchantPubkey, new Map());
+          }
+
+          // Initialize product map if doesn't exist
+          const merchantProducts = productReviewsMap.get(merchantPubkey)!;
+          if (!merchantProducts.has(productDTag)) {
+            merchantProducts.set(productDTag, new Map());
+          }
+
+          // Add or update review
+          const productReviews = merchantProducts.get(productDTag)!;
+
+          const createdAt = event.created_at;
+
+          // Only update if this is a newer review from this pubkey
+          const existingReview = productReviews.get(event.pubkey);
+          if (
+            !existingReview ||
+            createdAt >
+              Number(
+                existingReview.find((item) => item[0] === "created_at")?.[1],
+              )
+          ) {
+            // Replace the existing created_at or set a new entry
+            const updatedReview = existingReview
+              ? existingReview.map((item) => {
+                  if (item[0] === "created_at") {
+                    return ["created_at", createdAt.toString()]; // Replace the created_at entry
+                  }
+                  return item; // Keep existing items
+                })
+              : [...ratingTags, ["created_at", createdAt.toString()]]; // Initialize if it's a new review
+
+            productReviews.set(event.pubkey, updatedReview);
+          }
+        },
+        oneose() {
+          productReviewsMap.forEach((merchantProducts, merchantPubkey) => {
+            merchantProducts.forEach((productReviews, productDTag) => {
+              productReviews.forEach((review, reviewerPubkey) => {
+                // Filter out the created_at entries
+                const cleanedReview = review.filter(
+                  (item) => item[0] !== "created_at",
+                );
+                if (cleanedReview.length > 0) {
+                  productReviews.set(reviewerPubkey, cleanedReview);
+                }
+              });
+            });
+          });
+
+          editReviewsContext(merchantScoresMap, productReviewsMap, false);
+          h.close();
+          resolve({ merchantScoresMap, productReviewsMap });
+        },
+      });
+    } catch (error) {
+      console.log("failed to fetch reviews: ", error);
       reject(error);
     }
   });

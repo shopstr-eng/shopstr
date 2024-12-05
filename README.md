@@ -1,10 +1,10 @@
 # Shopstr
 
-A global, decentralized Nostr marketplace to buy and sell anything, anywhere, anytime, anonymously with Bitcoin.
+A global, decentralized Nostr marketplace for Bitcoin commerce.
 
 # Supported NIPs
 
-- [x] NIP-02: Follow List
+- [ ] NIP-02: Follow List
 - [x] NIP-04: Encrypted Direct Message (Deprecated)
 - [ ] NIP-05: Mapping Nostr keys to DNS-based internet identifiers
 - [x] NIP-07: window.nostr capability for web browsers
@@ -14,7 +14,6 @@ A global, decentralized Nostr marketplace to buy and sell anything, anywhere, an
 - [x] NIP-19: bech32-encoded entities
 - [x] NIP-24: Extra metadata fields and tags
 - [x] NIP-31: Dealing with Unknown Events
-- [ ] NIP-32: Labeling
 - [ ] NIP-36: Sensitive Content
 - [ ] NIP-42: Authentication of clients to relays
 - [ ] NIP-47: Wallet Connect
@@ -28,6 +27,7 @@ A global, decentralized Nostr marketplace to buy and sell anything, anywhere, an
 - [x] NIP-60: Cashu Wallet
 - [ ] NIP-61: Nutzaps
 - [x] NIP-65: Relay List Metadata
+- [x] NIP-85: Reviews
 - [x] NIP-89: Recommended Application Handlers
 - [x] NIP-98: HTTP Auth
 - [x] NIP-99: Classified Listings

@@ -65,6 +65,7 @@ export default function NewForm({
   const [imageError, setImageError] = useState<string | null>(null);
   const [signIn, setSignIn] = useState("");
   const [pubkey, setPubkey] = useState("");
+  const [relayHint, setRelayHint] = useState("");
   const [isEdit, setIsEdit] = useState(false);
   const [isPostingOrUpdatingProduct, setIsPostingOrUpdatingProduct] =
     useState(false);
@@ -98,9 +99,10 @@ export default function NewForm({
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      let { signInMethod, userPubkey } = getLocalStorageData();
+      let { signInMethod, userPubkey, relays } = getLocalStorageData();
       setSignIn(signInMethod as string);
       setPubkey(userPubkey as string);
+      setRelayHint(relays[0] as string);
     }
   }, []);
 
@@ -131,7 +133,7 @@ export default function NewForm({
         "client",
         "Shopstr",
         "31990:" + pubkey + ":" + (oldValues?.d || hashHex),
-        "wss://relay.damus.io",
+        relayHint,
       ],
       ["title", data["Product Name"] as string],
       ["summary", data["Description"] as string],
@@ -158,7 +160,9 @@ export default function NewForm({
     }
 
     if (data["Sizes"]) {
-      const sizesArray = Array.isArray(data["Sizes"]) ? data["Sizes"] : (data["Sizes"] as string).split(',').filter(Boolean);
+      const sizesArray = Array.isArray(data["Sizes"])
+        ? data["Sizes"]
+        : (data["Sizes"] as string).split(",").filter(Boolean);
       sizesArray.forEach((size) => {
         const quantity =
           (data["Size Quantities"] as Map<string, number>).get(size) || 0;

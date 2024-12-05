@@ -38,6 +38,36 @@ export const ProductContext = createContext({
   removeDeletedProductEvent: (productId: string) => {},
 } as ProductContextInterface);
 
+export interface ReviewsContextInterface {
+  merchantReviewsData: Map<string, number[]>;
+  productReviewsData: Map<string, Map<string, Map<string, string[][]>>>;
+  isLoading: boolean;
+  updateMerchantReviewsData: (
+    merchantPubkey: string,
+    merchantReviewsData: number[],
+  ) => void;
+  updateProductReviewsData: (
+    merchantPubkey: string,
+    productDTag: string,
+    productReviewsData: Map<string, string[][]>,
+  ) => void;
+}
+
+export const ReviewsContext = createContext({
+  merchantReviewsData: new Map(),
+  productReviewsData: new Map(),
+  isLoading: true,
+  updateMerchantReviewsData: (
+    merchantPubkey: string,
+    merchantReviewsData: number[],
+  ) => {},
+  updateProductReviewsData: (
+    merchantPubkey: string,
+    productDTag: string,
+    productReviewsData: Map<string, string[][]>,
+  ) => {},
+} as ReviewsContextInterface);
+
 export interface CartContextInterface {
   cartAddresses: string[][];
   isLoading: boolean;

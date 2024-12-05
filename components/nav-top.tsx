@@ -17,8 +17,10 @@ import { ShopSettings } from "../utils/types/types";
 
 const TopNav = ({
   setFocusedPubkey,
+  setSelectedSection,
 }: {
   setFocusedPubkey: (value: string) => void;
+  setSelectedSection: (value: string) => void;
 }) => {
   const { isHomeActive, isProfileActive } = useNavigation();
   const router = useRouter();
@@ -109,6 +111,9 @@ const TopNav = ({
         setShopLogoURL(shopSettings.content.ui.picture);
         setShopName(shopSettings.content.name);
       }
+    } else {
+      setShopLogoURL("");
+      setShopName("");
     }
   }, [router.pathname, shopMapContext]);
 
@@ -123,6 +128,7 @@ const TopNav = ({
 
   const handleHomeClick = () => {
     setFocusedPubkey("");
+    setSelectedSection("");
     router.push("/");
     setIsMobileMenuOpen(false);
   };
@@ -139,7 +145,7 @@ const TopNav = ({
         className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
         onClick={() => handleRoute("/messages")}
       >
-        Messages {unreadMsgCount > 0 && `(${unreadMsgCount})`}
+        Orders {unreadMsgCount > 0 && `(${unreadMsgCount})`}
       </Button>
       <Button
         className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
@@ -232,7 +238,7 @@ const TopNav = ({
             className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
             onClick={() => handleRoute("/messages")}
           >
-            Messages {unreadMsgCount > 0 && `(${unreadMsgCount})`}
+            Orders {unreadMsgCount > 0 && `(${unreadMsgCount})`}
           </Button>
           |
           <Button

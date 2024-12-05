@@ -69,13 +69,6 @@ const parseRequestBody = (body: string) => {
     if (!parseProductFormValues(parsedBody.tags)) {
       throw new Error("Invalid request data: missing or invalid property tags");
     }
-  } else if (
-    parsedBody.kind === 4 &&
-    (!parsedBody.tags || !Array.isArray(parsedBody.tags))
-  ) {
-    if (!parseNip04Values(parsedBody.tags)) {
-      throw new Error("Invalid request data: missing or invalid property tags");
-    }
   }
 
   if (!parsedBody.content || typeof parsedBody.content !== "string") {
@@ -99,22 +92,6 @@ const parseProductFormValues = (body: ProductFormValues): ProductFormValues => {
     "location",
     "price",
   ];
-  const parsedBody = typeof body === "string" ? JSON.parse(body) : body;
-  for (const key of expectedKeys) {
-    const matchingPair = parsedBody.find(([k]: [k: string]) => k === key);
-    if (
-      !matchingPair ||
-      !Array.isArray(matchingPair) ||
-      matchingPair[1] === undefined
-    ) {
-      throw new Error(`Missing or invalid property: ${key}`);
-    }
-  }
-  return parsedBody;
-};
-
-const parseNip04Values = (body: ProductFormValues): ProductFormValues => {
-  const expectedKeys = ["p"];
   const parsedBody = typeof body === "string" ? JSON.parse(body) : body;
   for (const key of expectedKeys) {
     const matchingPair = parsedBody.find(([k]: [k: string]) => k === key);
@@ -161,12 +138,7 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
         pubkey: event.pubkey,
         tags: [
           ["d", "30402"],
-          [
-            "a",
-            "31990:" + event.pubkey + ":" + dValue,
-            "wss://relay.damus.io",
-            "web",
-          ],
+          ["a", "31990:" + event.pubkey + ":" + dValue, relays[0], "web"],
         ],
         content: "",
         created_at: Math.floor(Date.now() / 1000),

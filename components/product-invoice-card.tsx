@@ -1,4 +1,3 @@
-//TODO: perhaps see if we can abstract away some payment logic into reusable functions
 import React, { useContext, useState, useEffect } from "react";
 import { CashuWalletContext } from "../utils/context/context";
 import { useRouter } from "next/router";
@@ -81,7 +80,8 @@ export default function ProductInvoiceCard({
   const router = useRouter();
   const { id, pubkey, currency, totalCost, shippingType } = productData;
   const pubkeyOfProductBeingSold = pubkey;
-  const { signInMethod, mints, tokens, history } = getLocalStorageData();
+  const { userNPub, userPubkey, signInMethod, mints, tokens, history } =
+    getLocalStorageData();
 
   const [enterPassphrase, setEnterPassphrase] = useState(false);
   const [passphrase, setPassphrase] = useState("");
@@ -167,45 +167,72 @@ export default function ProductInvoiceCard({
   }, [walletContext]);
 
   const sendPaymentAndContactMessage = async (
-    pubkeyOfProduct: string,
+    pubkeyToReceiveMessage: string,
     message: string,
-    isPayment: boolean,
+    isPayment?: boolean,
+    isReceipt?: boolean,
   ) => {
     let decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
     let decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
     let decodedRandomPubkeyForReceiver = nip19.decode(randomNpubForReceiver);
     let decodedRandomPrivkeyForReceiver = nip19.decode(randomNsecForReceiver);
 
-    let giftWrappedMessageEvent;
-    if (isPayment) {
-      giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
+    if (isReceipt) {
+      let giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
         decodedRandomPubkeyForSender.data as string,
-        pubkeyOfProduct,
+        userPubkey,
         message,
-        "order-payment",
+        "order-receipt",
+        productData,
       );
+      let sealedEvent = await constructMessageSeal(
+        giftWrappedMessageEvent,
+        decodedRandomPubkeyForSender.data as string,
+        userPubkey,
+        undefined,
+        decodedRandomPrivkeyForSender.data as Uint8Array,
+      );
+      let giftWrappedEvent = await constructMessageGiftWrap(
+        sealedEvent,
+        decodedRandomPubkeyForReceiver.data as string,
+        decodedRandomPrivkeyForReceiver.data as Uint8Array,
+        userPubkey,
+      );
+      await sendGiftWrappedMessageEvent(giftWrappedEvent);
     } else {
-      giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
+      let giftWrappedMessageEvent;
+      if (isPayment) {
+        giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
+          decodedRandomPubkeyForSender.data as string,
+          pubkeyToReceiveMessage,
+          message,
+          "order-payment",
+          productData,
+        );
+      } else {
+        giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
+          decodedRandomPubkeyForSender.data as string,
+          pubkeyToReceiveMessage,
+          message,
+          "order-info",
+          productData,
+        );
+      }
+      let sealedEvent = await constructMessageSeal(
+        giftWrappedMessageEvent,
         decodedRandomPubkeyForSender.data as string,
-        pubkeyOfProduct,
-        message,
-        "order-info",
+        pubkeyToReceiveMessage,
+        undefined,
+        decodedRandomPrivkeyForSender.data as Uint8Array,
       );
+      let giftWrappedEvent = await constructMessageGiftWrap(
+        sealedEvent,
+        decodedRandomPubkeyForReceiver.data as string,
+        decodedRandomPrivkeyForReceiver.data as Uint8Array,
+        pubkeyToReceiveMessage,
+      );
+      await sendGiftWrappedMessageEvent(giftWrappedEvent);
     }
-    let sealedEvent = await constructMessageSeal(
-      giftWrappedMessageEvent,
-      decodedRandomPubkeyForSender.data as string,
-      pubkeyOfProduct,
-      undefined,
-      decodedRandomPrivkeyForSender.data as Uint8Array,
-    );
-    let giftWrappedEvent = await constructMessageGiftWrap(
-      sealedEvent,
-      decodedRandomPubkeyForReceiver.data as string,
-      decodedRandomPrivkeyForReceiver.data as Uint8Array,
-      pubkeyOfProduct,
-    );
-    await sendGiftWrappedMessageEvent(giftWrappedEvent);
   };
 
   const onShippingSubmit = async (data: { [x: string]: any }) => {
@@ -490,7 +517,9 @@ export default function ProductInvoiceCard({
   ) => {
     const { title } = productData;
     const paymentMessage =
-      "This is a Cashu token payment for your " +
+      "This is a Cashu token payment from " +
+      userNPub +
+      " for your " +
       title +
       " listing on Shopstr: " +
       token;
@@ -521,6 +550,12 @@ export default function ProductInvoiceCard({
         shippingState &&
         shippingCountry
       ) {
+        let receiptMessage =
+          "Your order for " +
+          productData.title +
+          " was processed successfully. You should be receiving tracking information from " +
+          nip19.npubEncode(productData.pubkey) +
+          " as soon as they claim their payment.";
         let contactMessage = "";
         if (!shippingUnitNo && !selectedSize) {
           contactMessage =
@@ -596,8 +631,20 @@ export default function ProductInvoiceCard({
           contactMessage,
           false,
         );
+        await sendPaymentAndContactMessage(
+          userPubkey,
+          receiptMessage,
+          false,
+          true,
+        );
       } else if (contact && contactType && contactInstructions) {
         let contactMessage;
+        let receiptMessage =
+          "Your order for " +
+          productData.title +
+          " was processed successfully. You should be receiving delivery information from " +
+          nip19.npubEncode(productData.pubkey) +
+          " as soon as they claim their payment.";
         if (selectedSize) {
           contactMessage =
             "To finalize the sale of your " +
@@ -625,6 +672,12 @@ export default function ProductInvoiceCard({
           pubkeyOfProductBeingSold,
           contactMessage,
           false,
+        );
+        await sendPaymentAndContactMessage(
+          userPubkey,
+          receiptMessage,
+          false,
+          true,
         );
       }
     } else if (selectedSize) {
@@ -865,12 +918,12 @@ export default function ProductInvoiceCard({
                       </p>
                       <ClipboardIcon
                         onClick={handleCopyInvoice}
-                        className={`ml-2 h-4 w-4 cursor-pointer ${
+                        className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
                           copiedToClipboard ? "hidden" : ""
                         }`}
                       />
                       <CheckIcon
-                        className={`ml-2 h-4 w-4 cursor-pointer ${
+                        className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
                           copiedToClipboard ? "" : "hidden"
                         }`}
                       />
