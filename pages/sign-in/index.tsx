@@ -76,6 +76,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
               "wss://nos.lol",
               "wss://purplepag.es",
               "wss://relay.primal.net",
+              "wss://relay.nostr.band",
             ]),
           );
         }
@@ -151,6 +152,7 @@ const LoginPage = ({ router }: { router: NextRouter }) => {
             "wss://nos.lol",
             "wss://purplepag.es",
             "wss://relay.primal.net",
+            "wss://relay.nostr.band",
           ]),
         );
       }

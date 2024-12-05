@@ -57,6 +57,15 @@ export const ReviewsContext = createContext({
   merchantReviewsData: new Map(),
   productReviewsData: new Map(),
   isLoading: true,
+  updateMerchantReviewsData: (
+    merchantPubkey: string,
+    merchantReviewsData: number[],
+  ) => {},
+  updateProductReviewsData: (
+    merchantPubkey: string,
+    productDTag: string,
+    productReviewsData: Map<string, string[][]>,
+  ) => {},
 } as ReviewsContextInterface);
 
 export interface CartContextInterface {

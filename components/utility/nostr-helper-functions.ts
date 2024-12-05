@@ -1148,8 +1148,9 @@ export const setLocalStorageDataOnSignIn = ({
         : [
             "wss://relay.damus.io",
             "wss://nos.lol",
-            "wss://sendit.nosflare.com",
             "wss://purplepag.es",
+            "wss://relay.primal.net",
+            "wss://relay.nostr.band",
           ],
     ),
   );
@@ -1245,8 +1246,9 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     const defaultRelays = [
       "wss://relay.damus.io",
       "wss://nos.lol",
-      "wss://sendit.nosflare.com",
       "wss://purplepag.es",
+      "wss://relay.primal.net",
+      "wss://relay.nostr.band",
     ];
 
     if (relays && relays.length === 0) {

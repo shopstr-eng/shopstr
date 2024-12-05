@@ -94,7 +94,7 @@ export const ChatMessage = ({
             key={index}
             className="cursor-pointer text-shopstr-purple-light hover:underline dark:text-shopstr-yellow-light"
             onClick={() => {
-              router.push({
+              router.replace({
                 pathname: "/messages",
                 query: { pk: word, isInquiry: true },
               });
@@ -136,12 +136,12 @@ export const ChatMessage = ({
                 <ClaimButton token={tokenAfterCashuA} passphrase={passphrase} />
                 <ClipboardIcon
                   onClick={() => handleCopyToken("cashuA" + tokenAfterCashuA)}
-                  className={`ml-2 mt-1 h-5 w-5 cursor-pointer text-dark-text dark:text-light-text ${
+                  className={`ml-2 mt-1 h-5 w-5 cursor-pointer text-light-text ${
                     copiedToClipboard ? "hidden" : ""
                   }`}
                 />
                 <CheckIcon
-                  className={`ml-2 mt-1 h-5 w-5 cursor-pointer text-dark-text dark:text-light-text ${
+                  className={`ml-2 mt-1 h-5 w-5 cursor-pointer text-light-text ${
                     copiedToClipboard ? "" : "hidden"
                   }`}
                 />

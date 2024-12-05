@@ -316,7 +316,6 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       setShowFailureModal(true);
       setIsSendingDMLoading(false);
     }
-    router.replace(`/messages`);
   };
 
   const loadMoreMessages = async () => {

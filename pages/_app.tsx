@@ -404,6 +404,7 @@ function App({ Component, pageProps }: AppProps) {
           "wss://nos.lol",
           "wss://purplepag.es",
           "wss://relay.primal.net",
+          "wss://relay.nostr.band",
         ];
         localStorage.setItem("relays", JSON.stringify(allRelays));
       }
