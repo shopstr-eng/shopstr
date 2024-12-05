@@ -25,21 +25,17 @@ export const ChatMessage = ({
   setCanReview,
   setProductAddress,
 }: {
-  messageEvent?: NostrMessageEvent;
+  messageEvent: NostrMessageEvent;
   index: number;
-  currentChatPubkey?: string;
+  currentChatPubkey: string;
   passphrase?: string;
-  setBuyerPubkey?: (pubkey: string) => void;
-  setCanReview?: (canReview: boolean) => void;
-  setProductAddress?: (productAddress: string) => void;
+  setBuyerPubkey: (pubkey: string) => void;
+  setCanReview: (canReview: boolean) => void;
+  setProductAddress: (productAddress: string) => void;
 }) => {
   const router = useRouter();
 
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
-
-  if (!messageEvent || !currentChatPubkey) {
-    return null;
-  }
 
   useEffect(() => {
     if (messageEvent?.content && messageEvent.content.includes("npub")) {
