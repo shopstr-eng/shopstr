@@ -1,17 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { useRouter } from "next/router";
 import { Modal, ModalContent, ModalHeader, ModalBody } from "@nextui-org/react";
 import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/outline";
-import { SimplePool } from "nostr-tools";
 import parseTags, {
   ProductData,
 } from "../../components/utility/product-parser-functions";
 import ListingPage from "../../components/listing-page";
-import { getLocalStorageData } from "../../components/utility/nostr-helper-functions";
+import { ProductContext } from "../../utils/context/context";
+import { Event } from "nostr-tools";
 
 const Listing = () => {
   const router = useRouter();
-  const [relays, setRelays] = useState<string[]>([]);
   const [productData, setProductData] = useState<ProductData | undefined>(
     undefined,
   );
@@ -22,6 +21,8 @@ const Listing = () => {
   const [cashuPaymentSent, setCashuPaymentSent] = useState(false);
   const [cashuPaymentFailed, setCashuPaymentFailed] = useState(false);
 
+  const productContext = useContext(ProductContext);
+
   useEffect(() => {
     if (router.isReady) {
       const { productId } = router.query;
@@ -30,29 +31,29 @@ const Listing = () => {
       if (!productIdString) {
         router.push("/"); // if there isn't a productId, redirect to home page
       }
-      let { relays } = getLocalStorageData();
-      setRelays(relays);
     }
   }, [router]);
 
   useEffect(() => {
-    const pool = new SimplePool();
+    if (!productContext.isLoading && productContext.productEvents) {
+      const matchingEvent = productContext.productEvents.find(
+        (event: Event) => {
+          // Check for matching d tag
+          const dTagMatch =
+            event.tags.find((tag: string[]) => tag[0] === "d")?.[1] ===
+            productIdString;
+          // Check for matching event id
+          const idMatch = event.id === productIdString;
+          return dTagMatch || idMatch;
+        },
+      );
 
-    let subParams: { ids: string[]; kinds: number[] } = {
-      ids: [productIdString],
-      kinds: [30402],
-    };
-
-    let h = pool.subscribeMany(relays, [subParams], {
-      onevent(event) {
-        const productData = parseTags(event);
-        setProductData(productData);
-      },
-      oneose() {
-        h.close();
-      },
-    });
-  }, [relays]);
+      if (matchingEvent) {
+        const parsed = parseTags(matchingEvent);
+        setProductData(parsed);
+      }
+    }
+  }, [productContext.isLoading, productContext.productEvents, productIdString]);
 
   return (
     <>

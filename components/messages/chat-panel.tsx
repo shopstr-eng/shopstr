@@ -304,7 +304,7 @@ export const ChatPanel = ({
             Send
           </Button>
         </div>
-      ) : !canReview && buyerPubkey !== "" ? (
+      ) : !canReview && buyerPubkey ? (
         <>
           <div className="flex items-center justify-between border-t p-4">
             <Button

@@ -24,7 +24,14 @@ const DynamicHead = ({
 
     if (router.pathname.startsWith("/listing/")) {
       const productId = router.query.productId?.[0];
-      const product = productEvents.find((event) => event.id === productId);
+      const product = productEvents.find((event) => {
+        // Check for matching d tag
+        const dTagMatch =
+          event.tags.find((tag: string[]) => tag[0] === "d")?.[1] === productId;
+        // Check for matching event id
+        const idMatch = event.id === productId;
+        return dTagMatch || idMatch;
+      });
 
       if (product) {
         const productData = parseTags(product);

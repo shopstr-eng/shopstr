@@ -40,7 +40,7 @@ export const ChatMessage = ({
   useEffect(() => {
     if (messageEvent?.content && messageEvent.content.includes("npub")) {
       // Find word containing npub using regex
-      const npubMatch = messageEvent.content.match(/\S*npub\S*/);
+      const npubMatch = messageEvent.content.match(/npub[a-zA-Z0-9]+/);
       if (npubMatch && setBuyerPubkey) {
         let { data: buyerPubkey } = nip19.decode(npubMatch[0]);
         setBuyerPubkey(buyerPubkey as string);
@@ -88,7 +88,8 @@ export const ChatMessage = ({
   const renderMessageContent = (content: string) => {
     const words = content.split(/(\s+)/);
     return words.map((word, index) => {
-      if (word.match(/\S*npub\S*/)) {
+      const npubMatch = word.match(/npub[a-zA-Z0-9]+/);
+      if (npubMatch) {
         return (
           <span
             key={index}
@@ -96,7 +97,7 @@ export const ChatMessage = ({
             onClick={() => {
               router.replace({
                 pathname: "/orders",
-                query: { pk: word, isInquiry: true },
+                query: { pk: npubMatch[0], isInquiry: true },
               });
             }}
           >

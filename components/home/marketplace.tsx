@@ -201,7 +201,7 @@ export function MarketplacePage({
             <div key={product.id} className="mt-4 p-4 pt-4">
               <h3 className="mb-3 text-lg font-semibold text-light-text dark:text-dark-text">
                 <div
-                  onClick={() => handleTitleClick(product.id)}
+                  onClick={() => handleTitleClick(product.d as string)}
                   className="cursor-pointer hover:underline"
                 >
                   {product.title}
@@ -427,7 +427,7 @@ export function MarketplacePage({
         {selectedSection === "reviews" && !isFetchingReviews && (
           <div className="flex w-full flex-col justify-start bg-transparent px-4 py-8 text-light-text dark:text-dark-text">
             <h2 className="pb-2 text-2xl font-bold">Reviews</h2>
-            {merchantQuality !== "" && (
+            {merchantQuality !== "" ? (
               <div className="mt-4 p-4 pt-4">
                 <h3 className="mb-3 text-lg font-semibold text-light-text dark:text-dark-text">
                   Merchant Quality
@@ -461,6 +461,10 @@ export function MarketplacePage({
                     </>
                   )}
                 </div>
+              </div>
+            ) : (
+              <div className="break-words text-center text-xl text-light-text dark:text-dark-text">
+                No reviews . . . yet!
               </div>
             )}
             <p className="text-base">{renderProductScores()}</p>

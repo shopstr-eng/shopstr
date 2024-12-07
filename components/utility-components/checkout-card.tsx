@@ -246,7 +246,7 @@ export default function CheckoutCard({
     // The content you want to share
     const shareData = {
       title: title,
-      url: `${window.location.origin}/listing/${productData.id}`,
+      url: `${window.location.origin}/listing/${productData.d}`,
     };
     // Check if the Web Share API is available
     if (navigator.share) {
@@ -255,7 +255,7 @@ export default function CheckoutCard({
     } else {
       // Fallback for browsers that do not support the Web Share API
       navigator.clipboard.writeText(
-        `${window.location.origin}/listing/${productData.id}`,
+        `${window.location.origin}/listing/${productData.d}`,
       );
       setShowSuccessModal(true);
     }
@@ -501,80 +501,88 @@ export default function CheckoutCard({
                 <h3 className="mb-3 text-lg font-semibold text-light-text dark:text-dark-text">
                   Product Reviews
                 </h3>
-                <div className="space-y-3">
-                  {Array.from(productReviews.entries()).map(
-                    ([reviewerPubkey, reviewData]) => (
-                      <div
-                        key={reviewerPubkey}
-                        className="rounded-lg border-2 border-black p-3 dark:border-white"
-                      >
-                        <div className="mb-2 flex items-center gap-2">
-                          <ProfileWithDropdown
-                            pubkey={reviewerPubkey}
-                            dropDownKeys={
-                              reviewerPubkey === userPubkey
-                                ? ["shop_settings"]
-                                : ["shop", "inquiry"]
-                            }
-                          />
-                        </div>
-                        <div className="flex flex-col">
-                          <div className="mb-1 flex flex-wrap gap-2">
-                            {reviewData.map(([_, value, category], index) => {
-                              if (category === undefined) {
-                                // Don't render the comment here; we'll show it later.
-                                return null;
-                              } else if (category === "thumb") {
+                {productReviews.size > 0 ? (
+                  <div className="space-y-3">
+                    {Array.from(productReviews.entries()).map(
+                      ([reviewerPubkey, reviewData]) => (
+                        <div
+                          key={reviewerPubkey}
+                          className="rounded-lg border-2 border-black p-3 dark:border-white"
+                        >
+                          <div className="mb-2 flex items-center gap-2">
+                            <ProfileWithDropdown
+                              pubkey={reviewerPubkey}
+                              dropDownKeys={
+                                reviewerPubkey === userPubkey
+                                  ? ["shop_settings"]
+                                  : ["shop", "inquiry"]
+                              }
+                            />
+                          </div>
+                          <div className="flex flex-col">
+                            <div className="mb-1 flex flex-wrap gap-2">
+                              {reviewData.map(([_, value, category], index) => {
+                                if (category === undefined) {
+                                  // Don't render the comment here; we'll show it later.
+                                  return null;
+                                } else if (category === "thumb") {
+                                  return (
+                                    <Chip
+                                      key={index}
+                                      className={`text-light-text dark:text-dark-text ${
+                                        value === "1"
+                                          ? "bg-green-500"
+                                          : "bg-red-500"
+                                      }`}
+                                    >
+                                      {`overall: ${
+                                        value === "1" ? "👍" : "👎"
+                                      }`}
+                                    </Chip>
+                                  );
+                                } else {
+                                  // Render chips for other categories
+                                  return (
+                                    <Chip
+                                      key={index}
+                                      className={`text-light-text dark:text-dark-text ${
+                                        value === "1"
+                                          ? "bg-green-500"
+                                          : "bg-red-500"
+                                      }`}
+                                    >
+                                      {`${category}: ${
+                                        value === "1" ? "👍" : "👎"
+                                      }`}
+                                    </Chip>
+                                  );
+                                }
+                              })}
+                            </div>
+                            {reviewData.map(([category, value], index) => {
+                              if (category === "comment" && value !== "") {
+                                // Render the comment text below the chips
                                 return (
-                                  <Chip
+                                  <p
                                     key={index}
-                                    className={`text-light-text dark:text-dark-text ${
-                                      value === "1"
-                                        ? "bg-green-500"
-                                        : "bg-red-500"
-                                    }`}
+                                    className="italic text-light-text dark:text-dark-text"
                                   >
-                                    {`overall: ${value === "1" ? "👍" : "👎"}`}
-                                  </Chip>
-                                );
-                              } else {
-                                // Render chips for other categories
-                                return (
-                                  <Chip
-                                    key={index}
-                                    className={`text-light-text dark:text-dark-text ${
-                                      value === "1"
-                                        ? "bg-green-500"
-                                        : "bg-red-500"
-                                    }`}
-                                  >
-                                    {`${category}: ${
-                                      value === "1" ? "👍" : "👎"
-                                    }`}
-                                  </Chip>
+                                    &ldquo;{value}&rdquo;
+                                  </p>
                                 );
                               }
+                              return null;
                             })}
                           </div>
-                          {reviewData.map(([category, value], index) => {
-                            if (category === "comment" && value !== "") {
-                              // Render the comment text below the chips
-                              return (
-                                <p
-                                  key={index}
-                                  className="italic text-light-text dark:text-dark-text"
-                                >
-                                  &ldquo;{value}&rdquo;
-                                </p>
-                              );
-                            }
-                            return null;
-                          })}
                         </div>
-                      </div>
-                    ),
-                  )}
-                </div>
+                      ),
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-md break-words text-center text-light-text dark:text-dark-text">
+                    No reviews . . . yet!
+                  </div>
+                )}
               </div>
             )}
           </div>

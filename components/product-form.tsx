@@ -128,7 +128,7 @@ export default function NewForm({
 
     let tags: ProductFormValues = [
       ["d", oldValues?.d || hashHex],
-      ["alt", ("Classified listing: " + data["Product Name"]) as string],
+      ["alt", ("Product listing: " + data["Product Name"]) as string],
       [
         "client",
         "Shopstr",

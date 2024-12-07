@@ -71,7 +71,7 @@ export default function DisplayProductModal({
     // The content you want to share
     const shareData = {
       title: title,
-      url: `${window.location.origin}/listing/${productData.id}`,
+      url: `${window.location.origin}/listing/${productData.d}`,
     };
     // Check if the Web Share API is available
     if (navigator.share) {
@@ -80,7 +80,7 @@ export default function DisplayProductModal({
     } else {
       // Fallback for browsers that do not support the Web Share API
       navigator.clipboard.writeText(
-        `${window.location.origin}/listing/${productData.id}`,
+        `${window.location.origin}/listing/${productData.d}`,
       );
       setShowSuccessModal(true);
     }
