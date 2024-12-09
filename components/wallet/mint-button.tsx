@@ -95,7 +95,27 @@ const MintButton = ({ passphrase }: { passphrase?: string }) => {
         console.error("ERROR", err);
       });
 
-    invoiceHasBeenPaid(wallet, numSats, hash);
+    if (typeof window.webln !== "undefined") {
+      try {
+        await window.webln.enable();
+        try {
+          // if the user gave permission to use webln, initate the payment
+          const res = await window.webln.sendPayment(pr);
+          // the response contains the pre-image of the payment and could be used to verify the payment by comparing the hashes
+          if (res) {
+            invoiceHasBeenPaid(wallet, numSats, hash);
+            return;
+          }
+        } catch (e) {
+          invoiceHasBeenPaid(wallet, numSats, hash);
+          return;
+        }
+      } catch (e) {
+        invoiceHasBeenPaid(wallet, numSats, hash);
+      }
+    } else {
+      invoiceHasBeenPaid(wallet, numSats, hash);
+    }
   };
 
   /** CHECKS WHETHER INVOICE HAS BEEN PAID */

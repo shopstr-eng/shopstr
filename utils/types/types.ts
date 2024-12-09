@@ -46,3 +46,9 @@ export interface Transaction {
   amount: number;
   date: number;
 }
+
+declare global {
+  interface Window {
+    webln: any;
+  }
+}
