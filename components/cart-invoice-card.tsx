@@ -577,23 +577,41 @@ export default function CartInvoiceCard({
       remainingProofs = tokenToSend.returnChange;
       let paymentMessage = "";
       if (quantities[product.id] && quantities[product.id] > 1) {
-        paymentMessage =
-          "This is a Cashu token payment from " +
-          userNPub +
-          " for " +
-          quantities[product.id] +
-          " of your " +
-          title +
-          " listing on Shopstr: " +
-          encodedTokenToSend;
+        if (userNPub) {
+          paymentMessage =
+            "This is a Cashu token payment from " +
+            userNPub +
+            " for " +
+            quantities[product.id] +
+            " of your " +
+            title +
+            " listing on Shopstr: " +
+            encodedTokenToSend;
+        } else {
+          paymentMessage =
+            "This is a Cashu token payment for " +
+            quantities[product.id] +
+            " of your " +
+            title +
+            " listing on Shopstr: " +
+            encodedTokenToSend;
+        }
       } else {
-        paymentMessage =
-          "This is a Cashu token payment from " +
-          userNPub +
-          " for your " +
-          title +
-          " listing on Shopstr: " +
-          encodedTokenToSend;
+        if (userNPub) {
+          paymentMessage =
+            "This is a Cashu token payment from " +
+            userNPub +
+            " for your " +
+            title +
+            " listing on Shopstr: " +
+            encodedTokenToSend;
+        } else {
+          paymentMessage =
+            "This is a Cashu token payment for your " +
+            title +
+            " listing on Shopstr: " +
+            encodedTokenToSend;
+        }
       }
       await sendPaymentAndContactMessage(pubkey, paymentMessage, true, product);
       if (metricsInvoiceId) {
@@ -603,28 +621,24 @@ export default function CartInvoiceCard({
       }
 
       if (
-        shippingName ||
-        shippingAddress ||
-        shippingUnitNo ||
-        shippingCity ||
-        shippingPostalCode ||
-        shippingState ||
-        shippingCountry ||
-        contact ||
-        contactType ||
-        contactInstructions
+        !(
+          shippingName === undefined &&
+          shippingAddress === undefined &&
+          shippingUnitNo === undefined &&
+          shippingCity === undefined &&
+          shippingPostalCode === undefined &&
+          shippingState === undefined &&
+          shippingCountry === undefined &&
+          contact === undefined &&
+          contactType === undefined &&
+          contactInstructions === undefined
+        )
       ) {
         if (
           product.shippingType === "Added Cost" ||
           product.shippingType === "Free" ||
           (product.shippingType === "Free/Pickup" && needsShippingInfo === true)
         ) {
-          let receiptMessage =
-            "Your order for " +
-            product.title +
-            " was processed successfully. You should be receiving tracking information from " +
-            nip19.npubEncode(product.pubkey) +
-            " as soon as they claim their payment.";
           let contactMessage = "";
           if (!shippingUnitNo && !product.selectedSize) {
             contactMessage =
@@ -701,26 +715,29 @@ export default function CartInvoiceCard({
             false,
             product,
           );
-          await sendPaymentAndContactMessage(
-            userPubkey,
-            receiptMessage,
-            false,
-            product,
-            true,
-          );
+          if (userPubkey) {
+            let receiptMessage =
+              "Your order for " +
+              product.title +
+              " was processed successfully. You should be receiving tracking information from " +
+              nip19.npubEncode(product.pubkey) +
+              " as soon as they claim their payment.";
+            await sendPaymentAndContactMessage(
+              userPubkey,
+              receiptMessage,
+              false,
+              product,
+              true,
+            );
+          }
         } else if (
           product.shippingType === "N/A" ||
           product.shippingType === "Pickup" ||
           (product.shippingType === "Free/Pickup" &&
             needsShippingInfo === false)
         ) {
-          let receiptMessage =
-            "Your order for " +
-            product.title +
-            " was processed successfully. You should be receiving delivery information from " +
-            nip19.npubEncode(product.pubkey) +
-            " as soon as they claim their payment.";
           let contactMessage;
+          let receiptMessage;
           if (product.selectedSize) {
             contactMessage =
               "To finalize the sale of your " +
@@ -733,6 +750,14 @@ export default function CartInvoiceCard({
               contactType +
               " using the following instructions: " +
               contactInstructions;
+            receiptMessage =
+              "Your order for " +
+              product.title +
+              "in a size " +
+              product.selectedSize +
+              " was processed successfully. You should be receiving delivery information from " +
+              nip19.npubEncode(product.pubkey) +
+              " as soon as they claim their payment.";
           } else {
             contactMessage =
               "To finalize the sale of your " +
@@ -743,6 +768,12 @@ export default function CartInvoiceCard({
               contactType +
               " using the following instructions: " +
               contactInstructions;
+            receiptMessage =
+              "Your order for " +
+              product.title +
+              " was processed successfully. You should be receiving delivery information from " +
+              nip19.npubEncode(product.pubkey) +
+              " as soon as they claim their payment.";
           }
           await sendPaymentAndContactMessage(
             pubkey,
@@ -750,13 +781,15 @@ export default function CartInvoiceCard({
             false,
             product,
           );
-          await sendPaymentAndContactMessage(
-            userPubkey,
-            receiptMessage,
-            false,
-            product,
-            true,
-          );
+          if (userPubkey) {
+            await sendPaymentAndContactMessage(
+              userPubkey,
+              receiptMessage,
+              false,
+              product,
+              true,
+            );
+          }
         }
       } else if (product.selectedSize) {
         let contactMessage =
@@ -766,6 +799,37 @@ export default function CartInvoiceCard({
           contactMessage,
           false,
           product,
+        );
+        if (userPubkey) {
+          let receiptMessage =
+            "Thank you for your purchase of " +
+            title +
+            " in a size " +
+            product.selectedSize +
+            " from " +
+            nip19.npubEncode(product.pubkey) +
+            ".";
+          await sendPaymentAndContactMessage(
+            userPubkey,
+            receiptMessage,
+            false,
+            product,
+            true,
+          );
+        }
+      } else if (userPubkey) {
+        let receiptMessage =
+          "Thank you for your purchase of " +
+          title +
+          " from " +
+          nip19.npubEncode(product.pubkey) +
+          ".";
+        await sendPaymentAndContactMessage(
+          userPubkey,
+          receiptMessage,
+          false,
+          product,
+          true,
         );
       }
     }

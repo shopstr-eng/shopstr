@@ -516,13 +516,22 @@ export default function ProductInvoiceCard({
     contactInstructions?: string,
   ) => {
     const { title } = productData;
-    const paymentMessage =
-      "This is a Cashu token payment from " +
-      userNPub +
-      " for your " +
-      title +
-      " listing on Shopstr: " +
-      token;
+    let paymentMessage;
+    if (userNPub) {
+      paymentMessage =
+        "This is a Cashu token payment from " +
+        userNPub +
+        " for your " +
+        title +
+        " listing on Shopstr: " +
+        token;
+    } else {
+      paymentMessage =
+        "This is a Cashu token payment for your " +
+        title +
+        " listing on Shopstr: " +
+        token;
+    }
     await sendPaymentAndContactMessage(
       pubkeyOfProductBeingSold,
       paymentMessage,
@@ -530,16 +539,16 @@ export default function ProductInvoiceCard({
     );
     if (
       !(
-        shippingName &&
-        shippingAddress &&
-        shippingUnitNo &&
-        shippingCity &&
-        shippingPostalCode &&
-        shippingState &&
-        shippingCountry &&
-        contact &&
-        contactType &&
-        contactInstructions
+        shippingName === undefined &&
+        shippingAddress === undefined &&
+        shippingUnitNo === undefined &&
+        shippingCity === undefined &&
+        shippingPostalCode === undefined &&
+        shippingState === undefined &&
+        shippingCountry === undefined &&
+        contact === undefined &&
+        contactType === undefined &&
+        contactInstructions === undefined
       )
     ) {
       if (
@@ -631,20 +640,17 @@ export default function ProductInvoiceCard({
           contactMessage,
           false,
         );
-        await sendPaymentAndContactMessage(
-          userPubkey,
-          receiptMessage,
-          false,
-          true,
-        );
+        if (userPubkey) {
+          await sendPaymentAndContactMessage(
+            userPubkey,
+            receiptMessage,
+            false,
+            true,
+          );
+        }
       } else if (contact && contactType && contactInstructions) {
         let contactMessage;
-        let receiptMessage =
-          "Your order for " +
-          productData.title +
-          " was processed successfully. You should be receiving delivery information from " +
-          nip19.npubEncode(productData.pubkey) +
-          " as soon as they claim their payment.";
+        let receiptMessage;
         if (selectedSize) {
           contactMessage =
             "To finalize the sale of your " +
@@ -657,6 +663,14 @@ export default function ProductInvoiceCard({
             contactType +
             " using the following instructions: " +
             contactInstructions;
+          receiptMessage =
+            "Your order for " +
+            productData.title +
+            " in a size " +
+            selectedSize +
+            " was processed successfully. You should be receiving delivery information from " +
+            nip19.npubEncode(productData.pubkey) +
+            " as soon as they claim their payment.";
         } else {
           contactMessage =
             "To finalize the sale of your " +
@@ -667,18 +681,26 @@ export default function ProductInvoiceCard({
             contactType +
             " using the following instructions: " +
             contactInstructions;
+          receiptMessage =
+            "Your order for " +
+            productData.title +
+            " was processed successfully. You should be receiving delivery information from " +
+            nip19.npubEncode(productData.pubkey) +
+            " as soon as they claim their payment.";
         }
         await sendPaymentAndContactMessage(
           pubkeyOfProductBeingSold,
           contactMessage,
           false,
         );
-        await sendPaymentAndContactMessage(
-          userPubkey,
-          receiptMessage,
-          false,
-          true,
-        );
+        if (userPubkey) {
+          await sendPaymentAndContactMessage(
+            userPubkey,
+            receiptMessage,
+            false,
+            true,
+          );
+        }
       }
     } else if (selectedSize) {
       let contactMessage = "This purchase was for a size " + selectedSize + ".";
@@ -686,6 +708,35 @@ export default function ProductInvoiceCard({
         pubkeyOfProductBeingSold,
         contactMessage,
         false,
+      );
+      if (userPubkey) {
+        let receiptMessage =
+          "Thank you for your purchase of " +
+          title +
+          " in a size " +
+          selectedSize +
+          " from " +
+          nip19.npubEncode(productData.pubkey) +
+          ".";
+        await sendPaymentAndContactMessage(
+          userPubkey,
+          receiptMessage,
+          false,
+          true,
+        );
+      }
+    } else if (userPubkey) {
+      let receiptMessage =
+        "Thank you for your purchase of " +
+        title +
+        " from " +
+        nip19.npubEncode(productData.pubkey) +
+        ".";
+      await sendPaymentAndContactMessage(
+        userPubkey,
+        receiptMessage,
+        false,
+        true,
       );
     }
   };
@@ -759,7 +810,9 @@ export default function ProductInvoiceCard({
         .then(() => {
           captureCashuPaidMetric(productData);
         })
-        .catch(console.log);
+        .catch((error) => {
+          console.error(error);
+        });
       const changeProofs = tokenToSend?.returnChange;
       const remainingProofs = tokens.filter(
         (p: Proof) => !mintKeySetIds?.includes(p.id),
