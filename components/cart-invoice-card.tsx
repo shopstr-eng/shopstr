@@ -456,84 +456,38 @@ export default function CartInvoiceCard({
       if (typeof window.webln !== "undefined") {
         try {
           await window.webln.enable();
+          const isEnabled = await window.webln.isEnabled();
+          if (!isEnabled) {
+            throw new Error("WebLN is not enabled");
+          }
           try {
-            // if the user gave permission to use webln, initate the payment
             const res = await window.webln.sendPayment(pr);
-            // the response contains the pre-image of the payment and could be used to verify the payment by comparing the hashes
-            if (res) {
-              invoiceHasBeenPaid(
-                wallet,
-                newPrice,
-                hash,
-                id,
-                shippingName ? shippingName : undefined,
-                shippingAddress ? shippingAddress : undefined,
-                shippingUnitNo ? shippingUnitNo : undefined,
-                shippingCity ? shippingCity : undefined,
-                shippingPostalCode ? shippingPostalCode : undefined,
-                shippingState ? shippingState : undefined,
-                shippingCountry ? shippingCountry : undefined,
-                contact ? contact : undefined,
-                contactType ? contactType : undefined,
-                contactInstructions ? contactInstructions : undefined,
-              );
-              return;
+            if (!res) {
+              throw new Error("Payment failed");
             }
           } catch (e) {
-            invoiceHasBeenPaid(
-              wallet,
-              newPrice,
-              hash,
-              id,
-              shippingName ? shippingName : undefined,
-              shippingAddress ? shippingAddress : undefined,
-              shippingUnitNo ? shippingUnitNo : undefined,
-              shippingCity ? shippingCity : undefined,
-              shippingPostalCode ? shippingPostalCode : undefined,
-              shippingState ? shippingState : undefined,
-              shippingCountry ? shippingCountry : undefined,
-              contact ? contact : undefined,
-              contactType ? contactType : undefined,
-              contactInstructions ? contactInstructions : undefined,
-            );
-            return;
+            console.error(e);
           }
         } catch (e) {
-          invoiceHasBeenPaid(
-            wallet,
-            newPrice,
-            hash,
-            id,
-            shippingName ? shippingName : undefined,
-            shippingAddress ? shippingAddress : undefined,
-            shippingUnitNo ? shippingUnitNo : undefined,
-            shippingCity ? shippingCity : undefined,
-            shippingPostalCode ? shippingPostalCode : undefined,
-            shippingState ? shippingState : undefined,
-            shippingCountry ? shippingCountry : undefined,
-            contact ? contact : undefined,
-            contactType ? contactType : undefined,
-            contactInstructions ? contactInstructions : undefined,
-          );
+          console.error(e);
         }
-      } else {
-        invoiceHasBeenPaid(
-          wallet,
-          newPrice,
-          hash,
-          id,
-          shippingName ? shippingName : undefined,
-          shippingAddress ? shippingAddress : undefined,
-          shippingUnitNo ? shippingUnitNo : undefined,
-          shippingCity ? shippingCity : undefined,
-          shippingPostalCode ? shippingPostalCode : undefined,
-          shippingState ? shippingState : undefined,
-          shippingCountry ? shippingCountry : undefined,
-          contact ? contact : undefined,
-          contactType ? contactType : undefined,
-          contactInstructions ? contactInstructions : undefined,
-        );
       }
+      invoiceHasBeenPaid(
+        wallet,
+        newPrice,
+        hash,
+        id,
+        shippingName ? shippingName : undefined,
+        shippingAddress ? shippingAddress : undefined,
+        shippingUnitNo ? shippingUnitNo : undefined,
+        shippingCity ? shippingCity : undefined,
+        shippingPostalCode ? shippingPostalCode : undefined,
+        shippingState ? shippingState : undefined,
+        shippingCountry ? shippingCountry : undefined,
+        contact ? contact : undefined,
+        contactType ? contactType : undefined,
+        contactInstructions ? contactInstructions : undefined,
+      );
     } catch (error) {
       console.error(error);
       if (setInvoiceGenerationFailed) {

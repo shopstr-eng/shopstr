@@ -98,24 +98,23 @@ const MintButton = ({ passphrase }: { passphrase?: string }) => {
     if (typeof window.webln !== "undefined") {
       try {
         await window.webln.enable();
+        const isEnabled = await window.webln.isEnabled();
+        if (!isEnabled) {
+          throw new Error("WebLN is not enabled");
+        }
         try {
-          // if the user gave permission to use webln, initate the payment
           const res = await window.webln.sendPayment(pr);
-          // the response contains the pre-image of the payment and could be used to verify the payment by comparing the hashes
-          if (res) {
-            invoiceHasBeenPaid(wallet, numSats, hash);
-            return;
+          if (!res) {
+            throw new Error("Payment failed");
           }
         } catch (e) {
-          invoiceHasBeenPaid(wallet, numSats, hash);
-          return;
+          console.error(e);
         }
       } catch (e) {
-        invoiceHasBeenPaid(wallet, numSats, hash);
+        console.error(e);
       }
-    } else {
-      invoiceHasBeenPaid(wallet, numSats, hash);
     }
+    invoiceHasBeenPaid(wallet, numSats, hash);
   };
 
   /** CHECKS WHETHER INVOICE HAS BEEN PAID */
