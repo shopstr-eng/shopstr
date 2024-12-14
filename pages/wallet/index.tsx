@@ -19,9 +19,10 @@ const Wallet = () => {
   const [totalBalance, setTotalBalance] = useState(0);
   const [walletBalance, setWalletBalance] = useState(0);
   const [mint, setMint] = useState("");
+  const [mintKeySetIds, setMintKeySetIds] = useState<string[]>([]);
   const router = useRouter();
 
-  const { signInMethod } = getLocalStorageData();
+  const { signInMethod, mints, tokens } = getLocalStorageData();
 
   useEffect(() => {
     if (signInMethod === "nsec" && !validPassphrase(passphrase)) {
@@ -30,25 +31,32 @@ const Wallet = () => {
   }, [signInMethod, passphrase]);
 
   useEffect(() => {
+    const fetchLocalKeySet = async () => {
+      if (mints && mints.length > 0) {
+        const currentMint = new CashuMint(mints[0]);
+        setMint(mints[0]);
+        const mintKeySetResponse = await currentMint.getKeySets();
+        const mintKeySet = mintKeySetResponse?.keysets;
+        if (mintKeySet) {
+          setMintKeySetIds(mintKeySet);
+        }
+      }
+    };
+    fetchLocalKeySet();
+  }, [mints]);
+
+  useEffect(() => {
     // Function to fetch and update balances
     const fetchAndUpdateBalances = async () => {
-      const localData = getLocalStorageData();
-      if (localData && localData.tokens) {
+      if (tokens) {
         let tokensTotal =
-          localData.tokens && localData.tokens.length >= 1
-            ? localData.tokens.reduce(
-                (acc, token: Proof) => acc + token.amount,
-                0,
-              )
+          tokens && tokens.length >= 1
+            ? tokens.reduce((acc, token: Proof) => acc + token.amount, 0)
             : 0;
         setTotalBalance(tokensTotal);
       }
-      if (localData && localData.mints && localData.tokens) {
-        const currentMint = new CashuMint(localData.mints[0]);
-        setMint(localData.mints[0]);
-        const mintKeySetResponse = await currentMint.getKeySets();
-        const mintKeySetIds = mintKeySetResponse?.keysets;
-        const filteredProofs = localData.tokens.filter(
+      if (mints && tokens && mintKeySetIds) {
+        const filteredProofs = tokens.filter(
           (p: Proof) => mintKeySetIds?.includes(p.id),
         );
         let walletTotal =
@@ -66,7 +74,7 @@ const Wallet = () => {
     }, 1000); // Polling every 1000 milliseconds (1 seconds)
     // Clean up on component unmount
     return () => clearInterval(interval);
-  }, []);
+  }, [mintKeySetIds, mints, tokens]);
 
   const handleMintClick = () => {
     router.push("/settings/preferences");
