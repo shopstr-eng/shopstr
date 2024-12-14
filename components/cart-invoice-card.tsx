@@ -558,7 +558,16 @@ export default function CartInvoiceCard({
         }
       } catch (error) {
         console.error(error);
-
+        if (error instanceof TypeError) {
+          setShowInvoiceCard(false);
+          setInvoice("");
+          setQrCodeUrl(null);
+          setFailureText(
+            "Failed to validate invoice! Change your mint in settings and/or please try again.",
+          );
+          setShowFailureModal(true);
+          break;
+        }
         await new Promise((resolve) => setTimeout(resolve, 2000));
       }
     }

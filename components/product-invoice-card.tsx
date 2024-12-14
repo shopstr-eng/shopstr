@@ -59,6 +59,7 @@ import {
 import SignInModal from "./sign-in/SignInModal";
 import currencySelection from "../public/currencySelection.json";
 import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
+import FailureModal from "@/components/utility-components/failure-modal";
 import ShippingForm from "./shipping-form";
 import ContactForm from "./contact-form";
 
@@ -112,6 +113,9 @@ export default function ProductInvoiceCard({
 
   const [showPurchaseTypeOption, setShowPurchaseTypeOption] = useState(false);
   const [needsShippingInfo, setNeedsShippingInfo] = useState(false);
+
+  const [showFailureModal, setShowFailureModal] = useState(false);
+  const [failureText, setFailureText] = useState("");
 
   const {
     handleSubmit: handleShippingSubmit,
@@ -515,7 +519,16 @@ export default function ProductInvoiceCard({
         }
       } catch (error) {
         console.error(error);
-
+        if (error instanceof TypeError) {
+          setShowInvoiceCard(false);
+          setInvoice("");
+          setQrCodeUrl(null);
+          setFailureText(
+            "Failed to validate invoice! Change your mint in settings and/or please try again.",
+          );
+          setShowFailureModal(true);
+          break;
+        }
         await new Promise((resolve) => setTimeout(resolve, 2000));
       }
     }
@@ -1170,6 +1183,15 @@ export default function ProductInvoiceCard({
         isOpen={enterPassphrase}
         setIsOpen={setEnterPassphrase}
         onCancelRouteTo={`/${id}`}
+      />
+
+      <FailureModal
+        bodyText={failureText}
+        isOpen={showFailureModal}
+        onClose={() => {
+          setShowFailureModal(false);
+          setFailureText("");
+        }}
       />
     </>
   );

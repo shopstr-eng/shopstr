@@ -28,6 +28,7 @@ import {
 } from "../utility/nostr-helper-functions";
 import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
 import { CashuWalletContext } from "../../utils/context/context";
+import FailureModal from "@/components/utility-components/failure-modal";
 
 const MintButton = ({ passphrase }: { passphrase?: string }) => {
   const [showMintModal, setShowMintModal] = useState(false);
@@ -40,6 +41,9 @@ const MintButton = ({ passphrase }: { passphrase?: string }) => {
 
   const walletContext = useContext(CashuWalletContext);
   const [dTag, setDTag] = useState("");
+
+  const [showFailureModal, setShowFailureModal] = useState(false);
+  const [failureText, setFailureText] = useState("");
 
   const { mints, tokens, history } = getLocalStorageData();
 
@@ -149,7 +153,16 @@ const MintButton = ({ passphrase }: { passphrase?: string }) => {
         }
       } catch (error) {
         console.error(error);
-
+        if (error instanceof TypeError) {
+          setShowInvoiceCard(false);
+          setInvoice("");
+          setQrCodeUrl(null);
+          setFailureText(
+            "Failed to validate invoice! Change your mint in settings and/or please try again.",
+          );
+          setShowFailureModal(true);
+          break;
+        }
         await new Promise((resolve) => setTimeout(resolve, 2000));
       }
     }
@@ -315,6 +328,14 @@ const MintButton = ({ passphrase }: { passphrase?: string }) => {
           </form>
         </ModalContent>
       </Modal>
+      <FailureModal
+        bodyText={failureText}
+        isOpen={showFailureModal}
+        onClose={() => {
+          setShowFailureModal(false);
+          setFailureText("");
+        }}
+      />
     </div>
   );
 };
