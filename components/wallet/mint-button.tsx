@@ -118,7 +118,7 @@ const MintButton = ({ passphrase }: { passphrase?: string }) => {
         console.error(e);
       }
     }
-    invoiceHasBeenPaid(wallet, numSats, hash);
+    await invoiceHasBeenPaid(wallet, numSats, hash);
   };
 
   /** CHECKS WHETHER INVOICE HAS BEEN PAID */

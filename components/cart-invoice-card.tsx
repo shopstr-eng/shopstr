@@ -472,7 +472,7 @@ export default function CartInvoiceCard({
           console.error(e);
         }
       }
-      invoiceHasBeenPaid(
+      await invoiceHasBeenPaid(
         wallet,
         newPrice,
         hash,
@@ -533,7 +533,7 @@ export default function CartInvoiceCard({
         });
 
         if (encoded) {
-          sendTokens(
+          await sendTokens(
             wallet,
             proofs,
             shippingName ? shippingName : undefined,
@@ -548,8 +548,8 @@ export default function CartInvoiceCard({
             contactInstructions ? contactInstructions : undefined,
             metricsInvoiceId,
           );
-          setPaymentConfirmed(true);
           localStorage.setItem("cart", JSON.stringify([]));
+          setPaymentConfirmed(true);
           setQrCodeUrl(null);
           if (setInvoiceIsPaid) {
             setInvoiceIsPaid(true);
@@ -643,9 +643,9 @@ export default function CartInvoiceCard({
       }
       await sendPaymentAndContactMessage(pubkey, paymentMessage, true, product);
       if (metricsInvoiceId) {
-        captureInvoicePaidmetric(metricsInvoiceId, product);
+        await captureInvoicePaidmetric(metricsInvoiceId, product);
       } else {
-        captureCashuPaidMetric(product);
+        await captureCashuPaidMetric(product);
       }
 
       if (
@@ -896,7 +896,7 @@ export default function CartInvoiceCard({
         (p: Proof) => mintKeySetIds?.includes(p.id),
       );
       const tokenToSend = await wallet.send(price, filteredProofs);
-      sendTokens(
+      await sendTokens(
         wallet,
         tokenToSend.send,
         shippingName ? shippingName : undefined,

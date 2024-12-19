@@ -435,7 +435,7 @@ export default function ProductInvoiceCard({
           console.error(e);
         }
       }
-      invoiceHasBeenPaid(
+      await invoiceHasBeenPaid(
         wallet,
         newPrice,
         hash,
@@ -496,7 +496,7 @@ export default function ProductInvoiceCard({
         });
 
         if (encoded) {
-          sendTokens(
+          await sendTokens(
             encoded,
             shippingName ? shippingName : undefined,
             shippingAddress ? shippingAddress : undefined,
@@ -509,7 +509,7 @@ export default function ProductInvoiceCard({
             contactType ? contactType : undefined,
             contactInstructions ? contactInstructions : undefined,
           );
-          captureInvoicePaidmetric(metricsInvoiceId, productData);
+          await captureInvoicePaidmetric(metricsInvoiceId, productData);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           if (setInvoiceIsPaid) {
@@ -826,7 +826,7 @@ export default function ProductInvoiceCard({
           },
         ],
       });
-      sendTokens(
+      await sendTokens(
         encodedSendToken,
         shippingName ? shippingName : undefined,
         shippingAddress ? shippingAddress : undefined,
