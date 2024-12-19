@@ -496,7 +496,11 @@ function App({ Component, pageProps }: AppProps) {
             passphrase,
           );
 
-          if (cashuWalletRelays.length != 0 && cashuMints.length != 0) {
+          if (
+            cashuWalletRelays.length != 0 &&
+            cashuMints.length != 0 &&
+            cashuProofs.length != 0
+          ) {
             localStorage.setItem(
               "cashuWalletRelays",
               JSON.stringify(cashuWalletRelays),
