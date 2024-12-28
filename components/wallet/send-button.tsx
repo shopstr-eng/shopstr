@@ -31,6 +31,7 @@ import {
   CashuMint,
   CashuWallet,
   getEncodedToken,
+  MintKeyset,
   Proof,
 } from "@cashu/cashu-ts";
 import { CashuWalletContext } from "../../utils/context/context";
@@ -81,25 +82,24 @@ const SendButton = ({ passphrase }: { passphrase?: string }) => {
     try {
       const mint = new CashuMint(mints[0]);
       const wallet = new CashuWallet(mint);
-      const mintKeySetResponse = await mint.getKeySets();
-      const mintKeySetIds = mintKeySetResponse?.keysets;
+      const mintKeySetIds = await wallet.getKeySets();
       const filteredProofs = tokens.filter(
-        (p: Proof) => mintKeySetIds?.includes(p.id),
+        (p: Proof) =>
+          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id),
       );
-      const tokenToSend = await wallet.send(numSats, filteredProofs);
+      const { keep, send } = await wallet.send(numSats, filteredProofs, {
+        includeFees: true,
+      });
       const encodedSendToken = getEncodedToken({
-        token: [
-          {
-            mint: mints[0],
-            proofs: tokenToSend.send,
-          },
-        ],
+        mint: mints[0],
+        proofs: send,
       });
       setShowTokenCard(true);
       setNewToken(encodedSendToken);
-      const changeProofs = tokenToSend?.returnChange;
+      const changeProofs = keep;
       const remainingProofs = tokens.filter(
-        (p: Proof) => !mintKeySetIds?.includes(p.id),
+        (p: Proof) =>
+          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id),
       );
       let proofArray;
       if (changeProofs.length >= 1 && changeProofs) {

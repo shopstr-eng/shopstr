@@ -41,7 +41,7 @@ export default function RedemptionModal({
   changeMint: string;
 }) {
   const [showModal, setShowModal] = useState(false);
-  const { userPubkey, relays } = getLocalStorageData();
+  const { userPubkey } = getLocalStorageData();
 
   const [formattedChangeAmount, setFormattedChangeAmount] = useState("");
 
@@ -92,12 +92,8 @@ export default function RedemptionModal({
       let decodedRandomPubkeyForReceiver = nip19.decode(randomNpubForReceiver);
       let decodedRandomPrivkeyForReceiver = nip19.decode(randomNsecForReceiver);
       let encodedChange = getEncodedToken({
-        token: [
-          {
-            mint: changeMint,
-            proofs: changeProofs,
-          },
-        ],
+        mint: changeMint,
+        proofs: changeProofs,
       });
       const paymentMessage = "Overpaid fee change: " + encodedChange;
       let giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(

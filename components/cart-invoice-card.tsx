@@ -32,6 +32,7 @@ import {
   CashuWallet,
   getEncodedToken,
   Proof,
+  MintKeyset,
 } from "@cashu/cashu-ts";
 import {
   constructGiftWrappedMessageEvent,
@@ -520,16 +521,12 @@ export default function CartInvoiceCard({
 
     while (true) {
       try {
-        const { proofs } = await wallet.requestTokens(newPrice, hash);
+        const proofs = await wallet.mintProofs(newPrice, hash);
 
         // Encoded proofs can be spent at the mint
         encoded = getEncodedToken({
-          token: [
-            {
-              mint: mints[0],
-              proofs,
-            },
-          ],
+          mint: mints[0],
+          proofs,
         });
 
         if (encoded) {
@@ -593,16 +590,14 @@ export default function CartInvoiceCard({
       const title = product.title;
       const pubkey = product.pubkey;
       let tokenAmount = totalCostsInSats[pubkey];
-      const tokenToSend = await wallet.send(tokenAmount, remainingProofs);
-      let encodedTokenToSend = getEncodedToken({
-        token: [
-          {
-            mint: mints[0],
-            proofs: tokenToSend.send,
-          },
-        ],
+      const { keep, send } = await wallet.send(tokenAmount, remainingProofs, {
+        includeFees: true,
       });
-      remainingProofs = tokenToSend.returnChange;
+      let encodedTokenToSend = getEncodedToken({
+        mint: mints[0],
+        proofs: send,
+      });
+      remainingProofs = keep;
       let paymentMessage = "";
       if (quantities[product.id] && quantities[product.id] > 1) {
         if (userNPub) {
@@ -890,15 +885,17 @@ export default function CartInvoiceCard({
     try {
       const mint = new CashuMint(mints[0]);
       const wallet = new CashuWallet(mint);
-      const mintKeySetResponse = await mint.getKeySets();
-      const mintKeySetIds = mintKeySetResponse?.keysets;
+      const mintKeySetIds = await wallet.getKeySets();
       const filteredProofs = tokens.filter(
-        (p: Proof) => mintKeySetIds?.includes(p.id),
+        (p: Proof) =>
+          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id),
       );
-      const tokenToSend = await wallet.send(price, filteredProofs);
+      const { keep, send } = await wallet.send(price, filteredProofs, {
+        includeFees: true,
+      });
       await sendTokens(
         wallet,
-        tokenToSend.send,
+        send,
         shippingName ? shippingName : undefined,
         shippingAddress ? shippingAddress : undefined,
         shippingUnitNo ? shippingUnitNo : undefined,
@@ -910,9 +907,10 @@ export default function CartInvoiceCard({
         contactType ? contactType : undefined,
         contactInstructions ? contactInstructions : undefined,
       );
-      const changeProofs = tokenToSend?.returnChange;
+      const changeProofs = keep;
       const remainingProofs = tokens.filter(
-        (p: Proof) => !mintKeySetIds?.includes(p.id),
+        (p: Proof) =>
+          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id),
       );
       let proofArray;
       if (changeProofs.length >= 1 && changeProofs) {

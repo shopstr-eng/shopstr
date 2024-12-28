@@ -73,12 +73,16 @@ const ReceiveButton = ({ passphrase }: { passphrase?: string }) => {
     setIsInvalidToken(false);
     try {
       const token = getDecodedToken(tokenString);
-      const tokenEntry = token.token;
-      const tokenMint = tokenEntry[0].mint;
-      const tokenProofs = tokenEntry[0].proofs;
+      const tokenMint = token.mint;
+      const tokenProofs = token.proofs;
       const wallet = new CashuWallet(new CashuMint(tokenMint));
-      const spentProofs = await wallet?.checkProofsSpent(tokenProofs);
-      if (spentProofs.length === 0) {
+      let proofsStates = await wallet.checkProofsStates(tokenProofs);
+      const spentYs = new Set(
+        proofsStates
+          .filter((state) => state.state === "SPENT")
+          .map((state) => state.Y),
+      );
+      if (spentYs.size === 0) {
         const uniqueProofs = tokenProofs.filter(
           (proof: Proof) => !tokens.some((token: Proof) => token.C === proof.C),
         );
@@ -165,10 +169,10 @@ const ReceiveButton = ({ passphrase }: { passphrase?: string }) => {
                   rules={{
                     required: "A Cashu token string is required.",
                     validate: (value) =>
-                      /^(web\+cashu:\/\/|cashu:\/\/|cashu:|cashuA)/.test(
+                      /^(web\+cashu:\/\/|cashu:\/\/|cashu:|cashu[a-zA-Z])/.test(
                         value,
                       ) ||
-                      "The token must start with 'web+cashu://', 'cashu://', 'cashu:', or 'cashuA'.",
+                      "The token must start with 'web+cashu://', 'cashu://', 'cashu:', or 'cashu' followed by a versioning letter.",
                   }}
                   render={({
                     field: { onChange, onBlur, value },
