@@ -1059,10 +1059,34 @@ export default function ProductInvoiceCard({
                   className="text-light-text dark:text-dark-text"
                   onClick={async () => {
                     setShowShippingOption(false);
+                    let price = totalCost;
+                    if (!currencySelection.hasOwnProperty(currency)) {
+                      throw new Error(
+                        `${currency} is not a supported currency.`,
+                      );
+                    } else if (
+                      currencySelection.hasOwnProperty(currency) &&
+                      currency.toLowerCase() !== "sats" &&
+                      currency.toLowerCase() !== "sat"
+                    ) {
+                      try {
+                        const currencyData = {
+                          amount: price,
+                          currency: currency,
+                        };
+                        const numSats =
+                          await fiat.getSatoshiValue(currencyData);
+                        price = Math.round(numSats);
+                      } catch (err) {
+                        console.error("ERROR", err);
+                      }
+                    } else if (currency.toLowerCase() === "btc") {
+                      price = price * 100000000;
+                    }
                     if (isCashuPayment) {
-                      await handleCashuPayment(totalCost);
+                      await handleCashuPayment(price);
                     } else {
-                      await handleLightningPayment(totalCost);
+                      await handleLightningPayment(price);
                     }
                   }}
                 >
@@ -1124,10 +1148,34 @@ export default function ProductInvoiceCard({
                   className="text-light-text dark:text-dark-text"
                   onClick={async () => {
                     setShowPurchaseTypeOption(false);
+                    let price = totalCost;
+                    if (!currencySelection.hasOwnProperty(currency)) {
+                      throw new Error(
+                        `${currency} is not a supported currency.`,
+                      );
+                    } else if (
+                      currencySelection.hasOwnProperty(currency) &&
+                      currency.toLowerCase() !== "sats" &&
+                      currency.toLowerCase() !== "sat"
+                    ) {
+                      try {
+                        const currencyData = {
+                          amount: price,
+                          currency: currency,
+                        };
+                        const numSats =
+                          await fiat.getSatoshiValue(currencyData);
+                        price = Math.round(numSats);
+                      } catch (err) {
+                        console.error("ERROR", err);
+                      }
+                    } else if (currency.toLowerCase() === "btc") {
+                      price = price * 100000000;
+                    }
                     if (isCashuPayment) {
-                      await handleCashuPayment(totalCost);
+                      await handleCashuPayment(price);
                     } else {
-                      await handleLightningPayment(totalCost);
+                      await handleLightningPayment(price);
                     }
                   }}
                 >
