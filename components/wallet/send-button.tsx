@@ -87,7 +87,8 @@ const SendButton = ({ passphrase }: { passphrase?: string }) => {
         (p: Proof) =>
           mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id),
       );
-      const { keep, send } = await wallet.send(numSats, filteredProofs, {
+      let sendTotal = (numSats / 10) * 10;
+      const { keep, send } = await wallet.send(sendTotal, filteredProofs, {
         includeFees: true,
       });
       const encodedSendToken = getEncodedToken({
