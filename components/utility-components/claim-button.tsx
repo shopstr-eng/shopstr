@@ -225,6 +225,7 @@ export default function ClaimButton({
     const ln = new LightningAddress(lnurl);
     try {
       if (wallet) {
+        await wallet.loadMint();
         await ln.fetch();
         const invoice = await ln.requestInvoice({ satoshi: newAmount });
         const invoicePaymentRequest = invoice.paymentRequest;
