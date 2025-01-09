@@ -26,6 +26,7 @@ import {
 } from "@/components/utility/product-parser-functions";
 import { calculateWeightedScore } from "@/components/utility/review-parser-functions";
 import { DeleteEvent } from "../../../pages/api/nostr/crud-service";
+import { hashToCurve } from "@cashu/crypto/modules/common";
 
 function getUniqueProofs(proofs: Proof[]): Proof[] {
   const uniqueProofs = new Set<string>();
@@ -1048,6 +1049,7 @@ export const fetchCashuWallet = async (
 }> => {
   return new Promise(async function (resolve, reject) {
     const { userPubkey, signInMethod, tokens } = getLocalStorageData();
+    const enc = new TextEncoder();
     try {
       let mostRecentWalletEvent: NostrEvent[] = [];
       let proofEvents: any[] = [];
@@ -1201,15 +1203,21 @@ export const fetchCashuWallet = async (
                   let wallet = new CashuWallet(
                     new CashuMint(cashuWalletEventContent?.mint),
                   );
-                  let spentProofs = await wallet?.checkProofsSpent(
+                  const Ys = cashuWalletEventContent?.proofs.map((p: Proof) =>
+                    hashToCurve(enc.encode(p.secret)).toHex(true),
+                  );
+                  let proofsStates = await wallet?.checkProofsStates(
                     cashuWalletEventContent?.proofs,
                   );
-                  if (
-                    spentProofs &&
-                    spentProofs.length > 0 &&
-                    JSON.stringify(spentProofs) ===
-                      JSON.stringify(cashuWalletEventContent?.proofs)
-                  ) {
+                  const spentYs = new Set(
+                    proofsStates
+                      .filter((state) => state.state === "SPENT")
+                      .map((state) => state.Y),
+                  );
+                  const allYsMatch =
+                    Ys.length === spentYs.size &&
+                    Ys.every((y: string) => spentYs.has(y));
+                  if (proofsStates && proofsStates.length > 0 && allYsMatch) {
                     await DeleteEvent([event.id], passphrase);
                   } else if (cashuWalletEventContent.proofs) {
                     let allProofs = [
@@ -1235,11 +1243,19 @@ export const fetchCashuWallet = async (
                 try {
                   let wallet = new CashuWallet(new CashuMint(mint));
                   if (cashuProofs.length > 0) {
-                    let spentProofs =
-                      await wallet?.checkProofsSpent(cashuProofs);
-                    if (spentProofs.length > 0) {
+                    const Ys = cashuProofs.map((p: Proof) =>
+                      hashToCurve(enc.encode(p.secret)).toHex(true),
+                    );
+                    let proofsStates =
+                      await wallet?.checkProofsStates(cashuProofs);
+                    const spentYs = new Set(
+                      proofsStates
+                        .filter((state) => state.state === "SPENT")
+                        .map((state) => state.Y),
+                    );
+                    if (spentYs.size > 0) {
                       cashuProofs = cashuProofs.filter(
-                        (proof) => !spentProofs.includes(proof),
+                        (proof, index) => !spentYs.has(Ys[index]),
                       );
                     }
                   }

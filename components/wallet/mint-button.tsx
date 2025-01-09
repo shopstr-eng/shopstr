@@ -129,7 +129,7 @@ const MintButton = ({ passphrase }: { passphrase?: string }) => {
   ) {
     while (true) {
       try {
-        const { proofs } = await wallet.requestTokens(numSats, hash);
+        const proofs = await wallet.mintProofs(numSats, hash);
 
         if (proofs) {
           const proofArray = [...tokens, ...proofs];

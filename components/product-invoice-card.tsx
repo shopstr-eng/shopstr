@@ -31,6 +31,7 @@ import {
   CashuMint,
   CashuWallet,
   getEncodedToken,
+  MintKeyset,
   Proof,
 } from "@cashu/cashu-ts";
 import {
@@ -483,19 +484,12 @@ export default function ProductInvoiceCard({
 
     while (true) {
       try {
-        const { proofs } = await wallet.requestTokens(newPrice, hash);
-
-        // Encoded proofs can be spent at the mint
+        const proofs = await wallet.mintProofs(newPrice, hash);
         encoded = getEncodedToken({
-          token: [
-            {
-              mint: mints[0],
-              proofs,
-            },
-          ],
+          mint: mints[0],
+          proofs,
         });
-
-        if (encoded) {
+        if (encoded !== "" && encoded !== undefined) {
           await sendTokens(
             encoded,
             shippingName ? shippingName : undefined,
@@ -812,19 +806,17 @@ export default function ProductInvoiceCard({
     try {
       const mint = new CashuMint(mints[0]);
       const wallet = new CashuWallet(mint);
-      const mintKeySetResponse = await mint.getKeySets();
-      const mintKeySetIds = mintKeySetResponse?.keysets;
+      const mintKeySetIds = await wallet.getKeySets();
       const filteredProofs = tokens.filter(
-        (p: Proof) => mintKeySetIds?.includes(p.id),
+        (p: Proof) =>
+          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id),
       );
-      const tokenToSend = await wallet.send(price, filteredProofs);
+      const { keep, send } = await wallet.send(price, filteredProofs, {
+        includeFees: true,
+      });
       const encodedSendToken = getEncodedToken({
-        token: [
-          {
-            mint: mints[0],
-            proofs: tokenToSend.send,
-          },
-        ],
+        mint: mints[0],
+        proofs: send,
       });
       await sendTokens(
         encodedSendToken,
@@ -845,9 +837,10 @@ export default function ProductInvoiceCard({
         .catch((error) => {
           console.error(error);
         });
-      const changeProofs = tokenToSend?.returnChange;
+      const changeProofs = keep;
       const remainingProofs = tokens.filter(
-        (p: Proof) => !mintKeySetIds?.includes(p.id),
+        (p: Proof) =>
+          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id),
       );
       let proofArray;
       if (changeProofs.length >= 1 && changeProofs) {

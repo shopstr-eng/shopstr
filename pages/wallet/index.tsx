@@ -9,7 +9,7 @@ import ReceiveButton from "../../components/wallet/receive-button";
 import SendButton from "../../components/wallet/send-button";
 import PayButton from "../../components/wallet/pay-button";
 import Transactions from "../../components/wallet/transactions";
-import { CashuMint, Proof } from "@cashu/cashu-ts";
+import { CashuMint, CashuWallet, MintKeyset, Proof } from "@cashu/cashu-ts";
 import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
 
 const Wallet = () => {
@@ -19,7 +19,8 @@ const Wallet = () => {
   const [totalBalance, setTotalBalance] = useState(0);
   const [walletBalance, setWalletBalance] = useState(0);
   const [mint, setMint] = useState("");
-  const [mintKeySetIds, setMintKeySetIds] = useState<string[]>([]);
+  const [wallet, setWallet] = useState<CashuWallet>();
+  const [mintKeySetIds, setMintKeySetIds] = useState<MintKeyset[]>([]);
   const router = useRouter();
 
   const { signInMethod, mints, tokens } = getLocalStorageData();
@@ -31,19 +32,23 @@ const Wallet = () => {
   }, [signInMethod, passphrase]);
 
   useEffect(() => {
+    let currentMint = new CashuMint(mints[0]);
+    setMint(mints[0]);
+    let cashuWallet = new CashuWallet(currentMint);
+    setWallet(cashuWallet);
+  }, [mints]);
+
+  useEffect(() => {
     const fetchLocalKeySet = async () => {
-      if (mints && mints.length > 0) {
-        const currentMint = new CashuMint(mints[0]);
-        setMint(mints[0]);
-        const mintKeySetResponse = await currentMint.getKeySets();
-        const mintKeySet = mintKeySetResponse?.keysets;
-        if (mintKeySet) {
-          setMintKeySetIds(mintKeySet);
+      if (wallet) {
+        const mintKeySetIdsArray = await wallet.getKeySets();
+        if (mintKeySetIdsArray) {
+          setMintKeySetIds(mintKeySetIdsArray);
         }
       }
     };
     fetchLocalKeySet();
-  }, [mints]);
+  }, [wallet]);
 
   useEffect(() => {
     // Function to fetch and update balances
@@ -57,7 +62,8 @@ const Wallet = () => {
       }
       if (mints && tokens && mintKeySetIds) {
         const filteredProofs = tokens.filter(
-          (p: Proof) => mintKeySetIds?.includes(p.id),
+          (p: Proof) =>
+            mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id),
         );
         let walletTotal =
           filteredProofs && filteredProofs.length >= 1
@@ -71,7 +77,7 @@ const Wallet = () => {
     // Set up polling with setInterval
     const interval = setInterval(() => {
       fetchAndUpdateBalances();
-    }, 1000); // Polling every 1000 milliseconds (1 seconds)
+    }, 2100); // Polling every 2100 milliseconds (2.1 seconds)
     // Clean up on component unmount
     return () => clearInterval(interval);
   }, [mintKeySetIds, mints, tokens]);

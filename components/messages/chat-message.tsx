@@ -6,10 +6,11 @@ import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import ClaimButton from "../utility-components/claim-button";
 import { NostrMessageEvent } from "../../utils/types/types";
 import { timeSinceMessageDisplayText } from "../../utils/messages/utils";
+import { getDecodedToken } from "@cashu/cashu-ts";
 
 function isDecodableToken(token: string): boolean {
   try {
-    atob(token);
+    getDecodedToken(token);
     return true;
   } catch (e) {
     return false;
@@ -65,14 +66,16 @@ export const ChatMessage = ({
     }
   }, [messageEvent]);
 
-  const tokenAfterCashuA = messageEvent.content.includes("cashuA")
-    ? messageEvent.content.split("cashuA")[1]
+  const cashuMatch = messageEvent.content.match(/cashu[A-Za-z]/);
+  const cashuPrefix = cashuMatch ? cashuMatch[0] : null;
+  const tokenAfterCashuVersion = cashuPrefix
+    ? messageEvent.content.split(cashuPrefix)[1]
     : null;
-  const canDecodeToken = tokenAfterCashuA
-    ? isDecodableToken(tokenAfterCashuA)
+  const canDecodeToken = tokenAfterCashuVersion
+    ? isDecodableToken(cashuPrefix + tokenAfterCashuVersion)
     : false;
-  const contentBeforeCashuA = messageEvent.content.includes("cashuA")
-    ? messageEvent.content.split("cashuA")[0]
+  const contentBeforeCashu = cashuPrefix
+    ? messageEvent.content.split(cashuPrefix)[0]
     : messageEvent.content;
 
   const { userPubkey } = getLocalStorageData();
@@ -128,15 +131,18 @@ export const ChatMessage = ({
         }`}
       >
         <p className={`inline-block flex-wrap overflow-x-hidden break-all`}>
-          {messageEvent.content.includes("cashuA") &&
-          canDecodeToken &&
-          tokenAfterCashuA ? (
+          {cashuPrefix && canDecodeToken && tokenAfterCashuVersion ? (
             <>
-              {renderMessageContent(contentBeforeCashuA)}
+              {renderMessageContent(contentBeforeCashu)}
               <div className="flex items-center">
-                <ClaimButton token={tokenAfterCashuA} passphrase={passphrase} />
+                <ClaimButton
+                  token={cashuPrefix + tokenAfterCashuVersion}
+                  passphrase={passphrase}
+                />
                 <ClipboardIcon
-                  onClick={() => handleCopyToken("cashuA" + tokenAfterCashuA)}
+                  onClick={() =>
+                    handleCopyToken(cashuPrefix + tokenAfterCashuVersion)
+                  }
                   className={`ml-2 mt-1 h-5 w-5 cursor-pointer text-light-text ${
                     copiedToClipboard ? "hidden" : ""
                   }`}

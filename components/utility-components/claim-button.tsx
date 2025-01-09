@@ -25,22 +25,14 @@ import {
 } from "../utility/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { LightningAddress } from "@getalby/lightning-tools";
-import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
+import {
+  CashuMint,
+  CashuWallet,
+  Proof,
+  getDecodedToken,
+} from "@cashu/cashu-ts";
 import RedemptionModal from "./redemption-modal";
 import { formatWithCommas } from "./display-monetary-info";
-
-function decodeBase64ToJson(base64: string): any {
-  // Step 1: Decode the base64 string to a regular string
-  const decodedString = atob(base64);
-  // Step 2: Parse the decoded string as JSON
-  try {
-    const json = JSON.parse(decodedString);
-    return json;
-  } catch (error) {
-    console.error("Error parsing JSON from base64", error);
-    throw new Error("Invalid JSON format in base64 string.");
-  }
-}
 
 export default function ClaimButton({
   token,
@@ -51,7 +43,7 @@ export default function ClaimButton({
 }) {
   const [lnurl, setLnurl] = useState("");
   const profileContext = useContext(ProfileMapContext);
-  const { userNPub, userPubkey } = getLocalStorageData();
+  const { userPubkey } = getLocalStorageData();
 
   const [openClaimTypeModal, setOpenClaimTypeModal] = useState(false);
   const [openRedemptionModal, setOpenRedemptionModal] = useState(false);
@@ -59,7 +51,7 @@ export default function ClaimButton({
   const [isRedeemed, setIsRedeemed] = useState(false);
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [wallet, setWallet] = useState<CashuWallet>();
-  const [proofs, setProofs] = useState([]);
+  const [proofs, setProofs] = useState<Proof[]>([]);
   const [tokenMint, setTokenMint] = useState("");
   const [tokenAmount, setTokenAmount] = useState(0);
   const [formattedTokenAmount, setFormattedTokenAmount] = useState("");
@@ -77,15 +69,13 @@ export default function ClaimButton({
 
   const { mints, tokens, history } = getLocalStorageData();
 
-  const [name, setName] = useState("");
-
-  const { theme, setTheme } = useTheme();
+  const { theme } = useTheme();
 
   useEffect(() => {
-    const decodedToken = decodeBase64ToJson(token);
-    const mint = decodedToken.token[0].mint;
+    const decodedToken = getDecodedToken(token);
+    const mint = decodedToken.mint;
     setTokenMint(mint);
-    const proofs = decodedToken.token[0].proofs;
+    const proofs = decodedToken.proofs;
     setProofs(proofs);
     const newWallet = new CashuWallet(new CashuMint(mint));
     setWallet(newWallet);
@@ -103,8 +93,17 @@ export default function ClaimButton({
     const checkProofsSpent = async () => {
       try {
         if (proofs.length > 0) {
-          const spentProofs = await wallet?.checkProofsSpent(proofs);
-          if (spentProofs && spentProofs.length > 0) setIsRedeemed(true);
+          let proofsStates = await wallet?.checkProofsStates(proofs);
+          if (proofsStates) {
+            const spentYs = new Set(
+              proofsStates
+                .filter((state) => state.state === "SPENT")
+                .map((state) => state.Y),
+            );
+            if (spentYs.size > 0) {
+              setIsRedeemed(true);
+            }
+          }
         }
       } catch (error) {
         console.error(error);
@@ -125,11 +124,6 @@ export default function ClaimButton({
           "https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV"
         ? sellerProfile.content.lud16
         : "invalid",
-    );
-    setName(
-      sellerProfile && sellerProfile.content.name
-        ? sellerProfile.content.name
-        : userNPub,
     );
   }, [profileContext, tokenMint]);
 
@@ -164,8 +158,15 @@ export default function ClaimButton({
     setIsInvalidToken(false);
     setIsRedeeming(true);
     try {
-      const spentProofs = await wallet?.checkProofsSpent(proofs);
-      if (spentProofs?.length === 0) {
+      let proofsStates = await wallet?.checkProofsStates(proofs);
+      const spentYs = proofsStates
+        ? new Set(
+            proofsStates
+              .filter((state) => state.state === "SPENT")
+              .map((state) => state.Y),
+          )
+        : new Set();
+      if (spentYs.size === 0) {
         const uniqueProofs = proofs.filter(
           (proof: Proof) => !tokens.some((token: Proof) => token.C === proof.C),
         );
@@ -223,28 +224,37 @@ export default function ClaimButton({
     const newAmount = Math.floor(tokenAmount * 0.98 - 2);
     const ln = new LightningAddress(lnurl);
     try {
-      await ln.fetch();
-      const invoice = await ln.requestInvoice({ satoshi: newAmount });
-      const invoicePaymentRequest = invoice.paymentRequest;
-      const response = await wallet?.payLnInvoice(
-        invoicePaymentRequest,
-        proofs,
-      );
-      const changeProofs = response?.change;
-      const changeAmount =
-        Array.isArray(changeProofs) && changeProofs.length > 0
-          ? changeProofs.reduce(
-              (acc, current: Proof) => acc + current.amount,
-              0,
-            )
-          : 0;
-      if (changeAmount >= 1 && changeProofs) {
-        setClaimChangeAmount(changeAmount);
-        setClaimChangeProofs(changeProofs);
+      if (wallet) {
+        await wallet.loadMint();
+        await ln.fetch();
+        const invoice = await ln.requestInvoice({ satoshi: newAmount });
+        const invoicePaymentRequest = invoice.paymentRequest;
+        const meltQuote = await wallet.createMeltQuote(invoicePaymentRequest);
+        if (meltQuote) {
+          const meltQuoteTotal = meltQuote.amount + meltQuote.fee_reserve;
+          const { keep, send } = await wallet.send(meltQuoteTotal, proofs, {
+            includeFees: true,
+          });
+          const meltResponse = await wallet.meltProofs(meltQuote, send);
+          const changeProofs = [...keep, ...meltResponse.change];
+          const changeAmount =
+            Array.isArray(changeProofs) && changeProofs.length > 0
+              ? changeProofs.reduce(
+                  (acc, current: Proof) => acc + current.amount,
+                  0,
+                )
+              : 0;
+          if (changeAmount >= 1 && changeProofs) {
+            setClaimChangeAmount(changeAmount);
+            setClaimChangeProofs(changeProofs);
+          }
+          setIsPaid(true);
+          setOpenRedemptionModal(true);
+          setIsRedeeming(false);
+        }
+      } else {
+        throw new Error("Wallet not initialized");
       }
-      setIsPaid(true);
-      setOpenRedemptionModal(true);
-      setIsRedeeming(false);
     } catch (error) {
       console.log(error);
       setIsPaid(false);

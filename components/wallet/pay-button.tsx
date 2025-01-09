@@ -23,7 +23,7 @@ import {
   publishSpendingHistoryEvent,
 } from "../utility/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
-import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
+import { CashuMint, CashuWallet, MintKeyset, Proof } from "@cashu/cashu-ts";
 import { formatWithCommas } from "../utility-components/display-monetary-info";
 import { CashuWalletContext } from "../../utils/context/context";
 
@@ -34,7 +34,7 @@ const PayButton = ({ passphrase }: { passphrase?: string }) => {
   const [isRedeeming, setIsRedeeming] = useState(false);
 
   // const [totalAmount, setTotalAmount] = useState(0);
-  const [feeAmount, setFeeAmount] = useState("");
+  const [feeReserveAmount, setFeeReserveAmount] = useState("");
 
   const { mints, tokens, history } = getLocalStorageData();
 
@@ -48,9 +48,6 @@ const PayButton = ({ passphrase }: { passphrase?: string }) => {
     control: payControl,
     reset: payReset,
   } = useForm();
-
-  const getMint = () => new CashuMint(mints[0]);
-  const getWallet = () => new CashuWallet(getMint());
 
   useEffect(() => {
     const walletEvent = walletContext.mostRecentWalletEvent;
@@ -73,20 +70,18 @@ const PayButton = ({ passphrase }: { passphrase?: string }) => {
   };
 
   const calculateFee = async (invoice: string) => {
-    setFeeAmount("");
+    setFeeReserveAmount("");
     if (invoice && /^lnbc/.test(invoice)) {
-      const fee = await getWallet().getFee(invoice);
-      if (fee) {
-        setFeeAmount(formatWithCommas(fee, "sats"));
-        // const invoiceValue = new Invoice({ invoice });
-        // const { satoshi } = invoiceValue;
-        // const total = satoshi + fee;
-        // setTotalAmount(total);
+      const mint = new CashuMint(mints[0]);
+      const wallet = new CashuWallet(mint);
+      const meltQuote = await wallet?.createMeltQuote(invoice);
+      if (meltQuote) {
+        setFeeReserveAmount(formatWithCommas(meltQuote.fee_reserve, "sats"));
       } else {
-        setFeeAmount("");
+        setFeeReserveAmount("");
       }
     } else {
-      setFeeAmount("");
+      setFeeReserveAmount("");
     }
   };
 
@@ -95,16 +90,19 @@ const PayButton = ({ passphrase }: { passphrase?: string }) => {
     setPaymentFailed(false);
     setIsRedeeming(true);
     try {
-      const mintKeySetResponse = await getMint().getKeySets();
-      const mintKeySetIds = mintKeySetResponse?.keysets;
-      const filteredProofs = tokens.filter(
-        (p: Proof) => mintKeySetIds?.includes(p.id),
+      const mint = new CashuMint(mints[0]);
+      const wallet = new CashuWallet(mint);
+      const mintKeySetIds = await wallet.getKeySets();
+      const filteredProofs = tokens.filter((p: Proof) =>
+        mintKeySetIds.some((keyset: MintKeyset) => keyset.id === p.id),
       );
-      const response = await getWallet().payLnInvoice(
-        invoiceString,
-        filteredProofs,
-      );
-      const changeProofs = response?.change;
+      const meltQuote = await wallet.createMeltQuote(invoiceString);
+      const meltQuoteTotal = meltQuote.amount + meltQuote.fee_reserve;
+      const { keep, send } = await wallet.send(meltQuoteTotal, filteredProofs, {
+        includeFees: true,
+      });
+      const meltResponse = await wallet.meltProofs(meltQuote, send);
+      const changeProofs = [...keep, ...meltResponse.change];
       const changeAmount =
         Array.isArray(changeProofs) && changeProofs.length > 0
           ? changeProofs.reduce(
@@ -113,7 +111,8 @@ const PayButton = ({ passphrase }: { passphrase?: string }) => {
             )
           : 0;
       const remainingProofs = tokens.filter(
-        (p: Proof) => !mintKeySetIds?.includes(p.id),
+        (p: Proof) =>
+          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id),
       );
       let proofArray;
       if (changeAmount >= 1 && changeProofs) {
@@ -235,9 +234,9 @@ const PayButton = ({ passphrase }: { passphrase?: string }) => {
                         onBlur={onBlur} // notify when input is touched/blur
                         value={value}
                       />
-                      {feeAmount && (
+                      {feeReserveAmount && (
                         <div className="mt-2 text-left text-light-text dark:text-dark-text">
-                          Estimated Fee: {feeAmount}
+                          Fee Reserve: {feeReserveAmount}
                         </div>
                       )}
                       {/* {totalAmount && totalAmount >= 1 && (

@@ -42,7 +42,7 @@ const UpdateInvoice = async (req: NextApiRequest, res: NextApiResponse) => {
   } = response[0];
 
   try {
-    await wallet.requestTokens(total, hash);
+    await wallet.mintProofs(total, hash);
   } catch (error: any) {
     console.error(error);
     if (error.message.includes("quote already issued")) {
