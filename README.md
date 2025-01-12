@@ -16,6 +16,7 @@ A global, decentralized Nostr marketplace for Bitcoin commerce.
 - [x] NIP-31: Dealing with Unknown Events
 - [ ] NIP-36: Sensitive Content
 - [ ] NIP-42: Authentication of clients to relays
+- [x] NIP-46: Nostr Remote Signing
 - [ ] NIP-47: Wallet Connect
 - [ ] NIP-49: Private Key Encryption
 - [ ] NIP-50: Search Capability

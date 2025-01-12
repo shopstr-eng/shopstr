@@ -5,6 +5,8 @@ import {
   getNsecWithPassphrase,
   getPrivKeyWithPassphrase,
   nostrBuildUploadImages,
+  sendBunkerRequest,
+  awaitBunkerResponse,
 } from "../utility/nostr-helper-functions";
 import { finalizeEvent } from "nostr-tools";
 import FailureModal from "./failure-modal";
@@ -53,9 +55,21 @@ export const FileUploaderButton = ({
           imageFiles,
           async (e) => await window.nostr.signEvent(e),
         );
+      } else if (signInMethod === "bunker") {
+        response = await nostrBuildUploadImages(imageFiles, async (e) => {
+          const requestId = crypto.randomUUID();
+          await sendBunkerRequest("sign_event", requestId, e);
+          let signedEvent;
+          while (!signedEvent) {
+            signedEvent = await awaitBunkerResponse(requestId);
+            if (!signedEvent) {
+              await new Promise((resolve) => setTimeout(resolve, 2100));
+            }
+          }
+          return JSON.parse(signedEvent);
+        });
       } else if (signInMethod === "amber") {
         response = await nostrBuildUploadImages(imageFiles, async (e) => {
-          // const eventJson = encodeURIComponent(JSON.stringify(e));
           const eventJson = encodeURIComponent(JSON.stringify(e));
           const amberSignerUrl = `nostrsigner:${eventJson}?compressionType=gzip&returnType=event&type=sign_event`;
 

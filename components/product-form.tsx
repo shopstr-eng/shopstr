@@ -208,7 +208,8 @@ export default function NewForm({
   const watchCurrency = watch("Currency"); // acts as state for currency input. when currency changes, this variable changes as well
 
   const isButtonDisabled = useMemo(() => {
-    if (signIn === "extension" || signIn === "amber") return false; // extension can upload without passphrase
+    if (signIn === "extension" || signIn === "amber" || signIn === "bunker")
+      return false; // extension can upload without passphrase
     if (passphrase === "") return true; // nsec needs passphrase
     try {
       let nsec = getNsecWithPassphrase(passphrase);
