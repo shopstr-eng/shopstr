@@ -1,5 +1,6 @@
 import CryptoJS from "crypto-js";
 import {
+  Filter,
   finalizeEvent,
   nip04,
   nip19,
@@ -15,7 +16,7 @@ import { ProductFormValues } from "@/pages/api/nostr/post-event";
 import { DeleteEvent } from "@/pages/api/nostr/crud-service";
 import { gunzipSync } from "zlib";
 import { Buffer } from "buffer";
-import crypto from "crypto";
+import { DateTime } from "luxon";
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
@@ -72,9 +73,201 @@ function generateEventId(event: EncryptedMessageEvent) {
   });
 
   // Step 3: Create SHA256 hash of the serialized string
+  const crypto = require("crypto");
   const hash = crypto.createHash("sha256");
   hash.update(serialized);
   return hash.digest("hex");
+}
+
+interface BunkerTokenParams {
+  remotePubkey: string;
+  relays: string[];
+  secret?: string;
+}
+
+export function parseBunkerToken(token: string): BunkerTokenParams | null {
+  try {
+    if (!token.startsWith("bunker://")) {
+      return null;
+    }
+
+    // Extract the basic parts using URL
+    const url = new URL(token.replace("bunker://", "https://"));
+
+    // Get pubkey (hostname in URL)
+    const remotePubkey = url.hostname;
+
+    // Get relays from query params (can have multiple relay params)
+    const relays = url.searchParams.getAll("relay");
+
+    // Get optional secret
+    const secret = url.searchParams.get("secret") || undefined;
+
+    return {
+      remotePubkey,
+      relays,
+      secret,
+    };
+  } catch (error) {
+    console.error("Failed to parse bunker token:", error);
+    return null;
+  }
+}
+
+export async function sendBunkerRequest(
+  method: string,
+  requestIdString: string,
+  event?: any,
+  content?: string,
+  thirdPartyPubkey?: string,
+  clientPubkey?: string,
+  clientPrivkey?: string,
+  bunkerRemotePubkey?: string,
+  bunkerRelays?: string[],
+  bunkerSecret?: string,
+) {
+  const storage = getLocalStorageData();
+  const finalClientPubkey = clientPubkey || storage.clientPubkey;
+  const finalClientPrivkey = clientPrivkey || storage.clientPrivkey;
+  const finalBunkerRemotePubkey =
+    bunkerRemotePubkey || storage.bunkerRemotePubkey;
+  const finalBunkerRelays = bunkerRelays || storage.bunkerRelays;
+  const finalBunkerSecret = bunkerSecret || storage.bunkerSecret;
+
+  if (
+    !finalClientPubkey ||
+    !finalClientPrivkey ||
+    !finalBunkerRemotePubkey ||
+    !finalBunkerRelays
+  ) {
+    return;
+  }
+
+  let request;
+  if (
+    method === "connect" &&
+    finalClientPubkey &&
+    finalClientPrivkey &&
+    finalBunkerRemotePubkey &&
+    finalBunkerRelays
+  ) {
+    request = {
+      id: requestIdString,
+      method: method,
+      params: finalBunkerSecret
+        ? [finalBunkerRemotePubkey, finalBunkerSecret]
+        : [finalBunkerRemotePubkey],
+    };
+  } else {
+    if (method === "sign_event" && event) {
+      request = {
+        id: requestIdString,
+        method: method,
+        params: [JSON.stringify(event)],
+      };
+    } else if (method === "get_relays" || method === "get_public_key") {
+      request = {
+        id: requestIdString,
+        method: method,
+        params: [],
+      };
+    } else if (
+      method === "nip44_encrypt" ||
+      (method === "nip44_decrypt" && thirdPartyPubkey)
+    ) {
+      request = {
+        id: requestIdString,
+        method: method,
+        params: [thirdPartyPubkey, content],
+      };
+    }
+  }
+
+  let decodedClientPrivkey = nip19.decode(finalClientPrivkey);
+  let decodedClientPubkey = nip19.decode(finalClientPubkey);
+
+  let conversationKey = nip44.getConversationKey(
+    decodedClientPrivkey.data as Uint8Array,
+    finalBunkerRemotePubkey,
+  );
+  let encryptedContent = nip44.encrypt(
+    JSON.stringify(request),
+    conversationKey,
+  );
+
+  let requestEvent = {
+    kind: 24133,
+    pubkey: decodedClientPubkey.data as string,
+    content: encryptedContent,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [["p", finalBunkerRemotePubkey]],
+  };
+  let signedEvent = finalizeEvent(
+    requestEvent,
+    decodedClientPrivkey.data as Uint8Array,
+  );
+
+  const pool = new SimplePool();
+  await Promise.any(pool.publish(finalBunkerRelays, signedEvent));
+}
+
+export async function awaitBunkerResponse(
+  requestIdString: string,
+  clientPubkey?: string,
+  clientPrivkey?: string,
+  bunkerRemotePubkey?: string,
+  bunkerRelays?: string[],
+): Promise<any> {
+  const storage = getLocalStorageData();
+  const finalClientPubkey = clientPubkey || storage.clientPubkey;
+  const finalClientPrivkey = clientPrivkey || storage.clientPrivkey;
+  const finalBunkerRemotePubkey =
+    bunkerRemotePubkey || storage.bunkerRemotePubkey;
+  const finalBunkerRelays = bunkerRelays || storage.bunkerRelays;
+
+  if (
+    !finalClientPubkey ||
+    !finalClientPrivkey ||
+    !finalBunkerRemotePubkey ||
+    !finalBunkerRelays
+  ) {
+    return;
+  }
+
+  let decodedClientPrivkey = nip19.decode(finalClientPrivkey);
+  let decodedClientPubkey = nip19.decode(finalClientPubkey);
+  let conversationKey = nip44.getConversationKey(
+    decodedClientPrivkey.data as Uint8Array,
+    finalBunkerRemotePubkey,
+  );
+  return new Promise(async function (resolve, reject) {
+    try {
+      const pool = new SimplePool();
+      let since = Math.trunc(DateTime.now().minus({ days: 1 }).toSeconds());
+      const filter: Filter = {
+        kinds: [24133],
+        authors: [finalBunkerRemotePubkey],
+        "#p": [decodedClientPubkey.data as string],
+        since,
+      };
+      let responseResult: any;
+      let h = pool.subscribeMany(finalBunkerRelays, [filter], {
+        onevent(event) {
+          let responseContent = nip44.decrypt(event.content, conversationKey);
+          let responseId = JSON.parse(responseContent).id;
+          if (responseId === requestIdString) {
+            responseResult = JSON.parse(responseContent).result;
+          }
+        },
+        oneose() {
+          h.close();
+          resolve(responseResult);
+        },
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
 }
 
 async function amberSignEvent(event: any): Promise<any> {
@@ -209,7 +402,11 @@ export async function PostListing(
   // Add "published_at" key
   const updatedValues = [...values, ["published_at", String(created_at)]];
 
-  if (signInMethod === "extension" || signInMethod === "amber") {
+  if (
+    signInMethod === "extension" ||
+    signInMethod === "amber" ||
+    signInMethod === "bunker"
+  ) {
     const event = {
       created_at: created_at,
       kind: 30402,
@@ -247,6 +444,34 @@ export async function PostListing(
       signedEvent = await window.nostr.signEvent(event);
       signedRecEvent = await window.nostr.signEvent(recEvent);
       signedHandlerEvent = await window.nostr.signEvent(handlerEvent);
+    } else if (signInMethod === "bunker") {
+      const signEventId = crypto.randomUUID();
+      await sendBunkerRequest("sign_event", signEventId, event);
+      while (!signedEvent) {
+        signedEvent = await awaitBunkerResponse(signEventId);
+        if (!signedEvent) {
+          await new Promise((resolve) => setTimeout(resolve, 2100));
+        }
+      }
+      signedEvent = JSON.parse(signedEvent);
+      const signRecEventId = crypto.randomUUID();
+      await sendBunkerRequest("sign_event", signRecEventId, recEvent);
+      while (!signedRecEvent) {
+        signedRecEvent = await awaitBunkerResponse(signRecEventId);
+        if (!signedRecEvent) {
+          await new Promise((resolve) => setTimeout(resolve, 2100));
+        }
+      }
+      signedRecEvent = JSON.parse(signedRecEvent);
+      const signHandlerEventId = crypto.randomUUID();
+      await sendBunkerRequest("sign_event", signHandlerEventId, handlerEvent);
+      while (!signedHandlerEvent) {
+        signedHandlerEvent = await awaitBunkerResponse(signHandlerEventId);
+        if (!signedHandlerEvent) {
+          await new Promise((resolve) => setTimeout(resolve, 2100));
+        }
+      }
+      signedHandlerEvent = JSON.parse(signedHandlerEvent);
     } else if (signInMethod === "amber") {
       try {
         signedEvent = await amberSignEvent(event);
@@ -368,7 +593,7 @@ export async function constructMessageSeal(
   randomPrivkey?: Uint8Array,
 ): Promise<NostrEvent> {
   let stringifiedEvent = JSON.stringify(messageEvent);
-  let encryptedContent = "";
+  let encryptedContent;
   const { signInMethod } = getLocalStorageData();
   if (randomPrivkey) {
     let conversationKey = nip44.getConversationKey(
@@ -382,6 +607,21 @@ export async function constructMessageSeal(
         recipientPubkey,
         stringifiedEvent,
       );
+    } else if (signInMethod === "bunker") {
+      const encryptId = crypto.randomUUID();
+      await sendBunkerRequest(
+        "nip44_encrypt",
+        encryptId,
+        undefined,
+        stringifiedEvent,
+        recipientPubkey,
+      );
+      while (!encryptedContent) {
+        encryptedContent = await awaitBunkerResponse(encryptId);
+        if (!encryptedContent) {
+          await new Promise((resolve) => setTimeout(resolve, 2100));
+        }
+      }
     } else if (signInMethod === "nsec") {
       if (!passphrase) {
         throw new Error("Passphrase is required");
@@ -412,6 +652,16 @@ export async function constructMessageSeal(
     signedEvent = finalizeEvent(sealEvent, randomPrivkey);
   } else if (signInMethod === "extension") {
     signedEvent = await window.nostr.signEvent(sealEvent);
+  } else if (signInMethod === "bunker") {
+    const signEventId = crypto.randomUUID();
+    await sendBunkerRequest("sign_event", signEventId, sealEvent);
+    while (!signedEvent) {
+      signedEvent = await awaitBunkerResponse(signEventId);
+      if (!signedEvent) {
+        await new Promise((resolve) => setTimeout(resolve, 2100));
+      }
+    }
+    signedEvent = JSON.parse(signedEvent);
   } else if (signInMethod === "amber") {
     signedEvent = await amberSignEvent(sealEvent);
   } else if (signInMethod === "nsec") {
@@ -482,6 +732,16 @@ export async function publishReviewEvent(
     let signedEvent;
     if (signInMethod === "extension") {
       signedEvent = await window.nostr.signEvent(reviewEvent);
+    } else if (signInMethod === "bunker") {
+      const signEventId = crypto.randomUUID();
+      await sendBunkerRequest("sign_event", signEventId, reviewEvent);
+      while (!signedEvent) {
+        signedEvent = await awaitBunkerResponse(signEventId);
+        if (!signedEvent) {
+          await new Promise((resolve) => setTimeout(resolve, 2100));
+        }
+      }
+      signedEvent = JSON.parse(signedEvent);
     } else if (signInMethod === "amber") {
       signedEvent = await amberSignEvent(reviewEvent);
     } else if (signInMethod === "nsec") {
@@ -532,6 +792,21 @@ export async function publishShoppingCartEvent(
         userPubkey,
         productAddressTags,
       );
+    } else if (signInMethod === "bunker") {
+      const encryptId = crypto.randomUUID();
+      await sendBunkerRequest(
+        "nip44_encrypt",
+        encryptId,
+        undefined,
+        productAddressTags,
+        userPubkey,
+      );
+      while (!encryptedContent) {
+        encryptedContent = await awaitBunkerResponse(encryptId);
+        if (!encryptedContent) {
+          await new Promise((resolve) => setTimeout(resolve, 2100));
+        }
+      }
     } else if (signInMethod === "nsec") {
       if (!passphrase) {
         throw new Error("Passphrase is required");
@@ -558,6 +833,16 @@ export async function publishShoppingCartEvent(
     let signedEvent;
     if (signInMethod === "extension") {
       signedEvent = await window.nostr.signEvent(cartEvent);
+    } else if (signInMethod === "bunker") {
+      const signEventId = crypto.randomUUID();
+      await sendBunkerRequest("sign_event", signEventId, cartEvent);
+      while (!signedEvent) {
+        signedEvent = await awaitBunkerResponse(signEventId);
+        if (!signedEvent) {
+          await new Promise((resolve) => setTimeout(resolve, 2100));
+        }
+      }
+      signedEvent = JSON.parse(signedEvent);
     } else if (signInMethod === "amber") {
       signedEvent = await amberSignEvent(cartEvent);
     } else if (signInMethod === "nsec") {
@@ -630,6 +915,47 @@ export async function publishWalletEvent(passphrase?: string, dTag?: string) {
         created_at: Math.floor(Date.now() / 1000),
       };
       signedEvent = await window.nostr.signEvent(cashuWalletEvent);
+    } else if (signInMethod === "bunker") {
+      const cashuWalletEvent = {
+        kind: 37375,
+        tags: [
+          ["d", dTag ? dTag : "my-shopstr-wallet"],
+          ...mintTags,
+          ["name", "Shopstr Wallet"],
+          ["unit", "sat"],
+          ["description", "a wallet for shopstr sales and purchases"],
+          ...relayTags,
+          ["alt", "Shopstr Cashu wallet"],
+        ],
+        content: await (async (): Promise<string> => {
+          const encryptId = crypto.randomUUID();
+          await sendBunkerRequest(
+            "nip44_encrypt",
+            encryptId,
+            undefined,
+            JSON.stringify(walletContent),
+            userPubkey,
+          );
+          let encryptedContent;
+          while (!encryptedContent) {
+            encryptedContent = await awaitBunkerResponse(encryptId);
+            if (!encryptedContent) {
+              await new Promise((resolve) => setTimeout(resolve, 2100));
+            }
+          }
+          return encryptedContent;
+        })(),
+        created_at: Math.floor(Date.now() / 1000),
+      };
+      const signEventId = crypto.randomUUID();
+      await sendBunkerRequest("sign_event", signEventId, cashuWalletEvent);
+      while (!signedEvent) {
+        signedEvent = await awaitBunkerResponse(signEventId);
+        if (!signedEvent) {
+          await new Promise((resolve) => setTimeout(resolve, 2100));
+        }
+      }
+      signedEvent = JSON.parse(signedEvent);
     } else if (signInMethod === "amber") {
       const encryptedContent = await amberNip44Encrypt(
         walletContent,
@@ -735,6 +1061,39 @@ export async function publishProofEvent(
             created_at: Math.floor(Date.now() / 1000),
           };
           signedEvent = await window.nostr.signEvent(cashuProofEvent);
+        } else if (signInMethod === "bunker") {
+          const cashuWalletEvent = {
+            kind: 7375,
+            tags: [["a", "37375:" + userPubkey + dTagContent]],
+            content: await (async (): Promise<string> => {
+              const encryptId = crypto.randomUUID();
+              await sendBunkerRequest(
+                "nip44_encrypt",
+                encryptId,
+                undefined,
+                JSON.stringify(tokenArray),
+                userPubkey,
+              );
+              let encryptedContent;
+              while (!encryptedContent) {
+                encryptedContent = await awaitBunkerResponse(encryptId);
+                if (!encryptedContent) {
+                  await new Promise((resolve) => setTimeout(resolve, 2100));
+                }
+              }
+              return encryptedContent;
+            })(),
+            created_at: Math.floor(Date.now() / 1000),
+          };
+          const signEventId = crypto.randomUUID();
+          await sendBunkerRequest("sign_event", signEventId, cashuWalletEvent);
+          while (!signedEvent) {
+            signedEvent = await awaitBunkerResponse(signEventId);
+            if (!signedEvent) {
+              await new Promise((resolve) => setTimeout(resolve, 2100));
+            }
+          }
+          signedEvent = JSON.parse(signedEvent);
         } else if (signInMethod === "amber") {
           const encryptedContent = await amberNip44Encrypt(
             tokenArray,
@@ -803,6 +1162,39 @@ export async function publishProofEvent(
           created_at: Math.floor(Date.now() / 1000),
         };
         signedEvent = await window.nostr.signEvent(cashuProofEvent);
+      } else if (signInMethod === "bunker") {
+        const cashuWalletEvent = {
+          kind: 7375,
+          tags: [["a", "37375:" + userPubkey + dTagContent]],
+          content: await (async (): Promise<string> => {
+            const encryptId = crypto.randomUUID();
+            await sendBunkerRequest(
+              "nip44_encrypt",
+              encryptId,
+              undefined,
+              JSON.stringify(tokenArray),
+              userPubkey,
+            );
+            let encryptedContent;
+            while (!encryptedContent) {
+              encryptedContent = await awaitBunkerResponse(encryptId);
+              if (!encryptedContent) {
+                await new Promise((resolve) => setTimeout(resolve, 2100));
+              }
+            }
+            return encryptedContent;
+          })(),
+          created_at: Math.floor(Date.now() / 1000),
+        };
+        const signEventId = crypto.randomUUID();
+        await sendBunkerRequest("sign_event", signEventId, cashuWalletEvent);
+        while (!signedEvent) {
+          signedEvent = await awaitBunkerResponse(signEventId);
+          if (!signedEvent) {
+            await new Promise((resolve) => setTimeout(resolve, 2100));
+          }
+        }
+        signedEvent = JSON.parse(signedEvent);
       } else if (signInMethod === "amber") {
         const encryptedContent = await amberNip44Encrypt(
           tokenArray,
@@ -903,6 +1295,39 @@ export async function publishSpendingHistoryEvent(
         created_at: Math.floor(Date.now() / 1000),
       };
       signedEvent = await window.nostr.signEvent(cashuSpendingHistoryEvent);
+    } else if (signInMethod === "bunker") {
+      const cashuWalletEvent = {
+        kind: 7376,
+        tags: [["a", "37375:" + userPubkey + dTagContent]],
+        content: await (async (): Promise<string> => {
+          const encryptId = crypto.randomUUID();
+          await sendBunkerRequest(
+            "nip44_encrypt",
+            encryptId,
+            undefined,
+            JSON.stringify(eventContent),
+            userPubkey,
+          );
+          let encryptedContent;
+          while (!encryptedContent) {
+            encryptedContent = await awaitBunkerResponse(encryptId);
+            if (!encryptedContent) {
+              await new Promise((resolve) => setTimeout(resolve, 2100));
+            }
+          }
+          return encryptedContent;
+        })(),
+        created_at: Math.floor(Date.now() / 1000),
+      };
+      const signEventId = crypto.randomUUID();
+      await sendBunkerRequest("sign_event", signEventId, cashuWalletEvent);
+      while (!signedEvent) {
+        signedEvent = await awaitBunkerResponse(signEventId);
+        if (!signedEvent) {
+          await new Promise((resolve) => setTimeout(resolve, 2100));
+        }
+      }
+      signedEvent = JSON.parse(signedEvent);
     } else if (signInMethod === "amber") {
       const encryptedContent = await amberNip44Encrypt(
         eventContent,
@@ -959,6 +1384,16 @@ export async function finalizeAndSendNostrEvent(
     let signedEvent;
     if (signInMethod === "extension") {
       signedEvent = await window.nostr.signEvent(nostrEvent);
+    } else if (signInMethod === "bunker") {
+      const signEventId = crypto.randomUUID();
+      await sendBunkerRequest("sign_event", signEventId, nostrEvent);
+      while (!signedEvent) {
+        signedEvent = await awaitBunkerResponse(signEventId);
+        if (!signedEvent) {
+          await new Promise((resolve) => setTimeout(resolve, 2100));
+        }
+      }
+      signedEvent = JSON.parse(signedEvent);
     } else if (signInMethod === "amber") {
       signedEvent = await amberSignEvent(nostrEvent);
     } else {
@@ -1091,6 +1526,11 @@ const LOCALSTORAGECONSTANTS = {
   tokens: "tokens",
   history: "history",
   wot: "wot",
+  clientPubkey: "clientPubkey",
+  clientPrivkey: "clientPrivkey",
+  bunkerRemotePubkey: "bunkerRemotePubkey",
+  bunkerRelays: "bunkerRelays",
+  bunkerSecret: "bunkerSecret",
 };
 
 export const setLocalStorageDataOnSignIn = ({
@@ -1104,6 +1544,11 @@ export const setLocalStorageDataOnSignIn = ({
   cashuWalletRelays,
   mints,
   wot,
+  clientPubkey,
+  clientPrivkey,
+  bunkerRemotePubkey,
+  bunkerRelays,
+  bunkerSecret,
 }: {
   signInMethod: string;
   pubkey?: string;
@@ -1115,6 +1560,11 @@ export const setLocalStorageDataOnSignIn = ({
   writeRelays?: string[];
   mints?: string[];
   wot?: number;
+  clientPubkey?: string;
+  clientPrivkey?: string;
+  bunkerRemotePubkey?: string;
+  bunkerRelays?: string[];
+  bunkerSecret?: string;
 }) => {
   localStorage.setItem(LOCALSTORAGECONSTANTS.signInMethod, signInMethod);
 
@@ -1181,6 +1631,24 @@ export const setLocalStorageDataOnSignIn = ({
 
   localStorage.setItem(LOCALSTORAGECONSTANTS.wot, String(wot ? wot : 3));
 
+  if (clientPubkey && clientPrivkey && bunkerRemotePubkey && bunkerRelays) {
+    localStorage.setItem(LOCALSTORAGECONSTANTS.clientPubkey, clientPubkey);
+    localStorage.setItem(LOCALSTORAGECONSTANTS.clientPrivkey, clientPrivkey);
+    localStorage.setItem(
+      LOCALSTORAGECONSTANTS.bunkerRemotePubkey,
+      bunkerRemotePubkey,
+    );
+    localStorage.setItem(
+      LOCALSTORAGECONSTANTS.bunkerRelays,
+      JSON.stringify(
+        bunkerRelays && bunkerRelays.length != 0 ? bunkerRelays : [],
+      ),
+    );
+    if (bunkerSecret) {
+      localStorage.setItem(LOCALSTORAGECONSTANTS.bunkerSecret, bunkerSecret);
+    }
+  }
+
   window.dispatchEvent(new Event("storage"));
 };
 
@@ -1203,6 +1671,11 @@ export interface LocalStorageInterface {
   history: [];
   wot: number;
   encryptedPrivateKey?: string;
+  clientPubkey?: string;
+  clientPrivkey?: string;
+  bunkerRemotePubkey?: string;
+  bunkerRelays?: string[];
+  bunkerSecret?: string;
 }
 
 export const getLocalStorageData = (): LocalStorageInterface => {
@@ -1218,6 +1691,11 @@ export const getLocalStorageData = (): LocalStorageInterface => {
   let tokens;
   let history;
   let wot;
+  let clientPubkey;
+  let clientPrivkey;
+  let bunkerRemotePubkey;
+  let bunkerRelays;
+  let bunkerSecret;
 
   if (typeof window !== "undefined") {
     userNPub = localStorage.getItem(LOCALSTORAGECONSTANTS.userNPub);
@@ -1319,6 +1797,28 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     wot = localStorage.getItem(LOCALSTORAGECONSTANTS.wot)
       ? Number(localStorage.getItem(LOCALSTORAGECONSTANTS.wot))
       : 3;
+
+    clientPubkey = localStorage.getItem(LOCALSTORAGECONSTANTS.clientPubkey)
+      ? localStorage.getItem(LOCALSTORAGECONSTANTS.clientPubkey)
+      : undefined;
+    clientPrivkey = localStorage.getItem(LOCALSTORAGECONSTANTS.clientPrivkey)
+      ? localStorage.getItem(LOCALSTORAGECONSTANTS.clientPrivkey)
+      : undefined;
+    bunkerRemotePubkey = localStorage.getItem(
+      LOCALSTORAGECONSTANTS.bunkerRemotePubkey,
+    )
+      ? localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerRemotePubkey)
+      : undefined;
+    bunkerRelays = localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerRelays)
+      ? (
+          JSON.parse(
+            localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerRelays) as string,
+          ) as string[]
+        ).filter((r) => r)
+      : [];
+    bunkerSecret = localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerSecret)
+      ? localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerSecret)
+      : undefined;
   }
   return {
     signInMethod: signInMethod as string,
@@ -1333,6 +1833,11 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     tokens: tokens || [],
     history: history || [],
     wot: wot || 3,
+    clientPubkey: clientPubkey?.toString(),
+    clientPrivkey: clientPrivkey?.toString(),
+    bunkerRemotePubkey: bunkerRemotePubkey?.toString(),
+    bunkerRelays: bunkerRelays || [],
+    bunkerSecret: bunkerSecret?.toString(),
   };
 };
 
@@ -1347,6 +1852,11 @@ export const LogOut = () => {
   localStorage.removeItem(LOCALSTORAGECONSTANTS.userPubkey);
   localStorage.removeItem(LOCALSTORAGECONSTANTS.encryptedPrivateKey);
   localStorage.removeItem(LOCALSTORAGECONSTANTS.history);
+  localStorage.removeItem(LOCALSTORAGECONSTANTS.clientPubkey);
+  localStorage.removeItem(LOCALSTORAGECONSTANTS.clientPrivkey);
+  localStorage.removeItem(LOCALSTORAGECONSTANTS.bunkerRemotePubkey);
+  localStorage.removeItem(LOCALSTORAGECONSTANTS.bunkerRelays);
+  localStorage.removeItem(LOCALSTORAGECONSTANTS.bunkerSecret);
 
   window.dispatchEvent(new Event("storage"));
 };

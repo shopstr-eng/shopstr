@@ -430,7 +430,8 @@ function App({ Component, pageProps }: AppProps) {
         if (
           (getLocalStorageData().signInMethod === "nsec" && passphrase) ||
           getLocalStorageData().signInMethod === "extension" ||
-          getLocalStorageData().signInMethod === "amber"
+          getLocalStorageData().signInMethod === "amber" ||
+          getLocalStorageData().signInMethod === "bunker"
         ) {
           let { profileSetFromChats: newProfileSetFromChats } =
             await fetchGiftWrappedChatsAndMessages(
@@ -482,7 +483,8 @@ function App({ Component, pageProps }: AppProps) {
         if (
           (getLocalStorageData().signInMethod === "nsec" && passphrase) ||
           getLocalStorageData().signInMethod === "extension" ||
-          getLocalStorageData().signInMethod === "amber"
+          getLocalStorageData().signInMethod === "amber" ||
+          getLocalStorageData().signInMethod === "bunker"
         ) {
           let {
             mostRecentWalletEvent,

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useContext } from "react";
+import axios from "axios";
 import {
   Modal,
   ModalContent,
@@ -12,6 +13,9 @@ import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
 import {
   setLocalStorageDataOnSignIn,
   validateNSecKey,
+  parseBunkerToken,
+  sendBunkerRequest,
+  awaitBunkerResponse,
 } from "@/components/utility/nostr-helper-functions";
 import { RelaysContext } from "../../utils/context/context";
 import { getPublicKey, nip19 } from "nostr-tools";
@@ -27,10 +31,16 @@ export default function SignInModal({
   isOpen: boolean;
   onClose: () => void;
 }) {
+  const [bunkerToken, setBunkerToken] = useState("");
+  const [validBunkerToken, setValidBunkerToken] =
+    useState<InputProps["color"]>("default");
+
   const [privateKey, setPrivateKey] = useState<string>("");
   const [validPrivateKey, setValidPrivateKey] =
     useState<InputProps["color"]>("default");
   const [passphrase, setPassphrase] = useState<string>("");
+
+  const [showBunkerSignIn, setShowBunkerSignIn] = useState(false);
 
   const [showNsecSignIn, setShowNsecSignIn] = useState(false);
 
@@ -79,6 +89,129 @@ export default function SignInModal({
       setShowFailureModal(true);
     }
   };
+
+  const startBunkerLogin = async () => {
+    try {
+      const bunkerTokenParams = parseBunkerToken(bunkerToken);
+      if (bunkerTokenParams) {
+        const { remotePubkey, relays, secret } = bunkerTokenParams;
+        let clientPubkey;
+        let clientPrivkey;
+        await axios({
+          method: "GET",
+          url: "/api/nostr/generate-keys",
+        })
+          .then((response) => {
+            clientPubkey = response.data.npub;
+            clientPrivkey = response.data.nsec;
+          })
+          .catch((error) => {
+            console.error(error);
+          });
+        const connectId = crypto.randomUUID();
+        await sendBunkerRequest(
+          "connect",
+          connectId,
+          undefined,
+          undefined,
+          undefined,
+          clientPubkey,
+          clientPrivkey,
+          remotePubkey,
+          relays,
+          secret,
+        );
+        let ack;
+        while (!ack) {
+          ack = await awaitBunkerResponse(
+            connectId,
+            clientPubkey,
+            clientPrivkey,
+            remotePubkey,
+            relays,
+          );
+          if (!ack) {
+            await new Promise((resolve) => setTimeout(resolve, 2100));
+          }
+        }
+
+        if (ack) {
+          const gpkId = crypto.randomUUID();
+          await sendBunkerRequest(
+            "get_public_key",
+            gpkId,
+            undefined,
+            undefined,
+            undefined,
+            clientPubkey,
+            clientPrivkey,
+            remotePubkey,
+            relays,
+            secret,
+          );
+          let pk;
+          while (!pk) {
+            pk = await awaitBunkerResponse(
+              gpkId,
+              clientPubkey,
+              clientPrivkey,
+              remotePubkey,
+              relays,
+            );
+            if (!pk) {
+              await new Promise((resolve) => setTimeout(resolve, 2100));
+            }
+          }
+          if (
+            !relaysContext.isLoading &&
+            relaysContext.relayList.length >= 0 &&
+            relaysContext.readRelayList &&
+            relaysContext.writeRelayList
+          ) {
+            const generalRelays = relaysContext.relayList;
+            const readRelays = relaysContext.readRelayList;
+            const writeRelays = relaysContext.writeRelayList;
+            setLocalStorageDataOnSignIn({
+              signInMethod: "bunker",
+              pubkey: pk,
+              relays: generalRelays,
+              readRelays: readRelays,
+              writeRelays: writeRelays,
+              clientPubkey: clientPubkey,
+              clientPrivkey: clientPrivkey,
+              bunkerRemotePubkey: remotePubkey,
+              bunkerRelays: relays,
+              bunkerSecret: secret,
+            });
+          } else {
+            setLocalStorageDataOnSignIn({
+              signInMethod: "bunker",
+              pubkey: pk,
+              clientPubkey: clientPubkey,
+              clientPrivkey: clientPrivkey,
+              bunkerRemotePubkey: remotePubkey,
+              bunkerRelays: relays,
+              bunkerSecret: secret,
+            });
+          }
+          onClose();
+        } else {
+          throw new Error("Bunker sign in failed!");
+        }
+      }
+    } catch (error) {
+      setFailureText("Bunker sign in failed!");
+      setShowFailureModal(true);
+    }
+  };
+
+  useEffect(() => {
+    if (bunkerToken === "") {
+      setValidBunkerToken("default");
+    } else {
+      setValidBunkerToken(parseBunkerToken(bunkerToken) ? "success" : "danger");
+    }
+  }, [bunkerToken]);
 
   const startAmberLogin = async () => {
     try {
@@ -184,16 +317,16 @@ export default function SignInModal({
           relaysContext.readRelayList &&
           relaysContext.writeRelayList
         ) {
-          const allRelays = [
-            ...relaysContext.relayList,
-            ...relaysContext.readRelayList,
-            ...relaysContext.writeRelayList,
-          ];
+          const generalRelays = relaysContext.relayList;
+          const readRelays = relaysContext.readRelayList;
+          const writeRelays = relaysContext.writeRelayList;
           setLocalStorageDataOnSignIn({
             signInMethod: "nsec",
             pubkey: pk,
             encryptedPrivateKey: encryptedPrivateKey,
-            relays: allRelays,
+            relays: generalRelays,
+            readRelays: readRelays,
+            writeRelays: writeRelays,
           });
         } else {
           setLocalStorageDataOnSignIn({
@@ -227,10 +360,11 @@ export default function SignInModal({
         backdrop="blur"
         isOpen={isOpen}
         onClose={() => {
-          onClose();
+          setShowBunkerSignIn(false);
           setShowNsecSignIn(false);
           setPrivateKey("");
           setPassphrase("");
+          onClose();
         }}
         // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
         classNames={{
@@ -284,6 +418,45 @@ export default function SignInModal({
                   >
                     Extension Sign In
                   </Button>
+                  <div className="text-center">------ or ------</div>
+                  <div className="flex flex-col	">
+                    <div className="">
+                      <Button
+                        onClick={() => setShowBunkerSignIn(true)}
+                        className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
+                          showBunkerSignIn ? "hidden" : ""
+                        }`}
+                      >
+                        Bunker Sign In
+                      </Button>
+                    </div>
+                    <div
+                      className={`mb-4 flex flex-col justify-between space-y-4 ${
+                        showBunkerSignIn ? "" : "hidden"
+                      }`}
+                    >
+                      <div>
+                        <label>Bunker Token:</label>
+                        <Input
+                          color={validBunkerToken}
+                          width="100%"
+                          size="lg"
+                          value={bunkerToken}
+                          placeholder="Paste your bunker token (bunker://)..."
+                          onChange={(e) => setBunkerToken(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Button
+                          className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
+                          onClick={startBunkerLogin}
+                          isDisabled={validBunkerToken != "success"} // Disable the button only if both key strings are invalid or the button has already been clicked
+                        >
+                          Bunker Sign In
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
                   <div className="text-center">------ or ------</div>
                   {isAndroidDevice && (
                     <>

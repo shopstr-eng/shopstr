@@ -10,6 +10,8 @@ import {
   getLocalStorageData,
   validPassphrase,
   getPrivKeyWithPassphrase,
+  sendBunkerRequest,
+  awaitBunkerResponse,
 } from "../utility/nostr-helper-functions";
 import { ChatsContext } from "../../utils/context/context";
 import RequestPassphraseModal from "../utility-components/request-passphrase-modal";
@@ -367,6 +369,64 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
               sealEvent.pubkey,
               sealEvent.content,
             );
+            let messageEventCheck = JSON.parse(messageEventString);
+            if (
+              messageEventCheck.kind === 14 &&
+              messageEventCheck.pubkey === sealEvent.pubkey
+            ) {
+              let pubkeyChats = chatsMap.get(messageEventCheck.pubkey)
+                ?.decryptedChat;
+              if (
+                (pubkeyChats &&
+                  pubkeyChats.length > 0 &&
+                  pubkeyChats.some((msg) => msg.id != messageEventCheck.id)) ||
+                !pubkeyChats ||
+                (pubkeyChats && pubkeyChats.length === 0)
+              ) {
+                giftWrapMessageEvents.push({
+                  ...messageEventCheck,
+                  sig: "",
+                  read: false,
+                });
+              }
+            }
+          }
+        } else if (signInMethod === "bunker") {
+          const sealEventDecryptId = crypto.randomUUID();
+          await sendBunkerRequest(
+            "nip44_decrypt",
+            sealEventDecryptId,
+            undefined,
+            event.content,
+            event.pubkey,
+          );
+          let sealEventString;
+          while (!sealEventString) {
+            sealEventString = await awaitBunkerResponse(sealEventDecryptId);
+            if (!sealEventString) {
+              await new Promise((resolve) => setTimeout(resolve, 2100));
+            }
+          }
+          let sealEvent = JSON.parse(sealEventString);
+          sealEvent = JSON.parse(sealEvent);
+          if (sealEvent.kind === 13) {
+            const messageEventDecryptId = crypto.randomUUID();
+            await sendBunkerRequest(
+              "nip44_decrypt",
+              messageEventDecryptId,
+              undefined,
+              sealEvent.content,
+              sealEvent.pubkey,
+            );
+            let messageEventString;
+            while (!messageEventString) {
+              messageEventString = await awaitBunkerResponse(
+                messageEventDecryptId,
+              );
+              if (!messageEventString) {
+                await new Promise((resolve) => setTimeout(resolve, 2100));
+              }
+            }
             let messageEventCheck = JSON.parse(messageEventString);
             if (
               messageEventCheck.kind === 14 &&

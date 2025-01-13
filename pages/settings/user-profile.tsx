@@ -93,7 +93,12 @@ const UserProfilePage = () => {
   };
 
   const isButtonDisabled = useMemo(() => {
-    if (signInMethod === "extension" || signInMethod === "amber") return false; // extension can upload without passphrase
+    if (
+      signInMethod === "extension" ||
+      signInMethod === "amber" ||
+      signInMethod === "bunker"
+    )
+      return false; // extension can upload without passphrase
     if (passphrase === "") return true; // nsec needs passphrase
     try {
       let nsec = getNsecWithPassphrase(passphrase);

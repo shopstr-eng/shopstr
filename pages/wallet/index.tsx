@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/router";
 import {
   getLocalStorageData,
@@ -23,7 +23,8 @@ const Wallet = () => {
   const [mintKeySetIds, setMintKeySetIds] = useState<MintKeyset[]>([]);
   const router = useRouter();
 
-  const { signInMethod, mints, tokens } = getLocalStorageData();
+  const localStorageData = useMemo(() => getLocalStorageData(), []);
+  const { signInMethod, mints, tokens } = localStorageData;
 
   useEffect(() => {
     if (signInMethod === "nsec" && !validPassphrase(passphrase)) {
@@ -50,37 +51,62 @@ const Wallet = () => {
     fetchLocalKeySet();
   }, [wallet]);
 
+  const filteredProofs = useMemo(() => {
+    if (mints && tokens && mintKeySetIds) {
+      return tokens.filter(
+        (p: Proof) =>
+          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id),
+      );
+    }
+    return [];
+  }, [mintKeySetIds, mints, tokens]);
+
   useEffect(() => {
-    // Function to fetch and update balances
-    const fetchAndUpdateBalances = async () => {
-      if (tokens) {
-        let tokensTotal =
-          tokens && tokens.length >= 1
-            ? tokens.reduce((acc, token: Proof) => acc + token.amount, 0)
+    if (tokens) {
+      const tokensTotal =
+        tokens.length >= 1
+          ? tokens.reduce((acc, token: Proof) => acc + token.amount, 0)
+          : 0;
+      setTotalBalance(tokensTotal);
+    }
+
+    const walletTotal =
+      filteredProofs.length >= 1
+        ? filteredProofs.reduce((acc, p: Proof) => acc + p.amount, 0)
+        : 0;
+    setWalletBalance(walletTotal);
+  }, [tokens, filteredProofs]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const { tokens: newTokens } = getLocalStorageData();
+      if (newTokens) {
+        const tokensTotal =
+          newTokens.length >= 1
+            ? newTokens.reduce(
+                (acc: number, token: Proof) => acc + token.amount,
+                0,
+              )
             : 0;
         setTotalBalance(tokensTotal);
       }
-      if (mints && tokens && mintKeySetIds) {
-        const filteredProofs = tokens.filter(
-          (p: Proof) =>
-            mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id),
-        );
-        let walletTotal =
-          filteredProofs && filteredProofs.length >= 1
-            ? filteredProofs.reduce((acc, p: Proof) => acc + p.amount, 0)
-            : 0;
-        setWalletBalance(walletTotal);
-      }
-    };
-    // Initial fetch
-    fetchAndUpdateBalances();
-    // Set up polling with setInterval
-    const interval = setInterval(() => {
-      fetchAndUpdateBalances();
-    }, 2100); // Polling every 2100 milliseconds (2.1 seconds)
-    // Clean up on component unmount
+
+      const newFilteredProofs = newTokens.filter(
+        (p: Proof) =>
+          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id),
+      );
+      const newWalletTotal =
+        newFilteredProofs.length >= 1
+          ? newFilteredProofs.reduce(
+              (acc: number, p: Proof) => acc + p.amount,
+              0,
+            )
+          : 0;
+      setWalletBalance(newWalletTotal);
+    }, 2100);
+
     return () => clearInterval(interval);
-  }, [mintKeySetIds, mints, tokens]);
+  }, []);
 
   const handleMintClick = () => {
     router.push("/settings/preferences");

@@ -19,6 +19,8 @@ import { DateTime } from "luxon";
 import {
   getLocalStorageData,
   getPrivKeyWithPassphrase,
+  sendBunkerRequest,
+  awaitBunkerResponse,
 } from "@/components/utility/nostr-helper-functions";
 import {
   ProductData,
@@ -153,6 +155,40 @@ export const fetchCart = async (
               userPubkey,
               event.content,
             );
+            if (eventContent) {
+              let addressArray = JSON.parse(eventContent);
+              cartAddressesArray = addressArray;
+              for (const addressElement of addressArray) {
+                let address = addressElement[1];
+                const [kind, pubkey, dTag] = address;
+                if (kind === "30402") {
+                  const foundEvent = products.find((event) =>
+                    event.tags.some((tag) => tag[0] === "d" && tag[1] === dTag),
+                  );
+                  if (foundEvent) {
+                    cartArrayFromRelay.push(
+                      parseTags(foundEvent) as ProductData,
+                    );
+                  }
+                }
+              }
+            }
+          } else if (signInMethod === "bunker") {
+            const decryptId = crypto.randomUUID();
+            await sendBunkerRequest(
+              "nip04_decrypt",
+              decryptId,
+              undefined,
+              event.content,
+              userPubkey,
+            );
+            let eventContent;
+            while (!eventContent) {
+              eventContent = await awaitBunkerResponse(decryptId);
+              if (!eventContent) {
+                await new Promise((resolve) => setTimeout(resolve, 2100));
+              }
+            }
             if (eventContent) {
               let addressArray = JSON.parse(eventContent);
               cartAddressesArray = addressArray;
@@ -502,6 +538,47 @@ export const fetchGiftWrappedChatsAndMessages = async (
                   sealEvent.pubkey,
                   sealEvent.content,
                 );
+                let messageEventCheck = JSON.parse(messageEventString);
+                if (messageEventCheck.pubkey === sealEvent.pubkey) {
+                  messageEvent = messageEventCheck;
+                }
+              }
+            } else if (signInMethod === "bunker") {
+              const sealEventDecryptId = crypto.randomUUID();
+              await sendBunkerRequest(
+                "nip44_decrypt",
+                sealEventDecryptId,
+                undefined,
+                event.content,
+                event.pubkey,
+              );
+              let sealEventString;
+              while (!sealEventString) {
+                sealEventString = await awaitBunkerResponse(sealEventDecryptId);
+                if (!sealEventString) {
+                  await new Promise((resolve) => setTimeout(resolve, 2100));
+                }
+              }
+              let sealEvent = JSON.parse(sealEventString);
+              sealEvent = JSON.parse(sealEvent);
+              if (sealEvent.kind === 13) {
+                const messageEventDecryptId = crypto.randomUUID();
+                await sendBunkerRequest(
+                  "nip44_decrypt",
+                  messageEventDecryptId,
+                  undefined,
+                  sealEvent.content,
+                  sealEvent.pubkey,
+                );
+                let messageEventString;
+                while (!messageEventString) {
+                  messageEventString = await awaitBunkerResponse(
+                    messageEventDecryptId,
+                  );
+                  if (!messageEventString) {
+                    await new Promise((resolve) => setTimeout(resolve, 2100));
+                  }
+                }
                 let messageEventCheck = JSON.parse(messageEventString);
                 if (messageEventCheck.pubkey === sealEvent.pubkey) {
                   messageEvent = messageEventCheck;
@@ -1117,6 +1194,25 @@ export const fetchCashuWallet = async (
                     userPubkey,
                     event.content,
                   );
+                  if (eventContent) {
+                    cashuWalletEventContent = JSON.parse(eventContent);
+                  }
+                } else if (signInMethod === "bunker") {
+                  const decryptId = crypto.randomUUID();
+                  await sendBunkerRequest(
+                    "nip44_decrypt",
+                    decryptId,
+                    undefined,
+                    event.content,
+                    userPubkey,
+                  );
+                  let eventContent;
+                  while (!eventContent) {
+                    eventContent = await awaitBunkerResponse(decryptId);
+                    if (!eventContent) {
+                      await new Promise((resolve) => setTimeout(resolve, 2100));
+                    }
+                  }
                   if (eventContent) {
                     cashuWalletEventContent = JSON.parse(eventContent);
                   }
