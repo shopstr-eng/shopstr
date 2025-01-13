@@ -85,7 +85,7 @@ export default function SignInModal({
       }
       onClose();
     } catch (error) {
-      setFailureText("Extension sign in failed!");
+      setFailureText("Extension sign-in failed!");
       setShowFailureModal(true);
     }
   };
@@ -196,11 +196,11 @@ export default function SignInModal({
           }
           onClose();
         } else {
-          throw new Error("Bunker sign in failed!");
+          throw new Error("Bunker sign-in failed!");
         }
       }
     } catch (error) {
-      setFailureText("Bunker sign in failed!");
+      setFailureText("Bunker sign-in failed!");
       setShowFailureModal(true);
     }
   };
@@ -278,13 +278,12 @@ export default function SignInModal({
 
       setTimeout(() => {
         clearInterval(intervalId);
-        console.log("Amber sign in timeout");
-        setFailureText("Amber sign in timed out. Please try again.");
+        setFailureText("Amber sign-in timed out. Please try again.");
         setShowFailureModal(true);
       }, 60000);
     } catch (error) {
-      console.error("Amber sign in failed:", error);
-      setFailureText("Amber sign in failed!");
+      console.error("Amber sign-in failed:", error);
+      setFailureText("Amber sign-in failed!");
       setShowFailureModal(true);
     }
   };
@@ -417,7 +416,7 @@ export default function SignInModal({
                     className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
                     onClick={startExtensionLogin}
                   >
-                    Extension Sign In
+                    Extension Sign-in
                   </Button>
                   <div className="text-center">------ or ------</div>
                   <div className="flex flex-col	">
@@ -428,7 +427,7 @@ export default function SignInModal({
                           showBunkerSignIn ? "hidden" : ""
                         }`}
                       >
-                        Bunker Sign In
+                        Bunker Sign-in
                       </Button>
                     </div>
                     <div
@@ -453,7 +452,7 @@ export default function SignInModal({
                           onClick={startBunkerLogin}
                           isDisabled={validBunkerToken != "success"} // Disable the button only if both key strings are invalid or the button has already been clicked
                         >
-                          Bunker Sign In
+                          Bunker Sign-in
                         </Button>
                       </div>
                     </div>
@@ -465,7 +464,7 @@ export default function SignInModal({
                         className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
                         onClick={startAmberLogin}
                       >
-                        Amber Sign In
+                        Amber Sign-in
                       </Button>
                       <div className="text-center">------ or ------</div>
                     </>
@@ -479,7 +478,7 @@ export default function SignInModal({
                         showNsecSignIn ? "hidden" : ""
                       }`}
                     >
-                      nsec Sign In
+                      nsec Sign-in
                     </Button>
                   </div>
                   <div
@@ -523,7 +522,7 @@ export default function SignInModal({
                         onClick={handleSignIn}
                         isDisabled={validPrivateKey != "success"} // Disable the button only if both key strings are invalid or the button has already been clicked
                       >
-                        nsec Sign In
+                        nsec Sign-in
                       </Button>
                     </div>
                   </div>
