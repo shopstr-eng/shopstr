@@ -80,7 +80,6 @@ const Wallet = () => {
   useEffect(() => {
     const interval = setInterval(() => {
       const { tokens: newTokens } = getLocalStorageData();
-      console.log("check");
       if (newTokens) {
         const tokensTotal =
           newTokens.length >= 1
@@ -107,7 +106,7 @@ const Wallet = () => {
     }, 2100);
 
     return () => clearInterval(interval);
-  }, []); // Empty dependency array for continuous polling
+  }, []);
 
   const handleMintClick = () => {
     router.push("/settings/preferences");
