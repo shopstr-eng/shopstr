@@ -361,6 +361,7 @@ export default function SignInModal({
         isOpen={isOpen}
         onClose={() => {
           setShowBunkerSignIn(false);
+          setBunkerToken("");
           setShowNsecSignIn(false);
           setPrivateKey("");
           setPassphrase("");
