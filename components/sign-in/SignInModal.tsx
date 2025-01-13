@@ -180,7 +180,7 @@ export default function SignInModal({
               clientPubkey: clientPubkey,
               clientPrivkey: clientPrivkey,
               bunkerRemotePubkey: remotePubkey,
-              bunkerRelays: JSON.stringify(relays),
+              bunkerRelays: relays,
               bunkerSecret: secret,
             });
           } else {
@@ -190,7 +190,7 @@ export default function SignInModal({
               clientPubkey: clientPubkey,
               clientPrivkey: clientPrivkey,
               bunkerRemotePubkey: remotePubkey,
-              bunkerRelays: JSON.stringify(relays),
+              bunkerRelays: relays,
               bunkerSecret: secret,
             });
           }
@@ -360,10 +360,11 @@ export default function SignInModal({
         backdrop="blur"
         isOpen={isOpen}
         onClose={() => {
-          onClose();
+          setShowBunkerSignIn(false);
           setShowNsecSignIn(false);
           setPrivateKey("");
           setPassphrase("");
+          onClose();
         }}
         // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
         classNames={{
@@ -422,7 +423,7 @@ export default function SignInModal({
                     <div className="">
                       <Button
                         onClick={() => setShowBunkerSignIn(true)}
-                        className={`mt-2 w-full ${
+                        className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
                           showBunkerSignIn ? "hidden" : ""
                         }`}
                       >

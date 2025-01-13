@@ -91,7 +91,11 @@ export default function DisplayProductModal({
   };
 
   const beginDeleteListingProcess = () => {
-    if (signInMethod === "extension") {
+    if (
+      signInMethod === "extension" ||
+      signInMethod === "amber" ||
+      signInMethod === "bunker"
+    ) {
       finalizeDeleteListingProcess();
     } else if (signInMethod === "nsec") {
       setRequestPassphrase(true);

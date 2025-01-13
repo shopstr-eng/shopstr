@@ -16,7 +16,6 @@ import { ProductFormValues } from "@/pages/api/nostr/post-event";
 import { DeleteEvent } from "@/pages/api/nostr/crud-service";
 import { gunzipSync } from "zlib";
 import { Buffer } from "buffer";
-import crypto from "crypto";
 import { DateTime } from "luxon";
 
 function containsRelay(relays: string[], relay: string): boolean {
@@ -74,6 +73,7 @@ function generateEventId(event: EncryptedMessageEvent) {
   });
 
   // Step 3: Create SHA256 hash of the serialized string
+  const crypto = require("crypto");
   const hash = crypto.createHash("sha256");
   hash.update(serialized);
   return hash.digest("hex");
@@ -117,7 +117,7 @@ export function parseBunkerToken(token: string): BunkerTokenParams | null {
 export async function sendBunkerRequest(
   method: string,
   requestIdString: string,
-  event?: DraftNostrEvent,
+  event?: any,
   content?: string,
   thirdPartyPubkey?: string,
   clientPubkey?: string,
@@ -131,9 +131,7 @@ export async function sendBunkerRequest(
   const finalClientPrivkey = clientPrivkey || storage.clientPrivkey;
   const finalBunkerRemotePubkey =
     bunkerRemotePubkey || storage.bunkerRemotePubkey;
-  const finalBunkerRelays =
-    bunkerRelays ||
-    (storage.bunkerRelays ? JSON.parse(storage.bunkerRelays) : undefined);
+  const finalBunkerRelays = bunkerRelays || storage.bunkerRelays;
   const finalBunkerSecret = bunkerSecret || storage.bunkerSecret;
 
   if (
@@ -225,9 +223,7 @@ export async function awaitBunkerResponse(
   const finalClientPrivkey = clientPrivkey || storage.clientPrivkey;
   const finalBunkerRemotePubkey =
     bunkerRemotePubkey || storage.bunkerRemotePubkey;
-  const finalBunkerRelays =
-    bunkerRelays ||
-    (storage.bunkerRelays ? JSON.parse(storage.bunkerRelays) : undefined);
+  const finalBunkerRelays = bunkerRelays || storage.bunkerRelays;
 
   if (
     !finalClientPubkey ||
@@ -457,22 +453,25 @@ export async function PostListing(
           await new Promise((resolve) => setTimeout(resolve, 2100));
         }
       }
+      signedEvent = JSON.parse(signedEvent);
       const signRecEventId = crypto.randomUUID();
-      await sendBunkerRequest("sign_event", signRecEventId, event);
+      await sendBunkerRequest("sign_event", signRecEventId, recEvent);
       while (!signedRecEvent) {
         signedRecEvent = await awaitBunkerResponse(signRecEventId);
         if (!signedRecEvent) {
           await new Promise((resolve) => setTimeout(resolve, 2100));
         }
       }
+      signedRecEvent = JSON.parse(signedRecEvent);
       const signHandlerEventId = crypto.randomUUID();
-      await sendBunkerRequest("sign_event", signHandlerEventId, event);
+      await sendBunkerRequest("sign_event", signHandlerEventId, handlerEvent);
       while (!signedHandlerEvent) {
         signedHandlerEvent = await awaitBunkerResponse(signHandlerEventId);
         if (!signedHandlerEvent) {
           await new Promise((resolve) => setTimeout(resolve, 2100));
         }
       }
+      signedHandlerEvent = JSON.parse(signedHandlerEvent);
     } else if (signInMethod === "amber") {
       try {
         signedEvent = await amberSignEvent(event);
@@ -662,6 +661,7 @@ export async function constructMessageSeal(
         await new Promise((resolve) => setTimeout(resolve, 2100));
       }
     }
+    signedEvent = JSON.parse(signedEvent);
   } else if (signInMethod === "amber") {
     signedEvent = await amberSignEvent(sealEvent);
   } else if (signInMethod === "nsec") {
@@ -741,6 +741,7 @@ export async function publishReviewEvent(
           await new Promise((resolve) => setTimeout(resolve, 2100));
         }
       }
+      signedEvent = JSON.parse(signedEvent);
     } else if (signInMethod === "amber") {
       signedEvent = await amberSignEvent(reviewEvent);
     } else if (signInMethod === "nsec") {
@@ -841,6 +842,7 @@ export async function publishShoppingCartEvent(
           await new Promise((resolve) => setTimeout(resolve, 2100));
         }
       }
+      signedEvent = JSON.parse(signedEvent);
     } else if (signInMethod === "amber") {
       signedEvent = await amberSignEvent(cartEvent);
     } else if (signInMethod === "nsec") {
@@ -953,6 +955,7 @@ export async function publishWalletEvent(passphrase?: string, dTag?: string) {
           await new Promise((resolve) => setTimeout(resolve, 2100));
         }
       }
+      signedEvent = JSON.parse(signedEvent);
     } else if (signInMethod === "amber") {
       const encryptedContent = await amberNip44Encrypt(
         walletContent,
@@ -1090,6 +1093,7 @@ export async function publishProofEvent(
               await new Promise((resolve) => setTimeout(resolve, 2100));
             }
           }
+          signedEvent = JSON.parse(signedEvent);
         } else if (signInMethod === "amber") {
           const encryptedContent = await amberNip44Encrypt(
             tokenArray,
@@ -1190,6 +1194,7 @@ export async function publishProofEvent(
             await new Promise((resolve) => setTimeout(resolve, 2100));
           }
         }
+        signedEvent = JSON.parse(signedEvent);
       } else if (signInMethod === "amber") {
         const encryptedContent = await amberNip44Encrypt(
           tokenArray,
@@ -1322,6 +1327,7 @@ export async function publishSpendingHistoryEvent(
           await new Promise((resolve) => setTimeout(resolve, 2100));
         }
       }
+      signedEvent = JSON.parse(signedEvent);
     } else if (signInMethod === "amber") {
       const encryptedContent = await amberNip44Encrypt(
         eventContent,
@@ -1387,6 +1393,7 @@ export async function finalizeAndSendNostrEvent(
           await new Promise((resolve) => setTimeout(resolve, 2100));
         }
       }
+      signedEvent = JSON.parse(signedEvent);
     } else if (signInMethod === "amber") {
       signedEvent = await amberSignEvent(nostrEvent);
     } else {
@@ -1556,7 +1563,7 @@ export const setLocalStorageDataOnSignIn = ({
   clientPubkey?: string;
   clientPrivkey?: string;
   bunkerRemotePubkey?: string;
-  bunkerRelays?: string;
+  bunkerRelays?: string[];
   bunkerSecret?: string;
 }) => {
   localStorage.setItem(LOCALSTORAGECONSTANTS.signInMethod, signInMethod);
@@ -1633,7 +1640,9 @@ export const setLocalStorageDataOnSignIn = ({
     );
     localStorage.setItem(
       LOCALSTORAGECONSTANTS.bunkerRelays,
-      JSON.stringify(bunkerRelays),
+      JSON.stringify(
+        bunkerRelays && bunkerRelays.length != 0 ? bunkerRelays : [],
+      ),
     );
     if (bunkerSecret) {
       localStorage.setItem(LOCALSTORAGECONSTANTS.bunkerSecret, bunkerSecret);
@@ -1665,7 +1674,7 @@ export interface LocalStorageInterface {
   clientPubkey?: string;
   clientPrivkey?: string;
   bunkerRemotePubkey?: string;
-  bunkerRelays?: string;
+  bunkerRelays?: string[];
   bunkerSecret?: string;
 }
 
@@ -1788,6 +1797,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     wot = localStorage.getItem(LOCALSTORAGECONSTANTS.wot)
       ? Number(localStorage.getItem(LOCALSTORAGECONSTANTS.wot))
       : 3;
+
     clientPubkey = localStorage.getItem(LOCALSTORAGECONSTANTS.clientPubkey)
       ? localStorage.getItem(LOCALSTORAGECONSTANTS.clientPubkey)
       : undefined;
@@ -1800,8 +1810,12 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       ? localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerRemotePubkey)
       : undefined;
     bunkerRelays = localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerRelays)
-      ? localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerRelays)
-      : undefined;
+      ? (
+          JSON.parse(
+            localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerRelays) as string,
+          ) as string[]
+        ).filter((r) => r)
+      : [];
     bunkerSecret = localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerSecret)
       ? localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerSecret)
       : undefined;
@@ -1822,7 +1836,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     clientPubkey: clientPubkey?.toString(),
     clientPrivkey: clientPrivkey?.toString(),
     bunkerRemotePubkey: bunkerRemotePubkey?.toString(),
-    bunkerRelays: bunkerRelays?.toString(),
+    bunkerRelays: bunkerRelays || [],
     bunkerSecret: bunkerSecret?.toString(),
   };
 };

@@ -408,6 +408,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
             }
           }
           let sealEvent = JSON.parse(sealEventString);
+          sealEvent = JSON.parse(sealEvent);
           if (sealEvent.kind === 13) {
             const messageEventDecryptId = crypto.randomUUID();
             await sendBunkerRequest(
