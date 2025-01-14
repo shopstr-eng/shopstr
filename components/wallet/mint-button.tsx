@@ -5,6 +5,7 @@ import {
   BanknotesIcon,
   CheckIcon,
   ClipboardIcon,
+  InformationCircleIcon,
 } from "@heroicons/react/24/outline";
 import {
   Card,
@@ -45,7 +46,7 @@ const MintButton = ({ passphrase }: { passphrase?: string }) => {
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
 
-  const { mints, tokens, history } = getLocalStorageData();
+  const { mints, tokens, history, signInMethod } = getLocalStorageData();
 
   const {
     handleSubmit: handleMintSubmit,
@@ -247,6 +248,16 @@ const MintButton = ({ passphrase }: { passphrase?: string }) => {
                   );
                 }}
               />
+              {signInMethod === "bunker" && (
+                <div className="mx-4 my-2 flex items-center justify-center text-center">
+                  <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
+                  <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+                    If the token is taking a while to be minted, make sure to
+                    check your bunker application to approve the transaction
+                    events.
+                  </p>
+                </div>
+              )}
               {showInvoiceCard && (
                 <Card className="mt-3 max-w-[700px]">
                   <CardHeader className="flex justify-center gap-3">

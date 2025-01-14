@@ -4,6 +4,7 @@ import { useTheme } from "next-themes";
 import {
   BoltIcon,
   CheckCircleIcon,
+  InformationCircleIcon,
   XCircleIcon,
 } from "@heroicons/react/24/outline";
 import {
@@ -36,7 +37,7 @@ const PayButton = ({ passphrase }: { passphrase?: string }) => {
   // const [totalAmount, setTotalAmount] = useState(0);
   const [feeReserveAmount, setFeeReserveAmount] = useState("");
 
-  const { mints, tokens, history } = getLocalStorageData();
+  const { mints, tokens, history, signInMethod } = getLocalStorageData();
 
   const { theme } = useTheme();
 
@@ -248,6 +249,16 @@ const PayButton = ({ passphrase }: { passphrase?: string }) => {
                   );
                 }}
               />
+              {signInMethod === "bunker" && (
+                <div className="mx-4 my-2 flex items-center justify-center text-center">
+                  <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
+                  <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+                    If the invoice payment is taking a while to be confirmed,
+                    make sure to check your bunker application to approve the
+                    transaction events.
+                  </p>
+                </div>
+              )}
             </ModalBody>
 
             {paymentFailed ? (

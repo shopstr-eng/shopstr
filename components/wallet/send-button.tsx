@@ -5,6 +5,7 @@ import {
   ClipboardIcon,
   CheckIcon,
   CheckCircleIcon,
+  InformationCircleIcon,
   XCircleIcon,
 } from "@heroicons/react/24/outline";
 import {
@@ -46,7 +47,7 @@ const SendButton = ({ passphrase }: { passphrase?: string }) => {
   const walletContext = useContext(CashuWalletContext);
   const [dTag, setDTag] = useState("");
 
-  const { mints, tokens, history } = getLocalStorageData();
+  const { mints, tokens, history, signInMethod } = getLocalStorageData();
 
   const {
     handleSubmit: handleSendSubmit,
@@ -213,6 +214,16 @@ const SendButton = ({ passphrase }: { passphrase?: string }) => {
                   );
                 }}
               />
+              {signInMethod === "bunker" && (
+                <div className="mx-4 my-2 flex items-center justify-center text-center">
+                  <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
+                  <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+                    If the token is taking a while to be generated, make sure to
+                    check your bunker application to approve the transaction
+                    events.
+                  </p>
+                </div>
+              )}
               {sendFailed && (
                 <Card className="mt-3 max-w-[700px]">
                   <CardHeader className="flex justify-center gap-3">

@@ -3,6 +3,7 @@ import { useForm, Controller } from "react-hook-form";
 import {
   ArrowDownTrayIcon,
   CheckCircleIcon,
+  InformationCircleIcon,
   XCircleIcon,
 } from "@heroicons/react/24/outline";
 import {
@@ -38,7 +39,7 @@ const ReceiveButton = ({ passphrase }: { passphrase?: string }) => {
   const walletContext = useContext(CashuWalletContext);
   const [dTag, setDTag] = useState("");
 
-  const { mints, tokens, history } = getLocalStorageData();
+  const { mints, tokens, history, signInMethod } = getLocalStorageData();
 
   const {
     handleSubmit: handleReceiveSubmit,
@@ -200,6 +201,16 @@ const ReceiveButton = ({ passphrase }: { passphrase?: string }) => {
                     );
                   }}
                 />
+                {signInMethod === "bunker" && (
+                  <div className="mx-4 my-2 flex items-center justify-center text-center">
+                    <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
+                    <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+                      If the token is taking a while to be received, make sure
+                      to check your bunker application to approve the
+                      transaction events.
+                    </p>
+                  </div>
+                )}
               </ModalBody>
 
               <ModalFooter>
