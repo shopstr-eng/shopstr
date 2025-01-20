@@ -2,6 +2,7 @@ import "tailwindcss/tailwind.css";
 import type { AppProps } from "next/app";
 import "../styles/globals.css";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/router";
 import {
   ProfileMapContext,
   ProfileContextInterface,
@@ -391,6 +392,7 @@ function App({ Component, pageProps }: AppProps) {
   const [selectedSection, setSelectedSection] = useState("");
 
   const { signInMethod } = getLocalStorageData();
+  const router = useRouter();
 
   /** FETCH initial FOLLOWS, RELAYS, PRODUCTS, and PROFILES **/
   useEffect(() => {
@@ -565,10 +567,12 @@ function App({ Component, pageProps }: AppProps) {
                     <ChatsContext.Provider value={chatsContext}>
                       <NextUIProvider>
                         <NextThemesProvider attribute="class">
-                          <TopNav
-                            setFocusedPubkey={setFocusedPubkey}
-                            setSelectedSection={setSelectedSection}
-                          />
+                          {router.pathname !== "/" && (
+                            <TopNav
+                              setFocusedPubkey={setFocusedPubkey}
+                              setSelectedSection={setSelectedSection}
+                            />
+                          )}
                           <div className="flex">
                             <main className="flex-1">
                               <Component
@@ -591,13 +595,15 @@ function App({ Component, pageProps }: AppProps) {
           </FollowsContext.Provider>
         </CashuWalletContext.Provider>
       </RelaysContext.Provider>
-      <RequestPassphraseModal
-        passphrase={passphrase}
-        setCorrectPassphrase={setPassphrase}
-        isOpen={enterPassphrase}
-        setIsOpen={setEnterPassphrase}
-        onCancelRouteTo="/"
-      />
+      {router.pathname !== "/" && (
+        <RequestPassphraseModal
+          passphrase={passphrase}
+          setCorrectPassphrase={setPassphrase}
+          isOpen={enterPassphrase}
+          setIsOpen={setEnterPassphrase}
+          onCancelRouteTo="/marketplace"
+        />
+      )}
     </>
   );
 }

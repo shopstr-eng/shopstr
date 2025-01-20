@@ -129,7 +129,7 @@ const TopNav = ({
   const handleHomeClick = () => {
     setFocusedPubkey("");
     setSelectedSection("");
-    router.push("/");
+    router.push("/marketplace");
     setIsMobileMenuOpen(false);
   };
 
@@ -139,7 +139,7 @@ const TopNav = ({
         className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
         onClick={handleHomeClick}
       >
-        Home
+        Marketplace
       </Button>
       <Button
         className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
@@ -231,7 +231,7 @@ const TopNav = ({
             className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
             onClick={handleHomeClick}
           >
-            Home
+            Marketplace
           </Button>
           |
           <Button

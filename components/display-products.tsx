@@ -137,7 +137,11 @@ const DisplayProducts = ({
       setShowModal(true);
     } else {
       setShowModal(false);
-      router.push(`/listing/${product.d}`);
+      if (product.d !== undefined) {
+        router.push(`/listing/${product.d}`);
+      } else {
+        router.push(`/listing/${product.id}`);
+      }
     }
   };
 

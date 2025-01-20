@@ -5,6 +5,7 @@ import "react-responsive-carousel/lib/styles/carousel.min.css"; // requires a lo
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import { Image } from "@nextui-org/react";
 import { buildSrcSet } from "@/utils/images";
+import { useRouter } from "next/router";
 
 interface ImageCarouselProps {
   images: string[];
@@ -16,6 +17,7 @@ export default function ImageCarousel({
   classname,
   showThumbs,
 }: ImageCarouselProps) {
+  const router = useRouter();
   /** SHARED STYLES **/
   const PREVNEXTBUTTONSTYLES =
     "absolute z-10 top-[calc(50%-(.5*50%/2))] cursor-pointer h-[30%] w-[8%] rounded-sm bg-purple-300 opacity-20 hover:bg-purple-500 hover:opacity-80 flex items-center";
@@ -49,7 +51,7 @@ export default function ImageCarousel({
     <Carousel
       showArrows={images && images.length > 1}
       showStatus={false}
-      showIndicators={images && images.length > 1}
+      showIndicators={router.pathname !== "/" && images && images.length > 1}
       showThumbs={showThumbs}
       renderArrowPrev={(onClickHandler, hasPrev, label) =>
         hasPrev && (

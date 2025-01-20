@@ -11,6 +11,7 @@ import CompactPriceDisplay, {
 import { ProductData } from "../utility/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
+import { useRouter } from "next/router";
 
 const cardWidth = 380;
 const cardxMargin = 2.5;
@@ -27,6 +28,7 @@ export default function ProductCard({
   isReview?: boolean;
   footerContent?: ReactNode;
 }) {
+  const router = useRouter();
   if (!productData) return null;
   const { pubkey, title, images, categories, location, status } = productData;
   if (isReview)
@@ -119,23 +121,26 @@ export default function ProductCard({
             />
           </div>
           <div className="justify-left flex flex-col p-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
-                {title}
-              </h2>
-              <div>
-                {status === "active" && (
-                  <span className="mr-2 rounded-full bg-green-500 px-2 py-1 text-xs font-semibold text-white">
-                    Active
-                  </span>
-                )}
-                {status === "sold" && (
-                  <span className="mr-2 rounded-full bg-red-500 px-2 py-1 text-xs font-semibold text-white">
-                    Sold
-                  </span>
-                )}
+            {router.pathname !== "/" && (
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
+                  {title}
+                </h2>
+                <div>
+                  {status === "active" && (
+                    <span className="mr-2 rounded-full bg-green-500 px-2 py-1 text-xs font-semibold text-white">
+                      Active
+                    </span>
+                  )}
+                  {status === "sold" && (
+                    <span className="mr-2 rounded-full bg-red-500 px-2 py-1 text-xs font-semibold text-white">
+                      Sold
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
+
             <div className="z-10 mb-2 flex w-full justify-between">
               <ProfileWithDropdown
                 pubkey={pubkey}
@@ -146,9 +151,11 @@ export default function ProductCard({
                 }
               />
             </div>
-            <div className="justify-left flex">
-              <CompactPriceDisplay monetaryInfo={productData} />
-            </div>
+            {router.pathname !== "/" && (
+              <div className="justify-left flex">
+                <CompactPriceDisplay monetaryInfo={productData} />
+              </div>
+            )}
           </div>
         </div>
       </div>

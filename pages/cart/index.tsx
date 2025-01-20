@@ -476,7 +476,7 @@ export default function Component() {
                   Check your saved for later items or{" "}
                   <span
                     className="underline hover:text-light-text dark:hover:text-dark-text"
-                    onClick={() => router.push("/")}
+                    onClick={() => router.push("/marketplace")}
                   >
                     continue shopping.
                   </span>
@@ -567,7 +567,7 @@ export default function Component() {
         setCorrectPassphrase={setPassphrase}
         isOpen={enterPassphrase}
         setIsOpen={setEnterPassphrase}
-        onCancelRouteTo="/"
+        onCancelRouteTo="/marketplace"
       /> */}
     </>
   );

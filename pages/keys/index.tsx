@@ -65,7 +65,7 @@ const Keys = () => {
         encryptedPrivateKey: encryptedPrivateKey,
       });
 
-      router.push("/");
+      router.push("/marketplace");
     }
   };
 
@@ -87,9 +87,9 @@ const Keys = () => {
                   Shopstr
                 </h1>
               </div>
-              <div className="mb-4 flex flex-col">
-                Make sure to write down and save your public and private keys in
-                a secure format!
+              <div className="mb-4 flex flex-col text-center">
+                Make sure to save your public and private keys in a secure
+                format!
               </div>
               <div className="mb-4 flex flex-col">
                 <label className="text-xl">Public Key:</label>

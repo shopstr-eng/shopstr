@@ -1282,7 +1282,7 @@ export default function CartInvoiceCard({
             onClose={() => {
               setInvoiceIsPaid(false);
               setCashuPaymentSent(false);
-              router.push("/");
+              router.push("/marketplace");
             }}
             // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
             classNames={{
