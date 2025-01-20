@@ -81,7 +81,7 @@ const SettingsPage = () => {
               onClick={() => {
                 LogOut();
 
-                router.push("/");
+                router.push("/marketplace");
               }}
             >
               Log out

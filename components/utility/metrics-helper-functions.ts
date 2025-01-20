@@ -21,7 +21,7 @@ export async function capturePostListingMetric(id: string, tags: any[]) {
 }
 
 export const captureInvoicePaidmetric = async (
-  metricsInvoiceId: string,
+  hash: string,
   productData: ProductData,
 ) => {
   const { mints } = getLocalStorageData();
@@ -32,8 +32,17 @@ export const captureInvoicePaidmetric = async (
       "Content-Type": "application/json",
     },
     data: {
-      id: metricsInvoiceId,
+      hash,
       listing_id: productData.id,
+      total: productData.totalCost,
+      sub_total: productData.price,
+      tip_total: 0,
+      shipping_total: productData.shippingCost,
+      discount_total: 0,
+      fee_total: 0,
+      tax_total: 0,
+      currency: "SATS",
+      merchant_id: productData.pubkey,
       merchant_location: productData.location,
       mint: mints[0],
     },

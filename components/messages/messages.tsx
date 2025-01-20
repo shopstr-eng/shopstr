@@ -298,19 +298,6 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       );
       await sendGiftWrappedMessageEvent(senderGiftWrappedEvent);
       await sendGiftWrappedMessageEvent(receiverGiftWrappedEvent);
-      axios({
-        method: "POST",
-        url: "/api/metrics/post-inquiry",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        data: {
-          customer_id: userPubkey,
-          merchant_id: currentChatPubkey,
-          // listing_id: "TODO"
-          // relays: relays,
-        },
-      });
       setIsSendingDMLoading(false);
     } catch (e) {
       console.log("handleSendMessage errored", e);

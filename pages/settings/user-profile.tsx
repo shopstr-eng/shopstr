@@ -144,7 +144,7 @@ const UserProfilePage = () => {
                   </FileUploaderButton>
                 </div>
                 <div className="flex items-center justify-center">
-                  <div className="relative z-50 mt-[-3rem] h-24 w-24">
+                  <div className="relative z-20 mt-[-3rem] h-24 w-24">
                     <div className="">
                       <FileUploaderButton
                         isIconOnly
@@ -175,7 +175,7 @@ const UserProfilePage = () => {
               </div>
 
               <div
-                className="mb-2 flex w-full cursor-pointer flex-row items-center justify-center rounded-lg border-2 border-light-fg p-2 hover:opacity-60 dark:border-dark-fg"
+                className="mx-auto mb-2 flex w-full max-w-2xl cursor-pointer flex-row items-center justify-center rounded-lg border-2 border-light-fg p-2 hover:opacity-60 dark:border-dark-fg"
                 onClick={() => {
                   // copy to clipboard
                   navigator.clipboard.writeText(userNPub);
@@ -186,7 +186,7 @@ const UserProfilePage = () => {
                 }}
               >
                 <span
-                  className="text-xxs box-border flex max-w-full overflow-hidden text-ellipsis whitespace-nowrap pr-3 text-center font-bold text-light-text dark:text-dark-text"
+                  className="lg:text-md break-all pr-2 text-[0.50rem] font-bold text-light-text dark:text-dark-text sm:text-xs md:text-sm"
                   suppressHydrationWarning
                 >
                   {userNPub}
@@ -195,21 +195,21 @@ const UserProfilePage = () => {
                   <CheckIcon
                     width={15}
                     height={15}
-                    className="text-light-text dark:text-dark-text"
+                    className="flex-shrink-0 text-light-text dark:text-dark-text"
                   />
                 ) : (
                   <ClipboardIcon
                     width={15}
                     height={15}
-                    className="text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
+                    className="flex-shrink-0 text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
                   />
                 )}
               </div>
 
               {signInMethod === "nsec" ? (
-                <div className="mb-12 flex w-full cursor-pointer flex-row items-center justify-center rounded-lg border-2 border-light-fg p-2 dark:border-dark-fg">
+                <div className="mx-auto mb-12 flex w-full max-w-2xl cursor-pointer flex-row items-center justify-center rounded-lg border-2 border-light-fg p-2 dark:border-dark-fg">
                   <span
-                    className="text-xxs box-border flex max-w-full overflow-hidden text-ellipsis whitespace-nowrap pr-3 text-center font-bold text-light-text dark:text-dark-text"
+                    className="lg:text-md break-all pr-2 text-[0.50rem] font-bold text-light-text dark:text-dark-text sm:text-xs md:text-sm"
                     suppressHydrationWarning
                   >
                     {viewState === "shown"
@@ -220,13 +220,13 @@ const UserProfilePage = () => {
                     <CheckIcon
                       width={15}
                       height={15}
-                      className="text-light-text dark:text-dark-text"
+                      className="flex-shrink-0 text-light-text dark:text-dark-text"
                     />
                   ) : (
                     <ClipboardIcon
                       width={15}
                       height={15}
-                      className="text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
+                      className="flex-shrink-0 text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
                       onClick={() => {
                         // copy to clipboard
                         navigator.clipboard.writeText(userNSec);

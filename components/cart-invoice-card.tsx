@@ -434,13 +434,8 @@ export default function CartInvoiceCard({
       setShowInvoiceCard(true);
       const wallet = new CashuWallet(new CashuMint(mints[0]));
 
-      const invoiceMinted = await axios.post("/api/cashu/request-mint", {
-        mintUrl: mints[0],
-        total: newPrice,
-        currency: "SATS",
-      });
-
-      const { id, pr, hash } = invoiceMinted.data;
+      const { request: pr, quote: hash } =
+        await wallet.createMintQuote(newPrice);
 
       setInvoice(pr);
 
@@ -477,7 +472,6 @@ export default function CartInvoiceCard({
         wallet,
         newPrice,
         hash,
-        id,
         shippingName ? shippingName : undefined,
         shippingAddress ? shippingAddress : undefined,
         shippingUnitNo ? shippingUnitNo : undefined,
@@ -505,7 +499,6 @@ export default function CartInvoiceCard({
     wallet: CashuWallet,
     newPrice: number,
     hash: string,
-    metricsInvoiceId: string,
     shippingName?: string,
     shippingAddress?: string,
     shippingUnitNo?: string,
@@ -543,7 +536,7 @@ export default function CartInvoiceCard({
             contact ? contact : undefined,
             contactType ? contactType : undefined,
             contactInstructions ? contactInstructions : undefined,
-            metricsInvoiceId,
+            hash,
           );
           localStorage.setItem("cart", JSON.stringify([]));
           setPaymentConfirmed(true);
@@ -583,7 +576,7 @@ export default function CartInvoiceCard({
     contact?: string,
     contactType?: string,
     contactInstructions?: string,
-    metricsInvoiceId?: string,
+    hash?: string,
   ) => {
     let remainingProofs = proofs;
     for (const product of products) {
@@ -637,8 +630,8 @@ export default function CartInvoiceCard({
         }
       }
       await sendPaymentAndContactMessage(pubkey, paymentMessage, true, product);
-      if (metricsInvoiceId) {
-        await captureInvoicePaidmetric(metricsInvoiceId, product);
+      if (hash) {
+        await captureInvoicePaidmetric(hash, product);
       } else {
         await captureCashuPaidMetric(product);
       }
@@ -1282,7 +1275,7 @@ export default function CartInvoiceCard({
             onClose={() => {
               setInvoiceIsPaid(false);
               setCashuPaymentSent(false);
-              router.push("/");
+              router.push("/marketplace");
             }}
             // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
             classNames={{

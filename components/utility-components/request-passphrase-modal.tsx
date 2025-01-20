@@ -61,7 +61,9 @@ export default function RequestPassphraseModal({
 
   const onCancel = () => {
     setIsOpen(false);
-    onCancelRouteTo ? router.push(onCancelRouteTo) : router.push("/");
+    onCancelRouteTo
+      ? router.push(onCancelRouteTo)
+      : router.push("/marketplace");
   };
 
   return (

@@ -22,7 +22,7 @@ const useNavigation = () => {
     setIsProfileActive(false);
 
     switch (pathname) {
-      case "/":
+      case "/marketplace":
         setIsHomeActive(true);
         break;
       case "/orders":

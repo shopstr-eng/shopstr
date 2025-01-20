@@ -29,7 +29,7 @@ const Listing = () => {
       const productIdString = productId ? productId[0] : "";
       setProductIdString(productIdString);
       if (!productIdString) {
-        router.push("/"); // if there isn't a productId, redirect to home page
+        router.push("/marketplace"); // if there isn't a productId, redirect to home page
       }
     }
   }, [router]);
@@ -75,7 +75,7 @@ const Listing = () => {
               onClose={() => {
                 setInvoiceIsPaid(false);
                 setCashuPaymentSent(false);
-                router.push("/");
+                router.push("/marketplace");
               }}
               // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
               classNames={{

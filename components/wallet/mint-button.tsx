@@ -1,6 +1,5 @@
 import React, { useContext, useEffect, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
-import axios from "axios";
 import {
   BanknotesIcon,
   CheckIcon,
@@ -80,13 +79,7 @@ const MintButton = ({ passphrase }: { passphrase?: string }) => {
   const handleMint = async (numSats: number) => {
     const wallet = new CashuWallet(new CashuMint(mints[0]));
 
-    const mintInvoice = await axios.post("/api/cashu/request-mint", {
-      mintUrl: mints[0],
-      total: numSats,
-      currency: "SATS",
-    });
-
-    const { pr, hash } = mintInvoice.data;
+    const { request: pr, quote: hash } = await wallet.createMintQuote(numSats);
 
     setInvoice(pr);
 

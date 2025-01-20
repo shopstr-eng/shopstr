@@ -115,6 +115,14 @@ export default function MetricsPage() {
             Last 30 Days
           </DateRangePickerItem>
           <DateRangePickerItem
+            key="threehundredsixtyfiveDats"
+            value="threehundredsixtyfiveDats"
+            from={DateTime.now().minus({ days: 365 }).toJSDate()}
+            to={DateTime.now().toJSDate()}
+          >
+            Last 365 Days
+          </DateRangePickerItem>
+          <DateRangePickerItem
             key="mtd"
             value="ytd"
             from={DateTime.now().startOf("month").toJSDate()}
