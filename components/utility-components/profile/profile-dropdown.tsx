@@ -77,7 +77,7 @@ export const ProfileWithDropdown = ({
       startContent: <BuildingStorefrontIcon className={"h-5 w-5"} />,
       onClick: () => {
         let npub = nip19.npubEncode(pubkey);
-        router.push(`/market/${npub}`);
+        router.push(`/marketplace/${npub}`);
       },
       label: "Visit Seller",
     },
