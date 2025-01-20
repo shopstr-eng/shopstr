@@ -27,36 +27,22 @@ const UpdateInvoice = async (req: NextApiRequest, res: NextApiResponse) => {
     return res.status(400).json({});
   }
 
-  const response = await repo()("invoices").select("*").where({ id: event.id });
-  if (!response || response.length === 0) return res.status(404).json({});
-  const {
-    total,
-    sub_total,
-    tip_total,
-    shipping_total,
-    discount_total,
-    fee_total,
-    tax_total,
-    currency,
-    hash,
-  } = response[0];
-
   try {
-    await wallet.mintProofs(total, hash);
+    await wallet.mintProofs(event.total, event.hash);
   } catch (error: any) {
     console.error(error);
     if (error.message.includes("quote already issued")) {
       await repo()("transactions").insert({
         id: uuid(),
         date_time: DateTime.now().toUTC().toSQL(),
-        total,
-        sub_total,
-        tip_total,
-        shipping_total,
-        discount_total,
-        fee_total,
-        tax_total,
-        currency,
+        total: event.total,
+        sub_total: event.sub_total,
+        tip_total: event.tip_total,
+        shipping_total: event.shipping_total,
+        discount_total: event.discount_total,
+        fee_total: event.fee_total,
+        tax_total: event.tax_total,
+        currency: event.currency,
         merchant_id: event.merchant_id,
         listing_id: event.listing_id,
         funding_source: "ln",

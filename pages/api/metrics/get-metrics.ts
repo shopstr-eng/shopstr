@@ -86,20 +86,6 @@ export default async function GetMetrics(
     GROUP BY period
     ORDER BY period DESC;`);
 
-  const inquiriesMetricsPromise = repo?.raw<{ rows: Metrics[] }>(`
-    SELECT time_bucket('${bucket}', date_time, '${tz}') AS period, cast(count(id) AS INTEGER) AS "${label}"
-    FROM inquiries
-    WHERE date_time BETWEEN '${start}' AND '${end}'
-    GROUP BY period
-    ORDER BY period DESC;`);
-
-  const invoicesMetricsPromise = repo?.raw<{ rows: Metrics[] }>(`
-    SELECT time_bucket('${bucket}', date_time, '${tz}') AS period, cast(count(id) AS INTEGER) AS "${label}"
-    FROM invoices
-    WHERE date_time BETWEEN '${start}' AND '${end}'
-    GROUP BY period
-    ORDER BY period DESC;`);
-
   const ordersMetricsPromise = repo?.raw<{ rows: Metrics[] }>(`
     SELECT time_bucket('${bucket}', date_time, '${tz}') AS period, cast(count(id) AS INTEGER) AS "${label}"
     FROM transactions
@@ -107,21 +93,13 @@ export default async function GetMetrics(
     GROUP BY period
     ORDER BY period DESC;`);
 
-  const [
-    salesMetrics,
-    shoppersMetrics,
-    listingsMetrics,
-    inquiriesMetrics,
-    invoicesMetrics,
-    ordersMetrics,
-  ] = await Promise.allSettled([
-    salesMetricsPromise,
-    shoppersMetricsPromise,
-    listingsMetricsPromise,
-    inquiriesMetricsPromise,
-    invoicesMetricsPromise,
-    ordersMetricsPromise,
-  ]);
+  const [salesMetrics, shoppersMetrics, listingsMetrics, ordersMetrics] =
+    await Promise.allSettled([
+      salesMetricsPromise,
+      shoppersMetricsPromise,
+      listingsMetricsPromise,
+      ordersMetricsPromise,
+    ]);
 
   let salesData: Data | null = null;
   if (salesMetrics.status === "fulfilled" && salesMetrics.value) {
@@ -160,7 +138,7 @@ export default async function GetMetrics(
     listingsData = {
       label,
       category: {
-        title: "Total Listings Posted",
+        title: "Total Listings",
         subtitle: "Listings Over Time",
         total: listingsMetrics.value.rows.reduce(
           (prev, curr) => prev + curr[label],
@@ -168,38 +146,6 @@ export default async function GetMetrics(
         ),
         symbol: "",
         metrics: listingsMetrics.value.rows,
-      },
-    };
-  }
-  let inquiriesData: Data | null = null;
-  if (inquiriesMetrics.status === "fulfilled" && inquiriesMetrics.value) {
-    inquiriesData = {
-      label,
-      category: {
-        title: "Total Inquiries Sent",
-        subtitle: "Inquiries Over Time",
-        total: inquiriesMetrics.value.rows.reduce(
-          (prev, curr) => prev + curr[label],
-          0,
-        ),
-        symbol: "",
-        metrics: inquiriesMetrics.value.rows,
-      },
-    };
-  }
-  let invoicesData: Data | null = null;
-  if (invoicesMetrics.status === "fulfilled" && invoicesMetrics.value) {
-    invoicesData = {
-      label,
-      category: {
-        title: "Total Invoices Created",
-        subtitle: "Invoices Over Time",
-        total: invoicesMetrics.value.rows.reduce(
-          (prev, curr) => prev + curr[label],
-          0,
-        ),
-        symbol: "",
-        metrics: invoicesMetrics.value.rows,
       },
     };
   }
@@ -222,14 +168,5 @@ export default async function GetMetrics(
 
   return res
     .status(200)
-    .json(
-      [
-        salesData,
-        shoppersData,
-        listingsData,
-        inquiriesData,
-        invoicesData,
-        ordersData,
-      ].filter((n) => n),
-    );
+    .json([salesData, shoppersData, listingsData, ordersData].filter((n) => n));
 }

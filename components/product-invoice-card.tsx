@@ -397,13 +397,8 @@ export default function ProductInvoiceCard({
       setShowInvoiceCard(true);
       const wallet = new CashuWallet(new CashuMint(mints[0]));
 
-      const invoiceMinted = await axios.post("/api/cashu/request-mint", {
-        mintUrl: mints[0],
-        total: newPrice,
-        currency,
-      });
-
-      const { id, pr, hash } = invoiceMinted.data;
+      const { request: pr, quote: hash } =
+        await wallet.createMintQuote(newPrice);
 
       setInvoice(pr);
 
@@ -440,7 +435,6 @@ export default function ProductInvoiceCard({
         wallet,
         newPrice,
         hash,
-        id,
         shippingName ? shippingName : undefined,
         shippingAddress ? shippingAddress : undefined,
         shippingUnitNo ? shippingUnitNo : undefined,
@@ -468,7 +462,6 @@ export default function ProductInvoiceCard({
     wallet: CashuWallet,
     newPrice: number,
     hash: string,
-    metricsInvoiceId: string,
     shippingName?: string,
     shippingAddress?: string,
     shippingUnitNo?: string,
@@ -503,7 +496,7 @@ export default function ProductInvoiceCard({
             contactType ? contactType : undefined,
             contactInstructions ? contactInstructions : undefined,
           );
-          await captureInvoicePaidmetric(metricsInvoiceId, productData);
+          await captureInvoicePaidmetric(hash, productData);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           if (setInvoiceIsPaid) {
