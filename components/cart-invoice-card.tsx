@@ -53,10 +53,6 @@ import {
   formatWithCommas,
 } from "./utility-components/display-monetary-info";
 import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
-import {
-  captureCashuPaidMetric,
-  captureInvoicePaidmetric,
-} from "./utility/metrics-helper-functions";
 import SignInModal from "./sign-in/SignInModal";
 import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
 import FailureModal from "@/components/utility-components/failure-modal";
@@ -559,7 +555,6 @@ export default function CartInvoiceCard({
             contact ? contact : undefined,
             contactType ? contactType : undefined,
             contactInstructions ? contactInstructions : undefined,
-            hash,
             additionalInfo ? additionalInfo : undefined,
           );
           localStorage.setItem("cart", JSON.stringify([]));
@@ -600,7 +595,6 @@ export default function CartInvoiceCard({
     contact?: string,
     contactType?: string,
     contactInstructions?: string,
-    hash?: string,
     additionalInfo?: string,
   ) => {
     let remainingProofs = proofs;
@@ -656,11 +650,6 @@ export default function CartInvoiceCard({
         }
       }
       await sendPaymentAndContactMessage(pubkey, paymentMessage, true, product);
-      if (hash) {
-        await captureInvoicePaidmetric(hash, product);
-      } else {
-        await captureCashuPaidMetric(product);
-      }
 
       if (required && required !== "") {
         if (additionalInfo) {

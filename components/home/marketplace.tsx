@@ -88,21 +88,6 @@ export function MarketplacePage({
   }, [router.query.pubkey]);
 
   useEffect(() => {
-    const loggedIn = isUserLoggedIn();
-    if (loggedIn) {
-      fetch("/api/metrics/post-shopper", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: userPubkey,
-        }),
-      });
-    }
-  });
-
-  useEffect(() => {
     setIsFetchingReviews(true);
     if (
       focusedPubkey &&

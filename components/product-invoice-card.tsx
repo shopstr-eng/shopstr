@@ -53,10 +53,6 @@ import {
   formatWithCommas,
 } from "./utility-components/display-monetary-info";
 import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
-import {
-  captureCashuPaidMetric,
-  captureInvoicePaidmetric,
-} from "./utility/metrics-helper-functions";
 import SignInModal from "./sign-in/SignInModal";
 import currencySelection from "../public/currencySelection.json";
 import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
@@ -80,8 +76,7 @@ export default function ProductInvoiceCard({
   selectedSize?: string;
 }) {
   const router = useRouter();
-  const { id, pubkey, currency, totalCost, shippingType, required } =
-    productData;
+  const { id, pubkey, currency, totalCost, shippingType, required } = productData;
   const pubkeyOfProductBeingSold = pubkey;
   const { userNPub, userPubkey, signInMethod, mints, tokens, history } =
     getLocalStorageData();
@@ -507,7 +502,6 @@ export default function ProductInvoiceCard({
             contactInstructions ? contactInstructions : undefined,
             additionalInfo ? additionalInfo : undefined,
           );
-          await captureInvoicePaidmetric(hash, productData);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           if (setInvoiceIsPaid) {
@@ -570,15 +564,10 @@ export default function ProductInvoiceCard({
     );
 
     if (additionalInfo) {
-      let additionalMessage =
-        "Additional customer information: " + additionalInfo;
-      await sendPaymentAndContactMessage(
-        pubkeyOfProductBeingSold,
-        additionalMessage,
-        false,
-      );
+      let additionalMessage = "Additional customer information: " + additionalInfo;
+      await sendPaymentAndContactMessage(pubkeyOfProductBeingSold, additionalMessage, false);
     }
-
+    
     if (
       !(
         shippingName === undefined &&
@@ -848,13 +837,7 @@ export default function ProductInvoiceCard({
         contactType ? contactType : undefined,
         contactInstructions ? contactInstructions : undefined,
         additionalInfo ? additionalInfo : undefined,
-      )
-        .then(() => {
-          captureCashuPaidMetric(productData);
-        })
-        .catch((error) => {
-          console.error(error);
-        });
+      );
       const changeProofs = keep;
       const remainingProofs = tokens.filter(
         (p: Proof) =>

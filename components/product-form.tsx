@@ -30,7 +30,6 @@ import { CATEGORIES, SHIPPING_OPTIONS } from "./utility/STATIC-VARIABLES";
 import LocationDropdown from "./utility-components/dropdowns/location-dropdown";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 import { ProductContext } from "../utils/context/context";
-import { capturePostListingMetric } from "./utility/metrics-helper-functions";
 import { addProductToCache } from "../pages/api/nostr/cache-service";
 import { ProductData } from "./utility/product-parser-functions";
 import { ProductFormValues } from "@/pages/api/nostr/post-event";
@@ -189,8 +188,6 @@ export default function NewForm({
     }
 
     let newListing = await PostListing(tags, passphrase);
-
-    capturePostListingMetric(newListing.id, tags);
 
     if (isEdit) {
       if (handleDelete && oldValues?.id) {

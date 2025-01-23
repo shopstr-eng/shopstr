@@ -118,7 +118,7 @@ const TopNav = ({
   }, [router.pathname, shopMapContext]);
 
   const handleRoute = (path: string) => {
-    if (signedIn || (!signedIn && path === "/metrics")) {
+    if (signedIn) {
       router.push(path);
       setIsMobileMenuOpen(false);
     } else {
@@ -164,12 +164,6 @@ const TopNav = ({
         onClick={() => handleRoute("/cart")}
       >
         Cart {cartQuantity > 0 && `(${cartQuantity})`}
-      </Button>
-      <Button
-        className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-        onClick={() => handleRoute("/metrics")}
-      >
-        Metrics
       </Button>
     </div>
   );
@@ -262,12 +256,6 @@ const TopNav = ({
             Cart {cartQuantity > 0 && `(${cartQuantity})`}
           </Button>
           |
-          <Button
-            className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-            onClick={() => handleRoute("/metrics")}
-          >
-            Metrics
-          </Button>
           {signedIn ? (
             <>
               |
