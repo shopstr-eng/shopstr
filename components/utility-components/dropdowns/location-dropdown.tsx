@@ -27,22 +27,6 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
     const headingClasses =
       "flex w-full sticky top-1 z-20 py-1.5 px-2 dark:bg-dark-bg bg-light-bg shadow-small rounded-small";
 
-    let conferenceOptions = (
-      <SelectSection
-        key={"conferenceOptions"}
-        title="Conferences"
-        classNames={{
-          heading: headingClasses,
-        }}
-        className="text-light-text dark:text-dark-text"
-      >
-        <SelectItem key={"Nostriga"}>Nostriga</SelectItem>
-        <SelectItem key={"Baltic Honeybadger 2024"}>
-          Baltic Honeybadger 2024
-        </SelectItem>
-      </SelectSection>
-    );
-
     let countryOptions = (
       <SelectSection
         key={"countryOptions"}
@@ -102,20 +86,22 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
       </SelectSection>
     );
 
-    let globalOptions = (
+    let regionalOptions = (
       <SelectSection
-        key={"globalOptions"}
-        title="Global"
+        key={"regionalOptions"}
+        title="Regional"
         classNames={{
           heading: headingClasses,
         }}
         className="text-light-text dark:text-dark-text"
       >
         <SelectItem key={"Worldwide"}>Worldwide</SelectItem>
+        <SelectItem key={"US & Canada"}>US &amp; Canada</SelectItem>
+        <SelectItem key={"Europe"}>Europe</SelectItem>
         <SelectItem key={"Online"}>Online</SelectItem>
       </SelectSection>
     );
-    return [conferenceOptions, stateOptions, countryOptions, globalOptions];
+    return [regionalOptions, countryOptions, stateOptions];
   }, []);
 
   return (

@@ -53,6 +53,7 @@ export default function CheckoutCard({
     sizeQuantities,
     condition,
     d: dTag,
+    restrictions,
   } = productData;
 
   const { userPubkey } = getLocalStorageData();
@@ -412,6 +413,12 @@ export default function CheckoutCard({
                     <span>Condition: {condition}</span>
                   </div>
                 )}
+                {restrictions && (
+                  <div className="text-left text-xs text-light-text dark:text-dark-text">
+                    <span>Restrictions: </span>
+                    <span className="text-red-500">{restrictions}</span>
+                  </div>
+                )}
                 <div className="hidden sm:block">
                   <p className="mt-4 w-full text-left text-lg text-light-text dark:text-dark-text">
                     {renderSummary()}
@@ -428,12 +435,12 @@ export default function CheckoutCard({
                 <div className="mt-4">
                   <DisplayCheckoutCost monetaryInfo={productData} />
                 </div>
-                {renderSizeGrid()}
-                <div className="py-1">
+                <div className="pb-1">
                   <Chip key={location} startContent={locationAvatar(location)}>
                     {location}
                   </Chip>
                 </div>
+                {renderSizeGrid()}
                 <div className="flex w-full flex-col gap-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <Button

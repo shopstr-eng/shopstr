@@ -50,6 +50,8 @@ export default function DisplayProductModal({
     condition,
     status,
     quantity,
+    required,
+    restrictions,
   } = productData;
   const { signInMethod, userPubkey } = getLocalStorageData();
 
@@ -211,6 +213,24 @@ export default function DisplayProductModal({
                 <div className="text-left text-xs text-light-text dark:text-dark-text">
                   <span className="text-xl font-semibold">Quantity: </span>
                   <span className="text-xl">{quantity}</span>
+                </div>
+              </>
+            )}
+            {restrictions && (
+              <>
+                <div className="text-left text-xs text-light-text dark:text-dark-text">
+                  <span className="text-xl font-semibold">Restrictions: </span>
+                  <span className="text-xl text-red-500">{restrictions}</span>
+                </div>
+              </>
+            )}
+            {required && (
+              <>
+                <div className="text-left text-xs text-light-text dark:text-dark-text">
+                  <span className="text-xl font-semibold">
+                    Required Customer Information:{" "}
+                  </span>
+                  <span className="text-xl">{required}</span>
                 </div>
               </>
             )}

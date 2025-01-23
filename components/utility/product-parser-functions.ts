@@ -25,6 +25,8 @@ export type ProductData = {
   status?: string;
   selectedSize?: string;
   selectedQuantity?: number;
+  required?: string;
+  restrictions?: string;
 };
 
 export const parseTags = (productEvent: NostrEvent) => {
@@ -116,6 +118,12 @@ export const parseTags = (productEvent: NostrEvent) => {
         break;
       case "status":
         parsedData.status = values[0];
+        break;
+      case "required":
+        parsedData.required = values[0];
+        break;
+      case "restrictions":
+        parsedData.restrictions = values[0];
         break;
       default:
         return;

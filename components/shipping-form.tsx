@@ -22,12 +22,14 @@ export default function ShippingForm({
   handleShippingSubmit,
   onShippingSubmit,
   shippingControl,
+  requiredInfo,
 }: {
   showShippingModal: boolean;
   handleToggleShippingModal: () => void;
   handleShippingSubmit: UseFormHandleSubmit<FieldValues>;
   onShippingSubmit: (data: FieldValues) => void;
   shippingControl: Control<FieldValues>;
+  requiredInfo?: string;
 }) {
   return (
     <Modal
@@ -285,6 +287,41 @@ export default function ShippingForm({
                 );
               }}
             />
+
+            {requiredInfo && requiredInfo !== "" && (
+              <Controller
+                name="Required"
+                control={shippingControl}
+                rules={{
+                  required: "Additional information is required.",
+                }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => {
+                  let isErrored = error !== undefined;
+                  let errorMessage: string = error?.message
+                    ? error.message
+                    : "";
+                  return (
+                    <Input
+                      className="text-light-text dark:text-dark-text"
+                      autoFocus
+                      variant="bordered"
+                      fullWidth={true}
+                      label={`Enter ${requiredInfo}`}
+                      labelPlacement="inside"
+                      isInvalid={isErrored}
+                      errorMessage={errorMessage}
+                      // controller props
+                      onChange={onChange} // send value to hook form
+                      onBlur={onBlur} // notify when input is touched/blur
+                      value={value}
+                    />
+                  );
+                }}
+              />
+            )}
           </ModalBody>
 
           <ModalFooter>

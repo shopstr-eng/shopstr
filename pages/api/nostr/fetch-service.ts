@@ -482,7 +482,6 @@ export const fetchGiftWrappedChatsAndMessages = async (
       await fetchChatMessagesFromCache();
     try {
       let chatsMap = new Map();
-      let chatsReachedEOSE = false;
 
       const addToChatsMap = (
         pubkeyOfChat: string,
@@ -493,20 +492,6 @@ export const fetchGiftWrappedChatsAndMessages = async (
           chatsMap.set(pubkeyOfChat, [event]);
         } else {
           chatsMap.get(pubkeyOfChat).push(event);
-        }
-      };
-
-      const onEOSE = () => {
-        if (chatsReachedEOSE) {
-          //sort chats by created_at
-          chatsMap.forEach((value) => {
-            value.sort(
-              (a: NostrMessageEvent, b: NostrMessageEvent) =>
-                a.created_at - b.created_at,
-            );
-          });
-          resolve({ profileSetFromChats: new Set(chatsMap.keys()) });
-          editChatContext(chatsMap, false);
         }
       };
 
@@ -560,7 +545,9 @@ export const fetchGiftWrappedChatsAndMessages = async (
                 }
               }
               let sealEvent = JSON.parse(sealEventString);
-              sealEvent = JSON.parse(sealEvent);
+              if (typeof sealEvent === "string") {
+                sealEvent = JSON.parse(sealEvent);
+              }
               if (sealEvent.kind === 13) {
                 const messageEventDecryptId = crypto.randomUUID();
                 await sendBunkerRequest(
@@ -722,16 +709,16 @@ export const fetchGiftWrappedChatsAndMessages = async (
             } else if (chatMessage) {
               addToChatsMap(senderPubkey, chatMessage);
             }
-            if (chatsReachedEOSE) {
-              editChatContext(chatsMap, false);
-            }
           },
-          async oneose() {
-            chatsReachedEOSE = true;
-            onEOSE();
-          },
-          onclose(reasons) {
-            console.log(reasons);
+          oneose() {
+            chatsMap.forEach((value) => {
+              value.sort(
+                (a: NostrMessageEvent, b: NostrMessageEvent) =>
+                  a.created_at - b.created_at,
+              );
+            });
+            resolve({ profileSetFromChats: new Set(chatsMap.keys()) });
+            editChatContext(chatsMap, false);
           },
         },
       );

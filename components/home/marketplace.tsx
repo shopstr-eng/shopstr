@@ -96,7 +96,7 @@ export function MarketplacePage({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          id: loggedIn,
+          id: userPubkey,
         }),
       });
     }

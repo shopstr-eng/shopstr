@@ -24,12 +24,14 @@ export default function CombinedContactForm({
   handleCombinedSubmit,
   onCombinedSubmit,
   combinedControl,
+  requiredInfo,
 }: {
   showCombinedModal: boolean;
   handleToggleCombinedModal: () => void;
   handleCombinedSubmit: UseFormHandleSubmit<FieldValues>;
   onCombinedSubmit: (data: FieldValues) => void;
   combinedControl: Control<FieldValues>;
+  requiredInfo?: string;
 }) {
   return (
     <Modal
@@ -398,6 +400,41 @@ export default function CombinedContactForm({
                 );
               }}
             />
+
+            {requiredInfo && requiredInfo !== "" && (
+              <Controller
+                name="Required"
+                control={combinedControl}
+                rules={{
+                  required: "Additional information is required.",
+                }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => {
+                  let isErrored = error !== undefined;
+                  let errorMessage: string = error?.message
+                    ? error.message
+                    : "";
+                  return (
+                    <Input
+                      className="text-light-text dark:text-dark-text"
+                      autoFocus
+                      variant="bordered"
+                      fullWidth={true}
+                      label={`Enter ${requiredInfo}`}
+                      labelPlacement="inside"
+                      isInvalid={isErrored}
+                      errorMessage={errorMessage}
+                      // controller props
+                      onChange={onChange} // send value to hook form
+                      onBlur={onBlur} // notify when input is touched/blur
+                      value={value}
+                    />
+                  );
+                }}
+              />
+            )}
           </ModalBody>
 
           <ModalFooter>

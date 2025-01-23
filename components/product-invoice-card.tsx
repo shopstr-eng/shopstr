@@ -80,7 +80,8 @@ export default function ProductInvoiceCard({
   selectedSize?: string;
 }) {
   const router = useRouter();
-  const { id, pubkey, currency, totalCost, shippingType } = productData;
+  const { id, pubkey, currency, totalCost, shippingType, required } =
+    productData;
   const pubkeyOfProductBeingSold = pubkey;
   const { userNPub, userPubkey, signInMethod, mints, tokens, history } =
     getLocalStorageData();
@@ -272,6 +273,7 @@ export default function ProductInvoiceCard({
       let shippingPostalCode = data["Postal Code"];
       let shippingState = data["State/Province"];
       let shippingCountry = data["Country"];
+      let additionalInfo = data["Required"];
       setShowShippingModal(false);
       if (isCashuPayment) {
         await handleCashuPayment(
@@ -283,6 +285,7 @@ export default function ProductInvoiceCard({
           shippingPostalCode,
           shippingState,
           shippingCountry,
+          additionalInfo,
         );
       } else {
         await handleLightningPayment(
@@ -294,6 +297,7 @@ export default function ProductInvoiceCard({
           shippingPostalCode,
           shippingState,
           shippingCountry,
+          additionalInfo,
         );
       }
     } catch (error) {
@@ -332,6 +336,7 @@ export default function ProductInvoiceCard({
       let contact = data["Contact"];
       let contactType = data["Contact Type"];
       let contactInstructions = data["Instructions"];
+      let additionalInfo = data["Required"];
       setShowContactModal(false);
       if (isCashuPayment) {
         await handleCashuPayment(
@@ -346,6 +351,7 @@ export default function ProductInvoiceCard({
           contact,
           contactType,
           contactInstructions,
+          additionalInfo,
         );
       } else {
         await handleLightningPayment(
@@ -360,6 +366,7 @@ export default function ProductInvoiceCard({
           contact,
           contactType,
           contactInstructions,
+          additionalInfo,
         );
       }
     } catch (error) {
@@ -392,6 +399,7 @@ export default function ProductInvoiceCard({
     contact?: string,
     contactType?: string,
     contactInstructions?: string,
+    additionalInfo?: string,
   ) => {
     try {
       setShowInvoiceCard(true);
@@ -445,6 +453,7 @@ export default function ProductInvoiceCard({
         contact ? contact : undefined,
         contactType ? contactType : undefined,
         contactInstructions ? contactInstructions : undefined,
+        additionalInfo ? additionalInfo : undefined,
       );
     } catch (error) {
       console.error(error);
@@ -472,6 +481,7 @@ export default function ProductInvoiceCard({
     contact?: string,
     contactType?: string,
     contactInstructions?: string,
+    additionalInfo?: string,
   ) {
     let encoded;
 
@@ -495,6 +505,7 @@ export default function ProductInvoiceCard({
             contact ? contact : undefined,
             contactType ? contactType : undefined,
             contactInstructions ? contactInstructions : undefined,
+            additionalInfo ? additionalInfo : undefined,
           );
           await captureInvoicePaidmetric(hash, productData);
           setPaymentConfirmed(true);
@@ -533,6 +544,7 @@ export default function ProductInvoiceCard({
     contact?: string,
     contactType?: string,
     contactInstructions?: string,
+    additionalInfo?: string,
   ) => {
     const { title } = productData;
     let paymentMessage;
@@ -556,6 +568,17 @@ export default function ProductInvoiceCard({
       paymentMessage,
       true,
     );
+
+    if (additionalInfo) {
+      let additionalMessage =
+        "Additional customer information: " + additionalInfo;
+      await sendPaymentAndContactMessage(
+        pubkeyOfProductBeingSold,
+        additionalMessage,
+        false,
+      );
+    }
+
     if (
       !(
         shippingName === undefined &&
@@ -795,6 +818,7 @@ export default function ProductInvoiceCard({
     contact?: string,
     contactType?: string,
     contactInstructions?: string,
+    additionalInfo?: string,
   ) => {
     try {
       const mint = new CashuMint(mints[0]);
@@ -823,6 +847,7 @@ export default function ProductInvoiceCard({
         contact ? contact : undefined,
         contactType ? contactType : undefined,
         contactInstructions ? contactInstructions : undefined,
+        additionalInfo ? additionalInfo : undefined,
       )
         .then(() => {
           captureCashuPaidMetric(productData);
@@ -1200,6 +1225,7 @@ export default function ProductInvoiceCard({
         handleShippingSubmit={handleShippingSubmit}
         onShippingSubmit={onShippingSubmit}
         shippingControl={shippingControl}
+        requiredInfo={required !== "" ? required : undefined}
       />
 
       <ContactForm
@@ -1208,6 +1234,7 @@ export default function ProductInvoiceCard({
         handleContactSubmit={handleContactSubmit}
         onContactSubmit={onContactSubmit}
         contactControl={contactControl}
+        requiredInfo={required !== "" ? required : undefined}
       />
 
       <SignInModal isOpen={isOpen} onClose={onClose} />

@@ -89,6 +89,8 @@ export default function NewForm({
             : new Map<string, number>(),
           Condition: oldValues.condition ? oldValues.condition : "",
           Status: oldValues.status ? oldValues.status : "",
+          Required: oldValues.required ? oldValues.required : "",
+          Restrictions: oldValues.restrictions ? oldValues.restrictions : "",
         }
       : {
           Currency: "SATS",
@@ -176,6 +178,14 @@ export default function NewForm({
 
     if (data["Status"]) {
       tags.push(["status", data["Status"] as string]);
+    }
+
+    if (data["Required"]) {
+      tags.push(["required", data["Required"] as string]);
+    }
+
+    if (data["Restrictions"]) {
+      tags.push(["restrictions", data["Restrictions"] as string]);
     }
 
     let newListing = await PostListing(tags, passphrase);
@@ -896,6 +906,68 @@ export default function NewForm({
                           </SelectItem>
                         </SelectSection>
                       </Select>
+                    );
+                  }}
+                />
+
+                <Controller
+                  name="Required"
+                  control={control}
+                  render={({
+                    field: { onChange, onBlur, value },
+                    fieldState: { error },
+                  }) => {
+                    let isErrored = error !== undefined;
+                    let errorMessage: string = error?.message
+                      ? error.message
+                      : "";
+                    return (
+                      <Input
+                        className="text-light-text dark:text-dark-text"
+                        autoFocus
+                        variant="bordered"
+                        placeholder="Email, phone number, etc."
+                        fullWidth={true}
+                        label="Required Customer Information"
+                        labelPlacement="inside"
+                        isInvalid={isErrored}
+                        errorMessage={errorMessage}
+                        // controller props
+                        onChange={onChange} // send value to hook form
+                        onBlur={onBlur} // notify when input is touched/blur
+                        value={value}
+                      />
+                    );
+                  }}
+                />
+
+                <Controller
+                  name="Restrictions"
+                  control={control}
+                  render={({
+                    field: { onChange, onBlur, value },
+                    fieldState: { error },
+                  }) => {
+                    let isErrored = error !== undefined;
+                    let errorMessage: string = error?.message
+                      ? error.message
+                      : "";
+                    return (
+                      <Input
+                        className="text-light-text dark:text-dark-text"
+                        autoFocus
+                        variant="bordered"
+                        placeholder="US shipping only, signature required, no P.O. box delivery, etc."
+                        fullWidth={true}
+                        label="Restrictions"
+                        labelPlacement="inside"
+                        isInvalid={isErrored}
+                        errorMessage={errorMessage}
+                        // controller props
+                        onChange={onChange} // send value to hook form
+                        onBlur={onBlur} // notify when input is touched/blur
+                        value={value}
+                      />
                     );
                   }}
                 />
