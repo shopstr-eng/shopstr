@@ -29,7 +29,7 @@ export type ProductData = {
   restrictions?: string;
 };
 
-export const parseTags = (productEvent: NostrEvent) => {
+export const parseTags = async (productEvent: NostrEvent) => {
   let parsedData: ProductData = {
     id: "",
     pubkey: "",
@@ -129,7 +129,7 @@ export const parseTags = (productEvent: NostrEvent) => {
         return;
     }
   });
-  parsedData.totalCost = calculateTotalCost(parsedData);
+  parsedData.totalCost = await calculateTotalCost(parsedData);
   return parsedData;
 };
 

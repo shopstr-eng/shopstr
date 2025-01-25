@@ -33,25 +33,29 @@ const DynamicHead = ({
         return dTagMatch || idMatch;
       });
 
-      if (product) {
-        const productData = parseTags(product);
-        if (productData) {
-          setMetaTags({
-            title: productData.title || "Shopstr Listing",
-            description:
-              productData.summary || "Check out this product on Shopstr!",
-            image: productData.images?.[0] || "/shopstr-2000x2000.png",
-            url: `https://shopstr.store/listing/${productId}`,
-          });
-        } else {
-          setMetaTags({
-            title: "Shopstr Listing",
-            description: "Check out this listing on Shopstr!",
-            image: "/shopstr-2000x2000.png",
-            url: `https://shopstr.store/listing/${productId}`,
-          });
+      async function getProductData() {
+        if (product) {
+          const productData = await parseTags(product);
+          if (productData) {
+            setMetaTags({
+              title: productData.title || "Shopstr Listing",
+              description:
+                productData.summary || "Check out this product on Shopstr!",
+              image: productData.images?.[0] || "/shopstr-2000x2000.png",
+              url: `https://shopstr.store/listing/${productId}`,
+            });
+          } else {
+            setMetaTags({
+              title: "Shopstr Listing",
+              description: "Check out this listing on Shopstr!",
+              image: "/shopstr-2000x2000.png",
+              url: `https://shopstr.store/listing/${productId}`,
+            });
+          }
         }
       }
+
+      getProductData();
     } else if (router.pathname.includes("/npub")) {
       const pubkey = router.query.pubkey?.[0];
       const shopInfo = pubkey

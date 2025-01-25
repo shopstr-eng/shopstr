@@ -65,17 +65,17 @@ const DisplayProducts = ({
         ),
       ]; // sorts most recently created to least recently created
       let parsedProductData: ProductData[] = [];
-      sortedProductEvents.forEach((event) => {
+      sortedProductEvents.forEach(async (event) => {
         if (wotFilter) {
           if (!followsContext.isLoading && followsContext.followList) {
             const followList = followsContext.followList;
             if (followList.length > 0 && followList.includes(event.pubkey)) {
-              let parsedData = parseTags(event);
+              let parsedData = await parseTags(event);
               if (parsedData) parsedProductData.push(parsedData);
             }
           }
         } else {
-          let parsedData = parseTags(event);
+          let parsedData = await parseTags(event);
           if (parsedData) parsedProductData.push(parsedData);
         }
       });

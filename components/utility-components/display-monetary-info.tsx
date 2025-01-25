@@ -1,5 +1,6 @@
 import React from "react";
 import { ShippingOptionsType } from "../utility/STATIC-VARIABLES";
+import { fiat } from "@getalby/lightning-tools";
 
 type ProductMonetaryInfo = {
   shippingType?: ShippingOptionsType;
@@ -38,7 +39,7 @@ export default function CompactPriceDisplay({
   );
 }
 
-export function DisplayCostBreakdown({
+export async function DisplayCostBreakdown({
   monetaryInfo,
   subtotal,
   shippingType,
@@ -58,7 +59,7 @@ export function DisplayCostBreakdown({
     const formattedShippingCost = shippingCost
       ? formatWithCommas(shippingCost, currency)
       : `0 ${currency}`;
-    const totalCost = calculateTotalCost(monetaryInfo);
+    const totalCost = await calculateTotalCost(monetaryInfo);
     const formattedTotalCost = formatWithCommas(totalCost, currency);
 
     return (
@@ -129,12 +130,24 @@ export function DisplayCheckoutCost({
   );
 }
 
-export const calculateTotalCost = (
+export const calculateTotalCost = async (
   productMonetaryInfo: ProductMonetaryInfo,
 ) => {
-  const { price, shippingCost } = productMonetaryInfo;
+  const { price, shippingCost, currency } = productMonetaryInfo;
   let total = price;
   total += shippingCost ? shippingCost : 0;
+  if (currency.toLowerCase() !== "sats" && currency.toLowerCase() !== "sat") {
+    try {
+      const currencyData = { amount: total, currency: currency };
+      const numSats = await fiat.getSatoshiValue(currencyData);
+      total = Math.round(numSats);
+    } catch (err) {
+      console.error("ERROR", err);
+      return total;
+    }
+  } else if (currency.toLowerCase() === "btc") {
+    total = total * 100000000;
+  }
   return total;
 };
 

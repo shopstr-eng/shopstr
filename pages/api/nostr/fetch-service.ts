@@ -167,7 +167,7 @@ export const fetchCart = async (
                   );
                   if (foundEvent) {
                     cartArrayFromRelay.push(
-                      parseTags(foundEvent) as ProductData,
+                      (await parseTags(foundEvent)) as ProductData,
                     );
                   }
                 }
@@ -201,7 +201,7 @@ export const fetchCart = async (
                   );
                   if (foundEvent) {
                     cartArrayFromRelay.push(
-                      parseTags(foundEvent) as ProductData,
+                      (await parseTags(foundEvent)) as ProductData,
                     );
                   }
                 }
@@ -227,7 +227,9 @@ export const fetchCart = async (
                   event.tags.some((tag) => tag[0] === "d" && tag[1] === dTag),
                 );
                 if (foundEvent) {
-                  cartArrayFromRelay.push(parseTags(foundEvent) as ProductData);
+                  cartArrayFromRelay.push(
+                    (await parseTags(foundEvent)) as ProductData,
+                  );
                 }
               }
             }
@@ -289,7 +291,7 @@ export const fetchCart = async (
                   );
                   if (foundEvent) {
                     cartArrayFromRelay.push(
-                      parseTags(foundEvent) as ProductData,
+                      (await parseTags(foundEvent)) as ProductData,
                     );
                   }
                 }
