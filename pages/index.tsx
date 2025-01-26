@@ -32,8 +32,8 @@ export default function Landing() {
   useEffect(() => {
     let parsedProductsArray: ProductData[] = [];
     const products = productEventContext.productEvents;
-    products.forEach(async (product: any) => {
-      const parsedProduct = (await parseTags(product)) as ProductData;
+    products.forEach((product: any) => {
+      const parsedProduct = parseTags(product) as ProductData;
       if (parsedProduct.images.length > 0) {
         parsedProductsArray.push(parsedProduct);
       }

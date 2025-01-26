@@ -48,14 +48,10 @@ const Listing = () => {
         },
       );
 
-      const fetchProductData = async () => {
-        if (matchingEvent) {
-          const parsed = await parseTags(matchingEvent);
-          setProductData(parsed);
-        }
-      };
-
-      fetchProductData();
+      if (matchingEvent) {
+        const parsed = parseTags(matchingEvent);
+        setProductData(parsed);
+      }
     }
   }, [productContext.isLoading, productContext.productEvents, productIdString]);
 
