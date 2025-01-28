@@ -1339,7 +1339,7 @@ export const fetchCashuWallet = async (
             oneose() {
               queue.push(async () => {
                 w.close();
-                cashuMints.forEach(async (mint) => {
+                for(const mint of cashuMints){
                   try {
                     let wallet = new CashuWallet(new CashuMint(mint));
                     if (cashuProofs.length > 0) {
@@ -1407,7 +1407,7 @@ export const fetchCashuWallet = async (
                     let arrayOfProofsToAddBack = proofEvents
                       .filter((event) => proofIdsToAddBack.includes(event.id))
                       .map((event) => event);
-
+                      
                     const proofExists = (proof: Proof, proofArray: Proof[]) =>
                       proofArray.some(
                         (existingProof) =>
@@ -1428,7 +1428,7 @@ export const fetchCashuWallet = async (
                   } catch (error) {
                     console.log("Error checking spent proofs: ", error);
                   }
-                });
+                }
               });
               resolveW();
             },
