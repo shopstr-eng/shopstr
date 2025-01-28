@@ -1,0 +1,431 @@
+x-healthcheck: &healthcheck
+  interval: 1m
+  timeout: 1m
+  retries: 10
+  start_period: 10s
+
+services:
+
+  postgres:
+    image: timescale/timescaledb-ha:pg17
+    container_name: shopstr-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: shopstr
+      POSTGRES_PASSWORD: shopstr
+      POSTGRES_DB: shopstr
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD-SHELL", "PGPASSWORD=shopstr pg_isready -U shopstr -d shopstr -h 127.0.0.1"]
+    volumes:
+      - shopstr-postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/initdb.d:/docker-entrypoint-initdb.d:ro
+      - ./docker/postgres/seed:/seed:ro
+    ports:
+      - "5432:5432"
+
+  bitcoind:
+    container_name: shopstr-bitcoind
+    hostname: bitcoind
+    restart: unless-stopped
+    image: boltz/bitcoin-core:latest
+    command:
+      - -regtest
+      - -fallbackfee=0.00000253
+      - -zmqpubrawtx=tcp://0.0.0.0:29000
+      - -zmqpubrawblock=tcp://0.0.0.0:29001
+      - -txindex=1
+      - -dnsseed=0
+      - -upnp=0
+      - -rpcallowip=0.0.0.0/0
+      - -rpcbind=0.0.0.0
+      - -listenonion=0
+      - -blockfilterindex=1
+      - -peerblockfilters=1
+      - -maxmempool=5
+      - -deprecatedrpc=warnings
+    expose:
+      - 18443
+      - 18444
+    volumes:
+      - shopstr-bitcoind:/root/.bitcoin
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD-SHELL", "bitcoin-cli --rpccookiefile=/root/.bitcoin/regtest/.cookie -regtest getblockchaininfo && test -f /root/.bitcoin/bitcoind_ready"]
+    env_file:
+      - ./docker/.env.development
+    labels:
+      ofelia.enabled: "true"
+      ofelia.job-exec.bitcoind.schedule: "@every 1m"
+      ofelia.job-exec.bitcoind.command: >
+        bash -c '
+          BITCOIN_CLI_PARAMS="-rpcconnect=bitcoind -regtest -rpccookiefile=/root/.bitcoin/regtest/.cookie"
+          function bitcoin-cli-sim() {
+            bitcoin-cli $$BITCOIN_CLI_PARAMS "$$@"
+          }
+        
+          if bitcoin-cli-sim getblockchaininfo &> /dev/null; then
+              echo "bitcoind is ready"
+          else
+              exit 0
+          fi
+          
+          (bitcoin-cli-sim createwallet regtest || bitcoin-cli-sim loadwallet regtest) &> /dev/null
+           
+          blockcount=$$(bitcoin-cli-sim getblockcount 2>/dev/null)
+
+          if [ "$$blockcount" -le 0 ]; then
+            echo "Generating 150 blocks to regtest wallet"
+            bitcoin-cli-sim -rpcwallet="regtest" -generate 150
+
+            echo "Sending 30 BTC to $$LND_ADDR and $$CLN_ADDR"
+            bitcoin-cli-sim -rpcwallet="regtest" -named sendtoaddress address=$$LND_ADDR amount=30 fee_rate=1
+            bitcoin-cli-sim -rpcwallet="regtest" -named sendtoaddress address=$$CLN_ADDR amount=30 fee_rate=1
+
+            echo "Generating 150 blocks to regtest wallet"
+            bitcoin-cli-sim -rpcwallet="regtest" -generate 150
+          fi
+
+          (bitcoin-cli-sim createwallet client || bitcoin-cli-sim loadwallet client) &> /dev/null
+
+          echo "Sending 0.01 BTC to random address"
+          CLIENT_ADDRESS=$$( bitcoin-cli-sim  -rpcwallet="client" getnewaddress)
+          bitcoin-cli-sim -rpcwallet="regtest" sendtoaddress $$CLIENT_ADDRESS 0.01       
+
+          echo "Generating 1 block to regtest wallet"
+          bitcoin-cli-sim -rpcwallet="regtest" -generate 1
+          if [ "$$blockcount" -le 0 ]; then
+            echo "1">/root/.bitcoin/bitcoind_ready
+          fi
+        '
+        
+  elementsd:
+    container_name: shopstr-elementsd
+    hostname: elements
+    restart: unless-stopped
+    build: 
+      context: ./docker
+      dockerfile: ./elementsd/Dockerfile
+    expose:
+      - 31001
+    volumes:
+      - shopstr-elementsd:/root/.elements
+      - ./docker/elementsd/data:/seed:ro
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD-SHELL", "elements-cli -getinfo && test -f /root/.elements/elementsd_ready"]
+    env_file:
+      - ./docker/.env.development
+    labels:
+      ofelia.enabled: "true"
+      ofelia.job-exec.elementsd.schedule: "@every 1m"
+      ofelia.job-exec.elementsd.command: >
+        bash -c '
+          ELEMENTS_CLI_PARAMS="-rpcconnect=elementsd"
+          function elements-cli-sim() {
+             elements-cli $$ELEMENTS_CLI_PARAMS "$$@"
+          }
+        
+       
+          blockcount=$$(elements-cli-sim getblockcount 2>/dev/null)
+          (elements-cli-sim createwallet regtest || elements-cli-sim loadwallet regtest true) &> /dev/null
+
+          if [ "$$blockcount" -le 0 ]; then     
+            echo "Generating 150 liquid blocks to regtest wallet"
+            elements-cli-sim -rpcwallet="regtest" -generate 150
+            elements-cli-sim -rpcwallet="regtest" rescanblockchain 0 
+          fi
+
+          (elements-cli-sim createwallet client || elements-cli-sim loadwallet client true) &> /dev/null
+
+          echo "Sending 0.01 BTC to random address"
+          CLIENT_ADDRESS=$$( elements-cli-sim  -rpcwallet="client" getnewaddress "" bech32m)
+          elements-cli-sim -rpcwallet="regtest" sendtoaddress $$CLIENT_ADDRESS 0.01       
+
+          echo "Generating 1 block to regtest wallet"
+          elements-cli-sim -rpcwallet="regtest" -generate 1      
+
+          if [ "$$blockcount" -le 0 ]; then
+            echo "1">/root/.elements/elementsd_ready
+          fi   
+        '
+
+
+  lnd:
+    build:
+      context: ./docker
+      dockerfile: ./lnd/Dockerfile
+    restart: unless-stopped
+    container_name: shopstr-lnd
+    hostname: shopstr-lnd
+    command:
+      - --listen=0.0.0.0:9735
+      - --rpclisten=0.0.0.0:10009
+      - --restlisten=0.0.0.0:8081
+      - --alias=shopstr-lnd
+      - --externalip=shopstr-lnd
+      - --tlsextradomain=shopstr-lnd
+      - --tlsextradomain=host.docker.internal
+      - --bitcoin.active
+      - --bitcoin.regtest
+      - --bitcoin.node=bitcoind
+      - --bitcoind.rpchost=shopstr-bitcoind
+      - --bitcoind.zmqpubrawtx=shopstr-bitcoind:29000
+      - --bitcoind.zmqpubrawblock=shopstr-bitcoind:29001
+      - --bitcoind.rpccookie=/root/.bitcoin/regtest/.cookie
+      - --noseedbackup
+      - --protocol.wumbo-channels
+    depends_on:
+      bitcoind:
+        condition: service_healthy
+        restart: true
+    expose:
+      - 8081
+      - 9735
+    volumes_from:
+      - bitcoind:ro
+    volumes:
+      # Regenerate env
+      # - ./docker/lnd/data:/root/.lnd
+      # Use static env
+      - ./docker/lnd/data:/seed:ro
+      - shopstr-lnd:/root/.lnd/
+    env_file:
+      - ./docker/.env.development
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD-SHELL", "lncli --network=regtest --rpcserver=$$HOSTNAME --network=regtest listchannels | grep  active"]
+    labels:
+      ofelia.enabled: "true"
+      ofelia.job-exec.lnd.schedule: "@every 1m"
+      ofelia.job-exec.lnd.command: >
+        bash -c "
+          function lncli-sim(){
+            lncli --network=regtest --rpcserver=$$HOSTNAME --network=regtest $$@
+          }
+
+          if [ $$(lncli-sim getinfo | jq '.num_active_channels + .num_pending_channels') -lt 1 ]; then
+            lncli-sim openchannel --node_key=$$CLN_PUBKEY --connect shopstr-cln:9735 --sat_per_vbyte 1 --min_confs 0 --local_amt=1000000000 --push_amt=500000000
+          fi
+        "
+
+  cln:
+    container_name: shopstr-cln
+    build: 
+      context: ./docker
+      dockerfile: ./cln/Dockerfile
+    restart: unless-stopped
+    command:
+      - --large-channels
+      - --network
+      - regtest
+      - --bind-addr=0.0.0.0:9735
+      - --announce-addr=shopstr-cln:9735
+      - --bitcoin-rpcconnect=shopstr-bitcoind
+      - --bitcoin-rpcport=18443
+      - --grpc-host=0.0.0.0
+      - --grpc-port=9736
+      - --dev-bitcoind-poll=3
+      - --developer
+      - --dev-fast-gossip
+      - --dev-fast-reconnect
+      - --plugin=/root/hold
+      - --plugin=/root/clnurl
+      - --clnurl-host=0.0.0.0
+      - --ignore-fee-limits=false
+      - --min-emergency-msat=1000000
+    expose:
+      - 9735
+      - 9736
+      - 3000
+    volumes_from:
+      - bitcoind:ro
+    depends_on:
+      bitcoind:
+        condition: service_healthy
+        restart: true
+    volumes:
+      # Regenerate env
+      # - ./docker/cln/data:/root/.lightning
+      # Use static env
+      - ./docker/cln/data:/seed:ro
+      - shopstr-cln:/root/.lightning
+    env_file:
+      - ./docker/.env.development
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "lightning-cli", "--network=regtest", "getinfo"]
+    labels:
+      ofelia.enabled: "true"
+      ofelia.job-exec.cln.schedule: "@every 1m"
+      ofelia.job-exec.cln.command: >
+        bash -c "
+          function lightning-cli-sim(){
+            lightning-cli --network=regtest $$@
+          }
+          lightning-cli-sim --regtest connect $$LND_PUBKEY@lnd:9735
+        "
+
+  boltz:
+    image: boltz/boltz:latest
+    container_name: shopstr-boltz
+    restart: unless-stopped
+    volumes:
+      - ./docker/boltz/boltz.conf:/root/.boltz/boltz.conf:ro
+      - ./docker/boltz/seed.dat:/root/.boltz/seed.dat:ro
+      - shopstr-lnd:/data/lnd:ro
+      - shopstr-cln:/root/.lightning:ro
+      - shopstr-elementsd:/root/.elements:ro
+      - shopstr-bitcoind:/root/.bitcoin:ro
+    depends_on:
+      lnd:
+        condition: service_healthy
+        restart: true
+      cln:
+        condition: service_healthy
+        restart: true
+      elementsd:
+        condition: service_healthy
+        restart: true
+      bitcoind:
+        condition: service_healthy
+        restart: true
+    ports:
+      - "10001:10001"
+      - "10002:10002"
+      - "10003:10003"
+
+  cashu:
+    build:
+      context: ./docker
+      dockerfile: ./cashu/Dockerfile
+    container_name: shopstr-cashu
+    restart: unless-stopped
+    ports:
+      - "3338:3338"
+    depends_on:
+      lnd:
+        condition: service_healthy
+        restart: true
+    environment:
+      - MINT_LISTEN_HOST=0.0.0.0
+      - MINT_LISTEN_PORT=3338
+      - MINT_INFO_NAME="Shopstr Cashu Test Mint"
+      - MINT_PRIVATE_KEY=TEST_PRIVATE_KEY
+      - MINT_BACKEND_BOLT11_SAT=LndRPCWallet
+      - MINT_LND_RPC_ENDPOINT=shopstr-lnd:10009
+      - MINT_LND_RPC_CERT=/lnd/tls.cert
+      - MINT_LND_RPC_MACAROON=/lnd/data/chain/bitcoin/regtest/admin.macaroon
+    volumes:
+      - shopstr-lnd:/lnd:ro
+      # Rebuild environment
+      # - ./docker/cashu:/app/.cashu
+      # Use static environment
+      - ./docker/cashu/data:/seed:ro
+      - shopstr-cashu:/app/.cashu
+
+  nostr:
+    container_name: shopstr-nostr
+    restart: unless-stopped
+    build:
+      context: ./docker
+      dockerfile: ./strfry/Dockerfile
+    ports:
+      - 7777:7777
+    volumes:
+      - ./docker/strfry/strfry.conf:/etc/strfry.conf:ro
+      # Regenerate env
+      # - ./docker/strfry/db:/db
+      # Use static env
+      - shopstr-strfry:/db
+      - ./docker/strfry/db:/seed:ro
+      
+
+  imgpush:
+    container_name: shopstr-imgpush
+    restart: unless-stopped
+    build: 
+      context: ./docker
+      dockerfile: ./imgpush/Dockerfile
+    ports:
+      - "3001:5000"
+    volumes:
+      # Regenerate env
+      # - ./docker/imgpush/data:/images
+      # Use static env
+      - shopstr-imgpush:/images
+      - ./docker/imgpush/data:/seed:ro
+      
+  shopstr:
+    container_name: shopstr
+    stdin_open: true
+    tty: true
+    build:
+      context: .
+      dockerfile: ./docker/shopstr/Dockerfile
+      args:
+        - UID=${CURRENT_UID}
+        - GID=${CURRENT_GID}
+    restart: unless-stopped
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+    depends_on: 
+      postgres:
+        condition: service_healthy
+        restart: true
+      boltz:
+        condition: service_started
+        restart: true
+      cashu:
+        condition: service_started
+        restart: true
+      nostr:
+        condition: service_started
+        restart: true
+    expose:
+      - "3000"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./:/app
+    environment:
+      - DATABASE_URL=postgres://shopstr:shopstr@shopstr-postgres:5432/shopstr
+      - NEXT_PUBLIC_DEV_ENVIRONMENT=true
+ 
+
+
+  cron:
+    image: mcuadros/ofelia:latest
+    container_name: shopstr-cron
+    restart: unless-stopped 
+    command: daemon --docker -f label=com.docker.compose.project=${COMPOSE_PROJECT_NAME}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  # Restart ofelia as soon as new containers come online
+  # This is a workaround to ofelia not being able to reload the cron jobs at runtime
+  cron-live:
+    build:
+      context: ./docker
+      dockerfile: ./ofelia-live/Dockerfile
+    container_name: shopstr-cron-live
+    restart: unless-stopped
+    environment:
+      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro      
+    depends_on:
+      - cron
+    
+
+volumes:
+  shopstr-postgres-data:
+  shopstr-bitcoind:
+  shopstr-elementsd:
+  shopstr-lnd:
+  shopstr-cln:
+  shopstr-cashu:
+  shopstr-strfry:
+  shopstr-cron:
+  shopstr-imgpush:

@@ -1,0 +1,93 @@
+#!/bin/bash
+export CURRENT_UID=$(id -u) 
+export CURRENT_GID=$(id -g) 
+
+if [ "$ENVFILE" == "" ]; then
+    ENVFILE="./docker/.env.development"
+fi
+
+source $ENVFILE
+
+function start {
+    docker compose up --build $@
+} 
+
+function stop {
+    docker compose down $@
+}
+
+function delete {
+    docker compose down -v $@
+}
+
+function lnd {
+    docker compose exec lnd lncli --network=regtest --rpcserver=shopstr-lnd --network=regtest $@
+}
+
+function cln {
+    docker compose exec cln lightning-cli --network=regtest $@
+}
+
+function invoice {
+    docker compose exec lnd lncli --network=regtest --rpcserver=shopstr-lnd --network=regtest addinvoice $@
+}
+
+function pay {
+    docker compose exec cln lightning-cli --network=regtest pay $@
+}
+
+function logs {
+    container=${1:-shopstr}
+    rest=${@:2}
+    docker compose logs -f $container $rest
+}
+
+function ps {
+    docker compose ps $@
+}
+
+function exec {
+    container=${1:-shopstr}
+    rest=${@:2}
+    docker compose exec $container $rest
+
+}
+
+function cmd {
+    container=${1:-shopstr}
+    rest=${@:2}
+    docker compose exec -it $container sh -c "bash||sh"
+}
+
+function login {
+    docker compose exec shopstr sh /testbotstr/gen $1 ws://shopstr-nostr:7777
+}
+
+function help {
+    echo "Shopstr 
+ dev environment
+
+    start                        - Start the dev environment
+    stop                         - Stop the dev environment
+    delete                       - Reset the dev environment (delete containers and volumes)
+    lnd <command>                - Execute lncli commands on the lnd container
+    cln <command>                - Execute lightning-cli commands on the cln container
+    invoice <amount>             - Create a lightning invoice
+    pay <invoice>                - Pay a lightning invoice
+    logs                         - Show and follows the logs of a container (defaults to shopstr if no container is specified)
+    ps                           - Show the status of the containers
+    exec <container> <command>   - Run a command on a container (defaults to shopstr if no container is specified)
+    cmd  <container>             - Open a shell on a container (defaults to shopstr if no container is specified)
+    login <username>             - Generate a nsec to login in shopstr for the given username
+
+"
+
+}
+
+
+if [ "$1" == "" ]; then
+    help
+    exit 0
+fi
+
+$@

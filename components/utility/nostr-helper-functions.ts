@@ -17,6 +17,7 @@ import { DeleteEvent } from "@/pages/api/nostr/crud-service";
 import { gunzipSync } from "zlib";
 import { Buffer } from "buffer";
 import { DateTime } from "luxon";
+import EnvInfo from "@/utils/envinfo";
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
@@ -485,22 +486,16 @@ export async function PostListing(
 
     const pool = new SimplePool();
 
-    const allWriteRelays = [...writeRelays, ...relays];
-    const blastrRelay = "wss://sendit.nosflare.com";
-    if (!containsRelay(allWriteRelays, blastrRelay)) {
-      allWriteRelays.push(blastrRelay);
-    }
+    const allWriteRelays = withBlastr([...writeRelays, ...relays]);
+    
 
     await Promise.any(pool.publish(allWriteRelays, signedEvent));
     await Promise.any(pool.publish(allWriteRelays, signedRecEvent));
     await Promise.any(pool.publish(allWriteRelays, signedHandlerEvent));
     return signedEvent;
   } else {
-    const allWriteRelays = [...writeRelays, ...relays];
-    const blastrRelay = "wss://sendit.nosflare.com";
-    if (!containsRelay(allWriteRelays, blastrRelay)) {
-      allWriteRelays.push(blastrRelay);
-    }
+    const allWriteRelays = withBlastr([...writeRelays, ...relays]);
+   
     const res = await axios({
       method: "POST",
       url: "/api/nostr/post-event",
@@ -701,11 +696,8 @@ export async function sendGiftWrappedMessageEvent(
 ) {
   const { relays, writeRelays } = getLocalStorageData();
   const pool = new SimplePool();
-  const allWriteRelays = [...writeRelays, ...relays];
-  const blastrRelay = "wss://sendit.nosflare.com";
-  if (!containsRelay(allWriteRelays, blastrRelay)) {
-    allWriteRelays.push(blastrRelay);
-  }
+  const allWriteRelays = withBlastr([...writeRelays, ...relays]);
+ 
   await Promise.any(pool.publish(allWriteRelays, giftWrappedMessageEvent));
 }
 
@@ -717,11 +709,8 @@ export async function publishReviewEvent(
   try {
     const { userPubkey, relays, writeRelays, signInMethod } =
       getLocalStorageData();
-    const allWriteRelays = [...relays, ...writeRelays];
-    const blastrRelay = "wss://sendit.nosflare.com";
-    if (!containsRelay(allWriteRelays, blastrRelay)) {
-      allWriteRelays.push(blastrRelay);
-    }
+    const allWriteRelays = withBlastr([...relays, ...writeRelays]);
+    
     let reviewEvent = {
       pubkey: userPubkey,
       created_at: Math.floor(Date.now() / 1000),
@@ -766,11 +755,8 @@ export async function publishShoppingCartEvent(
 ) {
   try {
     const { relays, writeRelays, signInMethod } = getLocalStorageData();
-    const allWriteRelays = [...relays, ...writeRelays];
-    const blastrRelay = "wss://sendit.nosflare.com";
-    if (!containsRelay(allWriteRelays, blastrRelay)) {
-      allWriteRelays.push(blastrRelay);
-    }
+    const allWriteRelays = withBlastr([...relays, ...writeRelays]);
+  
     let updatedCartAddresses: string[][] = [];
     if (quantity && quantity < 0) {
       updatedCartAddresses = [...cartAddresses].filter(
@@ -880,11 +866,8 @@ export async function publishWalletEvent(passphrase?: string, dTag?: string) {
       (acc, current: Proof) => acc + current.amount,
       0,
     );
-    const allWriteRelays = [...relays, ...writeRelays];
-    const blastrRelay = "wss://sendit.nosflare.com";
-    if (!containsRelay(allWriteRelays, blastrRelay)) {
-      allWriteRelays.push(blastrRelay);
-    }
+    const allWriteRelays = withBlastr([...relays, ...writeRelays]);
+   
     cashuWalletRelays.forEach((relay) => relayTagsSet.add(relay));
     walletRelays = Array.from(relayTagsSet);
     const relayTags =
@@ -1029,12 +1012,8 @@ export async function publishProofEvent(
   try {
     const { userPubkey, signInMethod, relays, writeRelays, cashuWalletRelays } =
       getLocalStorageData();
-    const allWriteRelays = [...relays, ...writeRelays];
-    const blastrRelay = "wss://sendit.nosflare.com";
-    if (!containsRelay(allWriteRelays, blastrRelay)) {
-      allWriteRelays.push(blastrRelay);
-    }
-
+    const allWriteRelays = withBlastr([...relays, ...writeRelays]);
+   
     const hashHex = CryptoJS.SHA256("shopstr" + userPubkey).toString(
       CryptoJS.enc.Hex,
     );
@@ -1256,11 +1235,8 @@ export async function publishSpendingHistoryEvent(
   try {
     const { userPubkey, signInMethod, relays, writeRelays, cashuWalletRelays } =
       getLocalStorageData();
-    const allWriteRelays = [...relays, ...writeRelays];
-    const blastrRelay = "wss://sendit.nosflare.com";
-    if (!containsRelay(allWriteRelays, blastrRelay)) {
-      allWriteRelays.push(blastrRelay);
-    }
+    const allWriteRelays = withBlastr([...relays, ...writeRelays]);
+    
     const eventContent = [
       ["direction", direction],
       ["amount", amount, "sats"],
@@ -1402,11 +1378,7 @@ export async function finalizeAndSendNostrEvent(
       signedEvent = finalizeEvent(nostrEvent, senderPrivkey);
     }
     const pool = new SimplePool();
-    const allWriteRelays = [...writeRelays, ...relays];
-    const blastrRelay = "wss://sendit.nosflare.com";
-    if (!containsRelay(allWriteRelays, blastrRelay)) {
-      allWriteRelays.push(blastrRelay);
-    }
+    const allWriteRelays = withBlastr([...writeRelays, ...relays]);
     await Promise.any(pool.publish(allWriteRelays, signedEvent));
   } catch (e: any) {
     alert("Failed to send event: " + e.message);
@@ -1451,26 +1423,89 @@ export async function nostrBuildUploadImages(
   if (images.some((img) => !img.type.includes("image")))
     throw new Error("Only images are supported");
 
-  const url = "https://nostr.build/api/v2/upload/files";
+  if(EnvInfo.isShopstrDevEnvironment){
+    // simulate a nostr.build upload using a 
+    // much simpler local server
 
-  const payload = new FormData();
-  images.forEach((image) => {
-    payload.append("file[]", image);
-  });
+    const url = EnvInfo.isServer ? "http://shopstr-imgpush:5000" : "http://127.0.0.1:3001";
+    const resp:NostrBuildResponse = {
+      status: "success",
+      message: "success",
+      data: []
+    };
+    for(const img of images){
+      const payload = new FormData();
+      payload.append("file", img);
+      const response = await fetch(url, {
+        body: payload,
+        method: "POST",
+      }).then((res) => res.json());
 
-  const headers: HeadersInit = {};
-  if (sign) {
-    const token = await nip98.getToken(url, "POST", sign, true);
-    headers.Authorization = token;
+      // get image size
+      const image = new Image();
+      const imageUrl = URL.createObjectURL(img);
+      image.src = imageUrl;
+      await new Promise((resolve) => {
+        image.onload = resolve;
+      });
+      const width = image.width;
+      const height = image.height;
+      URL.revokeObjectURL(imageUrl);
+
+      // generate a fake hash
+      let fakesha256hash="";
+      for (let i = 0; i < 64; i++) {
+        fakesha256hash += Math.floor(Math.random() * 16).toString(16);
+      }
+
+      resp.data.push({
+        input_name: "APIv2",
+        name: response.filename,
+        url: url + "/" + response.filename,
+        thumbnail: url + "/" + response.filename+"?w=240",
+        responsive: {
+          "240p": url + "/" + response.filename+"?w=240",
+          "360p": url + "/" + response.filename+"?w=360",
+          "480p": url + "/" + response.filename+"?w=480",
+          "720p": url + "/" + response.filename+"?w=720",
+          "1080p": url + "/" + response.filename+"?w=1080"
+        },
+        blurhash:  url + "/" + response.filename,
+        sha256: fakesha256hash,
+        type: "picture",
+        mime: img.type,
+        size: img.size,
+        metadata: {},
+        dimensions: {
+          width: width,
+          height: height,
+        },
+      });
+    }
+
+    return resp.data;
+  } else {
+    const url = "https://nostr.build/api/v2/upload/files";
+
+    const payload = new FormData();
+    images.forEach((image) => {
+      payload.append("file[]", image);
+    });
+
+    const headers: HeadersInit = {};
+    if (sign) {
+      const token = await nip98.getToken(url, "POST", sign, true);
+      headers.Authorization = token;
+    }
+
+    const response = await fetch(url, {
+      body: payload,
+      method: "POST",
+      headers,
+    }).then((res) => res.json() as Promise<NostrBuildResponse>);
+
+    return response.data;
   }
-
-  const response = await fetch(url, {
-    body: payload,
-    method: "POST",
-    headers,
-  }).then((res) => res.json() as Promise<NostrBuildResponse>);
-
-  return response.data;
 }
 
 /***** HELPER FUNCTIONS *****/
@@ -1595,13 +1630,7 @@ export const setLocalStorageDataOnSignIn = ({
     JSON.stringify(
       relays && relays.length != 0
         ? relays
-        : [
-            "wss://relay.damus.io",
-            "wss://nos.lol",
-            "wss://purplepag.es",
-            "wss://relay.primal.net",
-            "wss://relay.nostr.band",
-          ],
+        : getDefaultRelays(),
     ),
   );
 
@@ -1626,7 +1655,7 @@ export const setLocalStorageDataOnSignIn = ({
 
   localStorage.setItem(
     LOCALSTORAGECONSTANTS.mints,
-    JSON.stringify(mints ? mints : ["https://mint.minibits.cash/Bitcoin"]),
+    JSON.stringify(mints ? mints : [getDefaultMint()]),
   );
 
   localStorage.setItem(LOCALSTORAGECONSTANTS.wot, String(wot ? wot : 3));
@@ -1721,13 +1750,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     const relaysString = localStorage.getItem(LOCALSTORAGECONSTANTS.relays);
     relays = relaysString ? (JSON.parse(relaysString) as string[]) : [];
 
-    const defaultRelays = [
-      "wss://relay.damus.io",
-      "wss://nos.lol",
-      "wss://purplepag.es",
-      "wss://relay.primal.net",
-      "wss://relay.nostr.band",
-    ];
+    const defaultRelays = getDefaultRelays();
 
     if (relays && relays.length === 0) {
       relays = defaultRelays;
@@ -1782,7 +1805,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       mints[0] ===
         "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"
     ) {
-      mints = ["https://mint.minibits.cash/Bitcoin"];
+      mints = [getDefaultMint()];
       localStorage.setItem(LOCALSTORAGECONSTANTS.mints, JSON.stringify(mints));
     }
 
@@ -1871,4 +1894,57 @@ export function nostrExtensionLoaded() {
     return false;
   }
   return true;
+}
+
+
+export function getDefaultRelays():string[]{
+  
+  if(EnvInfo.isShopstrDevEnvironment) {    
+    // use local relay in dev environment
+    if (!EnvInfo.isServer) {
+      return [
+        "ws://127.0.0.1:7777"
+      ];
+    } else {
+      return [
+        "ws://shopstr-nostr:7777"
+      ];
+    }
+  }
+
+  return [
+    "wss://relay.damus.io",
+    "wss://nos.lol",
+    "wss://purplepag.es",
+    "wss://relay.primal.net",
+    "wss://relay.nostr.band",
+  ];
+}
+
+export function withBlastr(relays:string[]):string[]{
+  const out = [...relays];
+  
+  if(EnvInfo.isShopstrDevEnvironment) {
+     // disable blastr in dev environment
+    return out;
+  }
+
+  const blastrRelay = "wss://sendit.nosflare.com";
+  if(!containsRelay(out, blastrRelay)){
+    out.push(blastrRelay);
+  }
+  return out;
+}
+
+export function getDefaultMint():string{
+  if(EnvInfo.isShopstrDevEnvironment) {    
+    // use local mint in dev environment
+    if (!EnvInfo.isServer) {
+      return "http://127.0.0.1:3338";
+    } else {
+      return "http://shopstr-cashu:3338";
+    }
+  }
+
+  return "https://mint.minibits.cash/Bitcoin";
 }
