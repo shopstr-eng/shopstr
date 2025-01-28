@@ -63,6 +63,16 @@ function login {
     docker compose exec shopstr sh /testbotstr/gen $1 ws://shopstr-nostr:7777
 }
 
+function nscan {
+    kinds=$1
+    if [ "$kinds" != "" ]; then
+        kinds="{\"kinds\":[$kinds]}"
+    else 
+        kinds="{}"
+    fi
+    docker compose exec nostr /app/strfry scan "$kinds"
+}
+
 function help {
     echo "Shopstr 
  dev environment
@@ -79,6 +89,7 @@ function help {
     exec <container> <command>   - Run a command on a container (defaults to shopstr if no container is specified)
     cmd  <container>             - Open a shell on a container (defaults to shopstr if no container is specified)
     login <username>             - Generate a nsec to login in shopstr for the given username
+    nscan [<kinds csv>]          - List nostr events in relay
 
 "
 
