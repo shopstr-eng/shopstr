@@ -1167,250 +1167,254 @@ export const fetchCashuWallet = async (
         kinds: [7375, 7376],
         authors: [userPubkey],
       };
-
+      
+      const queue:any = [];
       const handleWSubscription = new Promise<void>((resolveW) => {
         let w = pool.subscribeMany(
           cashuRelays.length !== 0 ? cashuRelays : relays,
           [cashuProofFilter],
           {
-            onevent: async (event) => {
-              try {
-                let cashuWalletEventContent;
-                if (signInMethod === "extension") {
-                  let eventContent = await window.nostr.nip44.decrypt(
-                    userPubkey,
-                    event.content,
-                  );
-                  if (eventContent) {
+            onevent: (event) => {
+              queue.push(async () => {
+                try {
+                  let cashuWalletEventContent;
+                  if (signInMethod === "extension") {
+                    let eventContent = await window.nostr.nip44.decrypt(
+                      userPubkey,
+                      event.content,
+                    );
+                    if (eventContent) {
+                      cashuWalletEventContent = JSON.parse(eventContent);
+                    }
+                  } else if (signInMethod === "bunker") {
+                    const decryptId = crypto.randomUUID();
+                    await sendBunkerRequest(
+                      "nip44_decrypt",
+                      decryptId,
+                      undefined,
+                      event.content,
+                      userPubkey,
+                    );
+                    let eventContent;
+                    while (!eventContent) {
+                      eventContent = await awaitBunkerResponse(decryptId);
+                      if (!eventContent) {
+                        await new Promise((resolve) => setTimeout(resolve, 2100));
+                      }
+                    }
+                    if (eventContent) {
+                      cashuWalletEventContent = JSON.parse(eventContent);
+                    }
+                  } else if (signInMethod === "nsec") {
+                    if (!passphrase) throw new Error("Passphrase is required");
+                    let senderPrivkey = getPrivKeyWithPassphrase(
+                      passphrase,
+                    ) as Uint8Array;
+                    const conversationKey = nip44.getConversationKey(
+                      senderPrivkey,
+                      getLocalStorageData().userPubkey,
+                    );
+                    let eventContent = nip44.decrypt(
+                      event.content,
+                      conversationKey,
+                    );
                     cashuWalletEventContent = JSON.parse(eventContent);
-                  }
-                } else if (signInMethod === "bunker") {
-                  const decryptId = crypto.randomUUID();
-                  await sendBunkerRequest(
-                    "nip44_decrypt",
-                    decryptId,
-                    undefined,
-                    event.content,
-                    userPubkey,
-                  );
-                  let eventContent;
-                  while (!eventContent) {
-                    eventContent = await awaitBunkerResponse(decryptId);
-                    if (!eventContent) {
-                      await new Promise((resolve) => setTimeout(resolve, 2100));
+                  } else if (signInMethod === "amber") {
+                    const amberSignerUrl = `nostrsigner:${event.content}?pubKey=${
+                      getLocalStorageData().userPubkey
+                    }&compressionType=none&returnType=signature&type=nip44_decrypt`;
+
+                    await navigator.clipboard.writeText("");
+
+                    window.open(amberSignerUrl, "_blank");
+
+                    const readClipboard = (): Promise<string> => {
+                      return new Promise((resolve, reject) => {
+                        const checkClipboard = async () => {
+                          try {
+                            if (!document.hasFocus()) {
+                              console.log(
+                                "Document not focused, waiting for focus...",
+                              );
+                              return;
+                            }
+
+                            const clipboardContent =
+                              await navigator.clipboard.readText();
+
+                            if (clipboardContent && clipboardContent !== "") {
+                              clearInterval(intervalId);
+                              let eventContent = clipboardContent;
+
+                              let parsedContent = JSON.parse(eventContent);
+
+                              resolve(parsedContent);
+                            } else {
+                              console.log("Waiting for new clipboard content...");
+                            }
+                          } catch (error) {
+                            console.error("Error reading clipboard:", error);
+                            reject(error);
+                          }
+                        };
+
+                        checkClipboard();
+                        const intervalId = setInterval(checkClipboard, 1000);
+
+                        setTimeout(() => {
+                          clearInterval(intervalId);
+                          console.log("Amber decryption timeout");
+                          alert("Amber decryption timed out. Please try again.");
+                        }, 60000);
+                      });
+                    };
+
+                    try {
+                      cashuWalletEventContent = await readClipboard();
+                    } catch (error) {
+                      console.error("Error reading clipboard:", error);
+                      alert("Amber decryption failed. Please try again.");
                     }
                   }
-                  if (eventContent) {
-                    cashuWalletEventContent = JSON.parse(eventContent);
-                  }
-                } else if (signInMethod === "nsec") {
-                  if (!passphrase) throw new Error("Passphrase is required");
-                  let senderPrivkey = getPrivKeyWithPassphrase(
-                    passphrase,
-                  ) as Uint8Array;
-                  const conversationKey = nip44.getConversationKey(
-                    senderPrivkey,
-                    getLocalStorageData().userPubkey,
-                  );
-                  let eventContent = nip44.decrypt(
-                    event.content,
-                    conversationKey,
-                  );
-                  cashuWalletEventContent = JSON.parse(eventContent);
-                } else if (signInMethod === "amber") {
-                  const amberSignerUrl = `nostrsigner:${event.content}?pubKey=${
-                    getLocalStorageData().userPubkey
-                  }&compressionType=none&returnType=signature&type=nip44_decrypt`;
-
-                  await navigator.clipboard.writeText("");
-
-                  window.open(amberSignerUrl, "_blank");
-
-                  const readClipboard = (): Promise<string> => {
-                    return new Promise((resolve, reject) => {
-                      const checkClipboard = async () => {
-                        try {
-                          if (!document.hasFocus()) {
-                            console.log(
-                              "Document not focused, waiting for focus...",
-                            );
-                            return;
-                          }
-
-                          const clipboardContent =
-                            await navigator.clipboard.readText();
-
-                          if (clipboardContent && clipboardContent !== "") {
-                            clearInterval(intervalId);
-                            let eventContent = clipboardContent;
-
-                            let parsedContent = JSON.parse(eventContent);
-
-                            resolve(parsedContent);
-                          } else {
-                            console.log("Waiting for new clipboard content...");
-                          }
-                        } catch (error) {
-                          console.error("Error reading clipboard:", error);
-                          reject(error);
-                        }
-                      };
-
-                      checkClipboard();
-                      const intervalId = setInterval(checkClipboard, 1000);
-
-                      setTimeout(() => {
-                        clearInterval(intervalId);
-                        console.log("Amber decryption timeout");
-                        alert("Amber decryption timed out. Please try again.");
-                      }, 60000);
+                  if (
+                    event.kind === 7375 &&
+                    cashuWalletEventContent.mint &&
+                    cashuWalletEventContent.proofs
+                  ) {
+                    proofEvents.push({
+                      id: event.id,
+                      proofs: cashuWalletEventContent.proofs,
                     });
-                  };
-
-                  try {
-                    cashuWalletEventContent = await readClipboard();
-                  } catch (error) {
-                    console.error("Error reading clipboard:", error);
-                    alert("Amber decryption failed. Please try again.");
-                  }
-                }
-                if (
-                  event.kind === 7375 &&
-                  cashuWalletEventContent.mint &&
-                  cashuWalletEventContent.proofs
-                ) {
-                  proofEvents.push({
-                    id: event.id,
-                    proofs: cashuWalletEventContent.proofs,
-                  });
-                  let wallet = new CashuWallet(
-                    new CashuMint(cashuWalletEventContent?.mint),
-                  );
-                  const Ys = cashuWalletEventContent?.proofs.map((p: Proof) =>
-                    hashToCurve(enc.encode(p.secret)).toHex(true),
-                  );
-                  let proofsStates = await wallet?.checkProofsStates(
-                    cashuWalletEventContent?.proofs,
-                  );
-                  const spentYs = new Set(
-                    proofsStates
-                      .filter((state) => state.state === "SPENT")
-                      .map((state) => state.Y),
-                  );
-                  const allYsMatch =
-                    Ys.length === spentYs.size &&
-                    Ys.every((y: string) => spentYs.has(y));
-                  if (proofsStates && proofsStates.length > 0 && allYsMatch) {
-                    await DeleteEvent([event.id], passphrase);
-                  } else if (cashuWalletEventContent.proofs) {
-                    let allProofs = [
-                      ...tokens,
-                      ...cashuWalletEventContent?.proofs,
-                      ...cashuProofs,
-                    ];
-                    cashuProofs = getUniqueProofs(allProofs);
-                  }
-                } else if (event.kind === 7376 && cashuWalletEventContent) {
-                  incomingSpendingHistory.push(cashuWalletEventContent);
-                }
-              } catch (decryptionError) {
-                console.error(
-                  "Error decrypting or parsing content:",
-                  decryptionError,
-                );
-              }
-            },
-            oneose() {
-              w.close();
-              cashuMints.forEach(async (mint) => {
-                try {
-                  let wallet = new CashuWallet(new CashuMint(mint));
-                  if (cashuProofs.length > 0) {
-                    const Ys = cashuProofs.map((p: Proof) =>
+                    let wallet = new CashuWallet(
+                      new CashuMint(cashuWalletEventContent?.mint),
+                    );
+                    const Ys = cashuWalletEventContent?.proofs.map((p: Proof) =>
                       hashToCurve(enc.encode(p.secret)).toHex(true),
                     );
-                    let proofsStates =
-                      await wallet?.checkProofsStates(cashuProofs);
+                    let proofsStates = await wallet?.checkProofsStates(
+                      cashuWalletEventContent?.proofs,
+                    );
                     const spentYs = new Set(
                       proofsStates
                         .filter((state) => state.state === "SPENT")
                         .map((state) => state.Y),
                     );
-                    if (spentYs.size > 0) {
-                      cashuProofs = cashuProofs.filter(
-                        (proof, index) => !spentYs.has(Ys[index]),
-                      );
+                    const allYsMatch =
+                      Ys.length === spentYs.size &&
+                      Ys.every((y: string) => spentYs.has(y));
+                    if (proofsStates && proofsStates.length > 0 && allYsMatch) {
+                      await DeleteEvent([event.id], passphrase);
+                    } else if (cashuWalletEventContent.proofs) {
+                      let allProofs = [
+                        ...tokens,
+                        ...cashuWalletEventContent?.proofs,
+                        ...cashuProofs,
+                      ];
+                      cashuProofs = getUniqueProofs(allProofs);
                     }
+                  } else if (event.kind === 7376 && cashuWalletEventContent) {
+                    incomingSpendingHistory.push(cashuWalletEventContent);
                   }
-
-                  let outProofIds = incomingSpendingHistory
-                    .filter((eventTags) =>
-                      eventTags.some(
-                        (tag) => tag[0] === "direction" && tag[1] === "out",
-                      ),
-                    )
-                    .map((eventTags) => {
-                      const destroyedTag = eventTags.find(
-                        (tag) => tag[0] === "e" && tag[3] === "destroyed",
-                      );
-                      return destroyedTag ? destroyedTag[1] : "";
-                    })
-                    .filter((eventId) => eventId !== "");
-
-                  let destroyedProofsArray = proofEvents
-                    .filter((event) => outProofIds.includes(event.id))
-                    .map((event) => event.proofs);
-
-                  cashuProofs = cashuProofs.filter(
-                    (cashuProof) =>
-                      !destroyedProofsArray.some(
-                        (destroyedProof) =>
-                          JSON.stringify(destroyedProof) ===
-                          JSON.stringify(cashuProof),
-                      ),
+                } catch (decryptionError) {
+                  console.error(
+                    "Error decrypting or parsing content:",
+                    decryptionError,
                   );
-
-                  let inProofIds = incomingSpendingHistory
-                    .filter((eventTags) =>
-                      eventTags.some(
-                        (tag) => tag[0] === "direction" && tag[1] === "out",
-                      ),
-                    )
-                    .map((eventTags) => {
-                      const createdTag = eventTags.find(
-                        (tag) => tag[0] === "e" && tag[3] === "created",
+                }
+              });
+            },
+            oneose() {
+              queue.push(async () => {
+                w.close();
+                for(const mint of cashuMints){
+                  try {
+                    let wallet = new CashuWallet(new CashuMint(mint));
+                    if (cashuProofs.length > 0) {
+                      const Ys = cashuProofs.map((p: Proof) =>
+                        hashToCurve(enc.encode(p.secret)).toHex(true),
                       );
-                      return createdTag ? createdTag[1] : "";
-                    })
-                    .filter((eventId) => eventId !== "");
+                      let proofsStates =
+                        await wallet?.checkProofsStates(cashuProofs);
+                      const spentYs = new Set(
+                        proofsStates
+                          .filter((state) => state.state === "SPENT")
+                          .map((state) => state.Y),
+                      );
+                      if (spentYs.size > 0) {
+                        cashuProofs = cashuProofs.filter(
+                          (proof, index) => !spentYs.has(Ys[index]),
+                        );
+                      }
+                    }
 
-                  let proofIdsToAddBack = inProofIds.filter(
-                    (id) => !outProofIds.includes(id),
-                  );
+                    let outProofIds = incomingSpendingHistory
+                      .filter((eventTags) =>
+                        eventTags.some(
+                          (tag) => tag[0] === "direction" && tag[1] === "out",
+                        ),
+                      )
+                      .map((eventTags) => {
+                        const destroyedTag = eventTags.find(
+                          (tag) => tag[0] === "e" && tag[3] === "destroyed",
+                        );
+                        return destroyedTag ? destroyedTag[1] : "";
+                      })
+                      .filter((eventId) => eventId !== "");
 
-                  let arrayOfProofsToAddBack = proofEvents
-                    .filter((event) => proofIdsToAddBack.includes(event.id))
-                    .map((event) => event.proofs);
+                    let destroyedProofsArray = proofEvents
+                      .filter((event) => outProofIds.includes(event.id))
+                      .map((event) => event.proofs);
 
-                  const proofExists = (proof: Proof, proofArray: Proof[]) =>
-                    proofArray.some(
-                      (existingProof) =>
-                        JSON.stringify(existingProof) === JSON.stringify(proof),
+                    cashuProofs = cashuProofs.filter(
+                      (cashuProof) =>
+                        !destroyedProofsArray.some(
+                          (destroyedProof) =>
+                            JSON.stringify(destroyedProof) ===
+                            JSON.stringify(cashuProof),
+                        ),
                     );
 
-                  arrayOfProofsToAddBack.forEach((proofsToAddBack) => {
-                    proofsToAddBack.forEach((proof: Proof) => {
-                      if (!proofExists(proof, cashuProofs)) {
-                        cashuProofs.push(proof);
-                      }
-                    });
-                  });
+                    let inProofIds = incomingSpendingHistory
+                      .filter((eventTags) =>
+                        eventTags.some(
+                          (tag) => tag[0] === "direction" && tag[1] === "out",
+                        ),
+                      )
+                      .map((eventTags) => {
+                        const createdTag = eventTags.find(
+                          (tag) => tag[0] === "e" && tag[3] === "created",
+                        );
+                        return createdTag ? createdTag[1] : "";
+                      })
+                      .filter((eventId) => eventId !== "");
 
-                  if (outProofIds.length > 0) {
-                    await DeleteEvent(outProofIds, passphrase);
+                    let proofIdsToAddBack = inProofIds.filter(
+                      (id) => !outProofIds.includes(id),
+                    );
+                    let arrayOfProofsToAddBack = proofEvents
+                      .filter((event) => proofIdsToAddBack.includes(event.id))
+                      .map((event) => event);
+                      
+                    const proofExists = (proof: Proof, proofArray: Proof[]) =>
+                      proofArray.some(
+                        (existingProof) =>
+                          JSON.stringify(existingProof) === JSON.stringify(proof),
+                      );
+
+                    arrayOfProofsToAddBack.forEach((proofsToAddBack) => {
+                      proofsToAddBack.forEach((proof: Proof) => {
+                        if (!proofExists(proof, cashuProofs)) {
+                          cashuProofs.push(proof);
+                        }
+                      });
+                    });
+
+                    if (outProofIds.length > 0) {
+                      await DeleteEvent(outProofIds, passphrase);
+                    }
+                  } catch (error) {
+                    console.log("Error checking spent proofs: ", error);
                   }
-                } catch (error) {
-                  console.log("Error checking spent proofs: ", error);
                 }
               });
               resolveW();
@@ -1419,7 +1423,12 @@ export const fetchCashuWallet = async (
         );
       });
 
-      await Promise.all([handleHSubscription, handleWSubscription]);
+      await handleHSubscription;
+      await handleWSubscription;
+
+      for(const q of queue){
+        await q();
+      }
 
       const returnCall = async (
         mostRecentWalletEvent: NostrEvent[],
