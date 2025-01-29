@@ -1,5 +1,5 @@
 import React, { useContext, useState, useEffect } from "react";
-import { CashuWalletContext } from "../utils/context/context";
+import { CashuWalletContext, ChatsContext } from "../utils/context/context";
 import { useRouter } from "next/router";
 import { useForm } from "react-hook-form";
 import {
@@ -46,6 +46,7 @@ import {
   publishProofEvent,
   publishSpendingHistoryEvent,
 } from "./utility/nostr-helper-functions";
+import { addChatMessagesToCache } from "../pages/api/nostr/cache-service";
 import { nip19 } from "nostr-tools";
 import { ProductData } from "./utility/product-parser-functions";
 import {
@@ -85,6 +86,8 @@ export default function ProductInvoiceCard({
   const pubkeyOfProductBeingSold = pubkey;
   const { userNPub, userPubkey, signInMethod, mints, tokens, history } =
     getLocalStorageData();
+
+  const chatsContext = useContext(ChatsContext);
 
   const [enterPassphrase, setEnterPassphrase] = useState(false);
   const [passphrase, setPassphrase] = useState("");
@@ -205,6 +208,17 @@ export default function ProductInvoiceCard({
         userPubkey,
       );
       await sendGiftWrappedMessageEvent(giftWrappedEvent);
+      chatsContext.addNewlyCreatedMessageEvent(
+        {
+          ...giftWrappedMessageEvent,
+          sig: "",
+          read: false,
+        },
+        true,
+      );
+      addChatMessagesToCache([
+        { ...giftWrappedMessageEvent, sig: "", read: false },
+      ]);
     } else {
       let giftWrappedMessageEvent;
       if (isPayment) {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import axios from "axios";
 import {
   Modal,
@@ -20,10 +20,12 @@ import {
   sendGiftWrappedMessageEvent,
   getLocalStorageData,
 } from "../utility/nostr-helper-functions";
+import { addChatMessagesToCache } from "../../pages/api/nostr/cache-service";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { nip19 } from "nostr-tools";
 import { getEncodedToken } from "@cashu/cashu-ts";
 import { formatWithCommas } from "./display-monetary-info";
+import { ChatsContext } from "@/utils/context/context";
 
 export default function RedemptionModal({
   opened,
@@ -42,6 +44,7 @@ export default function RedemptionModal({
 }) {
   const [showModal, setShowModal] = useState(false);
   const { userPubkey } = getLocalStorageData();
+  const chatsContext = useContext(ChatsContext);
 
   const [formattedChangeAmount, setFormattedChangeAmount] = useState("");
 
@@ -116,6 +119,17 @@ export default function RedemptionModal({
         pubkey,
       );
       await sendGiftWrappedMessageEvent(giftWrappedEvent);
+      chatsContext.addNewlyCreatedMessageEvent(
+        {
+          ...giftWrappedMessageEvent,
+          sig: "",
+          read: false,
+        },
+        true,
+      );
+      addChatMessagesToCache([
+        { ...giftWrappedMessageEvent, sig: "", read: false },
+      ]);
     }
     setShowModal(false);
   };

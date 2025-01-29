@@ -1,6 +1,6 @@
 # Shopstr
 
-A global, decentralized Nostr marketplace for Bitcoin commerce.
+A global, permissionless Nostr marketplace for Bitcoin commerce.
 
 # Supported NIPs
 
