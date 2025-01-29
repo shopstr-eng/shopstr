@@ -46,7 +46,7 @@ export default function ProductCard({
               dropDownKeys={
                 productData.pubkey === getLocalStorageData().userPubkey
                   ? ["shop_settings"]
-                  : ["shop", "inquiry"]
+                  : ["shop", "inquiry", "copy_npub"]
               }
             />
             <div className="flex flex-col justify-center">
@@ -147,7 +147,7 @@ export default function ProductCard({
                 dropDownKeys={
                   pubkey === getLocalStorageData().userPubkey
                     ? ["shop_settings"]
-                    : ["shop", "inquiry"]
+                    : ["shop", "inquiry", "copy_npub"]
                 }
               />
             </div>

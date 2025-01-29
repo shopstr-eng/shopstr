@@ -21,10 +21,7 @@ import DisplayProducts from "../display-products";
 import LocationDropdown from "../utility-components/dropdowns/location-dropdown";
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
 import { CATEGORIES } from "../utility/STATIC-VARIABLES";
-import {
-  getLocalStorageData,
-  isUserLoggedIn,
-} from "../utility/nostr-helper-functions";
+import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import { ProductData } from "../utility/product-parser-functions";
 import SignInModal from "../sign-in/SignInModal";
 import ShopstrSwitch from "../utility-components/shopstr-switch";
@@ -220,7 +217,7 @@ export function MarketplacePage({
                           dropDownKeys={
                             reviewerPubkey === userPubkey
                               ? ["shop_settings"]
-                              : ["shop", "inquiry"]
+                              : ["shop", "inquiry", "copy_npub"]
                           }
                         />
                       </div>
