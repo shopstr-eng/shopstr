@@ -1167,8 +1167,8 @@ export const fetchCashuWallet = async (
         kinds: [7375, 7376],
         authors: [userPubkey],
       };
-      
-      const queue:any = [];
+
+      const queue: any = [];
       const handleWSubscription = new Promise<void>((resolveW) => {
         let w = pool.subscribeMany(
           cashuRelays.length !== 0 ? cashuRelays : relays,
@@ -1199,7 +1199,9 @@ export const fetchCashuWallet = async (
                     while (!eventContent) {
                       eventContent = await awaitBunkerResponse(decryptId);
                       if (!eventContent) {
-                        await new Promise((resolve) => setTimeout(resolve, 2100));
+                        await new Promise((resolve) =>
+                          setTimeout(resolve, 2100),
+                        );
                       }
                     }
                     if (eventContent) {
@@ -1220,7 +1222,9 @@ export const fetchCashuWallet = async (
                     );
                     cashuWalletEventContent = JSON.parse(eventContent);
                   } else if (signInMethod === "amber") {
-                    const amberSignerUrl = `nostrsigner:${event.content}?pubKey=${
+                    const amberSignerUrl = `nostrsigner:${
+                      event.content
+                    }?pubKey=${
                       getLocalStorageData().userPubkey
                     }&compressionType=none&returnType=signature&type=nip44_decrypt`;
 
@@ -1250,7 +1254,9 @@ export const fetchCashuWallet = async (
 
                               resolve(parsedContent);
                             } else {
-                              console.log("Waiting for new clipboard content...");
+                              console.log(
+                                "Waiting for new clipboard content...",
+                              );
                             }
                           } catch (error) {
                             console.error("Error reading clipboard:", error);
@@ -1264,7 +1270,9 @@ export const fetchCashuWallet = async (
                         setTimeout(() => {
                           clearInterval(intervalId);
                           console.log("Amber decryption timeout");
-                          alert("Amber decryption timed out. Please try again.");
+                          alert(
+                            "Amber decryption timed out. Please try again.",
+                          );
                         }, 60000);
                       });
                     };
@@ -1326,7 +1334,7 @@ export const fetchCashuWallet = async (
             oneose() {
               queue.push(async () => {
                 w.close();
-                for(const mint of cashuMints){
+                for (const mint of cashuMints) {
                   try {
                     let wallet = new CashuWallet(new CashuMint(mint));
                     if (cashuProofs.length > 0) {
@@ -1394,11 +1402,12 @@ export const fetchCashuWallet = async (
                     let arrayOfProofsToAddBack = proofEvents
                       .filter((event) => proofIdsToAddBack.includes(event.id))
                       .map((event) => event);
-                      
+
                     const proofExists = (proof: Proof, proofArray: Proof[]) =>
                       proofArray.some(
                         (existingProof) =>
-                          JSON.stringify(existingProof) === JSON.stringify(proof),
+                          JSON.stringify(existingProof) ===
+                          JSON.stringify(proof),
                       );
 
                     arrayOfProofsToAddBack.forEach((proofsToAddBack) => {
@@ -1426,7 +1435,7 @@ export const fetchCashuWallet = async (
       await handleHSubscription;
       await handleWSubscription;
 
-      for(const q of queue){
+      for (const q of queue) {
         await q();
       }
 

@@ -298,6 +298,17 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       );
       await sendGiftWrappedMessageEvent(senderGiftWrappedEvent);
       await sendGiftWrappedMessageEvent(receiverGiftWrappedEvent);
+      chatsContext.addNewlyCreatedMessageEvent(
+        {
+          ...giftWrappedMessageEvent,
+          sig: "",
+          read: true,
+        },
+        true,
+      );
+      addChatMessagesToCache([
+        { ...giftWrappedMessageEvent, sig: "", read: true },
+      ]);
       setIsSendingDMLoading(false);
     } catch (e) {
       console.log("handleSendMessage errored", e);
@@ -594,8 +605,8 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
           });
         }
         chatsContext.addNewlyCreatedMessageEvent(messageEvent);
+        addChatMessagesToCache([messageEvent]);
       });
-      setChatsMap(combinedChatsMap);
       setIsChatsLoading(false);
       setIsLoadingMore(false);
     } catch (err) {

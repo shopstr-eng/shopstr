@@ -43,7 +43,7 @@ export const ChatPanel = ({
   passphrase,
 }: {
   handleGoBack: () => void;
-  handleSendMessage: (message: string) => void;
+  handleSendMessage: (message: string) => Promise<void>;
   currentChatPubkey: string;
   chatsMap: Map<string, ChatObject>;
   isSendingDMLoading: boolean;
@@ -239,8 +239,8 @@ export const ChatPanel = ({
       </div>
     );
 
-  const sendMessage = () => {
-    handleSendMessage(messageInput);
+  const sendMessage = async () => {
+    await handleSendMessage(messageInput);
     setMessageInput("");
   };
 
@@ -258,21 +258,25 @@ export const ChatPanel = ({
         />
       </h2>
       <div className="my-2 h-full overflow-y-scroll rounded-md border-2 border-light-fg bg-light-fg p-3 dark:border-dark-fg dark:bg-dark-fg">
-        {messages.map((messageEvent: NostrMessageEvent, index) => {
-          return (
-            // eslint-disable-next-line react/jsx-key
-            <ChatMessage
-              key={index}
-              messageEvent={messageEvent}
-              index={index}
-              currentChatPubkey={currentChatPubkey}
-              passphrase={passphrase}
-              setBuyerPubkey={setBuyerPubkey}
-              setCanReview={setCanReview}
-              setProductAddress={setProductAddress}
-            />
-          );
-        })}
+        {messages
+          .filter(
+            (message, index, self) =>
+              index === self.findIndex((m) => m.id === message.id),
+          )
+          .map((messageEvent: NostrMessageEvent, index) => {
+            return (
+              <ChatMessage
+                key={messageEvent.id}
+                messageEvent={messageEvent}
+                index={index}
+                currentChatPubkey={currentChatPubkey}
+                passphrase={passphrase}
+                setBuyerPubkey={setBuyerPubkey}
+                setCanReview={setCanReview}
+                setProductAddress={setProductAddress}
+              />
+            );
+          })}
         <div ref={bottomDivRef} />
       </div>
       {!isPayment ? (
@@ -287,19 +291,19 @@ export const ChatPanel = ({
             onChange={(e) => {
               setMessageInput(e.target.value);
             }}
-            onKeyDown={(e) => {
+            onKeyDown={async (e) => {
               if (
                 e.key === "Enter" &&
                 !(messageInput === "" || isSendingDMLoading)
               )
-                sendMessage();
+                await sendMessage();
             }}
           />
           <Button
             className={SHOPSTRBUTTONCLASSNAMES}
             isDisabled={messageInput === "" || isSendingDMLoading}
             isLoading={isSendingDMLoading}
-            onClick={sendMessage}
+            onClick={async () => await sendMessage()}
           >
             Send
           </Button>
