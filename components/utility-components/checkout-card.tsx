@@ -369,7 +369,7 @@ export default function CheckoutCard({
                       dropDownKeys={
                         pubkey === userPubkey
                           ? ["shop_settings"]
-                          : ["shop", "inquiry"]
+                          : ["shop", "inquiry", "copy_npub"]
                       }
                     />
                     {merchantQuality !== "" && (
@@ -522,7 +522,7 @@ export default function CheckoutCard({
                               dropDownKeys={
                                 reviewerPubkey === userPubkey
                                   ? ["shop_settings"]
-                                  : ["shop", "inquiry"]
+                                  : ["shop", "inquiry", "copy_npub"]
                               }
                             />
                           </div>
