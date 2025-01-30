@@ -5,7 +5,6 @@ A global, permissionless Nostr marketplace for Bitcoin commerce.
 # Supported NIPs
 
 - [ ] NIP-02: Follow List
-- [x] NIP-04: Encrypted Direct Message (Deprecated)
 - [ ] NIP-05: Mapping Nostr keys to DNS-based internet identifiers
 - [x] NIP-07: window.nostr capability for web browsers
 - [x] NIP-09: Event Deletion
@@ -21,7 +20,6 @@ A global, permissionless Nostr marketplace for Bitcoin commerce.
 - [ ] NIP-49: Private Key Encryption
 - [ ] NIP-50: Search Capability
 - [x] NIP-51: Lists
-- [x] NIP-55: Android Signer Application
 - [ ] NIP-56: Reporting
 - [ ] NIP-57: Lightning Zaps
 - [ ] NIP-58: Badges
