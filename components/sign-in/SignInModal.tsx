@@ -21,7 +21,6 @@ import { RelaysContext } from "../../utils/context/context";
 import { getPublicKey, nip19 } from "nostr-tools";
 import CryptoJS from "crypto-js";
 import { useRouter } from "next/router";
-import { isAndroid } from "../../utils/platform-detection";
 import FailureModal from "../../components/utility-components/failure-modal";
 
 export default function SignInModal({
@@ -44,18 +43,12 @@ export default function SignInModal({
 
   const [showNsecSignIn, setShowNsecSignIn] = useState(false);
 
-  const [isAndroidDevice, setIsAndroidDevice] = useState(false);
-
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
 
   const relaysContext = useContext(RelaysContext);
 
   const router = useRouter();
-
-  useEffect(() => {
-    setIsAndroidDevice(isAndroid());
-  }, []);
 
   const startExtensionLogin = async () => {
     try {
@@ -212,81 +205,6 @@ export default function SignInModal({
       setValidBunkerToken(parseBunkerToken(bunkerToken) ? "success" : "danger");
     }
   }, [bunkerToken]);
-
-  const startAmberLogin = async () => {
-    try {
-      const amberSignerUrl =
-        "nostrsigner:?compressionType=none&returnType=signature&type=get_public_key";
-
-      await navigator.clipboard.writeText("");
-
-      window.open(amberSignerUrl, "_blank");
-
-      const checkClipboard = async () => {
-        try {
-          if (!document.hasFocus()) {
-            console.log("Document not focused, waiting for focus...");
-            return;
-          }
-
-          const clipboardContent = await navigator.clipboard.readText();
-
-          if (
-            clipboardContent &&
-            clipboardContent !== "" &&
-            clipboardContent.startsWith("npub")
-          ) {
-            const pk = clipboardContent;
-
-            if (pk) {
-              if (
-                !relaysContext.isLoading &&
-                relaysContext.relayList.length >= 0 &&
-                relaysContext.readRelayList &&
-                relaysContext.writeRelayList
-              ) {
-                const generalRelays = relaysContext.relayList;
-                const readRelays = relaysContext.readRelayList;
-                const writeRelays = relaysContext.writeRelayList;
-                setLocalStorageDataOnSignIn({
-                  signInMethod: "amber",
-                  npub: pk,
-                  relays: generalRelays,
-                  readRelays: readRelays,
-                  writeRelays: writeRelays,
-                });
-              } else {
-                setLocalStorageDataOnSignIn({
-                  signInMethod: "amber",
-                  npub: pk,
-                });
-              }
-
-              await navigator.clipboard.writeText("");
-
-              clearInterval(intervalId);
-              onClose();
-            }
-          }
-        } catch (error) {
-          console.error("Error reading clipboard:", error);
-        }
-      };
-
-      checkClipboard();
-      const intervalId = setInterval(checkClipboard, 1000);
-
-      setTimeout(() => {
-        clearInterval(intervalId);
-        setFailureText("Amber sign-in timed out. Please try again.");
-        setShowFailureModal(true);
-      }, 60000);
-    } catch (error) {
-      console.error("Amber sign-in failed:", error);
-      setFailureText("Amber sign-in failed!");
-      setShowFailureModal(true);
-    }
-  };
 
   const handleGenerateKeys = () => {
     router.push("/keys");
@@ -458,17 +376,6 @@ export default function SignInModal({
                     </div>
                   </div>
                   <div className="text-center">------ or ------</div>
-                  {isAndroidDevice && (
-                    <>
-                      <Button
-                        className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
-                        onClick={startAmberLogin}
-                      >
-                        Amber Sign-in
-                      </Button>
-                      <div className="text-center">------ or ------</div>
-                    </>
-                  )}
                 </div>
                 <div className="flex flex-col	">
                   <div className="">

@@ -58,10 +58,6 @@ export default function ContactForm({
               control={contactControl}
               rules={{
                 required: "A contact is required.",
-                maxLength: {
-                  value: 50,
-                  message: "This input exceed maxLength of 50.",
-                },
               }}
               render={({
                 field: { onChange, onBlur, value },
@@ -94,10 +90,6 @@ export default function ContactForm({
               control={contactControl}
               rules={{
                 required: "A contact type is required.",
-                maxLength: {
-                  value: 50,
-                  message: "This input exceed maxLength of 50.",
-                },
               }}
               render={({
                 field: { onChange, onBlur, value },

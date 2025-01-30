@@ -28,6 +28,7 @@ import {
   getLocalStorageData,
   LocalStorageInterface,
   validPassphrase,
+  LogOut,
 } from "../components/utility/nostr-helper-functions";
 // import { ProductData } from "../components/utility/product-parser-functions";
 import { NextUIProvider } from "@nextui-org/react";
@@ -397,6 +398,9 @@ function App({ Component, pageProps }: AppProps) {
   /** FETCH initial FOLLOWS, RELAYS, PRODUCTS, and PROFILES **/
   useEffect(() => {
     async function fetchData() {
+      if (getLocalStorageData().signInMethod === "amber") {
+        LogOut();
+      }
       const relays = getLocalStorageData().relays;
       const readRelays = getLocalStorageData().readRelays;
       let allRelays = [...relays, ...readRelays];
@@ -432,7 +436,6 @@ function App({ Component, pageProps }: AppProps) {
         if (
           (getLocalStorageData().signInMethod === "nsec" && passphrase) ||
           getLocalStorageData().signInMethod === "extension" ||
-          getLocalStorageData().signInMethod === "amber" ||
           getLocalStorageData().signInMethod === "bunker"
         ) {
           let { profileSetFromChats: newProfileSetFromChats } =
@@ -485,7 +488,6 @@ function App({ Component, pageProps }: AppProps) {
         if (
           (getLocalStorageData().signInMethod === "nsec" && passphrase) ||
           getLocalStorageData().signInMethod === "extension" ||
-          getLocalStorageData().signInMethod === "amber" ||
           getLocalStorageData().signInMethod === "bunker"
         ) {
           let {

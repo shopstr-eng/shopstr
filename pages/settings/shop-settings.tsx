@@ -93,12 +93,7 @@ const ShopSettingsPage = () => {
   };
 
   const isButtonDisabled = useMemo(() => {
-    if (
-      signInMethod === "extension" ||
-      signInMethod === "amber" ||
-      signInMethod === "bunker"
-    )
-      return false;
+    if (signInMethod === "extension" || signInMethod === "bunker") return false;
     if (passphrase === "") return true;
     try {
       let nsec = getNsecWithPassphrase(passphrase);
