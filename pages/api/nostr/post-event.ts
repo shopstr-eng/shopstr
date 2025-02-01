@@ -3,7 +3,8 @@ import {
   SimplePool,
   finalizeEvent, // this assigns the pubkey, calculates the event id and signs the event in a single step
 } from "nostr-tools";
-
+import EnvInfo from "@/utils/envinfo";
+import { getDefaultRelays } from "@/components/utility/nostr-helper-functions";
 type ProductFormValue = [key: string, ...values: string[]];
 export type ProductFormValues = ProductFormValue[];
 
@@ -116,7 +117,7 @@ const PostEvent = async (req: NextApiRequest, res: NextApiResponse) => {
     delete event.privkey;
 
     const kind = event.kind;
-    const relays = event.relays;
+    const relays = EnvInfo.isShopstrDevEnvironment ? getDefaultRelays() : event.relays;
     delete event.relays;
     const pool = new SimplePool();
     let signedEvent = { ...event }; // using this as the editable event object which is either signed already or needs to be signed and posted to a relay
