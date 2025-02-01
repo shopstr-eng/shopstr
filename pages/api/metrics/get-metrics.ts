@@ -65,16 +65,16 @@ export default async function GetMetrics(
 
   // TODO: USE ONE SQL QUERY TO GET ALL DATA INSTEAD OF MULTIPLE QUERIES
 
+  const shoppersMetricsPromise = repo?.raw<{ rows: Metrics[] }>(`
+  SELECT time_bucket('${bucket}', date_time, '${tz}') AS period, cast(count(distinct(shopper_id)) AS INTEGER) AS "${label}"
+  FROM shoppers
+  WHERE date_time BETWEEN '${start}' AND '${end}'
+  GROUP BY period
+  ORDER BY period DESC;`);
+
   const salesMetricsPromise = repo?.raw<{ rows: Metrics[] }>(`
     SELECT time_bucket('${bucket}', date_time, '${tz}') AS period, cast(sum(total) AS INTEGER) AS "${label}"
     FROM transactions
-    WHERE date_time BETWEEN '${start}' AND '${end}'
-    GROUP BY period
-    ORDER BY period DESC;`);
-
-  const shoppersMetricsPromise = repo?.raw<{ rows: Metrics[] }>(`
-    SELECT time_bucket('${bucket}', date_time, '${tz}') AS period, cast(count(distinct(shopper_id)) AS INTEGER) AS "${label}"
-    FROM shoppers
     WHERE date_time BETWEEN '${start}' AND '${end}'
     GROUP BY period
     ORDER BY period DESC;`);
@@ -93,14 +93,30 @@ export default async function GetMetrics(
     GROUP BY period
     ORDER BY period DESC;`);
 
-  const [salesMetrics, shoppersMetrics, listingsMetrics, ordersMetrics] =
+  const [shoppersMetrics, salesMetrics, listingsMetrics, ordersMetrics] =
     await Promise.allSettled([
-      salesMetricsPromise,
       shoppersMetricsPromise,
+      salesMetricsPromise,
       listingsMetricsPromise,
       ordersMetricsPromise,
     ]);
 
+  let shoppersData: Data | null = null;
+  if (shoppersMetrics.status === "fulfilled" && shoppersMetrics.value) {
+    shoppersData = {
+      label,
+      category: {
+        title: "New Shoppers",
+        subtitle: "Shoppers Over Time",
+        total: shoppersMetrics.value.rows.reduce(
+          (prev, curr) => prev + curr[label],
+          0,
+        ),
+        symbol: "",
+        metrics: shoppersMetrics.value.rows,
+      },
+    };
+  }
   let salesData: Data | null = null;
   if (salesMetrics.status === "fulfilled" && salesMetrics.value) {
     salesData = {
@@ -114,22 +130,6 @@ export default async function GetMetrics(
         ),
         symbol: "sats",
         metrics: salesMetrics.value.rows,
-      },
-    };
-  }
-  let shoppersData: Data | null = null;
-  if (shoppersMetrics.status === "fulfilled" && shoppersMetrics.value) {
-    shoppersData = {
-      label,
-      category: {
-        title: "Total Shoppers",
-        subtitle: "Shoppers Over Time",
-        total: shoppersMetrics.value.rows.reduce(
-          (prev, curr) => prev + curr[label],
-          0,
-        ),
-        symbol: "",
-        metrics: shoppersMetrics.value.rows,
       },
     };
   }
@@ -168,5 +168,5 @@ export default async function GetMetrics(
 
   return res
     .status(200)
-    .json([salesData, shoppersData, listingsData, ordersData].filter((n) => n));
+    .json([shoppersData, salesData, listingsData, ordersData].filter((n) => n));
 }
