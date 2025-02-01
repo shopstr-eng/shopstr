@@ -22,12 +22,14 @@ export default function ContactForm({
   handleContactSubmit,
   onContactSubmit,
   contactControl,
+  requiredInfo,
 }: {
   showContactModal: boolean;
   handleToggleContactModal: () => void;
   handleContactSubmit: UseFormHandleSubmit<FieldValues>;
   onContactSubmit: (data: FieldValues) => void;
   contactControl: Control<FieldValues>;
+  requiredInfo?: string;
 }) {
   return (
     <Modal
@@ -56,10 +58,6 @@ export default function ContactForm({
               control={contactControl}
               rules={{
                 required: "A contact is required.",
-                maxLength: {
-                  value: 50,
-                  message: "This input exceed maxLength of 50.",
-                },
               }}
               render={({
                 field: { onChange, onBlur, value },
@@ -92,10 +90,6 @@ export default function ContactForm({
               control={contactControl}
               rules={{
                 required: "A contact type is required.",
-                maxLength: {
-                  value: 50,
-                  message: "This input exceed maxLength of 50.",
-                },
               }}
               render={({
                 field: { onChange, onBlur, value },
@@ -153,6 +147,41 @@ export default function ContactForm({
                 );
               }}
             />
+
+            {requiredInfo && requiredInfo !== "" && (
+              <Controller
+                name="Required"
+                control={contactControl}
+                rules={{
+                  required: "Additional information is required.",
+                }}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => {
+                  let isErrored = error !== undefined;
+                  let errorMessage: string = error?.message
+                    ? error.message
+                    : "";
+                  return (
+                    <Input
+                      className="text-light-text dark:text-dark-text"
+                      autoFocus
+                      variant="bordered"
+                      fullWidth={true}
+                      label={`Enter ${requiredInfo}`}
+                      labelPlacement="inside"
+                      isInvalid={isErrored}
+                      errorMessage={errorMessage}
+                      // controller props
+                      onChange={onChange} // send value to hook form
+                      onBlur={onBlur} // notify when input is touched/blur
+                      value={value}
+                    />
+                  );
+                }}
+              />
+            )}
           </ModalBody>
 
           <ModalFooter>

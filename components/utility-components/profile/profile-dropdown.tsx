@@ -17,6 +17,8 @@ import {
   ArrowRightStartOnRectangleIcon,
   BuildingStorefrontIcon,
   ChatBubbleBottomCenterIcon,
+  CheckIcon,
+  ClipboardIcon,
   Cog6ToothIcon,
   UserIcon,
 } from "@heroicons/react/24/outline";
@@ -29,7 +31,8 @@ type DropDownKeys =
   | "inquiry"
   | "settings"
   | "user_profile"
-  | "logout";
+  | "logout"
+  | "copy_npub";
 
 export const ProfileWithDropdown = ({
   pubkey,
@@ -45,6 +48,7 @@ export const ProfileWithDropdown = ({
   const [pfp, setPfp] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [showFailureModal, setShowFailureModal] = useState(false);
+  const [isNPubCopied, setIsNPubCopied] = useState(false);
   const profileContext = useContext(ProfileMapContext);
   const npub = pubkey ? nip19.npubEncode(pubkey) : "";
   const router = useRouter();
@@ -143,6 +147,25 @@ export const ProfileWithDropdown = ({
         router.push("/marketplace");
       },
       label: "Log Out",
+    },
+    copy_npub: {
+      key: "copy_npub",
+      color: "default",
+      className: "text-light-text dark:text-dark-text",
+      startContent: isNPubCopied ? (
+        <CheckIcon className="h-5 w-5" />
+      ) : (
+        <ClipboardIcon className="h-5 w-5" />
+      ),
+      onClick: () => {
+        let npub = nip19.npubEncode(pubkey);
+        navigator.clipboard.writeText(npub);
+        setIsNPubCopied(true);
+        setTimeout(() => {
+          setIsNPubCopied(false);
+        }, 1000);
+      },
+      label: "Copy npub",
     },
   };
 

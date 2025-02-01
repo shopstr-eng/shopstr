@@ -1,6 +1,6 @@
 import React, { useContext, useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/router";
-import { CashuWalletContext } from "../utils/context/context";
+import { CashuWalletContext, ChatsContext } from "../utils/context/context";
 import { useForm } from "react-hook-form";
 import {
   Button,
@@ -46,6 +46,7 @@ import {
   publishProofEvent,
   publishSpendingHistoryEvent,
 } from "./utility/nostr-helper-functions";
+import { addChatMessagesToCache } from "../pages/api/nostr/cache-service";
 import { nip19 } from "nostr-tools";
 import { ProductData } from "./utility/product-parser-functions";
 import {
@@ -85,6 +86,8 @@ export default function CartInvoiceCard({
     getLocalStorageData();
   const router = useRouter();
 
+  const chatsContext = useContext(ChatsContext);
+
   const [enterPassphrase, setEnterPassphrase] = useState(false);
   const [passphrase, setPassphrase] = useState("");
 
@@ -117,6 +120,17 @@ export default function CartInvoiceCard({
 
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
+  const [requiredInfo, setRequiredInfo] = useState("");
+
+  useEffect(() => {
+    if (products && products.length > 0) {
+      const requiredFields = products
+        .map((product) => product.required)
+        .filter((field) => field)
+        .join(", ");
+      setRequiredInfo(requiredFields);
+    }
+  }, [products]);
 
   const uniqueShippingTypes = useMemo(() => {
     return Array.from(new Set(Object.values(shippingTypes)));
@@ -220,6 +234,17 @@ export default function CartInvoiceCard({
         userPubkey,
       );
       await sendGiftWrappedMessageEvent(giftWrappedEvent);
+      chatsContext.addNewlyCreatedMessageEvent(
+        {
+          ...giftWrappedMessageEvent,
+          sig: "",
+          read: false,
+        },
+        true,
+      );
+      addChatMessagesToCache([
+        { ...giftWrappedMessageEvent, sig: "", read: false },
+      ]);
     } else {
       let giftWrappedMessageEvent;
       if (isPayment) {
@@ -269,6 +294,7 @@ export default function CartInvoiceCard({
       let shippingPostalCode = data["Postal Code"];
       let shippingState = data["State/Province"];
       let shippingCountry = data["Country"];
+      let additionalInfo = data["Required"];
       setShowShippingModal(false);
       if (isCashuPayment) {
         await handleCashuPayment(
@@ -280,6 +306,7 @@ export default function CartInvoiceCard({
           shippingPostalCode,
           shippingState,
           shippingCountry,
+          additionalInfo,
         );
       } else {
         await handleLightningPayment(
@@ -291,6 +318,7 @@ export default function CartInvoiceCard({
           shippingPostalCode,
           shippingState,
           shippingCountry,
+          additionalInfo,
         );
       }
     } catch (error) {
@@ -310,6 +338,7 @@ export default function CartInvoiceCard({
       let contact = data["Contact"];
       let contactType = data["Contact Type"];
       let contactInstructions = data["Instructions"];
+      let additionalInfo = data["Required"];
       setShowContactModal(false);
       if (isCashuPayment) {
         await handleCashuPayment(
@@ -324,6 +353,7 @@ export default function CartInvoiceCard({
           contact,
           contactType,
           contactInstructions,
+          additionalInfo,
         );
       } else {
         await handleLightningPayment(
@@ -338,6 +368,7 @@ export default function CartInvoiceCard({
           contact,
           contactType,
           contactInstructions,
+          additionalInfo,
         );
       }
     } catch (error) {
@@ -364,6 +395,7 @@ export default function CartInvoiceCard({
       let shippingPostalCode = data["Postal Code"];
       let shippingState = data["State/Province"];
       let shippingCountry = data["Country"];
+      let additionalInfo = data["Required"];
       setShowCombinedModal(false);
       if (isCashuPayment) {
         await handleCashuPayment(
@@ -378,6 +410,7 @@ export default function CartInvoiceCard({
           contact,
           contactType,
           contactInstructions,
+          additionalInfo,
         );
       } else {
         await handleLightningPayment(
@@ -392,6 +425,7 @@ export default function CartInvoiceCard({
           contact,
           contactType,
           contactInstructions,
+          additionalInfo,
         );
       }
     } catch (error) {
@@ -429,6 +463,7 @@ export default function CartInvoiceCard({
     contact?: string,
     contactType?: string,
     contactInstructions?: string,
+    additionalInfo?: string,
   ) => {
     try {
       setShowInvoiceCard(true);
@@ -482,6 +517,7 @@ export default function CartInvoiceCard({
         contact ? contact : undefined,
         contactType ? contactType : undefined,
         contactInstructions ? contactInstructions : undefined,
+        additionalInfo ? additionalInfo : undefined,
       );
     } catch (error) {
       console.error(error);
@@ -509,6 +545,7 @@ export default function CartInvoiceCard({
     contact?: string,
     contactType?: string,
     contactInstructions?: string,
+    additionalInfo?: string,
   ) {
     let encoded;
 
@@ -537,6 +574,7 @@ export default function CartInvoiceCard({
             contactType ? contactType : undefined,
             contactInstructions ? contactInstructions : undefined,
             hash,
+            additionalInfo ? additionalInfo : undefined,
           );
           localStorage.setItem("cart", JSON.stringify([]));
           setPaymentConfirmed(true);
@@ -577,11 +615,13 @@ export default function CartInvoiceCard({
     contactType?: string,
     contactInstructions?: string,
     hash?: string,
+    additionalInfo?: string,
   ) => {
     let remainingProofs = proofs;
     for (const product of products) {
       const title = product.title;
       const pubkey = product.pubkey;
+      const required = product.required;
       let tokenAmount = totalCostsInSats[pubkey];
       const { keep, send } = await wallet.send(tokenAmount, remainingProofs, {
         includeFees: true,
@@ -634,6 +674,19 @@ export default function CartInvoiceCard({
         await captureInvoicePaidmetric(hash, product);
       } else {
         await captureCashuPaidMetric(product);
+      }
+
+      if (required && required !== "") {
+        if (additionalInfo) {
+          let additionalMessage =
+            "Additional customer information: " + additionalInfo;
+          await sendPaymentAndContactMessage(
+            pubkey,
+            additionalMessage,
+            false,
+            product,
+          );
+        }
       }
 
       if (
@@ -874,6 +927,7 @@ export default function CartInvoiceCard({
     contact?: string,
     contactType?: string,
     contactInstructions?: string,
+    additionalInfo?: string,
   ) => {
     try {
       const mint = new CashuMint(mints[0]);
@@ -899,6 +953,7 @@ export default function CartInvoiceCard({
         contact ? contact : undefined,
         contactType ? contactType : undefined,
         contactInstructions ? contactInstructions : undefined,
+        additionalInfo ? additionalInfo : undefined,
       );
       const changeProofs = keep;
       const remainingProofs = tokens.filter(
@@ -1249,6 +1304,7 @@ export default function CartInvoiceCard({
         handleShippingSubmit={handleShippingSubmit}
         onShippingSubmit={onShippingSubmit}
         shippingControl={shippingControl}
+        requiredInfo={requiredInfo !== "" ? requiredInfo : undefined}
       />
 
       <ContactForm
@@ -1257,6 +1313,7 @@ export default function CartInvoiceCard({
         handleContactSubmit={handleContactSubmit}
         onContactSubmit={onContactSubmit}
         contactControl={contactControl}
+        requiredInfo={requiredInfo !== "" ? requiredInfo : undefined}
       />
 
       <CombinedContactForm
@@ -1265,6 +1322,7 @@ export default function CartInvoiceCard({
         handleCombinedSubmit={handleCombinedSubmit}
         onCombinedSubmit={onCombinedSubmit}
         combinedControl={combinedControl}
+        requiredInfo={requiredInfo !== "" ? requiredInfo : undefined}
       />
 
       {invoiceIsPaid || cashuPaymentSent ? (

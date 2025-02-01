@@ -96,7 +96,7 @@ export function MarketplacePage({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          id: loggedIn,
+          id: userPubkey,
         }),
       });
     }
@@ -220,7 +220,7 @@ export function MarketplacePage({
                           dropDownKeys={
                             reviewerPubkey === userPubkey
                               ? ["shop_settings"]
-                              : ["shop", "inquiry"]
+                              : ["shop", "inquiry", "copy_npub"]
                           }
                         />
                       </div>

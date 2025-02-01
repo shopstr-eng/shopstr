@@ -231,73 +231,6 @@ export const fetchCart = async (
                 }
               }
             }
-          } else if (signInMethod === "amber") {
-            const amberSignerUrl = `nostrsigner:${event.content}?pubKey=${userPubkey}&compressionType=none&returnType=signature&type=nip04_decrypt`;
-
-            await navigator.clipboard.writeText("");
-
-            window.open(amberSignerUrl, "_blank");
-
-            const readClipboard = (): Promise<string[][]> => {
-              return new Promise((resolve, reject) => {
-                const checkClipboard = async () => {
-                  try {
-                    if (!document.hasFocus()) {
-                      console.log("Document not focused, waiting for focus...");
-                      return;
-                    }
-
-                    const clipboardContent =
-                      await navigator.clipboard.readText();
-
-                    if (clipboardContent && clipboardContent !== "") {
-                      clearInterval(intervalId);
-                      let eventContent = clipboardContent;
-
-                      let parsedContent = JSON.parse(eventContent);
-
-                      resolve(parsedContent);
-                    } else {
-                      console.log("Waiting for new clipboard content...");
-                    }
-                  } catch (error) {
-                    console.error("Error reading clipboard:", error);
-                    reject(error);
-                  }
-                };
-
-                checkClipboard();
-                const intervalId = setInterval(checkClipboard, 1000);
-
-                setTimeout(() => {
-                  clearInterval(intervalId);
-                  console.log("Amber decryption timeout");
-                  alert("Amber decryption timed out. Please try again.");
-                }, 60000);
-              });
-            };
-
-            try {
-              let addressArray = await readClipboard();
-              cartAddressesArray = addressArray;
-              for (const addressElement of addressArray) {
-                let address = addressElement[1];
-                const [kind, pubkey, dTag] = address;
-                if (kind === "30402") {
-                  const foundEvent = products.find((event) =>
-                    event.tags.some((tag) => tag[0] === "d" && tag[1] === dTag),
-                  );
-                  if (foundEvent) {
-                    cartArrayFromRelay.push(
-                      parseTags(foundEvent) as ProductData,
-                    );
-                  }
-                }
-              }
-            } catch (error) {
-              console.error("Error reading clipboard:", error);
-              alert("Amber decryption failed. Please try again.");
-            }
           }
         },
         oneose() {
@@ -482,7 +415,6 @@ export const fetchGiftWrappedChatsAndMessages = async (
       await fetchChatMessagesFromCache();
     try {
       let chatsMap = new Map();
-      let chatsReachedEOSE = false;
 
       const addToChatsMap = (
         pubkeyOfChat: string,
@@ -493,20 +425,6 @@ export const fetchGiftWrappedChatsAndMessages = async (
           chatsMap.set(pubkeyOfChat, [event]);
         } else {
           chatsMap.get(pubkeyOfChat).push(event);
-        }
-      };
-
-      const onEOSE = () => {
-        if (chatsReachedEOSE) {
-          //sort chats by created_at
-          chatsMap.forEach((value) => {
-            value.sort(
-              (a: NostrMessageEvent, b: NostrMessageEvent) =>
-                a.created_at - b.created_at,
-            );
-          });
-          resolve({ profileSetFromChats: new Set(chatsMap.keys()) });
-          editChatContext(chatsMap, false);
         }
       };
 
@@ -560,7 +478,9 @@ export const fetchGiftWrappedChatsAndMessages = async (
                 }
               }
               let sealEvent = JSON.parse(sealEventString);
-              sealEvent = JSON.parse(sealEvent);
+              if (typeof sealEvent === "string") {
+                sealEvent = JSON.parse(sealEvent);
+              }
               if (sealEvent.kind === 13) {
                 const messageEventDecryptId = crypto.randomUUID();
                 await sendBunkerRequest(
@@ -612,74 +532,6 @@ export const fetchGiftWrappedChatsAndMessages = async (
                   messageEvent = messageEventCheck;
                 }
               }
-            } else if (signInMethod === "amber") {
-              const readClipboard = (): Promise<string> => {
-                return new Promise((resolve, reject) => {
-                  const checkClipboard = async () => {
-                    try {
-                      if (!document.hasFocus()) {
-                        console.log(
-                          "Document not focused, waiting for focus...",
-                        );
-                        return;
-                      }
-
-                      const clipboardContent =
-                        await navigator.clipboard.readText();
-
-                      if (clipboardContent && clipboardContent !== "") {
-                        clearInterval(intervalId);
-                        let eventContent = clipboardContent;
-
-                        let parsedContent = JSON.parse(eventContent);
-
-                        resolve(parsedContent);
-                      } else {
-                        console.log("Waiting for new clipboard content...");
-                      }
-                    } catch (error) {
-                      console.error("Error reading clipboard:", error);
-                      reject(error);
-                    }
-                  };
-
-                  checkClipboard();
-                  const intervalId = setInterval(checkClipboard, 1000);
-
-                  setTimeout(() => {
-                    clearInterval(intervalId);
-                    console.log("Amber decryption timeout");
-                    alert("Amber decryption timed out. Please try again.");
-                  }, 60000);
-                });
-              };
-
-              try {
-                const giftWrapAmberSignerUrl = `nostrsigner:${event.content}?pubKey=${event.pubkey}&compressionType=none&returnType=signature&type=nip44_decrypt`;
-
-                await navigator.clipboard.writeText("");
-
-                window.open(giftWrapAmberSignerUrl, "_blank");
-
-                let sealEventString = await readClipboard();
-                let sealEvent = JSON.parse(sealEventString);
-                if (sealEvent.kind == 13) {
-                  const sealAmberSignerUrl = `nostrsigner:${sealEvent.content}?pubKey=${event.pubkey}&compressionType=none&returnType=signature&type=nip44_decrypt`;
-
-                  await navigator.clipboard.writeText("");
-
-                  window.open(sealAmberSignerUrl, "_blank");
-
-                  let messageEventString = await readClipboard();
-                  let messageEventCheck = JSON.parse(messageEventString);
-                  if (messageEventCheck.pubkey === sealEvent.pubkey) {
-                    messageEvent = messageEventCheck;
-                  }
-                }
-              } catch (error) {
-                console.error("Error reading clipboard:", error);
-                alert("Amber decryption failed. Please try again.");
-              }
             }
             let senderPubkey = messageEvent.pubkey;
             let tagsMap: Map<string, string> = new Map(
@@ -722,16 +574,16 @@ export const fetchGiftWrappedChatsAndMessages = async (
             } else if (chatMessage) {
               addToChatsMap(senderPubkey, chatMessage);
             }
-            if (chatsReachedEOSE) {
-              editChatContext(chatsMap, false);
-            }
           },
-          async oneose() {
-            chatsReachedEOSE = true;
-            onEOSE();
-          },
-          onclose(reasons) {
-            console.log(reasons);
+          oneose() {
+            chatsMap.forEach((value) => {
+              value.sort(
+                (a: NostrMessageEvent, b: NostrMessageEvent) =>
+                  a.created_at - b.created_at,
+              );
+            });
+            resolve({ profileSetFromChats: new Set(chatsMap.keys()) });
+            editChatContext(chatsMap, false);
           },
         },
       );
@@ -1180,8 +1032,8 @@ export const fetchCashuWallet = async (
         kinds: [7375, 7376],
         authors: [userPubkey],
       };
-      
-      const queue:any = [];
+
+      const queue: any = [];
       const handleWSubscription = new Promise<void>((resolveW) => {
         let w = pool.subscribeMany(
           cashuRelays.length !== 0 ? cashuRelays : relays,
@@ -1212,7 +1064,9 @@ export const fetchCashuWallet = async (
                     while (!eventContent) {
                       eventContent = await awaitBunkerResponse(decryptId);
                       if (!eventContent) {
-                        await new Promise((resolve) => setTimeout(resolve, 2100));
+                        await new Promise((resolve) =>
+                          setTimeout(resolve, 2100),
+                        );
                       }
                     }
                     if (eventContent) {
@@ -1232,62 +1086,6 @@ export const fetchCashuWallet = async (
                       conversationKey,
                     );
                     cashuWalletEventContent = JSON.parse(eventContent);
-                  } else if (signInMethod === "amber") {
-                    const amberSignerUrl = `nostrsigner:${event.content}?pubKey=${
-                      getLocalStorageData().userPubkey
-                    }&compressionType=none&returnType=signature&type=nip44_decrypt`;
-
-                    await navigator.clipboard.writeText("");
-
-                    window.open(amberSignerUrl, "_blank");
-
-                    const readClipboard = (): Promise<string> => {
-                      return new Promise((resolve, reject) => {
-                        const checkClipboard = async () => {
-                          try {
-                            if (!document.hasFocus()) {
-                              console.log(
-                                "Document not focused, waiting for focus...",
-                              );
-                              return;
-                            }
-
-                            const clipboardContent =
-                              await navigator.clipboard.readText();
-
-                            if (clipboardContent && clipboardContent !== "") {
-                              clearInterval(intervalId);
-                              let eventContent = clipboardContent;
-
-                              let parsedContent = JSON.parse(eventContent);
-
-                              resolve(parsedContent);
-                            } else {
-                              console.log("Waiting for new clipboard content...");
-                            }
-                          } catch (error) {
-                            console.error("Error reading clipboard:", error);
-                            reject(error);
-                          }
-                        };
-
-                        checkClipboard();
-                        const intervalId = setInterval(checkClipboard, 1000);
-
-                        setTimeout(() => {
-                          clearInterval(intervalId);
-                          console.log("Amber decryption timeout");
-                          alert("Amber decryption timed out. Please try again.");
-                        }, 60000);
-                      });
-                    };
-
-                    try {
-                      cashuWalletEventContent = await readClipboard();
-                    } catch (error) {
-                      console.error("Error reading clipboard:", error);
-                      alert("Amber decryption failed. Please try again.");
-                    }
                   }
                   if (
                     event.kind === 7375 &&
@@ -1339,7 +1137,7 @@ export const fetchCashuWallet = async (
             oneose() {
               queue.push(async () => {
                 w.close();
-                cashuMints.forEach(async (mint) => {
+                for (const mint of cashuMints) {
                   try {
                     let wallet = new CashuWallet(new CashuMint(mint));
                     if (cashuProofs.length > 0) {
@@ -1411,7 +1209,8 @@ export const fetchCashuWallet = async (
                     const proofExists = (proof: Proof, proofArray: Proof[]) =>
                       proofArray.some(
                         (existingProof) =>
-                          JSON.stringify(existingProof) === JSON.stringify(proof),
+                          JSON.stringify(existingProof) ===
+                          JSON.stringify(proof),
                       );
 
                     arrayOfProofsToAddBack.forEach((proofsToAddBack) => {
@@ -1428,7 +1227,7 @@ export const fetchCashuWallet = async (
                   } catch (error) {
                     console.log("Error checking spent proofs: ", error);
                   }
-                });
+                }
               });
               resolveW();
             },
@@ -1439,7 +1238,7 @@ export const fetchCashuWallet = async (
       await handleHSubscription;
       await handleWSubscription;
 
-      for(const q of queue){
+      for (const q of queue) {
         await q();
       }
 

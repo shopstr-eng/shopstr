@@ -20,8 +20,7 @@ export default function Landing() {
   useEffect(() => {
     if (
       router.pathname === "/" &&
-      (getLocalStorageData().signInMethod === "amber" ||
-        getLocalStorageData().signInMethod === "bunker" ||
+      (getLocalStorageData().signInMethod === "bunker" ||
         getLocalStorageData().signInMethod === "extension" ||
         getLocalStorageData().signInMethod === "nsec")
     ) {
