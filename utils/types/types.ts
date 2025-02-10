@@ -37,6 +37,7 @@ export interface ProfileData {
     banner?: string;
     lud16?: string;
     nip05?: string;
+    shopstr_donation?: number;
   };
   created_at: number;
 }
