@@ -465,7 +465,7 @@ const UserProfilePage = () => {
                       }}
                       variant="bordered"
                       fullWidth
-                      label="Shopstr Donation (%)"
+                      label="Shopstr donation (%)"
                       labelPlacement="outside"
                       onChange={onChange}
                       onBlur={onBlur}
