@@ -690,18 +690,6 @@ export default function CartInvoiceCard({
         );
       }
 
-      if (donationToken) {
-        donationMessage = "Sale donation: " + donationToken;
-        await sendPaymentAndContactMessage(
-          "a37118a4888e02d28e8767c08caaf73b49abdac391ad7ff18a304891e416dc33",
-          donationMessage,
-          false,
-          product,
-          false,
-          true,
-        );
-      }
-
       if (required && required !== "") {
         if (additionalInfo) {
           let additionalMessage =
