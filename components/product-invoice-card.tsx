@@ -1,5 +1,9 @@
 import React, { useContext, useState, useEffect } from "react";
-import { CashuWalletContext, ChatsContext } from "../utils/context/context";
+import {
+  CashuWalletContext,
+  ChatsContext,
+  ProfileMapContext,
+} from "../utils/context/context";
 import { useRouter } from "next/router";
 import { useForm } from "react-hook-form";
 import {
@@ -88,6 +92,7 @@ export default function ProductInvoiceCard({
     getLocalStorageData();
 
   const chatsContext = useContext(ChatsContext);
+  const profileContext = useContext(ProfileMapContext);
 
   const [enterPassphrase, setEnterPassphrase] = useState(false);
   const [passphrase, setPassphrase] = useState("");
@@ -180,34 +185,47 @@ export default function ProductInvoiceCard({
     message: string,
     isPayment?: boolean,
     isReceipt?: boolean,
+    isDonation?: boolean,
   ) => {
     let decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
     let decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
     let decodedRandomPubkeyForReceiver = nip19.decode(randomNpubForReceiver);
     let decodedRandomPrivkeyForReceiver = nip19.decode(randomNsecForReceiver);
 
+    let messageSubject = "";
+    if (isPayment) {
+      messageSubject = "order-payment";
+    } else if (isReceipt) {
+      messageSubject = "order-receipt";
+    } else if (isDonation) {
+      messageSubject = "donation";
+    } else {
+      messageSubject = "order-info";
+    }
+
+    let giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
+      decodedRandomPubkeyForSender.data as string,
+      pubkeyToReceiveMessage,
+      message,
+      messageSubject,
+      productData,
+    );
+    let sealedEvent = await constructMessageSeal(
+      giftWrappedMessageEvent,
+      decodedRandomPubkeyForSender.data as string,
+      pubkeyToReceiveMessage,
+      undefined,
+      decodedRandomPrivkeyForSender.data as Uint8Array,
+    );
+    let giftWrappedEvent = await constructMessageGiftWrap(
+      sealedEvent,
+      decodedRandomPubkeyForReceiver.data as string,
+      decodedRandomPrivkeyForReceiver.data as Uint8Array,
+      pubkeyToReceiveMessage,
+    );
+    await sendGiftWrappedMessageEvent(giftWrappedEvent);
+
     if (isReceipt) {
-      let giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
-        decodedRandomPubkeyForSender.data as string,
-        userPubkey,
-        message,
-        "order-receipt",
-        productData,
-      );
-      let sealedEvent = await constructMessageSeal(
-        giftWrappedMessageEvent,
-        decodedRandomPubkeyForSender.data as string,
-        userPubkey,
-        undefined,
-        decodedRandomPrivkeyForSender.data as Uint8Array,
-      );
-      let giftWrappedEvent = await constructMessageGiftWrap(
-        sealedEvent,
-        decodedRandomPubkeyForReceiver.data as string,
-        decodedRandomPrivkeyForReceiver.data as Uint8Array,
-        userPubkey,
-      );
-      await sendGiftWrappedMessageEvent(giftWrappedEvent);
       chatsContext.addNewlyCreatedMessageEvent(
         {
           ...giftWrappedMessageEvent,
@@ -219,39 +237,6 @@ export default function ProductInvoiceCard({
       addChatMessagesToCache([
         { ...giftWrappedMessageEvent, sig: "", read: false },
       ]);
-    } else {
-      let giftWrappedMessageEvent;
-      if (isPayment) {
-        giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
-          decodedRandomPubkeyForSender.data as string,
-          pubkeyToReceiveMessage,
-          message,
-          "order-payment",
-          productData,
-        );
-      } else {
-        giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
-          decodedRandomPubkeyForSender.data as string,
-          pubkeyToReceiveMessage,
-          message,
-          "order-info",
-          productData,
-        );
-      }
-      let sealedEvent = await constructMessageSeal(
-        giftWrappedMessageEvent,
-        decodedRandomPubkeyForSender.data as string,
-        pubkeyToReceiveMessage,
-        undefined,
-        decodedRandomPrivkeyForSender.data as Uint8Array,
-      );
-      let giftWrappedEvent = await constructMessageGiftWrap(
-        sealedEvent,
-        decodedRandomPubkeyForReceiver.data as string,
-        decodedRandomPrivkeyForReceiver.data as Uint8Array,
-        pubkeyToReceiveMessage,
-      );
-      await sendGiftWrappedMessageEvent(giftWrappedEvent);
     }
   };
 
@@ -402,7 +387,7 @@ export default function ProductInvoiceCard({
   };
 
   const handleLightningPayment = async (
-    newPrice: number,
+    convertedPrice: number,
     shippingName?: string,
     shippingAddress?: string,
     shippingUnitNo?: string,
@@ -420,7 +405,7 @@ export default function ProductInvoiceCard({
       const wallet = new CashuWallet(new CashuMint(mints[0]));
 
       const { request: pr, quote: hash } =
-        await wallet.createMintQuote(newPrice);
+        await wallet.createMintQuote(convertedPrice);
 
       setInvoice(pr);
 
@@ -455,7 +440,7 @@ export default function ProductInvoiceCard({
       }
       await invoiceHasBeenPaid(
         wallet,
-        newPrice,
+        convertedPrice,
         hash,
         shippingName ? shippingName : undefined,
         shippingAddress ? shippingAddress : undefined,
@@ -497,18 +482,14 @@ export default function ProductInvoiceCard({
     contactInstructions?: string,
     additionalInfo?: string,
   ) {
-    let encoded;
-
     while (true) {
       try {
         const proofs = await wallet.mintProofs(newPrice, hash);
-        encoded = getEncodedToken({
-          mint: mints[0],
-          proofs,
-        });
-        if (encoded !== "" && encoded !== undefined) {
+        if (proofs) {
           await sendTokens(
-            encoded,
+            wallet,
+            proofs,
+            newPrice,
             shippingName ? shippingName : undefined,
             shippingAddress ? shippingAddress : undefined,
             shippingUnitNo ? shippingUnitNo : undefined,
@@ -547,7 +528,9 @@ export default function ProductInvoiceCard({
   }
 
   const sendTokens = async (
-    token: string,
+    wallet: CashuWallet,
+    proofs: Proof[],
+    totalPrice: number,
     shippingName?: string,
     shippingAddress?: string,
     shippingUnitNo?: string,
@@ -560,28 +543,76 @@ export default function ProductInvoiceCard({
     contactInstructions?: string,
     additionalInfo?: string,
   ) => {
-    const { title } = productData;
-    let paymentMessage;
-    if (userNPub) {
-      paymentMessage =
-        "This is a Cashu token payment from " +
-        userNPub +
-        " for your " +
-        title +
-        " listing on Shopstr: " +
-        token;
-    } else {
-      paymentMessage =
-        "This is a Cashu token payment for your " +
-        title +
-        " listing on Shopstr: " +
-        token;
-    }
-    await sendPaymentAndContactMessage(
+    let remainingProofs = proofs;
+    let sellerToken;
+    let donationToken;
+    const sellerProfile = profileContext.profileData.get(
       pubkeyOfProductBeingSold,
-      paymentMessage,
-      true,
     );
+    const donationPercentage = sellerProfile?.content?.shopstr_donation || 2.1;
+    const donationAmount = Math.ceil((totalPrice * donationPercentage) / 100);
+    const sellerAmount = totalPrice - donationAmount;
+
+    if (sellerAmount > 0) {
+      const { keep, send } = await wallet.send(sellerAmount, remainingProofs, {
+        includeFees: true,
+      });
+      sellerToken = getEncodedToken({
+        mint: mints[0],
+        proofs: send,
+      });
+      remainingProofs = keep;
+    }
+
+    if (donationAmount > 0) {
+      const { keep, send } = await wallet.send(
+        donationAmount,
+        remainingProofs,
+        {
+          includeFees: true,
+        },
+      );
+      donationToken = getEncodedToken({
+        mint: mints[0],
+        proofs: send,
+      });
+      remainingProofs = keep;
+    }
+    const { title } = productData;
+    let paymentMessage = "";
+    let donationMessage = "";
+    if (sellerToken) {
+      if (userNPub) {
+        paymentMessage =
+          "This is a Cashu token payment from " +
+          userNPub +
+          " for your " +
+          title +
+          " listing on Shopstr: " +
+          sellerToken;
+      } else {
+        paymentMessage =
+          "This is a Cashu token payment for your " +
+          title +
+          " listing on Shopstr: " +
+          sellerToken;
+      }
+      await sendPaymentAndContactMessage(
+        pubkeyOfProductBeingSold,
+        paymentMessage,
+        true,
+      );
+    }
+    if (donationToken) {
+      donationMessage = "Sale donation: " + donationToken;
+      await sendPaymentAndContactMessage(
+        "a37118a4888e02d28e8767c08caaf73b49abdac391ad7ff18a304891e416dc33",
+        donationMessage,
+        false,
+        false,
+        true,
+      );
+    }
 
     if (additionalInfo) {
       let additionalMessage =
@@ -845,12 +876,10 @@ export default function ProductInvoiceCard({
       const { keep, send } = await wallet.send(price, filteredProofs, {
         includeFees: true,
       });
-      const encodedSendToken = getEncodedToken({
-        mint: mints[0],
-        proofs: send,
-      });
       await sendTokens(
-        encodedSendToken,
+        wallet,
+        send,
+        price,
         shippingName ? shippingName : undefined,
         shippingAddress ? shippingAddress : undefined,
         shippingUnitNo ? shippingUnitNo : undefined,

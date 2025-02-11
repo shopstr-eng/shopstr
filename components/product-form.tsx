@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useEffect, useState, useContext } from "react";
 import Link from "next/link";
 import CryptoJS from "crypto-js";
+import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
 import {
   Modal,
@@ -29,7 +30,7 @@ import {
 import { CATEGORIES, SHIPPING_OPTIONS } from "./utility/STATIC-VARIABLES";
 import LocationDropdown from "./utility-components/dropdowns/location-dropdown";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
-import { ProductContext } from "../utils/context/context";
+import { ProductContext, ProfileMapContext } from "../utils/context/context";
 import { capturePostListingMetric } from "./utility/metrics-helper-functions";
 import { addProductToCache } from "../pages/api/nostr/cache-service";
 import { ProductData } from "./utility/product-parser-functions";
@@ -60,6 +61,7 @@ export default function NewForm({
   handleDelete,
   onSubmitCallback,
 }: ProductFormProps) {
+  const router = useRouter();
   const [passphrase, setPassphrase] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [imageError, setImageError] = useState<string | null>(null);
@@ -71,6 +73,7 @@ export default function NewForm({
     useState(false);
   const [showOptionalTags, setShowOptionalTags] = useState(false);
   const productEventContext = useContext(ProductContext);
+  const profileContext = useContext(ProfileMapContext);
   const { handleSubmit, control, reset, watch } = useForm({
     defaultValues: oldValues
       ? {
@@ -461,6 +464,23 @@ export default function NewForm({
                 );
               }}
             />
+
+            <div className="mx-4 my-2 flex items-center justify-center text-center">
+              <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
+              <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+                Your donation rate on sales is set to{" "}
+                {profileContext.profileData.get(pubkey)?.content
+                  ?.shopstr_donation || 2.1}
+                %. You can modify this in your{" "}
+                <span
+                  className="cursor-pointer underline hover:text-purple-500 dark:hover:text-yellow-500"
+                  onClick={() => router.push("/settings/user-profile")}
+                >
+                  profile settings
+                </span>
+                .
+              </p>
+            </div>
 
             <Controller
               name="Location"

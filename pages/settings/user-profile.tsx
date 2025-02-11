@@ -46,6 +46,7 @@ const UserProfilePage = () => {
       about: "",
       website: "",
       lud16: "", // Lightning address
+      shopstr_donation: 2.1,
     },
   });
 
@@ -448,6 +449,29 @@ const UserProfilePage = () => {
                       />
                     );
                   }}
+                />
+                <Controller
+                  name="shopstr_donation"
+                  control={control}
+                  render={({ field: { onChange, onBlur, value } }) => (
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.1}
+                      className="pb-4 text-light-text dark:text-dark-text"
+                      classNames={{
+                        label: "text-light-text dark:text-dark-text text-lg",
+                      }}
+                      variant="bordered"
+                      fullWidth
+                      label="Shopstr donation (%)"
+                      labelPlacement="outside"
+                      onChange={onChange}
+                      onBlur={onBlur}
+                      value={value.toString()}
+                    />
+                  )}
                 />
 
                 <Button
