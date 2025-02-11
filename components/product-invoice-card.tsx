@@ -482,12 +482,10 @@ export default function ProductInvoiceCard({
     contactInstructions?: string,
     additionalInfo?: string,
   ) {
-    let encoded;
-
     while (true) {
       try {
         const proofs = await wallet.mintProofs(newPrice, hash);
-        if (encoded !== "" && encoded !== undefined) {
+        if (proofs) {
           await sendTokens(
             wallet,
             proofs,

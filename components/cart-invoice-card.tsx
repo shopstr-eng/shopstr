@@ -532,19 +532,11 @@ export default function CartInvoiceCard({
     contactInstructions?: string,
     additionalInfo?: string,
   ) {
-    let encoded;
-
     while (true) {
       try {
         const proofs = await wallet.mintProofs(convertedPrice, hash);
 
-        // Encoded proofs can be spent at the mint
-        encoded = getEncodedToken({
-          mint: mints[0],
-          proofs,
-        });
-
-        if (encoded) {
+        if (proofs) {
           await sendTokens(
             wallet,
             proofs,
