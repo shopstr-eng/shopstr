@@ -1198,7 +1198,9 @@ export const fetchCashuWallet = async (
                     let inProofIds = incomingSpendingHistory
                       .filter((eventTags) =>
                         eventTags.some(
-                          (tag) => tag[0] === "direction" && tag[1] === "out",
+                          (tag) =>
+                            tag[0] === "direction" &&
+                            (tag[1] === "out" || tag[1] === "in"),
                         ),
                       )
                       .map((eventTags) => {
