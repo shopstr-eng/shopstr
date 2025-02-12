@@ -89,24 +89,25 @@ const Wallet = () => {
               )
             : 0;
         setTotalBalance(tokensTotal);
-      }
 
-      const newFilteredProofs = newTokens.filter(
-        (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id),
-      );
-      const newWalletTotal =
-        newFilteredProofs.length >= 1
-          ? newFilteredProofs.reduce(
-              (acc: number, p: Proof) => acc + p.amount,
-              0,
-            )
-          : 0;
-      setWalletBalance(newWalletTotal);
+        if (mintKeySetIds) {
+          const newFilteredProofs = newTokens.filter((p: Proof) =>
+            mintKeySetIds.some((keysetId: MintKeyset) => keysetId.id === p.id),
+          );
+          const newWalletTotal =
+            newFilteredProofs.length >= 1
+              ? newFilteredProofs.reduce(
+                  (acc: number, p: Proof) => acc + p.amount,
+                  0,
+                )
+              : 0;
+          setWalletBalance(newWalletTotal);
+        }
+      }
     }, 2100);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [mintKeySetIds]);
 
   const handleMintClick = () => {
     router.push("/settings/preferences");

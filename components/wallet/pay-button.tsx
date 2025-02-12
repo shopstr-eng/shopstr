@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from "react";
+import { useContext, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { useTheme } from "next-themes";
 import {
@@ -19,9 +19,7 @@ import {
 } from "@nextui-org/react";
 import {
   getLocalStorageData,
-  publishWalletEvent,
   publishProofEvent,
-  publishSpendingHistoryEvent,
 } from "../utility/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { CashuMint, CashuWallet, MintKeyset, Proof } from "@cashu/cashu-ts";
@@ -42,23 +40,12 @@ const PayButton = ({ passphrase }: { passphrase?: string }) => {
   const { theme } = useTheme();
 
   const walletContext = useContext(CashuWalletContext);
-  const [dTag, setDTag] = useState("");
 
   const {
     handleSubmit: handlePaySubmit,
     control: payControl,
     reset: payReset,
   } = useForm();
-
-  useEffect(() => {
-    const walletEvent = walletContext.mostRecentWalletEvent;
-    if (walletEvent?.tags) {
-      const walletTag = walletEvent.tags.find(
-        (tag: string[]) => tag[0] === "d",
-      )?.[1];
-      setDTag(walletTag);
-    }
-  }, [walletContext]);
 
   const handleTogglePayModal = () => {
     payReset();
@@ -102,6 +89,40 @@ const PayButton = ({ passphrase }: { passphrase?: string }) => {
       const { keep, send } = await wallet.send(meltQuoteTotal, filteredProofs, {
         includeFees: true,
       });
+      const deletedEventIds = [
+        ...new Set([
+          ...walletContext.proofEvents
+            .filter((event) =>
+              event.proofs.some((proof: Proof) =>
+                filteredProofs.some(
+                  (filteredProof) =>
+                    JSON.stringify(proof) === JSON.stringify(filteredProof),
+                ),
+              ),
+            )
+            .map((event) => event.id),
+          ...walletContext.proofEvents
+            .filter((event) =>
+              event.proofs.some((proof: Proof) =>
+                keep.some(
+                  (keepProof) =>
+                    JSON.stringify(proof) === JSON.stringify(keepProof),
+                ),
+              ),
+            )
+            .map((event) => event.id),
+          ...walletContext.proofEvents
+            .filter((event) =>
+              event.proofs.some((proof: Proof) =>
+                send.some(
+                  (sendProof) =>
+                    JSON.stringify(proof) === JSON.stringify(sendProof),
+                ),
+              ),
+            )
+            .map((event) => event.id),
+        ]),
+      ];
       const meltResponse = await wallet.meltProofs(meltQuote, send);
       const changeProofs = [...keep, ...meltResponse.change];
       const changeAmount =
@@ -138,23 +159,18 @@ const PayButton = ({ passphrase }: { passphrase?: string }) => {
           ...history,
         ]),
       );
-      const eventIds = walletContext.proofEvents.map((event) => event.id);
-      await publishSpendingHistoryEvent(
+      await publishProofEvent(
+        mints[0],
+        changeProofs && changeProofs.length >= 1 ? changeProofs : [],
         "out",
-        String(transactionAmount),
-        eventIds,
+        transactionAmount.toString(),
         passphrase,
-        dTag,
+        deletedEventIds,
       );
-      if (changeProofs && changeProofs.length > 0) {
-        await publishProofEvent(mints[0], changeProofs, "in", passphrase, dTag);
-      }
-      await publishWalletEvent(passphrase, dTag);
       setIsPaid(true);
       setIsRedeeming(false);
       handleTogglePayModal();
-    } catch (error) {
-      console.log(error);
+    } catch (_) {
       setPaymentFailed(true);
       setIsRedeeming(false);
     }
@@ -228,8 +244,8 @@ const PayButton = ({ passphrase }: { passphrase?: string }) => {
                           onChange(newValue);
                           try {
                             await calculateFee(newValue);
-                          } catch (error) {
-                            console.log(error);
+                          } catch (_) {
+                            setFeeReserveAmount("");
                           }
                         }}
                         onBlur={onBlur} // notify when input is touched/blur

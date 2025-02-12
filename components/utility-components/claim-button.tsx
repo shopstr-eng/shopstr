@@ -15,14 +15,9 @@ import {
   XCircleIcon,
 } from "@heroicons/react/24/outline";
 import { useTheme } from "next-themes";
-import {
-  ProfileMapContext,
-  CashuWalletContext,
-  ChatsContext,
-} from "../../utils/context/context";
+import { ProfileMapContext, ChatsContext } from "../../utils/context/context";
 import {
   getLocalStorageData,
-  publishWalletEvent,
   publishProofEvent,
   constructGiftWrappedMessageEvent,
   constructMessageSeal,
@@ -70,9 +65,6 @@ export default function ClaimButton({
   const [isSpent, setIsSpent] = useState(false);
   const [isInvalidToken, setIsInvalidToken] = useState(false);
   const [isDuplicateToken, setIsDuplicateToken] = useState(false);
-
-  const walletContext = useContext(CashuWalletContext);
-  const [dTag, setDTag] = useState("");
 
   const { mints, tokens, history } = getLocalStorageData();
 
@@ -166,16 +158,6 @@ export default function ClaimButton({
     );
   }, [profileContext, tokenMint]);
 
-  useEffect(() => {
-    const walletEvent = walletContext.mostRecentWalletEvent;
-    if (walletEvent?.tags) {
-      const walletTag = walletEvent.tags.find(
-        (tag: string[]) => tag[0] === "d",
-      )?.[1];
-      setDTag(walletTag);
-    }
-  }, [walletContext]);
-
   const handleClaimType = (type: string) => {
     if (type === "receive") {
       receive(false);
@@ -218,8 +200,8 @@ export default function ClaimButton({
           tokenMint,
           uniqueProofs,
           "in",
+          tokenAmount.toString(),
           passphrase,
-          dTag,
         );
         const tokenArray = [...tokens, ...uniqueProofs];
         localStorage.setItem("tokens", JSON.stringify(tokenArray));
@@ -244,13 +226,11 @@ export default function ClaimButton({
             ...history,
           ]),
         );
-        await publishWalletEvent(passphrase, dTag);
       } else {
         setIsSpent(true);
         setIsRedeeming(false);
       }
-    } catch (error) {
-      console.log(error);
+    } catch (_) {
       setIsInvalidToken(true);
       setIsRedeeming(false);
     }
@@ -339,8 +319,7 @@ export default function ClaimButton({
       } else {
         throw new Error("Wallet not initialized");
       }
-    } catch (error) {
-      console.log(error);
+    } catch (_) {
       setIsPaid(false);
       setOpenRedemptionModal(true);
       setIsRedeeming(false);

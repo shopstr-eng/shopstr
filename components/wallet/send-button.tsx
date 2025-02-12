@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import {
   ArrowUpTrayIcon,
@@ -24,9 +24,7 @@ import {
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import {
   getLocalStorageData,
-  publishWalletEvent,
   publishProofEvent,
-  publishSpendingHistoryEvent,
 } from "../utility/nostr-helper-functions";
 import {
   CashuMint,
@@ -45,7 +43,6 @@ const SendButton = ({ passphrase }: { passphrase?: string }) => {
   const [sendFailed, setSendFailed] = useState(false);
 
   const walletContext = useContext(CashuWalletContext);
-  const [dTag, setDTag] = useState("");
 
   const { mints, tokens, history, signInMethod } = getLocalStorageData();
 
@@ -54,16 +51,6 @@ const SendButton = ({ passphrase }: { passphrase?: string }) => {
     control: sendControl,
     reset: sendReset,
   } = useForm();
-
-  useEffect(() => {
-    const walletEvent = walletContext.mostRecentWalletEvent;
-    if (walletEvent?.tags) {
-      const walletTag = walletEvent.tags.find(
-        (tag: string[]) => tag[0] === "d",
-      )?.[1];
-      setDTag(walletTag);
-    }
-  }, [walletContext]);
 
   const handleToggleSendModal = () => {
     sendReset();
@@ -92,6 +79,42 @@ const SendButton = ({ passphrase }: { passphrase?: string }) => {
       const { keep, send } = await wallet.send(sendTotal, filteredProofs, {
         includeFees: true,
       });
+
+      const deletedEventIds = [
+        ...new Set([
+          ...walletContext.proofEvents
+            .filter((event) =>
+              event.proofs.some((proof: Proof) =>
+                filteredProofs.some(
+                  (filteredProof) =>
+                    JSON.stringify(proof) === JSON.stringify(filteredProof),
+                ),
+              ),
+            )
+            .map((event) => event.id),
+          ...walletContext.proofEvents
+            .filter((event) =>
+              event.proofs.some((proof: Proof) =>
+                keep.some(
+                  (keepProof) =>
+                    JSON.stringify(proof) === JSON.stringify(keepProof),
+                ),
+              ),
+            )
+            .map((event) => event.id),
+          ...walletContext.proofEvents
+            .filter((event) =>
+              event.proofs.some((proof: Proof) =>
+                send.some(
+                  (sendProof) =>
+                    JSON.stringify(proof) === JSON.stringify(sendProof),
+                ),
+              ),
+            )
+            .map((event) => event.id),
+        ]),
+      ];
+
       const encodedSendToken = getEncodedToken({
         mint: mints[0],
         proofs: send,
@@ -117,20 +140,15 @@ const SendButton = ({ passphrase }: { passphrase?: string }) => {
           ...history,
         ]),
       );
-      const eventIds = walletContext.proofEvents.map((event) => event.id);
-      await publishSpendingHistoryEvent(
+      await publishProofEvent(
+        mints[0],
+        changeProofs && changeProofs.length >= 1 ? changeProofs : [],
         "out",
-        String(numSats),
-        eventIds,
+        sendTotal.toString(),
         passphrase,
-        dTag,
+        deletedEventIds,
       );
-      if (changeProofs && changeProofs.length > 0) {
-        await publishProofEvent(mints[0], changeProofs, "in", passphrase, dTag);
-      }
-      await publishWalletEvent(passphrase, dTag);
-    } catch (error) {
-      console.log(error);
+    } catch (_) {
       setSendFailed(true);
     }
   };
