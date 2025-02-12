@@ -481,7 +481,7 @@ function App({ Component, pageProps }: AppProps) {
           getLocalStorageData().signInMethod === "extension" ||
           getLocalStorageData().signInMethod === "bunker"
         ) {
-          let { proofEvents, cashuMints, cashuProofs } = await fetchCashuWallet(
+          let { cashuMints, cashuProofs } = await fetchCashuWallet(
             allRelays,
             editCashuWalletContext,
             passphrase,

@@ -99,10 +99,10 @@ const PreferencesPage = () => {
       if (response.ok) {
         if (!mints.includes(newMint)) {
           setMints([newMint, ...mints]);
-          await publishWalletEvent(passphrase);
         } else {
           setMints([newMint, ...mints.filter((mint) => mint !== newMint)]);
         }
+        await publishWalletEvent(passphrase);
         handleToggleMintModal();
       } else {
         setFailureText(
