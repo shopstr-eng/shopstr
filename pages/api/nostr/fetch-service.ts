@@ -160,7 +160,7 @@ export const fetchCart = async (
               cartAddressesArray = addressArray;
               for (const addressElement of addressArray) {
                 let address = addressElement[1];
-                const [kind, pubkey, dTag] = address;
+                const [kind, _, dTag] = address;
                 if (kind === "30402") {
                   const foundEvent = products.find((event) =>
                     event.tags.some((tag) => tag[0] === "d" && tag[1] === dTag),
@@ -194,7 +194,7 @@ export const fetchCart = async (
               cartAddressesArray = addressArray;
               for (const addressElement of addressArray) {
                 let address = addressElement[1];
-                const [kind, pubkey, dTag] = address;
+                const [kind, _, dTag] = address;
                 if (kind === "30402") {
                   const foundEvent = products.find((event) =>
                     event.tags.some((tag) => tag[0] === "d" && tag[1] === dTag),
@@ -221,7 +221,7 @@ export const fetchCart = async (
             cartAddressesArray = addressArray;
             for (const addressElement of addressArray) {
               let address = addressElement[1];
-              const [kind, pubkey, dTag] = address;
+              const [kind, _, dTag] = address;
               if (kind === "30402") {
                 const foundEvent = products.find((event) =>
                   event.tags.some((tag) => tag[0] === "d" && tag[1] === dTag),
@@ -636,7 +636,7 @@ export const fetchReviews = async (
           const addressTag = event.tags.find((tag) => tag[0] === "d")?.[1];
           if (!addressTag) return;
 
-          const [_, kind, merchantPubkey, productDTag] = addressTag.split(":");
+          const [_, _kind, merchantPubkey, productDTag] = addressTag.split(":");
           if (!merchantPubkey || !productDTag) return;
 
           const ratingTags = event.tags.filter((tag) => tag[0] === "rating");
@@ -690,8 +690,8 @@ export const fetchReviews = async (
           }
         },
         oneose() {
-          productReviewsMap.forEach((merchantProducts, merchantPubkey) => {
-            merchantProducts.forEach((productReviews, productDTag) => {
+          productReviewsMap.forEach((merchantProducts, _) => {
+            merchantProducts.forEach((productReviews, _) => {
               productReviews.forEach((review, reviewerPubkey) => {
                 // Filter out the created_at entries
                 const cleanedReview = review.filter(
@@ -961,18 +961,14 @@ export const fetchAllRelays = async (
 export const fetchCashuWallet = async (
   relays: string[],
   editCashuWalletContext: (
-    walletEvents: NostrEvent,
     proofEvents: any[],
-    cashuWalletRelays: string[],
     cashuMints: string[],
     cashuProofs: Proof[],
     isLoading: boolean,
   ) => void,
   passphrase?: string,
 ): Promise<{
-  mostRecentWalletEvent: NostrEvent;
   proofEvents: any[];
-  cashuWalletRelays: string[];
   cashuMints: string[];
   cashuProofs: Proof[];
 }> => {
@@ -995,15 +991,25 @@ export const fetchCashuWallet = async (
       const pool = new SimplePool();
 
       const cashuWalletFilter: Filter = {
-        kinds: [37375],
+        kinds: [17375, 37375],
         authors: [userPubkey],
       };
 
       const handleHSubscription = new Promise<void>((resolveH) => {
         let h = pool.subscribeMany(relays, [cashuWalletFilter], {
           onevent: async (event) => {
-            if (
-              mostRecentWalletEvent.length === 0 ||
+            if (event.kind === 17375) {
+              const mints = event.tags.filter(
+                (tag: string[]) => tag[0] === "mint",
+              );
+              mints.forEach((tag) => {
+                if (!cashuMintSet.has(tag[1])) {
+                  cashuMintSet.add(tag[1]);
+                  cashuMints.push(tag[1]);
+                }
+              });
+            } else if (
+              (event.kind === 37375 && mostRecentWalletEvent.length === 0) ||
               event.created_at > mostRecentWalletEvent[0].created_at
             ) {
               mostRecentWalletEvent = [event];
@@ -1020,8 +1026,12 @@ export const fetchCashuWallet = async (
               const mints = mostRecentWalletEvent[0].tags.filter(
                 (tag: string[]) => tag[0] === "mint",
               );
-              mints.forEach((tag) => cashuMintSet.add(tag[1]));
-              cashuMints.push(...mints.map((tag: string[]) => tag[1]));
+              mints.forEach((tag) => {
+                if (!cashuMintSet.has(tag[1])) {
+                  cashuMintSet.add(tag[1]);
+                  cashuMints.push(tag[1]);
+                }
+              });
             }
             resolveH();
           },
@@ -1153,7 +1163,7 @@ export const fetchCashuWallet = async (
                       );
                       if (spentYs.size > 0) {
                         cashuProofs = cashuProofs.filter(
-                          (proof, index) => !spentYs.has(Ys[index]),
+                          (_, index) => !spentYs.has(Ys[index]),
                         );
                       }
                     }
@@ -1188,7 +1198,9 @@ export const fetchCashuWallet = async (
                     let inProofIds = incomingSpendingHistory
                       .filter((eventTags) =>
                         eventTags.some(
-                          (tag) => tag[0] === "direction" && tag[1] === "out",
+                          (tag) =>
+                            tag[0] === "direction" &&
+                            (tag[1] === "out" || tag[1] === "in"),
                         ),
                       )
                       .map((eventTags) => {
@@ -1243,35 +1255,18 @@ export const fetchCashuWallet = async (
       }
 
       const returnCall = async (
-        mostRecentWalletEvent: NostrEvent[],
         proofEvents: any[],
-        cashuWalletRelays: string[],
         cashuMints: string[],
         cashuProofs: Proof[],
       ) => {
         resolve({
-          mostRecentWalletEvent: mostRecentWalletEvent[0],
           proofEvents: proofEvents,
-          cashuWalletRelays: cashuRelays,
           cashuMints: cashuMints,
           cashuProofs: cashuProofs,
         });
-        editCashuWalletContext(
-          mostRecentWalletEvent[0],
-          proofEvents,
-          cashuWalletRelays,
-          cashuMints,
-          cashuProofs,
-          false,
-        );
+        editCashuWalletContext(proofEvents, cashuMints, cashuProofs, false);
       };
-      await returnCall(
-        mostRecentWalletEvent,
-        proofEvents,
-        cashuRelays,
-        cashuMints,
-        cashuProofs,
-      );
+      await returnCall(proofEvents, cashuMints, cashuProofs);
     } catch (error) {
       console.log("failed to fetch Cashu wallet: ", error);
       reject(error);

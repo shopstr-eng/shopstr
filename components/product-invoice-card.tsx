@@ -46,9 +46,7 @@ import {
   getLocalStorageData,
   validPassphrase,
   isUserLoggedIn,
-  publishWalletEvent,
   publishProofEvent,
-  publishSpendingHistoryEvent,
 } from "./utility/nostr-helper-functions";
 import { addChatMessagesToCache } from "../pages/api/nostr/cache-service";
 import { nip19 } from "nostr-tools";
@@ -105,7 +103,6 @@ export default function ProductInvoiceCard({
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
 
   const walletContext = useContext(CashuWalletContext);
-  const [dTag, setDTag] = useState("");
 
   const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
   const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
@@ -169,16 +166,6 @@ export default function ProductInvoiceCard({
         console.error(error);
       });
   }, []);
-
-  useEffect(() => {
-    const walletEvent = walletContext.mostRecentWalletEvent;
-    if (walletEvent?.tags) {
-      const walletTag = walletEvent.tags.find(
-        (tag: string[]) => tag[0] === "d",
-      )?.[1];
-      setDTag(walletTag);
-    }
-  }, [walletContext]);
 
   const sendPaymentAndContactMessage = async (
     pubkeyToReceiveMessage: string,
@@ -876,6 +863,40 @@ export default function ProductInvoiceCard({
       const { keep, send } = await wallet.send(price, filteredProofs, {
         includeFees: true,
       });
+      const deletedEventIds = [
+        ...new Set([
+          ...walletContext.proofEvents
+            .filter((event) =>
+              event.proofs.some((proof: Proof) =>
+                filteredProofs.some(
+                  (filteredProof) =>
+                    JSON.stringify(proof) === JSON.stringify(filteredProof),
+                ),
+              ),
+            )
+            .map((event) => event.id),
+          ...walletContext.proofEvents
+            .filter((event) =>
+              event.proofs.some((proof: Proof) =>
+                keep.some(
+                  (keepProof) =>
+                    JSON.stringify(proof) === JSON.stringify(keepProof),
+                ),
+              ),
+            )
+            .map((event) => event.id),
+          ...walletContext.proofEvents
+            .filter((event) =>
+              event.proofs.some((proof: Proof) =>
+                send.some(
+                  (sendProof) =>
+                    JSON.stringify(proof) === JSON.stringify(sendProof),
+                ),
+              ),
+            )
+            .map((event) => event.id),
+        ]),
+      ];
       await sendTokens(
         wallet,
         send,
@@ -917,18 +938,14 @@ export default function ProductInvoiceCard({
           ...history,
         ]),
       );
-      const eventIds = walletContext.proofEvents.map((event) => event.id);
-      await publishSpendingHistoryEvent(
+      await publishProofEvent(
+        mints[0],
+        changeProofs && changeProofs.length >= 1 ? changeProofs : [],
         "out",
-        String(price),
-        eventIds,
+        price.toString(),
         passphrase,
-        dTag,
+        deletedEventIds,
       );
-      if (changeProofs && changeProofs.length > 0) {
-        await publishProofEvent(mints[0], changeProofs, "in", passphrase, dTag);
-      }
-      await publishWalletEvent(passphrase, dTag);
       if (setCashuPaymentSent) {
         setCashuPaymentSent(true);
       }

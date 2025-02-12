@@ -16,8 +16,7 @@ export const getLocationFromReqHeaders = async (
     const res = await geoip.lookup(ip);
     if (!res) return null;
     return { latitude: res.ll[0], longitude: res.ll[1] };
-  } catch (err) {
-    console.log(err);
+  } catch (_) {
     return null;
   }
 };
@@ -32,8 +31,7 @@ export const getLocationFromAddress = async (address: string) => {
     const res = await geocoder.geocode({ address, limit: 1 });
     if (!res[0].latitude || !res[0].longitude) return null;
     return { latitude: res[0].latitude, longitude: res[0].longitude };
-  } catch (err) {
-    console.log(err);
+  } catch (_) {
     return null;
   }
 };
