@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import {
   BanknotesIcon,
@@ -23,11 +23,9 @@ import {
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import {
   getLocalStorageData,
-  publishWalletEvent,
   publishProofEvent,
 } from "../utility/nostr-helper-functions";
 import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
-import { CashuWalletContext } from "../../utils/context/context";
 import FailureModal from "@/components/utility-components/failure-modal";
 
 const MintButton = ({ passphrase }: { passphrase?: string }) => {
@@ -39,9 +37,6 @@ const MintButton = ({ passphrase }: { passphrase?: string }) => {
   const [invoice, setInvoice] = useState("");
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
 
-  const walletContext = useContext(CashuWalletContext);
-  const [dTag, setDTag] = useState("");
-
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
 
@@ -52,16 +47,6 @@ const MintButton = ({ passphrase }: { passphrase?: string }) => {
     control: mintControl,
     reset: mintReset,
   } = useForm();
-
-  useEffect(() => {
-    const walletEvent = walletContext.mostRecentWalletEvent;
-    if (walletEvent?.tags) {
-      const walletTag = walletEvent.tags.find(
-        (tag: string[]) => tag[0] === "d",
-      )?.[1];
-      setDTag(walletTag);
-    }
-  }, [walletContext]);
 
   const handleToggleMintModal = () => {
     mintReset();
@@ -135,8 +120,13 @@ const MintButton = ({ passphrase }: { passphrase?: string }) => {
               ...history,
             ]),
           );
-          await publishWalletEvent(passphrase, dTag);
-          await publishProofEvent(mints[0], proofs, "in", passphrase, dTag);
+          await publishProofEvent(
+            mints[0],
+            proofs,
+            "in",
+            numSats.toString(),
+            passphrase,
+          );
           // potentially capture a metric for the mint invoice
           setPaymentConfirmed(true);
           setQrCodeUrl(null);

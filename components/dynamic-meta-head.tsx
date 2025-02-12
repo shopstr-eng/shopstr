@@ -83,7 +83,7 @@ const DynamicHead = ({
     <Head>
       <meta
         name="viewport"
-        content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+        content="width=device-width, initial-scale=1, maximum-scale=1"
       />
       <title>{metaTags.title}</title>
       <meta name="description" content={metaTags.description} />

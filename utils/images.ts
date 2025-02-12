@@ -20,8 +20,7 @@ export const buildSrcSet = (image: string) => {
   try {
     const url = new URL(image);
     return hostToSrcSet(url);
-  } catch (err) {
-    console.log(err);
+  } catch (_) {
     return image;
   }
 };

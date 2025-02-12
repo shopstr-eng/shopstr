@@ -158,7 +158,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         setCurrentChatPubkey(sortedChatsByLastMessage[0][0]);
       } else {
         let index = sortedChatsByLastMessage.findIndex(
-          ([pubkey, chatObject]) => pubkey === currentChatPubkey,
+          ([pubkey, _]) => pubkey === currentChatPubkey,
         );
         if (index > 0) enterChat(sortedChatsByLastMessage[index - 1][0]);
       }
@@ -168,7 +168,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         setCurrentChatPubkey(sortedChatsByLastMessage[0][0]);
       } else {
         let index = sortedChatsByLastMessage.findIndex(
-          ([pubkey, chatObject]) => pubkey === currentChatPubkey,
+          ([pubkey, _]) => pubkey === currentChatPubkey,
         );
         if (index < sortedChatsByLastMessage.length - 1)
           enterChat(sortedChatsByLastMessage[index + 1][0]);
@@ -310,8 +310,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         { ...giftWrappedMessageEvent, sig: "", read: true },
       ]);
       setIsSendingDMLoading(false);
-    } catch (e) {
-      console.log("handleSendMessage errored", e);
+    } catch (_) {
       setFailureText("Error sending inquiry.");
       setShowFailureModal(true);
       setIsSendingDMLoading(false);
@@ -324,7 +323,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       if (isChatsLoading) return;
       setIsChatsLoading(true);
       let oldestMessageCreatedAt = Math.trunc(DateTime.now().toSeconds());
-      for (const [chatPubkey, chatObject] of chatsMap.entries()) {
+      for (const [_, chatObject] of chatsMap.entries()) {
         for (const messageEvent of chatObject.decryptedChat) {
           if (messageEvent.created_at < oldestMessageCreatedAt) {
             oldestMessageCreatedAt = messageEvent.created_at;
@@ -525,8 +524,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       });
       setIsChatsLoading(false);
       setIsLoadingMore(false);
-    } catch (err) {
-      console.log(err);
+    } catch (_) {
       setIsChatsLoading(false);
       setIsLoadingMore(false);
     }

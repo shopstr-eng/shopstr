@@ -122,8 +122,8 @@ const DisplayProducts = ({
     try {
       await DeleteEvent([productId], passphrase);
       productEventContext.removeDeletedProductEvent(productId);
-    } catch (e) {
-      console.log(e);
+    } catch (_) {
+      return;
     }
   };
 
@@ -250,8 +250,7 @@ const DisplayProducts = ({
       setLoadMoreClickCount((prevCount) => prevCount + 1);
       productEventContext.isLoading = false;
       setIsLoadingMore(false);
-    } catch (err) {
-      console.log(err);
+    } catch (_) {
       productEventContext.isLoading = false;
       setIsLoadingMore(false);
     }
