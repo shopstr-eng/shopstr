@@ -19,11 +19,11 @@ import {
 import { Relay } from "nostr-tools";
 import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
 import {
+  createNostrRelayEvent,
   getLocalStorageData,
   validPassphrase,
   publishWalletEvent,
 } from "../../components/utility/nostr-helper-functions";
-import { createNostrRelayEvent } from "../api/nostr/crud-service";
 import { useTheme } from "next-themes";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import ShopstrSlider from "../../components/utility-components/shopstr-slider";

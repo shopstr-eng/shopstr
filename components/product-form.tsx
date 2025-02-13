@@ -21,7 +21,6 @@ import {
 import { InformationCircleIcon, TrashIcon } from "@heroicons/react/24/outline";
 import Carousal from "@itseasy21/react-elastic-carousel";
 import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
-
 import {
   PostListing,
   getNsecWithPassphrase,
@@ -33,17 +32,10 @@ import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action
 import { ProductContext, ProfileMapContext } from "../utils/context/context";
 import { addProductToCache } from "../pages/api/nostr/cache-service";
 import { ProductData } from "./utility/product-parser-functions";
-import { ProductFormValues } from "@/pages/api/nostr/post-event";
 import { buildSrcSet } from "@/utils/images";
 import { FileUploaderButton } from "./utility-components/file-uploader";
-
 import currencySelection from "../public/currencySelection.json";
-
-declare global {
-  interface Window {
-    nostr: any;
-  }
-}
+import { ProductFormValues } from "../utils/types/types";
 
 interface ProductFormProps {
   handleModalToggle: () => void;

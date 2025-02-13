@@ -1,5 +1,4 @@
 import { useState, useEffect, useContext, useMemo } from "react";
-import axios from "axios";
 import {
   Modal,
   ModalContent,
@@ -17,6 +16,7 @@ import {
 import { useTheme } from "next-themes";
 import { ProfileMapContext, ChatsContext } from "../../utils/context/context";
 import {
+  generateKeys,
   getLocalStorageData,
   publishProofEvent,
   constructGiftWrappedMessageEvent,
@@ -78,28 +78,17 @@ export default function ClaimButton({
     useState<string>("");
 
   useEffect(() => {
-    axios({
-      method: "GET",
-      url: "/api/nostr/generate-keys",
-    })
-      .then((response) => {
-        setRandomNpubForSender(response.data.npub);
-        setRandomNsecForSender(response.data.nsec);
-      })
-      .catch((error) => {
-        console.error(error);
-      });
-    axios({
-      method: "GET",
-      url: "/api/nostr/generate-keys",
-    })
-      .then((response) => {
-        setRandomNpubForReceiver(response.data.npub);
-        setRandomNsecForReceiver(response.data.nsec);
-      })
-      .catch((error) => {
-        console.error(error);
-      });
+    const fetchKeys = async () => {
+      const { nsec: nsecForSender, npub: npubForSender } = await generateKeys();
+      setRandomNpubForSender(npubForSender);
+      setRandomNsecForSender(nsecForSender);
+      const { nsec: nsecForReceiver, npub: npubForReceiver } =
+        await generateKeys();
+      setRandomNpubForReceiver(npubForReceiver);
+      setRandomNsecForReceiver(nsecForReceiver);
+    };
+
+    fetchKeys();
   }, []);
 
   useEffect(() => {

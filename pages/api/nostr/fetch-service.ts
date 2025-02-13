@@ -17,6 +17,7 @@ import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
 import { ChatsMap } from "@/utils/context/context";
 import { DateTime } from "luxon";
 import {
+  DeleteEvent,
   getLocalStorageData,
   getPrivKeyWithPassphrase,
   sendBunkerRequest,
@@ -27,7 +28,6 @@ import {
   parseTags,
 } from "@/components/utility/product-parser-functions";
 import { calculateWeightedScore } from "@/components/utility/review-parser-functions";
-import { DeleteEvent } from "../../../pages/api/nostr/crud-service";
 import { hashToCurve } from "@cashu/crypto/modules/common";
 
 function getUniqueProofs(proofs: Proof[]): Proof[] {

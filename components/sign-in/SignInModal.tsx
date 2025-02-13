@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useContext } from "react";
-import axios from "axios";
 import {
   Modal,
   ModalContent,
@@ -11,6 +10,7 @@ import {
 } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
 import {
+  generateKeys,
   setLocalStorageDataOnSignIn,
   validateNSecKey,
   parseBunkerToken,
@@ -90,17 +90,9 @@ export default function SignInModal({
         const { remotePubkey, relays, secret } = bunkerTokenParams;
         let clientPubkey;
         let clientPrivkey;
-        await axios({
-          method: "GET",
-          url: "/api/nostr/generate-keys",
-        })
-          .then((response) => {
-            clientPubkey = response.data.npub;
-            clientPrivkey = response.data.nsec;
-          })
-          .catch((error) => {
-            console.error(error);
-          });
+        const { nsec, npub } = await generateKeys();
+        clientPubkey = npub;
+        clientPrivkey = nsec;
         const connectId = crypto.randomUUID();
         await sendBunkerRequest(
           "connect",

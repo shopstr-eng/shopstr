@@ -7,6 +7,7 @@ import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs
 import { ShopMapContext } from "@/utils/context/context";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
 import {
+  createNostrShopEvent,
   getNsecWithPassphrase,
   getLocalStorageData,
   validPassphrase,
@@ -14,7 +15,6 @@ import {
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
-import { createNostrShopEvent } from "../api/nostr/crud-service";
 
 const ShopSettingsPage = () => {
   const [enterPassphrase, setEnterPassphrase] = useState(false);

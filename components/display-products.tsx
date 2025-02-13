@@ -1,6 +1,9 @@
 import { useState, useEffect, useContext } from "react";
 import { Filter, SimplePool } from "nostr-tools";
-import { getLocalStorageData } from "./utility/nostr-helper-functions";
+import {
+  DeleteEvent,
+  getLocalStorageData,
+} from "./utility/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
 import {
   ProductContext,
@@ -12,7 +15,6 @@ import DisplayProductModal from "./display-product-modal";
 import { useRouter } from "next/router";
 import parseTags, { ProductData } from "./utility/product-parser-functions";
 import ShopstrSpinner from "./utility-components/shopstr-spinner";
-import { DeleteEvent } from "../pages/api/nostr/crud-service";
 import { Button } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
 import { DateTime } from "luxon";

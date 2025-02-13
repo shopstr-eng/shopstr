@@ -2,7 +2,6 @@
 import { Button, Input } from "@nextui-org/react";
 import React, { useEffect, useContext, useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
-import axios from "axios";
 import { nip19 } from "nostr-tools";
 import {
   Modal,
@@ -28,6 +27,7 @@ import {
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
   publishReviewEvent,
+  generateKeys,
   getLocalStorageData,
 } from "../utility/nostr-helper-functions";
 import { calculateWeightedScore } from "../utility/review-parser-functions";
@@ -98,28 +98,17 @@ export const ChatPanel = ({
   const bottomDivRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    axios({
-      method: "GET",
-      url: "/api/nostr/generate-keys",
-    })
-      .then((response) => {
-        setRandomNpubForSender(response.data.npub);
-        setRandomNsecForSender(response.data.nsec);
-      })
-      .catch((error) => {
-        console.error(error);
-      });
-    axios({
-      method: "GET",
-      url: "/api/nostr/generate-keys",
-    })
-      .then((response) => {
-        setRandomNpubForReceiver(response.data.npub);
-        setRandomNsecForReceiver(response.data.nsec);
-      })
-      .catch((error) => {
-        console.error(error);
-      });
+    const fetchKeys = async () => {
+      const { nsec: nsecForSender, npub: npubForSender } = await generateKeys();
+      setRandomNpubForSender(npubForSender);
+      setRandomNsecForSender(nsecForSender);
+      const { nsec: nsecForReceiver, npub: npubForReceiver } =
+        await generateKeys();
+      setRandomNpubForReceiver(npubForReceiver);
+      setRandomNsecForReceiver(nsecForReceiver);
+    };
+
+    fetchKeys();
   }, []);
 
   useEffect(() => {
@@ -186,7 +175,7 @@ export const ChatPanel = ({
 
   const onReviewSubmit = async (data: { [x: string]: any }) => {
     try {
-      const [_, kind, merchantPubkey, dTag] = productAddress.split(":");
+      const [_, _kind, merchantPubkey, dTag] = productAddress.split(":");
       const eventTags = [
         ["d", `a:${productAddress}`],
         ["rating", (selectedThumb === "up" ? 1 : 0).toString(), "thumb"],
