@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
 import { useRouter } from "next/router";
 import CryptoJS from "crypto-js";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
 import { getPublicKey, nip19 } from "nostr-tools";
-import { setLocalStorageDataOnSignIn } from "@/components/utility/nostr-helper-functions";
+import {
+  generateKeys,
+  setLocalStorageDataOnSignIn,
+} from "@/components/utility/nostr-helper-functions";
 import FailureModal from "../../components/utility-components/failure-modal";
 import SuccessModal from "../../components/utility-components/success-modal";
 
@@ -23,17 +25,13 @@ const Keys = () => {
   const [successText, setSuccessText] = useState("");
 
   useEffect(() => {
-    axios({
-      method: "GET",
-      url: "/api/nostr/generate-keys",
-    })
-      .then((response) => {
-        setNPub(response.data.npub);
-        setPrivateKey(response.data.nsec);
-      })
-      .catch((error) => {
-        console.error(error);
-      });
+    const fetchKeys = async () => {
+      const { nsec, npub } = await generateKeys();
+      setNPub(npub);
+      setPrivateKey(nsec);
+    };
+
+    fetchKeys();
   }, []);
 
   const handleCopyPubkey = () => {

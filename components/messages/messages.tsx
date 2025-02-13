@@ -7,6 +7,7 @@ import {
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
   decryptNpub,
+  generateKeys,
   getLocalStorageData,
   validPassphrase,
   getPrivKeyWithPassphrase,
@@ -16,7 +17,6 @@ import {
 import { ChatsContext } from "../../utils/context/context";
 import RequestPassphraseModal from "../utility-components/request-passphrase-modal";
 import ShopstrSpinner from "../utility-components/shopstr-spinner";
-import axios from "axios";
 import { ChatPanel } from "./chat-panel";
 import { ChatButton } from "./chat-button";
 import { Button } from "@nextui-org/react";
@@ -66,28 +66,17 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
     useState<string>("");
 
   useEffect(() => {
-    axios({
-      method: "GET",
-      url: "/api/nostr/generate-keys",
-    })
-      .then((response) => {
-        setRandomNpubForSender(response.data.npub);
-        setRandomNsecForSender(response.data.nsec);
-      })
-      .catch((error) => {
-        console.error(error);
-      });
-    axios({
-      method: "GET",
-      url: "/api/nostr/generate-keys",
-    })
-      .then((response) => {
-        setRandomNpubForReceiver(response.data.npub);
-        setRandomNsecForReceiver(response.data.nsec);
-      })
-      .catch((error) => {
-        console.error(error);
-      });
+    const fetchKeys = async () => {
+      const { nsec: nsecForSender, npub: npubForSender } = await generateKeys();
+      setRandomNpubForSender(npubForSender);
+      setRandomNsecForSender(nsecForSender);
+      const { nsec: nsecForReceiver, npub: npubForReceiver } =
+        await generateKeys();
+      setRandomNpubForReceiver(npubForReceiver);
+      setRandomNsecForReceiver(nsecForReceiver);
+    };
+
+    fetchKeys();
   }, []);
 
   useEffect(() => {

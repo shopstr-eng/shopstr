@@ -2,6 +2,8 @@ import CryptoJS from "crypto-js";
 import {
   Filter,
   finalizeEvent,
+  generateSecretKey,
+  getPublicKey,
   nip04,
   nip19,
   nip44,
@@ -24,6 +26,16 @@ function generateRandomTimestamp(): number {
   const randomSeconds = Math.floor(Math.random() * (twoDaysInMilliseconds + 1));
   const randomTimestamp = now - randomSeconds;
   return randomTimestamp;
+}
+
+export async function generateKeys(): Promise<{ nsec: string; npub: string }> {
+  const sk = generateSecretKey();
+  const nsec = nip19.nsecEncode(sk);
+
+  const pk = getPublicKey(sk);
+  const npub = nip19.npubEncode(pk);
+
+  return { nsec, npub };
 }
 
 function generateEventId(event: EncryptedMessageEvent) {

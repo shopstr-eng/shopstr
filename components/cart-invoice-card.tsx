@@ -22,7 +22,6 @@ import {
   Select,
   SelectItem,
 } from "@nextui-org/react";
-import axios from "axios";
 import {
   BanknotesIcon,
   BoltIcon,
@@ -43,6 +42,7 @@ import {
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
+  generateKeys,
   getLocalStorageData,
   validPassphrase,
   isUserLoggedIn,
@@ -164,20 +164,15 @@ export default function CartInvoiceCard({
 
   const generateNewKeys = async () => {
     try {
-      const senderResponse = await axios({
-        method: "GET",
-        url: "/api/nostr/generate-keys",
-      });
-      const receiverResponse = await axios({
-        method: "GET",
-        url: "/api/nostr/generate-keys",
-      });
+      const { nsec: nsecForSender, npub: npubForSender } = await generateKeys();
+      const { nsec: nsecForReceiver, npub: npubForReceiver } =
+        await generateKeys();
 
       return {
-        senderNpub: senderResponse.data.npub,
-        senderNsec: senderResponse.data.nsec,
-        receiverNpub: receiverResponse.data.npub,
-        receiverNsec: receiverResponse.data.nsec,
+        senderNpub: npubForSender,
+        senderNsec: nsecForSender,
+        receiverNpub: npubForReceiver,
+        receiverNsec: nsecForReceiver,
       };
     } catch (error) {
       console.error(error);
