@@ -258,7 +258,6 @@ const TopNav = ({
           |
           {signedIn ? (
             <>
-              |
               <ProfileWithDropdown
                 pubkey={getLocalStorageData().userPubkey}
                 baseClassname="justify-start dark:hover:shopstr-yellow-light pl-4 rounded-3xl py-2 hover:scale-105 hover:bg-light-bg hover:shadow-lg dark:hover:bg-dark-bg"
@@ -273,7 +272,6 @@ const TopNav = ({
             </>
           ) : (
             <>
-              |
               <Button
                 onClick={onOpen}
                 className={`bg-transparent text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${

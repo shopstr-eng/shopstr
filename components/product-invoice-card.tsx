@@ -79,7 +79,8 @@ export default function ProductInvoiceCard({
   selectedSize?: string;
 }) {
   const router = useRouter();
-  const { id, pubkey, currency, totalCost, shippingType, required } = productData;
+  const { id, pubkey, currency, totalCost, shippingType, required } =
+    productData;
   const pubkeyOfProductBeingSold = pubkey;
   const { userNPub, userPubkey, signInMethod, mints, tokens, history } =
     getLocalStorageData();
@@ -585,10 +586,15 @@ export default function ProductInvoiceCard({
     }
 
     if (additionalInfo) {
-      let additionalMessage = "Additional customer information: " + additionalInfo;
-      await sendPaymentAndContactMessage(pubkeyOfProductBeingSold, additionalMessage, false);
+      let additionalMessage =
+        "Additional customer information: " + additionalInfo;
+      await sendPaymentAndContactMessage(
+        pubkeyOfProductBeingSold,
+        additionalMessage,
+        false,
+      );
     }
-    
+
     if (
       !(
         shippingName === undefined &&
