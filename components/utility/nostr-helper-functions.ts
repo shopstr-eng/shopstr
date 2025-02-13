@@ -8,13 +8,11 @@ import {
   nip98,
   SimplePool,
 } from "nostr-tools";
-import axios from "axios";
-import { NostrEvent } from "@/utils/types/types";
+import { NostrEvent, ProductFormValues } from "@/utils/types/types";
 import { ProductData } from "@/components/utility/product-parser-functions";
 import { Proof } from "@cashu/cashu-ts";
-import { ProductFormValues } from "@/pages/api/nostr/post-event";
-import { DeleteEvent } from "@/pages/api/nostr/crud-service";
 import { DateTime } from "luxon";
+import { removeProductFromCache } from "../../pages/api/nostr/cache-service";
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
@@ -59,6 +57,45 @@ function generateEventId(event: EncryptedMessageEvent) {
   const hash = crypto.createHash("sha256");
   hash.update(serialized);
   return hash.digest("hex");
+}
+
+export async function DeleteEvent(
+  event_ids_to_delete: string[],
+  passphrase?: string,
+) {
+  const { userPubkey } = getLocalStorageData();
+  let deletionEvent = await createNostrDeleteEvent(
+    event_ids_to_delete,
+    userPubkey,
+    "user deletion request from shopstr.store",
+  );
+
+  await finalizeAndSendNostrEvent(deletionEvent, passphrase);
+  await removeProductFromCache(event_ids_to_delete);
+}
+
+export async function createNostrDeleteEvent(
+  event_ids: string[],
+  pubkey: string,
+  content: string,
+) {
+  let msg = {
+    kind: 5,
+    content: content,
+    tags: [],
+    created_at: 0,
+    pubkey: "",
+    id: "",
+    sig: "",
+  } as NostrEvent;
+
+  for (let event_id of event_ids) {
+    msg.tags.push(["e", event_id]);
+  }
+
+  msg.created_at = Math.floor(new Date().getTime() / 1000);
+  msg.pubkey = pubkey;
+  return msg;
 }
 
 interface BunkerTokenParams {
@@ -252,132 +289,144 @@ export async function awaitBunkerResponse(
   });
 }
 
+export async function createNostrProfileEvent(
+  pubkey: string,
+  content: string,
+  passphrase: string,
+) {
+  let msg = {
+    kind: 0,
+    content: content,
+    tags: [],
+    created_at: 0,
+    pubkey: pubkey,
+    id: "",
+    sig: "",
+  } as NostrEvent;
+
+  msg.created_at = Math.floor(new Date().getTime() / 1000);
+  await finalizeAndSendNostrEvent(msg, passphrase);
+  return msg;
+}
+
 export async function PostListing(
   values: ProductFormValues,
   passphrase: string,
-) {
+): Promise<NostrEvent> {
   const { signInMethod, userPubkey, relays, writeRelays } =
     getLocalStorageData();
   const summary = values.find(([key]) => key === "summary")?.[1] || "";
 
-  const dValue = values.find(([key]) => key === "d")?.[1] || undefined;
+  const dValue = values.find(([key]) => key === "d")?.[1] || "";
 
   const created_at = Math.floor(Date.now() / 1000);
-  // Add "published_at" key
   const updatedValues = [...values, ["published_at", String(created_at)]];
 
-  if (signInMethod === "extension" || signInMethod === "bunker") {
-    const event = {
-      created_at: created_at,
-      kind: 30402,
-      // kind: 30018,
-      tags: updatedValues,
-      content: summary,
-    };
+  const event = {
+    created_at: created_at,
+    kind: 30402,
+    tags: updatedValues,
+    content: summary,
+  };
 
-    const recEvent = {
-      kind: 31989,
-      tags: [
-        ["d", "30402"],
-        ["a", "31990:" + userPubkey + ":" + dValue, relays[0], "web"],
-      ],
-      content: "",
-      created_at: Math.floor(Date.now() / 1000),
-    };
+  const recEvent = {
+    kind: 31989,
+    tags: [
+      ["d", "30402"],
+      ["a", "31990:" + userPubkey + ":" + dValue, relays[0], "web"],
+    ],
+    content: "",
+    created_at: Math.floor(Date.now() / 1000),
+  };
 
-    const handlerEvent = {
-      kind: 31990,
-      tags: [
-        ["d", dValue],
-        ["k", "30402"],
-        ["web", "https://shopstr.store/<bech-32>", "npub"],
-      ],
-      content: "",
-      created_at: Math.floor(Date.now() / 1000),
-    };
+  const handlerEvent = {
+    kind: 31990,
+    tags: [
+      ["d", dValue],
+      ["k", "30402"],
+      ["web", "https://shopstr.store/<bech-32>", "npub"],
+    ],
+    content: "",
+    created_at: Math.floor(Date.now() / 1000),
+  };
 
-    let signedEvent;
-    let signedRecEvent;
-    let signedHandlerEvent;
+  let signedEvent;
+  let signedRecEvent;
+  let signedHandlerEvent;
 
-    if (signInMethod === "extension") {
-      signedEvent = await window.nostr.signEvent(event);
-      signedRecEvent = await window.nostr.signEvent(recEvent);
-      signedHandlerEvent = await window.nostr.signEvent(handlerEvent);
-    } else if (signInMethod === "bunker") {
-      const signEventId = crypto.randomUUID();
-      await sendBunkerRequest("sign_event", signEventId, event);
-      while (!signedEvent) {
-        signedEvent = await awaitBunkerResponse(signEventId);
-        if (!signedEvent) {
-          await new Promise((resolve) => setTimeout(resolve, 2100));
-        }
+  if (signInMethod === "extension") {
+    signedEvent = await window.nostr.signEvent(event);
+    signedRecEvent = await window.nostr.signEvent(recEvent);
+    signedHandlerEvent = await window.nostr.signEvent(handlerEvent);
+  } else if (signInMethod === "bunker") {
+    const signEventId = crypto.randomUUID();
+    await sendBunkerRequest("sign_event", signEventId, event);
+    while (!signedEvent) {
+      signedEvent = await awaitBunkerResponse(signEventId);
+      if (!signedEvent) {
+        await new Promise((resolve) => setTimeout(resolve, 2100));
       }
-      signedEvent = JSON.parse(signedEvent);
-      const signRecEventId = crypto.randomUUID();
-      await sendBunkerRequest("sign_event", signRecEventId, recEvent);
-      while (!signedRecEvent) {
-        signedRecEvent = await awaitBunkerResponse(signRecEventId);
-        if (!signedRecEvent) {
-          await new Promise((resolve) => setTimeout(resolve, 2100));
-        }
-      }
-      signedRecEvent = JSON.parse(signedRecEvent);
-      const signHandlerEventId = crypto.randomUUID();
-      await sendBunkerRequest("sign_event", signHandlerEventId, handlerEvent);
-      while (!signedHandlerEvent) {
-        signedHandlerEvent = await awaitBunkerResponse(signHandlerEventId);
-        if (!signedHandlerEvent) {
-          await new Promise((resolve) => setTimeout(resolve, 2100));
-        }
-      }
-      signedHandlerEvent = JSON.parse(signedHandlerEvent);
     }
-
-    const pool = new SimplePool();
-
-    const allWriteRelays = [...writeRelays, ...relays];
-    const blastrRelay = "wss://sendit.nosflare.com";
-    if (!containsRelay(allWriteRelays, blastrRelay)) {
-      allWriteRelays.push(blastrRelay);
+    signedEvent = JSON.parse(signedEvent);
+    const signRecEventId = crypto.randomUUID();
+    await sendBunkerRequest("sign_event", signRecEventId, recEvent);
+    while (!signedRecEvent) {
+      signedRecEvent = await awaitBunkerResponse(signRecEventId);
+      if (!signedRecEvent) {
+        await new Promise((resolve) => setTimeout(resolve, 2100));
+      }
     }
-
-    await Promise.any(pool.publish(allWriteRelays, signedEvent));
-    await Promise.any(pool.publish(allWriteRelays, signedRecEvent));
-    await Promise.any(pool.publish(allWriteRelays, signedHandlerEvent));
-    return signedEvent;
+    signedRecEvent = JSON.parse(signedRecEvent);
+    const signHandlerEventId = crypto.randomUUID();
+    await sendBunkerRequest("sign_event", signHandlerEventId, handlerEvent);
+    while (!signedHandlerEvent) {
+      signedHandlerEvent = await awaitBunkerResponse(signHandlerEventId);
+      if (!signedHandlerEvent) {
+        await new Promise((resolve) => setTimeout(resolve, 2100));
+      }
+    }
+    signedHandlerEvent = JSON.parse(signedHandlerEvent);
   } else {
-    const allWriteRelays = [...writeRelays, ...relays];
-    const blastrRelay = "wss://sendit.nosflare.com";
-    if (!containsRelay(allWriteRelays, blastrRelay)) {
-      allWriteRelays.push(blastrRelay);
-    }
-    const res = await axios({
-      method: "POST",
-      url: "/api/nostr/post-event",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      data: {
-        pubkey: userPubkey,
-        privkey: getPrivKeyWithPassphrase(passphrase),
-        created_at: created_at,
-        kind: 30402,
-        // kind: 30018,
-        tags: updatedValues,
-        content: summary,
-        relays: allWriteRelays,
-      },
-    });
-    return {
-      id: res.data.id,
-      pubkey: userPubkey,
-      created_at: created_at,
-      kind: 30402,
-      tags: updatedValues,
-      content: summary,
-    };
+    if (!passphrase) throw new Error("Passphrase is required");
+    let sk = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
+    signedEvent = finalizeEvent(event, sk);
+    signedRecEvent = finalizeEvent(recEvent, sk);
+    signedHandlerEvent = finalizeEvent(handlerEvent, sk);
   }
+
+  const pool = new SimplePool();
+
+  const allWriteRelays = [...writeRelays, ...relays];
+  const blastrRelay = "wss://sendit.nosflare.com";
+  if (!containsRelay(allWriteRelays, blastrRelay)) {
+    allWriteRelays.push(blastrRelay);
+  }
+
+  await Promise.any(pool.publish(allWriteRelays, signedEvent));
+  await Promise.any(pool.publish(allWriteRelays, signedRecEvent));
+  await Promise.any(pool.publish(allWriteRelays, signedHandlerEvent));
+
+  return signedEvent;
+}
+
+export async function createNostrShopEvent(
+  pubkey: string,
+  content: string,
+  passphrase: string,
+) {
+  let msg = {
+    kind: 30019, // NIP-15 - Stall Metadata
+    content: content,
+    tags: [],
+    created_at: 0,
+    pubkey: pubkey,
+    id: "",
+    sig: "",
+  } as NostrEvent;
+
+  msg.created_at = Math.floor(new Date().getTime() / 1000);
+  await finalizeAndSendNostrEvent(msg, passphrase);
+  return msg;
 }
 
 interface EncryptedMessageEvent {
@@ -597,6 +646,47 @@ export async function publishReviewEvent(
     alert("Failed to send event: " + e.message);
     return { error: e };
   }
+}
+
+export async function createNostrRelayEvent(
+  pubkey: string,
+  passphrase: string,
+) {
+  const relayList = getLocalStorageData().relays;
+  const readRelayList = getLocalStorageData().readRelays;
+  const writeRelayList = getLocalStorageData().writeRelays;
+  let relayTags = [];
+  if (relayList.length != 0) {
+    for (const relay of relayList) {
+      const relayTag = ["r", relay];
+      relayTags.push(relayTag);
+    }
+  }
+  if (readRelayList.length != 0) {
+    for (const relay of readRelayList) {
+      const relayTag = ["r", relay, "read"];
+      relayTags.push(relayTag);
+    }
+  }
+  if (writeRelayList.length != 0) {
+    for (const relay of writeRelayList) {
+      const relayTag = ["r", relay, "write"];
+      relayTags.push(relayTag);
+    }
+  }
+  let relayEvent = {
+    kind: 10002, // NIP-65 - Relay List Metadata
+    content: "",
+    tags: relayTags,
+    created_at: 0,
+    pubkey: pubkey,
+    id: "",
+    sig: "",
+  } as NostrEvent;
+
+  relayEvent.created_at = Math.floor(new Date().getTime() / 1000);
+  await finalizeAndSendNostrEvent(relayEvent, passphrase);
+  return relayEvent;
 }
 
 export async function publishShoppingCartEvent(

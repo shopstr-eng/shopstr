@@ -1,5 +1,9 @@
 import { Event } from "nostr-tools";
+
 export type ItemType = "products" | "profiles" | "chats";
+
+type ProductFormValue = [key: string, ...values: string[]];
+export type ProductFormValues = ProductFormValue[];
 
 export interface NostrEvent extends Event {}
 
@@ -51,5 +55,6 @@ export interface Transaction {
 declare global {
   interface Window {
     webln: any;
+    nostr: any;
   }
 }

@@ -11,16 +11,15 @@ import {
   EyeIcon,
 } from "@heroicons/react/24/outline";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
-
 import {
   getNsecWithPassphrase,
   getLocalStorageData,
   validPassphrase,
+  createNostrProfileEvent,
 } from "@/components/utility/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
-import { createNostrProfileEvent } from "../api/nostr/crud-service";
 
 const UserProfilePage = () => {
   const [enterPassphrase, setEnterPassphrase] = useState(false);
