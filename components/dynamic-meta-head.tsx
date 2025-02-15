@@ -1,8 +1,80 @@
 import Head from "next/head";
 import { useRouter } from "next/router";
-import React, { useState, useEffect } from "react";
-import parseTags from "./utility/product-parser-functions";
 import { NostrEvent, ShopSettings } from "@/utils/types/types";
+import parseTags from "./utility/product-parser-functions";
+
+type MetaTagsType = {
+  title: string;
+  description: string;
+  image: string;
+  url: string;
+};
+
+const getMetaTags = (
+  pathname: string,
+  query: { productId?: string[]; pubkey?: string[] },
+  productEvents: NostrEvent[],
+  shopEvents: Map<string, ShopSettings>,
+): MetaTagsType => {
+  const defaultTags = {
+    title: "Shopstr",
+    description: "Shop freely.",
+    image: "/shopstr-2000x2000.png",
+    url: "https://shopstr.store",
+  };
+
+  if (pathname.startsWith("/listing/")) {
+    const productId = query.productId?.[0];
+    const product = productEvents.find((event) => {
+      const dTagMatch =
+        event.tags.find((tag: string[]) => tag[0] === "d")?.[1] === productId;
+      const idMatch = event.id === productId;
+      return dTagMatch || idMatch;
+    });
+
+    if (product) {
+      const productData = parseTags(product);
+      if (productData) {
+        return {
+          title: productData.title || "Shopstr Listing",
+          description:
+            productData.summary || "Check out this product on Shopstr!",
+          image: productData.images?.[0] || "/shopstr-2000x2000.png",
+          url: `https://shopstr.store/listing/${productId}`,
+        };
+      }
+      return {
+        ...defaultTags,
+        title: "Shopstr Listing",
+        description: "Check out this listing on Shopstr!",
+        url: `https://shopstr.store/listing/${productId}`,
+      };
+    }
+  } else if (pathname.includes("/npub")) {
+    const pubkey = query.pubkey?.[0];
+    const shopInfo = pubkey
+      ? Array.from(shopEvents.values()).find((event) => event.pubkey === pubkey)
+      : undefined;
+
+    if (shopInfo) {
+      return {
+        title: `${shopInfo.content.name} Shop` || "Shopstr Shop",
+        description:
+          shopInfo.content.about || "Check out this shop on Shopstr!",
+        image: shopInfo.content.ui.picture || "/shopstr-2000x2000.png",
+        url: `https://shopstr.store/${pubkey}`,
+      };
+    }
+    return {
+      ...defaultTags,
+      title: "Shopstr Shop",
+      description: "Check out this shop on Shopstr!",
+      url: `https://shopstr.store/${pubkey}`,
+    };
+  }
+
+  return defaultTags;
+};
 
 const DynamicHead = ({
   productEvents,
@@ -12,72 +84,12 @@ const DynamicHead = ({
   shopEvents: Map<string, ShopSettings>;
 }) => {
   const router = useRouter();
-  const [metaTags, setMetaTags] = useState({
-    title: "Shopstr",
-    description: "Shop freely.",
-    image: "/shopstr-2000x2000.png",
-    url: "https://shopstr.store",
-  });
-
-  useEffect(() => {
-    if (!router.isReady) return;
-
-    if (router.pathname.startsWith("/listing/")) {
-      const productId = router.query.productId?.[0];
-      const product = productEvents.find((event) => {
-        // Check for matching d tag
-        const dTagMatch =
-          event.tags.find((tag: string[]) => tag[0] === "d")?.[1] === productId;
-        // Check for matching event id
-        const idMatch = event.id === productId;
-        return dTagMatch || idMatch;
-      });
-
-      if (product) {
-        const productData = parseTags(product);
-        if (productData) {
-          setMetaTags({
-            title: productData.title || "Shopstr Listing",
-            description:
-              productData.summary || "Check out this product on Shopstr!",
-            image: productData.images?.[0] || "/shopstr-2000x2000.png",
-            url: `https://shopstr.store/listing/${productId}`,
-          });
-        } else {
-          setMetaTags({
-            title: "Shopstr Listing",
-            description: "Check out this listing on Shopstr!",
-            image: "/shopstr-2000x2000.png",
-            url: `https://shopstr.store/listing/${productId}`,
-          });
-        }
-      }
-    } else if (router.pathname.includes("/npub")) {
-      const pubkey = router.query.pubkey?.[0];
-      const shopInfo = pubkey
-        ? Array.from(shopEvents.values()).find(
-            (event) => event.pubkey === pubkey,
-          )
-        : undefined;
-
-      if (shopInfo) {
-        setMetaTags({
-          title: `${shopInfo.content.name} Shop` || "Shopstr Shop",
-          description:
-            `${shopInfo.content.about}` || "Check out this shop on Shopstr!",
-          image: `${shopInfo.content.ui.picture}` || "/shopstr-2000x2000.png",
-          url: `https://shopstr.store/${pubkey}`,
-        });
-      } else {
-        setMetaTags({
-          title: "Shopstr Shop",
-          description: "Check out this shop on Shopstr!",
-          image: "/shopstr-2000x2000.png",
-          url: `https://shopstr.store/${pubkey}`,
-        });
-      }
-    }
-  }, [router.isReady, router.pathname, router.query, productEvents]);
+  const metaTags = getMetaTags(
+    router.pathname,
+    router.query,
+    productEvents,
+    shopEvents,
+  );
 
   return (
     <Head>
