@@ -1188,11 +1188,7 @@ export const fetchCashuWallet = async (
 
                     cashuProofs = cashuProofs.filter(
                       (cashuProof) =>
-                        !destroyedProofsArray.some(
-                          (destroyedProof) =>
-                            JSON.stringify(destroyedProof) ===
-                            JSON.stringify(cashuProof),
-                        ),
+                        !destroyedProofsArray.includes(cashuProof),
                     );
 
                     let inProofIds = incomingSpendingHistory
@@ -1216,22 +1212,27 @@ export const fetchCashuWallet = async (
                     );
                     let arrayOfProofsToAddBack = proofEvents
                       .filter((event) => proofIdsToAddBack.includes(event.id))
-                      .map((event) => event);
+                      .map((event) => event.proofs);
 
-                    const proofExists = (proof: Proof, proofArray: Proof[]) =>
-                      proofArray.some(
-                        (existingProof) =>
-                          JSON.stringify(existingProof) ===
-                          JSON.stringify(proof),
-                      );
+                    const proofExists = (
+                      proofToAdd: Proof,
+                      existingProofArray: Proof[],
+                    ): boolean => {
+                      return existingProofArray.includes(proofToAdd);
+                    };
 
-                    arrayOfProofsToAddBack.forEach((proofsToAddBack) => {
-                      proofsToAddBack.forEach((proof: Proof) => {
-                        if (!proofExists(proof, cashuProofs)) {
-                          cashuProofs.push(proof);
+                    for (const proofsToAddBack of arrayOfProofsToAddBack) {
+                      for (const proofToAdd of proofsToAddBack) {
+                        if (
+                          proofToAdd &&
+                          !proofExists(proofToAdd, cashuProofs)
+                        ) {
+                          cashuProofs.push(proofToAdd);
                         }
-                      });
-                    });
+                      }
+                    }
+
+                    cashuProofs = getUniqueProofs(cashuProofs);
 
                     if (outProofIds.length > 0) {
                       await DeleteEvent(outProofIds, passphrase);
