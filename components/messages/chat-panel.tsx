@@ -137,14 +137,15 @@ export const ChatPanel = ({
       let decodedRandomPrivkeyForReceiver = nip19.decode(randomNsecForReceiver);
 
       let deliveryTime = data["Delivery Time"];
-      let trackingUrl = data["Tracking Url"];
+      let shippingCarrier = data["Shipping Carrier"];
+      let trackingNumber = data["Tracking Number"];
       let message =
         "Your order from " +
         userNPub +
         " is expected to arrive within " +
         deliveryTime +
-        ". Check the following link to track it: " +
-        trackingUrl;
+        ". Your " + shippingCarrier + " tacking number is: " +
+        trackingNumber;
       let giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
         decodedRandomPubkeyForSender.data as string,
         buyerPubkey,
@@ -358,15 +359,10 @@ export const ChatPanel = ({
                     }}
                   />
                   <Controller
-                    name="Tracking Url"
+                    name="Shipping Carrier"
                     control={shippingControl}
                     rules={{
-                      required: "Tracking URL is required.",
-                      pattern: {
-                        value: /^https?:\/\/.+/i,
-                        message:
-                          "Please enter a valid URL starting with http:// or https://",
-                      },
+                      required: "A shipping carrier is required.",
                     }}
                     render={({
                       field: { onChange, onBlur, value },
@@ -378,8 +374,36 @@ export const ChatPanel = ({
                         : "";
                       return (
                         <Input
-                          label="Tracking URL"
-                          placeholder="https://..."
+                          label="Shipping Carrier"
+                          variant="bordered"
+                          placeholder="Fedex, UPS, etc. "
+                          isInvalid={isErrored}
+                          errorMessage={errorMessage}
+                          className="text-light-text dark:text-dark-text"
+                          onChange={onChange}
+                          onBlur={onBlur}
+                          value={value}
+                        />
+                      );
+                    }}
+                  />
+                  <Controller
+                    name="Tracking Number"
+                    control={shippingControl}
+                    rules={{
+                      required: "A tracking number is required.",
+                    }}
+                    render={({
+                      field: { onChange, onBlur, value },
+                      fieldState: { error },
+                    }) => {
+                      let isErrored = error !== undefined;
+                      let errorMessage: string = error?.message
+                        ? error.message
+                        : "";
+                      return (
+                        <Input
+                          label="Tracking Number"
                           variant="bordered"
                           isInvalid={isErrored}
                           errorMessage={errorMessage}
