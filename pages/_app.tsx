@@ -396,6 +396,11 @@ function App({ Component, pageProps }: AppProps) {
       if (getLocalStorageData().signInMethod === "amber") {
         LogOut();
       }
+      if (getLocalStorageData().signInMethod === "extension") {
+        if (!window.nostr.nip44) {
+          LogOut();
+        }
+      }
       const relays = getLocalStorageData().relays;
       const readRelays = getLocalStorageData().readRelays;
       let allRelays = [...relays, ...readRelays];
