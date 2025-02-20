@@ -1,4 +1,4 @@
-FROM boltz/elements:latest
+FROM boltz/elements:23.2.6
 
 ADD seeder.sh /seeder.sh
 RUN chmod +x /seeder.sh

@@ -28,7 +28,7 @@ services:
     container_name: shopstr-bitcoind
     hostname: bitcoind
     restart: unless-stopped
-    image: boltz/bitcoin-core:latest
+    image: boltz/bitcoin-core:28.1
     command:
       - -regtest
       - -fallbackfee=0.00000253
@@ -267,7 +267,7 @@ services:
         "
 
   boltz:
-    image: boltz/boltz:latest
+    image: boltz/boltz:latest@sha256:68a9ebc8d69c6b82ba778b8070a5a2f2d31ade0c4a348a39a6e9573e1afd5d08
     container_name: shopstr-boltz
     restart: unless-stopped
     volumes:
@@ -396,7 +396,7 @@ services:
 
 
   cron:
-    image: mcuadros/ofelia:latest
+    image: mcuadros/ofelia:2433093
     container_name: shopstr-cron
     restart: unless-stopped 
     command: daemon --docker -f label=com.docker.compose.project=${COMPOSE_PROJECT_NAME}
