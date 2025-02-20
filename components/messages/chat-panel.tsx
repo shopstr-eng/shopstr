@@ -144,7 +144,9 @@ export const ChatPanel = ({
         userNPub +
         " is expected to arrive within " +
         deliveryTime +
-        ". Your " + shippingCarrier + " tacking number is: " +
+        ". Your " +
+        shippingCarrier +
+        " tacking number is: " +
         trackingNumber;
       let giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
         decodedRandomPubkeyForSender.data as string,
