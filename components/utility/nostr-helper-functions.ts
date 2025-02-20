@@ -357,6 +357,7 @@ export async function PostListing(
       ["d", dValue],
       ["k", "30402"],
       ["web", "https://shopstr.store/marketplace/<bech-32>", "npub"],
+      ["web", "https://shopstr.store/listing/" + dValue],
     ],
     content: "",
     created_at: Math.floor(Date.now() / 1000),
