@@ -51,7 +51,14 @@ export default function SignInModal({
   const router = useRouter();
 
   const startExtensionLogin = async () => {
+    let isValidExtenstion = true;
     try {
+      if (!window.nostr.nip44) {
+        isValidExtenstion = false;
+        throw new Error(
+          "Please use a NIP-44 compatible extension like Alby or nos2x",
+        );
+      }
       // @ts-ignore
       var pk = await window.nostr.getPublicKey();
       if (
@@ -78,8 +85,15 @@ export default function SignInModal({
       }
       onClose();
     } catch (error) {
-      setFailureText("Extension sign-in failed!");
-      setShowFailureModal(true);
+      if (!isValidExtenstion) {
+        setFailureText(
+          "Extension sign-in failed! Please use a NIP-44 compatible extension like Alby or nos2x.",
+        );
+        setShowFailureModal(true);
+      } else {
+        setFailureText("Extension sign-in failed!");
+        setShowFailureModal(true);
+      }
     }
   };
 
