@@ -7,6 +7,7 @@ import {
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
   decryptNpub,
+  generateKeys,
   getLocalStorageData,
   validPassphrase,
   getPrivKeyWithPassphrase,
@@ -16,7 +17,6 @@ import {
 import { ChatsContext } from "../../utils/context/context";
 import RequestPassphraseModal from "../utility-components/request-passphrase-modal";
 import ShopstrSpinner from "../utility-components/shopstr-spinner";
-import axios from "axios";
 import { ChatPanel } from "./chat-panel";
 import { ChatButton } from "./chat-button";
 import { Button } from "@nextui-org/react";
@@ -66,28 +66,17 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
     useState<string>("");
 
   useEffect(() => {
-    axios({
-      method: "GET",
-      url: "/api/nostr/generate-keys",
-    })
-      .then((response) => {
-        setRandomNpubForSender(response.data.npub);
-        setRandomNsecForSender(response.data.nsec);
-      })
-      .catch((error) => {
-        console.error(error);
-      });
-    axios({
-      method: "GET",
-      url: "/api/nostr/generate-keys",
-    })
-      .then((response) => {
-        setRandomNpubForReceiver(response.data.npub);
-        setRandomNsecForReceiver(response.data.nsec);
-      })
-      .catch((error) => {
-        console.error(error);
-      });
+    const fetchKeys = async () => {
+      const { nsec: nsecForSender, npub: npubForSender } = await generateKeys();
+      setRandomNpubForSender(npubForSender);
+      setRandomNsecForSender(nsecForSender);
+      const { nsec: nsecForReceiver, npub: npubForReceiver } =
+        await generateKeys();
+      setRandomNpubForReceiver(npubForReceiver);
+      setRandomNsecForReceiver(nsecForReceiver);
+    };
+
+    fetchKeys();
   }, []);
 
   useEffect(() => {
@@ -158,7 +147,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         setCurrentChatPubkey(sortedChatsByLastMessage[0][0]);
       } else {
         let index = sortedChatsByLastMessage.findIndex(
-          ([pubkey, chatObject]) => pubkey === currentChatPubkey,
+          ([pubkey, _]) => pubkey === currentChatPubkey,
         );
         if (index > 0) enterChat(sortedChatsByLastMessage[index - 1][0]);
       }
@@ -168,7 +157,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         setCurrentChatPubkey(sortedChatsByLastMessage[0][0]);
       } else {
         let index = sortedChatsByLastMessage.findIndex(
-          ([pubkey, chatObject]) => pubkey === currentChatPubkey,
+          ([pubkey, _]) => pubkey === currentChatPubkey,
         );
         if (index < sortedChatsByLastMessage.length - 1)
           enterChat(sortedChatsByLastMessage[index + 1][0]);
@@ -310,8 +299,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         { ...giftWrappedMessageEvent, sig: "", read: true },
       ]);
       setIsSendingDMLoading(false);
-    } catch (e) {
-      console.log("handleSendMessage errored", e);
+    } catch (_) {
       setFailureText("Error sending inquiry.");
       setShowFailureModal(true);
       setIsSendingDMLoading(false);
@@ -324,7 +312,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       if (isChatsLoading) return;
       setIsChatsLoading(true);
       let oldestMessageCreatedAt = Math.trunc(DateTime.now().toSeconds());
-      for (const [chatPubkey, chatObject] of chatsMap.entries()) {
+      for (const [_, chatObject] of chatsMap.entries()) {
         for (const messageEvent of chatObject.decryptedChat) {
           if (messageEvent.created_at < oldestMessageCreatedAt) {
             oldestMessageCreatedAt = messageEvent.created_at;
@@ -525,8 +513,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       });
       setIsChatsLoading(false);
       setIsLoadingMore(false);
-    } catch (err) {
-      console.log(err);
+    } catch (_) {
       setIsChatsLoading(false);
       setIsLoadingMore(false);
     }

@@ -1,5 +1,9 @@
 import React, { useContext, useState, useEffect } from "react";
-import { CashuWalletContext, ChatsContext } from "../utils/context/context";
+import {
+  CashuWalletContext,
+  ChatsContext,
+  ProfileMapContext,
+} from "../utils/context/context";
 import { useRouter } from "next/router";
 import { useForm } from "react-hook-form";
 import {
@@ -18,7 +22,6 @@ import {
   Select,
   SelectItem,
 } from "@nextui-org/react";
-import axios from "axios";
 import {
   BanknotesIcon,
   BoltIcon,
@@ -42,9 +45,8 @@ import {
   getLocalStorageData,
   validPassphrase,
   isUserLoggedIn,
-  publishWalletEvent,
   publishProofEvent,
-  publishSpendingHistoryEvent,
+  generateKeys,
 } from "./utility/nostr-helper-functions";
 import { addChatMessagesToCache } from "../pages/api/nostr/cache-service";
 import { nip19 } from "nostr-tools";
@@ -88,6 +90,7 @@ export default function ProductInvoiceCard({
     getLocalStorageData();
 
   const chatsContext = useContext(ChatsContext);
+  const profileContext = useContext(ProfileMapContext);
 
   const [enterPassphrase, setEnterPassphrase] = useState(false);
   const [passphrase, setPassphrase] = useState("");
@@ -100,7 +103,6 @@ export default function ProductInvoiceCard({
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
 
   const walletContext = useContext(CashuWalletContext);
-  const [dTag, setDTag] = useState("");
 
   const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
   const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
@@ -141,73 +143,65 @@ export default function ProductInvoiceCard({
   }, [signInMethod, passphrase]);
 
   useEffect(() => {
-    axios({
-      method: "GET",
-      url: "/api/nostr/generate-keys",
-    })
-      .then((response) => {
-        setRandomNpubForSender(response.data.npub);
-        setRandomNsecForSender(response.data.nsec);
-      })
-      .catch((error) => {
-        console.error(error);
-      });
-    axios({
-      method: "GET",
-      url: "/api/nostr/generate-keys",
-    })
-      .then((response) => {
-        setRandomNpubForReceiver(response.data.npub);
-        setRandomNsecForReceiver(response.data.nsec);
-      })
-      .catch((error) => {
-        console.error(error);
-      });
-  }, []);
+    const fetchKeys = async () => {
+      const { nsec: nsecForSender, npub: npubForSender } = await generateKeys();
+      setRandomNpubForSender(npubForSender);
+      setRandomNsecForSender(nsecForSender);
+      const { nsec: nsecForReceiver, npub: npubForReceiver } =
+        await generateKeys();
+      setRandomNpubForReceiver(npubForReceiver);
+      setRandomNsecForReceiver(nsecForReceiver);
+    };
 
-  useEffect(() => {
-    const walletEvent = walletContext.mostRecentWalletEvent;
-    if (walletEvent?.tags) {
-      const walletTag = walletEvent.tags.find(
-        (tag: string[]) => tag[0] === "d",
-      )?.[1];
-      setDTag(walletTag);
-    }
-  }, [walletContext]);
+    fetchKeys();
+  }, []);
 
   const sendPaymentAndContactMessage = async (
     pubkeyToReceiveMessage: string,
     message: string,
     isPayment?: boolean,
     isReceipt?: boolean,
+    isDonation?: boolean,
   ) => {
     let decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
     let decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
     let decodedRandomPubkeyForReceiver = nip19.decode(randomNpubForReceiver);
     let decodedRandomPrivkeyForReceiver = nip19.decode(randomNsecForReceiver);
 
+    let messageSubject = "";
+    if (isPayment) {
+      messageSubject = "order-payment";
+    } else if (isReceipt) {
+      messageSubject = "order-receipt";
+    } else if (isDonation) {
+      messageSubject = "donation";
+    } else {
+      messageSubject = "order-info";
+    }
+
+    let giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
+      decodedRandomPubkeyForSender.data as string,
+      pubkeyToReceiveMessage,
+      message,
+      messageSubject,
+      productData,
+    );
+    let sealedEvent = await constructMessageSeal(
+      giftWrappedMessageEvent,
+      decodedRandomPubkeyForSender.data as string,
+      pubkeyToReceiveMessage,
+      undefined,
+      decodedRandomPrivkeyForSender.data as Uint8Array,
+    );
+    let giftWrappedEvent = await constructMessageGiftWrap(
+      sealedEvent,
+      decodedRandomPubkeyForReceiver.data as string,
+      decodedRandomPrivkeyForReceiver.data as Uint8Array,
+      pubkeyToReceiveMessage,
+    );
+    await sendGiftWrappedMessageEvent(giftWrappedEvent);
+
     if (isReceipt) {
-      let giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
-        decodedRandomPubkeyForSender.data as string,
-        userPubkey,
-        message,
-        "order-receipt",
-        productData,
-      );
-      let sealedEvent = await constructMessageSeal(
-        giftWrappedMessageEvent,
-        decodedRandomPubkeyForSender.data as string,
-        userPubkey,
-        undefined,
-        decodedRandomPrivkeyForSender.data as Uint8Array,
-      );
-      let giftWrappedEvent = await constructMessageGiftWrap(
-        sealedEvent,
-        decodedRandomPubkeyForReceiver.data as string,
-        decodedRandomPrivkeyForReceiver.data as Uint8Array,
-        userPubkey,
-      );
-      await sendGiftWrappedMessageEvent(giftWrappedEvent);
       chatsContext.addNewlyCreatedMessageEvent(
         {
           ...giftWrappedMessageEvent,
@@ -219,39 +213,6 @@ export default function ProductInvoiceCard({
       addChatMessagesToCache([
         { ...giftWrappedMessageEvent, sig: "", read: false },
       ]);
-    } else {
-      let giftWrappedMessageEvent;
-      if (isPayment) {
-        giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
-          decodedRandomPubkeyForSender.data as string,
-          pubkeyToReceiveMessage,
-          message,
-          "order-payment",
-          productData,
-        );
-      } else {
-        giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
-          decodedRandomPubkeyForSender.data as string,
-          pubkeyToReceiveMessage,
-          message,
-          "order-info",
-          productData,
-        );
-      }
-      let sealedEvent = await constructMessageSeal(
-        giftWrappedMessageEvent,
-        decodedRandomPubkeyForSender.data as string,
-        pubkeyToReceiveMessage,
-        undefined,
-        decodedRandomPrivkeyForSender.data as Uint8Array,
-      );
-      let giftWrappedEvent = await constructMessageGiftWrap(
-        sealedEvent,
-        decodedRandomPubkeyForReceiver.data as string,
-        decodedRandomPrivkeyForReceiver.data as Uint8Array,
-        pubkeyToReceiveMessage,
-      );
-      await sendGiftWrappedMessageEvent(giftWrappedEvent);
     }
   };
 
@@ -402,7 +363,7 @@ export default function ProductInvoiceCard({
   };
 
   const handleLightningPayment = async (
-    newPrice: number,
+    convertedPrice: number,
     shippingName?: string,
     shippingAddress?: string,
     shippingUnitNo?: string,
@@ -420,7 +381,7 @@ export default function ProductInvoiceCard({
       const wallet = new CashuWallet(new CashuMint(mints[0]));
 
       const { request: pr, quote: hash } =
-        await wallet.createMintQuote(newPrice);
+        await wallet.createMintQuote(convertedPrice);
 
       setInvoice(pr);
 
@@ -455,7 +416,7 @@ export default function ProductInvoiceCard({
       }
       await invoiceHasBeenPaid(
         wallet,
-        newPrice,
+        convertedPrice,
         hash,
         shippingName ? shippingName : undefined,
         shippingAddress ? shippingAddress : undefined,
@@ -497,18 +458,14 @@ export default function ProductInvoiceCard({
     contactInstructions?: string,
     additionalInfo?: string,
   ) {
-    let encoded;
-
     while (true) {
       try {
         const proofs = await wallet.mintProofs(newPrice, hash);
-        encoded = getEncodedToken({
-          mint: mints[0],
-          proofs,
-        });
-        if (encoded !== "" && encoded !== undefined) {
+        if (proofs) {
           await sendTokens(
-            encoded,
+            wallet,
+            proofs,
+            newPrice,
             shippingName ? shippingName : undefined,
             shippingAddress ? shippingAddress : undefined,
             shippingUnitNo ? shippingUnitNo : undefined,
@@ -547,7 +504,9 @@ export default function ProductInvoiceCard({
   }
 
   const sendTokens = async (
-    token: string,
+    wallet: CashuWallet,
+    proofs: Proof[],
+    totalPrice: number,
     shippingName?: string,
     shippingAddress?: string,
     shippingUnitNo?: string,
@@ -560,28 +519,76 @@ export default function ProductInvoiceCard({
     contactInstructions?: string,
     additionalInfo?: string,
   ) => {
-    const { title } = productData;
-    let paymentMessage;
-    if (userNPub) {
-      paymentMessage =
-        "This is a Cashu token payment from " +
-        userNPub +
-        " for your " +
-        title +
-        " listing on Shopstr: " +
-        token;
-    } else {
-      paymentMessage =
-        "This is a Cashu token payment for your " +
-        title +
-        " listing on Shopstr: " +
-        token;
-    }
-    await sendPaymentAndContactMessage(
+    let remainingProofs = proofs;
+    let sellerToken;
+    let donationToken;
+    const sellerProfile = profileContext.profileData.get(
       pubkeyOfProductBeingSold,
-      paymentMessage,
-      true,
     );
+    const donationPercentage = sellerProfile?.content?.shopstr_donation || 2.1;
+    const donationAmount = Math.ceil((totalPrice * donationPercentage) / 100);
+    const sellerAmount = totalPrice - donationAmount;
+
+    if (sellerAmount > 0) {
+      const { keep, send } = await wallet.send(sellerAmount, remainingProofs, {
+        includeFees: true,
+      });
+      sellerToken = getEncodedToken({
+        mint: mints[0],
+        proofs: send,
+      });
+      remainingProofs = keep;
+    }
+
+    if (donationAmount > 0) {
+      const { keep, send } = await wallet.send(
+        donationAmount,
+        remainingProofs,
+        {
+          includeFees: true,
+        },
+      );
+      donationToken = getEncodedToken({
+        mint: mints[0],
+        proofs: send,
+      });
+      remainingProofs = keep;
+    }
+    const { title } = productData;
+    let paymentMessage = "";
+    let donationMessage = "";
+    if (sellerToken) {
+      if (userNPub) {
+        paymentMessage =
+          "This is a Cashu token payment from " +
+          userNPub +
+          " for your " +
+          title +
+          " listing on Shopstr: " +
+          sellerToken;
+      } else {
+        paymentMessage =
+          "This is a Cashu token payment for your " +
+          title +
+          " listing on Shopstr: " +
+          sellerToken;
+      }
+      await sendPaymentAndContactMessage(
+        pubkeyOfProductBeingSold,
+        paymentMessage,
+        true,
+      );
+    }
+    if (donationToken) {
+      donationMessage = "Sale donation: " + donationToken;
+      await sendPaymentAndContactMessage(
+        "a37118a4888e02d28e8767c08caaf73b49abdac391ad7ff18a304891e416dc33",
+        donationMessage,
+        false,
+        false,
+        true,
+      );
+    }
 
     if (additionalInfo) {
       let additionalMessage =
@@ -845,12 +852,44 @@ export default function ProductInvoiceCard({
       const { keep, send } = await wallet.send(price, filteredProofs, {
         includeFees: true,
       });
-      const encodedSendToken = getEncodedToken({
-        mint: mints[0],
-        proofs: send,
-      });
+      const deletedEventIds = [
+        ...new Set([
+          ...walletContext.proofEvents
+            .filter((event) =>
+              event.proofs.some((proof: Proof) =>
+                filteredProofs.some(
+                  (filteredProof) =>
+                    JSON.stringify(proof) === JSON.stringify(filteredProof),
+                ),
+              ),
+            )
+            .map((event) => event.id),
+          ...walletContext.proofEvents
+            .filter((event) =>
+              event.proofs.some((proof: Proof) =>
+                keep.some(
+                  (keepProof) =>
+                    JSON.stringify(proof) === JSON.stringify(keepProof),
+                ),
+              ),
+            )
+            .map((event) => event.id),
+          ...walletContext.proofEvents
+            .filter((event) =>
+              event.proofs.some((proof: Proof) =>
+                send.some(
+                  (sendProof) =>
+                    JSON.stringify(proof) === JSON.stringify(sendProof),
+                ),
+              ),
+            )
+            .map((event) => event.id),
+        ]),
+      ];
       await sendTokens(
-        encodedSendToken,
+        wallet,
+        send,
+        price,
         shippingName ? shippingName : undefined,
         shippingAddress ? shippingAddress : undefined,
         shippingUnitNo ? shippingUnitNo : undefined,
@@ -888,18 +927,14 @@ export default function ProductInvoiceCard({
           ...history,
         ]),
       );
-      const eventIds = walletContext.proofEvents.map((event) => event.id);
-      await publishSpendingHistoryEvent(
+      await publishProofEvent(
+        mints[0],
+        changeProofs && changeProofs.length >= 1 ? changeProofs : [],
         "out",
-        String(price),
-        eventIds,
+        price.toString(),
         passphrase,
-        dTag,
+        deletedEventIds,
       );
-      if (changeProofs && changeProofs.length > 0) {
-        await publishProofEvent(mints[0], changeProofs, "in", passphrase, dTag);
-      }
-      await publishWalletEvent(passphrase, dTag);
       if (setCashuPaymentSent) {
         setCashuPaymentSent(true);
       }

@@ -11,16 +11,15 @@ import {
   EyeIcon,
 } from "@heroicons/react/24/outline";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
-
 import {
   getNsecWithPassphrase,
   getLocalStorageData,
   validPassphrase,
+  createNostrProfileEvent,
 } from "@/components/utility/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
-import { createNostrProfileEvent } from "../api/nostr/crud-service";
 
 const UserProfilePage = () => {
   const [enterPassphrase, setEnterPassphrase] = useState(false);
@@ -46,6 +45,7 @@ const UserProfilePage = () => {
       about: "",
       website: "",
       lud16: "", // Lightning address
+      shopstr_donation: 2.1,
     },
   });
 
@@ -448,6 +448,29 @@ const UserProfilePage = () => {
                       />
                     );
                   }}
+                />
+                <Controller
+                  name="shopstr_donation"
+                  control={control}
+                  render={({ field: { onChange, onBlur, value } }) => (
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.1}
+                      className="pb-4 text-light-text dark:text-dark-text"
+                      classNames={{
+                        label: "text-light-text dark:text-dark-text text-lg",
+                      }}
+                      variant="bordered"
+                      fullWidth
+                      label="Shopstr donation (%)"
+                      labelPlacement="outside"
+                      onChange={onChange}
+                      onBlur={onBlur}
+                      value={value.toString()}
+                    />
+                  )}
                 />
 
                 <Button

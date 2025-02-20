@@ -2,7 +2,6 @@
 import { Button, Input } from "@nextui-org/react";
 import React, { useEffect, useContext, useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
-import axios from "axios";
 import { nip19 } from "nostr-tools";
 import {
   Modal,
@@ -28,6 +27,7 @@ import {
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
   publishReviewEvent,
+  generateKeys,
   getLocalStorageData,
 } from "../utility/nostr-helper-functions";
 import { calculateWeightedScore } from "../utility/review-parser-functions";
@@ -98,28 +98,17 @@ export const ChatPanel = ({
   const bottomDivRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    axios({
-      method: "GET",
-      url: "/api/nostr/generate-keys",
-    })
-      .then((response) => {
-        setRandomNpubForSender(response.data.npub);
-        setRandomNsecForSender(response.data.nsec);
-      })
-      .catch((error) => {
-        console.error(error);
-      });
-    axios({
-      method: "GET",
-      url: "/api/nostr/generate-keys",
-    })
-      .then((response) => {
-        setRandomNpubForReceiver(response.data.npub);
-        setRandomNsecForReceiver(response.data.nsec);
-      })
-      .catch((error) => {
-        console.error(error);
-      });
+    const fetchKeys = async () => {
+      const { nsec: nsecForSender, npub: npubForSender } = await generateKeys();
+      setRandomNpubForSender(npubForSender);
+      setRandomNsecForSender(nsecForSender);
+      const { nsec: nsecForReceiver, npub: npubForReceiver } =
+        await generateKeys();
+      setRandomNpubForReceiver(npubForReceiver);
+      setRandomNsecForReceiver(nsecForReceiver);
+    };
+
+    fetchKeys();
   }, []);
 
   useEffect(() => {
@@ -148,14 +137,17 @@ export const ChatPanel = ({
       let decodedRandomPrivkeyForReceiver = nip19.decode(randomNsecForReceiver);
 
       let deliveryTime = data["Delivery Time"];
-      let trackingUrl = data["Tracking Url"];
+      let shippingCarrier = data["Shipping Carrier"];
+      let trackingNumber = data["Tracking Number"];
       let message =
         "Your order from " +
         userNPub +
         " is expected to arrive within " +
         deliveryTime +
-        ". Check the following link to track it: " +
-        trackingUrl;
+        ". Your " +
+        shippingCarrier +
+        " tacking number is: " +
+        trackingNumber;
       let giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
         decodedRandomPubkeyForSender.data as string,
         buyerPubkey,
@@ -186,7 +178,7 @@ export const ChatPanel = ({
 
   const onReviewSubmit = async (data: { [x: string]: any }) => {
     try {
-      const [_, kind, merchantPubkey, dTag] = productAddress.split(":");
+      const [_, _kind, merchantPubkey, dTag] = productAddress.split(":");
       const eventTags = [
         ["d", `a:${productAddress}`],
         ["rating", (selectedThumb === "up" ? 1 : 0).toString(), "thumb"],
@@ -369,15 +361,10 @@ export const ChatPanel = ({
                     }}
                   />
                   <Controller
-                    name="Tracking Url"
+                    name="Shipping Carrier"
                     control={shippingControl}
                     rules={{
-                      required: "Tracking URL is required.",
-                      pattern: {
-                        value: /^https?:\/\/.+/i,
-                        message:
-                          "Please enter a valid URL starting with http:// or https://",
-                      },
+                      required: "A shipping carrier is required.",
                     }}
                     render={({
                       field: { onChange, onBlur, value },
@@ -389,8 +376,36 @@ export const ChatPanel = ({
                         : "";
                       return (
                         <Input
-                          label="Tracking URL"
-                          placeholder="https://..."
+                          label="Shipping Carrier"
+                          variant="bordered"
+                          placeholder="Fedex, UPS, etc. "
+                          isInvalid={isErrored}
+                          errorMessage={errorMessage}
+                          className="text-light-text dark:text-dark-text"
+                          onChange={onChange}
+                          onBlur={onBlur}
+                          value={value}
+                        />
+                      );
+                    }}
+                  />
+                  <Controller
+                    name="Tracking Number"
+                    control={shippingControl}
+                    rules={{
+                      required: "A tracking number is required.",
+                    }}
+                    render={({
+                      field: { onChange, onBlur, value },
+                      fieldState: { error },
+                    }) => {
+                      let isErrored = error !== undefined;
+                      let errorMessage: string = error?.message
+                        ? error.message
+                        : "";
+                      return (
+                        <Input
+                          label="Tracking Number"
                           variant="bordered"
                           isInvalid={isErrored}
                           errorMessage={errorMessage}

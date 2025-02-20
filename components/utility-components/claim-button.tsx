@@ -14,24 +14,27 @@ import {
   XCircleIcon,
 } from "@heroicons/react/24/outline";
 import { useTheme } from "next-themes";
+import { ProfileMapContext, ChatsContext } from "../../utils/context/context";
 import {
-  ProfileMapContext,
-  CashuWalletContext,
-} from "../../utils/context/context";
-import {
+  generateKeys,
   getLocalStorageData,
-  publishWalletEvent,
   publishProofEvent,
+  constructGiftWrappedMessageEvent,
+  constructMessageSeal,
+  constructMessageGiftWrap,
+  sendGiftWrappedMessageEvent,
 } from "../utility/nostr-helper-functions";
+import { addChatMessagesToCache } from "../../pages/api/nostr/cache-service";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { LightningAddress } from "@getalby/lightning-tools";
+import { nip19 } from "nostr-tools";
 import {
   CashuMint,
   CashuWallet,
   Proof,
   getDecodedToken,
+  getEncodedToken,
 } from "@cashu/cashu-ts";
-import RedemptionModal from "./redemption-modal";
 import { formatWithCommas } from "./display-monetary-info";
 
 export default function ClaimButton({
@@ -43,6 +46,7 @@ export default function ClaimButton({
 }) {
   const [lnurl, setLnurl] = useState("");
   const profileContext = useContext(ProfileMapContext);
+  const chatsContext = useContext(ChatsContext);
   const { userPubkey } = getLocalStorageData();
 
   const [openClaimTypeModal, setOpenClaimTypeModal] = useState(false);
@@ -55,8 +59,6 @@ export default function ClaimButton({
   const [tokenMint, setTokenMint] = useState("");
   const [tokenAmount, setTokenAmount] = useState(0);
   const [formattedTokenAmount, setFormattedTokenAmount] = useState("");
-  const [claimChangeAmount, setClaimChangeAmount] = useState(0);
-  const [claimChangeProofs, setClaimChangeProofs] = useState<Proof[]>([]);
 
   const [isInvalidSuccess, setIsInvalidSuccess] = useState(false);
   const [isReceived, setIsReceived] = useState(false);
@@ -64,12 +66,30 @@ export default function ClaimButton({
   const [isInvalidToken, setIsInvalidToken] = useState(false);
   const [isDuplicateToken, setIsDuplicateToken] = useState(false);
 
-  const walletContext = useContext(CashuWalletContext);
-  const [dTag, setDTag] = useState("");
-
   const { mints, tokens, history } = getLocalStorageData();
 
   const { theme } = useTheme();
+
+  const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
+  const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
+  const [randomNpubForReceiver, setRandomNpubForReceiver] =
+    useState<string>("");
+  const [randomNsecForReceiver, setRandomNsecForReceiver] =
+    useState<string>("");
+
+  useEffect(() => {
+    const fetchKeys = async () => {
+      const { nsec: nsecForSender, npub: npubForSender } = await generateKeys();
+      setRandomNpubForSender(npubForSender);
+      setRandomNsecForSender(nsecForSender);
+      const { nsec: nsecForReceiver, npub: npubForReceiver } =
+        await generateKeys();
+      setRandomNpubForReceiver(npubForReceiver);
+      setRandomNsecForReceiver(nsecForReceiver);
+    };
+
+    fetchKeys();
+  }, []);
 
   useEffect(() => {
     const decodedToken = getDecodedToken(token);
@@ -127,16 +147,6 @@ export default function ClaimButton({
     );
   }, [profileContext, tokenMint]);
 
-  useEffect(() => {
-    const walletEvent = walletContext.mostRecentWalletEvent;
-    if (walletEvent?.tags) {
-      const walletTag = walletEvent.tags.find(
-        (tag: string[]) => tag[0] === "d",
-      )?.[1];
-      setDTag(walletTag);
-    }
-  }, [walletContext]);
-
   const handleClaimType = (type: string) => {
     if (type === "receive") {
       receive(false);
@@ -179,8 +189,8 @@ export default function ClaimButton({
           tokenMint,
           uniqueProofs,
           "in",
+          tokenAmount.toString(),
           passphrase,
-          dTag,
         );
         const tokenArray = [...tokens, ...uniqueProofs];
         localStorage.setItem("tokens", JSON.stringify(tokenArray));
@@ -205,13 +215,11 @@ export default function ClaimButton({
             ...history,
           ]),
         );
-        await publishWalletEvent(passphrase, dTag);
       } else {
         setIsSpent(true);
         setIsRedeeming(false);
       }
-    } catch (error) {
-      console.log(error);
+    } catch (_) {
       setIsInvalidToken(true);
       setIsRedeeming(false);
     }
@@ -244,9 +252,54 @@ export default function ClaimButton({
                   0,
                 )
               : 0;
-          if (changeAmount >= 1 && changeProofs) {
-            setClaimChangeAmount(changeAmount);
-            setClaimChangeProofs(changeProofs);
+          if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
+            let decodedRandomPubkeyForSender =
+              nip19.decode(randomNpubForSender);
+            let decodedRandomPrivkeyForSender =
+              nip19.decode(randomNsecForSender);
+            let decodedRandomPubkeyForReceiver = nip19.decode(
+              randomNpubForReceiver,
+            );
+            let decodedRandomPrivkeyForReceiver = nip19.decode(
+              randomNsecForReceiver,
+            );
+            let encodedChange = getEncodedToken({
+              mint: tokenMint,
+              proofs: changeProofs,
+            });
+            const paymentMessage = "Overpaid fee change: " + encodedChange;
+            let giftWrappedMessageEvent =
+              await constructGiftWrappedMessageEvent(
+                decodedRandomPubkeyForSender.data as string,
+                userPubkey,
+                paymentMessage,
+                "payment-change",
+              );
+            let sealedEvent = await constructMessageSeal(
+              giftWrappedMessageEvent,
+              decodedRandomPubkeyForSender.data as string,
+              userPubkey,
+              undefined,
+              decodedRandomPrivkeyForSender.data as Uint8Array,
+            );
+            let giftWrappedEvent = await constructMessageGiftWrap(
+              sealedEvent,
+              decodedRandomPubkeyForReceiver.data as string,
+              decodedRandomPrivkeyForReceiver.data as Uint8Array,
+              userPubkey,
+            );
+            await sendGiftWrappedMessageEvent(giftWrappedEvent);
+            chatsContext.addNewlyCreatedMessageEvent(
+              {
+                ...giftWrappedMessageEvent,
+                sig: "",
+                read: false,
+              },
+              true,
+            );
+            addChatMessagesToCache([
+              { ...giftWrappedMessageEvent, sig: "", read: false },
+            ]);
           }
           setIsPaid(true);
           setOpenRedemptionModal(true);
@@ -255,8 +308,7 @@ export default function ClaimButton({
       } else {
         throw new Error("Wallet not initialized");
       }
-    } catch (error) {
-      console.log(error);
+    } catch (_) {
       setIsPaid(false);
       setOpenRedemptionModal(true);
       setIsRedeeming(false);
@@ -504,14 +556,73 @@ export default function ClaimButton({
           </Modal>
         </>
       ) : null}
-      <RedemptionModal
-        isPaid={isPaid}
-        opened={openRedemptionModal}
-        changeAmount={claimChangeAmount}
-        changeProofs={claimChangeProofs}
-        lnurl={lnurl}
-        changeMint={tokenMint}
-      />
+      {isPaid ? (
+        <>
+          <Modal
+            backdrop="blur"
+            isOpen={openRedemptionModal}
+            onClose={() => setOpenRedemptionModal(false)}
+            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
+            classNames={{
+              body: "py-6 ",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
+            }}
+            isDismissable={true}
+            scrollBehavior={"normal"}
+            placement={"center"}
+            size="2xl"
+          >
+            <ModalContent>
+              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <CheckCircleIcon className="h-6 w-6 text-green-500" />
+                <div className="ml-2">Token successfully redeemed!</div>
+              </ModalHeader>
+              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <div className="flex items-center justify-center">
+                  Check your Lightning address ({lnurl}) for your sats.
+                </div>
+              </ModalBody>
+            </ModalContent>
+          </Modal>
+        </>
+      ) : (
+        <>
+          <Modal
+            backdrop="blur"
+            isOpen={openRedemptionModal}
+            onClose={() => setOpenRedemptionModal(false)}
+            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
+            classNames={{
+              body: "py-6 ",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
+            }}
+            isDismissable={true}
+            scrollBehavior={"normal"}
+            placement={"center"}
+            size="2xl"
+          >
+            <ModalContent>
+              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <XCircleIcon className="h-6 w-6 text-red-500" />
+                <div className="ml-2">Token redemption failed!</div>
+              </ModalHeader>
+              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <div className="flex items-center justify-center">
+                  You are attempting to redeem a token that has already been
+                  redeemed, is too small/large, or for which there were no
+                  payment routes found.
+                </div>
+              </ModalBody>
+            </ModalContent>
+          </Modal>
+        </>
+      )}
     </div>
   );
 }

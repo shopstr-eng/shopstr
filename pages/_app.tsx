@@ -59,8 +59,9 @@ import DynamicHead from "../components/dynamic-meta-head";
 function App({ Component, pageProps }: AppProps) {
   const [enterPassphrase, setEnterPassphrase] = useState(false);
   const [passphrase, setPassphrase] = useState("");
-  const [localStorageValues, setLocalStorageValues] =
-    useState<LocalStorageInterface>(getLocalStorageData());
+  const [localStorageValues, _] = useState<LocalStorageInterface>(
+    getLocalStorageData(),
+  );
   const [productContext, setProductContext] = useState<ProductContextInterface>(
     {
       productEvents: [],
@@ -261,9 +262,7 @@ function App({ Component, pageProps }: AppProps) {
   });
   const [cashuWalletContext, setCashuWalletContext] =
     useState<CashuWalletContextInterface>({
-      mostRecentWalletEvent: {},
       proofEvents: [],
-      cashuWalletRelays: [],
       cashuMints: [],
       cashuProofs: [],
       isLoading: true,
@@ -373,17 +372,13 @@ function App({ Component, pageProps }: AppProps) {
   };
 
   const editCashuWalletContext = (
-    mostRecentWalletEvent: any,
     proofEvents: any[],
-    cashuWalletRelays: string[],
     cashuMints: string[],
     cashuProofs: Proof[],
     isLoading: boolean,
   ) => {
     setCashuWalletContext({
-      mostRecentWalletEvent,
       proofEvents,
-      cashuWalletRelays,
       cashuMints,
       cashuProofs,
       isLoading,
@@ -401,6 +396,11 @@ function App({ Component, pageProps }: AppProps) {
     async function fetchData() {
       if (getLocalStorageData().signInMethod === "amber") {
         LogOut();
+      }
+      if (getLocalStorageData().signInMethod === "extension") {
+        if (!window.nostr.nip44) {
+          LogOut();
+        }
       }
       const relays = getLocalStorageData().relays;
       const readRelays = getLocalStorageData().readRelays;
@@ -456,21 +456,17 @@ function App({ Component, pageProps }: AppProps) {
             ...pubkeysToFetchProfilesFor,
           ];
         }
-        let { shopSettingsMap } = await fetchShopSettings(
+        await fetchShopSettings(
           allRelays,
           pubkeysToFetchProfilesFor,
           editShopContext,
         );
-        let { profileMap } = await fetchProfile(
+        await fetchProfile(
           allRelays,
           pubkeysToFetchProfilesFor,
           editProfileContext,
         );
-        let { merchantScoresMap, productReviewsMap } = await fetchReviews(
-          allRelays,
-          productEvents,
-          editReviewsContext,
-        );
+        await fetchReviews(allRelays, productEvents, editReviewsContext);
         // let { cartList } = await fetchCart(
         //   allRelays,
         //   editCartContext,
@@ -485,35 +481,18 @@ function App({ Component, pageProps }: AppProps) {
           getLocalStorageData().signInMethod === "extension" ||
           getLocalStorageData().signInMethod === "bunker"
         ) {
-          let {
-            mostRecentWalletEvent,
-            proofEvents,
-            cashuWalletRelays,
-            cashuMints,
-            cashuProofs,
-          } = await fetchCashuWallet(
+          let { cashuMints, cashuProofs } = await fetchCashuWallet(
             allRelays,
             editCashuWalletContext,
             passphrase,
           );
 
-          if (
-            cashuWalletRelays.length != 0 &&
-            cashuMints.length != 0 &&
-            cashuProofs.length != 0
-          ) {
-            localStorage.setItem(
-              "cashuWalletRelays",
-              JSON.stringify(cashuWalletRelays),
-            );
+          if (cashuMints.length != 0 && cashuProofs.length != 0) {
             localStorage.setItem("mints", JSON.stringify(cashuMints));
             localStorage.setItem("tokens", JSON.stringify(cashuProofs));
           }
         }
-        let { followList } = await fetchAllFollows(
-          allRelays,
-          editFollowsContext,
-        );
+        await fetchAllFollows(allRelays, editFollowsContext);
       } catch (error) {
         console.error("Error fetching data:", error);
       }

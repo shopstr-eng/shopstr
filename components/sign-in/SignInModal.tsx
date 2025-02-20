@@ -1,5 +1,4 @@
 import React, { useEffect, useState, useContext } from "react";
-import axios from "axios";
 import {
   Modal,
   ModalContent,
@@ -11,6 +10,7 @@ import {
 } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
 import {
+  generateKeys,
   setLocalStorageDataOnSignIn,
   validateNSecKey,
   parseBunkerToken,
@@ -51,7 +51,14 @@ export default function SignInModal({
   const router = useRouter();
 
   const startExtensionLogin = async () => {
+    let isValidExtenstion = true;
     try {
+      if (!window.nostr.nip44) {
+        isValidExtenstion = false;
+        throw new Error(
+          "Please use a NIP-44 compatible extension like Alby or nos2x",
+        );
+      }
       // @ts-ignore
       var pk = await window.nostr.getPublicKey();
       if (
@@ -78,8 +85,15 @@ export default function SignInModal({
       }
       onClose();
     } catch (error) {
-      setFailureText("Extension sign-in failed!");
-      setShowFailureModal(true);
+      if (!isValidExtenstion) {
+        setFailureText(
+          "Extension sign-in failed! Please use a NIP-44 compatible extension like Alby or nos2x.",
+        );
+        setShowFailureModal(true);
+      } else {
+        setFailureText("Extension sign-in failed!");
+        setShowFailureModal(true);
+      }
     }
   };
 
@@ -90,17 +104,9 @@ export default function SignInModal({
         const { remotePubkey, relays, secret } = bunkerTokenParams;
         let clientPubkey;
         let clientPrivkey;
-        await axios({
-          method: "GET",
-          url: "/api/nostr/generate-keys",
-        })
-          .then((response) => {
-            clientPubkey = response.data.npub;
-            clientPrivkey = response.data.nsec;
-          })
-          .catch((error) => {
-            console.error(error);
-          });
+        const { nsec, npub } = await generateKeys();
+        clientPubkey = npub;
+        clientPrivkey = nsec;
         const connectId = crypto.randomUUID();
         await sendBunkerRequest(
           "connect",

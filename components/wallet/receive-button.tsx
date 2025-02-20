@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import {
   ArrowDownTrayIcon,
@@ -18,7 +18,6 @@ import {
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import {
   getLocalStorageData,
-  publishWalletEvent,
   publishProofEvent,
 } from "../utility/nostr-helper-functions";
 import {
@@ -27,7 +26,6 @@ import {
   getDecodedToken,
   Proof,
 } from "@cashu/cashu-ts";
-import { CashuWalletContext } from "../../utils/context/context";
 
 const ReceiveButton = ({ passphrase }: { passphrase?: string }) => {
   const [showReceiveModal, setShowReceiveModal] = useState(false);
@@ -36,9 +34,6 @@ const ReceiveButton = ({ passphrase }: { passphrase?: string }) => {
   const [isInvalidToken, setIsInvalidToken] = useState(false);
   const [isDuplicateToken, setIsDuplicateToken] = useState(false);
 
-  const walletContext = useContext(CashuWalletContext);
-  const [dTag, setDTag] = useState("");
-
   const { mints, tokens, history, signInMethod } = getLocalStorageData();
 
   const {
@@ -46,16 +41,6 @@ const ReceiveButton = ({ passphrase }: { passphrase?: string }) => {
     control: receiveControl,
     reset: receiveReset,
   } = useForm();
-
-  useEffect(() => {
-    const walletEvent = walletContext.mostRecentWalletEvent;
-    if (walletEvent?.tags) {
-      const walletTag = walletEvent.tags.find(
-        (tag: string[]) => tag[0] === "d",
-      )?.[1];
-      setDTag(walletTag);
-    }
-  }, [walletContext]);
 
   const handleToggleReceiveModal = () => {
     receiveReset();
@@ -114,19 +99,17 @@ const ReceiveButton = ({ passphrase }: { passphrase?: string }) => {
             ...history,
           ]),
         );
-        await publishWalletEvent(passphrase, dTag);
         await publishProofEvent(
           tokenMint,
           uniqueProofs,
           "in",
+          transactionAmount.toString(),
           passphrase,
-          dTag,
         );
       } else {
         setIsSpent(true);
       }
-    } catch (error) {
-      console.log(error);
+    } catch (_) {
       setIsInvalidToken(true);
     }
   };
