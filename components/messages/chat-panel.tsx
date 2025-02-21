@@ -22,7 +22,7 @@ import { ChatObject, NostrMessageEvent } from "../../utils/types/types";
 import { ChatMessage } from "./chat-message";
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
 import {
-  constructGiftWrappedMessageEvent,
+  constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
@@ -77,7 +77,8 @@ export const ChatPanel = ({
       ["communication", 0],
     ]),
   );
-  const [productAddress, setProductAddress] = useState<string>("");
+  const [productAddress, setProductAddress] = useState("");
+  const [orderId, setOrderId] = useState("");
 
   const reviewsContext = useContext(ReviewsContext);
 
@@ -148,13 +149,18 @@ export const ChatPanel = ({
         shippingCarrier +
         " tacking number is: " +
         trackingNumber;
-      let giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
+      let giftWrappedMessageEvent = await constructGiftWrappedEvent(
         decodedRandomPubkeyForSender.data as string,
         buyerPubkey,
         message,
         "shipping-info",
-        undefined,
-        productAddress,
+        {
+          productAddress,
+          type: 4,
+          status: shipped,
+          isOrder: true,
+          orderId,
+        },
       );
       let sealedEvent = await constructMessageSeal(
         giftWrappedMessageEvent,
@@ -266,6 +272,7 @@ export const ChatPanel = ({
                 setBuyerPubkey={setBuyerPubkey}
                 setCanReview={setCanReview}
                 setProductAddress={setProductAddress}
+                setOrderId={setOrderId}
               />
             );
           })}

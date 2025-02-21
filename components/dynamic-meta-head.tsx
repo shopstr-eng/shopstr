@@ -62,14 +62,14 @@ const getMetaTags = (
         description:
           shopInfo.content.about || "Check out this shop on Shopstr!",
         image: shopInfo.content.ui.picture || "/shopstr-2000x2000.png",
-        url: `https://shopstr.store/${pubkey}`,
+        url: `https://shopstr.store/marketplace/${pubkey}`,
       };
     }
     return {
       ...defaultTags,
       title: "Shopstr Shop",
       description: "Check out this shop on Shopstr!",
-      url: `https://shopstr.store/${pubkey}`,
+      url: `https://shopstr.store/marketplace/${pubkey}`,
     };
   }
 

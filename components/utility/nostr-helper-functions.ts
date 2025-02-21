@@ -204,7 +204,7 @@ export async function sendBunkerRequest(
       };
     } else if (
       method === "nip44_encrypt" ||
-      (method === "nip44_decrypt" && thirdPartyPubkey)
+      (method === "nip44_decrypt" && thirdPartyPubkey) || method === "nip04_encrypt" || (method === "nip04_decrypt" && thirdPartyPubkey)
     ) {
       request = {
         id: requestIdString,
@@ -459,43 +459,90 @@ interface GiftWrappedMessageEvent {
   tags: string[][];
 }
 
-export async function constructGiftWrappedMessageEvent(
+export async function constructGiftWrappedEvent(
   senderPubkey: string,
   recipientPubkey: string,
   message: string,
   subject: string,
-  productData?: ProductData,
-  productAddress?: string,
+  options: {
+    kind?: number;
+    orderId?: string;
+    type?: number;
+    paymentType?: string;
+    paymentProof?: string;
+    paymentMint?: string;
+    orderAmount?: number;
+    status?: string;
+    productData?: ProductData;
+    quantity?: number;
+    productAddress?: string;
+    isOrder?: boolean;
+  } = {}
 ): Promise<GiftWrappedMessageEvent> {
   const { relays } = getLocalStorageData();
+  const {
+    kind,
+    orderId,
+    type,
+    paymentType,
+    paymentProof,
+    paymentMint,
+    orderAmount,
+    status,
+    productData,
+    quantity,
+    productAddress,
+    isOrder = false
+  } = options;
+
   let tags = [
     ["p", recipientPubkey, relays[0]],
     ["subject", subject],
   ];
 
-  if (productData) {
-    tags.push([
-      "a",
-      "30402:" + productData.pubkey + ":" + productData.d,
-      relays[0],
-    ]);
-  } else if (productAddress) {
-    tags.push(["a", productAddress, relays[0]]);
+  // Add order-specific tags
+  if (isOrder) {
+    tags.push(["order", orderId ? orderId : crypto.randomUUID()]);
+
+    if (type) tags.push(["type", type.toString()]);
+    if (orderAmount) tags.push(["amount", orderAmount.toString()]);
+    if (paymentType && paymentProof && paymentMint) tags.push(["payment", paymentType, paymentProof, paymentMint]);
+    if (status) tags.push(["status", status]);
+
+    // Handle product information for orders
+    if (productData || productAddress) {
+      tags.push([
+        "item",
+        productData ? `30402:${productData.pubkey}:${productData.d}` : productAddress!,
+        quantity ? quantity.toString() : "1"
+      ]);
+    }
+  } else {
+    // Handle regular message product references
+    if (productData) {
+      tags.push([
+        "a",
+        `30402:${productData.pubkey}:${productData.d}`,
+        relays[0]
+      ]);
+    } else if (productAddress) {
+      tags.push(["a", productAddress, relays[0]]);
+    }
   }
 
-  let bareGiftWrappedMessageEvent = {
+  const bareEvent = {
     pubkey: senderPubkey,
     created_at: Math.floor(Date.now() / 1000),
     content: message,
-    kind: 14,
-    tags: tags,
+    kind: kind ? kind : 14,
+    tags
   };
-  let giftWrappedMessageEventId = generateEventId(bareGiftWrappedMessageEvent);
-  let giftWrappedMessageEvent = {
-    id: giftWrappedMessageEventId,
-    ...bareGiftWrappedMessageEvent,
+
+  const eventId = generateEventId(bareEvent);
+  return {
+    id: eventId,
+    ...bareEvent
   };
-  return giftWrappedMessageEvent;
 }
 
 export async function constructMessageSeal(
@@ -716,21 +763,17 @@ export async function publishShoppingCartEvent(
     if (!containsRelay(allWriteRelays, blastrRelay)) {
       allWriteRelays.push(blastrRelay);
     }
-    let updatedCartAddresses: string[][] = [];
+    let cartTags: string[][] = [];
     if (quantity && quantity < 0) {
-      updatedCartAddresses = [...cartAddresses].filter(
+      cartTags = [...cartAddresses].filter(
         (address) => !address[1].includes(`:${product.d}`),
       );
-    } else {
-      const productTag = ["a", "30402:" + product.pubkey + ":" + product.d];
-      if (quantity && quantity > 1) {
-        for (let i = 0; i < quantity - 1; i++) {
-          updatedCartAddresses.push(productTag);
-        }
-      }
-      updatedCartAddresses.push(productTag);
+    } else if (quantity && quantity > 0) {
+      const productTag = ["item", "30402:" + product.pubkey + ":" + product.d, quantity];
+      cartTags.push(productTag);
     }
-    let productAddressTags = JSON.stringify(updatedCartAddresses);
+    cartTags.push(...[["d", crypto.randomUUID().toString()], ["title", "cart"]]);
+    let productAddressTags = JSON.stringify(cartTags);
     let encryptedContent;
     if (signInMethod === "extension") {
       encryptedContent = await window.nostr.nip04.encrypt(
@@ -740,7 +783,7 @@ export async function publishShoppingCartEvent(
     } else if (signInMethod === "bunker") {
       const encryptId = crypto.randomUUID();
       await sendBunkerRequest(
-        "nip44_encrypt",
+        "nip04_encrypt",
         encryptId,
         undefined,
         productAddressTags,
@@ -767,7 +810,7 @@ export async function publishShoppingCartEvent(
       pubkey: userPubkey,
       created_at: Math.floor(Date.now() / 1000),
       content: encryptedContent,
-      kind: 10402,
+      kind: 30405,
       tags: [],
     };
     let signedEvent;

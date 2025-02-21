@@ -38,7 +38,7 @@ import {
   Proof,
 } from "@cashu/cashu-ts";
 import {
-  constructGiftWrappedMessageEvent,
+  constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
@@ -162,6 +162,10 @@ export default function ProductInvoiceCard({
     isPayment?: boolean,
     isReceipt?: boolean,
     isDonation?: boolean,
+    orderId?: string,
+    paymentType?: string,
+    paymentProof?: string,
+    paymentMint?: string,
   ) => {
     let decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
     let decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
@@ -169,22 +173,41 @@ export default function ProductInvoiceCard({
     let decodedRandomPrivkeyForReceiver = nip19.decode(randomNsecForReceiver);
 
     let messageSubject = "";
-    if (isPayment) {
+    let messageOptions = {};
+    if (isPayment && orderId) {
       messageSubject = "order-payment";
+      messageOptions = {
+        isOrder: true,
+        type: 2,
+        orderAmount: totalCost,
+        orderId,
+        paymentType,
+        paymentProof,
+        paymentMint,
+      };
     } else if (isReceipt) {
       messageSubject = "order-receipt";
+      messageOptions = { productData };
     } else if (isDonation) {
       messageSubject = "donation";
-    } else {
+    } else if (orderId) {
       messageSubject = "order-info";
+      messageOptions = {
+        isOrder: true,
+        type: 1,
+        orderAmount: totalCost,
+        orderId,
+        productData,
+        quantity: 1,
+      };
     }
 
-    let giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
+    let giftWrappedMessageEvent = await constructGiftWrappedEvent(
       decodedRandomPubkeyForSender.data as string,
       pubkeyToReceiveMessage,
       message,
       messageSubject,
-      productData,
+      messageOptions,
     );
     let sealedEvent = await constructMessageSeal(
       giftWrappedMessageEvent,
@@ -528,11 +551,13 @@ export default function ProductInvoiceCard({
     const donationPercentage = sellerProfile?.content?.shopstr_donation || 2.1;
     const donationAmount = Math.ceil((totalPrice * donationPercentage) / 100);
     const sellerAmount = totalPrice - donationAmount;
+    let sellerProofs: Proof[] = [];
 
     if (sellerAmount > 0) {
       const { keep, send } = await wallet.send(sellerAmount, remainingProofs, {
         includeFees: true,
       });
+      sellerProofs = send;
       sellerToken = getEncodedToken({
         mint: mints[0],
         proofs: send,
@@ -557,7 +582,8 @@ export default function ProductInvoiceCard({
     const { title } = productData;
     let paymentMessage = "";
     let donationMessage = "";
-    if (sellerToken) {
+    let orderId = crypto.randomUUID();
+    if (sellerToken && sellerProofs) {
       if (userNPub) {
         paymentMessage =
           "This is a Cashu token payment from " +
@@ -577,6 +603,12 @@ export default function ProductInvoiceCard({
         pubkeyOfProductBeingSold,
         paymentMessage,
         true,
+        false,
+        false,
+        orderId,
+        "ecash",
+        JSON.stringify(sellerProofs),
+        mints[0],
       );
     }
     if (donationToken) {
@@ -597,6 +629,9 @@ export default function ProductInvoiceCard({
         pubkeyOfProductBeingSold,
         additionalMessage,
         false,
+        false,
+        false,
+        orderId,
       );
     }
 
@@ -702,6 +737,9 @@ export default function ProductInvoiceCard({
           pubkeyOfProductBeingSold,
           contactMessage,
           false,
+          false,
+          false,
+          orderId,
         );
         if (userPubkey) {
           await sendPaymentAndContactMessage(
@@ -755,6 +793,9 @@ export default function ProductInvoiceCard({
           pubkeyOfProductBeingSold,
           contactMessage,
           false,
+          false,
+          false,
+          orderId,
         );
         if (userPubkey) {
           await sendPaymentAndContactMessage(
@@ -771,6 +812,9 @@ export default function ProductInvoiceCard({
         pubkeyOfProductBeingSold,
         contactMessage,
         false,
+        false,
+        false,
+        orderId,
       );
       if (userPubkey) {
         let receiptMessage =

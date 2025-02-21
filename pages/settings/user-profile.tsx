@@ -2,7 +2,14 @@ import React, { useEffect, useState, useContext, useMemo } from "react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { ProfileMapContext } from "@/utils/context/context";
 import { useForm, Controller } from "react-hook-form";
-import { Button, Textarea, Input, Image } from "@nextui-org/react";
+import {
+  Button,
+  Textarea,
+  Input,
+  Image,
+  Select,
+  SelectItem,
+} from "@nextui-org/react";
 import {
   ArrowUpOnSquareIcon,
   CheckIcon,
@@ -45,6 +52,7 @@ const UserProfilePage = () => {
       about: "",
       website: "",
       lud16: "", // Lightning address
+      payment_preference: "ecash",
       shopstr_donation: 2.1,
     },
   });
@@ -449,6 +457,37 @@ const UserProfilePage = () => {
                     );
                   }}
                 />
+                <Controller
+                  name="payment_preference"
+                  control={control}
+                  render={({ field: { onChange, onBlur, value } }) => (
+                    <Select
+                      className="pb-4 text-light-text dark:text-dark-text"
+                      classNames={{
+                        label: "text-light-text dark:text-dark-text text-lg",
+                      }}
+                      variant="bordered"
+                      fullWidth={true}
+                      label="Payment preference"
+                      labelPlacement="outside"
+                      defaultSelectedKeys={["ecash"]}
+                      value={value}
+                      onChange={onChange}
+                      onBlur={onBlur}
+                    >
+                      <SelectItem key="manual" value="manual">
+                        Manual
+                      </SelectItem>
+                      <SelectItem key="ecash" value="ecash">
+                        Ecash
+                      </SelectItem>
+                      <SelectItem key="lud16" value="lud16">
+                        Lightning
+                      </SelectItem>
+                    </Select>
+                  )}
+                />
+
                 <Controller
                   name="shopstr_donation"
                   control={control}

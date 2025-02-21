@@ -19,7 +19,7 @@ import {
   generateKeys,
   getLocalStorageData,
   publishProofEvent,
-  constructGiftWrappedMessageEvent,
+  constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
@@ -268,13 +268,12 @@ export default function ClaimButton({
               proofs: changeProofs,
             });
             const paymentMessage = "Overpaid fee change: " + encodedChange;
-            let giftWrappedMessageEvent =
-              await constructGiftWrappedMessageEvent(
-                decodedRandomPubkeyForSender.data as string,
-                userPubkey,
-                paymentMessage,
-                "payment-change",
-              );
+            let giftWrappedMessageEvent = await constructGiftWrappedEvent(
+              decodedRandomPubkeyForSender.data as string,
+              userPubkey,
+              paymentMessage,
+              "payment-change",
+            );
             let sealedEvent = await constructMessageSeal(
               giftWrappedMessageEvent,
               decodedRandomPubkeyForSender.data as string,
