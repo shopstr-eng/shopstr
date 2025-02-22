@@ -7,7 +7,7 @@ import parseTags, {
 } from "../../components/utility/product-parser-functions";
 import ListingPage from "../../components/listing-page";
 import { ProductContext } from "../../utils/context/context";
-import { Event } from "nostr-tools";
+import { Event, nip19 } from "nostr-tools";
 
 const Listing = () => {
   const router = useRouter();
@@ -38,13 +38,22 @@ const Listing = () => {
     if (!productContext.isLoading && productContext.productEvents) {
       const matchingEvent = productContext.productEvents.find(
         (event: Event) => {
+          // check for matching naddr
+          const naddrMatch =
+            nip19.naddrEncode({
+              identifier:
+                event.tags.find((tag: string[]) => tag[0] === "d")?.[1] || "",
+              pubkey: event.pubkey,
+              kind: event.kind,
+            }) === productIdString;
+
           // Check for matching d tag
           const dTagMatch =
             event.tags.find((tag: string[]) => tag[0] === "d")?.[1] ===
             productIdString;
           // Check for matching event id
           const idMatch = event.id === productIdString;
-          return dTagMatch || idMatch;
+          return naddrMatch || dTagMatch || idMatch;
         },
       );
 

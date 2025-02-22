@@ -77,11 +77,10 @@ export function MarketplacePage({
 
   const { userPubkey } = getLocalStorageData();
 
-  // Update focusedPubkey when pubkey in url changes
   useEffect(() => {
-    let focusedPubkeys = router.query.pubkey;
-    if (focusedPubkeys && typeof focusedPubkeys[0] === "string") {
-      const { data } = nip19.decode(focusedPubkeys[0]);
+    let npub = router.query.npub;
+    if (npub && typeof npub[0] === "string") {
+      const { data } = nip19.decode(npub[0]);
       setFocusedPubkey(data as string); // router.query.pubkey returns array of pubkeys
       setSelectedSection("shop");
     }
@@ -183,8 +182,13 @@ export function MarketplacePage({
     });
   };
 
-  const handleTitleClick = (productId: string) => {
-    router.push(`/listing/${productId}`);
+  const handleTitleClick = (productId: string, productPubkey: string) => {
+    const naddr = nip19.naddrEncode({
+      identifier: productId,
+      pubkey: productPubkey,
+      kind: 30402,
+    });
+    router.push(`/listing/${naddr}`);
   };
 
   const renderProductScores = () => {
@@ -201,7 +205,9 @@ export function MarketplacePage({
             <div key={product.id} className="mt-4 p-4 pt-4">
               <h3 className="mb-3 text-lg font-semibold text-light-text dark:text-dark-text">
                 <div
-                  onClick={() => handleTitleClick(product.d as string)}
+                  onClick={() =>
+                    handleTitleClick(product.d as string, product.pubkey)
+                  }
                   className="cursor-pointer hover:underline"
                 >
                   {product.title}

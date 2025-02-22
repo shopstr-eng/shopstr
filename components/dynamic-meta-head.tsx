@@ -2,6 +2,7 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import { NostrEvent, ShopSettings } from "@/utils/types/types";
 import parseTags from "./utility/product-parser-functions";
+import { nip19 } from "nostr-tools";
 
 type MetaTagsType = {
   title: string;
@@ -12,7 +13,7 @@ type MetaTagsType = {
 
 const getMetaTags = (
   pathname: string,
-  query: { productId?: string[]; pubkey?: string[] },
+  query: { productId?: string[]; npub?: string[] },
   productEvents: NostrEvent[],
   shopEvents: Map<string, ShopSettings>,
 ): MetaTagsType => {
@@ -33,6 +34,11 @@ const getMetaTags = (
     });
 
     if (product) {
+      const naddr = nip19.naddrEncode({
+        identifier: productId as string,
+        pubkey: product.pubkey,
+        kind: 30402,
+      });
       const productData = parseTags(product);
       if (productData) {
         return {
@@ -40,20 +46,20 @@ const getMetaTags = (
           description:
             productData.summary || "Check out this product on Shopstr!",
           image: productData.images?.[0] || "/shopstr-2000x2000.png",
-          url: `https://shopstr.store/listing/${productId}`,
+          url: `https://shopstr.store/listing/${naddr}`,
         };
       }
       return {
         ...defaultTags,
         title: "Shopstr Listing",
         description: "Check out this listing on Shopstr!",
-        url: `https://shopstr.store/listing/${productId}`,
+        url: `https://shopstr.store/listing/${naddr}`,
       };
     }
   } else if (pathname.includes("/npub")) {
-    const pubkey = query.pubkey?.[0];
-    const shopInfo = pubkey
-      ? Array.from(shopEvents.values()).find((event) => event.pubkey === pubkey)
+    const npub = query.npub?.[0];
+    const shopInfo = npub
+      ? Array.from(shopEvents.values()).find((event) => nip19.npubEncode(event.pubkey) === npub)
       : undefined;
 
     if (shopInfo) {
@@ -62,14 +68,14 @@ const getMetaTags = (
         description:
           shopInfo.content.about || "Check out this shop on Shopstr!",
         image: shopInfo.content.ui.picture || "/shopstr-2000x2000.png",
-        url: `https://shopstr.store/${pubkey}`,
+        url: `https://shopstr.store/marketplace/${npub}`,
       };
     }
     return {
       ...defaultTags,
       title: "Shopstr Shop",
       description: "Check out this shop on Shopstr!",
-      url: `https://shopstr.store/${pubkey}`,
+      url: `https://shopstr.store/marketplace/${npub}`,
     };
   }
 
