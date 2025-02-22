@@ -88,7 +88,7 @@ export default function NewForm({
           Restrictions: oldValues.restrictions ? oldValues.restrictions : "",
         }
       : {
-          Currency: "SATS",
+          Currency: "SAT",
           "Shipping Option": "N/A",
           Status: "active",
         },
@@ -348,14 +348,10 @@ export default function NewForm({
               className={buttonClassName}
               passphrase={passphrase}
               imgCallbackOnUpload={(imgUrl) => {
-                setImages((prevValues) => {
-                  const updatedImages = [...prevValues];
-                  if (imgUrl && imgUrl.length > 0) {
-                    setImageError(null);
-                    return [...updatedImages, imgUrl];
-                  }
-                  return [...updatedImages];
-                });
+                if (imgUrl && imgUrl.length > 0) {
+                  setImageError(null);
+                  setImages((prevValues) => [...prevValues, imgUrl]);
+                }
               }}
             >
               {isButtonDisabled

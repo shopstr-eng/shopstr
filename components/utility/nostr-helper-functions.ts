@@ -329,8 +329,6 @@ export async function PostListing(
     getLocalStorageData();
   const summary = values.find(([key]) => key === "summary")?.[1] || "";
 
-  const dValue = values.find(([key]) => key === "d")?.[1] || "";
-
   const created_at = Math.floor(Date.now() / 1000);
   const updatedValues = [...values, ["published_at", String(created_at)]];
 
@@ -341,36 +339,40 @@ export async function PostListing(
     content: summary,
   };
 
-  const recEvent = {
-    kind: 31989,
+  const handlerDTag = crypto.randomUUID();
+
+  const handlerEvent = {
+    kind: 31990,
     tags: [
-      ["d", "30402"],
-      ["a", "31990:" + userPubkey + ":" + dValue, relays[0], "web"],
+      ["d", handlerDTag],
+      ["k", "30402"],
+      ["web", "https://shopstr.store/marketplace/<bech-32>", "npub"],
+      ["web", "https://shopstr.store/listing/<bech-32>", "naddr"],
     ],
     content: "",
     created_at: Math.floor(Date.now() / 1000),
   };
 
-  const handlerEvent = {
-    kind: 31990,
+  const recEvent = {
+    kind: 31989,
     tags: [
-      ["d", dValue],
-      ["k", "30402"],
-      ["web", "https://shopstr.store/marketplace/<bech-32>", "npub"],
-      ["web", "https://shopstr.store/listing/" + dValue],
+      ["d", "30402"],
+      ["a", "31990:" + userPubkey + ":" + handlerDTag, relays[0], "web"],
     ],
     content: "",
     created_at: Math.floor(Date.now() / 1000),
   };
 
   let signedEvent;
-  let signedRecEvent;
   let signedHandlerEvent;
+  let signedRecEvent;
 
   if (signInMethod === "extension") {
     signedEvent = await window.nostr.signEvent(event);
-    signedRecEvent = await window.nostr.signEvent(recEvent);
     signedHandlerEvent = await window.nostr.signEvent(handlerEvent);
+    if (signedHandlerEvent) {
+      signedRecEvent = await window.nostr.signEvent(recEvent);
+    }
   } else if (signInMethod === "bunker") {
     const signEventId = crypto.randomUUID();
     await sendBunkerRequest("sign_event", signEventId, event);
@@ -381,15 +383,6 @@ export async function PostListing(
       }
     }
     signedEvent = JSON.parse(signedEvent);
-    const signRecEventId = crypto.randomUUID();
-    await sendBunkerRequest("sign_event", signRecEventId, recEvent);
-    while (!signedRecEvent) {
-      signedRecEvent = await awaitBunkerResponse(signRecEventId);
-      if (!signedRecEvent) {
-        await new Promise((resolve) => setTimeout(resolve, 2100));
-      }
-    }
-    signedRecEvent = JSON.parse(signedRecEvent);
     const signHandlerEventId = crypto.randomUUID();
     await sendBunkerRequest("sign_event", signHandlerEventId, handlerEvent);
     while (!signedHandlerEvent) {
@@ -399,12 +392,25 @@ export async function PostListing(
       }
     }
     signedHandlerEvent = JSON.parse(signedHandlerEvent);
+    if (signedHandlerEvent) {
+      const signRecEventId = crypto.randomUUID();
+      await sendBunkerRequest("sign_event", signRecEventId, recEvent);
+      while (!signedRecEvent) {
+        signedRecEvent = await awaitBunkerResponse(signRecEventId);
+        if (!signedRecEvent) {
+          await new Promise((resolve) => setTimeout(resolve, 2100));
+        }
+      }
+      signedRecEvent = JSON.parse(signedRecEvent);
+    }
   } else {
     if (!passphrase) throw new Error("Passphrase is required");
     let sk = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
     signedEvent = finalizeEvent(event, sk);
-    signedRecEvent = finalizeEvent(recEvent, sk);
     signedHandlerEvent = finalizeEvent(handlerEvent, sk);
+    if (signedHandlerEvent) {
+      signedRecEvent = finalizeEvent(recEvent, sk);
+    }
   }
 
   const pool = new SimplePool();
@@ -416,8 +422,8 @@ export async function PostListing(
   }
 
   await Promise.any(pool.publish(allWriteRelays, signedEvent));
-  await Promise.any(pool.publish(allWriteRelays, signedRecEvent));
   await Promise.any(pool.publish(allWriteRelays, signedHandlerEvent));
+  await Promise.any(pool.publish(allWriteRelays, signedRecEvent));
 
   return signedEvent;
 }
