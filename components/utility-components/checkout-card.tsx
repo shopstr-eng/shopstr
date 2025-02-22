@@ -449,7 +449,7 @@ export default function CheckoutCard({
                 {renderSizeGrid()}
                 <div className="flex w-full flex-col gap-2">
                   <div className="flex flex-wrap items-center gap-2">
-                    {status && status !== "sold" ? (
+                    {status !== "sold" ? (
                       <>
                         <Button
                           className={`${SHOPSTRBUTTONCLASSNAMES} ${
