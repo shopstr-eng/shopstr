@@ -70,17 +70,19 @@ export const FileUploaderButton = ({
         });
       }
       const imageUrls = response?.map((i) => i.url);
-      if (imageUrls && imageUrls[0]) {
-        imgCallbackOnUpload(imageUrls[0]);
+      if (imageUrls && imageUrls.length > 0) {
+        return imageUrls;
       } else {
         setFailureText("Image upload failed to yield img URL!");
         setShowFailureModal(true);
+        return [];
       }
     } catch (e) {
       if (e instanceof Error) {
         setFailureText("Failed to upload image! " + e.message);
         setShowFailureModal(true);
       }
+      return [];
     }
   };
 
@@ -99,9 +101,14 @@ export const FileUploaderButton = ({
     const files = e.currentTarget.files;
     setLoading(true);
     if (files) {
-      await uploadImages(files);
+      const uploadedImages = await uploadImages(files);
+      // Send all images in order to callback
+      uploadedImages.forEach((imgUrl) => imgCallbackOnUpload(imgUrl));
     }
     setLoading(false);
+    if (hiddenFileInput.current) {
+      hiddenFileInput.current.value = "";
+    }
   };
   return (
     <>
@@ -116,6 +123,7 @@ export const FileUploaderButton = ({
       <Input
         type="file"
         accept="image/*"
+        multiple
         ref={hiddenFileInput}
         onInput={handleChange}
         className="hidden"

@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext } from "react";
-import { Filter, SimplePool } from "nostr-tools";
+import { Filter, SimplePool, nip19 } from "nostr-tools";
 import {
   DeleteEvent,
   getLocalStorageData,
@@ -139,7 +139,14 @@ const DisplayProducts = ({
       setShowModal(true);
     } else {
       setShowModal(false);
-      if (product.d !== undefined) {
+      const naddr = nip19.naddrEncode({
+        identifier: product.d as string,
+        pubkey: product.pubkey,
+        kind: 30402,
+      });
+      if (naddr) {
+        router.push(`/listing/${naddr}`);
+      } else if (product.d !== undefined) {
         router.push(`/listing/${product.d}`);
       } else {
         router.push(`/listing/${product.id}`);
