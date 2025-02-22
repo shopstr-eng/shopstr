@@ -54,6 +54,7 @@ export default function CheckoutCard({
     condition,
     d: dTag,
     restrictions,
+    status,
   } = productData;
 
   const { userPubkey } = getLocalStorageData();
@@ -448,28 +449,41 @@ export default function CheckoutCard({
                 {renderSizeGrid()}
                 <div className="flex w-full flex-col gap-2">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      className={`${SHOPSTRBUTTONCLASSNAMES} ${
-                        hasSizes && !selectedSize
-                          ? "cursor-not-allowed opacity-50"
-                          : ""
-                      }`}
-                      onClick={toggleBuyNow}
-                      disabled={hasSizes && !selectedSize}
-                    >
-                      Buy Now
-                    </Button>
-                    <Button
-                      className={`${SHOPSTRBUTTONCLASSNAMES} ${
-                        isAdded || (hasSizes && !selectedSize)
-                          ? "cursor-not-allowed opacity-50"
-                          : ""
-                      }`}
-                      onClick={handleAddToCart}
-                      disabled={isAdded || (hasSizes && !selectedSize)}
-                    >
-                      Add To Cart
-                    </Button>
+                    {status && status !== "sold" ? (
+                      <>
+                        <Button
+                          className={`${SHOPSTRBUTTONCLASSNAMES} ${
+                            hasSizes && !selectedSize
+                              ? "cursor-not-allowed opacity-50"
+                              : ""
+                          }`}
+                          onClick={toggleBuyNow}
+                          disabled={hasSizes && !selectedSize}
+                        >
+                          Buy Now
+                        </Button>
+                        <Button
+                          className={`${SHOPSTRBUTTONCLASSNAMES} ${
+                            isAdded || (hasSizes && !selectedSize)
+                              ? "cursor-not-allowed opacity-50"
+                              : ""
+                          }`}
+                          onClick={handleAddToCart}
+                          disabled={isAdded || (hasSizes && !selectedSize)}
+                        >
+                          Add To Cart
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button
+                          className={`${SHOPSTRBUTTONCLASSNAMES} cursor-not-allowed opacity-50`}
+                          disabled
+                        >
+                          Sold Out
+                        </Button>
+                      </>
+                    )}
                     <Button
                       type="submit"
                       className={SHOPSTRBUTTONCLASSNAMES}
