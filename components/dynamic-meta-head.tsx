@@ -59,7 +59,9 @@ const getMetaTags = (
   } else if (pathname.includes("/npub")) {
     const npub = query.npub?.[0];
     const shopInfo = npub
-      ? Array.from(shopEvents.values()).find((event) => nip19.npubEncode(event.pubkey) === npub)
+      ? Array.from(shopEvents.values()).find(
+          (event) => nip19.npubEncode(event.pubkey) === npub,
+        )
       : undefined;
 
     if (shopInfo) {

@@ -81,10 +81,10 @@ export function MarketplacePage({
     let npub = router.query.npub;
     if (npub && typeof npub[0] === "string") {
       const { data } = nip19.decode(npub[0]);
-      setFocusedPubkey(data as string); // router.query.pubkey returns array of pubkeys
+      setFocusedPubkey(data as string);
       setSelectedSection("shop");
     }
-  }, [router.query.pubkey]);
+  }, [router.query.npub]);
 
   useEffect(() => {
     const loggedIn = isUserLoggedIn();
