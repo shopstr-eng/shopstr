@@ -332,8 +332,8 @@ export function MarketplacePage({
             </div>
           </div>
         ) : (
-          <>
-            <div className="flex flex-row gap-2 pb-3">
+          <div className="flex flex-col gap-2 pb-3 sm:flex-row">
+            <div className="w-full">
               <Input
                 className="mt-2 text-light-text dark:text-dark-text"
                 isClearable
@@ -345,6 +345,8 @@ export function MarketplacePage({
                   setSelectedSearch(value);
                 }}
               ></Input>
+            </div>
+            <div className="flex w-full flex-row gap-2 pb-3">
               <Select
                 className="mt-2 text-light-text dark:text-dark-text"
                 label="Categories"
@@ -385,7 +387,7 @@ export function MarketplacePage({
                 />
               ) : null}
             </div>
-          </>
+          </div>
         )}
       </div>
       <div className="flex">
