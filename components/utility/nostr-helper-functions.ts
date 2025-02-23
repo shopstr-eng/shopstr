@@ -79,7 +79,7 @@ export async function DeleteEvent(
   let deletionEvent = await createNostrDeleteEvent(
     event_ids_to_delete,
     userPubkey,
-    "user deletion request from shopstr.store",
+    "NIP-99 listing deletion request",
   );
 
   await finalizeAndSendNostrEvent(deletionEvent, passphrase);
@@ -346,8 +346,8 @@ export async function PostListing(
     tags: [
       ["d", handlerDTag],
       ["k", "30402"],
-      ["web", "https://shopstr.store/marketplace/<bech-32>", "npub"],
-      ["web", "https://shopstr.store/listing/<bech-32>", "naddr"],
+      ["web", `${window.location.origin}/marketplace/<bech-32>`, "npub"],
+      ["web", `${window.location.origin}/listing/<bech-32>`, "naddr"],
     ],
     content: "",
     created_at: Math.floor(Date.now() / 1000),
