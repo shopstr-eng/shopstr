@@ -28,6 +28,7 @@ import {
   getLocalStorageData,
   LocalStorageInterface,
   validPassphrase,
+  getDefaultRelays,
   LogOut,
 } from "../components/utility/nostr-helper-functions";
 // import { ProductData } from "../components/utility/product-parser-functions";
@@ -405,13 +406,7 @@ function App({ Component, pageProps }: AppProps) {
       const readRelays = getLocalStorageData().readRelays;
       let allRelays = [...relays, ...readRelays];
       if (allRelays.length === 0) {
-        allRelays = [
-          "wss://relay.damus.io",
-          "wss://nos.lol",
-          "wss://purplepag.es",
-          "wss://relay.primal.net",
-          "wss://relay.nostr.band",
-        ];
+        allRelays = getDefaultRelays();
         localStorage.setItem("relays", JSON.stringify(allRelays));
       }
       const userPubkey = getLocalStorageData().userPubkey;

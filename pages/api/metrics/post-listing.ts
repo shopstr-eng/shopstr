@@ -3,6 +3,8 @@ import { DateTime } from "luxon";
 import { v4 as uuid } from "uuid";
 import repo from "../../../utils/metrics/repo";
 import { getLocationFromAddress, locationToSqlGeo } from "@/utils/metrics/geo";
+import EnvInfo from "@/utils/envinfo";
+import { getDefaultRelays } from "@/components/utility/nostr-helper-functions";
 
 const parseRequestBody = (body: string) => {
   const parsedBody = typeof body === "string" ? JSON.parse(body) : body;
@@ -17,6 +19,8 @@ const PostListing = async (req: NextApiRequest, res: NextApiResponse) => {
   const event = parseRequestBody(req.body);
 
   try {
+    const relays = EnvInfo.isShopstrDevEnvironment ? getDefaultRelays() : event.relays;
+
     await repo()("listings").insert({
       id: uuid(),
       listing_id: event.listing_id,
@@ -25,7 +29,7 @@ const PostListing = async (req: NextApiRequest, res: NextApiResponse) => {
       merchant_location: locationToSqlGeo(
         await getLocationFromAddress(event.merchant_location),
       ),
-      relays: event.relays,
+      relays: relays,
     });
   } catch (error: any) {
     console.error(error);
