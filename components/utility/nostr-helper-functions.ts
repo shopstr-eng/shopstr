@@ -204,7 +204,9 @@ export async function sendBunkerRequest(
       };
     } else if (
       method === "nip44_encrypt" ||
-      (method === "nip44_decrypt" && thirdPartyPubkey) || method === "nip04_encrypt" || (method === "nip04_decrypt" && thirdPartyPubkey)
+      (method === "nip44_decrypt" && thirdPartyPubkey) ||
+      method === "nip04_encrypt" ||
+      (method === "nip04_decrypt" && thirdPartyPubkey)
     ) {
       request = {
         id: requestIdString,
@@ -483,7 +485,7 @@ export async function constructGiftWrappedEvent(
     quantity?: number;
     productAddress?: string;
     isOrder?: boolean;
-  } = {}
+  } = {},
 ): Promise<GiftWrappedMessageEvent> {
   const { relays } = getLocalStorageData();
   const {
@@ -498,7 +500,7 @@ export async function constructGiftWrappedEvent(
     productData,
     quantity,
     productAddress,
-    isOrder = false
+    isOrder = false,
   } = options;
 
   let tags = [
@@ -512,15 +514,18 @@ export async function constructGiftWrappedEvent(
 
     if (type) tags.push(["type", type.toString()]);
     if (orderAmount) tags.push(["amount", orderAmount.toString()]);
-    if (paymentType && paymentProof && paymentMint) tags.push(["payment", paymentType, paymentProof, paymentMint]);
+    if (paymentType && paymentProof && paymentMint)
+      tags.push(["payment", paymentType, paymentProof, paymentMint]);
     if (status) tags.push(["status", status]);
 
     // Handle product information for orders
     if (productData || productAddress) {
       tags.push([
         "item",
-        productData ? `30402:${productData.pubkey}:${productData.d}` : productAddress!,
-        quantity ? quantity.toString() : "1"
+        productData
+          ? `30402:${productData.pubkey}:${productData.d}`
+          : productAddress!,
+        quantity ? quantity.toString() : "1",
       ]);
     }
   } else {
@@ -529,7 +534,7 @@ export async function constructGiftWrappedEvent(
       tags.push([
         "a",
         `30402:${productData.pubkey}:${productData.d}`,
-        relays[0]
+        relays[0],
       ]);
     } else if (productAddress) {
       tags.push(["a", productAddress, relays[0]]);
@@ -541,13 +546,13 @@ export async function constructGiftWrappedEvent(
     created_at: Math.floor(Date.now() / 1000),
     content: message,
     kind: kind ? kind : 14,
-    tags
+    tags,
   };
 
   const eventId = generateEventId(bareEvent);
   return {
     id: eventId,
-    ...bareEvent
+    ...bareEvent,
   };
 }
 
@@ -755,7 +760,8 @@ export async function createNostrRelayEvent(
   return relayEvent;
 }
 
-export async function publishShoppingCartEvent(
+export async function publishSavedForLaterEvent(
+  type: "cart" | "saved",
   userPubkey: string,
   cartAddresses: string[][],
   product: ProductData,
@@ -775,10 +781,17 @@ export async function publishShoppingCartEvent(
         (address) => !address[1].includes(`:${product.d}`),
       );
     } else if (quantity && quantity > 0) {
-      const productTag = ["item", "30402:" + product.pubkey + ":" + product.d, quantity];
-      cartTags.push(productTag);
+      for (let i = 0; i < quantity; i++) {
+        const productTag = ["a", "30402:" + product.pubkey + ":" + product.d];
+        cartTags.push(productTag);
+      }
     }
-    cartTags.push(...[["d", crypto.randomUUID().toString()], ["title", "cart"]]);
+    cartTags.push(
+      ...[
+        ["d", crypto.randomUUID()],
+        ["title", type],
+      ],
+    );
     let productAddressTags = JSON.stringify(cartTags);
     let encryptedContent;
     if (signInMethod === "extension") {

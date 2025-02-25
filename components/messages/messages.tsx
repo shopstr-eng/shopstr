@@ -259,7 +259,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         userPubkey,
         currentChatPubkey,
         message,
-        "listing-inquiry", // add order id as subject
+        "shopstr-listing-inquiry", // add order id as subject
       );
       let receiverSealedEvent = await constructMessageSeal(
         giftWrappedMessageEvent,

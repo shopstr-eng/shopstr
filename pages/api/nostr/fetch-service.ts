@@ -142,7 +142,7 @@ export const fetchCart = async (
       }
 
       const filter: Filter = {
-        kinds: [10402],
+        kinds: [30405],
         authors: [userPubkey],
         since,
         until,

@@ -14,7 +14,7 @@ import {
 import { ProductData } from "../../components/utility/product-parser-functions";
 import {
   getLocalStorageData,
-  publishShoppingCartEvent,
+  publishSavedForLaterEvent,
   validPassphrase,
 } from "../../components/utility/nostr-helper-functions";
 import { CartContext } from "@/utils/context/context";
@@ -174,7 +174,8 @@ export default function Component() {
   const handleSaveForLater = (productId: string) => {
     const product = products.find((p) => p.id === productId);
     if (product) {
-      publishShoppingCartEvent(
+      publishSavedForLaterEvent(
+        "saved",
         userPubkey,
         cartContext.cartAddresses,
         product,
@@ -187,7 +188,8 @@ export default function Component() {
   const handleRemoveFromSaveForLater = (productId: string) => {
     const product = products.find((p) => p.id === productId);
     if (product) {
-      publishShoppingCartEvent(
+      publishSavedForLaterEvent(
+        "saved",
         userPubkey,
         cartContext.cartAddresses,
         product,
@@ -479,6 +481,9 @@ export default function Component() {
                 </span>
               </div>
             )}
+            <div className="mb-4 flex items-center justify-between">
+              <h1 className="text-2xl font-bold">Saved For Later</h1>
+            </div>
           </div>
         </div>
       ) : (

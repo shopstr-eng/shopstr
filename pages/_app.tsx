@@ -492,7 +492,7 @@ function App({ Component, pageProps }: AppProps) {
             passphrase,
           );
 
-          if (cashuMints.length != 0 && cashuProofs.length != 0) {
+          if (cashuMints.length != 0 && cashuProofs) {
             localStorage.setItem("mints", JSON.stringify(cashuMints));
             localStorage.setItem("tokens", JSON.stringify(cashuProofs));
           }

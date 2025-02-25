@@ -172,9 +172,28 @@ const DisplayProducts = ({
   const productSatisfiesSearchFilter = (productData: ProductData) => {
     if (!selectedSearch) return true; // nothing in search bar
     if (!productData.title) return false; // we don't want to display it if product has no title
-    const re = new RegExp(selectedSearch, "gi");
-    const match = productData.title.match(re);
-    return match && match.length > 0;
+    if (selectedSearch.includes("naddr")) {
+      try {
+        const parsedNaddr = nip19.decode(selectedSearch);
+        if (parsedNaddr.type === "naddr") {
+          return (
+            productData.d === parsedNaddr.data.identifier &&
+            productData.pubkey === parsedNaddr.data.pubkey
+          );
+        }
+        return false;
+      } catch (_) {
+        return false;
+      }
+    } else {
+      try {
+        const re = new RegExp(selectedSearch, "gi");
+        const match = productData.title.match(re);
+        return match && match.length > 0;
+      } catch (_) {
+        return false;
+      }
+    }
   };
 
   const productSatisfiesAllFilters = (productData: ProductData) => {
