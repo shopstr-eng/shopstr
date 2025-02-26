@@ -49,6 +49,7 @@ import {
   generateKeys,
 } from "./utility/nostr-helper-functions";
 import { addChatMessagesToCache } from "../pages/api/nostr/cache-service";
+import { LightningAddress } from "@getalby/lightning-tools";
 import { nip19 } from "nostr-tools";
 import { ProductData } from "./utility/product-parser-functions";
 import {
@@ -166,6 +167,7 @@ export default function ProductInvoiceCard({
     paymentType?: string,
     paymentProof?: string,
     paymentMint?: string,
+    messageAmount?: number,
   ) => {
     let decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
     let decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
@@ -179,7 +181,7 @@ export default function ProductInvoiceCard({
       messageOptions = {
         isOrder: true,
         type: 2,
-        orderAmount: totalCost,
+        orderAmount: messageAmount ? messageAmount : totalCost,
         orderId,
         paymentType,
         paymentProof,
@@ -579,38 +581,120 @@ export default function ProductInvoiceCard({
       });
       remainingProofs = keep;
     }
+
     const { title } = productData;
-    let paymentMessage = "";
-    let donationMessage = "";
     let orderId = crypto.randomUUID();
-    if (sellerToken && sellerProofs) {
-      if (userNPub) {
-        paymentMessage =
-          "This is a Cashu token payment from " +
-          userNPub +
-          " for your " +
-          title +
-          " listing on Shopstr: " +
-          sellerToken;
-      } else {
-        paymentMessage =
-          "This is a Cashu token payment for your " +
-          title +
-          " listing on Shopstr: " +
-          sellerToken;
+    const paymentPreference =
+      sellerProfile?.content?.payment_preference || "service";
+    const lnurl = sellerProfile?.content?.lud16 || "";
+
+    if (
+      paymentPreference === "lightning" &&
+      lnurl &&
+      lnurl !== "" &&
+      sellerProofs
+    ) {
+      const newAmount = Math.floor(sellerAmount * 0.98 - 2);
+      const ln = new LightningAddress(lnurl);
+      await wallet.loadMint();
+      await ln.fetch();
+      const invoice = await ln.requestInvoice({ satoshi: newAmount });
+      const invoicePaymentRequest = invoice.paymentRequest;
+      const meltQuote = await wallet.createMeltQuote(invoicePaymentRequest);
+      if (meltQuote) {
+        const meltQuoteTotal = meltQuote.amount + meltQuote.fee_reserve;
+        const { keep, send } = await wallet.send(meltQuoteTotal, sellerProofs, {
+          includeFees: true,
+        });
+        const meltResponse = await wallet.meltProofs(meltQuote, send);
+        const meltAmount = meltResponse.quote.amount;
+        const changeProofs = [...keep, ...meltResponse.change];
+        const changeAmount =
+          Array.isArray(changeProofs) && changeProofs.length > 0
+            ? changeProofs.reduce(
+                (acc, current: Proof) => acc + current.amount,
+                0,
+              )
+            : 0;
+        let paymentMessage = "";
+        if (userNPub) {
+          paymentMessage =
+            "You have received a payment from " +
+            userNPub +
+            " for your " +
+            title +
+            " listing on Shopstr! Check the Lightning address set on your Nostr profile for your sats.";
+        } else {
+          paymentMessage =
+            "You have received a payment for your " +
+            title +
+            " listing on Shopstr! Check the Lightning address set on your Nostr profile for your sats.";
+        }
+        await sendPaymentAndContactMessage(
+          pubkeyOfProductBeingSold,
+          paymentMessage,
+          true,
+          false,
+          false,
+          orderId,
+          "lightning",
+          invoicePaymentRequest,
+          invoice.preimage ? invoice.preimage : invoice.paymentHash,
+          meltAmount,
+        );
+        if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
+          let encodedChange = getEncodedToken({
+            mint: mints[0],
+            proofs: changeProofs,
+          });
+          const changeMessage = "Overpaid fee change: " + encodedChange;
+          await sendPaymentAndContactMessage(
+            pubkeyOfProductBeingSold,
+            changeMessage,
+            true,
+            false,
+            false,
+            orderId,
+            "ecash",
+            JSON.stringify(changeProofs),
+            mints[0],
+            changeAmount,
+          );
+        }
       }
-      await sendPaymentAndContactMessage(
-        pubkeyOfProductBeingSold,
-        paymentMessage,
-        true,
-        false,
-        false,
-        orderId,
-        "ecash",
-        JSON.stringify(sellerProofs),
-        mints[0],
-      );
+    } else {
+      let paymentMessage = "";
+      if (sellerToken && sellerProofs) {
+        if (userNPub) {
+          paymentMessage =
+            "This is a Cashu token payment from " +
+            userNPub +
+            " for your " +
+            title +
+            " listing on Shopstr: " +
+            sellerToken;
+        } else {
+          paymentMessage =
+            "This is a Cashu token payment for your " +
+            title +
+            " listing on Shopstr: " +
+            sellerToken;
+        }
+        await sendPaymentAndContactMessage(
+          pubkeyOfProductBeingSold,
+          paymentMessage,
+          true,
+          false,
+          false,
+          orderId,
+          "ecash",
+          JSON.stringify(sellerProofs),
+          mints[0],
+          sellerAmount,
+        );
+      }
     }
+    let donationMessage = "";
     if (donationToken) {
       donationMessage = "Sale donation: " + donationToken;
       await sendPaymentAndContactMessage(
