@@ -147,14 +147,14 @@ export default function ClaimButton({
     );
   }, [profileContext, tokenMint]);
 
-  const handleClaimType = (type: string) => {
+  const handleClaimType = async (type: string) => {
     if (type === "receive") {
-      receive(false);
+      await receive(false);
     } else if (type === "redeem") {
       if (lnurl === "invalid") {
-        receive(true);
+        await receive(true);
       } else {
-        redeem();
+        await redeem();
       }
     }
   };

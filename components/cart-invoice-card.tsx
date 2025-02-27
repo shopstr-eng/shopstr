@@ -184,15 +184,16 @@ export default function CartInvoiceCard({
   const sendPaymentAndContactMessage = async (
     pubkeyToReceiveMessage: string,
     message: string,
-    isPayment: boolean,
     product: ProductData,
+    isPayment?: boolean,
     isReceipt?: boolean,
     isDonation?: boolean,
     orderId?: string,
     paymentType?: string,
     paymentProof?: string,
     paymentMint?: string,
-    changeAmount?: number,
+    messageAmount?: number,
+    productQuantity?: number,
   ) => {
     const newKeys = await generateNewKeys();
     if (!newKeys) {
@@ -212,16 +213,21 @@ export default function CartInvoiceCard({
       messageSubject = "order-payment";
       messageOptions = {
         isOrder: true,
-        type: 2,
-        orderAmount: totalCost,
+        type: 3,
+        orderAmount: messageAmount ? messageAmount : totalCost,
         orderId,
         paymentType,
         paymentProof,
         paymentMint,
       };
     } else if (isReceipt) {
-      messageSubject = "order-receipt";
-      messageOptions = { productData: product };
+      messageSubject = "order-info";
+      messageOptions = {
+        isOrder: true,
+        type: 4,
+        orderId,
+        status: "confirmed",
+      };
     } else if (isDonation) {
       messageSubject = "donation";
     } else if (orderId) {
@@ -229,10 +235,10 @@ export default function CartInvoiceCard({
       messageOptions = {
         isOrder: true,
         type: 1,
-        orderAmount: totalCost,
+        orderAmount: messageAmount ? messageAmount : undefined,
         orderId,
         productData: product,
-        quantity: 1,
+        quantity: productQuantity ? productQuantity : 1,
       };
     }
 
@@ -687,24 +693,46 @@ export default function CartInvoiceCard({
                 )
               : 0;
           let paymentMessage = "";
-          if (userNPub) {
-            paymentMessage =
-              "You have received a payment from " +
-              userNPub +
-              " for your " +
-              title +
-              " listing on Shopstr! Check the Lightning address set on your Nostr profile for your sats.";
+          if (quantities[product.id] && quantities[product.id] > 1) {
+            if (userNPub) {
+              paymentMessage =
+                "This is a Cashu token payment from " +
+                userNPub +
+                " for " +
+                quantities[product.id] +
+                " of your " +
+                title +
+                " listing on Shopstr: " +
+                sellerToken;
+            } else {
+              paymentMessage =
+                "This is a Cashu token payment for " +
+                quantities[product.id] +
+                " of your " +
+                title +
+                " listing on Shopstr: " +
+                sellerToken;
+            }
           } else {
-            paymentMessage =
-              "You have received a payment for your " +
-              title +
-              " listing on Shopstr! Check the Lightning address set on your Nostr profile for your sats.";
+            if (userNPub) {
+              paymentMessage =
+                "You have received a payment from " +
+                userNPub +
+                " for your " +
+                title +
+                " listing on Shopstr! Check the Lightning address set on your Nostr profile for your sats.";
+            } else {
+              paymentMessage =
+                "You have received a payment for your " +
+                title +
+                " listing on Shopstr! Check the Lightning address set on your Nostr profile for your sats.";
+            }
           }
           await sendPaymentAndContactMessage(
             pubkey,
             paymentMessage,
-            true,
             product,
+            true,
             false,
             false,
             orderId,
@@ -712,6 +740,9 @@ export default function CartInvoiceCard({
             invoicePaymentRequest,
             invoice.preimage ? invoice.preimage : invoice.paymentHash,
             meltAmount,
+            quantities[product.id] && quantities[product.id] > 1
+              ? quantities[product.id]
+              : 1,
           );
           if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
             let encodedChange = getEncodedToken({
@@ -722,8 +753,8 @@ export default function CartInvoiceCard({
             await sendPaymentAndContactMessage(
               pubkey,
               changeMessage,
-              true,
               product,
+              true,
               false,
               false,
               orderId,
@@ -780,8 +811,8 @@ export default function CartInvoiceCard({
         await sendPaymentAndContactMessage(
           pubkey,
           paymentMessage,
-          true,
           product,
+          true,
           false,
           false,
           orderId,
@@ -789,6 +820,9 @@ export default function CartInvoiceCard({
           JSON.stringify(sellerProofs),
           mints[0],
           sellerAmount,
+          quantities[product.id] && quantities[product.id] > 1
+            ? quantities[product.id]
+            : 1,
         );
       }
 
@@ -804,8 +838,8 @@ export default function CartInvoiceCard({
         await sendPaymentAndContactMessage(
           "a37118a4888e02d28e8767c08caaf73b49abdac391ad7ff18a304891e416dc33",
           donationMessage,
-          false,
           product,
+          false,
           false,
           true,
         );
@@ -818,8 +852,8 @@ export default function CartInvoiceCard({
           await sendPaymentAndContactMessage(
             pubkey,
             additionalMessage,
-            false,
             product,
+            false,
             false,
             false,
             orderId,
@@ -919,8 +953,8 @@ export default function CartInvoiceCard({
           await sendPaymentAndContactMessage(
             pubkey,
             contactMessage,
-            false,
             product,
+            false,
             false,
             false,
             orderId,
@@ -935,9 +969,11 @@ export default function CartInvoiceCard({
             await sendPaymentAndContactMessage(
               userPubkey,
               receiptMessage,
-              false,
               product,
+              false,
               true,
+              false,
+              orderId,
             );
           }
         } else if (
@@ -988,8 +1024,8 @@ export default function CartInvoiceCard({
           await sendPaymentAndContactMessage(
             pubkey,
             contactMessage,
-            false,
             product,
+            false,
             false,
             false,
             orderId,
@@ -998,9 +1034,11 @@ export default function CartInvoiceCard({
             await sendPaymentAndContactMessage(
               userPubkey,
               receiptMessage,
-              false,
               product,
+              false,
               true,
+              false,
+              orderId,
             );
           }
         }
@@ -1010,8 +1048,8 @@ export default function CartInvoiceCard({
         await sendPaymentAndContactMessage(
           pubkey,
           contactMessage,
-          false,
           product,
+          false,
           false,
           false,
           orderId,
@@ -1028,9 +1066,11 @@ export default function CartInvoiceCard({
           await sendPaymentAndContactMessage(
             userPubkey,
             receiptMessage,
-            false,
             product,
+            false,
             true,
+            false,
+            orderId,
           );
         }
       } else if (userPubkey) {
@@ -1043,9 +1083,11 @@ export default function CartInvoiceCard({
         await sendPaymentAndContactMessage(
           userPubkey,
           receiptMessage,
-          false,
           product,
+          false,
           true,
+          false,
+          orderId,
         );
       }
     }

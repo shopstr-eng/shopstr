@@ -484,6 +484,9 @@ export async function constructGiftWrappedEvent(
     productData?: ProductData;
     quantity?: number;
     productAddress?: string;
+    tracking?: string;
+    carrier?: string;
+    eta?: number;
     isOrder?: boolean;
   } = {},
 ): Promise<GiftWrappedMessageEvent> {
@@ -500,7 +503,10 @@ export async function constructGiftWrappedEvent(
     productData,
     quantity,
     productAddress,
-    isOrder = false,
+    tracking,
+    carrier,
+    eta,
+    isOrder,
   } = options;
 
   let tags = [
@@ -517,6 +523,9 @@ export async function constructGiftWrappedEvent(
     if (paymentType && paymentProof && paymentMint)
       tags.push(["payment", paymentType, paymentProof, paymentMint]);
     if (status) tags.push(["status", status]);
+    if (tracking) tags.push(["tracking", tracking]);
+    if (carrier) tags.push(["carrier", carrier]);
+    if (eta) tags.push(["eta", eta.toString()]);
 
     // Handle product information for orders
     if (productData || productAddress) {

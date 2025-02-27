@@ -176,11 +176,11 @@ export default function ProductInvoiceCard({
 
     let messageSubject = "";
     let messageOptions = {};
-    if (isPayment && orderId) {
+    if (isPayment) {
       messageSubject = "order-payment";
       messageOptions = {
         isOrder: true,
-        type: 2,
+        type: 3,
         orderAmount: messageAmount ? messageAmount : totalCost,
         orderId,
         paymentType,
@@ -188,8 +188,13 @@ export default function ProductInvoiceCard({
         paymentMint,
       };
     } else if (isReceipt) {
-      messageSubject = "order-receipt";
-      messageOptions = { productData };
+      messageSubject = "order-info";
+      messageOptions = {
+        isOrder: true,
+        type: 4,
+        orderId,
+        status: "confirmed",
+      };
     } else if (isDonation) {
       messageSubject = "donation";
     } else if (orderId) {
@@ -197,7 +202,7 @@ export default function ProductInvoiceCard({
       messageOptions = {
         isOrder: true,
         type: 1,
-        orderAmount: totalCost,
+        orderAmount: messageAmount ? messageAmount : undefined,
         orderId,
         productData,
         quantity: 1,
@@ -831,6 +836,8 @@ export default function ProductInvoiceCard({
             receiptMessage,
             false,
             true,
+            false,
+            orderId,
           );
         }
       } else if (contact && contactType && contactInstructions) {
@@ -887,6 +894,8 @@ export default function ProductInvoiceCard({
             receiptMessage,
             false,
             true,
+            false,
+            orderId,
           );
         }
       }
@@ -914,6 +923,8 @@ export default function ProductInvoiceCard({
           receiptMessage,
           false,
           true,
+          false,
+          orderId,
         );
       }
     } else if (userPubkey) {
@@ -928,6 +939,8 @@ export default function ProductInvoiceCard({
         receiptMessage,
         false,
         true,
+        false,
+        orderId,
       );
     }
   };
