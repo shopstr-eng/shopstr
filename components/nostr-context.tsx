@@ -223,13 +223,12 @@ export function NostrContextProvider({
 
   const reload = useCallback(() => {
     console.log("Reloading nostr");
-    const { readRelays, writeRelays, relays, cashuWalletRelays } =
+    const { readRelays, writeRelays, relays } =
       getLocalStorageData();
     nostr.addRelays([
       ...writeRelays,
       ...relays,
-      ...readRelays,
-      ...cashuWalletRelays,
+      ...readRelays
     ]);
   }, [nostr]);
 
