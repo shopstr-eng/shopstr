@@ -34,8 +34,10 @@ import {
   Proof,
 } from "@cashu/cashu-ts";
 import { CashuWalletContext } from "../../utils/context/context";
+import { useNostrContext, useSignerContext } from "../nostr-context";
+import { NostrNIP46Signer } from "@/utils/nostr/signer/nostr-nip46-signer";
 
-const SendButton = ({ passphrase }: { passphrase?: string }) => {
+const SendButton = () => {
   const [showSendModal, setShowSendModal] = useState(false);
   const [showTokenCard, setShowTokenCard] = useState(false);
   const [newToken, setNewToken] = useState("");
@@ -44,7 +46,10 @@ const SendButton = ({ passphrase }: { passphrase?: string }) => {
 
   const walletContext = useContext(CashuWalletContext);
 
-  const { mints, tokens, history, signInMethod } = getLocalStorageData();
+  const { signer } = useSignerContext();
+  const { nostr } = useNostrContext();
+
+  const { mints, tokens, history } = getLocalStorageData();
 
   const {
     handleSubmit: handleSendSubmit,
@@ -71,9 +76,8 @@ const SendButton = ({ passphrase }: { passphrase?: string }) => {
       const mint = new CashuMint(mints[0]);
       const wallet = new CashuWallet(mint);
       const mintKeySetIds = await wallet.getKeySets();
-      const filteredProofs = tokens.filter(
-        (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id),
+      const filteredProofs = tokens.filter((p: Proof) =>
+        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id),
       );
       let sendTotal = (numSats / 10) * 10;
       const { keep, send } = await wallet.send(sendTotal, filteredProofs, {
@@ -122,9 +126,8 @@ const SendButton = ({ passphrase }: { passphrase?: string }) => {
       setShowTokenCard(true);
       setNewToken(encodedSendToken);
       const changeProofs = keep;
-      const remainingProofs = tokens.filter(
-        (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id),
+      const remainingProofs = tokens.filter((p: Proof) =>
+        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id),
       );
       let proofArray;
       if (changeProofs.length >= 1 && changeProofs) {
@@ -141,11 +144,12 @@ const SendButton = ({ passphrase }: { passphrase?: string }) => {
         ]),
       );
       await publishProofEvent(
+        nostr!,
+        signer!,
         mints[0],
         changeProofs && changeProofs.length >= 1 ? changeProofs : [],
         "out",
         sendTotal.toString(),
-        passphrase,
         deletedEventIds,
       );
     } catch (_) {
@@ -232,7 +236,7 @@ const SendButton = ({ passphrase }: { passphrase?: string }) => {
                   );
                 }}
               />
-              {signInMethod === "bunker" && (
+              {signer instanceof NostrNIP46Signer && (
                 <div className="mx-4 my-2 flex items-center justify-center text-center">
                   <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
                   <p className="ml-2 text-xs text-light-text dark:text-dark-text">
