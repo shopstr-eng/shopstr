@@ -21,10 +21,7 @@ import DisplayProducts from "../display-products";
 import LocationDropdown from "../utility-components/dropdowns/location-dropdown";
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
 import { CATEGORIES } from "../utility/STATIC-VARIABLES";
-import {
-  getLocalStorageData,
-  isUserLoggedIn,
-} from "../utility/nostr-helper-functions";
+import { useSignerContext } from "../nostr-context";
 import { ProductData } from "../utility/product-parser-functions";
 import SignInModal from "../sign-in/SignInModal";
 import ShopstrSwitch from "../utility-components/shopstr-switch";
@@ -75,7 +72,7 @@ export function MarketplacePage({
   const shopMapContext = useContext(ShopMapContext);
   const followsContext = useContext(FollowsContext);
 
-  const { userPubkey } = getLocalStorageData();
+  const { pubkey: userPubkey, isLoggedIn: loggedIn } = useSignerContext();
 
   // Update focusedPubkey when pubkey in url changes
   useEffect(() => {
@@ -88,7 +85,6 @@ export function MarketplacePage({
   }, [router.query.pubkey]);
 
   useEffect(() => {
-    const loggedIn = isUserLoggedIn();
     if (loggedIn) {
       fetch("/api/metrics/post-shopper", {
         method: "POST",
@@ -100,7 +96,7 @@ export function MarketplacePage({
         }),
       });
     }
-  });
+  }, [userPubkey, loggedIn]);
 
   useEffect(() => {
     setIsFetchingReviews(true);
@@ -172,8 +168,7 @@ export function MarketplacePage({
   };
 
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
-    let { signInMethod } = getLocalStorageData();
-    if (!signInMethod) {
+    if (!loggedIn) {
       setShowFailureModal(true);
       return;
     }

@@ -24,6 +24,7 @@ import { sanitizeUrl } from "@braintree/sanitize-url";
 import FailureModal from "../utility-components/failure-modal";
 import SuccessModal from "../utility-components/success-modal";
 import currencySelection from "../../public/currencySelection.json";
+import { useSignerContext } from "../nostr-context";
 
 export const TOTALPRODUCTCARDWIDTH = 380 + 5;
 const SUMMARY_CHARACTER_LIMIT = 100;
@@ -56,7 +57,7 @@ export default function CheckoutCard({
     restrictions,
   } = productData;
 
-  const { userPubkey } = getLocalStorageData();
+  const { pubkey: userPubkey, isLoggedIn } = useSignerContext();
 
   const router = useRouter();
 
@@ -263,8 +264,7 @@ export default function CheckoutCard({
   };
 
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
-    let { signInMethod } = getLocalStorageData();
-    if (!signInMethod) {
+    if (!isLoggedIn) {
       setFailureText("You must be signed in to send an inquiry!");
       setShowFailureModal(true);
       return;

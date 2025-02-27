@@ -1,9 +1,15 @@
 import axios from "axios";
 import { getLocalStorageData } from "./nostr-helper-functions";
 import { ProductData } from "./product-parser-functions";
+import { NostrSigner } from "@/utils/nostr/signer/nostr-signer";
 
-export async function capturePostListingMetric(id: string, tags: any[]) {
-  const { userPubkey, relays } = getLocalStorageData();
+export async function capturePostListingMetric(
+  signer: NostrSigner,
+  id: string,
+  tags: any[],
+) {
+  const userPubkey = await signer?.getPubKey?.();
+  const { relays } = getLocalStorageData();
   axios({
     method: "POST",
     url: "/api/metrics/post-listing",

@@ -43,8 +43,6 @@ import {
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
   getLocalStorageData,
-  validPassphrase,
-  isUserLoggedIn,
   publishProofEvent,
   generateKeys,
 } from "./utility/nostr-helper-functions";
@@ -62,10 +60,10 @@ import {
 } from "./utility/metrics-helper-functions";
 import SignInModal from "./sign-in/SignInModal";
 import currencySelection from "../public/currencySelection.json";
-import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
 import FailureModal from "@/components/utility-components/failure-modal";
 import ShippingForm from "./shipping-form";
 import ContactForm from "./contact-form";
+import { useNostrContext, useSignerContext } from "./nostr-context";
 
 export default function ProductInvoiceCard({
   productData,
@@ -86,14 +84,17 @@ export default function ProductInvoiceCard({
   const { id, pubkey, currency, totalCost, shippingType, required } =
     productData;
   const pubkeyOfProductBeingSold = pubkey;
-  const { userNPub, userPubkey, signInMethod, mints, tokens, history } =
-    getLocalStorageData();
-
+  const { mints, tokens, history } = getLocalStorageData();
+  const {
+    pubkey: userPubkey,
+    npub: userNPub,
+    isLoggedIn,
+    signer,
+  } = useSignerContext();
   const chatsContext = useContext(ChatsContext);
   const profileContext = useContext(ProfileMapContext);
 
-  const [enterPassphrase, setEnterPassphrase] = useState(false);
-  const [passphrase, setPassphrase] = useState("");
+  const { nostr } = useNostrContext();
 
   const [showInvoiceCard, setShowInvoiceCard] = useState(false);
 
@@ -135,13 +136,6 @@ export default function ProductInvoiceCard({
     control: contactControl,
     reset: contactReset,
   } = useForm();
-
-  useEffect(() => {
-    if (signInMethod === "nsec" && !validPassphrase(passphrase)) {
-      setEnterPassphrase(true);
-    }
-  }, [signInMethod, passphrase]);
-
   useEffect(() => {
     const fetchKeys = async () => {
       const { nsec: nsecForSender, npub: npubForSender } = await generateKeys();
@@ -187,10 +181,10 @@ export default function ProductInvoiceCard({
       productData,
     );
     let sealedEvent = await constructMessageSeal(
+      signer!,
       giftWrappedMessageEvent,
       decodedRandomPubkeyForSender.data as string,
       pubkeyToReceiveMessage,
-      undefined,
       decodedRandomPrivkeyForSender.data as Uint8Array,
     );
     let giftWrappedEvent = await constructMessageGiftWrap(
@@ -814,8 +808,7 @@ export default function ProductInvoiceCard({
   };
 
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
-    let { signInMethod } = getLocalStorageData();
-    if (!signInMethod) {
+    if (!isLoggedIn) {
       onOpen();
       return;
     }
@@ -928,11 +921,12 @@ export default function ProductInvoiceCard({
         ]),
       );
       await publishProofEvent(
+        nostr!,
+        signer!,
         mints[0],
         changeProofs && changeProofs.length >= 1 ? changeProofs : [],
         "out",
         price.toString(),
-        passphrase,
         deletedEventIds,
       );
       if (setCashuPaymentSent) {
@@ -998,8 +992,7 @@ export default function ProductInvoiceCard({
             type="submit"
             className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
             onClick={() => {
-              let userLoggedIn = isUserLoggedIn();
-              if (!userLoggedIn) {
+              if (!isLoggedIn) {
                 onOpen();
                 return;
               }
@@ -1287,13 +1280,6 @@ export default function ProductInvoiceCard({
       />
 
       <SignInModal isOpen={isOpen} onClose={onClose} />
-      <RequestPassphraseModal
-        passphrase={passphrase}
-        setCorrectPassphrase={setPassphrase}
-        isOpen={enterPassphrase}
-        setIsOpen={setEnterPassphrase}
-        onCancelRouteTo={`/${id}`}
-      />
 
       <FailureModal
         bodyText={failureText}

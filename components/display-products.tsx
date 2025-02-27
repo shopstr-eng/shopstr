@@ -1,9 +1,6 @@
 import { useState, useEffect, useContext } from "react";
 import { Filter, SimplePool } from "nostr-tools";
-import {
-  DeleteEvent,
-  getLocalStorageData,
-} from "./utility/nostr-helper-functions";
+import { getLocalStorageData, deleteEvent } from "./utility/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
 import {
   ProductContext,
@@ -18,6 +15,7 @@ import ShopstrSpinner from "./utility-components/shopstr-spinner";
 import { Button } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
 import { DateTime } from "luxon";
+import { useNostrContext, useSignerContext } from "./nostr-context";
 
 const DisplayProducts = ({
   focusedPubkey,
@@ -55,7 +53,8 @@ const DisplayProducts = ({
 
   const router = useRouter();
 
-  const { userPubkey } = getLocalStorageData();
+  const {nostr} = useNostrContext();
+  const { signer, pubkey: userPubkey } = useSignerContext();
 
   useEffect(() => {
     if (!productEventContext) return;
@@ -120,12 +119,12 @@ const DisplayProducts = ({
     );
   };
 
-  const handleDelete = async (productId: string, passphrase?: string) => {
+  const handleDelete = async (productId: string) => {
     try {
-      await DeleteEvent([productId], passphrase);
+      await deleteEvent(nostr!,signer!, [productId]);
       productEventContext.removeDeletedProductEvent(productId);
-    } catch (_) {
-      return;
+    } catch (e) {
+      console.log(e);
     }
   };
 

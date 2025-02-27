@@ -14,15 +14,13 @@ import {
   setLocalStorageDataOnSignIn,
   validateNSecKey,
   parseBunkerToken,
-  sendBunkerRequest,
-  awaitBunkerResponse,
 } from "@/components/utility/nostr-helper-functions";
 import { RelaysContext } from "../../utils/context/context";
-import { getPublicKey, nip19 } from "nostr-tools";
-import CryptoJS from "crypto-js";
 import { useRouter } from "next/router";
 import FailureModal from "../../components/utility-components/failure-modal";
-
+import { useSignerContext } from "../nostr-context";
+import { NostrSigner } from "@/utils/nostr/signer/nostr-signer";
+import { NostrNSECEncSigner } from "@/utils/nostr/signer/nostr-nsec-enc-signer";
 export default function SignInModal({
   isOpen,
   onClose,
@@ -34,10 +32,10 @@ export default function SignInModal({
   const [validBunkerToken, setValidBunkerToken] =
     useState<InputProps["color"]>("default");
 
+  const [passphrase, setPassphrase] = useState<string>("");
   const [privateKey, setPrivateKey] = useState<string>("");
   const [validPrivateKey, setValidPrivateKey] =
     useState<InputProps["color"]>("default");
-  const [passphrase, setPassphrase] = useState<string>("");
 
   const [showBunkerSignIn, setShowBunkerSignIn] = useState(false);
 
@@ -49,155 +47,49 @@ export default function SignInModal({
   const relaysContext = useContext(RelaysContext);
 
   const router = useRouter();
+  const { newSigner } = useSignerContext();
+
+  const saveSigner = (signer: NostrSigner) => {
+    if (
+      !relaysContext.isLoading &&
+      relaysContext.relayList.length >= 0 &&
+      relaysContext.readRelayList &&
+      relaysContext.writeRelayList
+    ) {
+      const generalRelays = relaysContext.relayList;
+      const readRelays = relaysContext.readRelayList;
+      const writeRelays = relaysContext.writeRelayList;
+      setLocalStorageDataOnSignIn({
+        signer,
+        relays: generalRelays,
+        readRelays: readRelays,
+        writeRelays: writeRelays,
+      });
+    } else {
+      setLocalStorageDataOnSignIn({
+        signer,
+      });
+    }
+  };
 
   const startExtensionLogin = async () => {
-    let isValidExtenstion = true;
     try {
-      if (!window.nostr.nip44) {
-        isValidExtenstion = false;
-        throw new Error(
-          "Please use a NIP-44 compatible extension like Alby or nos2x",
-        );
-      }
-      // @ts-ignore
-      var pk = await window.nostr.getPublicKey();
-      if (
-        !relaysContext.isLoading &&
-        relaysContext.relayList.length >= 0 &&
-        relaysContext.readRelayList &&
-        relaysContext.writeRelayList
-      ) {
-        const generalRelays = relaysContext.relayList;
-        const readRelays = relaysContext.readRelayList;
-        const writeRelays = relaysContext.writeRelayList;
-        setLocalStorageDataOnSignIn({
-          signInMethod: "extension",
-          pubkey: pk,
-          relays: generalRelays,
-          readRelays: readRelays,
-          writeRelays: writeRelays,
-        });
-      } else {
-        setLocalStorageDataOnSignIn({
-          signInMethod: "extension",
-          pubkey: pk,
-        });
-      }
+      const signer = newSigner!("nip07", {});
+      await signer.getPubKey();
+      saveSigner(signer);
       onClose();
     } catch (error) {
-      if (!isValidExtenstion) {
-        setFailureText(
-          "Extension sign-in failed! Please use a NIP-44 compatible extension like Alby or nos2x.",
-        );
-        setShowFailureModal(true);
-      } else {
-        setFailureText("Extension sign-in failed!");
-        setShowFailureModal(true);
-      }
+      setFailureText("Extension sign-in failed! " + error);
+      setShowFailureModal(true);
     }
   };
 
   const startBunkerLogin = async () => {
     try {
-      const bunkerTokenParams = parseBunkerToken(bunkerToken);
-      if (bunkerTokenParams) {
-        const { remotePubkey, relays, secret } = bunkerTokenParams;
-        let clientPubkey;
-        let clientPrivkey;
-        const { nsec, npub } = await generateKeys();
-        clientPubkey = npub;
-        clientPrivkey = nsec;
-        const connectId = crypto.randomUUID();
-        await sendBunkerRequest(
-          "connect",
-          connectId,
-          undefined,
-          undefined,
-          undefined,
-          clientPubkey,
-          clientPrivkey,
-          remotePubkey,
-          relays,
-          secret,
-        );
-        let ack;
-        while (!ack) {
-          ack = await awaitBunkerResponse(
-            connectId,
-            clientPubkey,
-            clientPrivkey,
-            remotePubkey,
-            relays,
-          );
-          if (!ack) {
-            await new Promise((resolve) => setTimeout(resolve, 2100));
-          }
-        }
-
-        if (ack) {
-          const gpkId = crypto.randomUUID();
-          await sendBunkerRequest(
-            "get_public_key",
-            gpkId,
-            undefined,
-            undefined,
-            undefined,
-            clientPubkey,
-            clientPrivkey,
-            remotePubkey,
-            relays,
-            secret,
-          );
-          let pk;
-          while (!pk) {
-            pk = await awaitBunkerResponse(
-              gpkId,
-              clientPubkey,
-              clientPrivkey,
-              remotePubkey,
-              relays,
-            );
-            if (!pk) {
-              await new Promise((resolve) => setTimeout(resolve, 2100));
-            }
-          }
-          if (
-            !relaysContext.isLoading &&
-            relaysContext.relayList.length >= 0 &&
-            relaysContext.readRelayList &&
-            relaysContext.writeRelayList
-          ) {
-            const generalRelays = relaysContext.relayList;
-            const readRelays = relaysContext.readRelayList;
-            const writeRelays = relaysContext.writeRelayList;
-            setLocalStorageDataOnSignIn({
-              signInMethod: "bunker",
-              pubkey: pk,
-              relays: generalRelays,
-              readRelays: readRelays,
-              writeRelays: writeRelays,
-              clientPubkey: clientPubkey,
-              clientPrivkey: clientPrivkey,
-              bunkerRemotePubkey: remotePubkey,
-              bunkerRelays: relays,
-              bunkerSecret: secret,
-            });
-          } else {
-            setLocalStorageDataOnSignIn({
-              signInMethod: "bunker",
-              pubkey: pk,
-              clientPubkey: clientPubkey,
-              clientPrivkey: clientPrivkey,
-              bunkerRemotePubkey: remotePubkey,
-              bunkerRelays: relays,
-              bunkerSecret: secret,
-            });
-          }
-          onClose();
-        } else {
-          throw new Error("Bunker sign-in failed!");
-        }
-      }
+      const signer = newSigner!("nip46", { bunker: bunkerToken });
+      await signer.getPubKey();
+      saveSigner(signer);
+      onClose();
     } catch (error) {
       setFailureText("Bunker sign-in failed!");
       setShowFailureModal(true);
@@ -223,41 +115,20 @@ export default function SignInModal({
         setFailureText("No passphrase provided!");
         setShowFailureModal(true);
       } else {
-        let { data: sk } = nip19.decode(privateKey);
-        let pk = getPublicKey(sk as Uint8Array);
-        let encryptedPrivateKey = CryptoJS.AES.encrypt(
-          privateKey,
-          passphrase,
-        ).toString();
+        const { encryptedPrivKey, pubkey } =
+          NostrNSECEncSigner.getEncryptedNSEC(privateKey, passphrase);
 
         setTimeout(() => {
           onClose(); // avoids tree walker issue by closing modal
         }, 500);
 
-        if (
-          !relaysContext.isLoading &&
-          relaysContext.relayList.length >= 0 &&
-          relaysContext.readRelayList &&
-          relaysContext.writeRelayList
-        ) {
-          const generalRelays = relaysContext.relayList;
-          const readRelays = relaysContext.readRelayList;
-          const writeRelays = relaysContext.writeRelayList;
-          setLocalStorageDataOnSignIn({
-            signInMethod: "nsec",
-            pubkey: pk,
-            encryptedPrivateKey: encryptedPrivateKey,
-            relays: generalRelays,
-            readRelays: readRelays,
-            writeRelays: writeRelays,
-          });
-        } else {
-          setLocalStorageDataOnSignIn({
-            signInMethod: "nsec",
-            pubkey: pk,
-            encryptedPrivateKey: encryptedPrivateKey,
-          });
-        }
+        const signer = newSigner!("nsec", {
+          encryptedPrivKey: encryptedPrivKey,
+          pubkey,
+        });
+        await signer.getPubKey();
+        saveSigner(signer);
+        onClose();
       }
     } else {
       setFailureText(

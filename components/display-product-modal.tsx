@@ -19,17 +19,16 @@ import ImageCarousel from "./utility-components/image-carousel";
 import CompactCategories from "./utility-components/compact-categories";
 import { locationAvatar } from "./utility-components/dropdowns/location-dropdown";
 import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
-import RequestPassphraseModal from "./utility-components/request-passphrase-modal";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
-import { getLocalStorageData } from "./utility/nostr-helper-functions";
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
 import SuccessModal from "./utility-components/success-modal";
+import { useSignerContext } from "./nostr-context";
 
 interface ProductModalProps {
   productData: any;
   handleModalToggle: () => void;
   showModal: boolean;
-  handleDelete: (productId: string, passphrase?: string) => void;
+  handleDelete: (productId: string) => void;
 }
 
 export default function DisplayProductModal({
@@ -53,9 +52,8 @@ export default function DisplayProductModal({
     required,
     restrictions,
   } = productData;
-  const { signInMethod, userPubkey } = getLocalStorageData();
 
-  const [requestPassphrase, setRequestPassphrase] = useState(false);
+  const { pubkey: userPubkey, isLoggedIn } = useSignerContext();
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showProductForm, setShowProductForm] = useState(false);
 
@@ -93,17 +91,14 @@ export default function DisplayProductModal({
   };
 
   const beginDeleteListingProcess = () => {
-    if (signInMethod === "extension" || signInMethod === "bunker") {
-      finalizeDeleteListingProcess();
-    } else if (signInMethod === "nsec") {
-      setRequestPassphrase(true);
-    }
+    if (!isLoggedIn) return;
+    finalizeDeleteListingProcess();
   };
-  const finalizeDeleteListingProcess = async (passphrase?: string) => {
+  const finalizeDeleteListingProcess = () => {
     // only used for when signInMethod === "nsec"
     setDeleteLoading(true);
     handleModalToggle(); // closes product detail modal
-    handleDelete(productData.id, passphrase); // delete listing
+    handleDelete(productData.id); // delete listing
     setDeleteLoading(false);
   };
 
@@ -240,7 +235,9 @@ export default function DisplayProductModal({
                 startContent={
                   <ShareIcon className="h-6 w-6 hover:text-yellow-500" />
                 }
-                onClick={handleShare}
+                onClick={() => {
+                  handleShare().catch((e) => console.error(e));
+                }}
               >
                 Share
               </Button>
@@ -279,11 +276,6 @@ export default function DisplayProductModal({
           </ModalFooter>
         </ModalContent>
       </Modal>
-      <RequestPassphraseModal
-        isOpen={requestPassphrase}
-        setIsOpen={setRequestPassphrase}
-        actionOnSubmit={finalizeDeleteListingProcess}
-      />
       {userPubkey === pubkey && (
         <ProductForm
           showModal={showProductForm}

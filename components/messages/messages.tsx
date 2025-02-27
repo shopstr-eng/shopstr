@@ -9,13 +9,8 @@ import {
   decryptNpub,
   generateKeys,
   getLocalStorageData,
-  validPassphrase,
-  getPrivKeyWithPassphrase,
-  sendBunkerRequest,
-  awaitBunkerResponse,
 } from "../utility/nostr-helper-functions";
 import { ChatsContext } from "../../utils/context/context";
-import RequestPassphraseModal from "../utility-components/request-passphrase-modal";
 import ShopstrSpinner from "../utility-components/shopstr-spinner";
 import { ChatPanel } from "./chat-panel";
 import { ChatButton } from "./chat-button";
@@ -29,6 +24,7 @@ import {
 import { useKeyPress } from "../utility/functions";
 import { DateTime } from "luxon";
 import FailureModal from "../utility-components/failure-modal";
+import { useSignerContext } from "../nostr-context";
 
 const Messages = ({ isPayment }: { isPayment: boolean }) => {
   const router = useRouter();
@@ -43,15 +39,12 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
   >([]); // [chatPubkey, chat]
   const [currentChatPubkey, setCurrentChatPubkey] = useState("");
 
-  const [enterPassphrase, setEnterPassphrase] = useState(false);
-  const [passphrase, setPassphrase] = useState("");
-
   const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
   const [oldestTimestamp, setOldestTimestamp] = useState(Number.MAX_VALUE);
 
   const [isChatsLoading, setIsChatsLoading] = useState(true);
   const [isSendingDMLoading, setIsSendingDMLoading] = useState(false);
-  const { signInMethod, userPubkey } = getLocalStorageData();
+  const { signer, pubkey: userPubkey } = useSignerContext();
 
   const [isClient, setIsClient] = useState(false);
 
@@ -89,11 +82,9 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         setIsChatsLoading(false);
         return;
       }
-      if (signInMethod === "nsec" && !validPassphrase(passphrase)) {
-        setEnterPassphrase(true); // prompt for passphrase when chatsContext is loaded
-      } else if (
-        !chatsContext.isLoading &&
-        chatsContext.chatsMap &&
+      if (
+        !chatsContext.isLoading && 
+        chatsContext.chatsMap && 
         !isLoadingMore
       ) {
         // comes here only if signInMethod is extension or its nsec and passphrase is valid
@@ -119,7 +110,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       }
     }
     loadChats();
-  }, [chatsContext, passphrase, isPayment]);
+  }, [chatsContext, isPayment]);
 
   useEffect(() => {
     let sortedChatsByLastMessage = Array.from(chatsMap.entries()).sort(
@@ -256,28 +247,28 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       let decodedRandomPubkeyForReceiver = nip19.decode(randomNpubForReceiver);
       let decodedRandomPrivkeyForReceiver = nip19.decode(randomNsecForReceiver);
       let giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
-        userPubkey,
+        userPubkey!,
         currentChatPubkey,
         message,
         "listing-inquiry",
       );
       let receiverSealedEvent = await constructMessageSeal(
+        signer!,
         giftWrappedMessageEvent,
-        userPubkey,
+        userPubkey!,
         currentChatPubkey,
-        passphrase,
       );
       let senderSealedEvent = await constructMessageSeal(
+        signer!,
         giftWrappedMessageEvent,
-        userPubkey,
-        userPubkey,
-        passphrase,
+        userPubkey!,
+        userPubkey!,
       );
       let senderGiftWrappedEvent = await constructMessageGiftWrap(
         senderSealedEvent,
         decodedRandomPubkeyForSender.data as string,
         decodedRandomPrivkeyForSender.data as Uint8Array,
-        userPubkey,
+        userPubkey!,
       );
       let receiverGiftWrappedEvent = await constructMessageGiftWrap(
         receiverSealedEvent,
@@ -334,7 +325,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       const pool = new SimplePool();
       const giftWrapFilter: Filter = {
         kinds: [1059],
-        "#p": [userPubkey],
+        "#p": [userPubkey!],
         since,
         until: oldestMessageCreatedAt,
       };
@@ -344,138 +335,36 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       );
       let giftWrapMessageEvents: NostrMessageEvent[] = [];
       for (const event of giftWrapEvents) {
-        if (signInMethod === "extension") {
-          let sealEventString = await window.nostr.nip44.decrypt(
-            event.pubkey,
-            event.content,
+        let sealEventString = await signer!.decrypt(
+          event.pubkey,
+          event.content,
+        );
+        let sealEvent = JSON.parse(sealEventString);
+        if (sealEvent.kind === 13) {
+          let messageEventString = await signer!.decrypt(
+            sealEvent.pubkey,
+            sealEvent.content,
           );
-          let sealEvent = JSON.parse(sealEventString);
-          if (sealEvent.kind === 13) {
-            let messageEventString = await window.nostr.nip44.decrypt(
-              sealEvent.pubkey,
-              sealEvent.content,
-            );
-            let messageEventCheck = JSON.parse(messageEventString);
+          let messageEventCheck = JSON.parse(messageEventString);
+          if (
+            messageEventCheck.kind === 14 &&
+            messageEventCheck.pubkey === sealEvent.pubkey
+          ) {
+            let pubkeyChats = chatsMap.get(
+              messageEventCheck.pubkey,
+            )?.decryptedChat;
             if (
-              messageEventCheck.kind === 14 &&
-              messageEventCheck.pubkey === sealEvent.pubkey
+              (pubkeyChats &&
+                pubkeyChats.length > 0 &&
+                pubkeyChats.some((msg) => msg.id != messageEventCheck.id)) ||
+              !pubkeyChats ||
+              (pubkeyChats && pubkeyChats.length === 0)
             ) {
-              let pubkeyChats = chatsMap.get(messageEventCheck.pubkey)
-                ?.decryptedChat;
-              if (
-                (pubkeyChats &&
-                  pubkeyChats.length > 0 &&
-                  pubkeyChats.some((msg) => msg.id != messageEventCheck.id)) ||
-                !pubkeyChats ||
-                (pubkeyChats && pubkeyChats.length === 0)
-              ) {
-                giftWrapMessageEvents.push({
-                  ...messageEventCheck,
-                  sig: "",
-                  read: false,
-                });
-              }
-            }
-          }
-        } else if (signInMethod === "bunker") {
-          const sealEventDecryptId = crypto.randomUUID();
-          await sendBunkerRequest(
-            "nip44_decrypt",
-            sealEventDecryptId,
-            undefined,
-            event.content,
-            event.pubkey,
-          );
-          let sealEventString;
-          while (!sealEventString) {
-            sealEventString = await awaitBunkerResponse(sealEventDecryptId);
-            if (!sealEventString) {
-              await new Promise((resolve) => setTimeout(resolve, 2100));
-            }
-          }
-          let sealEvent = JSON.parse(sealEventString);
-          sealEvent = JSON.parse(sealEvent);
-          if (sealEvent.kind === 13) {
-            const messageEventDecryptId = crypto.randomUUID();
-            await sendBunkerRequest(
-              "nip44_decrypt",
-              messageEventDecryptId,
-              undefined,
-              sealEvent.content,
-              sealEvent.pubkey,
-            );
-            let messageEventString;
-            while (!messageEventString) {
-              messageEventString = await awaitBunkerResponse(
-                messageEventDecryptId,
-              );
-              if (!messageEventString) {
-                await new Promise((resolve) => setTimeout(resolve, 2100));
-              }
-            }
-            let messageEventCheck = JSON.parse(messageEventString);
-            if (
-              messageEventCheck.kind === 14 &&
-              messageEventCheck.pubkey === sealEvent.pubkey
-            ) {
-              let pubkeyChats = chatsMap.get(messageEventCheck.pubkey)
-                ?.decryptedChat;
-              if (
-                (pubkeyChats &&
-                  pubkeyChats.length > 0 &&
-                  pubkeyChats.some((msg) => msg.id != messageEventCheck.id)) ||
-                !pubkeyChats ||
-                (pubkeyChats && pubkeyChats.length === 0)
-              ) {
-                giftWrapMessageEvents.push({
-                  ...messageEventCheck,
-                  sig: "",
-                  read: false,
-                });
-              }
-            }
-          }
-        } else if (signInMethod === "nsec") {
-          if (!passphrase) throw new Error("Passphrase is required");
-          let userPrivkey = getPrivKeyWithPassphrase(passphrase) as Uint8Array;
-          const giftWrapConversationKey = nip44.getConversationKey(
-            userPrivkey,
-            event.pubkey,
-          );
-          let sealEventString = nip44.decrypt(
-            event.content,
-            giftWrapConversationKey,
-          );
-          let sealEvent = JSON.parse(sealEventString);
-          if (sealEvent.kind === 13) {
-            let sealConversationKey = nip44.getConversationKey(
-              userPrivkey,
-              sealEvent.pubkey,
-            );
-            let messageEventString = nip44.decrypt(
-              sealEvent.content,
-              sealConversationKey,
-            );
-            let messageEventCheck = JSON.parse(messageEventString);
-            if (
-              messageEventCheck.kind === 14 &&
-              messageEventCheck.pubkey === sealEvent.pubkey
-            ) {
-              let pubkeyChats = chatsMap.get(messageEventCheck.pubkey)
-                ?.decryptedChat;
-              if (
-                (pubkeyChats &&
-                  pubkeyChats.length > 0 &&
-                  pubkeyChats.some((msg) => msg.id != messageEventCheck.id)) ||
-                !pubkeyChats ||
-                (pubkeyChats && pubkeyChats.length === 0)
-              ) {
-                giftWrapMessageEvents.push({
-                  ...messageEventCheck,
-                  sig: "",
-                  read: false,
-                });
-              }
+              giftWrapMessageEvents.push({
+                ...messageEventCheck,
+                sig: "",
+                read: false,
+              });
             }
           }
         }
@@ -597,17 +486,10 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
               isSendingDMLoading={isSendingDMLoading}
               handleSendMessage={handleSendGiftWrappedMessage}
               isPayment={isPayment}
-              passphrase={passphrase}
             />
           </div>
         )}
       </div>
-      <RequestPassphraseModal
-        passphrase={passphrase}
-        setCorrectPassphrase={setPassphrase}
-        isOpen={enterPassphrase}
-        setIsOpen={setEnterPassphrase}
-      />
       <FailureModal
         bodyText={failureText}
         isOpen={showFailureModal}

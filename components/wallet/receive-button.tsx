@@ -26,15 +26,19 @@ import {
   getDecodedToken,
   Proof,
 } from "@cashu/cashu-ts";
+import { useNostrContext, useSignerContext } from "../nostr-context";
+import { NostrNIP46Signer } from "@/utils/nostr/signer/nostr-nip46-signer";
 
-const ReceiveButton = ({ passphrase }: { passphrase?: string }) => {
+const ReceiveButton = () => {
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   const [isClaimed, setIsClaimed] = useState(false);
   const [isSpent, setIsSpent] = useState(false);
   const [isInvalidToken, setIsInvalidToken] = useState(false);
   const [isDuplicateToken, setIsDuplicateToken] = useState(false);
 
-  const { mints, tokens, history, signInMethod } = getLocalStorageData();
+  const { signer } = useSignerContext();
+  const { nostr } = useNostrContext();
+  const { mints, tokens, history } = getLocalStorageData();
 
   const {
     handleSubmit: handleReceiveSubmit,
@@ -100,11 +104,12 @@ const ReceiveButton = ({ passphrase }: { passphrase?: string }) => {
           ]),
         );
         await publishProofEvent(
+          nostr!,
+          signer!,
           tokenMint,
           uniqueProofs,
           "in",
-          transactionAmount.toString(),
-          passphrase,
+          transactionAmount.toString()
         );
       } else {
         setIsSpent(true);
@@ -184,7 +189,7 @@ const ReceiveButton = ({ passphrase }: { passphrase?: string }) => {
                     );
                   }}
                 />
-                {signInMethod === "bunker" && (
+                {signer instanceof NostrNIP46Signer && (
                   <div className="mx-4 my-2 flex items-center justify-center text-center">
                     <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
                     <p className="ml-2 text-xs text-light-text dark:text-dark-text">
