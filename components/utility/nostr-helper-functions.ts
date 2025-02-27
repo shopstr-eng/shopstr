@@ -82,7 +82,7 @@ export async function deleteEvent(
     signer,
     event_ids_to_delete,
     userPubkey,
-    "user deletion request from shopstr.store",
+    "NIP-99 listing deletion request",
   );
 
   await finalizeAndSendNostrEvent(signer, nostr, deletionEvent);
@@ -340,8 +340,6 @@ export async function PostListing(values: ProductFormValues) {
 
   const summary = values.find(([key]) => key === "summary")?.[1] || "";
 
-  const dValue = values.find(([key]) => key === "d")?.[1] || "";
-
   const created_at = Math.floor(Date.now() / 1000);
   const updatedValues = [...values, ["published_at", String(created_at)]];
 
@@ -352,23 +350,25 @@ export async function PostListing(values: ProductFormValues) {
     content: summary,
   };
 
-  const recEvent = {
-    kind: 31989,
+  const handlerDTag = crypto.randomUUID();
+
+  const handlerEvent = {
+    kind: 31990,
     tags: [
-      ["d", "30402"],
-      ["a", "31990:" + userPubkey + ":" + dValue, relays[0], "web"],
+      ["d", handlerDTag],
+      ["k", "30402"],
+      ["web", `${window.location.origin}/marketplace/<bech-32>`, "npub"],
+      ["web", `${window.location.origin}/listing/<bech-32>`, "naddr"],
     ],
     content: "",
     created_at: Math.floor(Date.now() / 1000),
   };
 
-  const handlerEvent = {
-    kind: 31990,
+  const recEvent = {
+    kind: 31989,
     tags: [
-      ["d", dValue],
-      ["k", "30402"],
-      ["web", "https://shopstr.store/marketplace/<bech-32>", "npub"],
-      ["web", "https://shopstr.store/listing/" + dValue],
+      ["d", "30402"],
+      ["a", "31990:" + userPubkey + ":" + handlerDTag, relays[0], "web"],
     ],
     content: "",
     created_at: Math.floor(Date.now() / 1000),
@@ -382,6 +382,7 @@ export async function PostListing(values: ProductFormValues) {
   await nostr.publish(signedEvent, allWriteRelays);
   await nostr.publish(signedRecEvent, allWriteRelays);
   await nostr.publish(signedHandlerEvent, allWriteRelays);
+
 
   return signedEvent;
 }

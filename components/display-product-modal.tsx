@@ -23,6 +23,7 @@ import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
 import SuccessModal from "./utility-components/success-modal";
 import { useSignerContext } from "./nostr-context";
+import { nip19 } from "nostr-tools";
 
 interface ProductModalProps {
   productData: any;
@@ -68,10 +69,15 @@ export default function DisplayProductModal({
   };
 
   const handleShare = async () => {
+    const naddr = nip19.naddrEncode({
+      identifier: productData.d as string,
+      pubkey: productData.pubkey,
+      kind: 30402,
+    });
     // The content you want to share
     const shareData = {
       title: title,
-      url: `${window.location.origin}/listing/${productData.d}`,
+      url: `${window.location.origin}/listing/${naddr}`,
     };
     // Check if the Web Share API is available
     if (navigator.share) {
@@ -80,7 +86,7 @@ export default function DisplayProductModal({
     } else {
       // Fallback for browsers that do not support the Web Share API
       navigator.clipboard.writeText(
-        `${window.location.origin}/listing/${productData.d}`,
+        `${window.location.origin}/listing/${naddr}`,
       );
       setShowSuccessModal(true);
     }

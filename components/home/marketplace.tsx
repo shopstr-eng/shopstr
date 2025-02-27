@@ -74,15 +74,14 @@ export function MarketplacePage({
 
   const { pubkey: userPubkey, isLoggedIn: loggedIn } = useSignerContext();
 
-  // Update focusedPubkey when pubkey in url changes
   useEffect(() => {
-    let focusedPubkeys = router.query.pubkey;
-    if (focusedPubkeys && typeof focusedPubkeys[0] === "string") {
-      const { data } = nip19.decode(focusedPubkeys[0]);
-      setFocusedPubkey(data as string); // router.query.pubkey returns array of pubkeys
+    let npub = router.query.npub;
+    if (npub && typeof npub[0] === "string") {
+      const { data } = nip19.decode(npub[0]);
+      setFocusedPubkey(data as string);
       setSelectedSection("shop");
     }
-  }, [router.query.pubkey]);
+  }, [router.query.npub]);
 
   useEffect(() => {
     if (loggedIn) {
@@ -178,8 +177,13 @@ export function MarketplacePage({
     });
   };
 
-  const handleTitleClick = (productId: string) => {
-    router.push(`/listing/${productId}`);
+  const handleTitleClick = (productId: string, productPubkey: string) => {
+    const naddr = nip19.naddrEncode({
+      identifier: productId,
+      pubkey: productPubkey,
+      kind: 30402,
+    });
+    router.push(`/listing/${naddr}`);
   };
 
   const renderProductScores = () => {
@@ -196,7 +200,9 @@ export function MarketplacePage({
             <div key={product.id} className="mt-4 p-4 pt-4">
               <h3 className="mb-3 text-lg font-semibold text-light-text dark:text-dark-text">
                 <div
-                  onClick={() => handleTitleClick(product.d as string)}
+                  onClick={() =>
+                    handleTitleClick(product.d as string, product.pubkey)
+                  }
                   className="cursor-pointer hover:underline"
                 >
                   {product.title}
@@ -336,8 +342,8 @@ export function MarketplacePage({
             </div>
           </div>
         ) : (
-          <>
-            <div className="flex flex-row gap-2 pb-3">
+          <div className="flex flex-col gap-2 pb-3 sm:flex-row">
+            <div className="w-full">
               <Input
                 className="mt-2 text-light-text dark:text-dark-text"
                 isClearable
@@ -349,6 +355,8 @@ export function MarketplacePage({
                   setSelectedSearch(value);
                 }}
               ></Input>
+            </div>
+            <div className="flex w-full flex-row gap-2 pb-3">
               <Select
                 className="mt-2 text-light-text dark:text-dark-text"
                 label="Categories"
@@ -389,7 +397,7 @@ export function MarketplacePage({
                 />
               ) : null}
             </div>
-          </>
+          </div>
         )}
       </div>
       <div className="flex">

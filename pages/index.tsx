@@ -10,6 +10,7 @@ import parseTags, {
 } from "@/components/utility/product-parser-functions";
 import { useSignerContext } from "@/components/nostr-context";
 import Link from "next/link";
+import { nip19 } from "nostr-tools";
 
 export default function Landing() {
   const router = useRouter();
@@ -83,7 +84,15 @@ export default function Landing() {
                   <ProductCard
                     key={product.id + "-" + index}
                     productData={product}
-                    onProductClick={() => router.push(`/listing/${product.d}`)}
+                    onProductClick={() =>
+                      router.push(
+                        `/listing/${nip19.naddrEncode({
+                          identifier: product.d as string,
+                          pubkey: product.pubkey,
+                          kind: 30402,
+                        })}`,
+                      )
+                    }
                   />
                 </div>
               ))}
