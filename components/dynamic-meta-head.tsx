@@ -1,7 +1,9 @@
 import Head from "next/head";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { NostrEvent, ShopSettings } from "@/utils/types/types";
 import parseTags from "./utility/product-parser-functions";
+import { nip19 } from "nostr-tools";
 
 type MetaTagsType = {
   title: string;
@@ -11,8 +13,9 @@ type MetaTagsType = {
 };
 
 const getMetaTags = (
+  windowOrigin: string,
   pathname: string,
-  query: { productId?: string[]; pubkey?: string[] },
+  query: { productId?: string[]; npub?: string[] },
   productEvents: NostrEvent[],
   shopEvents: Map<string, ShopSettings>,
 ): MetaTagsType => {
@@ -20,7 +23,7 @@ const getMetaTags = (
     title: "Shopstr",
     description: "Shop freely.",
     image: "/shopstr-2000x2000.png",
-    url: "https://shopstr.store",
+    url: `${windowOrigin}`,
   };
 
   if (pathname.startsWith("/listing/")) {
@@ -33,6 +36,11 @@ const getMetaTags = (
     });
 
     if (product) {
+      const naddr = nip19.naddrEncode({
+        identifier: productId as string,
+        pubkey: product.pubkey,
+        kind: 30402,
+      });
       const productData = parseTags(product);
       if (productData) {
         return {
@@ -40,20 +48,22 @@ const getMetaTags = (
           description:
             productData.summary || "Check out this product on Shopstr!",
           image: productData.images?.[0] || "/shopstr-2000x2000.png",
-          url: `https://shopstr.store/listing/${productId}`,
+          url: `${windowOrigin}/listing/${naddr}`,
         };
       }
       return {
         ...defaultTags,
         title: "Shopstr Listing",
         description: "Check out this listing on Shopstr!",
-        url: `https://shopstr.store/listing/${productId}`,
+        url: `${windowOrigin}/listing/${naddr}`,
       };
     }
   } else if (pathname.includes("/npub")) {
-    const pubkey = query.pubkey?.[0];
-    const shopInfo = pubkey
-      ? Array.from(shopEvents.values()).find((event) => event.pubkey === pubkey)
+    const npub = query.npub?.[0];
+    const shopInfo = npub
+      ? Array.from(shopEvents.values()).find(
+          (event) => nip19.npubEncode(event.pubkey) === npub,
+        )
       : undefined;
 
     if (shopInfo) {
@@ -62,14 +72,14 @@ const getMetaTags = (
         description:
           shopInfo.content.about || "Check out this shop on Shopstr!",
         image: shopInfo.content.ui.picture || "/shopstr-2000x2000.png",
-        url: `https://shopstr.store/${pubkey}`,
+        url: `${windowOrigin}/marketplace/${npub}`,
       };
     }
     return {
       ...defaultTags,
       title: "Shopstr Shop",
       description: "Check out this shop on Shopstr!",
-      url: `https://shopstr.store/${pubkey}`,
+      url: `${windowOrigin}/marketplace/${npub}`,
     };
   }
 
@@ -84,7 +94,14 @@ const DynamicHead = ({
   shopEvents: Map<string, ShopSettings>;
 }) => {
   const router = useRouter();
+  const [origin, setOrigin] = useState("");
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
+
   const metaTags = getMetaTags(
+    origin ? origin : "https://shopstr.market",
     router.pathname,
     router.query,
     productEvents,
@@ -105,7 +122,7 @@ const DynamicHead = ({
       <meta property="og:description" content={metaTags.description} />
       <meta property="og:image" content={metaTags.image} />
       <meta name="twitter:card" content="summary_large_image" />
-      <meta property="twitter:domain" content="shopstr.store" />
+      <meta property="twitter:domain" content={origin} />
       <meta property="twitter:url" content={metaTags.url} />
       <meta name="twitter:title" content={metaTags.title} />
       <meta name="twitter:description" content={metaTags.description} />
