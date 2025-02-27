@@ -487,12 +487,7 @@ function Shopstr({ props }: { props: AppProps }) {
             localStorage.setItem("tokens", JSON.stringify(cashuProofs));
           }
         }
-        await fetchAllFollows(
-          nostr!,
-          signer!,
-          allRelays,
-          editFollowsContext,
-        );
+        await fetchAllFollows(nostr!, signer!, allRelays, editFollowsContext);
       } catch (error) {
         console.error("Error fetching data:", error);
       }
@@ -500,7 +495,7 @@ function Shopstr({ props }: { props: AppProps }) {
     fetchData();
     window.addEventListener("storage", fetchData);
     return () => window.removeEventListener("storage", fetchData);
-  }, [nostr, signer,  isLoggedIn]);
+  }, [nostr, signer, isLoggedIn]);
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {

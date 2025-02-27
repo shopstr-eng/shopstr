@@ -34,7 +34,6 @@ export const MyListingsPage = () => {
 
   const menuRef = useRef<HTMLDivElement>(null);
 
-
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {

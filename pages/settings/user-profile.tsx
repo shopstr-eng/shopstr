@@ -27,7 +27,6 @@ const UserProfilePage = () => {
   const [userNSec, setUserNSec] = useState("");
   const [viewState, setViewState] = useState<"shown" | "hidden">("hidden");
 
-
   const profileContext = useContext(ProfileMapContext);
   const { handleSubmit, control, reset, watch, setValue } = useForm({
     defaultValues: {

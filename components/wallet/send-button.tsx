@@ -76,9 +76,8 @@ const SendButton = () => {
       const mint = new CashuMint(mints[0]);
       const wallet = new CashuWallet(mint);
       const mintKeySetIds = await wallet.getKeySets();
-      const filteredProofs = tokens.filter(
-        (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id),
+      const filteredProofs = tokens.filter((p: Proof) =>
+        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id),
       );
       let sendTotal = (numSats / 10) * 10;
       const { keep, send } = await wallet.send(sendTotal, filteredProofs, {
@@ -127,9 +126,8 @@ const SendButton = () => {
       setShowTokenCard(true);
       setNewToken(encodedSendToken);
       const changeProofs = keep;
-      const remainingProofs = tokens.filter(
-        (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id),
+      const remainingProofs = tokens.filter((p: Proof) =>
+        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id),
       );
       let proofArray;
       if (changeProofs.length >= 1 && changeProofs) {

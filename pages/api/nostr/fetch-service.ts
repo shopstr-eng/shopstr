@@ -16,7 +16,10 @@ import {
 import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
 import { ChatsMap } from "@/utils/context/context";
 import { DateTime } from "luxon";
-import { getLocalStorageData, deleteEvent } from "@/components/utility/nostr-helper-functions";
+import {
+  getLocalStorageData,
+  deleteEvent,
+} from "@/components/utility/nostr-helper-functions";
 import {
   ProductData,
   parseTags,
@@ -67,7 +70,8 @@ export const fetchAllPosts = async (
         console.log("Failed to fetch all listings from cache: ", error);
       }
 
-      if (!since && !EnvInfo.isShopstrDevEnvironment) { // TODO: remove this, only for debug
+      if (!since && !EnvInfo.isShopstrDevEnvironment) {
+        // TODO: remove this, only for debug
         since = Math.trunc(DateTime.now().minus({ days: 14 }).toSeconds());
       }
       if (!until) {
@@ -177,9 +181,7 @@ export const fetchCart = async (
                   event.tags.some((tag) => tag[0] === "d" && tag[1] === dTag),
                 );
                 if (foundEvent) {
-                  cartArrayFromRelay.push(
-                    parseTags(foundEvent) as ProductData
-                  );
+                  cartArrayFromRelay.push(parseTags(foundEvent) as ProductData);
                 }
               }
             }
@@ -560,9 +562,7 @@ export const fetchReviews = async (
         if (
           !existingReview ||
           createdAt >
-              Number(
-                existingReview.find((item) => item[0] === "created_at")?.[1],
-              )
+            Number(existingReview.find((item) => item[0] === "created_at")?.[1])
         ) {
           // Replace the existing created_at or set a new entry
           const updatedReview = existingReview
@@ -827,23 +827,21 @@ export const fetchCashuWallet = async (
 
       // find most recent wallet event
       for (const event of hEvents) {
-         if (event.kind === 17375) {
-              const mints = event.tags.filter(
-                (tag: string[]) => tag[0] === "mint",
-              );
-              mints.forEach((tag) => {
-                if (!cashuMintSet.has(tag[1])) {
-                  cashuMintSet.add(tag[1]);
-                  cashuMints.push(tag[1]);
-                }
-              });
-            } else if (
-              (event.kind === 37375 && mostRecentWalletEvent.length === 0) ||
-              event.created_at > mostRecentWalletEvent[0].created_at
-            ) {
-              mostRecentWalletEvent = [event];
+        if (event.kind === 17375) {
+          const mints = event.tags.filter((tag: string[]) => tag[0] === "mint");
+          mints.forEach((tag) => {
+            if (!cashuMintSet.has(tag[1])) {
+              cashuMintSet.add(tag[1]);
+              cashuMints.push(tag[1]);
             }
-          }
+          });
+        } else if (
+          (event.kind === 37375 && mostRecentWalletEvent.length === 0) ||
+          event.created_at > mostRecentWalletEvent[0].created_at
+        ) {
+          mostRecentWalletEvent = [event];
+        }
+      }
       if (mostRecentWalletEvent.length > 0) {
         // extract cashu data
         const relayList = mostRecentWalletEvent[0].tags.filter(
@@ -854,12 +852,12 @@ export const fetchCashuWallet = async (
         const mints = mostRecentWalletEvent[0].tags.filter(
           (tag: string[]) => tag[0] === "mint",
         );
-       mints.forEach((tag) => {
-         if (!cashuMintSet.has(tag[1])) {
-           cashuMintSet.add(tag[1]);
-           cashuMints.push(tag[1]);
-         }
-       });
+        mints.forEach((tag) => {
+          if (!cashuMintSet.has(tag[1])) {
+            cashuMintSet.add(tag[1]);
+            cashuMints.push(tag[1]);
+          }
+        });
       }
       const cashuProofFilter: Filter = {
         kinds: [7375, 7376],
@@ -906,7 +904,7 @@ export const fetchCashuWallet = async (
               Ys.length === spentYs.size &&
               Ys.every((y: string) => spentYs.has(y));
             if (proofsStates && proofsStates.length > 0 && allYsMatch) {
-              await deleteEvent(nostr,signer!,[event.id]);
+              await deleteEvent(nostr, signer!, [event.id]);
             } else if (cashuWalletEventContent.proofs) {
               let allProofs = [
                 ...tokens,
@@ -930,8 +928,7 @@ export const fetchCashuWallet = async (
             const Ys = cashuProofs.map((p: Proof) =>
               hashToCurve(enc.encode(p.secret)).toHex(true),
             );
-            let proofsStates =
-              await wallet?.checkProofsStates(cashuProofs);
+            let proofsStates = await wallet?.checkProofsStates(cashuProofs);
             const spentYs = new Set(
               proofsStates
                 .filter((state) => state.state === "SPENT")
@@ -963,8 +960,7 @@ export const fetchCashuWallet = async (
             .map((event) => event.proofs);
 
           cashuProofs = cashuProofs.filter(
-            (cashuProof) =>
-              !destroyedProofsArray.includes(cashuProof),
+            (cashuProof) => !destroyedProofsArray.includes(cashuProof),
           );
 
           let inProofIds = incomingSpendingHistory
@@ -999,10 +995,7 @@ export const fetchCashuWallet = async (
 
           for (const proofsToAddBack of arrayOfProofsToAddBack) {
             for (const proofToAdd of proofsToAddBack) {
-              if (
-                proofToAdd &&
-                !proofExists(proofToAdd, cashuProofs)
-              ) {
+              if (proofToAdd && !proofExists(proofToAdd, cashuProofs)) {
                 cashuProofs.push(proofToAdd);
               }
             }
@@ -1011,7 +1004,7 @@ export const fetchCashuWallet = async (
           cashuProofs = getUniqueProofs(cashuProofs);
 
           if (outProofIds.length > 0) {
-            await deleteEvent(nostr,signer!, outProofIds);
+            await deleteEvent(nostr, signer!, outProofIds);
           }
         } catch (error) {
           console.log("Error checking spent proofs: ", error);
@@ -1024,13 +1017,7 @@ export const fetchCashuWallet = async (
         cashuProofs: cashuProofs,
       });
 
-      editCashuWalletContext(
-        proofEvents,
-        cashuMints,
-        cashuProofs,
-        false,
-      );
-
+      editCashuWalletContext(proofEvents, cashuMints, cashuProofs, false);
     } catch (error) {
       console.log("failed to fetch Cashu wallet: ", error);
       reject(error);

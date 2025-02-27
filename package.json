@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "format": "prettier --write .",
     "knex:migrate": "node --loader ts-node/esm ./node_modules/.bin/knex --knexfile ./knexfile.ts migrate:latest"
   },
   "dependencies": {

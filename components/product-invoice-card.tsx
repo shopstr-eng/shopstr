@@ -838,9 +838,8 @@ export default function ProductInvoiceCard({
       const mint = new CashuMint(mints[0]);
       const wallet = new CashuWallet(mint);
       const mintKeySetIds = await wallet.getKeySets();
-      const filteredProofs = tokens.filter(
-        (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id),
+      const filteredProofs = tokens.filter((p: Proof) =>
+        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id),
       );
       const { keep, send } = await wallet.send(price, filteredProofs, {
         includeFees: true,
@@ -902,9 +901,8 @@ export default function ProductInvoiceCard({
           console.error(error);
         });
       const changeProofs = keep;
-      const remainingProofs = tokens.filter(
-        (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id),
+      const remainingProofs = tokens.filter((p: Proof) =>
+        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id),
       );
       let proofArray;
       if (changeProofs.length >= 1 && changeProofs) {

@@ -82,11 +82,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         setIsChatsLoading(false);
         return;
       }
-      if (
-        !chatsContext.isLoading && 
-        chatsContext.chatsMap && 
-        !isLoadingMore
-      ) {
+      if (!chatsContext.isLoading && chatsContext.chatsMap && !isLoadingMore) {
         // comes here only if signInMethod is extension or its nsec and passphrase is valid
         let decryptedChats = await getDecryptedChatsFromContext();
         const passedNPubkey = router.query.pk ? router.query.pk : null;

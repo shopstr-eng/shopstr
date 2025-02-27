@@ -14,7 +14,7 @@ const hostToSrcSet = (url: URL) => {
         .map((size) => `${url.origin}/resp/${size}p${url.pathname} ${size}w`)
         .join(", ");
     case "127.0.0.1":
-      if(EnvInfo.isShopstrDevEnvironment && url.port === "3001") {
+      if (EnvInfo.isShopstrDevEnvironment && url.port === "3001") {
         return ["240", "480", "720", "1080"]
           .map((size) => `${url.origin}${url.pathname}?w=${size} ${size}w`)
           .join(", ");

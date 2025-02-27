@@ -46,10 +46,8 @@ const PreferencesPage = () => {
   const [isLoaded, setIsLoaded] = useState(false);
   const { signer, pubkey } = useSignerContext();
 
-
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
-
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -95,7 +93,7 @@ const PreferencesPage = () => {
         } else {
           setMints([newMint, ...mints.filter((mint) => mint !== newMint)]);
         }
-        await publishWalletEvent(nostr!,signer!);
+        await publishWalletEvent(nostr!, signer!);
         handleToggleMintModal();
       } else {
         setFailureText(
@@ -113,7 +111,7 @@ const PreferencesPage = () => {
 
   const deleteMint = async (mintToDelete: string) => {
     setMints(mints.filter((mint) => mint !== mintToDelete));
-    await publishWalletEvent(nostr!,signer!);
+    await publishWalletEvent(nostr!, signer!);
   };
 
   useEffect(() => {
@@ -182,7 +180,7 @@ const PreferencesPage = () => {
   };
 
   const publishRelays = () => {
-    createNostrRelayEvent(nostr!,signer!,pubkey!);
+    createNostrRelayEvent(nostr!, signer!, pubkey!);
     setRelaysAreChanged(false);
   };
 

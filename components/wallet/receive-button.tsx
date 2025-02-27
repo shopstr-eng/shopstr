@@ -109,7 +109,7 @@ const ReceiveButton = () => {
           tokenMint,
           uniqueProofs,
           "in",
-          transactionAmount.toString()
+          transactionAmount.toString(),
         );
       } else {
         setIsSpent(true);

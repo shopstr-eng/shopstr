@@ -25,7 +25,7 @@ export class NostrNSECEncSigner implements NostrSigner {
   public passphrase?: string;
   private pubkey?: string;
   private rememberedPassphrase?: string;
-  private inputPassphrase?:string;
+  private inputPassphrase?: string;
   private inputPassphraseClearer?: any;
 
   public static getEncryptedNSEC(
@@ -152,13 +152,13 @@ export class NostrNSECEncSigner implements NostrSigner {
 
         // save input passphrase for few seconds, improve ux by not asking for passphrase again
         // for multiple close actions
-        if(this.inputPassphraseClearer) clearTimeout(this.inputPassphraseClearer);
+        if (this.inputPassphraseClearer)
+          clearTimeout(this.inputPassphraseClearer);
         this.inputPassphraseClearer = setTimeout(() => {
           this.inputPassphrase = undefined;
         }, 5000);
         this.inputPassphrase = passphrase;
         //
-
 
         return privKeyBytes;
       } catch (e) {

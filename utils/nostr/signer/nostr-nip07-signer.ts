@@ -16,13 +16,13 @@ export class NostrNIP07Signer implements NostrSigner {
     };
   }
 
-  private checkExtension(): any{
-    if(!window?.nostr) throw new Error("Nostr extension not found");
+  private checkExtension(): any {
+    if (!window?.nostr) throw new Error("Nostr extension not found");
     if (!window?.nostr?.nip44) {
-       throw new Error(
-         "Please use a NIP-44 compatible extension like Alby or nos2x",
-       );
-     }
+      throw new Error(
+        "Please use a NIP-44 compatible extension like Alby or nos2x",
+      );
+    }
   }
 
   public static fromJSON(

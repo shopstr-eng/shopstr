@@ -137,9 +137,8 @@ const PayButton = () => {
               0,
             )
           : 0;
-      const remainingProofs = tokens.filter(
-        (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id),
+      const remainingProofs = tokens.filter((p: Proof) =>
+        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id),
       );
       let proofArray;
       if (changeAmount >= 1 && changeProofs) {

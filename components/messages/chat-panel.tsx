@@ -187,7 +187,7 @@ export const ChatPanel = ({
       });
       const productReviewsData = new Map<string, string[][]>();
       productReviewsData.set(userPubkey!, eventTags);
-      await publishReviewEvent(nostr!, signer!,data.comment, eventTags);
+      await publishReviewEvent(nostr!, signer!, data.comment, eventTags);
       reviewsContext.updateProductReviewsData(
         merchantPubkey,
         dTag,

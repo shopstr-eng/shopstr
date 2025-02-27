@@ -41,7 +41,6 @@ const TopNav = ({
     }
   });
 
-
   useEffect(() => {
     const fetchAndUpdateCartQuantity = async () => {
       let cartList = localStorage.getItem("cart")

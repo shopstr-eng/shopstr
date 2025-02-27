@@ -1,6 +1,9 @@
 import { useState, useEffect, useContext } from "react";
 import { Filter, SimplePool } from "nostr-tools";
-import { getLocalStorageData, deleteEvent } from "./utility/nostr-helper-functions";
+import {
+  getLocalStorageData,
+  deleteEvent,
+} from "./utility/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
 import {
   ProductContext,
@@ -53,7 +56,7 @@ const DisplayProducts = ({
 
   const router = useRouter();
 
-  const {nostr} = useNostrContext();
+  const { nostr } = useNostrContext();
   const { signer, pubkey: userPubkey } = useSignerContext();
 
   useEffect(() => {
@@ -121,7 +124,7 @@ const DisplayProducts = ({
 
   const handleDelete = async (productId: string) => {
     try {
-      await deleteEvent(nostr!,signer!, [productId]);
+      await deleteEvent(nostr!, signer!, [productId]);
       productEventContext.removeDeletedProductEvent(productId);
     } catch (e) {
       console.log(e);

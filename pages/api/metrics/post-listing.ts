@@ -19,7 +19,9 @@ const PostListing = async (req: NextApiRequest, res: NextApiResponse) => {
   const event = parseRequestBody(req.body);
 
   try {
-    const relays = EnvInfo.isShopstrDevEnvironment ? getDefaultRelays() : event.relays;
+    const relays = EnvInfo.isShopstrDevEnvironment
+      ? getDefaultRelays()
+      : event.relays;
 
     await repo()("listings").insert({
       id: uuid(),

@@ -81,7 +81,7 @@ export default function CartInvoiceCard({
   subtotal: number;
   totalShippingCost: number;
   totalCost: number;
-}) { 
+}) {
   const { mints, tokens, history } = getLocalStorageData();
   const router = useRouter();
 
@@ -151,7 +151,6 @@ export default function CartInvoiceCard({
     control: combinedControl,
     reset: combinedReset,
   } = useForm();
-
 
   const generateNewKeys = async () => {
     try {
@@ -939,9 +938,8 @@ export default function CartInvoiceCard({
       const mint = new CashuMint(mints[0]);
       const wallet = new CashuWallet(mint);
       const mintKeySetIds = await wallet.getKeySets();
-      const filteredProofs = tokens.filter(
-        (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id),
+      const filteredProofs = tokens.filter((p: Proof) =>
+        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id),
       );
       const { keep, send } = await wallet.send(price, filteredProofs, {
         includeFees: true,
@@ -996,9 +994,8 @@ export default function CartInvoiceCard({
         additionalInfo ? additionalInfo : undefined,
       );
       const changeProofs = keep;
-      const remainingProofs = tokens.filter(
-        (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id),
+      const remainingProofs = tokens.filter((p: Proof) =>
+        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id),
       );
       let proofArray;
       if (changeProofs.length >= 1 && changeProofs) {

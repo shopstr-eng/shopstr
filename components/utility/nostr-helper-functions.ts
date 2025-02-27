@@ -71,11 +71,11 @@ function generateEventId(event: EncryptedMessageEvent) {
   return hash.digest("hex");
 }
 
-export async function deleteEvent (
+export async function deleteEvent(
   nostr: NostrManager,
   signer: NostrSigner,
   event_ids_to_delete: string[],
-){
+) {
   const userPubkey: string = await signer.getPubKey();
   let deletionEvent = await createNostrDeleteEvent(
     nostr,
@@ -307,7 +307,6 @@ export function parseBunkerToken(token: string): BunkerTokenParams | null {
 //   });
 // }
 
-
 export async function createNostrProfileEvent(
   nostr: NostrManager,
   signer: NostrSigner,
@@ -329,10 +328,7 @@ export async function createNostrProfileEvent(
   return msg;
 }
 
-
-export async function PostListing(
-  values: ProductFormValues
-) {
+export async function PostListing(values: ProductFormValues) {
   const { relays, writeRelays } = getLocalStorageData();
 
   const { signer, isLoggedIn } = useSignerContext();
@@ -395,7 +391,7 @@ export async function createNostrShopEvent(
   signer: NostrSigner,
   pubkey: string,
   content: string,
-){
+) {
   let msg = {
     kind: 30019, // NIP-15 - Stall Metadata
     content: content,
@@ -567,7 +563,7 @@ export async function createNostrRelayEvent(
   nostr: NostrManager,
   signer: NostrSigner,
   pubkey: string,
-)  {
+) {
   if (!signer || !nostr) throw new Error("Login required");
   const relayList = getLocalStorageData().relays;
   const readRelayList = getLocalStorageData().readRelays;
@@ -653,11 +649,10 @@ export async function publishShoppingCartEvent(
 
 export async function publishWalletEvent(
   nostr: NostrManager,
-  signer: NostrSigner
+  signer: NostrSigner,
 ) {
   try {
-    const { mints, relays, writeRelays } =
-      getLocalStorageData();
+    const { mints, relays, writeRelays } = getLocalStorageData();
     const userPubkey = await signer.getPubKey();
 
     let mintTagsSet = new Set<string>();
@@ -670,14 +665,14 @@ export async function publishWalletEvent(
     const mintTags = walletMints.map((mint) => ["mint", mint]);
     const walletContent = [...mintTags];
     const cashuWalletEvent = {
-        kind: 17375,
-        tags: [],
-        content: await window.nostr.nip44.encrypt(
-          userPubkey,
-          JSON.stringify(walletContent),
-        ),
-        created_at: Math.floor(Date.now() / 1000),
-      };
+      kind: 17375,
+      tags: [],
+      content: await window.nostr.nip44.encrypt(
+        userPubkey,
+        JSON.stringify(walletContent),
+      ),
+      created_at: Math.floor(Date.now() / 1000),
+    };
     const signedEvent = await signer.sign(cashuWalletEvent);
     await nostr.publish(signedEvent, allWriteRelays);
   } catch (e: any) {
@@ -700,7 +695,6 @@ export async function publishProofEvent(
     const allWriteRelays = withBlastr([...relays, ...writeRelays]);
     const userPubkey = await signer?.getPubKey?.();
 
-
     let signedEvent;
     if (proofs.length > 0) {
       const tokenArray = {
@@ -709,29 +703,26 @@ export async function publishProofEvent(
         ...(deletedEventsArray ? { del: deletedEventsArray } : {}),
       };
       const cashuProofEvent = {
-          kind: 7375,
-          tags: [],
-          content: await signer!.encrypt(
-            userPubkey,
-            JSON.stringify(tokenArray),
-          ),
-          created_at: Math.floor(Date.now() / 1000),
-        };
-        signedEvent = await signer!.sign(cashuProofEvent);
-          await nostr.publish(signedEvent,allWriteRelays);
-      }
- if (deletedEventsArray && deletedEventsArray.length > 0) {
-   await deleteEvent(nostr!,signer!,deletedEventsArray);
- }
+        kind: 7375,
+        tags: [],
+        content: await signer!.encrypt(userPubkey, JSON.stringify(tokenArray)),
+        created_at: Math.floor(Date.now() / 1000),
+      };
+      signedEvent = await signer!.sign(cashuProofEvent);
+      await nostr.publish(signedEvent, allWriteRelays);
+    }
+    if (deletedEventsArray && deletedEventsArray.length > 0) {
+      await deleteEvent(nostr!, signer!, deletedEventsArray);
+    }
 
- await publishSpendingHistoryEvent(
-   nostr!,
-   signer!,
-   direction,
-   amount,
-   signedEvent && signedEvent.id ? signedEvent.id : "",
-   deletedEventsArray,
- );
+    await publishSpendingHistoryEvent(
+      nostr!,
+      signer!,
+      direction,
+      amount,
+      signedEvent && signedEvent.id ? signedEvent.id : "",
+      deletedEventsArray,
+    );
   } catch (e: any) {
     alert("Failed to send event: " + e.message);
     return { error: e };
@@ -747,8 +738,7 @@ export async function publishSpendingHistoryEvent(
   sentEventIds?: string[],
 ) {
   try {
-    const { relays, writeRelays } =
-      getLocalStorageData();
+    const { relays, writeRelays } = getLocalStorageData();
     const allWriteRelays = withBlastr([...relays, ...writeRelays]);
 
     const eventContent = [
@@ -770,15 +760,11 @@ export async function publishSpendingHistoryEvent(
     const cashuSpendingHistoryEvent = {
       kind: 7376,
       tags: [],
-      content: await signer!.encrypt(
-        userPubkey,
-        JSON.stringify(eventContent),
-      ),
+      content: await signer!.encrypt(userPubkey, JSON.stringify(eventContent)),
       created_at: Math.floor(Date.now() / 1000),
     };
     signedEvent = await signer!.sign(cashuSpendingHistoryEvent);
     await nostr!.publish(signedEvent, allWriteRelays);
-
   } catch (e: any) {
     alert("Failed to send event: " + e.message);
     return { error: e };
@@ -788,7 +774,7 @@ export async function publishSpendingHistoryEvent(
 export async function finalizeAndSendNostrEvent(
   signer: NostrSigner,
   nostr: NostrManager,
-  nostrEvent: NostrEvent
+  nostrEvent: NostrEvent,
 ) {
   try {
     const { writeRelays, relays } = getLocalStorageData();
@@ -1021,11 +1007,7 @@ export const setLocalStorageDataOnSignIn = ({
 
   localStorage.setItem(
     LOCALSTORAGECONSTANTS.relays,
-    JSON.stringify(
-      relays && relays.length != 0
-        ? relays
-        : getDefaultRelays(),
-    ),
+    JSON.stringify(relays && relays.length != 0 ? relays : getDefaultRelays()),
   );
 
   localStorage.setItem(
