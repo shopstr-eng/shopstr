@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { Button, Input } from "@nextui-org/react";
@@ -12,22 +12,12 @@ import {
   ShippingOptionsType,
 } from "../../components/utility/STATIC-VARIABLES";
 import { ProductData } from "../../components/utility/product-parser-functions";
-import {
-  getLocalStorageData,
-  publishSavedForLaterEvent,
-  validPassphrase,
-} from "../../components/utility/nostr-helper-functions";
-import { CartContext } from "@/utils/context/context";
 import { DisplayCostBreakdown } from "../../components/utility-components/display-monetary-info";
 import CartInvoiceCard from "../../components/cart-invoice-card";
 import { fiat } from "@getalby/lightning-tools";
 import currencySelection from "../../public/currencySelection.json";
-import RequestPassphraseModal from "../../components/utility-components/request-passphrase-modal";
 
 export default function Component() {
-  const [enterPassphrase, setEnterPassphrase] = useState(false);
-  const [passphrase, setPassphrase] = useState("");
-
   const [products, setProducts] = useState<ProductData[]>([]);
   const [satPrices, setSatPrices] = useState<{ [key: string]: number | null }>(
     {},
@@ -62,17 +52,7 @@ export default function Component() {
   }>(Object.fromEntries(products.map((product) => [product.id, false])));
   const [isBeingPaid, setIsBeingPaid] = useState(false);
 
-  const cartContext = useContext(CartContext);
-
   const router = useRouter();
-
-  const { signInMethod, userPubkey } = getLocalStorageData();
-
-  useEffect(() => {
-    if (signInMethod === "nsec" && !validPassphrase(passphrase)) {
-      setEnterPassphrase(true);
-    }
-  }, [signInMethod, passphrase]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -169,34 +149,6 @@ export default function Component() {
 
   const toggleCheckout = () => {
     setIsBeingPaid(!isBeingPaid);
-  };
-
-  const handleSaveForLater = (productId: string) => {
-    const product = products.find((p) => p.id === productId);
-    if (product) {
-      publishSavedForLaterEvent(
-        "saved",
-        userPubkey,
-        cartContext.cartAddresses,
-        product,
-        quantities[productId],
-        passphrase,
-      );
-    }
-  };
-
-  const handleRemoveFromSaveForLater = (productId: string) => {
-    const product = products.find((p) => p.id === productId);
-    if (product) {
-      publishSavedForLaterEvent(
-        "saved",
-        userPubkey,
-        cartContext.cartAddresses,
-        product,
-        -1,
-        passphrase,
-      );
-    }
   };
 
   const handleRemoveFromCart = (productId: string) => {
@@ -437,14 +389,6 @@ export default function Component() {
                     <div className="absolute bottom-4 right-4 flex">
                       <Button
                         size="sm"
-                        className="mr-2 text-shopstr-purple-light dark:text-shopstr-yellow-light"
-                        variant="light"
-                        onClick={() => handleSaveForLater(product.id)}
-                      >
-                        Save For Later
-                      </Button>
-                      <Button
-                        size="sm"
                         color="danger"
                         variant="light"
                         className="mr-2"
@@ -481,9 +425,6 @@ export default function Component() {
                 </span>
               </div>
             )}
-            <div className="mb-4 flex items-center justify-between">
-              <h1 className="text-2xl font-bold">Saved For Later</h1>
-            </div>
           </div>
         </div>
       ) : (
@@ -563,13 +504,6 @@ export default function Component() {
           </div>
         </>
       )}
-      <RequestPassphraseModal
-        passphrase={passphrase}
-        setCorrectPassphrase={setPassphrase}
-        isOpen={enterPassphrase}
-        setIsOpen={setEnterPassphrase}
-        onCancelRouteTo="/marketplace"
-      />
     </>
   );
 }
