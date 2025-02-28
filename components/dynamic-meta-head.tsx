@@ -101,7 +101,7 @@ const DynamicHead = ({
   }, []);
 
   const metaTags = getMetaTags(
-    origin ? origin : "https://shopstr.market",
+    origin ? origin : "https://shopstr.store",
     router.pathname,
     router.query,
     productEvents,

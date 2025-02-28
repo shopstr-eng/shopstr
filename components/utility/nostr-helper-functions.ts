@@ -341,13 +341,18 @@ export async function PostListing(
 
   const handlerDTag = crypto.randomUUID();
 
+  const origin =
+    window && typeof window !== undefined
+      ? window.location.origin
+      : "https://shopstr.store";
+
   const handlerEvent = {
     kind: 31990,
     tags: [
       ["d", handlerDTag],
       ["k", "30402"],
-      ["web", `${window.location.origin}/marketplace/<bech-32>`, "npub"],
-      ["web", `${window.location.origin}/listing/<bech-32>`, "naddr"],
+      ["web", `${origin}/marketplace/<bech-32>`, "npub"],
+      ["web", `${origin}/listing/<bech-32>`, "naddr"],
     ],
     content: "",
     created_at: Math.floor(Date.now() / 1000),
