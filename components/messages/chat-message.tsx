@@ -63,7 +63,11 @@ export const ChatMessage = ({
     let subject = tagsMap.get("subject") ? tagsMap.get("subject") : null;
     let productAddress = tagsMap.get("a") ? tagsMap.get("a") : null;
     let orderId = tagsMap.get("order") ? tagsMap.get("order") : null;
-    setCanReview?.(subject === "order-receipt" || subject === "shipping-info");
+    setCanReview?.(
+      subject === "order-info" ||
+        subject === "order-receipt" ||
+        subject === "shipping-info",
+    );
     if (productAddress) {
       setProductAddress?.(productAddress);
     }
