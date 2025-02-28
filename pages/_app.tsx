@@ -10,8 +10,6 @@ import {
   ShopContextInterface,
   ProductContext,
   ProductContextInterface,
-  // CartContext,
-  // CartContextInterface,
   ChatsContextInterface,
   ChatsContext,
   ChatsMap,
@@ -30,12 +28,10 @@ import {
   validPassphrase,
   LogOut,
 } from "../components/utility/nostr-helper-functions";
-// import { ProductData } from "../components/utility/product-parser-functions";
 import { NextUIProvider } from "@nextui-org/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import {
   fetchAllPosts,
-  // fetchCart,
   fetchReviews,
   fetchShopSettings,
   fetchProfile,
@@ -143,37 +139,6 @@ function App({ Component, pageProps }: AppProps) {
       },
     },
   );
-  // const [cartContext, setCartContext] = useState<CartContextInterface>({
-  //   cartAddresses: [],
-  //   isLoading: true,
-  //   addProductToCart: (productData: ProductData) => {
-  //     setCartContext((cartContext) => {
-  //       let cartAddresses = [
-  //         ...cartContext.cartAddresses,
-  //         ["a", "30402:" + productData.pubkey + ":" + productData.d],
-  //       ];
-  //       return {
-  //         cartAddresses: cartAddresses,
-  //         isLoading: false,
-  //         addProductToCart: productContext.addNewlyCreatedProductEvent,
-  //         removeProductFromCart: cartContext.removeProductFromCart,
-  //       };
-  //     });
-  //   },
-  //   removeProductFromCart: (productData: ProductData) => {
-  //     setCartContext((cartContext) => {
-  //       let cartAddresses = [...cartContext.cartAddresses].filter(
-  //         (address) => !address[1].includes(`:${productData.d}`),
-  //       );
-  //       return {
-  //         cartAddresses: cartAddresses,
-  //         isLoading: false,
-  //         addProductToCart: cartContext.addProductToCart,
-  //         removeProductFromCart: cartContext.removeProductFromCart,
-  //       };
-  //     });
-  //   },
-  // });
   const [shopContext, setShopContext] = useState<ShopContextInterface>({
     shopData: new Map(),
     isLoading: true,
@@ -296,17 +261,6 @@ function App({ Component, pageProps }: AppProps) {
       };
     });
   };
-
-  // const editCartContext = (cartAddresses: string[][], isLoading: boolean) => {
-  //   setCartContext((cartContext) => {
-  //     return {
-  //       cartAddresses: cartAddresses,
-  //       isLoading: isLoading,
-  //       addProductToCart: cartContext.addProductToCart,
-  //       removeProductFromCart: cartContext.removeProductFromCart,
-  //     };
-  //   });
-  // };
 
   const editShopContext = (
     shopData: Map<string, ShopSettings>,
@@ -472,15 +426,6 @@ function App({ Component, pageProps }: AppProps) {
           editProfileContext,
         );
         await fetchReviews(allRelays, productEvents, editReviewsContext);
-        // let { cartList } = await fetchCart(
-        //   allRelays,
-        //   editCartContext,
-        //   productEvents,
-        //   passphrase,
-        // );
-        // if (cartList.length > 0) {
-        //   localStorage.setItem("cart", JSON.stringify(cartList));
-        // }
         if (
           (getLocalStorageData().signInMethod === "nsec" && passphrase) ||
           getLocalStorageData().signInMethod === "extension" ||
@@ -492,7 +437,7 @@ function App({ Component, pageProps }: AppProps) {
             passphrase,
           );
 
-          if (cashuMints.length != 0 && cashuProofs.length != 0) {
+          if (cashuMints.length != 0 && cashuProofs) {
             localStorage.setItem("mints", JSON.stringify(cashuMints));
             localStorage.setItem("tokens", JSON.stringify(cashuProofs));
           }
@@ -542,7 +487,6 @@ function App({ Component, pageProps }: AppProps) {
           <FollowsContext.Provider value={followsContext}>
             <ProductContext.Provider value={productContext}>
               <ReviewsContext.Provider value={reviewsContext}>
-                {/* <CartContext.Provider value={cartContext}> */}
                 <ProfileMapContext.Provider value={profileContext}>
                   <ShopMapContext.Provider value={shopContext}>
                     <ChatsContext.Provider value={chatsContext}>
@@ -570,7 +514,6 @@ function App({ Component, pageProps }: AppProps) {
                     </ChatsContext.Provider>
                   </ShopMapContext.Provider>
                 </ProfileMapContext.Provider>
-                {/* </CartContext.Provider> */}
               </ReviewsContext.Provider>
             </ProductContext.Provider>
           </FollowsContext.Provider>

@@ -2,7 +2,7 @@ import { useState, useEffect, useContext } from "react";
 import { Filter, nip19, nip44, SimplePool } from "nostr-tools";
 import { useRouter } from "next/router";
 import {
-  constructGiftWrappedMessageEvent,
+  constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
@@ -255,7 +255,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       let decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
       let decodedRandomPubkeyForReceiver = nip19.decode(randomNpubForReceiver);
       let decodedRandomPrivkeyForReceiver = nip19.decode(randomNsecForReceiver);
-      let giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
+      let giftWrappedMessageEvent = await constructGiftWrappedEvent(
         userPubkey,
         currentChatPubkey,
         message,

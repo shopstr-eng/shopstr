@@ -87,7 +87,8 @@ const Keys = () => {
               </div>
               <div className="mb-4 flex flex-col text-center">
                 Make sure to save your public and private keys in a secure
-                format!
+                format! You can always view them again under your profile
+                settings.
               </div>
               <div className="mb-4 flex flex-col">
                 <label className="text-xl">Public Key:</label>

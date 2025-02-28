@@ -25,6 +25,7 @@ export const ChatMessage = ({
   setBuyerPubkey,
   setCanReview,
   setProductAddress,
+  setOrderId,
 }: {
   messageEvent: NostrMessageEvent;
   index: number;
@@ -33,6 +34,7 @@ export const ChatMessage = ({
   setBuyerPubkey: (pubkey: string) => void;
   setCanReview: (canReview: boolean) => void;
   setProductAddress: (productAddress: string) => void;
+  setOrderId: (orderId: string) => void;
 }) => {
   const router = useRouter();
 
@@ -60,9 +62,17 @@ export const ChatMessage = ({
     );
     let subject = tagsMap.get("subject") ? tagsMap.get("subject") : null;
     let productAddress = tagsMap.get("a") ? tagsMap.get("a") : null;
-    setCanReview?.(subject === "order-receipt" || subject === "shipping-info");
+    let orderId = tagsMap.get("order") ? tagsMap.get("order") : null;
+    setCanReview?.(
+      subject === "order-info" ||
+        subject === "order-receipt" ||
+        subject === "shipping-info",
+    );
     if (productAddress) {
       setProductAddress?.(productAddress);
+    }
+    if (orderId) {
+      setOrderId?.(orderId);
     }
   }, [messageEvent]);
 

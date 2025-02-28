@@ -41,6 +41,7 @@ export interface ProfileData {
     banner?: string;
     lud16?: string;
     nip05?: string;
+    payment_preference?: string;
     shopstr_donation?: number;
   };
   created_at: number;
