@@ -628,12 +628,16 @@ export default function ProductInvoiceCard({
             userNPub +
             " for your " +
             title +
-            " listing on Shopstr! Check the Lightning address set on your Nostr profile for your sats.";
+            " listing on Shopstr! Check your Lightning address (" +
+            lnurl +
+            ") for your sats.";
         } else {
           paymentMessage =
             "You have received a payment for your " +
             title +
-            " listing on Shopstr! Check the Lightning address set on your Nostr profile for your sats.";
+            " listing on Shopstr! Check your Lightning address (" +
+            lnurl +
+            ") for your sats.";
         }
         await sendPaymentAndContactMessage(
           pubkeyOfProductBeingSold,

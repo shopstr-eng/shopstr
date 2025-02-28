@@ -475,13 +475,25 @@ const UserProfilePage = () => {
                       onChange={onChange}
                       onBlur={onBlur}
                     >
-                      <SelectItem key="service" value="service">
+                      <SelectItem
+                        key="service"
+                        value="service"
+                        className="text-light-text dark:text-dark-text"
+                      >
                         Service
                       </SelectItem>
-                      <SelectItem key="ecash" value="ecash">
+                      <SelectItem
+                        key="ecash"
+                        value="ecash"
+                        className="text-light-text dark:text-dark-text"
+                      >
                         Ecash
                       </SelectItem>
-                      <SelectItem key="lightning" value="lightning">
+                      <SelectItem
+                        key="lightning"
+                        value="lightning"
+                        className="text-light-text dark:text-dark-text"
+                      >
                         Lightning
                       </SelectItem>
                     </Select>
