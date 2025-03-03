@@ -79,6 +79,7 @@ const UserProfilePage = () => {
       if (profile) {
         reset(profile.content);
       }
+      console.log(profile.content)
       setIsFetchingProfile(false);
       if (passphrase) {
         const nsec = getNsecWithPassphrase(passphrase);
