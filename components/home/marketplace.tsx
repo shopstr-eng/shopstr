@@ -302,7 +302,7 @@ export function MarketplacePage({
             <div className="w-full sm:order-2 sm:w-auto">
               <Input
                 className="text-light-text dark:text-dark-text"
-                placeholder="Search for a listing title or use a naddr1 identifier..."
+                placeholder="Listing title, naddr1 identifier..."
                 value={selectedSearch}
                 startContent={<MagnifyingGlassIcon height={"1em"} />}
                 onChange={(event) => {
@@ -356,7 +356,7 @@ export function MarketplacePage({
               <Input
                 className="mt-2 text-light-text dark:text-dark-text"
                 isClearable
-                placeholder="Search for a listing title or use a naddr1 identifier..."
+                placeholder="Listing title, naddr1 identifier..."
                 value={selectedSearch}
                 startContent={<MagnifyingGlassIcon height={"1em"} />}
                 onChange={(event) => {

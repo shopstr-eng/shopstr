@@ -52,7 +52,7 @@ const UserProfilePage = () => {
       about: "",
       website: "",
       lud16: "", // Lightning address
-      payment_preference: "service",
+      payment_preference: "ecash",
       shopstr_donation: 2.1,
     },
   });
@@ -470,24 +470,24 @@ const UserProfilePage = () => {
                       fullWidth={true}
                       label="Payment preference"
                       labelPlacement="outside"
-                      defaultSelectedKeys={["service"]}
+                      defaultSelectedKeys={["ecash"]}
                       value={value}
                       onChange={onChange}
                       onBlur={onBlur}
                     >
-                      <SelectItem
+                      {/* <SelectItem
                         key="service"
                         value="service"
                         className="text-light-text dark:text-dark-text"
                       >
                         Service
-                      </SelectItem>
+                      </SelectItem> */}
                       <SelectItem
                         key="ecash"
                         value="ecash"
                         className="text-light-text dark:text-dark-text"
                       >
-                        Ecash
+                        Cashu
                       </SelectItem>
                       <SelectItem
                         key="lightning"

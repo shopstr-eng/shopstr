@@ -95,8 +95,8 @@ export async function createNostrDeleteEvent(
     kind: 5,
     content: content,
     tags: [],
-    created_at: 0,
-    pubkey: "",
+    created_at: Math.floor(Date.now() / 1000),
+    pubkey,
     id: "",
     sig: "",
   } as NostrEvent;
@@ -105,8 +105,6 @@ export async function createNostrDeleteEvent(
     msg.tags.push(["e", event_id]);
   }
 
-  msg.created_at = Math.floor(new Date().getTime() / 1000);
-  msg.pubkey = pubkey;
   return msg;
 }
 
@@ -312,13 +310,12 @@ export async function createNostrProfileEvent(
     kind: 0,
     content: content,
     tags: [],
-    created_at: 0,
+    created_at: Math.floor(Date.now() / 1000),
     pubkey: pubkey,
     id: "",
     sig: "",
   } as NostrEvent;
 
-  msg.created_at = Math.floor(new Date().getTime() / 1000);
   await finalizeAndSendNostrEvent(msg, passphrase);
   return msg;
 }
@@ -444,13 +441,12 @@ export async function createNostrShopEvent(
     kind: 30019, // NIP-15 - Stall Metadata
     content: content,
     tags: [],
-    created_at: 0,
+    created_at: Math.floor(Date.now() / 1000),
     pubkey: pubkey,
     id: "",
     sig: "",
   } as NostrEvent;
 
-  msg.created_at = Math.floor(new Date().getTime() / 1000);
   await finalizeAndSendNostrEvent(msg, passphrase);
   return msg;
 }
@@ -763,13 +759,12 @@ export async function createNostrRelayEvent(
     kind: 10002, // NIP-65 - Relay List Metadata
     content: "",
     tags: relayTags,
-    created_at: 0,
+    created_at: Math.floor(Date.now() / 1000),
     pubkey: pubkey,
     id: "",
     sig: "",
   } as NostrEvent;
 
-  relayEvent.created_at = Math.floor(new Date().getTime() / 1000);
   await finalizeAndSendNostrEvent(relayEvent, passphrase);
   return relayEvent;
 }

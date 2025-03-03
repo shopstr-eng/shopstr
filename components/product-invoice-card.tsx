@@ -590,7 +590,7 @@ export default function ProductInvoiceCard({
     const { title } = productData;
     let orderId = crypto.randomUUID();
     const paymentPreference =
-      sellerProfile?.content?.payment_preference || "service";
+      sellerProfile?.content?.payment_preference || "ecash";
     const lnurl = sellerProfile?.content?.lud16 || "";
 
     if (
