@@ -38,7 +38,7 @@ import {
   MintKeyset,
 } from "@cashu/cashu-ts";
 import {
-  constructGiftWrappedMessageEvent,
+  constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
@@ -49,6 +49,7 @@ import {
   publishProofEvent,
 } from "./utility/nostr-helper-functions";
 import { addChatMessagesToCache } from "../pages/api/nostr/cache-service";
+import { LightningAddress } from "@getalby/lightning-tools";
 import { nip19 } from "nostr-tools";
 import { ProductData } from "./utility/product-parser-functions";
 import {
@@ -183,10 +184,16 @@ export default function CartInvoiceCard({
   const sendPaymentAndContactMessage = async (
     pubkeyToReceiveMessage: string,
     message: string,
-    isPayment: boolean,
     product: ProductData,
+    isPayment?: boolean,
     isReceipt?: boolean,
     isDonation?: boolean,
+    orderId?: string,
+    paymentType?: string,
+    paymentProof?: string,
+    paymentMint?: string,
+    messageAmount?: number,
+    productQuantity?: number,
   ) => {
     const newKeys = await generateNewKeys();
     if (!newKeys) {
@@ -201,22 +208,46 @@ export default function CartInvoiceCard({
     let decodedRandomPrivkeyForReceiver = nip19.decode(newKeys.receiverNsec);
 
     let messageSubject = "";
+    let messageOptions = {};
     if (isPayment) {
       messageSubject = "order-payment";
+      messageOptions = {
+        isOrder: true,
+        type: 3,
+        orderAmount: messageAmount ? messageAmount : totalCost,
+        orderId,
+        paymentType,
+        paymentProof,
+        paymentMint,
+      };
     } else if (isReceipt) {
-      messageSubject = "order-receipt";
+      messageSubject = "order-info";
+      messageOptions = {
+        isOrder: true,
+        type: 4,
+        orderId,
+        status: "confirmed",
+      };
     } else if (isDonation) {
       messageSubject = "donation";
-    } else {
+    } else if (orderId) {
       messageSubject = "order-info";
+      messageOptions = {
+        isOrder: true,
+        type: 1,
+        orderAmount: messageAmount ? messageAmount : undefined,
+        orderId,
+        productData: product,
+        quantity: productQuantity ? productQuantity : 1,
+      };
     }
 
-    let giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
+    let giftWrappedMessageEvent = await constructGiftWrappedEvent(
       decodedRandomPubkeyForSender.data as string,
       pubkeyToReceiveMessage,
       message,
       messageSubject,
-      product,
+      messageOptions,
     );
     let sealedEvent = await constructMessageSeal(
       giftWrappedMessageEvent,
@@ -591,6 +622,7 @@ export default function CartInvoiceCard({
         (tokenAmount * donationPercentage) / 100,
       );
       const sellerAmount = tokenAmount - donationAmount;
+      let sellerProofs: Proof[] = [];
 
       if (sellerAmount > 0) {
         const { keep, send } = await wallet.send(
@@ -600,6 +632,7 @@ export default function CartInvoiceCard({
             includeFees: true,
           },
         );
+        sellerProofs = send;
         sellerToken = getEncodedToken({
           mint: mints[0],
           proofs: send,
@@ -621,63 +654,196 @@ export default function CartInvoiceCard({
         });
         remainingProofs = keep;
       }
-      let paymentMessage = "";
-      let donationMessage = "";
-      if (quantities[product.id] && quantities[product.id] > 1) {
-        if (sellerToken) {
-          if (userNPub) {
-            paymentMessage =
-              "This is a Cashu token payment from " +
-              userNPub +
-              " for " +
-              quantities[product.id] +
-              " of your " +
-              title +
-              " listing on Shopstr: " +
-              sellerToken;
+
+      let orderId = crypto.randomUUID();
+      const paymentPreference =
+        sellerProfile?.content?.payment_preference || "ecash";
+      const lnurl = sellerProfile?.content?.lud16 || "";
+
+      if (
+        paymentPreference === "lightning" &&
+        lnurl &&
+        lnurl !== "" &&
+        sellerProofs
+      ) {
+        const newAmount = Math.floor(sellerAmount * 0.98 - 2);
+        const ln = new LightningAddress(lnurl);
+        await wallet.loadMint();
+        await ln.fetch();
+        const invoice = await ln.requestInvoice({ satoshi: newAmount });
+        const invoicePaymentRequest = invoice.paymentRequest;
+        const meltQuote = await wallet.createMeltQuote(invoicePaymentRequest);
+        if (meltQuote) {
+          const meltQuoteTotal = meltQuote.amount + meltQuote.fee_reserve;
+          const { keep, send } = await wallet.send(
+            meltQuoteTotal,
+            sellerProofs,
+            {
+              includeFees: true,
+            },
+          );
+          const meltResponse = await wallet.meltProofs(meltQuote, send);
+          const meltAmount = meltResponse.quote.amount;
+          const changeProofs = [...keep, ...meltResponse.change];
+          const changeAmount =
+            Array.isArray(changeProofs) && changeProofs.length > 0
+              ? changeProofs.reduce(
+                  (acc, current: Proof) => acc + current.amount,
+                  0,
+                )
+              : 0;
+          let paymentMessage = "";
+          if (quantities[product.id] && quantities[product.id] > 1) {
+            if (userNPub) {
+              paymentMessage =
+                "This is a Cashu token payment from " +
+                userNPub +
+                " for " +
+                quantities[product.id] +
+                " of your " +
+                title +
+                " listing on Shopstr: " +
+                sellerToken;
+            } else {
+              paymentMessage =
+                "This is a Cashu token payment for " +
+                quantities[product.id] +
+                " of your " +
+                title +
+                " listing on Shopstr: " +
+                sellerToken;
+            }
           } else {
-            paymentMessage =
-              "This is a Cashu token payment for " +
-              quantities[product.id] +
-              " of your " +
-              title +
-              " listing on Shopstr: " +
-              sellerToken;
+            if (userNPub) {
+              paymentMessage =
+                "You have received a payment from " +
+                userNPub +
+                " for your " +
+                title +
+                " listing on Shopstr! Check your Lightning address (" +
+                lnurl +
+                ") for your sats.";
+            } else {
+              paymentMessage =
+                "You have received a payment for your " +
+                title +
+                " listing on Shopstr! Check your Lightning address (" +
+                lnurl +
+                ") for your sats.";
+            }
+          }
+          await sendPaymentAndContactMessage(
+            pubkey,
+            paymentMessage,
+            product,
+            true,
+            false,
+            false,
+            orderId,
+            "lightning",
+            invoicePaymentRequest,
+            invoice.preimage ? invoice.preimage : invoice.paymentHash,
+            meltAmount,
+            quantities[product.id] && quantities[product.id] > 1
+              ? quantities[product.id]
+              : 1,
+          );
+          if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
+            let encodedChange = getEncodedToken({
+              mint: mints[0],
+              proofs: changeProofs,
+            });
+            const changeMessage = "Overpaid fee change: " + encodedChange;
+            await sendPaymentAndContactMessage(
+              pubkey,
+              changeMessage,
+              product,
+              true,
+              false,
+              false,
+              orderId,
+              "ecash",
+              JSON.stringify(changeProofs),
+              mints[0],
+              changeAmount,
+            );
           }
         }
       } else {
-        if (sellerToken) {
-          if (userNPub) {
-            paymentMessage =
-              "This is a Cashu token payment from " +
-              userNPub +
-              " for your " +
-              title +
-              " listing on Shopstr: " +
-              sellerToken;
-          } else {
-            paymentMessage =
-              "This is a Cashu token payment for your " +
-              title +
-              " listing on Shopstr: " +
-              sellerToken;
+        let paymentMessage = "";
+        if (quantities[product.id] && quantities[product.id] > 1) {
+          if (sellerToken) {
+            if (userNPub) {
+              paymentMessage =
+                "This is a Cashu token payment from " +
+                userNPub +
+                " for " +
+                quantities[product.id] +
+                " of your " +
+                title +
+                " listing on Shopstr: " +
+                sellerToken;
+            } else {
+              paymentMessage =
+                "This is a Cashu token payment for " +
+                quantities[product.id] +
+                " of your " +
+                title +
+                " listing on Shopstr: " +
+                sellerToken;
+            }
+          }
+        } else {
+          if (sellerToken) {
+            if (userNPub) {
+              paymentMessage =
+                "This is a Cashu token payment from " +
+                userNPub +
+                " for your " +
+                title +
+                " listing on Shopstr: " +
+                sellerToken;
+            } else {
+              paymentMessage =
+                "This is a Cashu token payment for your " +
+                title +
+                " listing on Shopstr: " +
+                sellerToken;
+            }
           }
         }
+        await sendPaymentAndContactMessage(
+          pubkey,
+          paymentMessage,
+          product,
+          true,
+          false,
+          false,
+          orderId,
+          "ecash",
+          JSON.stringify(sellerProofs),
+          mints[0],
+          sellerAmount,
+          quantities[product.id] && quantities[product.id] > 1
+            ? quantities[product.id]
+            : 1,
+        );
       }
-      await sendPaymentAndContactMessage(pubkey, paymentMessage, true, product);
+
       if (hash) {
         await captureInvoicePaidmetric(hash, product);
       } else {
         await captureCashuPaidMetric(product);
       }
 
+      let donationMessage = "";
       if (donationToken) {
         donationMessage = "Sale donation: " + donationToken;
         await sendPaymentAndContactMessage(
           "a37118a4888e02d28e8767c08caaf73b49abdac391ad7ff18a304891e416dc33",
           donationMessage,
-          false,
           product,
+          false,
           false,
           true,
         );
@@ -690,8 +856,11 @@ export default function CartInvoiceCard({
           await sendPaymentAndContactMessage(
             pubkey,
             additionalMessage,
-            false,
             product,
+            false,
+            false,
+            false,
+            orderId,
           );
         }
       }
@@ -788,8 +957,11 @@ export default function CartInvoiceCard({
           await sendPaymentAndContactMessage(
             pubkey,
             contactMessage,
-            false,
             product,
+            false,
+            false,
+            false,
+            orderId,
           );
           if (userPubkey) {
             let receiptMessage =
@@ -801,9 +973,11 @@ export default function CartInvoiceCard({
             await sendPaymentAndContactMessage(
               userPubkey,
               receiptMessage,
-              false,
               product,
+              false,
               true,
+              false,
+              orderId,
             );
           }
         } else if (
@@ -854,16 +1028,21 @@ export default function CartInvoiceCard({
           await sendPaymentAndContactMessage(
             pubkey,
             contactMessage,
-            false,
             product,
+            false,
+            false,
+            false,
+            orderId,
           );
           if (userPubkey) {
             await sendPaymentAndContactMessage(
               userPubkey,
               receiptMessage,
-              false,
               product,
+              false,
               true,
+              false,
+              orderId,
             );
           }
         }
@@ -873,8 +1052,11 @@ export default function CartInvoiceCard({
         await sendPaymentAndContactMessage(
           pubkey,
           contactMessage,
-          false,
           product,
+          false,
+          false,
+          false,
+          orderId,
         );
         if (userPubkey) {
           let receiptMessage =
@@ -888,9 +1070,11 @@ export default function CartInvoiceCard({
           await sendPaymentAndContactMessage(
             userPubkey,
             receiptMessage,
-            false,
             product,
+            false,
             true,
+            false,
+            orderId,
           );
         }
       } else if (userPubkey) {
@@ -903,9 +1087,11 @@ export default function CartInvoiceCard({
         await sendPaymentAndContactMessage(
           userPubkey,
           receiptMessage,
-          false,
           product,
+          false,
           true,
+          false,
+          orderId,
         );
       }
     }
@@ -1392,8 +1578,7 @@ export default function CartInvoiceCard({
               </ModalHeader>
               <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                 <div className="flex items-center justify-center">
-                  The seller will receive a DM containing your payment as a
-                  Cashu token.
+                  The seller will receive a DM with your order details.
                 </div>
               </ModalBody>
             </ModalContent>

@@ -38,7 +38,7 @@ import {
   Proof,
 } from "@cashu/cashu-ts";
 import {
-  constructGiftWrappedMessageEvent,
+  constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
@@ -49,6 +49,7 @@ import {
   generateKeys,
 } from "./utility/nostr-helper-functions";
 import { addChatMessagesToCache } from "../pages/api/nostr/cache-service";
+import { LightningAddress } from "@getalby/lightning-tools";
 import { nip19 } from "nostr-tools";
 import { ProductData } from "./utility/product-parser-functions";
 import {
@@ -162,6 +163,11 @@ export default function ProductInvoiceCard({
     isPayment?: boolean,
     isReceipt?: boolean,
     isDonation?: boolean,
+    orderId?: string,
+    paymentType?: string,
+    paymentProof?: string,
+    paymentMint?: string,
+    messageAmount?: number,
   ) => {
     let decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
     let decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
@@ -169,22 +175,46 @@ export default function ProductInvoiceCard({
     let decodedRandomPrivkeyForReceiver = nip19.decode(randomNsecForReceiver);
 
     let messageSubject = "";
+    let messageOptions = {};
     if (isPayment) {
       messageSubject = "order-payment";
+      messageOptions = {
+        isOrder: true,
+        type: 3,
+        orderAmount: messageAmount ? messageAmount : totalCost,
+        orderId,
+        paymentType,
+        paymentProof,
+        paymentMint,
+      };
     } else if (isReceipt) {
-      messageSubject = "order-receipt";
+      messageSubject = "order-info";
+      messageOptions = {
+        isOrder: true,
+        type: 4,
+        orderId,
+        status: "confirmed",
+      };
     } else if (isDonation) {
       messageSubject = "donation";
-    } else {
+    } else if (orderId) {
       messageSubject = "order-info";
+      messageOptions = {
+        isOrder: true,
+        type: 1,
+        orderAmount: messageAmount ? messageAmount : undefined,
+        orderId,
+        productData,
+        quantity: 1,
+      };
     }
 
-    let giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
+    let giftWrappedMessageEvent = await constructGiftWrappedEvent(
       decodedRandomPubkeyForSender.data as string,
       pubkeyToReceiveMessage,
       message,
       messageSubject,
-      productData,
+      messageOptions,
     );
     let sealedEvent = await constructMessageSeal(
       giftWrappedMessageEvent,
@@ -528,11 +558,13 @@ export default function ProductInvoiceCard({
     const donationPercentage = sellerProfile?.content?.shopstr_donation || 2.1;
     const donationAmount = Math.ceil((totalPrice * donationPercentage) / 100);
     const sellerAmount = totalPrice - donationAmount;
+    let sellerProofs: Proof[] = [];
 
     if (sellerAmount > 0) {
       const { keep, send } = await wallet.send(sellerAmount, remainingProofs, {
         includeFees: true,
       });
+      sellerProofs = send;
       sellerToken = getEncodedToken({
         mint: mints[0],
         proofs: send,
@@ -554,31 +586,124 @@ export default function ProductInvoiceCard({
       });
       remainingProofs = keep;
     }
+
     const { title } = productData;
-    let paymentMessage = "";
-    let donationMessage = "";
-    if (sellerToken) {
-      if (userNPub) {
-        paymentMessage =
-          "This is a Cashu token payment from " +
-          userNPub +
-          " for your " +
-          title +
-          " listing on Shopstr: " +
-          sellerToken;
-      } else {
-        paymentMessage =
-          "This is a Cashu token payment for your " +
-          title +
-          " listing on Shopstr: " +
-          sellerToken;
+    let orderId = crypto.randomUUID();
+    const paymentPreference =
+      sellerProfile?.content?.payment_preference || "ecash";
+    const lnurl = sellerProfile?.content?.lud16 || "";
+
+    if (
+      paymentPreference === "lightning" &&
+      lnurl &&
+      lnurl !== "" &&
+      sellerProofs
+    ) {
+      const newAmount = Math.floor(sellerAmount * 0.98 - 2);
+      const ln = new LightningAddress(lnurl);
+      await wallet.loadMint();
+      await ln.fetch();
+      const invoice = await ln.requestInvoice({ satoshi: newAmount });
+      const invoicePaymentRequest = invoice.paymentRequest;
+      const meltQuote = await wallet.createMeltQuote(invoicePaymentRequest);
+      if (meltQuote) {
+        const meltQuoteTotal = meltQuote.amount + meltQuote.fee_reserve;
+        const { keep, send } = await wallet.send(meltQuoteTotal, sellerProofs, {
+          includeFees: true,
+        });
+        const meltResponse = await wallet.meltProofs(meltQuote, send);
+        const meltAmount = meltResponse.quote.amount;
+        const changeProofs = [...keep, ...meltResponse.change];
+        const changeAmount =
+          Array.isArray(changeProofs) && changeProofs.length > 0
+            ? changeProofs.reduce(
+                (acc, current: Proof) => acc + current.amount,
+                0,
+              )
+            : 0;
+        let paymentMessage = "";
+        if (userNPub) {
+          paymentMessage =
+            "You have received a payment from " +
+            userNPub +
+            " for your " +
+            title +
+            " listing on Shopstr! Check your Lightning address (" +
+            lnurl +
+            ") for your sats.";
+        } else {
+          paymentMessage =
+            "You have received a payment for your " +
+            title +
+            " listing on Shopstr! Check your Lightning address (" +
+            lnurl +
+            ") for your sats.";
+        }
+        await sendPaymentAndContactMessage(
+          pubkeyOfProductBeingSold,
+          paymentMessage,
+          true,
+          false,
+          false,
+          orderId,
+          "lightning",
+          invoicePaymentRequest,
+          invoice.preimage ? invoice.preimage : invoice.paymentHash,
+          meltAmount,
+        );
+        if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
+          let encodedChange = getEncodedToken({
+            mint: mints[0],
+            proofs: changeProofs,
+          });
+          const changeMessage = "Overpaid fee change: " + encodedChange;
+          await sendPaymentAndContactMessage(
+            pubkeyOfProductBeingSold,
+            changeMessage,
+            true,
+            false,
+            false,
+            orderId,
+            "ecash",
+            JSON.stringify(changeProofs),
+            mints[0],
+            changeAmount,
+          );
+        }
       }
-      await sendPaymentAndContactMessage(
-        pubkeyOfProductBeingSold,
-        paymentMessage,
-        true,
-      );
+    } else {
+      let paymentMessage = "";
+      if (sellerToken && sellerProofs) {
+        if (userNPub) {
+          paymentMessage =
+            "This is a Cashu token payment from " +
+            userNPub +
+            " for your " +
+            title +
+            " listing on Shopstr: " +
+            sellerToken;
+        } else {
+          paymentMessage =
+            "This is a Cashu token payment for your " +
+            title +
+            " listing on Shopstr: " +
+            sellerToken;
+        }
+        await sendPaymentAndContactMessage(
+          pubkeyOfProductBeingSold,
+          paymentMessage,
+          true,
+          false,
+          false,
+          orderId,
+          "ecash",
+          JSON.stringify(sellerProofs),
+          mints[0],
+          sellerAmount,
+        );
+      }
     }
+    let donationMessage = "";
     if (donationToken) {
       donationMessage = "Sale donation: " + donationToken;
       await sendPaymentAndContactMessage(
@@ -597,6 +722,9 @@ export default function ProductInvoiceCard({
         pubkeyOfProductBeingSold,
         additionalMessage,
         false,
+        false,
+        false,
+        orderId,
       );
     }
 
@@ -702,6 +830,9 @@ export default function ProductInvoiceCard({
           pubkeyOfProductBeingSold,
           contactMessage,
           false,
+          false,
+          false,
+          orderId,
         );
         if (userPubkey) {
           await sendPaymentAndContactMessage(
@@ -709,6 +840,8 @@ export default function ProductInvoiceCard({
             receiptMessage,
             false,
             true,
+            false,
+            orderId,
           );
         }
       } else if (contact && contactType && contactInstructions) {
@@ -755,6 +888,9 @@ export default function ProductInvoiceCard({
           pubkeyOfProductBeingSold,
           contactMessage,
           false,
+          false,
+          false,
+          orderId,
         );
         if (userPubkey) {
           await sendPaymentAndContactMessage(
@@ -762,6 +898,8 @@ export default function ProductInvoiceCard({
             receiptMessage,
             false,
             true,
+            false,
+            orderId,
           );
         }
       }
@@ -771,6 +909,9 @@ export default function ProductInvoiceCard({
         pubkeyOfProductBeingSold,
         contactMessage,
         false,
+        false,
+        false,
+        orderId,
       );
       if (userPubkey) {
         let receiptMessage =
@@ -786,6 +927,8 @@ export default function ProductInvoiceCard({
           receiptMessage,
           false,
           true,
+          false,
+          orderId,
         );
       }
     } else if (userPubkey) {
@@ -800,6 +943,8 @@ export default function ProductInvoiceCard({
         receiptMessage,
         false,
         true,
+        false,
+        orderId,
       );
     }
   };
@@ -1047,6 +1192,12 @@ export default function ProductInvoiceCard({
               <div className="flex flex-col items-center justify-center">
                 {qrCodeUrl ? (
                   <>
+                    <div>
+                      <p className="mb-2 text-center">
+                        Don&apos;t refresh or close the page until the payment
+                        has been confirmed.
+                      </p>
+                    </div>
                     <Image
                       alt="Lightning invoice"
                       className="object-cover"

@@ -302,10 +302,14 @@ export function MarketplacePage({
             <div className="w-full sm:order-2 sm:w-auto">
               <Input
                 className="text-light-text dark:text-dark-text"
-                isClearable
-                placeholder="Search items..."
+                placeholder="Listing title, naddr1 identifier..."
+                value={selectedSearch}
                 startContent={<MagnifyingGlassIcon height={"1em"} />}
-                onChange={(event) => setSelectedSearch(event.target.value)}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setSelectedSearch(value);
+                }}
+                onClear={() => setSelectedSearch("")}
               />
             </div>
 
@@ -352,13 +356,14 @@ export function MarketplacePage({
               <Input
                 className="mt-2 text-light-text dark:text-dark-text"
                 isClearable
-                label="Listings"
-                placeholder="Type to search..."
+                placeholder="Listing title, naddr1 identifier..."
+                value={selectedSearch}
                 startContent={<MagnifyingGlassIcon height={"1em"} />}
                 onChange={(event) => {
                   const value = event.target.value;
                   setSelectedSearch(value);
                 }}
+                onClear={() => setSelectedSearch("")}
               ></Input>
             </div>
             <div className="flex w-full flex-row gap-2 pb-3">

@@ -997,17 +997,19 @@ export default function NewForm({
             <div className="mx-4 my-2 flex items-center justify-center text-center">
               <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
               <p className="ml-2 text-xs text-light-text dark:text-dark-text">
-                Once sold, you will receive a message containing a{" "}
-                <Link href="https://cashu.space" passHref legacyBehavior>
-                  <a
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline"
-                  >
-                    Cashu
-                  </a>
-                </Link>{" "}
-                token that you can redeem for Bitcoin.
+                Your payment preference is set to{" "}
+                {profileContext.profileData.get(pubkey)?.content
+                  ?.payment_preference === "lightning"
+                  ? "Lightning"
+                  : "Cashu"}
+                . You can modify this in your{" "}
+                <span
+                  className="cursor-pointer underline hover:text-purple-500 dark:hover:text-yellow-500"
+                  onClick={() => router.push("/settings/user-profile")}
+                >
+                  profile settings
+                </span>
+                .
               </p>
             </div>
           </ModalBody>

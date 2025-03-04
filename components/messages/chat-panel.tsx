@@ -22,7 +22,7 @@ import { ChatObject, NostrMessageEvent } from "../../utils/types/types";
 import { ChatMessage } from "./chat-message";
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
 import {
-  constructGiftWrappedMessageEvent,
+  constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
@@ -77,7 +77,8 @@ export const ChatPanel = ({
       ["communication", 0],
     ]),
   );
-  const [productAddress, setProductAddress] = useState<string>("");
+  const [productAddress, setProductAddress] = useState("");
+  const [orderId, setOrderId] = useState("");
 
   const reviewsContext = useContext(ReviewsContext);
 
@@ -136,25 +137,47 @@ export const ChatPanel = ({
       let decodedRandomPubkeyForReceiver = nip19.decode(randomNpubForReceiver);
       let decodedRandomPrivkeyForReceiver = nip19.decode(randomNsecForReceiver);
 
-      let deliveryTime = data["Delivery Time"];
+      // Convert delivery days to future unix timestamp
+      const daysToAdd = parseInt(data["Delivery Time"]);
+      const currentTimestamp = Math.floor(Date.now() / 1000); // Current unix timestamp in seconds
+      const futureTimestamp = currentTimestamp + daysToAdd * 24 * 60 * 60; // Add days in seconds
+
+      // Create a human-readable date format
+      const humanReadableDate = new Date(
+        futureTimestamp * 1000,
+      ).toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+
       let shippingCarrier = data["Shipping Carrier"];
       let trackingNumber = data["Tracking Number"];
       let message =
         "Your order from " +
         userNPub +
-        " is expected to arrive within " +
-        deliveryTime +
+        " is expected to arrive on " +
+        humanReadableDate +
         ". Your " +
         shippingCarrier +
-        " tacking number is: " +
+        " tracking number is: " +
         trackingNumber;
-      let giftWrappedMessageEvent = await constructGiftWrappedMessageEvent(
+      let giftWrappedMessageEvent = await constructGiftWrappedEvent(
         decodedRandomPubkeyForSender.data as string,
         buyerPubkey,
         message,
         "shipping-info",
-        undefined,
-        productAddress,
+        {
+          productAddress,
+          type: 5,
+          status: "shipped",
+          isOrder: true,
+          orderId,
+          tracking: trackingNumber,
+          carrier: shippingCarrier,
+          eta: futureTimestamp, // Using the calculated future timestamp
+        },
       );
       let sealedEvent = await constructMessageSeal(
         giftWrappedMessageEvent,
@@ -266,6 +289,7 @@ export const ChatPanel = ({
                 setBuyerPubkey={setBuyerPubkey}
                 setCanReview={setCanReview}
                 setProductAddress={setProductAddress}
+                setOrderId={setOrderId}
               />
             );
           })}
@@ -335,6 +359,7 @@ export const ChatPanel = ({
                     control={shippingControl}
                     rules={{
                       required: "Expected delivery time is required.",
+                      min: 1,
                     }}
                     render={({
                       field: { onChange, onBlur, value },
@@ -347,12 +372,13 @@ export const ChatPanel = ({
                       return (
                         <Input
                           autoFocus
-                          label="Expected Delivery Time"
-                          placeholder="e.g. 3-5 business days"
+                          label="Expected Delivery Time (days)"
+                          placeholder="e.g. 3"
                           variant="bordered"
                           isInvalid={isErrored}
                           errorMessage={errorMessage}
                           className="text-light-text dark:text-dark-text"
+                          type="number"
                           onChange={onChange}
                           onBlur={onBlur}
                           value={value}
@@ -435,7 +461,8 @@ export const ChatPanel = ({
           </Modal>
         </>
       ) : (
-        productAddress !== "" && (
+        productAddress !== "" &&
+        buyerPubkey && (
           <>
             <div className="flex items-center justify-between border-t p-4">
               <Button

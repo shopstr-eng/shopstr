@@ -172,9 +172,28 @@ const DisplayProducts = ({
   const productSatisfiesSearchFilter = (productData: ProductData) => {
     if (!selectedSearch) return true; // nothing in search bar
     if (!productData.title) return false; // we don't want to display it if product has no title
-    const re = new RegExp(selectedSearch, "gi");
-    const match = productData.title.match(re);
-    return match && match.length > 0;
+    if (selectedSearch.includes("naddr")) {
+      try {
+        const parsedNaddr = nip19.decode(selectedSearch);
+        if (parsedNaddr.type === "naddr") {
+          return (
+            productData.d === parsedNaddr.data.identifier &&
+            productData.pubkey === parsedNaddr.data.pubkey
+          );
+        }
+        return false;
+      } catch (_) {
+        return false;
+      }
+    } else {
+      try {
+        const re = new RegExp(selectedSearch, "gi");
+        const match = productData.title.match(re);
+        return match && match.length > 0;
+      } catch (_) {
+        return false;
+      }
+    }
   };
 
   const productSatisfiesAllFilters = (productData: ProductData) => {
@@ -189,20 +208,7 @@ const DisplayProducts = ({
     if (focusedPubkey && productData.pubkey !== focusedPubkey) return;
     if (!productSatisfiesAllFilters(productData)) return;
     if (productData.images.length === 0) return;
-
-    if (
-      (productData.pubkey ===
-        "95a5e73109d4c419456372ce99bbf5823dfb6f77aed58d03f77ea052f150ee4a" ||
-        productData.pubkey ===
-          "773ed8aba7ee59f6f24612533e891450b6197b5ca24e7680209adb944e330e2f" ||
-        productData.pubkey ===
-          "0914be24d8269be22bce80bdc4319bbe7663fd9f84f53288ee9cad94a34cda43" ||
-        productData.pubkey ===
-          "996c55eb43d3a29564b5a8cde4bc8c751393daa0d9288772d4213045c6c0fd3e") &&
-      userPubkey !== productData.pubkey
-    ) {
-      return; // temp fix, add adult categories or separate from global later
-    }
+    if (productData.contentWarning) return;
 
     return (
       <ProductCard
