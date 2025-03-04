@@ -470,9 +470,8 @@ const UserProfilePage = () => {
                       fullWidth={true}
                       label="Payment preference"
                       labelPlacement="outside"
-                      defaultSelectedKeys={["ecash"]}
-                      value={value}
-                      onChange={onChange}
+                      selectedKeys={value ? [value] : []}
+                      onChange={(e) => onChange(e.target.value)}
                       onBlur={onBlur}
                     >
                       {/* <SelectItem

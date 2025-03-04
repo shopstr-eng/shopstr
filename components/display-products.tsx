@@ -208,6 +208,7 @@ const DisplayProducts = ({
     if (focusedPubkey && productData.pubkey !== focusedPubkey) return;
     if (!productSatisfiesAllFilters(productData)) return;
     if (productData.images.length === 0) return;
+    if (productData.contentWarning) return;
 
     return (
       <ProductCard

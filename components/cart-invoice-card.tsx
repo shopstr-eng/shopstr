@@ -1578,8 +1578,7 @@ export default function CartInvoiceCard({
               </ModalHeader>
               <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                 <div className="flex items-center justify-center">
-                  The seller will receive a DM containing your payment as a
-                  Cashu token.
+                  The seller will receive a DM with your order details.
                 </div>
               </ModalBody>
             </ModalContent>

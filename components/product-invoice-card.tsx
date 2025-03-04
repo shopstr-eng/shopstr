@@ -1192,6 +1192,12 @@ export default function ProductInvoiceCard({
               <div className="flex flex-col items-center justify-center">
                 {qrCodeUrl ? (
                   <>
+                    <div>
+                      <p className="mb-2 text-center">
+                        Don't refresh or close the page until the payment has
+                        been confirmed.
+                      </p>
+                    </div>
                     <Image
                       alt="Lightning invoice"
                       className="object-cover"

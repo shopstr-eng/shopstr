@@ -18,6 +18,7 @@ export type ProductData = {
   shippingCost?: number;
   totalCost: number;
   d?: string;
+  contentWarning?: boolean;
   quantity?: number;
   sizes?: string[];
   sizeQuantities?: Map<string, number>;
@@ -79,7 +80,7 @@ export const parseTags = (productEvent: NostrEvent) => {
         break;
       case "shipping":
         if (values.length === 3) {
-          const [shippingType, cost, currency] = values;
+          const [shippingType, cost, _currency] = values;
           parsedData.shippingType = shippingType as ShippingOptionsType;
           parsedData.shippingCost = Number(cost);
           break;
@@ -87,7 +88,7 @@ export const parseTags = (productEvent: NostrEvent) => {
         // TODO Deprecate Below after 11/07/2023
         else if (values.length === 2) {
           // [cost, currency]
-          const [cost, currency] = values;
+          const [cost, _currency] = values;
           parsedData.shippingType = "Added Cost";
           parsedData.shippingCost = Number(cost);
           break;
@@ -101,6 +102,21 @@ export const parseTags = (productEvent: NostrEvent) => {
         break;
       case "d":
         parsedData.d = values[0];
+        break;
+      case "content-warning":
+        parsedData.contentWarning = true;
+        break;
+      case "L":
+        const LValue = values[0];
+        if (LValue === "content-warning") {
+          parsedData.contentWarning = true;
+        }
+        break;
+      case "l":
+        const lValue = values[1];
+        if (lValue === "content-warning") {
+          parsedData.contentWarning = true;
+        }
         break;
       case "quantity":
         parsedData.quantity = Number(values[0]);
