@@ -196,7 +196,9 @@ const DisplayProducts = ({
         productData.pubkey ===
           "773ed8aba7ee59f6f24612533e891450b6197b5ca24e7680209adb944e330e2f" ||
         productData.pubkey ===
-          "0914be24d8269be22bce80bdc4319bbe7663fd9f84f53288ee9cad94a34cda43") &&
+          "0914be24d8269be22bce80bdc4319bbe7663fd9f84f53288ee9cad94a34cda43" ||
+        productData.pubkey ===
+          "996c55eb43d3a29564b5a8cde4bc8c751393daa0d9288772d4213045c6c0fd3e") &&
       userPubkey !== productData.pubkey
     ) {
       return; // temp fix, add adult categories or separate from global later
