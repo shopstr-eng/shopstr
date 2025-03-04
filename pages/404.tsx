@@ -2,7 +2,6 @@ import React from "react";
 import { Button } from "@nextui-org/react";
 import { useRouter } from "next/router";
 import Link from "next/link";
-import { EnvelopeIcon, ShoppingBagIcon } from "@heroicons/react/24/outline";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
 
 export default function Custom404() {
@@ -18,7 +17,7 @@ export default function Custom404() {
           Page Not Found
         </h2>
         <p className="mb-8 text-light-text dark:text-dark-text">
-          The page you're looking for doesn't exist or has been moved.
+          The page you&apos;re looking for doesn&apos;t exist or has been moved.
         </p>
         <div className="flex flex-col items-center justify-center space-y-4 sm:flex-row sm:space-x-4 sm:space-y-0">
           <Button
