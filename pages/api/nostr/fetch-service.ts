@@ -1,4 +1,4 @@
-import { Filter, nip04, nip44, SimplePool } from "nostr-tools";
+import { Filter, nip04, nip44, SimplePool, verifyEvent } from "nostr-tools";
 import {
   addChatMessageToCache,
   addProductToCache,
@@ -88,15 +88,18 @@ export const fetchAllPosts = async (
 
       let h = pool.subscribeMany(relays, [filter], {
         onevent(event) {
-          productArrayFromRelay.push(event);
-          if (
-            deletedProductsInCacheSet &&
-            event.id in deletedProductsInCacheSet
-          ) {
-            deletedProductsInCacheSet.delete(event.id);
+          const isVerified = verifyEvent(event);
+          if (isVerified) {
+            productArrayFromRelay.push(event);
+            if (
+              deletedProductsInCacheSet &&
+              event.id in deletedProductsInCacheSet
+            ) {
+              deletedProductsInCacheSet.delete(event.id);
+            }
+            addProductToCache(event);
+            profileSetFromProducts.add(event.pubkey);
           }
-          addProductToCache(event);
-          profileSetFromProducts.add(event.pubkey);
         },
         oneose() {
           h.close();
@@ -139,7 +142,7 @@ export const fetchCart = async (
       }
 
       const filter: Filter = {
-        kinds: [10402],
+        kinds: [30405],
         authors: [userPubkey],
         since,
         until,
@@ -150,12 +153,79 @@ export const fetchCart = async (
 
       let h = pool.subscribeMany(relays, [filter], {
         onevent: async (event) => {
-          if (signInMethod === "extension") {
-            let eventContent = await window.nostr.nip04.decrypt(
-              userPubkey,
-              event.content,
-            );
-            if (eventContent) {
+          const isVerified = verifyEvent(event);
+          if (isVerified) {
+            if (signInMethod === "extension") {
+              let eventContent = await window.nostr.nip04.decrypt(
+                userPubkey,
+                event.content,
+              );
+              if (eventContent) {
+                let addressArray = JSON.parse(eventContent);
+                cartAddressesArray = addressArray;
+                for (const addressElement of addressArray) {
+                  let address = addressElement[1];
+                  const [kind, _, dTag] = address;
+                  if (kind === "30402") {
+                    const foundEvent = products.find((event) =>
+                      event.tags.some(
+                        (tag) => tag[0] === "d" && tag[1] === dTag,
+                      ),
+                    );
+                    if (foundEvent) {
+                      cartArrayFromRelay.push(
+                        parseTags(foundEvent) as ProductData,
+                      );
+                    }
+                  }
+                }
+              }
+            } else if (signInMethod === "bunker") {
+              const decryptId = crypto.randomUUID();
+              await sendBunkerRequest(
+                "nip04_decrypt",
+                decryptId,
+                undefined,
+                event.content,
+                userPubkey,
+              );
+              let eventContent;
+              while (!eventContent) {
+                eventContent = await awaitBunkerResponse(decryptId);
+                if (!eventContent) {
+                  await new Promise((resolve) => setTimeout(resolve, 2100));
+                }
+              }
+              if (eventContent) {
+                let addressArray = JSON.parse(eventContent);
+                cartAddressesArray = addressArray;
+                for (const addressElement of addressArray) {
+                  let address = addressElement[1];
+                  const [kind, _, dTag] = address;
+                  if (kind === "30402") {
+                    const foundEvent = products.find((event) =>
+                      event.tags.some(
+                        (tag) => tag[0] === "d" && tag[1] === dTag,
+                      ),
+                    );
+                    if (foundEvent) {
+                      cartArrayFromRelay.push(
+                        parseTags(foundEvent) as ProductData,
+                      );
+                    }
+                  }
+                }
+              }
+            } else if (signInMethod === "nsec") {
+              if (!passphrase) throw new Error("Passphrase is required");
+              let senderPrivkey = getPrivKeyWithPassphrase(
+                passphrase,
+              ) as Uint8Array;
+              let eventContent = await nip04.decrypt(
+                senderPrivkey,
+                userPubkey,
+                event.content,
+              );
               let addressArray = JSON.parse(eventContent);
               cartAddressesArray = addressArray;
               for (const addressElement of addressArray) {
@@ -170,64 +240,6 @@ export const fetchCart = async (
                       parseTags(foundEvent) as ProductData,
                     );
                   }
-                }
-              }
-            }
-          } else if (signInMethod === "bunker") {
-            const decryptId = crypto.randomUUID();
-            await sendBunkerRequest(
-              "nip04_decrypt",
-              decryptId,
-              undefined,
-              event.content,
-              userPubkey,
-            );
-            let eventContent;
-            while (!eventContent) {
-              eventContent = await awaitBunkerResponse(decryptId);
-              if (!eventContent) {
-                await new Promise((resolve) => setTimeout(resolve, 2100));
-              }
-            }
-            if (eventContent) {
-              let addressArray = JSON.parse(eventContent);
-              cartAddressesArray = addressArray;
-              for (const addressElement of addressArray) {
-                let address = addressElement[1];
-                const [kind, _, dTag] = address;
-                if (kind === "30402") {
-                  const foundEvent = products.find((event) =>
-                    event.tags.some((tag) => tag[0] === "d" && tag[1] === dTag),
-                  );
-                  if (foundEvent) {
-                    cartArrayFromRelay.push(
-                      parseTags(foundEvent) as ProductData,
-                    );
-                  }
-                }
-              }
-            }
-          } else if (signInMethod === "nsec") {
-            if (!passphrase) throw new Error("Passphrase is required");
-            let senderPrivkey = getPrivKeyWithPassphrase(
-              passphrase,
-            ) as Uint8Array;
-            let eventContent = await nip04.decrypt(
-              senderPrivkey,
-              userPubkey,
-              event.content,
-            );
-            let addressArray = JSON.parse(eventContent);
-            cartAddressesArray = addressArray;
-            for (const addressElement of addressArray) {
-              let address = addressElement[1];
-              const [kind, _, dTag] = address;
-              if (kind === "30402") {
-                const foundEvent = products.find((event) =>
-                  event.tags.some((tag) => tag[0] === "d" && tag[1] === dTag),
-                );
-                if (foundEvent) {
-                  cartArrayFromRelay.push(parseTags(foundEvent) as ProductData);
                 }
               }
             }
@@ -292,7 +304,10 @@ export const fetchShopSettings = async (
       };
       let h = pool.subscribeMany(relays, [shopFilter], {
         onevent(event) {
-          shopEvents.push(event);
+          const isVerified = verifyEvent(event);
+          if (isVerified) {
+            shopEvents.push(event);
+          }
         },
         oneose: async () => {
           h.close();
@@ -363,23 +378,26 @@ export const fetchProfile = async (
 
       let h = pool.subscribeMany(relays, [subParams], {
         onevent(event) {
-          if (
-            profileMap.get(event.pubkey) === null ||
-            profileMap.get(event.pubkey).created_at > event.created_at
-          ) {
-            // update only if the profile is not already set or the new event is newer
-            try {
-              const content = JSON.parse(event.content);
-              profileMap.set(event.pubkey, {
-                pubkey: event.pubkey,
-                created_at: event.created_at,
-                content: content,
-              });
-            } catch (error) {
-              console.error(
-                `Failed parse profile for pubkey: ${event.pubkey}, ${event.content}`,
-                error,
-              );
+          const isVerified = verifyEvent(event);
+          if (isVerified) {
+            if (
+              profileMap.get(event.pubkey) === null ||
+              profileMap.get(event.pubkey).created_at > event.created_at
+            ) {
+              // update only if the profile is not already set or the new event is newer
+              try {
+                const content = JSON.parse(event.content);
+                profileMap.set(event.pubkey, {
+                  pubkey: event.pubkey,
+                  created_at: event.created_at,
+                  content: content,
+                });
+              } catch (error) {
+                console.error(
+                  `Failed parse profile for pubkey: ${event.pubkey}, ${event.content}`,
+                  error,
+                );
+              }
             }
           }
         },
@@ -444,135 +462,138 @@ export const fetchGiftWrappedChatsAndMessages = async (
         {
           async onevent(event) {
             let messageEvent;
-
-            if (signInMethod === "extension") {
-              let sealEventString = await window.nostr.nip44.decrypt(
-                event.pubkey,
-                event.content,
-              );
-              let sealEvent = JSON.parse(sealEventString);
-              if (sealEvent.kind === 13) {
-                let messageEventString = await window.nostr.nip44.decrypt(
-                  sealEvent.pubkey,
-                  sealEvent.content,
+            const isVerified = verifyEvent(event);
+            if (isVerified) {
+              if (signInMethod === "extension") {
+                let sealEventString = await window.nostr.nip44.decrypt(
+                  event.pubkey,
+                  event.content,
                 );
-                let messageEventCheck = JSON.parse(messageEventString);
-                if (messageEventCheck.pubkey === sealEvent.pubkey) {
-                  messageEvent = messageEventCheck;
+                let sealEvent = JSON.parse(sealEventString);
+                if (sealEvent.kind === 13) {
+                  let messageEventString = await window.nostr.nip44.decrypt(
+                    sealEvent.pubkey,
+                    sealEvent.content,
+                  );
+                  let messageEventCheck = JSON.parse(messageEventString);
+                  if (messageEventCheck.pubkey === sealEvent.pubkey) {
+                    messageEvent = messageEventCheck;
+                  }
                 }
-              }
-            } else if (signInMethod === "bunker") {
-              const sealEventDecryptId = crypto.randomUUID();
-              await sendBunkerRequest(
-                "nip44_decrypt",
-                sealEventDecryptId,
-                undefined,
-                event.content,
-                event.pubkey,
-              );
-              let sealEventString;
-              while (!sealEventString) {
-                sealEventString = await awaitBunkerResponse(sealEventDecryptId);
-                if (!sealEventString) {
-                  await new Promise((resolve) => setTimeout(resolve, 2100));
-                }
-              }
-              let sealEvent = JSON.parse(sealEventString);
-              if (typeof sealEvent === "string") {
-                sealEvent = JSON.parse(sealEvent);
-              }
-              if (sealEvent.kind === 13) {
-                const messageEventDecryptId = crypto.randomUUID();
+              } else if (signInMethod === "bunker") {
+                const sealEventDecryptId = crypto.randomUUID();
                 await sendBunkerRequest(
                   "nip44_decrypt",
-                  messageEventDecryptId,
+                  sealEventDecryptId,
                   undefined,
-                  sealEvent.content,
-                  sealEvent.pubkey,
+                  event.content,
+                  event.pubkey,
                 );
-                let messageEventString;
-                while (!messageEventString) {
-                  messageEventString = await awaitBunkerResponse(
-                    messageEventDecryptId,
-                  );
-                  if (!messageEventString) {
+                let sealEventString;
+                while (!sealEventString) {
+                  sealEventString =
+                    await awaitBunkerResponse(sealEventDecryptId);
+                  if (!sealEventString) {
                     await new Promise((resolve) => setTimeout(resolve, 2100));
                   }
                 }
-                let messageEventCheck = JSON.parse(messageEventString);
-                if (messageEventCheck.pubkey === sealEvent.pubkey) {
-                  messageEvent = messageEventCheck;
+                let sealEvent = JSON.parse(sealEventString);
+                if (typeof sealEvent === "string") {
+                  sealEvent = JSON.parse(sealEvent);
                 }
-              }
-            } else if (signInMethod === "nsec") {
-              if (!passphrase) throw new Error("Passphrase is required");
-              let userPrivkey = getPrivKeyWithPassphrase(
-                passphrase,
-              ) as Uint8Array;
-              const giftWrapConversationKey = nip44.getConversationKey(
-                userPrivkey,
-                event.pubkey,
-              );
-              let sealEventString = nip44.decrypt(
-                event.content,
-                giftWrapConversationKey,
-              );
-              let sealEvent = JSON.parse(sealEventString);
-              if (sealEvent.kind === 13) {
-                let sealConversationKey = nip44.getConversationKey(
+                if (sealEvent.kind === 13) {
+                  const messageEventDecryptId = crypto.randomUUID();
+                  await sendBunkerRequest(
+                    "nip44_decrypt",
+                    messageEventDecryptId,
+                    undefined,
+                    sealEvent.content,
+                    sealEvent.pubkey,
+                  );
+                  let messageEventString;
+                  while (!messageEventString) {
+                    messageEventString = await awaitBunkerResponse(
+                      messageEventDecryptId,
+                    );
+                    if (!messageEventString) {
+                      await new Promise((resolve) => setTimeout(resolve, 2100));
+                    }
+                  }
+                  let messageEventCheck = JSON.parse(messageEventString);
+                  if (messageEventCheck.pubkey === sealEvent.pubkey) {
+                    messageEvent = messageEventCheck;
+                  }
+                }
+              } else if (signInMethod === "nsec") {
+                if (!passphrase) throw new Error("Passphrase is required");
+                let userPrivkey = getPrivKeyWithPassphrase(
+                  passphrase,
+                ) as Uint8Array;
+                const giftWrapConversationKey = nip44.getConversationKey(
                   userPrivkey,
-                  sealEvent.pubkey,
+                  event.pubkey,
                 );
-                let messageEventString = nip44.decrypt(
-                  sealEvent.content,
-                  sealConversationKey,
+                let sealEventString = nip44.decrypt(
+                  event.content,
+                  giftWrapConversationKey,
                 );
-                let messageEventCheck = JSON.parse(messageEventString);
-                if (messageEventCheck.pubkey === sealEvent.pubkey) {
-                  messageEvent = messageEventCheck;
+                let sealEvent = JSON.parse(sealEventString);
+                if (sealEvent.kind === 13) {
+                  let sealConversationKey = nip44.getConversationKey(
+                    userPrivkey,
+                    sealEvent.pubkey,
+                  );
+                  let messageEventString = nip44.decrypt(
+                    sealEvent.content,
+                    sealConversationKey,
+                  );
+                  let messageEventCheck = JSON.parse(messageEventString);
+                  if (messageEventCheck.pubkey === sealEvent.pubkey) {
+                    messageEvent = messageEventCheck;
+                  }
                 }
               }
-            }
-            let senderPubkey = messageEvent.pubkey;
-            let tagsMap: Map<string, string> = new Map(
-              messageEvent.tags.map(([k, v]: [string, string]) => [k, v]),
-            );
-            let subject = tagsMap.get("subject")
-              ? tagsMap.get("subject")
-              : null;
-            if (
-              subject !== "listing-inquiry" &&
-              subject !== "order-payment" &&
-              subject !== "order-info" &&
-              subject !== "payment-change" &&
-              subject !== "order-receipt" &&
-              subject !== "shipping-info"
-            ) {
-              return;
-            }
-            let recipientPubkey = tagsMap.get("p") ? tagsMap.get("p") : null; // pubkey you sent the message to
-            if (typeof recipientPubkey !== "string") {
-              console.error(
-                `fetchAllOutgoingChats: Failed to get recipientPubkey from tagsMap",
+              let senderPubkey = messageEvent.pubkey;
+              let tagsMap: Map<string, string> = new Map(
+                messageEvent.tags.map(([k, v]: [string, string]) => [k, v]),
+              );
+              let subject = tagsMap.get("subject")
+                ? tagsMap.get("subject")
+                : null;
+              if (
+                subject !== "listing-inquiry" &&
+                subject !== "order-payment" &&
+                subject !== "order-info" &&
+                subject !== "payment-change" &&
+                subject !== "order-receipt" &&
+                subject !== "shipping-info"
+              ) {
+                return;
+              }
+              let recipientPubkey = tagsMap.get("p") ? tagsMap.get("p") : null; // pubkey you sent the message to
+              if (typeof recipientPubkey !== "string") {
+                console.error(
+                  `fetchAllOutgoingChats: Failed to get recipientPubkey from tagsMap",
                     ${tagsMap},
                     ${event}`,
-              );
-              alert(
-                `fetchAllOutgoingChats: Failed to get recipientPubkey from tagsMap`,
-              );
-              return;
-            }
-            let chatMessage = chatMessagesFromCache.get(messageEvent.id);
-            if (!chatMessage) {
-              chatMessage = { ...messageEvent, sig: "", read: false }; // false because the user received it and it wasn't in the cache
-              if (chatMessage) {
-                addChatMessageToCache(chatMessage);
+                );
+                alert(
+                  `fetchAllOutgoingChats: Failed to get recipientPubkey from tagsMap`,
+                );
+                return;
               }
-            }
-            if (senderPubkey === userPubkey && chatMessage) {
-              addToChatsMap(recipientPubkey, chatMessage);
-            } else if (chatMessage) {
-              addToChatsMap(senderPubkey, chatMessage);
+              let chatMessage = chatMessagesFromCache.get(messageEvent.id);
+              if (!chatMessage) {
+                chatMessage = { ...messageEvent, sig: "", read: false }; // false because the user received it and it wasn't in the cache
+                if (chatMessage) {
+                  addChatMessageToCache(chatMessage);
+                }
+              }
+              if (senderPubkey === userPubkey && chatMessage) {
+                addToChatsMap(recipientPubkey, chatMessage);
+              } else if (chatMessage) {
+                addToChatsMap(senderPubkey, chatMessage);
+              }
             }
           },
           oneose() {
@@ -633,60 +654,64 @@ export const fetchReviews = async (
 
       let h = pool.subscribeMany(relays, [reviewsFilter], {
         onevent(event) {
-          const addressTag = event.tags.find((tag) => tag[0] === "d")?.[1];
-          if (!addressTag) return;
+          const isVerified = verifyEvent(event);
+          if (isVerified) {
+            const addressTag = event.tags.find((tag) => tag[0] === "d")?.[1];
+            if (!addressTag) return;
 
-          const [_, _kind, merchantPubkey, productDTag] = addressTag.split(":");
-          if (!merchantPubkey || !productDTag) return;
+            const [_, _kind, merchantPubkey, productDTag] =
+              addressTag.split(":");
+            if (!merchantPubkey || !productDTag) return;
 
-          const ratingTags = event.tags.filter((tag) => tag[0] === "rating");
-          const commentArray = ["comment", event.content];
-          ratingTags.unshift(commentArray);
+            const ratingTags = event.tags.filter((tag) => tag[0] === "rating");
+            const commentArray = ["comment", event.content];
+            ratingTags.unshift(commentArray);
 
-          // Add score to merchant's scores (all reviews)
-          if (!merchantScoresMap.has(merchantPubkey)) {
-            merchantScoresMap.set(merchantPubkey, []);
-          }
-          merchantScoresMap
-            .get(merchantPubkey)!
-            .push(calculateWeightedScore(event.tags));
+            // Add score to merchant's scores (all reviews)
+            if (!merchantScoresMap.has(merchantPubkey)) {
+              merchantScoresMap.set(merchantPubkey, []);
+            }
+            merchantScoresMap
+              .get(merchantPubkey)!
+              .push(calculateWeightedScore(event.tags));
 
-          // Initialize merchant map if doesn't exist
-          if (!productReviewsMap.has(merchantPubkey)) {
-            productReviewsMap.set(merchantPubkey, new Map());
-          }
+            // Initialize merchant map if doesn't exist
+            if (!productReviewsMap.has(merchantPubkey)) {
+              productReviewsMap.set(merchantPubkey, new Map());
+            }
 
-          // Initialize product map if doesn't exist
-          const merchantProducts = productReviewsMap.get(merchantPubkey)!;
-          if (!merchantProducts.has(productDTag)) {
-            merchantProducts.set(productDTag, new Map());
-          }
+            // Initialize product map if doesn't exist
+            const merchantProducts = productReviewsMap.get(merchantPubkey)!;
+            if (!merchantProducts.has(productDTag)) {
+              merchantProducts.set(productDTag, new Map());
+            }
 
-          // Add or update review
-          const productReviews = merchantProducts.get(productDTag)!;
+            // Add or update review
+            const productReviews = merchantProducts.get(productDTag)!;
 
-          const createdAt = event.created_at;
+            const createdAt = event.created_at;
 
-          // Only update if this is a newer review from this pubkey
-          const existingReview = productReviews.get(event.pubkey);
-          if (
-            !existingReview ||
-            createdAt >
-              Number(
-                existingReview.find((item) => item[0] === "created_at")?.[1],
-              )
-          ) {
-            // Replace the existing created_at or set a new entry
-            const updatedReview = existingReview
-              ? existingReview.map((item) => {
-                  if (item[0] === "created_at") {
-                    return ["created_at", createdAt.toString()]; // Replace the created_at entry
-                  }
-                  return item; // Keep existing items
-                })
-              : [...ratingTags, ["created_at", createdAt.toString()]]; // Initialize if it's a new review
+            // Only update if this is a newer review from this pubkey
+            const existingReview = productReviews.get(event.pubkey);
+            if (
+              !existingReview ||
+              createdAt >
+                Number(
+                  existingReview.find((item) => item[0] === "created_at")?.[1],
+                )
+            ) {
+              // Replace the existing created_at or set a new entry
+              const updatedReview = existingReview
+                ? existingReview.map((item) => {
+                    if (item[0] === "created_at") {
+                      return ["created_at", createdAt.toString()]; // Replace the created_at entry
+                    }
+                    return item; // Keep existing items
+                  })
+                : [...ratingTags, ["created_at", createdAt.toString()]]; // Initialize if it's a new review
 
-            productReviews.set(event.pubkey, updatedReview);
+              productReviews.set(event.pubkey, updatedReview);
+            }
           }
         },
         oneose() {
@@ -752,12 +777,15 @@ export const fetchAllFollows = async (
         };
         let second = pool.subscribeMany(relays, [secondFollowFilter], {
           onevent(followEvent) {
-            const validFollowTags = followEvent.tags
-              .map((tag) => tag[1])
-              .filter(
-                (pubkey) => isHexString(pubkey) && !followsSet.has(pubkey),
-              );
-            secondDegreeFollowsArrayFromRelay.push(...validFollowTags);
+            const isVerified = verifyEvent(followEvent);
+            if (isVerified) {
+              const validFollowTags = followEvent.tags
+                .map((tag) => tag[1])
+                .filter(
+                  (pubkey) => isHexString(pubkey) && !followsSet.has(pubkey),
+                );
+              secondDegreeFollowsArrayFromRelay.push(...validFollowTags);
+            }
           },
           oneose: async () => {
             second.close();
@@ -827,12 +855,16 @@ export const fetchAllFollows = async (
 
             let second = pool.subscribeMany(relays, [secondFollowFilter], {
               onevent(followEvent) {
-                const validFollowTags = followEvent.tags
-                  .map((tag) => tag[1])
-                  .filter(
-                    (pubkey) => isHexString(pubkey) && !followsSet.has(pubkey),
-                  );
-                secondDegreeFollowsArray.push(...validFollowTags);
+                const isVerified = verifyEvent(followEvent);
+                if (isVerified) {
+                  const validFollowTags = followEvent.tags
+                    .map((tag) => tag[1])
+                    .filter(
+                      (pubkey) =>
+                        isHexString(pubkey) && !followsSet.has(pubkey),
+                    );
+                  secondDegreeFollowsArray.push(...validFollowTags);
+                }
               },
               oneose() {
                 second.close();
@@ -854,16 +886,19 @@ export const fetchAllFollows = async (
 
           let first = pool.subscribeMany(relays, [firstFollowfilter], {
             onevent(event) {
-              const validTags = event.tags
-                .map((tag) => tag[1])
-                .filter(
-                  (pubkey) => isHexString(pubkey) && !followsSet.has(pubkey),
-                );
-              validTags.forEach((pubkey) => followsSet.add(pubkey));
-              followsArray.push(...validTags);
+              const isVerified = verifyEvent(event);
+              if (isVerified) {
+                const validTags = event.tags
+                  .map((tag) => tag[1])
+                  .filter(
+                    (pubkey) => isHexString(pubkey) && !followsSet.has(pubkey),
+                  );
+                validTags.forEach((pubkey) => followsSet.add(pubkey));
+                followsArray.push(...validTags);
 
-              firstDegreeFollowsLength = followsArray.length;
-              fetchSecondDegreeFollows(followsArray);
+                firstDegreeFollowsLength = followsArray.length;
+                fetchSecondDegreeFollows(followsArray);
+              }
             },
             oneose() {
               first.close();
@@ -913,26 +948,29 @@ export const fetchAllRelays = async (
 
       let h = pool.subscribeMany(relays, [relayfilter], {
         onevent(event) {
-          const validRelays = event.tags.filter(
-            (tag) => tag[0] === "r" && !tag[2],
-          );
+          const isVerified = verifyEvent(event);
+          if (isVerified) {
+            const validRelays = event.tags.filter(
+              (tag) => tag[0] === "r" && !tag[2],
+            );
 
-          const validReadRelays = event.tags.filter(
-            (tag) => tag[0] === "r" && tag[2] === "read",
-          );
+            const validReadRelays = event.tags.filter(
+              (tag) => tag[0] === "r" && tag[2] === "read",
+            );
 
-          const validWriteRelays = event.tags.filter(
-            (tag) => tag[0] === "r" && tag[2] === "write",
-          );
+            const validWriteRelays = event.tags.filter(
+              (tag) => tag[0] === "r" && tag[2] === "write",
+            );
 
-          validRelays.forEach((tag) => relaySet.add(tag[1]));
-          relayList.push(...validRelays.map((tag) => tag[1]));
+            validRelays.forEach((tag) => relaySet.add(tag[1]));
+            relayList.push(...validRelays.map((tag) => tag[1]));
 
-          validReadRelays.forEach((tag) => readRelaySet.add(tag[1]));
-          readRelayList.push(...validReadRelays.map((tag) => tag[1]));
+            validReadRelays.forEach((tag) => readRelaySet.add(tag[1]));
+            readRelayList.push(...validReadRelays.map((tag) => tag[1]));
 
-          validWriteRelays.forEach((tag) => writeRelaySet.add(tag[1]));
-          writeRelayList.push(...validWriteRelays.map((tag) => tag[1]));
+            validWriteRelays.forEach((tag) => writeRelaySet.add(tag[1]));
+            writeRelayList.push(...validWriteRelays.map((tag) => tag[1]));
+          }
         },
         oneose: async () => {
           h.close();
@@ -998,21 +1036,24 @@ export const fetchCashuWallet = async (
       const handleHSubscription = new Promise<void>((resolveH) => {
         let h = pool.subscribeMany(relays, [cashuWalletFilter], {
           onevent: async (event) => {
-            if (event.kind === 17375) {
-              const mints = event.tags.filter(
-                (tag: string[]) => tag[0] === "mint",
-              );
-              mints.forEach((tag) => {
-                if (!cashuMintSet.has(tag[1])) {
-                  cashuMintSet.add(tag[1]);
-                  cashuMints.push(tag[1]);
-                }
-              });
-            } else if (
-              (event.kind === 37375 && mostRecentWalletEvent.length === 0) ||
-              event.created_at > mostRecentWalletEvent[0].created_at
-            ) {
-              mostRecentWalletEvent = [event];
+            const isVerified = verifyEvent(event);
+            if (isVerified) {
+              if (event.kind === 17375) {
+                const mints = event.tags.filter(
+                  (tag: string[]) => tag[0] === "mint",
+                );
+                mints.forEach((tag) => {
+                  if (!cashuMintSet.has(tag[1])) {
+                    cashuMintSet.add(tag[1]);
+                    cashuMints.push(tag[1]);
+                  }
+                });
+              } else if (
+                (event.kind === 37375 && mostRecentWalletEvent.length === 0) ||
+                event.created_at > mostRecentWalletEvent[0].created_at
+              ) {
+                mostRecentWalletEvent = [event];
+              }
             }
           },
           oneose() {
@@ -1050,99 +1091,108 @@ export const fetchCashuWallet = async (
           [cashuProofFilter],
           {
             onevent: (event) => {
-              queue.push(async () => {
-                try {
-                  let cashuWalletEventContent;
-                  if (signInMethod === "extension") {
-                    let eventContent = await window.nostr.nip44.decrypt(
-                      userPubkey,
-                      event.content,
-                    );
-                    if (eventContent) {
-                      cashuWalletEventContent = JSON.parse(eventContent);
-                    }
-                  } else if (signInMethod === "bunker") {
-                    const decryptId = crypto.randomUUID();
-                    await sendBunkerRequest(
-                      "nip44_decrypt",
-                      decryptId,
-                      undefined,
-                      event.content,
-                      userPubkey,
-                    );
-                    let eventContent;
-                    while (!eventContent) {
-                      eventContent = await awaitBunkerResponse(decryptId);
-                      if (!eventContent) {
-                        await new Promise((resolve) =>
-                          setTimeout(resolve, 2100),
-                        );
+              const isVerified = verifyEvent(event);
+              if (isVerified) {
+                queue.push(async () => {
+                  try {
+                    let cashuWalletEventContent;
+                    if (signInMethod === "extension") {
+                      let eventContent = await window.nostr.nip44.decrypt(
+                        userPubkey,
+                        event.content,
+                      );
+                      if (eventContent) {
+                        cashuWalletEventContent = JSON.parse(eventContent);
                       }
-                    }
-                    if (eventContent) {
+                    } else if (signInMethod === "bunker") {
+                      const decryptId = crypto.randomUUID();
+                      await sendBunkerRequest(
+                        "nip44_decrypt",
+                        decryptId,
+                        undefined,
+                        event.content,
+                        userPubkey,
+                      );
+                      let eventContent;
+                      while (!eventContent) {
+                        eventContent = await awaitBunkerResponse(decryptId);
+                        if (!eventContent) {
+                          await new Promise((resolve) =>
+                            setTimeout(resolve, 2100),
+                          );
+                        }
+                      }
+                      if (eventContent) {
+                        cashuWalletEventContent = JSON.parse(eventContent);
+                      }
+                    } else if (signInMethod === "nsec") {
+                      if (!passphrase)
+                        throw new Error("Passphrase is required");
+                      let senderPrivkey = getPrivKeyWithPassphrase(
+                        passphrase,
+                      ) as Uint8Array;
+                      const conversationKey = nip44.getConversationKey(
+                        senderPrivkey,
+                        getLocalStorageData().userPubkey,
+                      );
+                      let eventContent = nip44.decrypt(
+                        event.content,
+                        conversationKey,
+                      );
                       cashuWalletEventContent = JSON.parse(eventContent);
                     }
-                  } else if (signInMethod === "nsec") {
-                    if (!passphrase) throw new Error("Passphrase is required");
-                    let senderPrivkey = getPrivKeyWithPassphrase(
-                      passphrase,
-                    ) as Uint8Array;
-                    const conversationKey = nip44.getConversationKey(
-                      senderPrivkey,
-                      getLocalStorageData().userPubkey,
-                    );
-                    let eventContent = nip44.decrypt(
-                      event.content,
-                      conversationKey,
-                    );
-                    cashuWalletEventContent = JSON.parse(eventContent);
-                  }
-                  if (
-                    event.kind === 7375 &&
-                    cashuWalletEventContent.mint &&
-                    cashuWalletEventContent.proofs
-                  ) {
-                    proofEvents.push({
-                      id: event.id,
-                      proofs: cashuWalletEventContent.proofs,
-                    });
-                    let wallet = new CashuWallet(
-                      new CashuMint(cashuWalletEventContent?.mint),
-                    );
-                    const Ys = cashuWalletEventContent?.proofs.map((p: Proof) =>
-                      hashToCurve(enc.encode(p.secret)).toHex(true),
-                    );
-                    let proofsStates = await wallet?.checkProofsStates(
-                      cashuWalletEventContent?.proofs,
-                    );
-                    const spentYs = new Set(
-                      proofsStates
-                        .filter((state) => state.state === "SPENT")
-                        .map((state) => state.Y),
-                    );
-                    const allYsMatch =
-                      Ys.length === spentYs.size &&
-                      Ys.every((y: string) => spentYs.has(y));
-                    if (proofsStates && proofsStates.length > 0 && allYsMatch) {
-                      await DeleteEvent([event.id], passphrase);
-                    } else if (cashuWalletEventContent.proofs) {
-                      let allProofs = [
-                        ...tokens,
-                        ...cashuWalletEventContent?.proofs,
-                        ...cashuProofs,
-                      ];
-                      cashuProofs = getUniqueProofs(allProofs);
+                    if (
+                      event.kind === 7375 &&
+                      cashuWalletEventContent.mint &&
+                      cashuWalletEventContent.proofs
+                    ) {
+                      proofEvents.push({
+                        id: event.id,
+                        proofs: cashuWalletEventContent.proofs,
+                      });
+                      let wallet = new CashuWallet(
+                        new CashuMint(cashuWalletEventContent?.mint),
+                      );
+                      const Ys = cashuWalletEventContent?.proofs.map(
+                        (p: Proof) =>
+                          hashToCurve(enc.encode(p.secret)).toHex(true),
+                      );
+                      let proofsStates = await wallet?.checkProofsStates(
+                        cashuWalletEventContent?.proofs,
+                      );
+                      const spentYs = new Set(
+                        proofsStates
+                          .filter((state) => state.state === "SPENT")
+                          .map((state) => state.Y),
+                      );
+                      const allYsMatch =
+                        Ys.length === spentYs.size &&
+                        Ys.every((y: string) => spentYs.has(y));
+                      if (
+                        proofsStates &&
+                        proofsStates.length > 0 &&
+                        allYsMatch
+                      ) {
+                        await DeleteEvent([event.id], passphrase);
+                      } else if (cashuWalletEventContent.proofs) {
+                        let allProofs = [
+                          ...tokens,
+                          ...cashuWalletEventContent?.proofs,
+                          ...cashuProofs,
+                        ];
+                        cashuProofs = getUniqueProofs(allProofs);
+                      }
+                    } else if (event.kind === 7376 && cashuWalletEventContent) {
+                      incomingSpendingHistory.push(cashuWalletEventContent);
                     }
-                  } else if (event.kind === 7376 && cashuWalletEventContent) {
-                    incomingSpendingHistory.push(cashuWalletEventContent);
+                  } catch (decryptionError) {
+                    console.error(
+                      "Error decrypting or parsing content:",
+                      decryptionError,
+                    );
                   }
-                } catch (decryptionError) {
-                  console.error(
-                    "Error decrypting or parsing content:",
-                    decryptionError,
-                  );
-                }
-              });
+                });
+              }
             },
             oneose() {
               queue.push(async () => {

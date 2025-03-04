@@ -81,17 +81,8 @@ export default function ProductCard({
           <div className="mx-4 mt-2 flex items-center justify-center text-center">
             <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
             <p className="ml-2 text-xs text-light-text dark:text-dark-text">
-              Once purchased, the seller will receive a message with a{" "}
-              <Link href="https://cashu.space" passHref legacyBehavior>
-                <a
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline"
-                >
-                  Cashu
-                </a>
-              </Link>{" "}
-              token containing your payment.
+              Once purchased, the seller will receive a DM with your order
+              details.
             </p>
           </div>
         </CardBody>
