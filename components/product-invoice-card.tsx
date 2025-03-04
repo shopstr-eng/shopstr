@@ -612,63 +612,108 @@ export default function ProductInvoiceCard({
           includeFees: true,
         });
         const meltResponse = await wallet.meltProofs(meltQuote, send);
-        const meltAmount = meltResponse.quote.amount;
-        const changeProofs = [...keep, ...meltResponse.change];
-        const changeAmount =
-          Array.isArray(changeProofs) && changeProofs.length > 0
-            ? changeProofs.reduce(
-                (acc, current: Proof) => acc + current.amount,
-                0,
-              )
-            : 0;
-        let paymentMessage = "";
-        if (userNPub) {
-          paymentMessage =
-            "You have received a payment from " +
-            userNPub +
-            " for your " +
-            title +
-            " listing on Shopstr! Check your Lightning address (" +
-            lnurl +
-            ") for your sats.";
-        } else {
-          paymentMessage =
-            "You have received a payment for your " +
-            title +
-            " listing on Shopstr! Check your Lightning address (" +
-            lnurl +
-            ") for your sats.";
-        }
-        await sendPaymentAndContactMessage(
-          pubkeyOfProductBeingSold,
-          paymentMessage,
-          true,
-          false,
-          false,
-          orderId,
-          "lightning",
-          invoicePaymentRequest,
-          invoice.preimage ? invoice.preimage : invoice.paymentHash,
-          meltAmount,
-        );
-        if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
-          let encodedChange = getEncodedToken({
-            mint: mints[0],
-            proofs: changeProofs,
-          });
-          const changeMessage = "Overpaid fee change: " + encodedChange;
+        if (meltResponse.quote) {
+          const meltAmount = meltResponse.quote.amount;
+          const changeProofs = [...keep, ...meltResponse.change];
+          const changeAmount =
+            Array.isArray(changeProofs) && changeProofs.length > 0
+              ? changeProofs.reduce(
+                  (acc, current: Proof) => acc + current.amount,
+                  0,
+                )
+              : 0;
+          let paymentMessage = "";
+          if (userNPub) {
+            paymentMessage =
+              "You have received a payment from " +
+              userNPub +
+              " for your " +
+              title +
+              " listing on Shopstr! Check your Lightning address (" +
+              lnurl +
+              ") for your sats.";
+          } else {
+            paymentMessage =
+              "You have received a payment for your " +
+              title +
+              " listing on Shopstr! Check your Lightning address (" +
+              lnurl +
+              ") for your sats.";
+          }
           await sendPaymentAndContactMessage(
             pubkeyOfProductBeingSold,
-            changeMessage,
+            paymentMessage,
             true,
             false,
             false,
             orderId,
-            "ecash",
-            JSON.stringify(changeProofs),
-            mints[0],
-            changeAmount,
+            "lightning",
+            invoicePaymentRequest,
+            invoice.preimage ? invoice.preimage : invoice.paymentHash,
+            meltAmount,
           );
+          if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
+            let encodedChange = getEncodedToken({
+              mint: mints[0],
+              proofs: changeProofs,
+            });
+            const changeMessage = "Overpaid fee change: " + encodedChange;
+            await sendPaymentAndContactMessage(
+              pubkeyOfProductBeingSold,
+              changeMessage,
+              true,
+              false,
+              false,
+              orderId,
+              "ecash",
+              JSON.stringify(changeProofs),
+              mints[0],
+              changeAmount,
+            );
+          }
+        } else {
+          const unusedProofs = [...keep, ...send, ...meltResponse.change];
+          const unusedAmount =
+            Array.isArray(unusedProofs) && unusedProofs.length > 0
+              ? unusedProofs.reduce(
+                  (acc, current: Proof) => acc + current.amount,
+                  0,
+                )
+              : 0;
+          const unusedToken = getEncodedToken({
+            mint: mints[0],
+            proofs: unusedProofs,
+          });
+          let paymentMessage = "";
+          if (unusedToken && unusedProofs) {
+            if (userNPub) {
+              paymentMessage =
+                "This is a Cashu token payment from " +
+                userNPub +
+                " for your " +
+                title +
+                " listing on Shopstr: " +
+                unusedToken;
+            } else {
+              paymentMessage =
+                "This is a Cashu token payment for your " +
+                title +
+                " listing on Shopstr: " +
+                unusedToken;
+            }
+            await sendPaymentAndContactMessage(
+              pubkeyOfProductBeingSold,
+              paymentMessage,
+              true,
+              false,
+              false,
+              orderId,
+              "ecash",
+              JSON.stringify(unusedProofs),
+              mints[0],
+              unusedAmount,
+            );
+          }
         }
       }
     } else {
