@@ -1194,8 +1194,8 @@ export default function ProductInvoiceCard({
                   <>
                     <div>
                       <p className="mb-2 text-center">
-                        Don't refresh or close the page until the payment has
-                        been confirmed.
+                        Don&apos;t refresh or close the page until the payment
+                        has been confirmed.
                       </p>
                     </div>
                     <Image
