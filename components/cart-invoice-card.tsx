@@ -216,6 +216,7 @@ export default function CartInvoiceCard({
         type: 3,
         orderAmount: messageAmount ? messageAmount : totalCost,
         orderId,
+        productData: product,
         paymentType,
         paymentProof,
         paymentMint,
@@ -226,6 +227,7 @@ export default function CartInvoiceCard({
         isOrder: true,
         type: 4,
         orderId,
+        productData: product,
         status: "confirmed",
       };
     } else if (isDonation) {
