@@ -179,6 +179,7 @@ export default function ProductInvoiceCard({
         type: 3,
         orderAmount: messageAmount ? messageAmount : totalCost,
         orderId,
+        productData,
         paymentType,
         paymentProof,
         paymentMint,
@@ -189,6 +190,7 @@ export default function ProductInvoiceCard({
         isOrder: true,
         type: 4,
         orderId,
+        productData,
         status: "confirmed",
       };
     } else if (isDonation) {

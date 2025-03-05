@@ -48,6 +48,8 @@ export const ChatMessage = ({
         let { data: buyerPubkey } = nip19.decode(npubMatch[0]);
         setBuyerPubkey(buyerPubkey as string);
       }
+    } else {
+      setBuyerPubkey("");
     }
   }, [messageEvent?.content, setBuyerPubkey]);
 
@@ -61,19 +63,19 @@ export const ChatMessage = ({
         ),
     );
     let subject = tagsMap.get("subject") ? tagsMap.get("subject") : null;
-    let productAddress = tagsMap.get("a") ? tagsMap.get("a") : null;
-    let orderId = tagsMap.get("order") ? tagsMap.get("order") : null;
+    let productAddress = tagsMap.get("a")
+      ? tagsMap.get("a")
+      : tagsMap.get("item")
+        ? tagsMap.get("item")
+        : "";
+    let orderId = tagsMap.get("order") ? tagsMap.get("order") : "";
     setCanReview?.(
       subject === "order-info" ||
         subject === "order-receipt" ||
         subject === "shipping-info",
     );
-    if (productAddress) {
-      setProductAddress?.(productAddress);
-    }
-    if (orderId) {
-      setOrderId?.(orderId);
-    }
+    setProductAddress?.(productAddress as string);
+    setOrderId?.(orderId as string);
   }, [messageEvent]);
 
   const cashuMatch = messageEvent.content.match(/cashu[A-Za-z]/);

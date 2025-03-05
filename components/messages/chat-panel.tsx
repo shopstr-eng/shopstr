@@ -461,7 +461,7 @@ export const ChatPanel = ({
           </Modal>
         </>
       ) : (
-        productAddress !== "" &&
+        productAddress &&
         buyerPubkey && (
           <>
             <div className="flex items-center justify-between border-t p-4">
