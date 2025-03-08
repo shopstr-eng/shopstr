@@ -12,6 +12,7 @@ import { ProductData } from "../utility/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import { useRouter } from "next/router";
+import { useSignerContext } from "../nostr-context";
 
 const cardWidth = 380;
 const cardxMargin = 2.5;
@@ -29,6 +30,7 @@ export default function ProductCard({
   footerContent?: ReactNode;
 }) {
   const router = useRouter();
+  const { pubkey: userPubkey } = useSignerContext();
   if (!productData) return null;
   const { pubkey, title, images, categories, location, status } = productData;
   if (isReview)
@@ -44,7 +46,7 @@ export default function ProductCard({
             <ProfileWithDropdown
               pubkey={productData.pubkey}
               dropDownKeys={
-                productData.pubkey === getLocalStorageData().userPubkey
+                productData.pubkey === userPubkey
                   ? ["shop_settings"]
                   : ["shop", "inquiry", "copy_npub"]
               }
@@ -136,7 +138,7 @@ export default function ProductCard({
               <ProfileWithDropdown
                 pubkey={pubkey}
                 dropDownKeys={
-                  pubkey === getLocalStorageData().userPubkey
+                  pubkey === userPubkey
                     ? ["shop_settings"]
                     : ["shop", "inquiry", "copy_npub"]
                 }

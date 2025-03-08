@@ -1,7 +1,7 @@
 import "tailwindcss/tailwind.css";
 import type { AppProps } from "next/app";
 import "../styles/globals.css";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/router";
 import {
   ProfileMapContext,
@@ -24,8 +24,7 @@ import {
 } from "../utils/context/context";
 import {
   getLocalStorageData,
-  LocalStorageInterface,
-  validPassphrase,
+  getDefaultRelays,
   LogOut,
 } from "../components/utility/nostr-helper-functions";
 import { NextUIProvider } from "@nextui-org/react";
@@ -48,15 +47,18 @@ import {
 } from "../utils/types/types";
 import { Proof } from "@cashu/cashu-ts";
 import TopNav from "@/components/nav-top";
-import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
 import DynamicHead from "../components/dynamic-meta-head";
+import {
+  NostrContextProvider,
+  SignerContextProvider,
+  useNostrContext,
+  useSignerContext,
+} from "@/components/nostr-context";
 
-function App({ Component, pageProps }: AppProps) {
-  const [enterPassphrase, setEnterPassphrase] = useState(false);
-  const [passphrase, setPassphrase] = useState("");
-  const [localStorageValues, _] = useState<LocalStorageInterface>(
-    getLocalStorageData(),
-  );
+function Shopstr({ props }: { props: AppProps }) {
+  const { Component, pageProps } = props;
+  const { nostr } = useNostrContext();
+  const { signer, isLoggedIn } = useSignerContext();
   const [productContext, setProductContext] = useState<ProductContextInterface>(
     {
       productEvents: [],
@@ -171,46 +173,42 @@ function App({ Component, pageProps }: AppProps) {
       },
     },
   );
-  const [chatsContext, setChatsContext] = useState<ChatsContextInterface>({
-    chatsMap: new Map(),
-    isLoading: true,
-    addNewlyCreatedMessageEvent: (
-      messageEvent: NostrMessageEvent,
-      sent?: boolean,
-    ) => {
-      setChatsContext((chatsContext) => {
-        const newChatsMap = new Map(chatsContext.chatsMap);
-        let chatArray;
-        if (messageEvent.pubkey === getLocalStorageData().userPubkey) {
-          let recipientPubkey = messageEvent.tags.find(
-            (tag) => tag[0] === "p",
-          )?.[1];
-          if (recipientPubkey) {
-            chatArray = newChatsMap.get(recipientPubkey) || [];
-            if (sent) {
-              chatArray.push(messageEvent);
-            } else {
-              chatArray = [messageEvent, ...chatArray];
-            }
-            newChatsMap.set(recipientPubkey, chatArray);
-          }
-        } else {
-          chatArray = newChatsMap.get(messageEvent.pubkey) || [];
+
+  const [chatsMap, setChatMap] = useState(new Map());
+  const [isChatLoading, setIsChatLoading] = useState(true);
+  const addNewlyCreatedMessageEvent = useCallback(
+    async (messageEvent: NostrMessageEvent, sent?: boolean) => {
+      const pubkey = await signer?.getPubKey();
+      const newChatsMap = new Map(chatsMap);
+      let chatArray;
+      if (messageEvent.pubkey === pubkey) {
+        let recipientPubkey = messageEvent.tags.find(
+          (tag) => tag[0] === "p",
+        )?.[1];
+        if (recipientPubkey) {
+          chatArray = newChatsMap.get(recipientPubkey) || [];
           if (sent) {
             chatArray.push(messageEvent);
           } else {
             chatArray = [messageEvent, ...chatArray];
           }
-          newChatsMap.set(messageEvent.pubkey, chatArray);
+          newChatsMap.set(recipientPubkey, chatArray);
         }
-        return {
-          chatsMap: newChatsMap,
-          isLoading: false,
-          addNewlyCreatedMessageEvent: chatsContext.addNewlyCreatedMessageEvent,
-        };
-      });
+      } else {
+        chatArray = newChatsMap.get(messageEvent.pubkey) || [];
+        if (sent) {
+          chatArray.push(messageEvent);
+        } else {
+          chatArray = [messageEvent, ...chatArray];
+        }
+        newChatsMap.set(messageEvent.pubkey, chatArray);
+      }
+      setChatMap(newChatsMap);
+      setIsChatLoading(false);
     },
-  });
+    [chatsMap, signer],
+  );
+
   const [followsContext, setFollowsContext] = useState<FollowsContextInterface>(
     {
       followList: [],
@@ -289,13 +287,8 @@ function App({ Component, pageProps }: AppProps) {
   };
 
   const editChatContext = (chatsMap: ChatsMap, isLoading: boolean) => {
-    setChatsContext((chatsContext) => {
-      return {
-        chatsMap,
-        isLoading,
-        addNewlyCreatedMessageEvent: chatsContext.addNewlyCreatedMessageEvent,
-      };
-    });
+    setChatMap(chatsMap);
+    setIsChatLoading(isLoading);
   };
 
   const editFollowsContext = (
@@ -341,7 +334,6 @@ function App({ Component, pageProps }: AppProps) {
   const [focusedPubkey, setFocusedPubkey] = useState("");
   const [selectedSection, setSelectedSection] = useState("");
 
-  const { signInMethod } = getLocalStorageData();
   const router = useRouter();
 
   /** FETCH initial FOLLOWS, RELAYS, PRODUCTS, and PROFILES **/
@@ -359,18 +351,14 @@ function App({ Component, pageProps }: AppProps) {
       const readRelays = getLocalStorageData().readRelays;
       let allRelays = [...relays, ...readRelays];
       if (allRelays.length === 0) {
-        allRelays = [
-          "wss://relay.damus.io",
-          "wss://nos.lol",
-          "wss://purplepag.es",
-          "wss://relay.primal.net",
-          "wss://relay.nostr.band",
-        ];
+        allRelays = getDefaultRelays();
         localStorage.setItem("relays", JSON.stringify(allRelays));
       }
-      const userPubkey = getLocalStorageData().userPubkey;
+      const userPubkey = await signer?.getPubKey();
       try {
         let { relayList, readRelayList, writeRelayList } = await fetchAllRelays(
+          nostr!,
+          signer!,
           allRelays,
           editRelaysContext,
         );
@@ -382,22 +370,20 @@ function App({ Component, pageProps }: AppProps) {
         }
         let pubkeysToFetchProfilesFor: string[] = [];
         let { productEvents, profileSetFromProducts } = await fetchAllPosts(
+          nostr!,
           allRelays,
           editProductContext,
         );
         pubkeysToFetchProfilesFor = [...profileSetFromProducts];
         let profileSetFromChats = new Set<string>();
-        if (
-          (getLocalStorageData().signInMethod === "nsec" && passphrase) ||
-          getLocalStorageData().signInMethod === "extension" ||
-          getLocalStorageData().signInMethod === "bunker"
-        ) {
+        if (isLoggedIn) {
           let { profileSetFromChats: newProfileSetFromChats } =
             await fetchGiftWrappedChatsAndMessages(
+              nostr!,
+              signer!,
               allRelays,
-              userPubkey,
+              userPubkey!,
               editChatContext,
-              passphrase,
             );
           newProfileSetFromChats.forEach((profile) =>
             profileSetFromChats.add(profile),
@@ -416,25 +402,38 @@ function App({ Component, pageProps }: AppProps) {
           ];
         }
         await fetchShopSettings(
+          nostr!,
           allRelays,
           pubkeysToFetchProfilesFor,
           editShopContext,
         );
         await fetchProfile(
+          nostr!,
           allRelays,
           pubkeysToFetchProfilesFor,
           editProfileContext,
         );
-        await fetchReviews(allRelays, productEvents, editReviewsContext);
-        if (
-          (getLocalStorageData().signInMethod === "nsec" && passphrase) ||
-          getLocalStorageData().signInMethod === "extension" ||
-          getLocalStorageData().signInMethod === "bunker"
-        ) {
+        await fetchReviews(
+          nostr!,
+          allRelays,
+          productEvents,
+          editReviewsContext,
+        );
+        // let { cartList } = await fetchCart(
+        //   allRelays,
+        //   editCartContext,
+        //   productEvents,
+        //   passphrase,
+        // );
+        // if (cartList.length > 0) {
+        //   localStorage.setItem("cart", JSON.stringify(cartList));
+        // }
+        if (isLoggedIn) {
           let { cashuMints, cashuProofs } = await fetchCashuWallet(
+            nostr!,
+            signer!,
             allRelays,
             editCashuWalletContext,
-            passphrase,
           );
 
           if (cashuMints.length != 0 && cashuProofs) {
@@ -442,7 +441,7 @@ function App({ Component, pageProps }: AppProps) {
             localStorage.setItem("tokens", JSON.stringify(cashuProofs));
           }
         }
-        await fetchAllFollows(allRelays, editFollowsContext);
+        await fetchAllFollows(nostr!, signer!, allRelays, editFollowsContext);
       } catch (error) {
         console.error("Error fetching data:", error);
       }
@@ -450,13 +449,7 @@ function App({ Component, pageProps }: AppProps) {
     fetchData();
     window.addEventListener("storage", fetchData);
     return () => window.removeEventListener("storage", fetchData);
-  }, [localStorageValues.relays, passphrase]);
-
-  useEffect(() => {
-    if (signInMethod === "nsec" && !validPassphrase(passphrase)) {
-      setEnterPassphrase(true);
-    }
-  }, [signInMethod, passphrase]);
+  }, [nostr, signer, isLoggedIn]);
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
@@ -489,28 +482,31 @@ function App({ Component, pageProps }: AppProps) {
               <ReviewsContext.Provider value={reviewsContext}>
                 <ProfileMapContext.Provider value={profileContext}>
                   <ShopMapContext.Provider value={shopContext}>
-                    <ChatsContext.Provider value={chatsContext}>
-                      <NextUIProvider>
-                        <NextThemesProvider attribute="class">
-                          {router.pathname !== "/" && (
-                            <TopNav
-                              setFocusedPubkey={setFocusedPubkey}
-                              setSelectedSection={setSelectedSection}
-                            />
-                          )}
-                          <div className="flex">
-                            <main className="flex-1">
-                              <Component
-                                {...pageProps}
-                                focusedPubkey={focusedPubkey}
-                                setFocusedPubkey={setFocusedPubkey}
-                                selectedSection={selectedSection}
-                                setSelectedSection={setSelectedSection}
-                              />
-                            </main>
-                          </div>
-                        </NextThemesProvider>
-                      </NextUIProvider>
+                    <ChatsContext.Provider
+                      value={{
+                        chatsMap: chatsMap,
+                        isLoading: isChatLoading,
+                        addNewlyCreatedMessageEvent:
+                          addNewlyCreatedMessageEvent,
+                      }}
+                    >
+                      {router.pathname !== "/" && (
+                        <TopNav
+                          setFocusedPubkey={setFocusedPubkey}
+                          setSelectedSection={setSelectedSection}
+                        />
+                      )}
+                      <div className="flex">
+                        <main className="flex-1">
+                          <Component
+                            {...pageProps}
+                            focusedPubkey={focusedPubkey}
+                            setFocusedPubkey={setFocusedPubkey}
+                            selectedSection={selectedSection}
+                            setSelectedSection={setSelectedSection}
+                          />
+                        </main>
+                      </div>
                     </ChatsContext.Provider>
                   </ShopMapContext.Provider>
                 </ProfileMapContext.Provider>
@@ -519,17 +515,22 @@ function App({ Component, pageProps }: AppProps) {
           </FollowsContext.Provider>
         </CashuWalletContext.Provider>
       </RelaysContext.Provider>
-      {router.pathname !== "/" && (
-        <RequestPassphraseModal
-          passphrase={passphrase}
-          setCorrectPassphrase={setPassphrase}
-          isOpen={enterPassphrase}
-          setIsOpen={setEnterPassphrase}
-          onCancelRouteTo="/marketplace"
-        />
-      )}
     </>
   );
 }
-
+function App(props: AppProps) {
+  return (
+    <>
+      <NextUIProvider>
+        <NextThemesProvider attribute="class">
+          <NostrContextProvider>
+            <SignerContextProvider>
+              <Shopstr props={props} />
+            </SignerContextProvider>
+          </NostrContextProvider>
+        </NextThemesProvider>
+      </NextUIProvider>
+    </>
+  );
+}
 export default App;

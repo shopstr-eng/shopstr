@@ -8,7 +8,7 @@ import ProductCard from "@/components/utility-components/product-card";
 import parseTags, {
   ProductData,
 } from "@/components/utility/product-parser-functions";
-import { getLocalStorageData } from "@/components/utility/nostr-helper-functions";
+import { useSignerContext } from "@/components/nostr-context";
 import Link from "next/link";
 import { nip19 } from "nostr-tools";
 
@@ -18,16 +18,12 @@ export default function Landing() {
 
   const [parsedProducts, setParsedProducts] = useState<ProductData[]>([]);
 
+  const { isLoggedIn } = useSignerContext();
   useEffect(() => {
-    if (
-      router.pathname === "/" &&
-      (getLocalStorageData().signInMethod === "bunker" ||
-        getLocalStorageData().signInMethod === "extension" ||
-        getLocalStorageData().signInMethod === "nsec")
-    ) {
+    if (router.pathname === "/" && isLoggedIn) {
       router.push("/marketplace");
     }
-  }, [router.pathname]);
+  }, [router.pathname, isLoggedIn]);
 
   useEffect(() => {
     let parsedProductsArray: ProductData[] = [];
