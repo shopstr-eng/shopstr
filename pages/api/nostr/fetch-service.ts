@@ -1,4 +1,4 @@
-import { Filter, nip04, nip44, SimplePool } from "nostr-tools";
+import { Filter, nip04, nip44, SimplePool, verifyEvent } from "nostr-tools";
 import {
   addChatMessageToCache,
   addProductToCache,
@@ -152,7 +152,7 @@ export const fetchCart = async (
       }
 
       const filter: Filter = {
-        kinds: [10402],
+        kinds: [30405],
         authors: [userPubkey],
         since,
         until,

@@ -20,7 +20,7 @@ import {
   getLocalStorageData,
   publishWalletEvent,
   publishProofEvent,
-  constructGiftWrappedMessageEvent,
+  constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
@@ -144,14 +144,14 @@ export default function ClaimButton({ token }: { token: string }) {
     );
   }, [profileContext, tokenMint]);
 
-  const handleClaimType = (type: string) => {
+  const handleClaimType = async (type: string) => {
     if (type === "receive") {
-      receive(false);
+      await receive(false);
     } else if (type === "redeem") {
       if (lnurl === "invalid") {
-        receive(true);
+        await receive(true);
       } else {
-        redeem();
+        await redeem();
       }
     }
   };
@@ -266,13 +266,12 @@ export default function ClaimButton({ token }: { token: string }) {
               proofs: changeProofs,
             });
             const paymentMessage = "Overpaid fee change: " + encodedChange;
-            let giftWrappedMessageEvent =
-              await constructGiftWrappedMessageEvent(
-                decodedRandomPubkeyForSender.data as string,
-                userPubkey!,
-                paymentMessage,
-                "payment-change",
-              );
+            let giftWrappedMessageEvent = await constructGiftWrappedEvent(
+              decodedRandomPubkeyForSender.data as string,
+              userPubkey!,
+              paymentMessage,
+              "payment-change",
+            );
             let sealedEvent = await constructMessageSeal(
               signer!,
               giftWrappedMessageEvent,
