@@ -75,9 +75,9 @@ export class NostrNSecSigner implements NostrSigner {
       [key: string]: any;
     },
     challengeHandler: ChallengeHandler,
-  ): NostrNSECEncSigner | undefined {
+  ): NostrNSecSigner | undefined {
     if (json.type !== "nsec" || !json.encryptedPrivKey) return undefined;
-    return new NostrNSECEncSigner(
+    return new NostrNSecSigner(
       {
         encryptedPrivKey: json.encryptedPrivKey,
         passphrase: json.passphrase,
