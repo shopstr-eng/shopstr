@@ -44,8 +44,6 @@ import {
   sendGiftWrappedMessageEvent,
   generateKeys,
   getLocalStorageData,
-  validPassphrase,
-  isUserLoggedIn,
   publishProofEvent,
 } from "./utility/nostr-helper-functions";
 import { addChatMessagesToCache } from "../pages/api/nostr/cache-service";
@@ -62,11 +60,11 @@ import {
   captureInvoicePaidmetric,
 } from "./utility/metrics-helper-functions";
 import SignInModal from "./sign-in/SignInModal";
-import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
 import FailureModal from "@/components/utility-components/failure-modal";
 import ShippingForm from "./shipping-form";
 import ContactForm from "./contact-form";
 import CombinedContactForm from "./combined-contact-form";
+import { useNostrContext, useSignerContext } from "./nostr-context";
 
 export default function CartInvoiceCard({
   products,
@@ -85,15 +83,13 @@ export default function CartInvoiceCard({
   totalShippingCost: number;
   totalCost: number;
 }) {
-  const { userPubkey, userNPub, signInMethod, mints, tokens, history } =
-    getLocalStorageData();
+  const { mints, tokens, history } = getLocalStorageData();
   const router = useRouter();
 
   const chatsContext = useContext(ChatsContext);
   const profileContext = useContext(ProfileMapContext);
-
-  const [enterPassphrase, setEnterPassphrase] = useState(false);
-  const [passphrase, setPassphrase] = useState("");
+  const { nostr } = useNostrContext();
+  const { signer, isLoggedIn: userLoggedIn } = useSignerContext();
 
   const [showInvoiceCard, setShowInvoiceCard] = useState(false);
 
@@ -157,12 +153,6 @@ export default function CartInvoiceCard({
     reset: combinedReset,
   } = useForm();
 
-  useEffect(() => {
-    if (signInMethod === "nsec" && !validPassphrase(passphrase)) {
-      setEnterPassphrase(true);
-    }
-  }, [signInMethod, passphrase]);
-
   const generateNewKeys = async () => {
     try {
       const { nsec: nsecForSender, npub: npubForSender } = await generateKeys();
@@ -198,6 +188,12 @@ export default function CartInvoiceCard({
     const newKeys = await generateNewKeys();
     if (!newKeys) {
       setFailureText("Failed to generate new keys for messages!");
+      setShowFailureModal(true);
+      return;
+    }
+
+    if (!userLoggedIn) {
+      setFailureText("User is not logged in!");
       setShowFailureModal(true);
       return;
     }
@@ -252,10 +248,10 @@ export default function CartInvoiceCard({
       messageOptions,
     );
     let sealedEvent = await constructMessageSeal(
+      signer!,
       giftWrappedMessageEvent,
       decodedRandomPubkeyForSender.data as string,
       pubkeyToReceiveMessage,
-      undefined,
       decodedRandomPrivkeyForSender.data as Uint8Array,
     );
     let giftWrappedEvent = await constructMessageGiftWrap(
@@ -609,6 +605,8 @@ export default function CartInvoiceCard({
     hash?: string,
     additionalInfo?: string,
   ) => {
+    const userNPub = await signer?.getNPub?.();
+    const userPubkey = await signer?.getPubKey?.();
     let remainingProofs = proofs;
     for (const product of products) {
       const title = product.title;
@@ -1277,11 +1275,12 @@ export default function CartInvoiceCard({
         ]),
       );
       await publishProofEvent(
+        nostr!,
+        signer!,
         mints[0],
         changeProofs && changeProofs.length >= 1 ? changeProofs : [],
         "out",
         price.toString(),
-        passphrase,
         deletedEventIds,
       );
       if (setCashuPaymentSent) {
@@ -1354,7 +1353,6 @@ export default function CartInvoiceCard({
             type="submit"
             className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
             onClick={() => {
-              let userLoggedIn = isUserLoggedIn();
               if (!userLoggedIn) {
                 onOpen();
                 return;
@@ -1727,13 +1725,6 @@ export default function CartInvoiceCard({
         </>
       ) : null}
       <SignInModal isOpen={isOpen} onClose={onClose} />
-      <RequestPassphraseModal
-        passphrase={passphrase}
-        setCorrectPassphrase={setPassphrase}
-        isOpen={enterPassphrase}
-        setIsOpen={setEnterPassphrase}
-        onCancelRouteTo={"/cart"}
-      />
       <FailureModal
         bodyText={failureText}
         isOpen={showFailureModal}

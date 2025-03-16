@@ -5,18 +5,19 @@ import MyListingsPage from "./my-listings";
 import ProductForm from "../product-form";
 import { useRouter } from "next/router";
 import { useSearchParams } from "next/navigation";
-import { isUserLoggedIn } from "../utility/nostr-helper-functions";
+import { useSignerContext } from "../nostr-context";
 
 const MyListingsFeed = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const [showModal, setShowModal] = useState(false);
+  const { isLoggedIn } = useSignerContext();
 
   useEffect(() => {
-    if (!searchParams || !isUserLoggedIn()) return;
+    if (!searchParams || !isLoggedIn) return;
     setShowModal(searchParams.has("addNewListing"));
-  }, [searchParams]);
+  }, [searchParams, isLoggedIn]);
 
   const handleProductModalToggle = () => {
     setShowModal(!showModal);

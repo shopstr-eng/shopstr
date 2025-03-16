@@ -36,18 +36,14 @@ import {
   getEncodedToken,
 } from "@cashu/cashu-ts";
 import { formatWithCommas } from "./display-monetary-info";
+import { useNostrContext, useSignerContext } from "../nostr-context";
 
-export default function ClaimButton({
-  token,
-  passphrase,
-}: {
-  token: string;
-  passphrase?: string;
-}) {
+export default function ClaimButton({ token }: { token: string }) {
   const [lnurl, setLnurl] = useState("");
   const profileContext = useContext(ProfileMapContext);
   const chatsContext = useContext(ChatsContext);
-  const { userPubkey } = getLocalStorageData();
+  const { signer, pubkey: userPubkey, isLoggedIn } = useSignerContext();
+  const { nostr } = useNostrContext();
 
   const [openClaimTypeModal, setOpenClaimTypeModal] = useState(false);
   const [openRedemptionModal, setOpenRedemptionModal] = useState(false);
@@ -134,8 +130,8 @@ export default function ClaimButton({
 
   useEffect(() => {
     const sellerProfileMap = profileContext.profileData;
-    const sellerProfile = sellerProfileMap.has(userPubkey)
-      ? sellerProfileMap.get(userPubkey)
+    const sellerProfile = sellerProfileMap.has(userPubkey!)
+      ? sellerProfileMap.get(userPubkey!)
       : undefined;
     setLnurl(
       sellerProfile &&
@@ -186,11 +182,12 @@ export default function ClaimButton({
           return;
         }
         await publishProofEvent(
+          nostr!,
+          signer!,
           tokenMint,
           uniqueProofs,
           "in",
           tokenAmount.toString(),
-          passphrase,
         );
         const tokenArray = [...tokens, ...uniqueProofs];
         localStorage.setItem("tokens", JSON.stringify(tokenArray));
@@ -270,22 +267,22 @@ export default function ClaimButton({
             const paymentMessage = "Overpaid fee change: " + encodedChange;
             let giftWrappedMessageEvent = await constructGiftWrappedEvent(
               decodedRandomPubkeyForSender.data as string,
-              userPubkey,
+              userPubkey!,
               paymentMessage,
               "payment-change",
             );
             let sealedEvent = await constructMessageSeal(
+              signer!,
               giftWrappedMessageEvent,
               decodedRandomPubkeyForSender.data as string,
-              userPubkey,
-              undefined,
+              userPubkey!,
               decodedRandomPrivkeyForSender.data as Uint8Array,
             );
             let giftWrappedEvent = await constructMessageGiftWrap(
               sealedEvent,
               decodedRandomPubkeyForReceiver.data as string,
               decodedRandomPrivkeyForReceiver.data as Uint8Array,
-              userPubkey,
+              userPubkey!,
             );
             await sendGiftWrappedMessageEvent(giftWrappedEvent);
             chatsContext.addNewlyCreatedMessageEvent(
