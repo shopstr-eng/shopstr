@@ -18,7 +18,7 @@ const PostListing = async (req: NextApiRequest, res: NextApiResponse) => {
   const event = parseRequestBody(req.body);
 
   try {
-    const relays = event.relays ? getDefaultRelays() : event.relays;
+    const relays = event.relays ? event.relays : getDefaultRelays();
 
     await repo()("listings").insert({
       id: uuid(),
