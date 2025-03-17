@@ -209,6 +209,7 @@ const DisplayProducts = ({
   const displayProductCard = (productData: ProductData, index: number) => {
     if (focusedPubkey && productData.pubkey !== focusedPubkey) return;
     if (!productSatisfiesAllFilters(productData)) return;
+    if (!productData.currency) return;
     if (productData.images.length === 0) return;
     if (productData.contentWarning) return;
 

@@ -1,4 +1,4 @@
-import { Filter, nip04, nip44, SimplePool, verifyEvent } from "nostr-tools";
+import { Filter } from "nostr-tools";
 import {
   addChatMessageToCache,
   addProductToCache,
@@ -49,8 +49,6 @@ export const fetchAllPosts = async (
   nostr: NostrManager,
   relays: string[],
   editProductContext: (productEvents: NostrEvent[], isLoading: boolean) => void,
-  since?: number,
-  until?: number,
 ): Promise<{
   productEvents: NostrEvent[];
   profileSetFromProducts: Set<string>;
@@ -69,14 +67,8 @@ export const fetchAllPosts = async (
         console.log("Failed to fetch all listings from cache: ", error);
       }
 
-      if (!until) {
-        until = Math.trunc(DateTime.now().toSeconds());
-      }
-
       const filter: Filter = {
         kinds: [30402],
-        since,
-        until,
       };
 
       let productArrayFromRelay: NostrEvent[] = [];
@@ -88,18 +80,20 @@ export const fetchAllPosts = async (
       }
 
       for (const event of fetchedEvents) {
+        if (!event || !event.id) continue;
+
+        productArrayFromRelay.push(event);
         try {
-          productArrayFromRelay.push(event);
           if (
             deletedProductsInCacheSet &&
             event.id in deletedProductsInCacheSet
           ) {
             deletedProductsInCacheSet.delete(event.id);
           }
-          addProductToCache(event);
+          await addProductToCache(event);
           profileSetFromProducts.add(event.pubkey);
         } catch (error) {
-          console.error("Failed to parse product: ", error);
+          console.error("Failed to process product:", event.id, error);
         }
       }
 
@@ -357,7 +351,6 @@ export const fetchGiftWrappedChatsAndMessages = async (
   relays: string[],
   userPubkey: string,
   editChatContext: (chatsMap: ChatsMap, isLoading: boolean) => void,
-  since?: number,
 ): Promise<{
   profileSetFromChats: Set<string>;
 }> => {
@@ -387,16 +380,11 @@ export const fetchGiftWrappedChatsAndMessages = async (
         }
       };
 
-      if (!since) {
-        since = Math.trunc(DateTime.now().minus({ days: 14 }).toSeconds());
-      }
-
       const fetchedEvents = await nostr.fetch(
         [
           {
             kinds: [1059],
             "#p": [userPubkey],
-            since,
           },
         ],
         {},
@@ -410,16 +398,24 @@ export const fetchGiftWrappedChatsAndMessages = async (
           event.pubkey,
           event.content,
         );
-        let sealEvent = JSON.parse(sealEventString);
-        if (sealEvent.kind === 13) {
-          let messageEventString = await signer!.decrypt(
-            sealEvent.pubkey,
-            sealEvent.content,
-          );
-          let messageEventCheck = JSON.parse(messageEventString);
-          if (messageEventCheck.pubkey === sealEvent.pubkey) {
-            messageEvent = messageEventCheck;
+        if (sealEventString) {
+          const sealEvent = JSON.parse(sealEventString);
+          if (sealEvent?.kind === 13) {
+            const messageEventString = await signer!.decrypt(
+              sealEvent.pubkey,
+              sealEvent.content,
+            );
+            if (messageEventString) {
+              const messageEventCheck = JSON.parse(messageEventString);
+              if (messageEventCheck?.pubkey === sealEvent.pubkey) {
+                messageEvent = messageEventCheck;
+              }
+            } else {
+              continue;
+            }
           }
+        } else {
+          continue;
         }
         let senderPubkey = messageEvent.pubkey;
 
@@ -435,7 +431,7 @@ export const fetchGiftWrappedChatsAndMessages = async (
           subject !== "order-receipt" &&
           subject !== "shipping-info"
         ) {
-          return;
+          continue;
         }
         let recipientPubkey = tagsMap.get("p") ? tagsMap.get("p") : null; // pubkey you sent the message to
         if (typeof recipientPubkey !== "string") {
