@@ -174,6 +174,15 @@ const DisplayProducts = ({
       } catch (_) {
         return false;
       }
+    } else if (selectedSearch.includes("npub")) {
+      try {
+        const parsedNpub = nip19.decode(selectedSearch);
+        if (parsedNpub.type === "npub") {
+          return parsedNpub.data === productData.pubkey;
+        }
+      } catch (_) {
+        return false;
+      }
     } else {
       try {
         const re = new RegExp(selectedSearch, "gi");
