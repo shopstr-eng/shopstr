@@ -2,9 +2,14 @@ import { useState, useEffect, useContext } from "react";
 import { nip19 } from "nostr-tools";
 import { deleteEvent } from "./utility/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
-import { ProductContext, FollowsContext } from "../utils/context/context";
+import {
+  ProductContext,
+  ProfileMapContext,
+  FollowsContext,
+} from "../utils/context/context";
 import ProductCard from "./utility-components/product-card";
 import DisplayProductModal from "./display-product-modal";
+import ShopstrSpinner from "./utility-components/shopstr-spinner";
 import { useRouter } from "next/router";
 import parseTags, { ProductData } from "./utility/product-parser-functions";
 import { useNostrContext, useSignerContext } from "./nostr-context";
@@ -31,6 +36,7 @@ const DisplayProducts = ({
   const [productEvents, setProductEvents] = useState<ProductData[]>([]);
   const [isProductsLoading, setIsProductLoading] = useState(true);
   const productEventContext = useContext(ProductContext);
+  const profileMapContext = useContext(ProfileMapContext);
   const followsContext = useContext(FollowsContext);
   const [focusedProduct, setFocusedProduct] = useState(""); // product being viewed in modal
   const [showModal, setShowModal] = useState(false);
@@ -243,6 +249,13 @@ const DisplayProducts = ({
               <br></br>Try adding a new listing!
             </p>
           )}
+        {profileMapContext.isLoading ||
+        productEventContext.isLoading ||
+        isProductsLoading ? (
+          <div className="mb-6 mt-6 flex items-center justify-center">
+            <ShopstrSpinner />
+          </div>
+        ) : null}
       </div>
       <DisplayProductModal
         productData={focusedProduct}
