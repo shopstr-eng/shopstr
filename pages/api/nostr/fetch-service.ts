@@ -117,8 +117,6 @@ export const fetchCart = async (
   relays: string[],
   editCartContext: (cartAddresses: string[][], isLoading: boolean) => void,
   products: NostrEvent[],
-  since?: number,
-  until?: number,
 ): Promise<{
   cartList: ProductData[];
 }> => {
@@ -133,18 +131,9 @@ export const fetchCart = async (
       }
       const userPubkey = await signer.getPubKey();
 
-      if (!since) {
-        since = Math.trunc(DateTime.now().minus({ days: 14 }).toSeconds());
-      }
-      if (!until) {
-        until = Math.trunc(DateTime.now().toSeconds());
-      }
-
       const filter: Filter = {
         kinds: [30405],
         authors: [userPubkey],
-        since,
-        until,
       };
 
       let cartArrayFromRelay: ProductData[] = [];
@@ -422,7 +411,7 @@ export const fetchGiftWrappedChatsAndMessages = async (
         let tagsMap: Map<string, string> = new Map(
           messageEvent.tags.map(([k, v]: [string, string]) => [k, v]),
         );
-        let subject = tagsMap.get("subject") ? tagsMap.get("subject") : null;
+        let subject = tagsMap.has("subject") ? tagsMap.get("subject") : null;
         if (
           subject !== "listing-inquiry" &&
           subject !== "order-payment" &&
@@ -449,7 +438,7 @@ export const fetchGiftWrappedChatsAndMessages = async (
         if (!chatMessage) {
           chatMessage = { ...messageEvent, sig: "", read: false }; // false because the user received it and it wasn't in the cache
           if (chatMessage) {
-            addChatMessageToCache(chatMessage);
+            await addChatMessageToCache(chatMessage);
           }
         }
         if (senderPubkey === userPubkey && chatMessage) {
@@ -670,17 +659,16 @@ export const fetchAllFollows = async (
     );
     return {
       followsArrayFromRelay,
-      followsSet,
       firstDegreeFollowsLength,
     };
   };
 
-  let { followsArrayFromRelay, followsSet, firstDegreeFollowsLength } =
+  let { followsArrayFromRelay, firstDegreeFollowsLength } =
     await fetchFollows(userPubkey);
 
   if (!followsArrayFromRelay?.length) {
     // If followsArrayFromRelay is still empty, add the default value
-    ({ followsArrayFromRelay, followsSet, firstDegreeFollowsLength } =
+    ({ followsArrayFromRelay, firstDegreeFollowsLength } =
       await fetchFollows(defaultAuthor));
   }
   editFollowsContext(followsArrayFromRelay, firstDegreeFollowsLength, false);

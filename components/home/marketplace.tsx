@@ -420,7 +420,6 @@ export function MarketplacePage({
             selectedCategories={selectedCategories}
             selectedLocation={selectedLocation}
             selectedSearch={selectedSearch}
-            canShowLoadMore={true}
             wotFilter={wotFilter}
             setCategories={setCategories}
             onFilteredProductsChange={handleFilteredProductsChange}

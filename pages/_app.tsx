@@ -342,7 +342,10 @@ function Shopstr({ props }: { props: AppProps }) {
       if (getLocalStorageData().signInMethod === "amber") {
         LogOut();
       }
-      if (getLocalStorageData().signInMethod === "extension") {
+      if (
+        getLocalStorageData().signInMethod === "extension" ||
+        getLocalStorageData().signer?.type === "nip07"
+      ) {
         if (!window.nostr.nip44) {
           LogOut();
         }
@@ -419,15 +422,6 @@ function Shopstr({ props }: { props: AppProps }) {
           productEvents,
           editReviewsContext,
         );
-        // let { cartList } = await fetchCart(
-        //   allRelays,
-        //   editCartContext,
-        //   productEvents,
-        //   passphrase,
-        // );
-        // if (cartList.length > 0) {
-        //   localStorage.setItem("cart", JSON.stringify(cartList));
-        // }
         if (isLoggedIn) {
           let { cashuMints, cashuProofs } = await fetchCashuWallet(
             nostr!,
@@ -483,12 +477,14 @@ function Shopstr({ props }: { props: AppProps }) {
                 <ProfileMapContext.Provider value={profileContext}>
                   <ShopMapContext.Provider value={shopContext}>
                     <ChatsContext.Provider
-                      value={{
-                        chatsMap: chatsMap,
-                        isLoading: isChatLoading,
-                        addNewlyCreatedMessageEvent:
-                          addNewlyCreatedMessageEvent,
-                      }}
+                      value={
+                        {
+                          chatsMap: chatsMap,
+                          isLoading: isChatLoading,
+                          addNewlyCreatedMessageEvent:
+                            addNewlyCreatedMessageEvent,
+                        } as ChatsContextInterface
+                      }
                     >
                       {router.pathname !== "/" && (
                         <TopNav

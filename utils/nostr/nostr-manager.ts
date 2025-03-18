@@ -1,6 +1,5 @@
 import {
   SimplePool,
-  Relay as NToolRelay,
   Filter as NToolFilter,
   Event as NToolEvent,
   EventTemplate as NToolEvenTemplate,
@@ -181,7 +180,7 @@ export class NostrManager {
       }
 
       if (!params.onevent) {
-        params.onevent = (event: NostrEvent) => {};
+        params.onevent = () => {};
       }
 
       if (!params.oneose) {

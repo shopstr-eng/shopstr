@@ -28,8 +28,6 @@ export const MyListingsPage = () => {
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const [canShowLoadMore, setCanShowLoadMore] = useState(true);
-
   const shopMapContext = useContext(ShopMapContext);
 
   const menuRef = useRef<HTMLDivElement>(null);
@@ -232,8 +230,6 @@ export const MyListingsPage = () => {
               selectedCategories={selectedCategories}
               selectedLocation={""}
               selectedSearch={""}
-              canShowLoadMore={canShowLoadMore}
-              setCanShowLoadMore={setCanShowLoadMore}
               isMyListings={true}
               setCategories={setCategories}
             />
