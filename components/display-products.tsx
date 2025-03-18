@@ -240,7 +240,7 @@ const DisplayProducts = ({
             <p className="mt-4 break-words text-center text-2xl text-light-text dark:text-dark-text">
               No products found...
               <br></br>
-              <br></br>Try adding a new listing, or load more!
+              <br></br>Try adding a new listing!
             </p>
           )}
       </div>
