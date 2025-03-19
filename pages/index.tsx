@@ -18,12 +18,12 @@ export default function Landing() {
 
   const [parsedProducts, setParsedProducts] = useState<ProductData[]>([]);
 
-  const { isLoggedIn } = useSignerContext();
+  const signerContext = useSignerContext();
   useEffect(() => {
-    if (router.pathname === "/" && isLoggedIn) {
+    if (router.pathname === "/" && signerContext.isLoggedIn) {
       router.push("/marketplace");
     }
-  }, [router.pathname, isLoggedIn]);
+  }, [router.pathname, signerContext]);
 
   useEffect(() => {
     let parsedProductsArray: ProductData[] = [];

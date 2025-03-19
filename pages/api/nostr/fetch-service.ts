@@ -15,7 +15,6 @@ import {
 } from "@/utils/types/types";
 import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
 import { ChatsMap } from "@/utils/context/context";
-import { DateTime } from "luxon";
 import {
   getLocalStorageData,
   deleteEvent,

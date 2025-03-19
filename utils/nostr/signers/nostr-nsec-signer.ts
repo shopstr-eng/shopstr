@@ -175,7 +175,6 @@ export class NostrNSecSigner implements NostrSigner {
   }
 
   public async getPubKey(): Promise<string> {
-    console.log("nostr-nsec-enc-signer: getPubKey");
     if (this.pubkey) return this.pubkey;
     const privKey = await this._getPrivKey();
     this.pubkey = getPublicKey(privKey);
@@ -183,19 +182,16 @@ export class NostrNSecSigner implements NostrSigner {
   }
 
   public async getNPub(): Promise<string> {
-    console.log("nostr-nsec-enc-signer: getNPub");
     const pubkey = await this.getPubKey();
     return nip19.npubEncode(pubkey);
   }
 
   public async sign(event: NostrEventTemplate): Promise<NostrEvent> {
-    console.log("nostr-nsec-enc-signer: sign");
     const privKey = await this._getPrivKey();
     return finalizeEvent(event, privKey);
   }
 
   public async encrypt(pubkey: string, plainText: string): Promise<string> {
-    console.log("nostr-nsec-enc-signer: encrypt");
     const conversationKey = nip44.getConversationKey(
       await this._getPrivKey(),
       pubkey,
@@ -204,7 +200,6 @@ export class NostrNSecSigner implements NostrSigner {
   }
 
   public async decrypt(pubkey: string, cipherText: string): Promise<string> {
-    console.log("nostr-nsec-enc-signer: decrypt");
     const conversationKey = nip44.getConversationKey(
       await this._getPrivKey(),
       pubkey,

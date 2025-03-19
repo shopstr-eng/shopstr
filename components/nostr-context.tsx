@@ -3,7 +3,6 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useRef,
   useState,
 } from "react";
 import {
@@ -11,7 +10,10 @@ import {
   NostrSigner,
 } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
-import { getLocalStorageData } from "./utility/nostr-helper-functions";
+import {
+  getLocalStorageData,
+  setLocalStorageDataOnSignIn,
+} from "./utility/nostr-helper-functions";
 import PassphraseChallengeModal from "@/components/utility-components/request-passphrase-modal";
 import AuthUrlChallengeModal from "@/components/utility-components/auth-challenge-modal";
 import { NostrNIP07Signer } from "@/utils/nostr/signers/nostr-nip07-signer";
@@ -64,19 +66,16 @@ export function SignerContextProvider({
     abortSignal,
     error,
   ) => {
-    return new Promise((resolve, reject) => {
-      console.log("Challenge requested");
+    return new Promise((resolve, _reject) => {
       setError(error);
       setAbort(() => abort);
       setChallengeResolver(() => {
         return async (res: any) => {
-          console.log("Resolving challenge", res);
           resolve(res);
         };
       });
       switch (type) {
         case "passphrase": {
-          console.log("Request passphrase");
           setIsPassphraseRequested(true);
           // automatically close the modal when the challenge is aborted
           abortSignal.addEventListener("abort", () => {
@@ -85,7 +84,6 @@ export function SignerContextProvider({
           break;
         }
         case "auth_url": {
-          console.log("Request auth challenge");
           setAuthUrl(challenge);
           setIsAuthChallengeRequested(true);
           // automatically close the modal when the challenge is aborted or resolved
@@ -101,37 +99,87 @@ export function SignerContextProvider({
     });
   };
 
+  const loadKeys = async (signerObject: NostrSigner) => {
+    try {
+      const [pubkey, npub] = await Promise.all([
+        signerObject.getPubKey(),
+        signerObject.getNPub(),
+      ]);
+      setPubKey(pubkey);
+      setNPub(npub);
+      setIsPassphraseRequested(false);
+    } catch (error) {
+      // Only show passphrase modal if it's a passphrase error
+      if (error instanceof Error && error.message.includes("passphrase")) {
+        setIsPassphraseRequested(true);
+      }
+      setPubKey(undefined);
+      setNPub(undefined);
+    }
+  };
+
   const loadSigner = useCallback(() => {
-    console.log("Reloading signer");
-    const { signer } = getLocalStorageData();
-    if (!signer) {
+    let existingSigner;
+    const { signer, signInMethod } = getLocalStorageData();
+
+    if (signer) {
+      existingSigner = signer;
+    } else if (signInMethod) {
+      switch (signInMethod) {
+        case "bunker": {
+          let bunker =
+            "bunker://" +
+            getLocalStorageData().bunkerRemotePubkey +
+            "/?secret=" +
+            getLocalStorageData().bunkerSecret;
+          let bunkerRelays = getLocalStorageData().bunkerRelays;
+          for (const relay of bunkerRelays!) {
+            bunker += "&relay=" + relay;
+          }
+          let appPrivKey = getLocalStorageData().clientPrivkey;
+          existingSigner = {
+            type: "nip46",
+            bunker,
+            appPrivKey: appPrivKey!,
+          };
+          break;
+        }
+        case "extension": {
+          existingSigner = {
+            type: "nip07",
+          };
+          break;
+        }
+        case "nsec": {
+          let encryptedPrivateKey = getLocalStorageData().encryptedPrivateKey;
+          existingSigner = {
+            type: "nsec",
+            encryptedPrivKey: encryptedPrivateKey!,
+          };
+          break;
+        }
+        default: {
+          throw new Error("Unknown signInMethod " + signInMethod);
+        }
+      }
+    } else {
       setSigner(undefined);
+      setPubKey(undefined);
+      setNPub(undefined);
       return;
     }
 
     const signerObject: NostrSigner = NostrManager.signerFrom(
-      signer!,
+      existingSigner!,
       challengeHandler,
     );
     setSigner(signerObject);
+    setLocalStorageDataOnSignIn({ signer: signerObject });
     if (!signerObject) return;
-    signerObject.getPubKey().then(
-      (key) => {
-        setPubKey(key);
-      },
-      (err) => {
-        setPubKey(undefined);
-      },
-    );
 
-    signerObject.getNPub().then(
-      (key) => {
-        setNPub(key);
-      },
-      (err) => {
-        setNPub(undefined);
-      },
-    );
+    if (signerObject) {
+      loadKeys(signerObject);
+    }
   }, []);
 
   useEffect(() => {
@@ -178,6 +226,7 @@ export function SignerContextProvider({
           actionOnSubmit={(passphrase: string, remind: boolean) => {
             if (challengeResolver) {
               challengeResolver({ res: passphrase, remind });
+              if (signer) loadKeys(signer);
             }
           }}
           actionOnCancel={() => {
@@ -222,7 +271,6 @@ export function NostrContextProvider({
   const [nostr] = useState<NostrManager>(new NostrManager());
 
   const reload = useCallback(() => {
-    console.log("Reloading nostr");
     const { readRelays, writeRelays, relays } = getLocalStorageData();
     nostr.addRelays([...writeRelays, ...relays, ...readRelays]);
   }, [nostr]);

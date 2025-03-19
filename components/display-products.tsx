@@ -113,8 +113,8 @@ const DisplayProducts = ({
     try {
       await deleteEvent(nostr!, signer!, [productId]);
       productEventContext.removeDeletedProductEvent(productId);
-    } catch (e) {
-      console.log(e);
+    } catch (_) {
+      return;
     }
   };
 

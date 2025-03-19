@@ -517,7 +517,6 @@ export async function publishSavedForLaterEvent(
   try {
     const { relays, writeRelays } = getLocalStorageData();
     const allWriteRelays = withBlastr([...writeRelays, ...relays]);
-    let updatedCartAddresses: string[][] = [];
 
     let cartTags: string[][] = [];
 
@@ -883,6 +882,10 @@ export interface LocalStorageInterface {
   history: [];
   wot: number;
   encryptedPrivateKey?: string;
+  clientPrivkey?: string;
+  bunkerRemotePubkey?: string;
+  bunkerRelays?: string[];
+  bunkerSecret?: string;
   signer?: { [key: string]: string };
 }
 
@@ -896,6 +899,10 @@ export const getLocalStorageData = (): LocalStorageInterface => {
   let tokens;
   let history;
   let wot;
+  let clientPrivkey;
+  let bunkerRemotePubkey;
+  let bunkerRelays;
+  let bunkerSecret;
   let signer;
 
   if (typeof window !== "undefined") {
@@ -975,28 +982,22 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       ? Number(localStorage.getItem(LOCALSTORAGECONSTANTS.wot))
       : 3;
 
-    const clientPrivkey = localStorage.getItem(
-      LOCALSTORAGECONSTANTS.clientPrivkey,
-    )
+    clientPrivkey = localStorage.getItem(LOCALSTORAGECONSTANTS.clientPrivkey)
       ? localStorage.getItem(LOCALSTORAGECONSTANTS.clientPrivkey)
       : undefined;
-    const bunkerRemotePubkey = localStorage.getItem(
+    bunkerRemotePubkey = localStorage.getItem(
       LOCALSTORAGECONSTANTS.bunkerRemotePubkey,
     )
       ? localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerRemotePubkey)
       : undefined;
-    const bunkerRelays = localStorage.getItem(
-      LOCALSTORAGECONSTANTS.bunkerRelays,
-    )
+    bunkerRelays = localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerRelays)
       ? (
           JSON.parse(
             localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerRelays) as string,
           ) as string[]
         ).filter((r) => r)
       : [];
-    const bunkerSecret = localStorage.getItem(
-      LOCALSTORAGECONSTANTS.bunkerSecret,
-    )
+    bunkerSecret = localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerSecret)
       ? localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerSecret)
       : undefined;
 
@@ -1043,6 +1044,10 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     tokens: tokens || [],
     history: history || [],
     wot: wot || 3,
+    clientPrivkey: clientPrivkey?.toString(),
+    bunkerRemotePubkey: bunkerRemotePubkey?.toString(),
+    bunkerRelays: bunkerRelays || [],
+    bunkerSecret: bunkerSecret?.toString(),
     signer,
   };
 };
