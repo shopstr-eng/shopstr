@@ -35,8 +35,6 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
   >([]); // [chatPubkey, chat]
   const [currentChatPubkey, setCurrentChatPubkey] = useState("");
 
-  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
-
   const [isChatsLoading, setIsChatsLoading] = useState(true);
   const [isSendingDMLoading, setIsSendingDMLoading] = useState(false);
   const { signer, pubkey: userPubkey } = useSignerContext();
@@ -77,7 +75,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         setIsChatsLoading(false);
         return;
       }
-      if (!chatsContext.isLoading && chatsContext.chatsMap && !isLoadingMore) {
+      if (!chatsContext.isLoading && chatsContext.chatsMap) {
         // comes here only if signInMethod is extension or its nsec and passphrase is valid
         let decryptedChats = await getDecryptedChatsFromContext();
         const passedNPubkey = router.query.pk ? router.query.pk : null;

@@ -2,11 +2,9 @@ import {
   nip44,
   nip19,
   getPublicKey,
-  verifyEvent,
   NostrEvent,
   finalizeEvent,
   generateSecretKey,
-  SimplePool,
 } from "nostr-tools";
 import { newPromiseWithTimeout } from "@/utils/timeout";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils";

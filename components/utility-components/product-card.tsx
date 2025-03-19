@@ -1,5 +1,4 @@
 import React, { ReactNode } from "react";
-import Link from "next/link";
 import { InformationCircleIcon } from "@heroicons/react/24/outline";
 import { Card, CardBody, Divider, Chip, CardFooter } from "@nextui-org/react";
 import { locationAvatar } from "./dropdowns/location-dropdown";
@@ -10,7 +9,6 @@ import CompactPriceDisplay, {
 } from "./display-monetary-info";
 import { ProductData } from "../utility/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
-import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import { useRouter } from "next/router";
 import { useSignerContext } from "../nostr-context";
 

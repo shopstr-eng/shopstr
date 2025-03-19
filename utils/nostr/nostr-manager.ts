@@ -174,7 +174,7 @@ export class NostrManager {
     params?: SubscribeManyParams,
     relayUrls?: string[],
   ): Promise<NostrEvent[]> {
-    return await newPromiseWithTimeout(async (resolve, reject) => {
+    return await newPromiseWithTimeout(async (resolve, _reject) => {
       if (!params) {
         params = {};
       }

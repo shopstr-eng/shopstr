@@ -42,7 +42,7 @@ export default function ClaimButton({ token }: { token: string }) {
   const [lnurl, setLnurl] = useState("");
   const profileContext = useContext(ProfileMapContext);
   const chatsContext = useContext(ChatsContext);
-  const { signer, pubkey: userPubkey, isLoggedIn } = useSignerContext();
+  const { signer, pubkey: userPubkey } = useSignerContext();
   const { nostr } = useNostrContext();
 
   const [openClaimTypeModal, setOpenClaimTypeModal] = useState(false);

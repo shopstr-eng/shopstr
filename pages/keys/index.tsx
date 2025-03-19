@@ -61,8 +61,8 @@ const Keys = () => {
               pubkey,
             },
           },
-          async (type, challenge, abort, abortSignal, error) => {
-            return new Promise((resolve, reject) => {
+          async (_type, _challenge, _abort, _abortSignal, _error) => {
+            return new Promise((_resolve, reject) => {
               reject(new Error("No challenge handler provided"));
             });
           },
@@ -75,7 +75,7 @@ const Keys = () => {
 
   return (
     <>
-      <div className="flex h-[100vh] flex-col bg-light-bg pt-24 dark:bg-dark-bg">
+      <div className="f3 books about my learnings along the way. Tweets about the career path of entrepreneurship & the buslex h-[100vh] flex-col bg-light-bg pt-24 dark:bg-dark-bg">
         <div className="p-4">
           <Card>
             <CardBody>
