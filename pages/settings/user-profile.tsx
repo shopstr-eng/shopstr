@@ -18,17 +18,21 @@ import {
   EyeIcon,
 } from "@heroicons/react/24/outline";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
-import { useSignerContext, useNostrContext } from "@/components/nostr-context";
+import { SignerContext, NostrContext } from "@/utils/context/nostr-context";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
 import { createNostrProfileEvent } from "@/components/utility/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 
 const UserProfilePage = () => {
-  const { nostr } = useNostrContext();
+  const { nostr } = useContext(NostrContext);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
   const [isFetchingProfile, setIsFetchingProfile] = useState(false);
-  const { signer, pubkey: userPubkey, npub: userNPub } = useSignerContext();
+  const {
+    signer,
+    pubkey: userPubkey,
+    npub: userNPub,
+  } = useContext(SignerContext);
   const [isNPubCopied, setIsNPubCopied] = useState(false);
   const [isNSecCopied, setIsNSecCopied] = useState(false);
   const [userNSec, setUserNSec] = useState("");

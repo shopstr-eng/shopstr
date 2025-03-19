@@ -34,7 +34,7 @@ import { ProductData } from "./utility/product-parser-functions";
 import { buildSrcSet } from "@/utils/images";
 import { FileUploaderButton } from "./utility-components/file-uploader";
 import currencySelection from "../public/currencySelection.json";
-import { useSignerContext } from "./nostr-context";
+import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
 import { ProductFormValues } from "../utils/types/types";
 
 interface ProductFormProps {
@@ -63,7 +63,12 @@ export default function NewForm({
   const [showOptionalTags, setShowOptionalTags] = useState(false);
   const productEventContext = useContext(ProductContext);
   const profileContext = useContext(ProfileMapContext);
-  const { signer, pubkey: signerPubKey } = useSignerContext();
+  const {
+    signer,
+    isLoggedIn,
+    pubkey: signerPubKey,
+  } = useContext(SignerContext);
+  const { nostr } = useContext(NostrContext);
 
   const { handleSubmit, control, reset, watch } = useForm({
     defaultValues: oldValues
@@ -181,7 +186,7 @@ export default function NewForm({
       tags.push(["restrictions", data["Restrictions"] as string]);
     }
 
-    let newListing = await PostListing(tags);
+    let newListing = await PostListing(tags, signer!, isLoggedIn!, nostr!);
 
     capturePostListingMetric(signer!, newListing.id, tags);
 
@@ -990,7 +995,12 @@ export default function NewForm({
             <Button
               className={SHOPSTRBUTTONCLASSNAMES}
               type="submit"
-              onClick={(e) => {}}
+              onClick={(e) => {
+                if (signer && isLoggedIn) {
+                  e.preventDefault();
+                  handleSubmit(onSubmit as any)();
+                }
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault(); // Prevent default to avoid submitting the form again

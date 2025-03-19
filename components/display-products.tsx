@@ -12,7 +12,7 @@ import DisplayProductModal from "./display-product-modal";
 import ShopstrSpinner from "./utility-components/shopstr-spinner";
 import { useRouter } from "next/router";
 import parseTags, { ProductData } from "./utility/product-parser-functions";
-import { useNostrContext, useSignerContext } from "./nostr-context";
+import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
 
 const DisplayProducts = ({
   focusedPubkey,
@@ -43,8 +43,8 @@ const DisplayProducts = ({
 
   const router = useRouter();
 
-  const { nostr } = useNostrContext();
-  const { signer, pubkey: userPubkey } = useSignerContext();
+  const { nostr } = useContext(NostrContext);
+  const { signer, pubkey: userPubkey } = useContext(SignerContext);
 
   useEffect(() => {
     if (!productEventContext) return;

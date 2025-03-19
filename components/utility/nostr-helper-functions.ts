@@ -1,3 +1,4 @@
+import { useContext } from "react";
 import {
   finalizeEvent,
   generateSecretKey,
@@ -10,7 +11,7 @@ import {
 import { NostrEvent, ProductFormValues } from "@/utils/types/types";
 import { ProductData } from "@/components/utility/product-parser-functions";
 import { Proof } from "@cashu/cashu-ts";
-import { useNostrContext, useSignerContext } from "@/components/nostr-context";
+import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { removeProductFromCache } from "@/pages/api/nostr/cache-service";
@@ -168,14 +169,17 @@ export async function createNostrProfileEvent(
   return msg;
 }
 
-export async function PostListing(values: ProductFormValues) {
+export async function PostListing(
+  values: ProductFormValues,
+  signer: NostrSigner,
+  isLoggedIn: boolean,
+  nostr: NostrManager,
+) {
   const { relays, writeRelays } = getLocalStorageData();
 
-  const { signer, isLoggedIn } = useSignerContext();
   if (!signer || !isLoggedIn) throw new Error("Login required");
   const userPubkey = await signer.getPubKey();
 
-  const { nostr } = useNostrContext();
   if (!nostr) throw new Error("Nostr writer required");
 
   const summary = values.find(([key]) => key === "summary")?.[1] || "";

@@ -1,9 +1,9 @@
 import {
   createContext,
   useCallback,
-  useContext,
   useEffect,
   useState,
+  ReactNode,
 } from "react";
 import {
   ChallengeHandler,
@@ -13,36 +13,38 @@ import { NostrManager } from "@/utils/nostr/nostr-manager";
 import {
   getLocalStorageData,
   setLocalStorageDataOnSignIn,
-} from "./utility/nostr-helper-functions";
+} from "@/components/utility/nostr-helper-functions";
 import PassphraseChallengeModal from "@/components/utility-components/request-passphrase-modal";
 import AuthUrlChallengeModal from "@/components/utility-components/auth-challenge-modal";
 import { NostrNIP07Signer } from "@/utils/nostr/signers/nostr-nip07-signer";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
 
-type _SignerContext = {
+interface SignerContextInterface {
   signer?: NostrSigner;
   isLoggedIn?: boolean;
   pubkey?: string;
   npub?: string;
   newSigner?: (type: string, args: any) => NostrSigner;
-};
-
-type _NostrContext = {
-  nostr?: NostrManager;
-};
-
-const SignerContext = createContext<_SignerContext>({});
-
-export function useSignerContext() {
-  return useContext(SignerContext);
 }
 
-export function SignerContextProvider({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export const SignerContext = createContext({
+  signer: {} as NostrSigner,
+  isLoggedIn: false,
+  pubkey: "",
+  npub: "",
+  newSigner: {},
+} as SignerContextInterface);
+
+interface NostrContextInterface {
+  nostr?: NostrManager;
+}
+
+export const NostrContext = createContext({
+  nostr: {} as NostrManager,
+} as NostrContextInterface);
+
+export function SignerContextProvider({ children }: { children: ReactNode }) {
   const [isPassphraseRequested, setIsPassphraseRequested] = useState(false);
   const [isAuthChallengeRequested, setIsAuthChallengeRequested] =
     useState(false);
@@ -77,7 +79,6 @@ export function SignerContextProvider({
       switch (type) {
         case "passphrase": {
           setIsPassphraseRequested(true);
-          // automatically close the modal when the challenge is aborted
           abortSignal.addEventListener("abort", () => {
             setIsPassphraseRequested(false);
           });
@@ -86,7 +87,6 @@ export function SignerContextProvider({
         case "auth_url": {
           setAuthUrl(challenge);
           setIsAuthChallengeRequested(true);
-          // automatically close the modal when the challenge is aborted or resolved
           abortSignal.addEventListener("abort", () => {
             setIsAuthChallengeRequested(false);
           });
@@ -109,7 +109,6 @@ export function SignerContextProvider({
       setNPub(npub);
       setIsPassphraseRequested(false);
     } catch (error) {
-      // Only show passphrase modal if it's a passphrase error
       if (error instanceof Error && error.message.includes("passphrase")) {
         setIsPassphraseRequested(true);
       }
@@ -257,17 +256,7 @@ export function SignerContextProvider({
   );
 }
 
-const NostrContext = createContext<_NostrContext>({});
-
-export function useNostrContext() {
-  return useContext(NostrContext);
-}
-
-export function NostrContextProvider({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export function NostrContextProvider({ children }: { children: ReactNode }) {
   const [nostr] = useState<NostrManager>(new NostrManager());
 
   const reload = useCallback(() => {

@@ -1,8 +1,9 @@
+import { useContext } from "react";
 import { Button, Input } from "@nextui-org/react";
 import { useRef, useState } from "react";
 import { nostrBuildUploadImages } from "../utility/nostr-helper-functions";
 import FailureModal from "./failure-modal";
-import { useSignerContext } from "../nostr-context";
+import { SignerContext } from "@/utils/context/nostr-context";
 
 export const FileUploaderButton = ({
   disabled,
@@ -24,7 +25,7 @@ export const FileUploaderButton = ({
 
   // Create a reference to the hidden file input element
   const hiddenFileInput = useRef<HTMLInputElement>(null);
-  const { signer, isLoggedIn } = useSignerContext();
+  const { signer, isLoggedIn } = useContext(SignerContext);
 
   const uploadImages = async (files: FileList) => {
     try {

@@ -21,7 +21,7 @@ import DisplayProducts from "../display-products";
 import LocationDropdown from "../utility-components/dropdowns/location-dropdown";
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
 import { CATEGORIES } from "../utility/STATIC-VARIABLES";
-import { useSignerContext } from "../nostr-context";
+import { SignerContext } from "@/utils/context/nostr-context";
 import { ProductData } from "../utility/product-parser-functions";
 import SignInModal from "../sign-in/SignInModal";
 import ShopstrSwitch from "../utility-components/shopstr-switch";
@@ -72,7 +72,8 @@ export function MarketplacePage({
   const shopMapContext = useContext(ShopMapContext);
   const followsContext = useContext(FollowsContext);
 
-  const { pubkey: userPubkey, isLoggedIn: loggedIn } = useSignerContext();
+  const { pubkey: userPubkey, isLoggedIn: loggedIn } =
+    useContext(SignerContext);
 
   useEffect(() => {
     let npub = router.query.npub;

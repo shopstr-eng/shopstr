@@ -102,7 +102,7 @@ export default function PassphraseChallengeModal({
               onChange={() => setRemindToggled(!remindToggled)}
             />
             <label className="text-light-text dark:text-dark-text">
-              Remember passphrase
+              Remember passphrase for this session
             </label>
           </div>
           {error && (

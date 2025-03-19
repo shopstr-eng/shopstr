@@ -22,7 +22,7 @@ import { sanitizeUrl } from "@braintree/sanitize-url";
 import FailureModal from "../utility-components/failure-modal";
 import SuccessModal from "../utility-components/success-modal";
 import currencySelection from "../../public/currencySelection.json";
-import { useSignerContext } from "../nostr-context";
+import { SignerContext } from "@/utils/context/nostr-context";
 
 export const TOTALPRODUCTCARDWIDTH = 380 + 5;
 const SUMMARY_CHARACTER_LIMIT = 100;
@@ -56,7 +56,7 @@ export default function CheckoutCard({
     status,
   } = productData;
 
-  const { pubkey: userPubkey, isLoggedIn } = useSignerContext();
+  const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
 
   const router = useRouter();
 

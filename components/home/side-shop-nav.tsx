@@ -10,7 +10,7 @@ import { Button, useDisclosure } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { useRouter } from "next/router";
 import SignInModal from "../sign-in/SignInModal";
-import { useSignerContext } from "../nostr-context";
+import { SignerContext } from "@/utils/context/nostr-context";
 import { ShopSettings } from "../../utils/types/types";
 import FailureModal from "../utility-components/failure-modal";
 
@@ -41,7 +41,7 @@ const SideShopNav = ({
   const [usersPubkey, setUsersPubkey] = useState<string | null>(null);
 
   const [showFailureModal, setShowFailureModal] = useState(false);
-  const { pubkey: userPubkey, isLoggedIn } = useSignerContext();
+  const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
 
   useEffect(() => {
     if (

@@ -64,7 +64,7 @@ import FailureModal from "@/components/utility-components/failure-modal";
 import ShippingForm from "./shipping-form";
 import ContactForm from "./contact-form";
 import CombinedContactForm from "./combined-contact-form";
-import { useNostrContext, useSignerContext } from "./nostr-context";
+import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
 
 export default function CartInvoiceCard({
   products,
@@ -88,8 +88,8 @@ export default function CartInvoiceCard({
 
   const chatsContext = useContext(ChatsContext);
   const profileContext = useContext(ProfileMapContext);
-  const { nostr } = useNostrContext();
-  const { signer, isLoggedIn: userLoggedIn } = useSignerContext();
+  const { nostr } = useContext(NostrContext);
+  const { signer, isLoggedIn: userLoggedIn } = useContext(SignerContext);
 
   const [showInvoiceCard, setShowInvoiceCard] = useState(false);
 

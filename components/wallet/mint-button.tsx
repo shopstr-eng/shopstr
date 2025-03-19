@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useContext, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import {
   BanknotesIcon,
@@ -27,8 +27,7 @@ import {
 } from "../utility/nostr-helper-functions";
 import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
 import FailureModal from "@/components/utility-components/failure-modal";
-import { useSignerContext } from "../nostr-context";
-import { useNostrContext } from "../nostr-context";
+import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
 
 const MintButton = () => {
@@ -43,8 +42,8 @@ const MintButton = () => {
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
 
-  const { signer } = useSignerContext();
-  const { nostr } = useNostrContext();
+  const { signer } = useContext(SignerContext);
+  const { nostr } = useContext(NostrContext);
 
   const { mints, tokens, history } = getLocalStorageData();
 

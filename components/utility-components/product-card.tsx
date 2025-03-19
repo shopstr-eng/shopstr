@@ -1,4 +1,4 @@
-import React, { ReactNode } from "react";
+import React, { ReactNode, useContext } from "react";
 import { InformationCircleIcon } from "@heroicons/react/24/outline";
 import { Card, CardBody, Divider, Chip, CardFooter } from "@nextui-org/react";
 import { locationAvatar } from "./dropdowns/location-dropdown";
@@ -10,7 +10,7 @@ import CompactPriceDisplay, {
 import { ProductData } from "../utility/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { useRouter } from "next/router";
-import { useSignerContext } from "../nostr-context";
+import { SignerContext } from "@/utils/context/nostr-context";
 
 const cardWidth = 380;
 const cardxMargin = 2.5;
@@ -28,7 +28,7 @@ export default function ProductCard({
   footerContent?: ReactNode;
 }) {
   const router = useRouter();
-  const { pubkey: userPubkey } = useSignerContext();
+  const { pubkey: userPubkey } = useContext(SignerContext);
   if (!productData) return null;
   const { pubkey, title, images, categories, location, status } = productData;
   if (isReview)

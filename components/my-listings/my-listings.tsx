@@ -1,7 +1,7 @@
 import router from "next/router";
 import React, { useContext, useState, useEffect, useRef } from "react";
 import DisplayProducts from "../display-products";
-import { useSignerContext } from "../nostr-context";
+import { SignerContext } from "@/utils/context/nostr-context";
 import { Button, useDisclosure } from "@nextui-org/react";
 import { Bars3Icon } from "@heroicons/react/24/outline";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
@@ -12,7 +12,7 @@ import { sanitizeUrl } from "@braintree/sanitize-url";
 import SideShopNav from "../home/side-shop-nav";
 
 export const MyListingsPage = () => {
-  const { pubkey: usersPubkey } = useSignerContext();
+  const { pubkey: usersPubkey } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   const [shopBannerURL, setShopBannerURL] = useState("");

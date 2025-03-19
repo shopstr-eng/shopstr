@@ -31,7 +31,7 @@ import {
 } from "../utility/nostr-helper-functions";
 import { calculateWeightedScore } from "../utility/review-parser-functions";
 import { ReviewsContext } from "../../utils/context/context";
-import { useNostrContext, useSignerContext } from "../nostr-context";
+import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
 
 export const ChatPanel = ({
   handleGoBack,
@@ -92,8 +92,12 @@ export const ChatPanel = ({
     reset: reviewReset,
   } = useForm();
 
-  const { signer, pubkey: userPubkey, npub: userNPub } = useSignerContext();
-  const { nostr } = useNostrContext();
+  const {
+    signer,
+    pubkey: userPubkey,
+    npub: userNPub,
+  } = useContext(SignerContext);
+  const { nostr } = useContext(NostrContext);
 
   const bottomDivRef = useRef<HTMLDivElement>(null);
 

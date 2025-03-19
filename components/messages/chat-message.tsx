@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { nip19 } from "nostr-tools";
 import { CheckIcon, ClipboardIcon } from "@heroicons/react/24/outline";
@@ -6,7 +6,7 @@ import ClaimButton from "../utility-components/claim-button";
 import { NostrMessageEvent } from "../../utils/types/types";
 import { timeSinceMessageDisplayText } from "../../utils/messages/utils";
 import { getDecodedToken } from "@cashu/cashu-ts";
-import { useSignerContext } from "../nostr-context";
+import { SignerContext } from "@/utils/context/nostr-context";
 
 function isDecodableToken(token: string): boolean {
   try {
@@ -88,7 +88,7 @@ export const ChatMessage = ({
     ? messageEvent.content.split(cashuPrefix)[0]
     : messageEvent.content;
 
-  const { pubkey: userPubkey } = useSignerContext();
+  const { pubkey: userPubkey } = useContext(SignerContext);
 
   const handleCopyToken = (token: string) => {
     navigator.clipboard.writeText(token);

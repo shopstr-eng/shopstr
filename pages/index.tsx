@@ -8,7 +8,7 @@ import ProductCard from "@/components/utility-components/product-card";
 import parseTags, {
   ProductData,
 } from "@/components/utility/product-parser-functions";
-import { useSignerContext } from "@/components/nostr-context";
+import { SignerContext } from "@/utils/context/nostr-context";
 import Link from "next/link";
 import { nip19 } from "nostr-tools";
 
@@ -18,7 +18,7 @@ export default function Landing() {
 
   const [parsedProducts, setParsedProducts] = useState<ProductData[]>([]);
 
-  const signerContext = useSignerContext();
+  const signerContext = useContext(SignerContext);
   useEffect(() => {
     if (router.pathname === "/" && signerContext.isLoggedIn) {
       router.push("/marketplace");

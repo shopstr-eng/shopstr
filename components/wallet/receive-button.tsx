@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useContext, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import {
   ArrowDownTrayIcon,
@@ -26,7 +26,7 @@ import {
   getDecodedToken,
   Proof,
 } from "@cashu/cashu-ts";
-import { useNostrContext, useSignerContext } from "../nostr-context";
+import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
 
 const ReceiveButton = () => {
@@ -36,8 +36,8 @@ const ReceiveButton = () => {
   const [isInvalidToken, setIsInvalidToken] = useState(false);
   const [isDuplicateToken, setIsDuplicateToken] = useState(false);
 
-  const { signer } = useSignerContext();
-  const { nostr } = useNostrContext();
+  const { signer } = useContext(SignerContext);
+  const { nostr } = useContext(NostrContext);
   const { mints, tokens, history } = getLocalStorageData();
 
   const {

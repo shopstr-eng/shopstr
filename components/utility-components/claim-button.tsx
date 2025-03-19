@@ -36,14 +36,14 @@ import {
   getEncodedToken,
 } from "@cashu/cashu-ts";
 import { formatWithCommas } from "./display-monetary-info";
-import { useNostrContext, useSignerContext } from "../nostr-context";
+import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
 
 export default function ClaimButton({ token }: { token: string }) {
   const [lnurl, setLnurl] = useState("");
   const profileContext = useContext(ProfileMapContext);
   const chatsContext = useContext(ChatsContext);
-  const { signer, pubkey: userPubkey } = useSignerContext();
-  const { nostr } = useNostrContext();
+  const { signer, pubkey: userPubkey } = useContext(SignerContext);
+  const { nostr } = useContext(NostrContext);
 
   const [openClaimTypeModal, setOpenClaimTypeModal] = useState(false);
   const [openRedemptionModal, setOpenRedemptionModal] = useState(false);

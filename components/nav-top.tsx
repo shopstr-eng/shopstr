@@ -6,7 +6,7 @@ import { countNumberOfUnreadMessagesFromChatsContext } from "@/utils/messages/ut
 import { ChatsContext, ShopMapContext } from "@/utils/context/context";
 import { db } from "../pages/api/nostr/cache-service";
 import { useLiveQuery } from "dexie-react-hooks";
-import { useSignerContext } from "./nostr-context";
+import { SignerContext } from "@/utils/context/nostr-context";
 import { useRouter } from "next/router";
 import SignInModal from "./sign-in/SignInModal";
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
@@ -28,7 +28,8 @@ const TopNav = ({
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
   const [cartQuantity, setCartQuantity] = useState(0);
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const { isLoggedIn: signedIn, pubkey: userPubkey } = useSignerContext();
+  const { isLoggedIn: signedIn, pubkey: userPubkey } =
+    useContext(SignerContext);
 
   const [shopLogoURL, setShopLogoURL] = useState("");
   const [shopName, setShopName] = useState("");

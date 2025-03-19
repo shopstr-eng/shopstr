@@ -25,7 +25,7 @@ import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { CashuMint, CashuWallet, MintKeyset, Proof } from "@cashu/cashu-ts";
 import { formatWithCommas } from "../utility-components/display-monetary-info";
 import { CashuWalletContext } from "../../utils/context/context";
-import { useNostrContext, useSignerContext } from "../nostr-context";
+import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
 
 const PayButton = () => {
@@ -37,8 +37,8 @@ const PayButton = () => {
   // const [totalAmount, setTotalAmount] = useState(0);
   const [feeReserveAmount, setFeeReserveAmount] = useState("");
 
-  const { signer } = useSignerContext();
-  const { nostr } = useNostrContext();
+  const { signer } = useContext(SignerContext);
+  const { nostr } = useContext(NostrContext);
 
   const { mints, tokens, history } = getLocalStorageData();
 

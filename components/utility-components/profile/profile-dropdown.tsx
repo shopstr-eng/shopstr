@@ -21,7 +21,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import FailureModal from "../failure-modal";
-import { useSignerContext } from "@/components/nostr-context";
+import { SignerContext } from "@/utils/context/nostr-context";
 
 type DropDownKeys =
   | "shop"
@@ -50,7 +50,7 @@ export const ProfileWithDropdown = ({
   const profileContext = useContext(ProfileMapContext);
   const npub = pubkey ? nip19.npubEncode(pubkey) : "";
   const router = useRouter();
-  const { isLoggedIn } = useSignerContext();
+  const { isLoggedIn } = useContext(SignerContext);
   useEffect(() => {
     const profileMap = profileContext.profileData;
     const profile = profileMap.has(pubkey) ? profileMap.get(pubkey) : undefined;

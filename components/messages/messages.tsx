@@ -20,7 +20,8 @@ import {
 } from "../../pages/api/nostr/cache-service";
 import { useKeyPress } from "../utility/functions";
 import FailureModal from "../utility-components/failure-modal";
-import { useSignerContext } from "../nostr-context";
+import { SignerContext } from "@/utils/context/nostr-context";
+import { Sign } from "crypto";
 
 const Messages = ({ isPayment }: { isPayment: boolean }) => {
   const router = useRouter();
@@ -37,7 +38,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
 
   const [isChatsLoading, setIsChatsLoading] = useState(true);
   const [isSendingDMLoading, setIsSendingDMLoading] = useState(false);
-  const { signer, pubkey: userPubkey } = useSignerContext();
+  const { signer, pubkey: userPubkey } = useContext(SignerContext);
 
   const [isClient, setIsClient] = useState(false);
 

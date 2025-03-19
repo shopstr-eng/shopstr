@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useContext, useState } from "react";
 import {
   PencilSquareIcon,
   ShareIcon,
@@ -22,7 +22,7 @@ import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
 import SuccessModal from "./utility-components/success-modal";
-import { useSignerContext } from "./nostr-context";
+import { SignerContext } from "@/utils/context/nostr-context";
 import { nip19 } from "nostr-tools";
 
 interface ProductModalProps {
@@ -54,7 +54,7 @@ export default function DisplayProductModal({
     restrictions,
   } = productData;
 
-  const { pubkey: userPubkey, isLoggedIn } = useSignerContext();
+  const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showProductForm, setShowProductForm] = useState(false);
 

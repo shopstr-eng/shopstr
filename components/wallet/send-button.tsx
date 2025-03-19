@@ -34,7 +34,7 @@ import {
   Proof,
 } from "@cashu/cashu-ts";
 import { CashuWalletContext } from "../../utils/context/context";
-import { useNostrContext, useSignerContext } from "../nostr-context";
+import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
 
 const SendButton = () => {
@@ -46,8 +46,8 @@ const SendButton = () => {
 
   const walletContext = useContext(CashuWalletContext);
 
-  const { signer } = useSignerContext();
-  const { nostr } = useNostrContext();
+  const { signer } = useContext(SignerContext);
+  const { nostr } = useContext(NostrContext);
 
   const { mints, tokens, history } = getLocalStorageData();
 

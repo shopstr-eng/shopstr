@@ -17,7 +17,7 @@ import {
 import { RelaysContext } from "../../utils/context/context";
 import { useRouter } from "next/router";
 import FailureModal from "../../components/utility-components/failure-modal";
-import { useSignerContext } from "../nostr-context";
+import { SignerContext } from "@/utils/context/nostr-context";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
 export default function SignInModal({
@@ -46,7 +46,7 @@ export default function SignInModal({
   const relaysContext = useContext(RelaysContext);
 
   const router = useRouter();
-  const { newSigner } = useSignerContext();
+  const { newSigner } = useContext(SignerContext);
 
   const saveSigner = (signer: NostrSigner) => {
     if (

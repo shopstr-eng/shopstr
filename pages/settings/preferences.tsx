@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { useForm, Controller } from "react-hook-form";
 import Link from "next/link";
 import {
@@ -27,10 +27,10 @@ import { useTheme } from "next-themes";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import ShopstrSlider from "../../components/utility-components/shopstr-slider";
 import FailureModal from "../../components/utility-components/failure-modal";
-import { useNostrContext, useSignerContext } from "@/components/nostr-context";
+import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
 
 const PreferencesPage = () => {
-  const { nostr } = useNostrContext();
+  const { nostr } = useContext(NostrContext);
   const [relays, setRelays] = useState(Array<string>(0));
   const [readRelays, setReadRelays] = useState(Array<string>(0));
   const [writeRelays, setWriteRelays] = useState(Array<string>(0));
@@ -44,7 +44,7 @@ const PreferencesPage = () => {
   const [showMintModal, setShowMintModal] = useState(false);
 
   const [isLoaded, setIsLoaded] = useState(false);
-  const { signer, pubkey } = useSignerContext();
+  const { signer, pubkey } = useContext(SignerContext);
 
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");

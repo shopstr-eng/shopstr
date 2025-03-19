@@ -1,7 +1,7 @@
 import "tailwindcss/tailwind.css";
 import type { AppProps } from "next/app";
 import "../styles/globals.css";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useContext } from "react";
 import { useRouter } from "next/router";
 import {
   ProfileMapContext,
@@ -51,14 +51,14 @@ import DynamicHead from "../components/dynamic-meta-head";
 import {
   NostrContextProvider,
   SignerContextProvider,
-  useNostrContext,
-  useSignerContext,
-} from "@/components/nostr-context";
+  NostrContext,
+  SignerContext,
+} from "@/utils/context/nostr-context";
 
 function Shopstr({ props }: { props: AppProps }) {
   const { Component, pageProps } = props;
-  const { nostr } = useNostrContext();
-  const { signer, isLoggedIn } = useSignerContext();
+  const { nostr } = useContext(NostrContext);
+  const { signer, isLoggedIn } = useContext(SignerContext);
   const [productContext, setProductContext] = useState<ProductContextInterface>(
     {
       productEvents: [],

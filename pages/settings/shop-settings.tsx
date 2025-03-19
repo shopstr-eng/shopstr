@@ -6,17 +6,17 @@ import { ArrowUpOnSquareIcon } from "@heroicons/react/24/outline";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { ShopMapContext } from "@/utils/context/context";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
-import { useSignerContext, useNostrContext } from "@/components/nostr-context";
+import { SignerContext, NostrContext } from "@/utils/context/nostr-context";
 import { createNostrShopEvent } from "@/components/utility/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 
 const ShopSettingsPage = () => {
-  const { nostr } = useNostrContext();
+  const { nostr } = useContext(NostrContext);
   const [isUploadingShopSettings, setIsUploadingShopSettings] = useState(false);
   const [isFetchingShop, setIsFetchingShop] = useState(false);
 
-  const { signer, pubkey: userPubkey } = useSignerContext();
+  const { signer, pubkey: userPubkey } = useContext(SignerContext);
 
   const shopContext = useContext(ShopMapContext);
   const { handleSubmit, control, reset, watch, setValue } = useForm({

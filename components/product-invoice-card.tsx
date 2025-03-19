@@ -64,7 +64,7 @@ import currencySelection from "../public/currencySelection.json";
 import FailureModal from "@/components/utility-components/failure-modal";
 import ShippingForm from "./shipping-form";
 import ContactForm from "./contact-form";
-import { useNostrContext, useSignerContext } from "./nostr-context";
+import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
 
 export default function ProductInvoiceCard({
   productData,
@@ -91,11 +91,11 @@ export default function ProductInvoiceCard({
     npub: userNPub,
     isLoggedIn,
     signer,
-  } = useSignerContext();
+  } = useContext(SignerContext);
   const chatsContext = useContext(ChatsContext);
   const profileContext = useContext(ProfileMapContext);
 
-  const { nostr } = useNostrContext();
+  const { nostr } = useContext(NostrContext);
 
   const [showInvoiceCard, setShowInvoiceCard] = useState(false);
 
