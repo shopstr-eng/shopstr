@@ -1,6 +1,7 @@
 import { NostrEventTemplate, NostrEvent } from "@/utils/nostr/nostr-manager";
 
 export interface NostrSigner {
+  connect(): Promise<string>;
   getPubKey(): Promise<string>;
   getNPub(): Promise<string>;
   sign(event: NostrEventTemplate): Promise<NostrEvent>;

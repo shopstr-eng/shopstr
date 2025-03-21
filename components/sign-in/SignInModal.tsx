@@ -14,6 +14,7 @@ import {
   validateNSecKey,
   parseBunkerToken,
 } from "@/components/utility/nostr-helper-functions";
+import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 import { RelaysContext } from "../../utils/context/context";
 import { useRouter } from "next/router";
 import FailureModal from "../../components/utility-components/failure-modal";
@@ -37,6 +38,7 @@ export default function SignInModal({
     useState<InputProps["color"]>("default");
 
   const [showBunkerSignIn, setShowBunkerSignIn] = useState(false);
+  const [isBunkerConnecting, setIsBunkerConnecting] = useState(false);
 
   const [showNsecSignIn, setShowNsecSignIn] = useState(false);
 
@@ -72,6 +74,8 @@ export default function SignInModal({
   };
 
   const startExtensionLogin = async () => {
+    setShowBunkerSignIn(false);
+    setShowNsecSignIn(false);
     try {
       const signer = newSigner!("nip07", {});
       await signer.getPubKey();
@@ -84,14 +88,18 @@ export default function SignInModal({
   };
 
   const startBunkerLogin = async () => {
+    setIsBunkerConnecting(true);
     try {
       const signer = newSigner!("nip46", { bunker: bunkerToken });
-      await signer.getPubKey();
+      await signer.connect();
       saveSigner(signer);
+      setIsBunkerConnecting(false);
+      await signer.getPubKey();
       onClose();
     } catch (error) {
       setFailureText("Bunker sign-in failed!");
       setShowFailureModal(true);
+      setIsBunkerConnecting(false);
     }
   };
 
@@ -156,6 +164,7 @@ export default function SignInModal({
         isOpen={isOpen}
         onClose={() => {
           setShowBunkerSignIn(false);
+          setIsBunkerConnecting(false);
           setBunkerToken("");
           setShowNsecSignIn(false);
           setPrivateKey("");
@@ -218,7 +227,10 @@ export default function SignInModal({
                   <div className="flex flex-col	">
                     <div className="">
                       <Button
-                        onClick={() => setShowBunkerSignIn(true)}
+                        onClick={() => {
+                          setShowNsecSignIn(false);
+                          setShowBunkerSignIn(true);
+                        }}
                         className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
                           showBunkerSignIn ? "hidden" : ""
                         }`}
@@ -248,7 +260,13 @@ export default function SignInModal({
                           onClick={startBunkerLogin}
                           isDisabled={validBunkerToken != "success"} // Disable the button only if both key strings are invalid or the button has already been clicked
                         >
-                          Bunker Sign-in
+                          {isBunkerConnecting ? (
+                            <div className="flex items-center justify-center">
+                              <ShopstrSpinner />
+                            </div>
+                          ) : (
+                            <>Bunker Sign-in</>
+                          )}
                         </Button>
                       </div>
                     </div>
@@ -258,7 +276,10 @@ export default function SignInModal({
                 <div className="flex flex-col	">
                   <div className="">
                     <Button
-                      onClick={() => setShowNsecSignIn(true)}
+                      onClick={() => {
+                        setShowBunkerSignIn(false);
+                        setShowNsecSignIn(true);
+                      }}
                       className={`mt-2 w-full ${
                         showNsecSignIn ? "hidden" : ""
                       }`}

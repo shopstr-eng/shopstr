@@ -154,7 +154,7 @@ export class NostrManager {
         params ?? {},
       ),
       close: async () => {
-        await sub._sub.close();
+        sub._sub.close();
         for (const relay of relays) {
           const activeSubs = relay.activeSubs;
           const i = activeSubs.indexOf(sub);
@@ -243,7 +243,7 @@ export class NostrManager {
         await (await r).connect();
       },
       disconnect: async () => {
-        await (await r).close();
+        (await r).close();
       },
       activeSubs: [],
       sleeping: true,

@@ -95,6 +95,10 @@ export class NostrNSecSigner implements NostrSigner {
     };
   }
 
+  public async connect(): Promise<string> {
+    return "connected";
+  }
+
   private async getPassphrase(
     abort: () => {},
     error?: Error,

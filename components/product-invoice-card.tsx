@@ -65,6 +65,7 @@ import FailureModal from "@/components/utility-components/failure-modal";
 import ShippingForm from "./shipping-form";
 import ContactForm from "./contact-form";
 import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
+import { ShippingFormData, ContactFormData } from "@/utils/types/types";
 
 export default function ProductInvoiceCard({
   productData,
@@ -82,8 +83,7 @@ export default function ProductInvoiceCard({
   selectedSize?: string;
 }) {
   const router = useRouter();
-  const { id, pubkey, currency, totalCost, shippingType, required } =
-    productData;
+  const { pubkey, currency, totalCost, shippingType, required } = productData;
   const pubkeyOfProductBeingSold = pubkey;
   const { mints, tokens, history } = getLocalStorageData();
   const {
@@ -239,6 +239,46 @@ export default function ProductInvoiceCard({
       addChatMessagesToCache([
         { ...giftWrappedMessageEvent, sig: "", read: false },
       ]);
+    }
+  };
+
+  const validatePaymentData = (
+    price: number,
+    data?: ShippingFormData | ContactFormData,
+  ) => {
+    if (price < 1) {
+      throw new Error("Payment amount must be greater than 0 sats");
+    }
+
+    if (data) {
+      // Type guard to check which form data we received
+      if ("Name" in data) {
+        const shippingData = data as ShippingFormData;
+        if (
+          !shippingData.Name?.trim() ||
+          !shippingData.Address?.trim() ||
+          !shippingData.City?.trim() ||
+          !shippingData["Postal Code"]?.trim() ||
+          !shippingData["State/Province"]?.trim() ||
+          !shippingData.Country?.trim()
+        ) {
+          throw new Error("Required shipping fields are missing");
+        }
+      } else if ("Contact" in data) {
+        const contactData = data as ContactFormData;
+        if (
+          !contactData.Contact?.trim() ||
+          !contactData["Contact Type"]?.trim() ||
+          !contactData.Instructions?.trim()
+        ) {
+          throw new Error("Required contact fields are missing");
+        }
+      }
+      if ("Required" in data) {
+        if (!data["Required"]?.trim()) {
+          throw new Error("Required fields are missing");
+        }
+      }
     }
   };
 
@@ -403,6 +443,35 @@ export default function ProductInvoiceCard({
     additionalInfo?: string,
   ) => {
     try {
+      if (
+        shippingName ||
+        shippingAddress ||
+        shippingCity ||
+        shippingPostalCode ||
+        shippingState ||
+        shippingCountry
+      ) {
+        validatePaymentData(convertedPrice, {
+          Name: shippingName || "",
+          Address: shippingAddress || "",
+          Unit: shippingUnitNo,
+          City: shippingCity || "",
+          "Postal Code": shippingPostalCode || "",
+          "State/Province": shippingState || "",
+          Country: shippingCountry || "",
+          Required: additionalInfo,
+        });
+      } else if (contact || contactType || contactInstructions) {
+        validatePaymentData(convertedPrice, {
+          Contact: contact || "",
+          "Contact Type": contactType || "",
+          Instructions: contactInstructions || "",
+          Required: additionalInfo,
+        });
+      } else {
+        validatePaymentData(convertedPrice);
+      }
+
       setShowInvoiceCard(true);
       const wallet = new CashuWallet(new CashuMint(mints[0]));
 
@@ -1027,6 +1096,43 @@ export default function ProductInvoiceCard({
     additionalInfo?: string,
   ) => {
     try {
+      if (!mints || mints.length === 0) {
+        throw new Error("No Cashu mint available");
+      }
+
+      if (!walletContext) {
+        throw new Error("Wallet context not available");
+      }
+
+      if (
+        shippingName ||
+        shippingAddress ||
+        shippingCity ||
+        shippingPostalCode ||
+        shippingState ||
+        shippingCountry
+      ) {
+        validatePaymentData(price, {
+          Name: shippingName || "",
+          Address: shippingAddress || "",
+          Unit: shippingUnitNo,
+          City: shippingCity || "",
+          "Postal Code": shippingPostalCode || "",
+          "State/Province": shippingState || "",
+          Country: shippingCountry || "",
+          Required: additionalInfo,
+        });
+      } else if (contact || contactType || contactInstructions) {
+        validatePaymentData(price, {
+          Contact: contact || "",
+          "Contact Type": contactType || "",
+          Instructions: contactInstructions || "",
+          Required: additionalInfo,
+        });
+      } else {
+        validatePaymentData(price);
+      }
+
       const mint = new CashuMint(mints[0]);
       const wallet = new CashuWallet(mint);
       const mintKeySetIds = await wallet.getKeySets();

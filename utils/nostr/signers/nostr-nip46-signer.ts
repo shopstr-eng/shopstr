@@ -37,8 +37,6 @@ export class NostrNIP46Signer implements NostrSigner {
   private readonly challengeHandler: ChallengeHandler;
   private readonly instanceId: string = uuidv4();
   private readonly pendingChallenges: Map<string, AbortController> = new Map();
-  private pubkey?: string;
-  private connectingPromise?: Promise<void>;
 
   // used to increment the requestId
   private eventCounter: number = 0;
@@ -168,38 +166,12 @@ export class NostrNIP46Signer implements NostrSigner {
     }
   }
 
-  private async connect(permissions?: string[]) {
-    // if there is a pending connection attempt, we'll wait for it
-    if (this.connectingPromise) {
-      await this.connectingPromise;
-      return;
-    }
-
-    if (this.pubkey) return;
-
-    const newConnection = async () => {
-      const args: string[] = [];
-      args.push(this.bunker.bunkerPubkey);
-      args.push(this.bunker.secret || "");
-      if (permissions) args.push(permissions.join(","));
-      const resp = await this.sendRPC("connect", args);
-      if (resp !== "ack") throw new Error("Connection failed " + resp);
-      this.pubkey = await this.sendRPC("get_public_key", []);
-    };
-
-    const checkConnection = async () => {
-      this.pubkey = await this.sendRPC("get_public_key", []);
-    };
-
-    // Try to reuse or establish a connection.
-    //      - If the app is already authorized, checkConnection will succeed.
-    //      - If the app is not authorized, newConnection will succeed.
-    // In any case, when this method resolves successfully, it means the app is authorized.
-    this.connectingPromise = newPromiseWithTimeout<void>((resolve, reject) => {
-      Promise.race([newConnection(), checkConnection()]).then(resolve, reject);
-    });
-
-    await this.connectingPromise;
+  public async connect(permissions?: string[]) {
+    const args: string[] = [];
+    args.push(this.bunker.bunkerPubkey);
+    args.push(this.bunker.secret || "");
+    if (permissions) args.push(permissions.join(","));
+    return await this.sendRPC("connect", args);
   }
 
   public async close(): Promise<void> {
@@ -207,8 +179,7 @@ export class NostrNIP46Signer implements NostrSigner {
   }
 
   public async getPubKey(): Promise<string> {
-    await this.connect();
-    return this.pubkey!;
+    return await this.sendRPC("get_public_key", []);
   }
 
   public async getNPub(): Promise<string> {
@@ -217,7 +188,6 @@ export class NostrNIP46Signer implements NostrSigner {
   }
 
   public async sign(event: NostrEventTemplate): Promise<NostrEvent> {
-    await this.connect();
     const signedEvent = await this.sendRPC("sign_event", [
       JSON.stringify(event),
     ]);
@@ -225,12 +195,10 @@ export class NostrNIP46Signer implements NostrSigner {
   }
 
   public async encrypt(pubkey: string, plainText: string): Promise<string> {
-    await this.connect();
     return await this.sendRPC("nip44_encrypt", [pubkey, plainText]);
   }
 
   public async decrypt(pubkey: string, cipherText: string): Promise<string> {
-    await this.connect();
     return await this.sendRPC("nip44_decrypt", [pubkey, cipherText]);
   }
 
@@ -272,7 +240,7 @@ export class NostrNIP46Signer implements NostrSigner {
       this.appPrivKey,
       userPubKey,
     );
-    signEvent.content = await nip44.encrypt(signEvent.content, conversationKey);
+    signEvent.content = nip44.encrypt(signEvent.content, conversationKey);
     const signedEvent = finalizeEvent(signEvent, this.appPrivKey);
 
     // we need to start waiting for the response before we publish the event

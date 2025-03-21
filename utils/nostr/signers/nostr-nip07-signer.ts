@@ -33,6 +33,10 @@ export class NostrNIP07Signer implements NostrSigner {
     return new NostrNIP07Signer({});
   }
 
+  public async connect(): Promise<string> {
+    return "connected";
+  }
+
   public async getPubKey(): Promise<string> {
     const pubkey = await window.nostr.getPublicKey();
     return pubkey;

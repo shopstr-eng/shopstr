@@ -1,4 +1,3 @@
-import { useContext } from "react";
 import {
   finalizeEvent,
   generateSecretKey,
@@ -11,7 +10,6 @@ import {
 import { NostrEvent, ProductFormValues } from "@/utils/types/types";
 import { ProductData } from "@/components/utility/product-parser-functions";
 import { Proof } from "@cashu/cashu-ts";
-import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { removeProductFromCache } from "@/pages/api/nostr/cache-service";
