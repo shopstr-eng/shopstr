@@ -1,21 +1,14 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/router";
-import {
-  getLocalStorageData,
-  validPassphrase,
-} from "../../components/utility/nostr-helper-functions";
+import { getLocalStorageData } from "../../components/utility/nostr-helper-functions";
 import MintButton from "../../components/wallet/mint-button";
 import ReceiveButton from "../../components/wallet/receive-button";
 import SendButton from "../../components/wallet/send-button";
 import PayButton from "../../components/wallet/pay-button";
 import Transactions from "../../components/wallet/transactions";
 import { CashuMint, CashuWallet, MintKeyset, Proof } from "@cashu/cashu-ts";
-import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
 
 const Wallet = () => {
-  const [enterPassphrase, setEnterPassphrase] = useState(false);
-  const [passphrase, setPassphrase] = useState("");
-
   const [totalBalance, setTotalBalance] = useState(0);
   const [walletBalance, setWalletBalance] = useState(0);
   const [mint, setMint] = useState("");
@@ -24,13 +17,7 @@ const Wallet = () => {
   const router = useRouter();
 
   const localStorageData = useMemo(() => getLocalStorageData(), []);
-  const { signInMethod, mints, tokens } = localStorageData;
-
-  useEffect(() => {
-    if (signInMethod === "nsec" && !validPassphrase(passphrase)) {
-      setEnterPassphrase(true);
-    }
-  }, [signInMethod, passphrase]);
+  const { mints, tokens } = localStorageData;
 
   useEffect(() => {
     let currentMint = new CashuMint(mints[0]);
@@ -130,24 +117,17 @@ const Wallet = () => {
           </p>
         </center>
         <div className="flex justify-center">
-          <ReceiveButton passphrase={passphrase} />
-          <SendButton passphrase={passphrase} />
+          <ReceiveButton />
+          <SendButton />
         </div>
         <div className="flex justify-center">
-          <MintButton passphrase={passphrase} />
-          <PayButton passphrase={passphrase} />
+          <MintButton />
+          <PayButton />
         </div>
         <div className="flex justify-center">
           <Transactions />
         </div>
       </div>
-      <RequestPassphraseModal
-        passphrase={passphrase}
-        setCorrectPassphrase={setPassphrase}
-        isOpen={enterPassphrase}
-        setIsOpen={setEnterPassphrase}
-        onCancelRouteTo="/wallet"
-      />
     </>
   );
 };

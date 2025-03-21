@@ -1,29 +1,21 @@
+import { useContext } from "react";
 import { Button, Input } from "@nextui-org/react";
 import { useRef, useState } from "react";
-import {
-  getLocalStorageData,
-  getNsecWithPassphrase,
-  getPrivKeyWithPassphrase,
-  nostrBuildUploadImages,
-  sendBunkerRequest,
-  awaitBunkerResponse,
-} from "../utility/nostr-helper-functions";
-import { finalizeEvent } from "nostr-tools";
+import { nostrBuildUploadImages } from "../utility/nostr-helper-functions";
 import FailureModal from "./failure-modal";
+import { SignerContext } from "@/utils/context/nostr-context";
 
 export const FileUploaderButton = ({
   disabled,
   isIconOnly,
   className,
   children,
-  passphrase,
   imgCallbackOnUpload,
 }: {
   disabled?: any;
   isIconOnly: boolean;
   className: any;
   children: React.ReactNode;
-  passphrase: string;
   imgCallbackOnUpload: (imgUrl: string) => void;
 }) => {
   const [loading, setLoading] = useState(false);
@@ -33,7 +25,7 @@ export const FileUploaderButton = ({
 
   // Create a reference to the hidden file input element
   const hiddenFileInput = useRef<HTMLInputElement>(null);
-  const { signInMethod } = getLocalStorageData();
+  const { signer, isLoggedIn } = useContext(SignerContext);
 
   const uploadImages = async (files: FileList) => {
     try {
@@ -43,32 +35,14 @@ export const FileUploaderButton = ({
         throw new Error("Only images are supported");
       }
       let response;
-      if (signInMethod === "nsec") {
-        if (!passphrase || !getNsecWithPassphrase(passphrase))
-          throw new Error("Invalid passphrase!");
-        const privkey = getPrivKeyWithPassphrase(passphrase);
-        response = await nostrBuildUploadImages(imageFiles, (e) =>
-          Promise.resolve(finalizeEvent(e, privkey as Uint8Array)),
-        );
-      } else if (signInMethod === "extension") {
+
+      if (isLoggedIn) {
         response = await nostrBuildUploadImages(
           imageFiles,
-          async (e) => await window.nostr.signEvent(e),
+          async (e) => await signer!.sign(e),
         );
-      } else if (signInMethod === "bunker") {
-        response = await nostrBuildUploadImages(imageFiles, async (e) => {
-          const requestId = crypto.randomUUID();
-          await sendBunkerRequest("sign_event", requestId, e);
-          let signedEvent;
-          while (!signedEvent) {
-            signedEvent = await awaitBunkerResponse(requestId);
-            if (!signedEvent) {
-              await new Promise((resolve) => setTimeout(resolve, 2100));
-            }
-          }
-          return JSON.parse(signedEvent);
-        });
       }
+
       const imageUrls = response?.map((i) => i.url);
       if (imageUrls && imageUrls.length > 0) {
         return imageUrls;

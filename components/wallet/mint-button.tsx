@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useContext, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import {
   BanknotesIcon,
@@ -27,8 +27,10 @@ import {
 } from "../utility/nostr-helper-functions";
 import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
 import FailureModal from "@/components/utility-components/failure-modal";
+import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
+import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
 
-const MintButton = ({ passphrase }: { passphrase?: string }) => {
+const MintButton = () => {
   const [showMintModal, setShowMintModal] = useState(false);
   const [showInvoiceCard, setShowInvoiceCard] = useState(false);
 
@@ -40,7 +42,10 @@ const MintButton = ({ passphrase }: { passphrase?: string }) => {
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
 
-  const { mints, tokens, history, signInMethod } = getLocalStorageData();
+  const { signer } = useContext(SignerContext);
+  const { nostr } = useContext(NostrContext);
+
+  const { mints, tokens, history } = getLocalStorageData();
 
   const {
     handleSubmit: handleMintSubmit,
@@ -121,11 +126,12 @@ const MintButton = ({ passphrase }: { passphrase?: string }) => {
             ]),
           );
           await publishProofEvent(
+            nostr!,
+            signer!,
             mints[0],
             proofs,
             "in",
             numSats.toString(),
-            passphrase,
           );
           // potentially capture a metric for the mint invoice
           setPaymentConfirmed(true);
@@ -231,7 +237,7 @@ const MintButton = ({ passphrase }: { passphrase?: string }) => {
                   );
                 }}
               />
-              {signInMethod === "bunker" && (
+              {signer instanceof NostrNIP46Signer && (
                 <div className="mx-4 my-2 flex items-center justify-center text-center">
                   <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
                   <p className="ml-2 text-xs text-light-text dark:text-dark-text">

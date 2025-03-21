@@ -44,8 +44,6 @@ import {
   sendGiftWrappedMessageEvent,
   generateKeys,
   getLocalStorageData,
-  validPassphrase,
-  isUserLoggedIn,
   publishProofEvent,
 } from "./utility/nostr-helper-functions";
 import { addChatMessagesToCache } from "../pages/api/nostr/cache-service";
@@ -62,11 +60,16 @@ import {
   captureInvoicePaidmetric,
 } from "./utility/metrics-helper-functions";
 import SignInModal from "./sign-in/SignInModal";
-import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
 import FailureModal from "@/components/utility-components/failure-modal";
 import ShippingForm from "./shipping-form";
 import ContactForm from "./contact-form";
 import CombinedContactForm from "./combined-contact-form";
+import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
+import {
+  ShippingFormData,
+  ContactFormData,
+  CombinedFormData,
+} from "@/utils/types/types";
 
 export default function CartInvoiceCard({
   products,
@@ -85,15 +88,13 @@ export default function CartInvoiceCard({
   totalShippingCost: number;
   totalCost: number;
 }) {
-  const { userPubkey, userNPub, signInMethod, mints, tokens, history } =
-    getLocalStorageData();
+  const { mints, tokens, history } = getLocalStorageData();
   const router = useRouter();
 
   const chatsContext = useContext(ChatsContext);
   const profileContext = useContext(ProfileMapContext);
-
-  const [enterPassphrase, setEnterPassphrase] = useState(false);
-  const [passphrase, setPassphrase] = useState("");
+  const { nostr } = useContext(NostrContext);
+  const { signer, isLoggedIn: userLoggedIn } = useContext(SignerContext);
 
   const [showInvoiceCard, setShowInvoiceCard] = useState(false);
 
@@ -157,12 +158,6 @@ export default function CartInvoiceCard({
     reset: combinedReset,
   } = useForm();
 
-  useEffect(() => {
-    if (signInMethod === "nsec" && !validPassphrase(passphrase)) {
-      setEnterPassphrase(true);
-    }
-  }, [signInMethod, passphrase]);
-
   const generateNewKeys = async () => {
     try {
       const { nsec: nsecForSender, npub: npubForSender } = await generateKeys();
@@ -198,6 +193,12 @@ export default function CartInvoiceCard({
     const newKeys = await generateNewKeys();
     if (!newKeys) {
       setFailureText("Failed to generate new keys for messages!");
+      setShowFailureModal(true);
+      return;
+    }
+
+    if (!userLoggedIn) {
+      setFailureText("User is not logged in!");
       setShowFailureModal(true);
       return;
     }
@@ -252,10 +253,10 @@ export default function CartInvoiceCard({
       messageOptions,
     );
     let sealedEvent = await constructMessageSeal(
+      signer!,
       giftWrappedMessageEvent,
       decodedRandomPubkeyForSender.data as string,
       pubkeyToReceiveMessage,
-      undefined,
       decodedRandomPrivkeyForSender.data as Uint8Array,
     );
     let giftWrappedEvent = await constructMessageGiftWrap(
@@ -278,6 +279,60 @@ export default function CartInvoiceCard({
       addChatMessagesToCache([
         { ...giftWrappedMessageEvent, sig: "", read: false },
       ]);
+    }
+  };
+
+  const validatePaymentData = (
+    price: number,
+    data?: ShippingFormData | ContactFormData | CombinedFormData,
+  ) => {
+    if (price < 1) {
+      throw new Error("Payment amount must be greater than 0 sats");
+    }
+
+    if (data) {
+      if ("Name" in data && "Contact" in data) {
+        const combinedData = data as CombinedFormData;
+        if (
+          !combinedData.Name?.trim() ||
+          !combinedData.Address?.trim() ||
+          !combinedData.City?.trim() ||
+          !combinedData["Postal Code"]?.trim() ||
+          !combinedData["State/Province"]?.trim() ||
+          !combinedData.Country?.trim() ||
+          !combinedData.Contact?.trim() ||
+          !combinedData["Contact Type"]?.trim() ||
+          !combinedData.Instructions?.trim()
+        ) {
+          throw new Error("Required shipping fields are missing");
+        }
+      } else if ("Name" in data) {
+        const shippingData = data as ShippingFormData;
+        if (
+          !shippingData.Name?.trim() ||
+          !shippingData.Address?.trim() ||
+          !shippingData.City?.trim() ||
+          !shippingData["Postal Code"]?.trim() ||
+          !shippingData["State/Province"]?.trim() ||
+          !shippingData.Country?.trim()
+        ) {
+          throw new Error("Required shipping fields are missing");
+        }
+      } else if ("Contact" in data) {
+        const contactData = data as ContactFormData;
+        if (
+          !contactData.Contact?.trim() ||
+          !contactData["Contact Type"]?.trim() ||
+          !contactData.Instructions?.trim()
+        ) {
+          throw new Error("Required contact fields are missing");
+        }
+      }
+      if ("Required" in data) {
+        if (!data["Required"]?.trim()) {
+          throw new Error("Required fields are missing");
+        }
+      }
     }
   };
 
@@ -466,6 +521,35 @@ export default function CartInvoiceCard({
     additionalInfo?: string,
   ) => {
     try {
+      if (
+        shippingName ||
+        shippingAddress ||
+        shippingCity ||
+        shippingPostalCode ||
+        shippingState ||
+        shippingCountry
+      ) {
+        validatePaymentData(convertedPrice, {
+          Name: shippingName || "",
+          Address: shippingAddress || "",
+          Unit: shippingUnitNo,
+          City: shippingCity || "",
+          "Postal Code": shippingPostalCode || "",
+          "State/Province": shippingState || "",
+          Country: shippingCountry || "",
+          Required: additionalInfo,
+        });
+      } else if (contact || contactType || contactInstructions) {
+        validatePaymentData(convertedPrice, {
+          Contact: contact || "",
+          "Contact Type": contactType || "",
+          Instructions: contactInstructions || "",
+          Required: additionalInfo,
+        });
+      } else {
+        validatePaymentData(convertedPrice);
+      }
+
       setShowInvoiceCard(true);
       const wallet = new CashuWallet(new CashuMint(mints[0]));
 
@@ -609,6 +693,8 @@ export default function CartInvoiceCard({
     hash?: string,
     additionalInfo?: string,
   ) => {
+    const userNPub = await signer?.getNPub?.();
+    const userPubkey = await signer?.getPubKey?.();
     let remainingProofs = proofs;
     for (const product of products) {
       const title = product.title;
@@ -1198,6 +1284,43 @@ export default function CartInvoiceCard({
     additionalInfo?: string,
   ) => {
     try {
+      if (!mints || mints.length === 0) {
+        throw new Error("No Cashu mint available");
+      }
+
+      if (!walletContext) {
+        throw new Error("Wallet context not available");
+      }
+
+      if (
+        shippingName ||
+        shippingAddress ||
+        shippingCity ||
+        shippingPostalCode ||
+        shippingState ||
+        shippingCountry
+      ) {
+        validatePaymentData(price, {
+          Name: shippingName || "",
+          Address: shippingAddress || "",
+          Unit: shippingUnitNo,
+          City: shippingCity || "",
+          "Postal Code": shippingPostalCode || "",
+          "State/Province": shippingState || "",
+          Country: shippingCountry || "",
+          Required: additionalInfo,
+        });
+      } else if (contact || contactType || contactInstructions) {
+        validatePaymentData(price, {
+          Contact: contact || "",
+          "Contact Type": contactType || "",
+          Instructions: contactInstructions || "",
+          Required: additionalInfo,
+        });
+      } else {
+        validatePaymentData(price);
+      }
+
       const mint = new CashuMint(mints[0]);
       const wallet = new CashuWallet(mint);
       const mintKeySetIds = await wallet.getKeySets();
@@ -1277,11 +1400,12 @@ export default function CartInvoiceCard({
         ]),
       );
       await publishProofEvent(
+        nostr!,
+        signer!,
         mints[0],
         changeProofs && changeProofs.length >= 1 ? changeProofs : [],
         "out",
         price.toString(),
-        passphrase,
         deletedEventIds,
       );
       if (setCashuPaymentSent) {
@@ -1354,7 +1478,6 @@ export default function CartInvoiceCard({
             type="submit"
             className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
             onClick={() => {
-              let userLoggedIn = isUserLoggedIn();
               if (!userLoggedIn) {
                 onOpen();
                 return;
@@ -1727,13 +1850,6 @@ export default function CartInvoiceCard({
         </>
       ) : null}
       <SignInModal isOpen={isOpen} onClose={onClose} />
-      <RequestPassphraseModal
-        passphrase={passphrase}
-        setCorrectPassphrase={setPassphrase}
-        isOpen={enterPassphrase}
-        setIsOpen={setEnterPassphrase}
-        onCancelRouteTo={"/cart"}
-      />
       <FailureModal
         bodyText={failureText}
         isOpen={showFailureModal}

@@ -28,10 +28,10 @@ import {
   sendGiftWrappedMessageEvent,
   publishReviewEvent,
   generateKeys,
-  getLocalStorageData,
 } from "../utility/nostr-helper-functions";
 import { calculateWeightedScore } from "../utility/review-parser-functions";
 import { ReviewsContext } from "../../utils/context/context";
+import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
 
 export const ChatPanel = ({
   handleGoBack,
@@ -40,7 +40,6 @@ export const ChatPanel = ({
   chatsMap,
   isSendingDMLoading,
   isPayment,
-  passphrase,
 }: {
   handleGoBack: () => void;
   handleSendMessage: (message: string) => Promise<void>;
@@ -48,7 +47,6 @@ export const ChatPanel = ({
   chatsMap: Map<string, ChatObject>;
   isSendingDMLoading: boolean;
   isPayment: boolean;
-  passphrase?: string;
 }) => {
   const [messageInput, setMessageInput] = useState("");
   const [messages, setMessages] = useState<NostrMessageEvent[]>([]); // [chatPubkey, chat]
@@ -94,7 +92,12 @@ export const ChatPanel = ({
     reset: reviewReset,
   } = useForm();
 
-  const { userPubkey, userNPub } = getLocalStorageData();
+  const {
+    signer,
+    pubkey: userPubkey,
+    npub: userNPub,
+  } = useContext(SignerContext);
+  const { nostr } = useContext(NostrContext);
 
   const bottomDivRef = useRef<HTMLDivElement>(null);
 
@@ -180,10 +183,10 @@ export const ChatPanel = ({
         },
       );
       let sealedEvent = await constructMessageSeal(
+        signer!,
         giftWrappedMessageEvent,
         decodedRandomPubkeyForSender.data as string,
         buyerPubkey,
-        undefined,
         decodedRandomPrivkeyForSender.data as Uint8Array,
       );
       let giftWrappedEvent = await constructMessageGiftWrap(
@@ -210,8 +213,8 @@ export const ChatPanel = ({
         eventTags.push(["rating", value.toString(), key]);
       });
       const productReviewsData = new Map<string, string[][]>();
-      productReviewsData.set(userPubkey, eventTags);
-      await publishReviewEvent(data.comment, eventTags, passphrase);
+      productReviewsData.set(userPubkey!, eventTags);
+      await publishReviewEvent(nostr!, signer!, data.comment, eventTags);
       reviewsContext.updateProductReviewsData(
         merchantPubkey,
         dTag,
@@ -285,7 +288,6 @@ export const ChatPanel = ({
                 messageEvent={messageEvent}
                 index={index}
                 currentChatPubkey={currentChatPubkey}
-                passphrase={passphrase}
                 setBuyerPubkey={setBuyerPubkey}
                 setCanReview={setCanReview}
                 setProductAddress={setProductAddress}

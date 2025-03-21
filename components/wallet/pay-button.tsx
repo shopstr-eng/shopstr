@@ -25,8 +25,10 @@ import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { CashuMint, CashuWallet, MintKeyset, Proof } from "@cashu/cashu-ts";
 import { formatWithCommas } from "../utility-components/display-monetary-info";
 import { CashuWalletContext } from "../../utils/context/context";
+import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
+import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
 
-const PayButton = ({ passphrase }: { passphrase?: string }) => {
+const PayButton = () => {
   const [showPayModal, setShowPayModal] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
   const [paymentFailed, setPaymentFailed] = useState(false);
@@ -35,7 +37,10 @@ const PayButton = ({ passphrase }: { passphrase?: string }) => {
   // const [totalAmount, setTotalAmount] = useState(0);
   const [feeReserveAmount, setFeeReserveAmount] = useState("");
 
-  const { mints, tokens, history, signInMethod } = getLocalStorageData();
+  const { signer } = useContext(SignerContext);
+  const { nostr } = useContext(NostrContext);
+
+  const { mints, tokens, history } = getLocalStorageData();
 
   const { theme } = useTheme();
 
@@ -160,11 +165,12 @@ const PayButton = ({ passphrase }: { passphrase?: string }) => {
         ]),
       );
       await publishProofEvent(
+        nostr!,
+        signer!,
         mints[0],
         changeProofs && changeProofs.length >= 1 ? changeProofs : [],
         "out",
         transactionAmount.toString(),
-        passphrase,
         deletedEventIds,
       );
       setIsPaid(true);
@@ -265,7 +271,7 @@ const PayButton = ({ passphrase }: { passphrase?: string }) => {
                   );
                 }}
               />
-              {signInMethod === "bunker" && (
+              {signer instanceof NostrNIP46Signer && (
                 <div className="mx-4 my-2 flex items-center justify-center text-center">
                   <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
                   <p className="ml-2 text-xs text-light-text dark:text-dark-text">

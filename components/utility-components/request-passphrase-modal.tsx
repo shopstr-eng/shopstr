@@ -8,58 +8,51 @@ import {
   Input,
   Button,
 } from "@nextui-org/react";
-import { validPassphrase } from "../utility/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
 import { useRouter } from "next/router";
 
-export default function RequestPassphraseModal({
-  passphrase,
-  setCorrectPassphrase,
+export default function PassphraseChallengeModal({
+  actionOnSubmit,
+  actionOnCancel,
   isOpen,
   setIsOpen,
-  actionOnSubmit,
   onCancelRouteTo,
+  error,
 }: {
-  passphrase?: string;
-  setCorrectPassphrase?: (passphrase: string) => void;
+  actionOnSubmit?: (passphrase: string, remind: boolean) => void;
+  actionOnCancel?: () => void;
   isOpen: boolean;
   setIsOpen: (value: boolean) => void;
-  actionOnSubmit?: (passphrase: string) => void; // callback function to be called after getting correct passphrase (delete listing)
   onCancelRouteTo?: string; // route to go to on cancel
+  error?: Error;
 }) {
-  const [passphraseInput, setPassphraseInput] = useState(
-    passphrase ? passphrase : "",
-  ); // passphrase to be entered by user
+  const [remindToggled, setRemindToggled] = useState(false);
+  const [passphraseInput, setPassphraseInput] = useState("");
+  const isButtonDisabled = useMemo(() => {
+    return passphraseInput.trim().length === 0;
+  }, [passphraseInput]);
   const router = useRouter();
   const passphraseInputRef = useRef<HTMLInputElement>(null);
-  const isButtonDisabled = useMemo(() => {
-    return !validPassphrase(passphraseInput);
-  }, [passphraseInput]);
 
   const buttonClassName = useMemo(() => {
-    const disabledStyle = " from-gray-300 to-gray-400 cursor-not-allowed";
     const enabledStyle = SHOPSTRBUTTONCLASSNAMES;
-    const className =
-      "text-white shadow-lg bg-gradient-to-tr" +
-      (isButtonDisabled ? disabledStyle : enabledStyle);
+    const className = "text-white shadow-lg bg-gradient-to-tr" + enabledStyle;
     return className;
-  }, [isButtonDisabled]);
+  }, []);
 
   const onSubmit = () => {
     if (isButtonDisabled && passphraseInputRef.current) {
       passphraseInputRef.current.focus();
     } else if (!isButtonDisabled) {
       setIsOpen(false);
-      if (setCorrectPassphrase) {
-        setCorrectPassphrase(passphraseInput);
-      }
       if (actionOnSubmit) {
-        actionOnSubmit(passphraseInput);
+        actionOnSubmit(passphraseInput, remindToggled);
       }
     }
   };
 
   const onCancel = () => {
+    if (actionOnCancel) actionOnCancel();
     setIsOpen(false);
     onCancelRouteTo
       ? router.push(onCancelRouteTo)
@@ -102,6 +95,19 @@ export default function RequestPassphraseModal({
             }}
             value={passphraseInput}
           />
+          <div className="mt-4 flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={remindToggled}
+              onChange={() => setRemindToggled(!remindToggled)}
+            />
+            <label className="text-light-text dark:text-dark-text">
+              Remember passphrase for this session
+            </label>
+          </div>
+          {error && (
+            <div className="mt-2 text-sm text-red-500">{error.message}</div>
+          )}
         </ModalBody>
 
         <ModalFooter>

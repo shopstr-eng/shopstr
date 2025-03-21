@@ -10,19 +10,17 @@ import {
 } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
 import {
-  generateKeys,
   setLocalStorageDataOnSignIn,
   validateNSecKey,
   parseBunkerToken,
-  sendBunkerRequest,
-  awaitBunkerResponse,
 } from "@/components/utility/nostr-helper-functions";
+import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 import { RelaysContext } from "../../utils/context/context";
-import { getPublicKey, nip19 } from "nostr-tools";
-import CryptoJS from "crypto-js";
 import { useRouter } from "next/router";
 import FailureModal from "../../components/utility-components/failure-modal";
-
+import { SignerContext } from "@/utils/context/nostr-context";
+import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
+import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
 export default function SignInModal({
   isOpen,
   onClose,
@@ -34,12 +32,13 @@ export default function SignInModal({
   const [validBunkerToken, setValidBunkerToken] =
     useState<InputProps["color"]>("default");
 
+  const [passphrase, setPassphrase] = useState<string>("");
   const [privateKey, setPrivateKey] = useState<string>("");
   const [validPrivateKey, setValidPrivateKey] =
     useState<InputProps["color"]>("default");
-  const [passphrase, setPassphrase] = useState<string>("");
 
   const [showBunkerSignIn, setShowBunkerSignIn] = useState(false);
+  const [isBunkerConnecting, setIsBunkerConnecting] = useState(false);
 
   const [showNsecSignIn, setShowNsecSignIn] = useState(false);
 
@@ -49,158 +48,58 @@ export default function SignInModal({
   const relaysContext = useContext(RelaysContext);
 
   const router = useRouter();
+  const { newSigner } = useContext(SignerContext);
+
+  const saveSigner = (signer: NostrSigner) => {
+    if (
+      !relaysContext.isLoading &&
+      relaysContext.relayList.length >= 0 &&
+      relaysContext.readRelayList &&
+      relaysContext.writeRelayList
+    ) {
+      const generalRelays = relaysContext.relayList;
+      const readRelays = relaysContext.readRelayList;
+      const writeRelays = relaysContext.writeRelayList;
+      setLocalStorageDataOnSignIn({
+        signer,
+        relays: generalRelays,
+        readRelays: readRelays,
+        writeRelays: writeRelays,
+      });
+    } else {
+      setLocalStorageDataOnSignIn({
+        signer,
+      });
+    }
+  };
 
   const startExtensionLogin = async () => {
-    let isValidExtenstion = true;
+    setShowBunkerSignIn(false);
+    setShowNsecSignIn(false);
     try {
-      if (!window.nostr.nip44) {
-        isValidExtenstion = false;
-        throw new Error(
-          "Please use a NIP-44 compatible extension like Alby or nos2x",
-        );
-      }
-      // @ts-ignore
-      var pk = await window.nostr.getPublicKey();
-      if (
-        !relaysContext.isLoading &&
-        relaysContext.relayList.length >= 0 &&
-        relaysContext.readRelayList &&
-        relaysContext.writeRelayList
-      ) {
-        const generalRelays = relaysContext.relayList;
-        const readRelays = relaysContext.readRelayList;
-        const writeRelays = relaysContext.writeRelayList;
-        setLocalStorageDataOnSignIn({
-          signInMethod: "extension",
-          pubkey: pk,
-          relays: generalRelays,
-          readRelays: readRelays,
-          writeRelays: writeRelays,
-        });
-      } else {
-        setLocalStorageDataOnSignIn({
-          signInMethod: "extension",
-          pubkey: pk,
-        });
-      }
+      const signer = newSigner!("nip07", {});
+      await signer.getPubKey();
+      saveSigner(signer);
       onClose();
     } catch (error) {
-      if (!isValidExtenstion) {
-        setFailureText(
-          "Extension sign-in failed! Please use a NIP-44 compatible extension like Alby or nos2x.",
-        );
-        setShowFailureModal(true);
-      } else {
-        setFailureText("Extension sign-in failed!");
-        setShowFailureModal(true);
-      }
+      setFailureText("Extension sign-in failed! " + error);
+      setShowFailureModal(true);
     }
   };
 
   const startBunkerLogin = async () => {
+    setIsBunkerConnecting(true);
     try {
-      const bunkerTokenParams = parseBunkerToken(bunkerToken);
-      if (bunkerTokenParams) {
-        const { remotePubkey, relays, secret } = bunkerTokenParams;
-        let clientPubkey;
-        let clientPrivkey;
-        const { nsec, npub } = await generateKeys();
-        clientPubkey = npub;
-        clientPrivkey = nsec;
-        const connectId = crypto.randomUUID();
-        await sendBunkerRequest(
-          "connect",
-          connectId,
-          undefined,
-          undefined,
-          undefined,
-          clientPubkey,
-          clientPrivkey,
-          remotePubkey,
-          relays,
-          secret,
-        );
-        let ack;
-        while (!ack) {
-          ack = await awaitBunkerResponse(
-            connectId,
-            clientPubkey,
-            clientPrivkey,
-            remotePubkey,
-            relays,
-          );
-          if (!ack) {
-            await new Promise((resolve) => setTimeout(resolve, 2100));
-          }
-        }
-
-        if (ack) {
-          const gpkId = crypto.randomUUID();
-          await sendBunkerRequest(
-            "get_public_key",
-            gpkId,
-            undefined,
-            undefined,
-            undefined,
-            clientPubkey,
-            clientPrivkey,
-            remotePubkey,
-            relays,
-            secret,
-          );
-          let pk;
-          while (!pk) {
-            pk = await awaitBunkerResponse(
-              gpkId,
-              clientPubkey,
-              clientPrivkey,
-              remotePubkey,
-              relays,
-            );
-            if (!pk) {
-              await new Promise((resolve) => setTimeout(resolve, 2100));
-            }
-          }
-          if (
-            !relaysContext.isLoading &&
-            relaysContext.relayList.length >= 0 &&
-            relaysContext.readRelayList &&
-            relaysContext.writeRelayList
-          ) {
-            const generalRelays = relaysContext.relayList;
-            const readRelays = relaysContext.readRelayList;
-            const writeRelays = relaysContext.writeRelayList;
-            setLocalStorageDataOnSignIn({
-              signInMethod: "bunker",
-              pubkey: pk,
-              relays: generalRelays,
-              readRelays: readRelays,
-              writeRelays: writeRelays,
-              clientPubkey: clientPubkey,
-              clientPrivkey: clientPrivkey,
-              bunkerRemotePubkey: remotePubkey,
-              bunkerRelays: relays,
-              bunkerSecret: secret,
-            });
-          } else {
-            setLocalStorageDataOnSignIn({
-              signInMethod: "bunker",
-              pubkey: pk,
-              clientPubkey: clientPubkey,
-              clientPrivkey: clientPrivkey,
-              bunkerRemotePubkey: remotePubkey,
-              bunkerRelays: relays,
-              bunkerSecret: secret,
-            });
-          }
-          onClose();
-        } else {
-          throw new Error("Bunker sign-in failed!");
-        }
-      }
+      const signer = newSigner!("nip46", { bunker: bunkerToken });
+      await signer.connect();
+      saveSigner(signer);
+      setIsBunkerConnecting(false);
+      await signer.getPubKey();
+      onClose();
     } catch (error) {
       setFailureText("Bunker sign-in failed!");
       setShowFailureModal(true);
+      setIsBunkerConnecting(false);
     }
   };
 
@@ -223,41 +122,22 @@ export default function SignInModal({
         setFailureText("No passphrase provided!");
         setShowFailureModal(true);
       } else {
-        let { data: sk } = nip19.decode(privateKey);
-        let pk = getPublicKey(sk as Uint8Array);
-        let encryptedPrivateKey = CryptoJS.AES.encrypt(
+        const { encryptedPrivKey, pubkey } = NostrNSecSigner.getEncryptedNSEC(
           privateKey,
           passphrase,
-        ).toString();
+        );
 
         setTimeout(() => {
           onClose(); // avoids tree walker issue by closing modal
         }, 500);
 
-        if (
-          !relaysContext.isLoading &&
-          relaysContext.relayList.length >= 0 &&
-          relaysContext.readRelayList &&
-          relaysContext.writeRelayList
-        ) {
-          const generalRelays = relaysContext.relayList;
-          const readRelays = relaysContext.readRelayList;
-          const writeRelays = relaysContext.writeRelayList;
-          setLocalStorageDataOnSignIn({
-            signInMethod: "nsec",
-            pubkey: pk,
-            encryptedPrivateKey: encryptedPrivateKey,
-            relays: generalRelays,
-            readRelays: readRelays,
-            writeRelays: writeRelays,
-          });
-        } else {
-          setLocalStorageDataOnSignIn({
-            signInMethod: "nsec",
-            pubkey: pk,
-            encryptedPrivateKey: encryptedPrivateKey,
-          });
-        }
+        const signer = newSigner!("nsec", {
+          encryptedPrivKey: encryptedPrivKey,
+          pubkey,
+        });
+        await signer.getPubKey();
+        saveSigner(signer);
+        onClose();
       }
     } else {
       setFailureText(
@@ -284,6 +164,7 @@ export default function SignInModal({
         isOpen={isOpen}
         onClose={() => {
           setShowBunkerSignIn(false);
+          setIsBunkerConnecting(false);
           setBunkerToken("");
           setShowNsecSignIn(false);
           setPrivateKey("");
@@ -346,7 +227,10 @@ export default function SignInModal({
                   <div className="flex flex-col	">
                     <div className="">
                       <Button
-                        onClick={() => setShowBunkerSignIn(true)}
+                        onClick={() => {
+                          setShowNsecSignIn(false);
+                          setShowBunkerSignIn(true);
+                        }}
                         className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
                           showBunkerSignIn ? "hidden" : ""
                         }`}
@@ -376,7 +260,13 @@ export default function SignInModal({
                           onClick={startBunkerLogin}
                           isDisabled={validBunkerToken != "success"} // Disable the button only if both key strings are invalid or the button has already been clicked
                         >
-                          Bunker Sign-in
+                          {isBunkerConnecting ? (
+                            <div className="flex items-center justify-center">
+                              <ShopstrSpinner />
+                            </div>
+                          ) : (
+                            <>Bunker Sign-in</>
+                          )}
                         </Button>
                       </div>
                     </div>
@@ -386,7 +276,10 @@ export default function SignInModal({
                 <div className="flex flex-col	">
                   <div className="">
                     <Button
-                      onClick={() => setShowNsecSignIn(true)}
+                      onClick={() => {
+                        setShowBunkerSignIn(false);
+                        setShowNsecSignIn(true);
+                      }}
                       className={`mt-2 w-full ${
                         showNsecSignIn ? "hidden" : ""
                       }`}
