@@ -18,28 +18,25 @@ import {
   EyeIcon,
 } from "@heroicons/react/24/outline";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
-import {
-  getNsecWithPassphrase,
-  getLocalStorageData,
-  validPassphrase,
-  createNostrProfileEvent,
-} from "@/components/utility/nostr-helper-functions";
+import { SignerContext, NostrContext } from "@/utils/context/nostr-context";
+import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
+import { createNostrProfileEvent } from "@/components/utility/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
-import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 
 const UserProfilePage = () => {
-  const [enterPassphrase, setEnterPassphrase] = useState(false);
-  const [passphrase, setPassphrase] = useState("");
+  const { nostr } = useContext(NostrContext);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
   const [isFetchingProfile, setIsFetchingProfile] = useState(false);
-  const [userPubkey, setUserPubkey] = useState("");
+  const {
+    signer,
+    pubkey: userPubkey,
+    npub: userNPub,
+  } = useContext(SignerContext);
   const [isNPubCopied, setIsNPubCopied] = useState(false);
   const [isNSecCopied, setIsNSecCopied] = useState(false);
   const [userNSec, setUserNSec] = useState("");
   const [viewState, setViewState] = useState<"shown" | "hidden">("hidden");
-
-  const { signInMethod, userNPub } = getLocalStorageData();
 
   const profileContext = useContext(ProfileMapContext);
   const { handleSubmit, control, reset, watch, setValue } = useForm({
@@ -57,10 +54,6 @@ const UserProfilePage = () => {
     },
   });
 
-  useEffect(() => {
-    setUserPubkey(getLocalStorageData().userPubkey);
-  }, []);
-
   const watchBanner = watch("banner");
   const watchPicture = watch("picture");
   const defaultImage = useMemo(() => {
@@ -68,32 +61,41 @@ const UserProfilePage = () => {
   }, [userPubkey]);
 
   useEffect(() => {
-    if (signInMethod === "nsec" && !validPassphrase(passphrase)) {
-      setEnterPassphrase(true); // prompt for passphrase when chatsContext is loaded
-    } else {
-      setIsFetchingProfile(true);
-      const profileMap = profileContext.profileData;
-      const profile = profileMap.has(userPubkey)
-        ? profileMap.get(userPubkey)
-        : undefined;
-      if (profile) {
-        reset(profile.content);
-      }
-      setIsFetchingProfile(false);
-      if (passphrase) {
-        const nsec = getNsecWithPassphrase(passphrase);
-        if (nsec) {
-          setUserNSec(nsec);
-        }
-      }
+    if (!userPubkey) return;
+    setIsFetchingProfile(true);
+    const profileMap = profileContext.profileData;
+    const profile = profileMap.has(userPubkey)
+      ? profileMap.get(userPubkey)
+      : undefined;
+    if (profile) {
+      reset(profile.content);
     }
-  }, [profileContext, userPubkey, passphrase]);
+    setIsFetchingProfile(false);
+
+    if (signer instanceof NostrNSecSigner) {
+      const nsecSigner = signer as NostrNSecSigner;
+      nsecSigner._getNSec().then(
+        (nsec) => {
+          setUserNSec(nsec);
+        },
+        (err: any) => {
+          console.error(err);
+        },
+      );
+    }
+  }, [profileContext, userPubkey, signer, reset]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
+    if (!userPubkey) throw new Error("pubkey is undefined");
     setIsUploadingProfile(true);
-    await createNostrProfileEvent(userPubkey, JSON.stringify(data), passphrase);
+    await createNostrProfileEvent(
+      nostr!,
+      signer!,
+      userPubkey!,
+      JSON.stringify(data),
+    );
     profileContext.updateProfileData({
-      pubkey: userPubkey,
+      pubkey: userPubkey!,
       content: data,
       created_at: 0,
     });
@@ -101,16 +103,8 @@ const UserProfilePage = () => {
   };
 
   const isButtonDisabled = useMemo(() => {
-    if (signInMethod === "extension" || signInMethod === "bunker") return false; // extension can upload without passphrase
-    if (passphrase === "") return true; // nsec needs passphrase
-    try {
-      let nsec = getNsecWithPassphrase(passphrase);
-      if (!nsec) return true; // invalid passphrase
-    } catch (e) {
-      return true; // invalid passphrase
-    }
-    return false;
-  }, [signInMethod, passphrase]);
+    return !!(signer && userPubkey);
+  }, [signer, userPubkey]);
 
   const buttonClassName = useMemo(() => {
     const disabledStyle = "from-gray-300 to-gray-400 cursor-not-allowed";
@@ -140,7 +134,6 @@ const UserProfilePage = () => {
                   <FileUploaderButton
                     isIconOnly={false}
                     className={`absolute bottom-5 right-5 z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
-                    passphrase={passphrase}
                     imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
                   >
                     Upload Banner
@@ -152,7 +145,6 @@ const UserProfilePage = () => {
                       <FileUploaderButton
                         isIconOnly
                         className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
-                        passphrase={passphrase}
                         imgCallbackOnUpload={(imgUrl) =>
                           setValue("picture", imgUrl)
                         }
@@ -180,19 +172,18 @@ const UserProfilePage = () => {
               <div
                 className="mx-auto mb-2 flex w-full max-w-2xl cursor-pointer flex-row items-center justify-center rounded-lg border-2 border-light-fg p-2 hover:opacity-60 dark:border-dark-fg"
                 onClick={() => {
-                  // copy to clipboard
-                  navigator.clipboard.writeText(userNPub);
+                  navigator.clipboard.writeText(userNPub!);
                   setIsNPubCopied(true);
                   setTimeout(() => {
                     setIsNPubCopied(false);
-                  }, 1000);
+                  }, 2100);
                 }}
               >
                 <span
                   className="lg:text-md break-all pr-2 text-[0.50rem] font-bold text-light-text dark:text-dark-text sm:text-xs md:text-sm"
                   suppressHydrationWarning
                 >
-                  {userNPub}
+                  {userNPub!}
                 </span>
                 {isNPubCopied ? (
                   <CheckIcon
@@ -209,7 +200,7 @@ const UserProfilePage = () => {
                 )}
               </div>
 
-              {signInMethod === "nsec" ? (
+              {userNSec ? (
                 <div className="mx-auto mb-12 flex w-full max-w-2xl cursor-pointer flex-row items-center justify-center rounded-lg border-2 border-light-fg p-2 dark:border-dark-fg">
                   <span
                     className="lg:text-md break-all pr-2 text-[0.50rem] font-bold text-light-text dark:text-dark-text sm:text-xs md:text-sm"
@@ -231,12 +222,11 @@ const UserProfilePage = () => {
                       height={15}
                       className="flex-shrink-0 text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
                       onClick={() => {
-                        // copy to clipboard
                         navigator.clipboard.writeText(userNSec);
                         setIsNSecCopied(true);
                         setTimeout(() => {
                           setIsNSecCopied(false);
-                        }, 1000);
+                        }, 2100);
                       }}
                     />
                   )}
@@ -542,13 +532,6 @@ const UserProfilePage = () => {
           )}
         </div>
       </div>
-      <RequestPassphraseModal
-        passphrase={passphrase}
-        setCorrectPassphrase={setPassphrase}
-        isOpen={enterPassphrase}
-        setIsOpen={setEnterPassphrase}
-        onCancelRouteTo="/settings"
-      />
     </>
   );
 };

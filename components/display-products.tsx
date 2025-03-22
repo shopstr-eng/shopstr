@@ -1,9 +1,6 @@
 import { useState, useEffect, useContext } from "react";
-import { Filter, SimplePool, nip19 } from "nostr-tools";
-import {
-  DeleteEvent,
-  getLocalStorageData,
-} from "./utility/nostr-helper-functions";
+import { nip19 } from "nostr-tools";
+import { deleteEvent } from "./utility/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
 import {
   ProductContext,
@@ -12,20 +9,16 @@ import {
 } from "../utils/context/context";
 import ProductCard from "./utility-components/product-card";
 import DisplayProductModal from "./display-product-modal";
+import ShopstrSpinner from "./utility-components/shopstr-spinner";
 import { useRouter } from "next/router";
 import parseTags, { ProductData } from "./utility/product-parser-functions";
-import ShopstrSpinner from "./utility-components/shopstr-spinner";
-import { Button } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
-import { DateTime } from "luxon";
+import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
 
 const DisplayProducts = ({
   focusedPubkey,
   selectedCategories,
   selectedLocation,
   selectedSearch,
-  canShowLoadMore,
-  setCanShowLoadMore,
   wotFilter,
   isMyListings,
   setCategories,
@@ -35,8 +28,6 @@ const DisplayProducts = ({
   selectedCategories: Set<string>;
   selectedLocation: string;
   selectedSearch: string;
-  canShowLoadMore?: boolean;
-  setCanShowLoadMore?: (canShowLoadMore: boolean) => void;
   wotFilter?: boolean;
   isMyListings?: boolean;
   setCategories?: (categories: string[]) => void;
@@ -49,13 +40,11 @@ const DisplayProducts = ({
   const followsContext = useContext(FollowsContext);
   const [focusedProduct, setFocusedProduct] = useState(""); // product being viewed in modal
   const [showModal, setShowModal] = useState(false);
-  const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
-
-  const [loadMoreClickCount, setLoadMoreClickCount] = useState(0);
 
   const router = useRouter();
 
-  const { userPubkey } = getLocalStorageData();
+  const { nostr } = useContext(NostrContext);
+  const { signer, pubkey: userPubkey } = useContext(SignerContext);
 
   useEffect(() => {
     if (!productEventContext) return;
@@ -120,9 +109,9 @@ const DisplayProducts = ({
     );
   };
 
-  const handleDelete = async (productId: string, passphrase?: string) => {
+  const handleDelete = async (productId: string) => {
     try {
-      await DeleteEvent([productId], passphrase);
+      await deleteEvent(nostr!, signer!, [productId]);
       productEventContext.removeDeletedProductEvent(productId);
     } catch (_) {
       return;
@@ -185,6 +174,15 @@ const DisplayProducts = ({
       } catch (_) {
         return false;
       }
+    } else if (selectedSearch.includes("npub")) {
+      try {
+        const parsedNpub = nip19.decode(selectedSearch);
+        if (parsedNpub.type === "npub") {
+          return parsedNpub.data === productData.pubkey;
+        }
+      } catch (_) {
+        return false;
+      }
     } else {
       try {
         const re = new RegExp(selectedSearch, "gi");
@@ -207,6 +205,7 @@ const DisplayProducts = ({
   const displayProductCard = (productData: ProductData, index: number) => {
     if (focusedPubkey && productData.pubkey !== focusedPubkey) return;
     if (!productSatisfiesAllFilters(productData)) return;
+    if (!productData.currency) return;
     if (productData.images.length === 0) return;
     if (productData.contentWarning) return;
 
@@ -217,60 +216,6 @@ const DisplayProducts = ({
         onProductClick={onProductClick}
       />
     );
-  };
-
-  const loadMoreListings = async () => {
-    try {
-      setIsLoadingMore(true);
-      if (productEventContext.isLoading) return;
-      productEventContext.isLoading = true;
-
-      const oldestListing =
-        productEvents.length > 0
-          ? productEvents[productEvents.length - 1]
-          : null;
-      const oldestListingCreatedAt = oldestListing
-        ? oldestListing.createdAt
-        : Math.trunc(DateTime.now().toSeconds());
-
-      const daysToSubtract = 14 * Math.pow(2, loadMoreClickCount);
-      const since = Math.trunc(
-        DateTime.fromSeconds(oldestListingCreatedAt)
-          .minus({ days: daysToSubtract })
-          .toSeconds(),
-      );
-
-      // Check if the new timestamp is before January 1, 2022
-      const jan2022 = DateTime.fromObject({
-        year: 2022,
-        month: 1,
-        day: 1,
-      }).toSeconds();
-      if (since < jan2022 && setCanShowLoadMore) {
-        setCanShowLoadMore(false);
-      }
-
-      const pool = new SimplePool();
-      const filter: Filter = {
-        kinds: [30402],
-        since,
-        until: oldestListingCreatedAt,
-      };
-
-      const events = await pool.querySync(getLocalStorageData().relays, filter);
-      events.forEach((event) => {
-        if (event.id !== oldestListing?.id) {
-          productEventContext.addNewlyCreatedProductEvent(event);
-        }
-      });
-
-      setLoadMoreClickCount((prevCount) => prevCount + 1);
-      productEventContext.isLoading = false;
-      setIsLoadingMore(false);
-    } catch (_) {
-      productEventContext.isLoading = false;
-      setIsLoadingMore(false);
-    }
   };
 
   return (
@@ -310,24 +255,14 @@ const DisplayProducts = ({
             <p className="mt-4 break-words text-center text-2xl text-light-text dark:text-dark-text">
               No products found...
               <br></br>
-              <br></br>Try adding a new listing, or load more!
+              <br></br>Try adding a new listing!
             </p>
           )}
         {profileMapContext.isLoading ||
         productEventContext.isLoading ||
-        isProductsLoading ||
-        isLoadingMore ? (
+        isProductsLoading ? (
           <div className="mb-6 mt-6 flex items-center justify-center">
             <ShopstrSpinner />
-          </div>
-        ) : canShowLoadMore && productEvents.length != 0 ? (
-          <div className="mt-8 h-20 px-4">
-            <Button
-              className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
-              onClick={async () => await loadMoreListings()}
-            >
-              Load More . . .
-            </Button>
           </div>
         ) : null}
       </div>

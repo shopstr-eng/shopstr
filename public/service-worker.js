@@ -1,4 +1,3 @@
-console.log("Running service worker!!!");
 self.addEventListener("install", () => {
   console.log("service worker installed");
 });

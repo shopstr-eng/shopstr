@@ -43,8 +43,6 @@ import {
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
   getLocalStorageData,
-  validPassphrase,
-  isUserLoggedIn,
   publishProofEvent,
   generateKeys,
 } from "./utility/nostr-helper-functions";
@@ -59,10 +57,11 @@ import {
 import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
 import SignInModal from "./sign-in/SignInModal";
 import currencySelection from "../public/currencySelection.json";
-import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
 import FailureModal from "@/components/utility-components/failure-modal";
 import ShippingForm from "./shipping-form";
 import ContactForm from "./contact-form";
+import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
+import { ShippingFormData, ContactFormData } from "@/utils/types/types";
 
 export default function ProductInvoiceCard({
   productData,
@@ -80,17 +79,19 @@ export default function ProductInvoiceCard({
   selectedSize?: string;
 }) {
   const router = useRouter();
-  const { id, pubkey, currency, totalCost, shippingType, required } =
-    productData;
+  const { pubkey, currency, totalCost, shippingType, required } = productData;
   const pubkeyOfProductBeingSold = pubkey;
-  const { userNPub, userPubkey, signInMethod, mints, tokens, history } =
-    getLocalStorageData();
-
+  const { mints, tokens, history } = getLocalStorageData();
+  const {
+    pubkey: userPubkey,
+    npub: userNPub,
+    isLoggedIn,
+    signer,
+  } = useContext(SignerContext);
   const chatsContext = useContext(ChatsContext);
   const profileContext = useContext(ProfileMapContext);
 
-  const [enterPassphrase, setEnterPassphrase] = useState(false);
-  const [passphrase, setPassphrase] = useState("");
+  const { nostr } = useContext(NostrContext);
 
   const [showInvoiceCard, setShowInvoiceCard] = useState(false);
 
@@ -132,13 +133,6 @@ export default function ProductInvoiceCard({
     control: contactControl,
     reset: contactReset,
   } = useForm();
-
-  useEffect(() => {
-    if (signInMethod === "nsec" && !validPassphrase(passphrase)) {
-      setEnterPassphrase(true);
-    }
-  }, [signInMethod, passphrase]);
-
   useEffect(() => {
     const fetchKeys = async () => {
       const { nsec: nsecForSender, npub: npubForSender } = await generateKeys();
@@ -215,10 +209,10 @@ export default function ProductInvoiceCard({
       messageOptions,
     );
     let sealedEvent = await constructMessageSeal(
+      signer!,
       giftWrappedMessageEvent,
       decodedRandomPubkeyForSender.data as string,
       pubkeyToReceiveMessage,
-      undefined,
       decodedRandomPrivkeyForSender.data as Uint8Array,
     );
     let giftWrappedEvent = await constructMessageGiftWrap(
@@ -244,13 +238,53 @@ export default function ProductInvoiceCard({
     }
   };
 
+  const validatePaymentData = (
+    price: number,
+    data?: ShippingFormData | ContactFormData,
+  ) => {
+    if (price < 1) {
+      throw new Error("Payment amount must be greater than 0 sats");
+    }
+
+    if (data) {
+      // Type guard to check which form data we received
+      if ("Name" in data) {
+        const shippingData = data as ShippingFormData;
+        if (
+          !shippingData.Name?.trim() ||
+          !shippingData.Address?.trim() ||
+          !shippingData.City?.trim() ||
+          !shippingData["Postal Code"]?.trim() ||
+          !shippingData["State/Province"]?.trim() ||
+          !shippingData.Country?.trim()
+        ) {
+          throw new Error("Required shipping fields are missing");
+        }
+      } else if ("Contact" in data) {
+        const contactData = data as ContactFormData;
+        if (
+          !contactData.Contact?.trim() ||
+          !contactData["Contact Type"]?.trim() ||
+          !contactData.Instructions?.trim()
+        ) {
+          throw new Error("Required contact fields are missing");
+        }
+      }
+      if ("Required" in data && data["Required"] !== "") {
+        if (!data["Required"]?.trim()) {
+          throw new Error("Required fields are missing");
+        }
+      }
+    }
+  };
+
   const onShippingSubmit = async (data: { [x: string]: any }) => {
     try {
       let price = totalCost;
-      if (!currencySelection.hasOwnProperty(currency)) {
+      if (!currencySelection.hasOwnProperty(currency.toUpperCase())) {
         throw new Error(`${currency} is not a supported currency.`);
       } else if (
-        currencySelection.hasOwnProperty(currency) &&
+        currencySelection.hasOwnProperty(currency.toUpperCase()) &&
         currency.toLowerCase() !== "sats" &&
         currency.toLowerCase() !== "sat"
       ) {
@@ -314,10 +348,10 @@ export default function ProductInvoiceCard({
   const onContactSubmit = async (data: { [x: string]: any }) => {
     try {
       let price = totalCost;
-      if (!currencySelection.hasOwnProperty(currency)) {
+      if (!currencySelection.hasOwnProperty(currency.toUpperCase())) {
         throw new Error(`${currency} is not a supported currency.`);
       } else if (
-        currencySelection.hasOwnProperty(currency) &&
+        currencySelection.hasOwnProperty(currency.toUpperCase()) &&
         currency.toLowerCase() !== "sats" &&
         currency.toLowerCase() !== "sat"
       ) {
@@ -405,6 +439,35 @@ export default function ProductInvoiceCard({
     additionalInfo?: string,
   ) => {
     try {
+      if (
+        shippingName ||
+        shippingAddress ||
+        shippingCity ||
+        shippingPostalCode ||
+        shippingState ||
+        shippingCountry
+      ) {
+        validatePaymentData(convertedPrice, {
+          Name: shippingName || "",
+          Address: shippingAddress || "",
+          Unit: shippingUnitNo || "",
+          City: shippingCity || "",
+          "Postal Code": shippingPostalCode || "",
+          "State/Province": shippingState || "",
+          Country: shippingCountry || "",
+          Required: additionalInfo || "",
+        });
+      } else if (contact || contactType || contactInstructions) {
+        validatePaymentData(convertedPrice, {
+          Contact: contact || "",
+          "Contact Type": contactType || "",
+          Instructions: contactInstructions || "",
+          Required: additionalInfo || "",
+        });
+      } else {
+        validatePaymentData(convertedPrice);
+      }
+
       setShowInvoiceCard(true);
       const wallet = new CashuWallet(new CashuMint(mints[0]));
 
@@ -525,7 +588,7 @@ export default function ProductInvoiceCard({
           setShowFailureModal(true);
           break;
         }
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, 2100));
       }
     }
   }
@@ -994,15 +1057,13 @@ export default function ProductInvoiceCard({
   const handleCopyInvoice = () => {
     navigator.clipboard.writeText(invoice);
     setCopiedToClipboard(true);
-    // after 2 seconds, set copiedToClipboard back to false
     setTimeout(() => {
       setCopiedToClipboard(false);
-    }, 2000);
+    }, 2100);
   };
 
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
-    let { signInMethod } = getLocalStorageData();
-    if (!signInMethod) {
+    if (!isLoggedIn) {
       onOpen();
       return;
     }
@@ -1029,6 +1090,43 @@ export default function ProductInvoiceCard({
     additionalInfo?: string,
   ) => {
     try {
+      if (!mints || mints.length === 0) {
+        throw new Error("No Cashu mint available");
+      }
+
+      if (!walletContext) {
+        throw new Error("Wallet context not available");
+      }
+
+      if (
+        shippingName ||
+        shippingAddress ||
+        shippingCity ||
+        shippingPostalCode ||
+        shippingState ||
+        shippingCountry
+      ) {
+        validatePaymentData(price, {
+          Name: shippingName || "",
+          Address: shippingAddress || "",
+          Unit: shippingUnitNo || "",
+          City: shippingCity || "",
+          "Postal Code": shippingPostalCode || "",
+          "State/Province": shippingState || "",
+          Country: shippingCountry || "",
+          Required: additionalInfo || "",
+        });
+      } else if (contact || contactType || contactInstructions) {
+        validatePaymentData(price, {
+          Contact: contact || "",
+          "Contact Type": contactType || "",
+          Instructions: contactInstructions || "",
+          Required: additionalInfo || "",
+        });
+      } else {
+        validatePaymentData(price);
+      }
+
       const mint = new CashuMint(mints[0]);
       const wallet = new CashuWallet(mint);
       const mintKeySetIds = await wallet.getKeySets();
@@ -1109,11 +1207,12 @@ export default function ProductInvoiceCard({
         ]),
       );
       await publishProofEvent(
+        nostr!,
+        signer!,
         mints[0],
         changeProofs && changeProofs.length >= 1 ? changeProofs : [],
         "out",
         price.toString(),
-        passphrase,
         deletedEventIds,
       );
       if (setCashuPaymentSent) {
@@ -1179,8 +1278,7 @@ export default function ProductInvoiceCard({
             type="submit"
             className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
             onClick={() => {
-              let userLoggedIn = isUserLoggedIn();
-              if (!userLoggedIn) {
+              if (!isLoggedIn) {
                 onOpen();
                 return;
               }
@@ -1228,7 +1326,7 @@ export default function ProductInvoiceCard({
               <div className="flex flex-col items-center justify-center">
                 {qrCodeUrl ? (
                   <>
-                    <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
+                    <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900 text-light-text dark:text-dark-text">
                       Don&apos;t refresh or close the page until the payment has
                       been confirmed!
                     </h3>
@@ -1312,12 +1410,16 @@ export default function ProductInvoiceCard({
                   onClick={async () => {
                     setShowShippingOption(false);
                     let price = totalCost;
-                    if (!currencySelection.hasOwnProperty(currency)) {
+                    if (
+                      !currencySelection.hasOwnProperty(currency.toUpperCase())
+                    ) {
                       throw new Error(
                         `${currency} is not a supported currency.`,
                       );
                     } else if (
-                      currencySelection.hasOwnProperty(currency) &&
+                      currencySelection.hasOwnProperty(
+                        currency.toUpperCase(),
+                      ) &&
                       currency.toLowerCase() !== "sats" &&
                       currency.toLowerCase() !== "sat"
                     ) {
@@ -1401,12 +1503,16 @@ export default function ProductInvoiceCard({
                   onClick={async () => {
                     setShowPurchaseTypeOption(false);
                     let price = totalCost;
-                    if (!currencySelection.hasOwnProperty(currency)) {
+                    if (
+                      !currencySelection.hasOwnProperty(currency.toUpperCase())
+                    ) {
                       throw new Error(
                         `${currency} is not a supported currency.`,
                       );
                     } else if (
-                      currencySelection.hasOwnProperty(currency) &&
+                      currencySelection.hasOwnProperty(
+                        currency.toUpperCase(),
+                      ) &&
                       currency.toLowerCase() !== "sats" &&
                       currency.toLowerCase() !== "sat"
                     ) {
@@ -1472,13 +1578,6 @@ export default function ProductInvoiceCard({
       />
 
       <SignInModal isOpen={isOpen} onClose={onClose} />
-      <RequestPassphraseModal
-        passphrase={passphrase}
-        setCorrectPassphrase={setPassphrase}
-        isOpen={enterPassphrase}
-        setIsOpen={setEnterPassphrase}
-        onCancelRouteTo={`/${id}`}
-      />
 
       <FailureModal
         bodyText={failureText}

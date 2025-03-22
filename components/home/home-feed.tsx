@@ -24,14 +24,9 @@ const HomeFeed = ({
   const [shopBannerURL, setShopBannerURL] = useState("");
   const [isFetchingShop, setIsFetchingShop] = useState(false);
 
-  const [isHome, setIsHome] = useState(false);
-
   const shopMapContext = useContext(ShopMapContext);
 
   useEffect(() => {
-    if (!router.pathname.includes("npub")) {
-      setIsHome(true);
-    }
     setIsFetchingShop(true);
     if (
       focusedPubkey &&

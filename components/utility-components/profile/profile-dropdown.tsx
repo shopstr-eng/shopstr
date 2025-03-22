@@ -1,7 +1,4 @@
-import {
-  LogOut,
-  isUserLoggedIn,
-} from "@/components/utility/nostr-helper-functions";
+import { LogOut } from "@/components/utility/nostr-helper-functions";
 import { ProfileMapContext } from "@/utils/context/context";
 import {
   Dropdown,
@@ -24,6 +21,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import FailureModal from "../failure-modal";
+import { SignerContext } from "@/utils/context/nostr-context";
 
 type DropDownKeys =
   | "shop"
@@ -52,6 +50,7 @@ export const ProfileWithDropdown = ({
   const profileContext = useContext(ProfileMapContext);
   const npub = pubkey ? nip19.npubEncode(pubkey) : "";
   const router = useRouter();
+  const { isLoggedIn } = useContext(SignerContext);
   useEffect(() => {
     const profileMap = profileContext.profileData;
     const profile = profileMap.has(pubkey) ? profileMap.get(pubkey) : undefined;
@@ -101,7 +100,7 @@ export const ProfileWithDropdown = ({
       className: "text-light-text dark:text-dark-text",
       startContent: <ChatBubbleBottomCenterIcon className={"h-5 w-5"} />,
       onClick: () => {
-        if (!isUserLoggedIn()) {
+        if (!isLoggedIn) {
           setShowFailureModal(true);
           return;
         }
@@ -163,7 +162,7 @@ export const ProfileWithDropdown = ({
         setIsNPubCopied(true);
         setTimeout(() => {
           setIsNPubCopied(false);
-        }, 1000);
+        }, 2100);
       },
       label: "Copy npub",
     },
