@@ -1,9 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { useRouter } from "next/router";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
 import { setLocalStorageDataOnSignIn } from "@/components/utility/nostr-helper-functions";
+import { RelaysContext } from "../../utils/context/context";
+import { SignerContext } from "@/utils/context/nostr-context";
+import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
 import { generateKeys } from "@/components/utility/nostr-helper-functions";
 import FailureModal from "../../components/utility-components/failure-modal";
@@ -20,6 +23,32 @@ const Keys = () => {
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successText, setSuccessText] = useState("");
+
+  const { newSigner } = useContext(SignerContext);
+  const relaysContext = useContext(RelaysContext);
+
+  const saveSigner = (signer: NostrSigner) => {
+    if (
+      !relaysContext.isLoading &&
+      relaysContext.relayList.length >= 0 &&
+      relaysContext.readRelayList &&
+      relaysContext.writeRelayList
+    ) {
+      const generalRelays = relaysContext.relayList;
+      const readRelays = relaysContext.readRelayList;
+      const writeRelays = relaysContext.writeRelayList;
+      setLocalStorageDataOnSignIn({
+        signer,
+        relays: generalRelays,
+        readRelays: readRelays,
+        writeRelays: writeRelays,
+      });
+    } else {
+      setLocalStorageDataOnSignIn({
+        signer,
+      });
+    }
+  };
 
   useEffect(() => {
     const fetchKeys = async () => {
@@ -43,7 +72,7 @@ const Keys = () => {
     setShowSuccessModal(true);
   };
 
-  const handleSignIn = () => {
+  const handleSignIn = async () => {
     if (passphrase === "" || passphrase === null) {
       setShowFailureModal(true);
     } else {
@@ -51,24 +80,12 @@ const Keys = () => {
         privateKey,
         passphrase,
       );
-
-      setLocalStorageDataOnSignIn({
-        signer: NostrNSecSigner.fromJSON(
-          {
-            type: "nsec",
-            args: {
-              encryptedPrivKey,
-              pubkey,
-            },
-          },
-          async (_type, _challenge, _abort, _abortSignal, _error) => {
-            return new Promise((_resolve, reject) => {
-              reject(new Error("No challenge handler provided"));
-            });
-          },
-        ),
+      const signer = newSigner!("nsec", {
+        encryptedPrivKey: encryptedPrivKey,
+        pubkey,
       });
-
+      await signer.getPubKey();
+      saveSigner(signer);
       router.push("/marketplace");
     }
   };

@@ -357,7 +357,6 @@ function Shopstr({ props }: { props: AppProps }) {
         allRelays = getDefaultRelays();
         localStorage.setItem("relays", JSON.stringify(allRelays));
       }
-      const userPubkey = await signer?.getPubKey();
       try {
         let { relayList, readRelayList, writeRelayList } = await fetchAllRelays(
           nostr!,
@@ -378,6 +377,7 @@ function Shopstr({ props }: { props: AppProps }) {
           editProductContext,
         );
         pubkeysToFetchProfilesFor = [...profileSetFromProducts];
+        const userPubkey = (await signer?.getPubKey()) || undefined;
         let profileSetFromChats = new Set<string>();
         if (isLoggedIn) {
           let { profileSetFromChats: newProfileSetFromChats } =
@@ -385,8 +385,8 @@ function Shopstr({ props }: { props: AppProps }) {
               nostr!,
               signer!,
               allRelays,
-              userPubkey!,
               editChatContext,
+              userPubkey,
             );
           newProfileSetFromChats.forEach((profile) =>
             profileSetFromChats.add(profile),
@@ -435,7 +435,12 @@ function Shopstr({ props }: { props: AppProps }) {
             localStorage.setItem("tokens", JSON.stringify(cashuProofs));
           }
         }
-        await fetchAllFollows(nostr!, signer!, allRelays, editFollowsContext);
+        await fetchAllFollows(
+          nostr!,
+          allRelays,
+          editFollowsContext,
+          userPubkey,
+        );
       } catch (error) {
         console.error("Error fetching data:", error);
       }
@@ -514,6 +519,7 @@ function Shopstr({ props }: { props: AppProps }) {
     </>
   );
 }
+
 function App(props: AppProps) {
   return (
     <>
@@ -529,4 +535,5 @@ function App(props: AppProps) {
     </>
   );
 }
+
 export default App;

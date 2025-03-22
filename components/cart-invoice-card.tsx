@@ -328,7 +328,7 @@ export default function CartInvoiceCard({
           throw new Error("Required contact fields are missing");
         }
       }
-      if ("Required" in data) {
+      if ("Required" in data && data["Required"] !== "") {
         if (!data["Required"]?.trim()) {
           throw new Error("Required fields are missing");
         }
@@ -532,19 +532,19 @@ export default function CartInvoiceCard({
         validatePaymentData(convertedPrice, {
           Name: shippingName || "",
           Address: shippingAddress || "",
-          Unit: shippingUnitNo,
+          Unit: shippingUnitNo || "",
           City: shippingCity || "",
           "Postal Code": shippingPostalCode || "",
           "State/Province": shippingState || "",
           Country: shippingCountry || "",
-          Required: additionalInfo,
+          Required: additionalInfo || "",
         });
       } else if (contact || contactType || contactInstructions) {
         validatePaymentData(convertedPrice, {
           Contact: contact || "",
           "Contact Type": contactType || "",
           Instructions: contactInstructions || "",
-          Required: additionalInfo,
+          Required: additionalInfo || "",
         });
       } else {
         validatePaymentData(convertedPrice);
@@ -672,7 +672,7 @@ export default function CartInvoiceCard({
           setShowFailureModal(true);
           break;
         }
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, 2100));
       }
     }
   }
@@ -693,8 +693,8 @@ export default function CartInvoiceCard({
     hash?: string,
     additionalInfo?: string,
   ) => {
-    const userNPub = await signer?.getNPub?.();
     const userPubkey = await signer?.getPubKey?.();
+    const userNPub = userPubkey ? nip19.npubEncode(userPubkey) : undefined;
     let remainingProofs = proofs;
     for (const product of products) {
       const title = product.title;
@@ -1261,10 +1261,9 @@ export default function CartInvoiceCard({
   const handleCopyInvoice = () => {
     navigator.clipboard.writeText(invoice);
     setCopiedToClipboard(true);
-    // after 2 seconds, set copiedToClipboard back to false
     setTimeout(() => {
       setCopiedToClipboard(false);
-    }, 2000);
+    }, 2100);
   };
 
   const formattedTotalCost = formatWithCommas(totalCost, "sats");
@@ -1303,19 +1302,19 @@ export default function CartInvoiceCard({
         validatePaymentData(price, {
           Name: shippingName || "",
           Address: shippingAddress || "",
-          Unit: shippingUnitNo,
+          Unit: shippingUnitNo || "",
           City: shippingCity || "",
           "Postal Code": shippingPostalCode || "",
           "State/Province": shippingState || "",
           Country: shippingCountry || "",
-          Required: additionalInfo,
+          Required: additionalInfo || "",
         });
       } else if (contact || contactType || contactInstructions) {
         validatePaymentData(price, {
           Contact: contact || "",
           "Contact Type": contactType || "",
           Instructions: contactInstructions || "",
-          Required: additionalInfo,
+          Required: additionalInfo || "",
         });
       } else {
         validatePaymentData(price);
@@ -1543,6 +1542,10 @@ export default function CartInvoiceCard({
               <div className="flex flex-col items-center justify-center">
                 {qrCodeUrl ? (
                   <>
+                    <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900 text-light-text dark:text-dark-text">
+                      Don&apos;t refresh or close the page until the payment has
+                      been confirmed!
+                    </h3>
                     <Image
                       alt="Lightning invoice"
                       className="object-cover"

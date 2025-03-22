@@ -154,15 +154,13 @@ export class NostrNSecSigner implements NostrSigner {
           this.rememberedPassphrase = passphrase;
         }
 
-        // save input passphrase for few seconds, improve ux by not asking for passphrase again
-        // for multiple close actions
+        // save input passphrase for few seconds, improve ux by not asking for passphrase again for multiple close actions
         if (this.inputPassphraseClearer)
           clearTimeout(this.inputPassphraseClearer);
         this.inputPassphraseClearer = setTimeout(() => {
           this.inputPassphrase = undefined;
         }, 5000);
         this.inputPassphrase = passphrase;
-        //
 
         return privKeyBytes;
       } catch (e) {
@@ -183,11 +181,6 @@ export class NostrNSecSigner implements NostrSigner {
     const privKey = await this._getPrivKey();
     this.pubkey = getPublicKey(privKey);
     return this.pubkey;
-  }
-
-  public async getNPub(): Promise<string> {
-    const pubkey = await this.getPubKey();
-    return nip19.npubEncode(pubkey);
   }
 
   public async sign(event: NostrEventTemplate): Promise<NostrEvent> {

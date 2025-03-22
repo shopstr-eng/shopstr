@@ -274,7 +274,7 @@ export default function ProductInvoiceCard({
           throw new Error("Required contact fields are missing");
         }
       }
-      if ("Required" in data) {
+      if ("Required" in data && data["Required"] !== "") {
         if (!data["Required"]?.trim()) {
           throw new Error("Required fields are missing");
         }
@@ -285,10 +285,10 @@ export default function ProductInvoiceCard({
   const onShippingSubmit = async (data: { [x: string]: any }) => {
     try {
       let price = totalCost;
-      if (!currencySelection.hasOwnProperty(currency)) {
+      if (!currencySelection.hasOwnProperty(currency.toUpperCase())) {
         throw new Error(`${currency} is not a supported currency.`);
       } else if (
-        currencySelection.hasOwnProperty(currency) &&
+        currencySelection.hasOwnProperty(currency.toUpperCase()) &&
         currency.toLowerCase() !== "sats" &&
         currency.toLowerCase() !== "sat"
       ) {
@@ -352,10 +352,10 @@ export default function ProductInvoiceCard({
   const onContactSubmit = async (data: { [x: string]: any }) => {
     try {
       let price = totalCost;
-      if (!currencySelection.hasOwnProperty(currency)) {
+      if (!currencySelection.hasOwnProperty(currency.toUpperCase())) {
         throw new Error(`${currency} is not a supported currency.`);
       } else if (
-        currencySelection.hasOwnProperty(currency) &&
+        currencySelection.hasOwnProperty(currency.toUpperCase()) &&
         currency.toLowerCase() !== "sats" &&
         currency.toLowerCase() !== "sat"
       ) {
@@ -454,19 +454,19 @@ export default function ProductInvoiceCard({
         validatePaymentData(convertedPrice, {
           Name: shippingName || "",
           Address: shippingAddress || "",
-          Unit: shippingUnitNo,
+          Unit: shippingUnitNo || "",
           City: shippingCity || "",
           "Postal Code": shippingPostalCode || "",
           "State/Province": shippingState || "",
           Country: shippingCountry || "",
-          Required: additionalInfo,
+          Required: additionalInfo || "",
         });
       } else if (contact || contactType || contactInstructions) {
         validatePaymentData(convertedPrice, {
           Contact: contact || "",
           "Contact Type": contactType || "",
           Instructions: contactInstructions || "",
-          Required: additionalInfo,
+          Required: additionalInfo || "",
         });
       } else {
         validatePaymentData(convertedPrice);
@@ -593,7 +593,7 @@ export default function ProductInvoiceCard({
           setShowFailureModal(true);
           break;
         }
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, 2100));
       }
     }
   }
@@ -1062,10 +1062,9 @@ export default function ProductInvoiceCard({
   const handleCopyInvoice = () => {
     navigator.clipboard.writeText(invoice);
     setCopiedToClipboard(true);
-    // after 2 seconds, set copiedToClipboard back to false
     setTimeout(() => {
       setCopiedToClipboard(false);
-    }, 2000);
+    }, 2100);
   };
 
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
@@ -1115,19 +1114,19 @@ export default function ProductInvoiceCard({
         validatePaymentData(price, {
           Name: shippingName || "",
           Address: shippingAddress || "",
-          Unit: shippingUnitNo,
+          Unit: shippingUnitNo || "",
           City: shippingCity || "",
           "Postal Code": shippingPostalCode || "",
           "State/Province": shippingState || "",
           Country: shippingCountry || "",
-          Required: additionalInfo,
+          Required: additionalInfo || "",
         });
       } else if (contact || contactType || contactInstructions) {
         validatePaymentData(price, {
           Contact: contact || "",
           "Contact Type": contactType || "",
           Instructions: contactInstructions || "",
-          Required: additionalInfo,
+          Required: additionalInfo || "",
         });
       } else {
         validatePaymentData(price);
@@ -1338,7 +1337,7 @@ export default function ProductInvoiceCard({
               <div className="flex flex-col items-center justify-center">
                 {qrCodeUrl ? (
                   <>
-                    <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
+                    <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900 text-light-text dark:text-dark-text">
                       Don&apos;t refresh or close the page until the payment has
                       been confirmed!
                     </h3>
@@ -1422,12 +1421,16 @@ export default function ProductInvoiceCard({
                   onClick={async () => {
                     setShowShippingOption(false);
                     let price = totalCost;
-                    if (!currencySelection.hasOwnProperty(currency)) {
+                    if (
+                      !currencySelection.hasOwnProperty(currency.toUpperCase())
+                    ) {
                       throw new Error(
                         `${currency} is not a supported currency.`,
                       );
                     } else if (
-                      currencySelection.hasOwnProperty(currency) &&
+                      currencySelection.hasOwnProperty(
+                        currency.toUpperCase(),
+                      ) &&
                       currency.toLowerCase() !== "sats" &&
                       currency.toLowerCase() !== "sat"
                     ) {
@@ -1511,12 +1514,16 @@ export default function ProductInvoiceCard({
                   onClick={async () => {
                     setShowPurchaseTypeOption(false);
                     let price = totalCost;
-                    if (!currencySelection.hasOwnProperty(currency)) {
+                    if (
+                      !currencySelection.hasOwnProperty(currency.toUpperCase())
+                    ) {
                       throw new Error(
                         `${currency} is not a supported currency.`,
                       );
                     } else if (
-                      currencySelection.hasOwnProperty(currency) &&
+                      currencySelection.hasOwnProperty(
+                        currency.toUpperCase(),
+                      ) &&
                       currency.toLowerCase() !== "sats" &&
                       currency.toLowerCase() !== "sat"
                     ) {

@@ -337,8 +337,8 @@ export const fetchGiftWrappedChatsAndMessages = async (
   nostr: NostrManager,
   signer: NostrSigner | undefined,
   relays: string[],
-  userPubkey: string,
   editChatContext: (chatsMap: ChatsMap, isLoading: boolean) => void,
+  userPubkey?: string,
 ): Promise<{
   profileSetFromChats: Set<string>;
 }> => {
@@ -350,114 +350,115 @@ export const fetchGiftWrappedChatsAndMessages = async (
       editChatContext(new Map(), false);
       resolve({ profileSetFromChats: new Set() });
       // FIXME return to stop execution (?)
-    }
-    let chatMessagesFromCache: Map<string, NostrMessageEvent> =
-      await fetchChatMessagesFromCache();
-    try {
-      let chatsMap = new Map();
+    } else {
+      let chatMessagesFromCache: Map<string, NostrMessageEvent> =
+        await fetchChatMessagesFromCache();
+      try {
+        let chatsMap = new Map();
 
-      const addToChatsMap = (
-        pubkeyOfChat: string,
-        event: NostrMessageEvent,
-      ) => {
-        // pubkeyOfChat is the person you are chatting with if incoming, or the person you are sending to if outgoing
-        if (!chatsMap.has(pubkeyOfChat)) {
-          chatsMap.set(pubkeyOfChat, [event]);
-        } else {
-          chatsMap.get(pubkeyOfChat).push(event);
-        }
-      };
+        const addToChatsMap = (
+          pubkeyOfChat: string,
+          event: NostrMessageEvent,
+        ) => {
+          // pubkeyOfChat is the person you are chatting with if incoming, or the person you are sending to if outgoing
+          if (!chatsMap.has(pubkeyOfChat)) {
+            chatsMap.set(pubkeyOfChat, [event]);
+          } else {
+            chatsMap.get(pubkeyOfChat).push(event);
+          }
+        };
 
-      const fetchedEvents = await nostr.fetch(
-        [
-          {
-            kinds: [1059],
-            "#p": [userPubkey],
-          },
-        ],
-        {},
-        relays,
-      );
-
-      for (const event of fetchedEvents) {
-        let messageEvent;
-
-        let sealEventString = await signer!.decrypt(
-          event.pubkey,
-          event.content,
+        const fetchedEvents = await nostr.fetch(
+          [
+            {
+              kinds: [1059],
+              "#p": [userPubkey],
+            },
+          ],
+          {},
+          relays,
         );
-        if (sealEventString) {
-          const sealEvent = JSON.parse(sealEventString);
-          if (sealEvent?.kind === 13) {
-            const messageEventString = await signer!.decrypt(
-              sealEvent.pubkey,
-              sealEvent.content,
-            );
-            if (messageEventString) {
-              const messageEventCheck = JSON.parse(messageEventString);
-              if (messageEventCheck?.pubkey === sealEvent.pubkey) {
-                messageEvent = messageEventCheck;
+
+        for (const event of fetchedEvents) {
+          let messageEvent;
+
+          let sealEventString = await signer!.decrypt(
+            event.pubkey,
+            event.content,
+          );
+          if (sealEventString) {
+            const sealEvent = JSON.parse(sealEventString);
+            if (sealEvent?.kind === 13) {
+              const messageEventString = await signer!.decrypt(
+                sealEvent.pubkey,
+                sealEvent.content,
+              );
+              if (messageEventString) {
+                const messageEventCheck = JSON.parse(messageEventString);
+                if (messageEventCheck?.pubkey === sealEvent.pubkey) {
+                  messageEvent = messageEventCheck;
+                }
+              } else {
+                continue;
               }
-            } else {
-              continue;
+            }
+          } else {
+            continue;
+          }
+          let senderPubkey = messageEvent.pubkey;
+
+          let tagsMap: Map<string, string> = new Map(
+            messageEvent.tags.map(([k, v]: [string, string]) => [k, v]),
+          );
+          let subject = tagsMap.has("subject") ? tagsMap.get("subject") : null;
+          if (
+            subject !== "listing-inquiry" &&
+            subject !== "order-payment" &&
+            subject !== "order-info" &&
+            subject !== "payment-change" &&
+            subject !== "order-receipt" &&
+            subject !== "shipping-info"
+          ) {
+            continue;
+          }
+          let recipientPubkey = tagsMap.get("p") ? tagsMap.get("p") : null; // pubkey you sent the message to
+          if (typeof recipientPubkey !== "string") {
+            console.error(
+              `fetchAllOutgoingChats: Failed to get recipientPubkey from tagsMap",
+                ${tagsMap},
+                ${event}`,
+            );
+            alert(
+              `fetchAllOutgoingChats: Failed to get recipientPubkey from tagsMap`,
+            );
+            return;
+          }
+          let chatMessage = chatMessagesFromCache.get(messageEvent.id);
+          if (!chatMessage) {
+            chatMessage = { ...messageEvent, sig: "", read: false }; // false because the user received it and it wasn't in the cache
+            if (chatMessage) {
+              await addChatMessageToCache(chatMessage);
             }
           }
-        } else {
-          continue;
-        }
-        let senderPubkey = messageEvent.pubkey;
-
-        let tagsMap: Map<string, string> = new Map(
-          messageEvent.tags.map(([k, v]: [string, string]) => [k, v]),
-        );
-        let subject = tagsMap.has("subject") ? tagsMap.get("subject") : null;
-        if (
-          subject !== "listing-inquiry" &&
-          subject !== "order-payment" &&
-          subject !== "order-info" &&
-          subject !== "payment-change" &&
-          subject !== "order-receipt" &&
-          subject !== "shipping-info"
-        ) {
-          continue;
-        }
-        let recipientPubkey = tagsMap.get("p") ? tagsMap.get("p") : null; // pubkey you sent the message to
-        if (typeof recipientPubkey !== "string") {
-          console.error(
-            `fetchAllOutgoingChats: Failed to get recipientPubkey from tagsMap",
-              ${tagsMap},
-              ${event}`,
-          );
-          alert(
-            `fetchAllOutgoingChats: Failed to get recipientPubkey from tagsMap`,
-          );
-          return;
-        }
-        let chatMessage = chatMessagesFromCache.get(messageEvent.id);
-        if (!chatMessage) {
-          chatMessage = { ...messageEvent, sig: "", read: false }; // false because the user received it and it wasn't in the cache
-          if (chatMessage) {
-            await addChatMessageToCache(chatMessage);
+          if (senderPubkey === userPubkey && chatMessage) {
+            addToChatsMap(recipientPubkey, chatMessage);
+          } else if (chatMessage) {
+            addToChatsMap(senderPubkey, chatMessage);
           }
         }
-        if (senderPubkey === userPubkey && chatMessage) {
-          addToChatsMap(recipientPubkey, chatMessage);
-        } else if (chatMessage) {
-          addToChatsMap(senderPubkey, chatMessage);
-        }
-      }
 
-      chatsMap.forEach((value) => {
-        value.sort(
-          (a: NostrMessageEvent, b: NostrMessageEvent) =>
-            a.created_at - b.created_at,
-        );
-      });
-      resolve({ profileSetFromChats: new Set(chatsMap.keys()) });
-      editChatContext(chatsMap, false);
-    } catch (error) {
-      console.log("Failed to fetch chats and messages: ", error);
-      reject(error);
+        chatsMap.forEach((value) => {
+          value.sort(
+            (a: NostrMessageEvent, b: NostrMessageEvent) =>
+              a.created_at - b.created_at,
+          );
+        });
+        resolve({ profileSetFromChats: new Set(chatsMap.keys()) });
+        editChatContext(chatsMap, false);
+      } catch (error) {
+        console.log("Failed to fetch chats and messages: ", error);
+        reject(error);
+      }
     }
   });
 };
@@ -582,20 +583,19 @@ export const fetchReviews = async (
 
 export const fetchAllFollows = async (
   nostr: NostrManager,
-  signer: NostrSigner | undefined,
   relays: string[],
   editFollowsContext: (
     followList: string[],
     firstDegreeFollowsLength: number,
     isLoading: boolean,
   ) => void,
+  userPubkey?: string,
 ): Promise<{
   followList: string[];
 }> => {
   const wot = getLocalStorageData().wot;
   const defaultAuthor =
     "d36e8083fa7b36daee646cb8b3f99feaa3d89e5a396508741f003e21ac0b6bec";
-  const userPubkey = (await signer?.getPubKey()) || defaultAuthor;
 
   const fetchFollows = async (userPubkey: string) => {
     let secondDegreeFollowsArrayFromRelay: string[] = [];
@@ -662,8 +662,9 @@ export const fetchAllFollows = async (
     };
   };
 
-  let { followsArrayFromRelay, firstDegreeFollowsLength } =
-    await fetchFollows(userPubkey);
+  let { followsArrayFromRelay, firstDegreeFollowsLength } = await fetchFollows(
+    userPubkey || defaultAuthor,
+  );
 
   if (!followsArrayFromRelay?.length) {
     // If followsArrayFromRelay is still empty, add the default value

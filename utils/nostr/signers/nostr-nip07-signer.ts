@@ -42,11 +42,6 @@ export class NostrNIP07Signer implements NostrSigner {
     return pubkey;
   }
 
-  public async getNPub(): Promise<string> {
-    const pubkey = await this.getPubKey();
-    return nip19.npubEncode(pubkey);
-  }
-
   public async sign(event: NostrEventTemplate): Promise<NostrEvent> {
     return await window.nostr.signEvent(event);
   }

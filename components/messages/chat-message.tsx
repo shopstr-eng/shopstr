@@ -95,7 +95,7 @@ export const ChatMessage = ({
     setCopiedToClipboard(true);
     setTimeout(() => {
       setCopiedToClipboard(false);
-    }, 2000);
+    }, 2100);
   };
 
   const renderMessageContent = (content: string) => {

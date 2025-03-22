@@ -172,12 +172,11 @@ const UserProfilePage = () => {
               <div
                 className="mx-auto mb-2 flex w-full max-w-2xl cursor-pointer flex-row items-center justify-center rounded-lg border-2 border-light-fg p-2 hover:opacity-60 dark:border-dark-fg"
                 onClick={() => {
-                  // copy to clipboard
                   navigator.clipboard.writeText(userNPub!);
                   setIsNPubCopied(true);
                   setTimeout(() => {
                     setIsNPubCopied(false);
-                  }, 1000);
+                  }, 2100);
                 }}
               >
                 <span
@@ -223,12 +222,11 @@ const UserProfilePage = () => {
                       height={15}
                       className="flex-shrink-0 text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
                       onClick={() => {
-                        // copy to clipboard
                         navigator.clipboard.writeText(userNSec);
                         setIsNSecCopied(true);
                         setTimeout(() => {
                           setIsNSecCopied(false);
-                        }, 1000);
+                        }, 2100);
                       }}
                     />
                   )}

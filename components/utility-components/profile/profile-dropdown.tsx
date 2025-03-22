@@ -162,7 +162,7 @@ export const ProfileWithDropdown = ({
         setIsNPubCopied(true);
         setTimeout(() => {
           setIsNPubCopied(false);
-        }, 1000);
+        }, 2100);
       },
       label: "Copy npub",
     },

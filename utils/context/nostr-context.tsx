@@ -5,6 +5,7 @@ import {
   useState,
   ReactNode,
 } from "react";
+import { nip19 } from "nostr-tools";
 import {
   ChallengeHandler,
   NostrSigner,
@@ -98,10 +99,8 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
 
   const loadKeys = async (signerObject: NostrSigner) => {
     try {
-      const [pubkey, npub] = await Promise.all([
-        signerObject.getPubKey(),
-        signerObject.getNPub(),
-      ]);
+      const pubkey = await signerObject.getPubKey();
+      const npub = nip19.npubEncode(pubkey);
       setPubKey(pubkey);
       setNPub(npub);
       setIsPassphraseRequested(false);

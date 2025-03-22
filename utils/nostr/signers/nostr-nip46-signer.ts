@@ -166,11 +166,11 @@ export class NostrNIP46Signer implements NostrSigner {
     }
   }
 
-  public async connect(permissions?: string[]) {
+  public async connect() {
     const args: string[] = [];
     args.push(this.bunker.bunkerPubkey);
     args.push(this.bunker.secret || "");
-    if (permissions) args.push(permissions.join(","));
+    args.push("sign_event,get_public_key,nip44_encrypt,nip44_decrypt");
     return await this.sendRPC("connect", args);
   }
 
@@ -180,11 +180,6 @@ export class NostrNIP46Signer implements NostrSigner {
 
   public async getPubKey(): Promise<string> {
     return await this.sendRPC("get_public_key", []);
-  }
-
-  public async getNPub(): Promise<string> {
-    const pubkey = await this.getPubKey();
-    return nip19.npubEncode(pubkey);
   }
 
   public async sign(event: NostrEventTemplate): Promise<NostrEvent> {
@@ -223,7 +218,7 @@ export class NostrNIP46Signer implements NostrSigner {
 
   private async sendRPC(method: string, params: any): Promise<any> {
     const requestId = this.getNewRequestId();
-    const userPubKey = this.bunker.bunkerPubkey;
+    const remotePubKey = this.bunker.bunkerPubkey;
 
     const signEvent = {
       kind: 24133,
@@ -233,12 +228,12 @@ export class NostrNIP46Signer implements NostrSigner {
         method,
         params,
       }),
-      tags: [["p", userPubKey]],
+      tags: [["p", remotePubKey]],
     };
 
     const conversationKey = nip44.getConversationKey(
       this.appPrivKey,
-      userPubKey,
+      remotePubKey,
     );
     signEvent.content = nip44.encrypt(signEvent.content, conversationKey);
     const signedEvent = finalizeEvent(signEvent, this.appPrivKey);

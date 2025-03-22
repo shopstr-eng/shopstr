@@ -162,10 +162,9 @@ const SendButton = () => {
   const handleCopyTokenString = () => {
     navigator.clipboard.writeText(newToken);
     setCopiedToClipboard(true);
-    // after 2 seconds, set copiedToClipboard back to false
     setTimeout(() => {
       setCopiedToClipboard(false);
-    }, 2000);
+    }, 2100);
   };
 
   return (

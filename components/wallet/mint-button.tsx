@@ -153,7 +153,7 @@ const MintButton = () => {
           setShowFailureModal(true);
           break;
         }
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, 2100));
       }
     }
   }
@@ -161,10 +161,9 @@ const MintButton = () => {
   const handleCopyInvoice = () => {
     navigator.clipboard.writeText(invoice);
     setCopiedToClipboard(true);
-    // after 2 seconds, set copiedToClipboard back to false
     setTimeout(() => {
       setCopiedToClipboard(false);
-    }, 2000);
+    }, 2100);
   };
 
   return (

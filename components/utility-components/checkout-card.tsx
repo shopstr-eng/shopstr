@@ -223,7 +223,7 @@ export default function CheckoutCard({
 
   const handleAddToCart = () => {
     if (
-      !currencySelection.hasOwnProperty(productData.currency) ||
+      !currencySelection.hasOwnProperty(productData.currency.toUpperCase()) ||
       productData.totalCost < 1
     ) {
       setFailureText(
