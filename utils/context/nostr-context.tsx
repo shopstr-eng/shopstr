@@ -11,7 +11,10 @@ import {
   NostrSigner,
 } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
-import { getLocalStorageData } from "@/components/utility/nostr-helper-functions";
+import {
+  getLocalStorageData,
+  setLocalStorageDataOnSignIn,
+} from "@/components/utility/nostr-helper-functions";
 import PassphraseChallengeModal from "@/components/utility-components/request-passphrase-modal";
 import AuthUrlChallengeModal from "@/components/utility-components/auth-challenge-modal";
 import { NostrNIP07Signer } from "@/utils/nostr/signers/nostr-nip07-signer";
@@ -168,9 +171,11 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
       existingSigner!,
       challengeHandler,
     );
-    setSigner(signerObject);
     if (!signerObject) return;
-
+    setLocalStorageDataOnSignIn({
+      signer: signerObject,
+    });
+    setSigner(signerObject);
     loadKeys(signerObject);
   }, []);
 
