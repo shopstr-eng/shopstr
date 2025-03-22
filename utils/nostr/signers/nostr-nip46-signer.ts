@@ -1,6 +1,5 @@
 import {
   nip44,
-  nip19,
   getPublicKey,
   NostrEvent,
   finalizeEvent,

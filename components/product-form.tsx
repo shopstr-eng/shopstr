@@ -188,7 +188,7 @@ export default function NewForm({
 
     let newListing = await PostListing(tags, signer!, isLoggedIn!, nostr!);
 
-    capturePostListingMetric(signer!, newListing.id, tags);
+    await capturePostListingMetric(signer!, newListing.id, tags);
 
     if (isEdit) {
       if (handleDelete && oldValues?.id) {
