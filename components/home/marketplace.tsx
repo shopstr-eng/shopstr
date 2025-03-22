@@ -21,10 +21,7 @@ import DisplayProducts from "../display-products";
 import LocationDropdown from "../utility-components/dropdowns/location-dropdown";
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
 import { CATEGORIES } from "../utility/STATIC-VARIABLES";
-import {
-  getLocalStorageData,
-  isUserLoggedIn,
-} from "../utility/nostr-helper-functions";
+import { SignerContext } from "@/utils/context/nostr-context";
 import { ProductData } from "../utility/product-parser-functions";
 import SignInModal from "../sign-in/SignInModal";
 import ShopstrSwitch from "../utility-components/shopstr-switch";
@@ -75,7 +72,8 @@ export function MarketplacePage({
   const shopMapContext = useContext(ShopMapContext);
   const followsContext = useContext(FollowsContext);
 
-  const { userPubkey } = getLocalStorageData();
+  const { pubkey: userPubkey, isLoggedIn: loggedIn } =
+    useContext(SignerContext);
 
   useEffect(() => {
     let npub = router.query.npub;
@@ -87,7 +85,6 @@ export function MarketplacePage({
   }, [router.query.npub]);
 
   useEffect(() => {
-    const loggedIn = isUserLoggedIn();
     if (loggedIn) {
       fetch("/api/metrics/post-shopper", {
         method: "POST",
@@ -99,7 +96,7 @@ export function MarketplacePage({
         }),
       });
     }
-  });
+  }, [userPubkey, loggedIn]);
 
   useEffect(() => {
     setIsFetchingReviews(true);
@@ -171,8 +168,7 @@ export function MarketplacePage({
   };
 
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
-    let { signInMethod } = getLocalStorageData();
-    if (!signInMethod) {
+    if (!loggedIn) {
       setShowFailureModal(true);
       return;
     }
@@ -302,7 +298,7 @@ export function MarketplacePage({
             <div className="w-full sm:order-2 sm:w-auto">
               <Input
                 className="text-light-text dark:text-dark-text"
-                placeholder="Listing title, naddr1 identifier..."
+                placeholder="Listing title, naddr1..., npub..."
                 value={selectedSearch}
                 startContent={<MagnifyingGlassIcon height={"1em"} />}
                 onChange={(event) => {
@@ -356,7 +352,7 @@ export function MarketplacePage({
               <Input
                 className="mt-2 text-light-text dark:text-dark-text"
                 isClearable
-                placeholder="Listing title, naddr1 identifier..."
+                placeholder="Listing title, naddr1..., npub..."
                 value={selectedSearch}
                 startContent={<MagnifyingGlassIcon height={"1em"} />}
                 onChange={(event) => {
@@ -425,7 +421,6 @@ export function MarketplacePage({
             selectedCategories={selectedCategories}
             selectedLocation={selectedLocation}
             selectedSearch={selectedSearch}
-            canShowLoadMore={true}
             wotFilter={wotFilter}
             setCategories={setCategories}
             onFilteredProductsChange={handleFilteredProductsChange}

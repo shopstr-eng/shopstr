@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { useForm, Controller } from "react-hook-form";
 import Link from "next/link";
 import {
@@ -21,19 +21,16 @@ import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABL
 import {
   createNostrRelayEvent,
   getLocalStorageData,
-  validPassphrase,
   publishWalletEvent,
 } from "../../components/utility/nostr-helper-functions";
 import { useTheme } from "next-themes";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import ShopstrSlider from "../../components/utility-components/shopstr-slider";
-import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
 import FailureModal from "../../components/utility-components/failure-modal";
+import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
 
 const PreferencesPage = () => {
-  const [enterPassphrase, setEnterPassphrase] = useState(false);
-  const [passphrase, setPassphrase] = useState("");
-
+  const { nostr } = useContext(NostrContext);
   const [relays, setRelays] = useState(Array<string>(0));
   const [readRelays, setReadRelays] = useState(Array<string>(0));
   const [writeRelays, setWriteRelays] = useState(Array<string>(0));
@@ -47,26 +44,20 @@ const PreferencesPage = () => {
   const [showMintModal, setShowMintModal] = useState(false);
 
   const [isLoaded, setIsLoaded] = useState(false);
-
-  const [pubkey, setPubkey] = useState("");
+  const { signer, pubkey } = useContext(SignerContext);
 
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
 
-  const { signInMethod } = getLocalStorageData();
-
   useEffect(() => {
-    if (signInMethod === "nsec" && !validPassphrase(passphrase)) {
-      setEnterPassphrase(true); // prompt for passphrase when chatsContext is loaded
-    } else if (typeof window !== "undefined") {
+    if (typeof window !== "undefined") {
       setMints(getLocalStorageData().mints);
       setRelays(getLocalStorageData().relays);
       setReadRelays(getLocalStorageData().readRelays);
       setWriteRelays(getLocalStorageData().writeRelays);
-      setPubkey(getLocalStorageData().userPubkey);
     }
     setIsLoaded(true);
-  }, [signInMethod, passphrase]);
+  }, [signer]);
 
   useEffect(() => {
     if (mints.length != 0) {
@@ -102,7 +93,7 @@ const PreferencesPage = () => {
         } else {
           setMints([newMint, ...mints.filter((mint) => mint !== newMint)]);
         }
-        await publishWalletEvent(passphrase);
+        await publishWalletEvent(nostr!, signer!);
         handleToggleMintModal();
       } else {
         setFailureText(
@@ -120,7 +111,7 @@ const PreferencesPage = () => {
 
   const deleteMint = async (mintToDelete: string) => {
     setMints(mints.filter((mint) => mint !== mintToDelete));
-    await publishWalletEvent(passphrase);
+    await publishWalletEvent(nostr!, signer!);
   };
 
   useEffect(() => {
@@ -189,7 +180,7 @@ const PreferencesPage = () => {
   };
 
   const publishRelays = () => {
-    createNostrRelayEvent(pubkey, passphrase);
+    createNostrRelayEvent(nostr!, signer!, pubkey!);
     setRelaysAreChanged(false);
   };
 
@@ -783,13 +774,6 @@ const PreferencesPage = () => {
           )}
         </div>
       </div>
-      <RequestPassphraseModal
-        passphrase={passphrase}
-        setCorrectPassphrase={setPassphrase}
-        isOpen={enterPassphrase}
-        setIsOpen={setEnterPassphrase}
-        onCancelRouteTo="/settings"
-      />
       <FailureModal
         bodyText={failureText}
         isOpen={showFailureModal}

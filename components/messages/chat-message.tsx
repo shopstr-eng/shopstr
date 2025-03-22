@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { nip19 } from "nostr-tools";
 import { CheckIcon, ClipboardIcon } from "@heroicons/react/24/outline";
-import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import ClaimButton from "../utility-components/claim-button";
 import { NostrMessageEvent } from "../../utils/types/types";
 import { timeSinceMessageDisplayText } from "../../utils/messages/utils";
 import { getDecodedToken } from "@cashu/cashu-ts";
+import { SignerContext } from "@/utils/context/nostr-context";
 
 function isDecodableToken(token: string): boolean {
   try {
@@ -21,7 +21,6 @@ export const ChatMessage = ({
   messageEvent,
   index = 0,
   currentChatPubkey,
-  passphrase,
   setBuyerPubkey,
   setCanReview,
   setProductAddress,
@@ -30,7 +29,6 @@ export const ChatMessage = ({
   messageEvent: NostrMessageEvent;
   index: number;
   currentChatPubkey: string;
-  passphrase?: string;
   setBuyerPubkey: (pubkey: string) => void;
   setCanReview: (canReview: boolean) => void;
   setProductAddress: (productAddress: string) => void;
@@ -90,14 +88,14 @@ export const ChatMessage = ({
     ? messageEvent.content.split(cashuPrefix)[0]
     : messageEvent.content;
 
-  const { userPubkey } = getLocalStorageData();
+  const { pubkey: userPubkey } = useContext(SignerContext);
 
   const handleCopyToken = (token: string) => {
     navigator.clipboard.writeText(token);
     setCopiedToClipboard(true);
     setTimeout(() => {
       setCopiedToClipboard(false);
-    }, 2000);
+    }, 2100);
   };
 
   const renderMessageContent = (content: string) => {
@@ -147,10 +145,7 @@ export const ChatMessage = ({
             <>
               {renderMessageContent(contentBeforeCashu)}
               <div className="flex items-center">
-                <ClaimButton
-                  token={cashuPrefix + tokenAfterCashuVersion}
-                  passphrase={passphrase}
-                />
+                <ClaimButton token={cashuPrefix + tokenAfterCashuVersion} />
                 <ClipboardIcon
                   onClick={() =>
                     handleCopyToken(cashuPrefix + tokenAfterCashuVersion)

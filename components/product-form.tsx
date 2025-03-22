@@ -1,5 +1,4 @@
-import React, { useMemo, useRef, useEffect, useState, useContext } from "react";
-import Link from "next/link";
+import React, { useEffect, useState, useContext } from "react";
 import CryptoJS from "crypto-js";
 import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
@@ -23,7 +22,6 @@ import Carousal from "@itseasy21/react-elastic-carousel";
 import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
 import {
   PostListing,
-  getNsecWithPassphrase,
   getLocalStorageData,
 } from "./utility/nostr-helper-functions";
 import { CATEGORIES, SHIPPING_OPTIONS } from "./utility/STATIC-VARIABLES";
@@ -36,13 +34,14 @@ import { ProductData } from "./utility/product-parser-functions";
 import { buildSrcSet } from "@/utils/images";
 import { FileUploaderButton } from "./utility-components/file-uploader";
 import currencySelection from "../public/currencySelection.json";
+import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
 import { ProductFormValues } from "../utils/types/types";
 
 interface ProductFormProps {
   handleModalToggle: () => void;
   showModal: boolean;
   oldValues?: ProductData;
-  handleDelete?: (productId: string, passphrase: string) => void;
+  handleDelete?: (productId: string) => void;
   onSubmitCallback?: () => void;
 }
 
@@ -54,10 +53,8 @@ export default function NewForm({
   onSubmitCallback,
 }: ProductFormProps) {
   const router = useRouter();
-  const [passphrase, setPassphrase] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [imageError, setImageError] = useState<string | null>(null);
-  const [signIn, setSignIn] = useState("");
   const [pubkey, setPubkey] = useState("");
   const [relayHint, setRelayHint] = useState("");
   const [isEdit, setIsEdit] = useState(false);
@@ -66,6 +63,13 @@ export default function NewForm({
   const [showOptionalTags, setShowOptionalTags] = useState(false);
   const productEventContext = useContext(ProductContext);
   const profileContext = useContext(ProfileMapContext);
+  const {
+    signer,
+    isLoggedIn,
+    pubkey: signerPubKey,
+  } = useContext(SignerContext);
+  const { nostr } = useContext(NostrContext);
+
   const { handleSubmit, control, reset, watch } = useForm({
     defaultValues: oldValues
       ? {
@@ -96,12 +100,11 @@ export default function NewForm({
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      let { signInMethod, userPubkey, relays } = getLocalStorageData();
-      setSignIn(signInMethod as string);
-      setPubkey(userPubkey as string);
+      let { relays } = getLocalStorageData();
+      setPubkey(signerPubKey as string);
       setRelayHint(relays[0] as string);
     }
-  }, []);
+  }, [signerPubKey]);
 
   useEffect(() => {
     setImages(oldValues?.images || []);
@@ -183,13 +186,13 @@ export default function NewForm({
       tags.push(["restrictions", data["Restrictions"] as string]);
     }
 
-    let newListing = await PostListing(tags, passphrase);
+    let newListing = await PostListing(tags, signer!, isLoggedIn!, nostr!);
 
-    capturePostListingMetric(newListing.id, tags);
+    await capturePostListingMetric(signer!, newListing.id, tags);
 
     if (isEdit) {
       if (handleDelete && oldValues?.id) {
-        handleDelete(oldValues.id, passphrase);
+        handleDelete(oldValues.id);
       }
     }
 
@@ -204,34 +207,12 @@ export default function NewForm({
 
   const clear = () => {
     handleModalToggle();
-    setPassphrase("");
     setImages([]);
     reset();
   };
 
   const watchShippingOption = watch("Shipping Option"); // acts as state for shippingOption input. when shippingOption changes, this variable changes as well
   const watchCurrency = watch("Currency"); // acts as state for currency input. when currency changes, this variable changes as well
-
-  const isButtonDisabled = useMemo(() => {
-    if (signIn === "extension" || signIn === "bunker") return false; // extension can upload without passphrase
-    if (passphrase === "") return true; // nsec needs passphrase
-    try {
-      let nsec = getNsecWithPassphrase(passphrase);
-      if (!nsec) return true; // invalid passphrase
-    } catch (e) {
-      return true; // invalid passphrase
-    }
-    return false;
-  }, [signIn, passphrase]);
-
-  const buttonClassName = useMemo(() => {
-    const disabledStyle = " from-gray-300 to-gray-400 cursor-not-allowed";
-    const enabledStyle = SHOPSTRBUTTONCLASSNAMES;
-    const className = isButtonDisabled ? disabledStyle : enabledStyle;
-    return className;
-  }, [isButtonDisabled]);
-
-  const passphraseInputRef = useRef<HTMLInputElement>(null);
 
   const deleteImage = (index: number) => () => {
     setImages((prevValues) => {
@@ -345,8 +326,7 @@ export default function NewForm({
             {imageError && <div className="text-red-600">{imageError}</div>}
             <FileUploaderButton
               isIconOnly={false}
-              className={buttonClassName}
-              passphrase={passphrase}
+              className={SHOPSTRBUTTONCLASSNAMES}
               imgCallbackOnUpload={(imgUrl) => {
                 if (imgUrl && imgUrl.length > 0) {
                   setImageError(null);
@@ -354,9 +334,7 @@ export default function NewForm({
                 }
               }}
             >
-              {isButtonDisabled
-                ? "Enter your passphrase below!"
-                : "Upload Images"}
+              Upload Images
             </FileUploaderButton>
             <Controller
               name="Description"
@@ -981,19 +959,6 @@ export default function NewForm({
               </>
             )}
 
-            {signIn === "nsec" && (
-              <Input
-                autoFocus
-                className="text-light-text dark:text-dark-text"
-                ref={passphraseInputRef}
-                variant="flat"
-                label="Passphrase"
-                labelPlacement="inside"
-                type="password"
-                onChange={(e) => setPassphrase(e.target.value)}
-                value={passphrase}
-              />
-            )}
             <div className="mx-4 my-2 flex items-center justify-center text-center">
               <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
               <p className="ml-2 text-xs text-light-text dark:text-dark-text">
@@ -1028,25 +993,21 @@ export default function NewForm({
             </ConfirmActionDropdown>
 
             <Button
-              className={buttonClassName}
+              className={SHOPSTRBUTTONCLASSNAMES}
               type="submit"
               onClick={(e) => {
-                if (
-                  isButtonDisabled &&
-                  signIn === "nsec" &&
-                  passphraseInputRef.current
-                ) {
+                if (signer && isLoggedIn) {
                   e.preventDefault();
-                  passphraseInputRef.current.focus();
+                  handleSubmit(onSubmit as any)();
                 }
               }}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && !isButtonDisabled) {
+                if (e.key === "Enter") {
                   e.preventDefault(); // Prevent default to avoid submitting the form again
                   handleSubmit(onSubmit as any)(); // Programmatic submit
                 }
               }}
-              isDisabled={isPostingOrUpdatingProduct || isButtonDisabled}
+              isDisabled={isPostingOrUpdatingProduct}
               isLoading={isPostingOrUpdatingProduct}
             >
               {isEdit ? "Edit Product" : "List Product"}

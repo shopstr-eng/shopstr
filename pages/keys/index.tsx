@@ -1,14 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { useRouter } from "next/router";
-import CryptoJS from "crypto-js";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
-import { getPublicKey, nip19 } from "nostr-tools";
-import {
-  generateKeys,
-  setLocalStorageDataOnSignIn,
-} from "@/components/utility/nostr-helper-functions";
+import { setLocalStorageDataOnSignIn } from "@/components/utility/nostr-helper-functions";
+import { RelaysContext } from "../../utils/context/context";
+import { SignerContext } from "@/utils/context/nostr-context";
+import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
+import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
+import { generateKeys } from "@/components/utility/nostr-helper-functions";
 import FailureModal from "../../components/utility-components/failure-modal";
 import SuccessModal from "../../components/utility-components/success-modal";
 
@@ -23,6 +23,32 @@ const Keys = () => {
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successText, setSuccessText] = useState("");
+
+  const { newSigner } = useContext(SignerContext);
+  const relaysContext = useContext(RelaysContext);
+
+  const saveSigner = (signer: NostrSigner) => {
+    if (
+      !relaysContext.isLoading &&
+      relaysContext.relayList.length >= 0 &&
+      relaysContext.readRelayList &&
+      relaysContext.writeRelayList
+    ) {
+      const generalRelays = relaysContext.relayList;
+      const readRelays = relaysContext.readRelayList;
+      const writeRelays = relaysContext.writeRelayList;
+      setLocalStorageDataOnSignIn({
+        signer,
+        relays: generalRelays,
+        readRelays: readRelays,
+        writeRelays: writeRelays,
+      });
+    } else {
+      setLocalStorageDataOnSignIn({
+        signer,
+      });
+    }
+  };
 
   useEffect(() => {
     const fetchKeys = async () => {
@@ -46,30 +72,27 @@ const Keys = () => {
     setShowSuccessModal(true);
   };
 
-  const handleSignIn = () => {
+  const handleSignIn = async () => {
     if (passphrase === "" || passphrase === null) {
       setShowFailureModal(true);
     } else {
-      let { data: sk } = nip19.decode(privateKey);
-      let pk = getPublicKey(sk as Uint8Array);
-      let encryptedPrivateKey = CryptoJS.AES.encrypt(
+      const { encryptedPrivKey, pubkey } = NostrNSecSigner.getEncryptedNSEC(
         privateKey,
         passphrase,
-      ).toString();
-
-      setLocalStorageDataOnSignIn({
-        signInMethod: "nsec",
-        pubkey: pk as string,
-        encryptedPrivateKey: encryptedPrivateKey,
+      );
+      const signer = newSigner!("nsec", {
+        encryptedPrivKey: encryptedPrivKey,
+        pubkey,
       });
-
+      await signer.getPubKey();
+      saveSigner(signer);
       router.push("/marketplace");
     }
   };
 
   return (
     <>
-      <div className="flex h-[100vh] flex-col bg-light-bg pt-24 dark:bg-dark-bg">
+      <div className="f3 books about my learnings along the way. Tweets about the career path of entrepreneurship & the buslex h-[100vh] flex-col bg-light-bg pt-24 dark:bg-dark-bg">
         <div className="p-4">
           <Card>
             <CardBody>

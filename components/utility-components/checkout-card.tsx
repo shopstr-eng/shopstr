@@ -2,7 +2,6 @@ import React, { useContext, useEffect, useRef, useState } from "react";
 import { nip19 } from "nostr-tools";
 import { ProductData } from "../utility/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
-import { getLocalStorageData } from "../utility/nostr-helper-functions";
 import {
   DisplayCostBreakdown,
   DisplayCheckoutCost,
@@ -17,13 +16,13 @@ import {
   FaceSmileIcon,
   InformationCircleIcon,
 } from "@heroicons/react/24/outline";
-import Link from "next/link";
 import { ShopMapContext, ReviewsContext } from "@/utils/context/context";
 import { ShopSettings } from "../../utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import FailureModal from "../utility-components/failure-modal";
 import SuccessModal from "../utility-components/success-modal";
 import currencySelection from "../../public/currencySelection.json";
+import { SignerContext } from "@/utils/context/nostr-context";
 
 export const TOTALPRODUCTCARDWIDTH = 380 + 5;
 const SUMMARY_CHARACTER_LIMIT = 100;
@@ -57,7 +56,7 @@ export default function CheckoutCard({
     status,
   } = productData;
 
-  const { userPubkey } = getLocalStorageData();
+  const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
 
   const router = useRouter();
 
@@ -224,7 +223,7 @@ export default function CheckoutCard({
 
   const handleAddToCart = () => {
     if (
-      !currencySelection.hasOwnProperty(productData.currency) ||
+      !currencySelection.hasOwnProperty(productData.currency.toUpperCase()) ||
       productData.totalCost < 1
     ) {
       setFailureText(
@@ -269,8 +268,7 @@ export default function CheckoutCard({
   };
 
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
-    let { signInMethod } = getLocalStorageData();
-    if (!signInMethod) {
+    if (!isLoggedIn) {
       setFailureText("You must be signed in to send an inquiry!");
       setShowFailureModal(true);
       return;

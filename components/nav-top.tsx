@@ -6,10 +6,7 @@ import { countNumberOfUnreadMessagesFromChatsContext } from "@/utils/messages/ut
 import { ChatsContext, ShopMapContext } from "@/utils/context/context";
 import { db } from "../pages/api/nostr/cache-service";
 import { useLiveQuery } from "dexie-react-hooks";
-import {
-  getLocalStorageData,
-  isUserLoggedIn,
-} from "./utility/nostr-helper-functions";
+import { SignerContext } from "@/utils/context/nostr-context";
 import { useRouter } from "next/router";
 import SignInModal from "./sign-in/SignInModal";
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
@@ -31,7 +28,8 @@ const TopNav = ({
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
   const [cartQuantity, setCartQuantity] = useState(0);
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const [signedIn, setSignedIn] = useState(false);
+  const { isLoggedIn: signedIn, pubkey: userPubkey } =
+    useContext(SignerContext);
 
   const [shopLogoURL, setShopLogoURL] = useState("");
   const [shopName, setShopName] = useState("");
@@ -43,16 +41,6 @@ const TopNav = ({
       await db.table("chatMessages").toArray();
     }
   });
-
-  useEffect(() => {
-    const getSignedInStatus = () => {
-      const loggedIn = isUserLoggedIn();
-      setSignedIn(loggedIn);
-    };
-    getSignedInStatus();
-    window.addEventListener("storage", getSignedInStatus);
-    return () => window.removeEventListener("storage", getSignedInStatus);
-  }, []);
 
   useEffect(() => {
     const fetchAndUpdateCartQuantity = async () => {
@@ -87,7 +75,6 @@ const TopNav = ({
     const npub = router.pathname
       .split("/")
       .find((segment) => segment.includes("npub"));
-    const userPubkey = getLocalStorageData().userPubkey;
     if (
       npub &&
       shopMapContext.shopData.has(npub) &&
@@ -115,7 +102,7 @@ const TopNav = ({
       setShopLogoURL("");
       setShopName("");
     }
-  }, [router.pathname, shopMapContext]);
+  }, [router.pathname, shopMapContext, userPubkey]);
 
   const handleRoute = (path: string) => {
     if (signedIn || (!signedIn && path === "/metrics")) {
@@ -207,7 +194,7 @@ const TopNav = ({
           </Button>
           {signedIn ? (
             <ProfileWithDropdown
-              pubkey={getLocalStorageData().userPubkey}
+              pubkey={userPubkey!}
               baseClassname="w-full dark:hover:shopstr-yellow-light rounded-3xl hover:scale-105 hover:bg-light-bg hover:shadow-lg dark:hover:bg-dark-bg"
               dropDownKeys={[
                 "shop_settings",
@@ -272,7 +259,7 @@ const TopNav = ({
             <>
               |
               <ProfileWithDropdown
-                pubkey={getLocalStorageData().userPubkey}
+                pubkey={userPubkey!}
                 baseClassname="justify-start dark:hover:shopstr-yellow-light pl-4 rounded-3xl py-2 hover:scale-105 hover:bg-light-bg hover:shadow-lg dark:hover:bg-dark-bg"
                 dropDownKeys={[
                   "shop_settings",

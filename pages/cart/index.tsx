@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import Link from "next/link";
 import { Button, Input } from "@nextui-org/react";
 import {
   PlusIcon,
@@ -195,10 +194,10 @@ export default function Component() {
       return product.price;
     }
     let price = 0;
-    if (!currencySelection.hasOwnProperty(product.currency)) {
+    if (!currencySelection.hasOwnProperty(product.currency.toUpperCase())) {
       throw new Error(`${product.currency} is not a supported currency.`);
     } else if (
-      currencySelection.hasOwnProperty(product.currency) &&
+      currencySelection.hasOwnProperty(product.currency.toUpperCase()) &&
       product.currency.toLowerCase() !== "sats" &&
       product.currency.toLowerCase() !== "sat"
     ) {
@@ -229,10 +228,10 @@ export default function Component() {
       return shippingCost;
     }
     let cost = 0;
-    if (!currencySelection.hasOwnProperty(product.currency)) {
+    if (!currencySelection.hasOwnProperty(product.currency.toUpperCase())) {
       throw new Error(`${product.currency} is not a supported currency.`);
     } else if (
-      currencySelection.hasOwnProperty(product.currency) &&
+      currencySelection.hasOwnProperty(product.currency.toUpperCase()) &&
       product.currency.toLowerCase() !== "sats" &&
       product.currency.toLowerCase() !== "sat"
     ) {
@@ -260,10 +259,10 @@ export default function Component() {
       return product.totalCost;
     }
     let total = 0;
-    if (!currencySelection.hasOwnProperty(product.currency)) {
+    if (!currencySelection.hasOwnProperty(product.currency.toUpperCase())) {
       throw new Error(`${product.currency} is not a supported currency.`);
     } else if (
-      currencySelection.hasOwnProperty(product.currency) &&
+      currencySelection.hasOwnProperty(product.currency.toUpperCase()) &&
       product.currency.toLowerCase() !== "sats" &&
       product.currency.toLowerCase() !== "sat"
     ) {

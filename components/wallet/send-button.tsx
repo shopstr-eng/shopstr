@@ -34,8 +34,10 @@ import {
   Proof,
 } from "@cashu/cashu-ts";
 import { CashuWalletContext } from "../../utils/context/context";
+import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
+import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
 
-const SendButton = ({ passphrase }: { passphrase?: string }) => {
+const SendButton = () => {
   const [showSendModal, setShowSendModal] = useState(false);
   const [showTokenCard, setShowTokenCard] = useState(false);
   const [newToken, setNewToken] = useState("");
@@ -44,7 +46,10 @@ const SendButton = ({ passphrase }: { passphrase?: string }) => {
 
   const walletContext = useContext(CashuWalletContext);
 
-  const { mints, tokens, history, signInMethod } = getLocalStorageData();
+  const { signer } = useContext(SignerContext);
+  const { nostr } = useContext(NostrContext);
+
+  const { mints, tokens, history } = getLocalStorageData();
 
   const {
     handleSubmit: handleSendSubmit,
@@ -141,11 +146,12 @@ const SendButton = ({ passphrase }: { passphrase?: string }) => {
         ]),
       );
       await publishProofEvent(
+        nostr!,
+        signer!,
         mints[0],
         changeProofs && changeProofs.length >= 1 ? changeProofs : [],
         "out",
         sendTotal.toString(),
-        passphrase,
         deletedEventIds,
       );
     } catch (_) {
@@ -156,10 +162,9 @@ const SendButton = ({ passphrase }: { passphrase?: string }) => {
   const handleCopyTokenString = () => {
     navigator.clipboard.writeText(newToken);
     setCopiedToClipboard(true);
-    // after 2 seconds, set copiedToClipboard back to false
     setTimeout(() => {
       setCopiedToClipboard(false);
-    }, 2000);
+    }, 2100);
   };
 
   return (
@@ -232,7 +237,7 @@ const SendButton = ({ passphrase }: { passphrase?: string }) => {
                   );
                 }}
               />
-              {signInMethod === "bunker" && (
+              {signer instanceof NostrNIP46Signer && (
                 <div className="mx-4 my-2 flex items-center justify-center text-center">
                   <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
                   <p className="ml-2 text-xs text-light-text dark:text-dark-text">

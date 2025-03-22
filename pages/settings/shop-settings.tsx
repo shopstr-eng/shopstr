@@ -6,24 +6,17 @@ import { ArrowUpOnSquareIcon } from "@heroicons/react/24/outline";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { ShopMapContext } from "@/utils/context/context";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
-import {
-  createNostrShopEvent,
-  getNsecWithPassphrase,
-  getLocalStorageData,
-  validPassphrase,
-} from "@/components/utility/nostr-helper-functions";
+import { SignerContext, NostrContext } from "@/utils/context/nostr-context";
+import { createNostrShopEvent } from "@/components/utility/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
-import RequestPassphraseModal from "@/components/utility-components/request-passphrase-modal";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 
 const ShopSettingsPage = () => {
-  const [enterPassphrase, setEnterPassphrase] = useState(false);
-  const [passphrase, setPassphrase] = useState("");
+  const { nostr } = useContext(NostrContext);
   const [isUploadingShopSettings, setIsUploadingShopSettings] = useState(false);
   const [isFetchingShop, setIsFetchingShop] = useState(false);
-  const [userPubkey, setUserPubkey] = useState("");
 
-  const { signInMethod } = getLocalStorageData();
+  const { signer, pubkey: userPubkey } = useContext(SignerContext);
 
   const shopContext = useContext(ShopMapContext);
   const { handleSubmit, control, reset, watch, setValue } = useForm({
@@ -35,36 +28,28 @@ const ShopSettingsPage = () => {
     },
   });
 
-  useEffect(() => {
-    setUserPubkey(getLocalStorageData().userPubkey);
-  }, []);
-
   const watchBanner = watch("banner");
   const watchPicture = watch("picture");
   const defaultImage = "/shopstr-2000x2000.png";
 
   useEffect(() => {
-    if (signInMethod === "nsec" && !validPassphrase(passphrase)) {
-      setEnterPassphrase(true); // prompt for passphrase when chatsContext is loaded
-    } else {
-      setIsFetchingShop(true);
-      const shopMap = shopContext.shopData;
+    setIsFetchingShop(true);
+    const shopMap = shopContext.shopData;
 
-      const shop = shopMap.has(userPubkey)
-        ? shopMap.get(userPubkey)
-        : undefined;
-      if (shop) {
-        const mappedContent = {
-          name: shop.content.name,
-          about: shop.content.about,
-          picture: shop.content.ui.picture,
-          banner: shop.content.ui.banner,
-        };
-        reset(mappedContent);
-      }
-      setIsFetchingShop(false);
+    const shop = shopMap.has(userPubkey!)
+      ? shopMap.get(userPubkey!)
+      : undefined;
+    if (shop) {
+      const mappedContent = {
+        name: shop.content.name,
+        about: shop.content.about,
+        picture: shop.content.ui.picture,
+        banner: shop.content.ui.banner,
+      };
+      reset(mappedContent);
     }
-  }, [shopContext, userPubkey, passphrase]);
+    setIsFetchingShop(false);
+  }, [shopContext, userPubkey, userPubkey]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
     setIsUploadingShopSettings(true);
@@ -77,39 +62,25 @@ const ShopSettingsPage = () => {
         theme: "",
         darkMode: false,
       },
-      merchants: [userPubkey],
+      merchants: [userPubkey!],
     };
     await createNostrShopEvent(
-      userPubkey,
+      nostr!,
+      signer!,
+      userPubkey!,
       JSON.stringify(transformedData),
-      passphrase,
     );
     shopContext.updateShopData({
-      pubkey: userPubkey,
+      pubkey: userPubkey!,
       content: transformedData,
       created_at: 0,
     });
     setIsUploadingShopSettings(false);
   };
 
-  const isButtonDisabled = useMemo(() => {
-    if (signInMethod === "extension" || signInMethod === "bunker") return false;
-    if (passphrase === "") return true;
-    try {
-      let nsec = getNsecWithPassphrase(passphrase);
-      if (!nsec) return true;
-    } catch (e) {
-      return true;
-    }
-    return false;
-  }, [signInMethod, passphrase]);
-
   const buttonClassName = useMemo(() => {
-    const disabledStyle = "from-gray-300 to-gray-400 cursor-not-allowed";
-    const enabledStyle = SHOPSTRBUTTONCLASSNAMES;
-    const className = isButtonDisabled ? disabledStyle : enabledStyle;
-    return `w-full mb-10 ${className}`;
-  }, [isButtonDisabled]);
+    return `w-full mb-10 ${SHOPSTRBUTTONCLASSNAMES}`;
+  }, []);
 
   return (
     <>
@@ -132,7 +103,6 @@ const ShopSettingsPage = () => {
                   <FileUploaderButton
                     isIconOnly={false}
                     className={`absolute bottom-5 right-5 z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
-                    passphrase={passphrase}
                     imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
                   >
                     Upload Banner
@@ -144,7 +114,6 @@ const ShopSettingsPage = () => {
                       <FileUploaderButton
                         isIconOnly
                         className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
-                        passphrase={passphrase}
                         imgCallbackOnUpload={(imgUrl) =>
                           setValue("picture", imgUrl)
                         }
@@ -252,7 +221,7 @@ const ShopSettingsPage = () => {
                   className={buttonClassName}
                   type="submit"
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && !isButtonDisabled) {
+                    if (e.key === "Enter") {
                       e.preventDefault(); // Prevent default to avoid submitting the form again
                       handleSubmit(onSubmit as any)(); // Programmatic submit
                     }
@@ -267,13 +236,6 @@ const ShopSettingsPage = () => {
           )}
         </div>
       </div>
-      <RequestPassphraseModal
-        passphrase={passphrase}
-        setCorrectPassphrase={setPassphrase}
-        isOpen={enterPassphrase}
-        setIsOpen={setEnterPassphrase}
-        onCancelRouteTo="/settings"
-      />
     </>
   );
 };

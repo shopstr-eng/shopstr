@@ -1,5 +1,3 @@
-// create a react spinner component using nextui
-
 import { Spinner } from "@nextui-org/react";
 import { useTheme } from "next-themes";
 
