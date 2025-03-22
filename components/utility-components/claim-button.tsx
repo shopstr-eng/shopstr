@@ -134,10 +134,7 @@ export default function ClaimButton({ token }: { token: string }) {
       ? sellerProfileMap.get(userPubkey!)
       : undefined;
     setLnurl(
-      sellerProfile &&
-        sellerProfile.content.lud16 &&
-        tokenMint !==
-          "https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV"
+      sellerProfile && sellerProfile.content.lud16
         ? sellerProfile.content.lud16
         : "invalid",
     );

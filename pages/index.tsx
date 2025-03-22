@@ -1,4 +1,5 @@
 import { Button, Image } from "@nextui-org/react";
+import { ArrowUpRightIcon } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
 import { useContext, useEffect, useState } from "react";
@@ -301,8 +302,85 @@ export default function Landing() {
 
       {/* Footer */}
       <footer className="w-full bg-light-fg px-4 py-6 text-center text-sm text-light-text dark:bg-dark-fg dark:text-dark-text md:text-base">
-        © Shopstr 2025
+        © 2023-2025, Shopstr Market Inc. or its affiliates
       </footer>
+
+      {/* FAQ Link */}
+      <div className="flex items-center justify-center bg-light-fg pb-4 dark:bg-dark-fg">
+        <button
+          onClick={() => router.push("/faq")}
+          className="flex items-center gap-1 text-light-text hover:text-shopstr-purple dark:text-dark-text dark:hover:text-shopstr-yellow"
+        >
+          FAQ
+          <ArrowUpRightIcon className="h-3 w-3 text-light-text dark:text-dark-text" />
+        </button>
+      </div>
+
+      {/* Social Icons */}
+      <div className="flex items-center justify-center bg-light-fg pb-6 dark:bg-dark-fg">
+        <div className="flex h-auto w-full items-center justify-center gap-4">
+          <a
+            href="https://github.com/shopstr-eng/shopstr"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Image
+              src="/github-mark.png"
+              alt="GitHub"
+              width={23}
+              height={23}
+              className="block dark:hidden"
+            />
+            <Image
+              src="/github-mark-white.png"
+              alt="GitHub"
+              width={23}
+              height={23}
+              className="hidden dark:block"
+            />
+          </a>
+          <a
+            href="https://njump.me/npub15dc33fyg3cpd9r58vlqge2hh8dy6hkkrjxkhluv2xpyfreqkmsesesyv6e"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Image
+              src="/nostr-icon-black-transparent-256x256.png"
+              alt="Nostr"
+              width={32}
+              height={32}
+              className="block dark:hidden"
+            />
+            <Image
+              src="/nostr-icon-white-transparent-256x256.png"
+              alt="Nostr"
+              width={32}
+              height={32}
+              className="hidden dark:block"
+            />
+          </a>
+          <a
+            href="https://x.com/_shopstr"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Image
+              src="/x-logo-black.png"
+              alt="X"
+              width={23}
+              height={23}
+              className="block dark:hidden"
+            />
+            <Image
+              src="/x-logo-white.png"
+              alt="X"
+              width={23}
+              height={23}
+              className="hidden dark:block"
+            />
+          </a>
+        </div>
+      </div>
     </div>
   );
 }

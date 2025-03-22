@@ -961,13 +961,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       ? JSON.parse(localStorage.getItem("mints") as string)
       : null;
 
-    if (
-      mints === null ||
-      mints[0] ===
-        "https://legend.lnbits.com/cashu/api/v1/AptDNABNBXv8gpuywhx6NV" ||
-      mints[0] ===
-        "https://legend.lnbits.com/cashu/api/v1/4gr9Xcmz3XEkUNwiBiQGoC"
-    ) {
+    if (mints === null) {
       mints = [getDefaultMint()];
       localStorage.setItem(LOCALSTORAGECONSTANTS.mints, JSON.stringify(mints));
     }
@@ -1017,7 +1011,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
           break;
         case "bunker":
           let bunker =
-            "bunker://" + bunkerRemotePubkey + "/?secret=" + bunkerSecret;
+            "bunker://" + bunkerRemotePubkey + "?secret=" + bunkerSecret;
           for (const relay of bunkerRelays) {
             bunker += "&relay=" + relay;
           }

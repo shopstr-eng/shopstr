@@ -125,7 +125,7 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
           let bunker =
             "bunker://" +
             getLocalStorageData().bunkerRemotePubkey +
-            "/?secret=" +
+            "?secret=" +
             getLocalStorageData().bunkerSecret;
           let bunkerRelays = getLocalStorageData().bunkerRelays;
           for (const relay of bunkerRelays!) {
