@@ -99,7 +99,7 @@ export default function NewForm({
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      let { relays } = getLocalStorageData();
+      const { relays } = getLocalStorageData();
       setPubkey(signerPubKey as string);
       setRelayHint(relays[0] as string);
     }
@@ -122,10 +122,10 @@ export default function NewForm({
 
     setIsPostingOrUpdatingProduct(true);
     const hashHex = CryptoJS.SHA256(data["Product Name"] as string).toString(
-      CryptoJS.enc.Hex,
+      CryptoJS.enc.Hex
     );
 
-    let tags: ProductFormValues = [
+    const tags: ProductFormValues = [
       ["d", oldValues?.d || hashHex],
       ["alt", ("Product listing: " + data["Product Name"]) as string],
       [
@@ -185,7 +185,7 @@ export default function NewForm({
       tags.push(["restrictions", data["Restrictions"] as string]);
     }
 
-    let newListing = await PostListing(tags, signer!, isLoggedIn!, nostr!);
+    const newListing = await PostListing(tags, signer!, isLoggedIn!, nostr!);
 
     if (isEdit) {
       if (handleDelete && oldValues?.id) {
@@ -254,8 +254,10 @@ export default function NewForm({
                 field: { onChange, onBlur, value },
                 fieldState: { error },
               }) => {
-                let isErrored = error !== undefined;
-                let errorMessage: string = error?.message ? error.message : "";
+                const isErrored = error !== undefined;
+                const errorMessage: string = error?.message
+                  ? error.message
+                  : "";
                 return (
                   <Input
                     className="text-light-text dark:text-dark-text"
@@ -343,8 +345,10 @@ export default function NewForm({
                 field: { onChange, onBlur, value },
                 fieldState: { error },
               }) => {
-                let isErrored = error !== undefined;
-                let errorMessage: string = error?.message ? error.message : "";
+                const isErrored = error !== undefined;
+                const errorMessage: string = error?.message
+                  ? error.message
+                  : "";
                 return (
                   <Textarea
                     className="text-light-text dark:text-dark-text"
@@ -374,8 +378,10 @@ export default function NewForm({
                 field: { onChange, onBlur, value },
                 fieldState: { error },
               }) => {
-                let isErrored = error !== undefined;
-                let errorMessage: string = error?.message ? error.message : "";
+                const isErrored = error !== undefined;
+                const errorMessage: string = error?.message
+                  ? error.message
+                  : "";
                 return (
                   <Input
                     className="text-light-text dark:text-dark-text"
@@ -455,8 +461,10 @@ export default function NewForm({
                 field: { onChange, onBlur, value },
                 fieldState: { error },
               }) => {
-                let isErrored = error !== undefined;
-                let errorMessage: string = error?.message ? error.message : "";
+                const isErrored = error !== undefined;
+                const errorMessage: string = error?.message
+                  ? error.message
+                  : "";
                 return (
                   <LocationDropdown
                     autoFocus
@@ -485,8 +493,10 @@ export default function NewForm({
                 field: { onChange, onBlur, value },
                 fieldState: { error },
               }) => {
-                let isErrored = error !== undefined;
-                let errorMessage: string = error?.message ? error.message : "";
+                const isErrored = error !== undefined;
+                const errorMessage: string = error?.message
+                  ? error.message
+                  : "";
                 return (
                   <Select
                     className="text-light-text dark:text-dark-text"
@@ -528,8 +538,8 @@ export default function NewForm({
                   field: { onChange, onBlur, value },
                   fieldState: { error },
                 }) => {
-                  let isErrored = error !== undefined;
-                  let errorMessage: string = error?.message
+                  const isErrored = error !== undefined;
+                  const errorMessage: string = error?.message
                     ? error.message
                     : "";
                   return (
@@ -580,8 +590,10 @@ export default function NewForm({
                 field: { onChange, onBlur, value },
                 fieldState: { error },
               }) => {
-                let isErrored = error !== undefined;
-                let errorMessage: string = error?.message ? error.message : "";
+                const isErrored = error !== undefined;
+                const errorMessage: string = error?.message
+                  ? error.message
+                  : "";
                 return (
                   <Select
                     variant="bordered"
@@ -652,8 +664,8 @@ export default function NewForm({
                     field: { onChange, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage = error?.message || "";
+                    const isErrored = error !== undefined;
+                    const errorMessage = error?.message || "";
                     return (
                       <div className="flex flex-col">
                         <Input
@@ -684,8 +696,8 @@ export default function NewForm({
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage = error?.message || "";
+                    const isErrored = error !== undefined;
+                    const errorMessage = error?.message || "";
 
                     const selectedSizes = Array.isArray(value)
                       ? value
@@ -753,7 +765,7 @@ export default function NewForm({
                   }) => {
                     const handleQuantityChange = (
                       size: string,
-                      quantity: number,
+                      quantity: number
                     ) => {
                       const newQuantities = new Map(value);
                       newQuantities.set(size, quantity);
@@ -779,7 +791,7 @@ export default function NewForm({
                               onChange={(e) =>
                                 handleQuantityChange(
                                   size,
-                                  parseInt(e.target.value) || 0,
+                                  parseInt(e.target.value) || 0
                                 )
                               }
                               className="w-20"
@@ -798,8 +810,8 @@ export default function NewForm({
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
                       ? error.message
                       : "";
                     return (
@@ -859,8 +871,8 @@ export default function NewForm({
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
                       ? error.message
                       : "";
                     return (
@@ -899,8 +911,8 @@ export default function NewForm({
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
                       ? error.message
                       : "";
                     return (
@@ -930,8 +942,8 @@ export default function NewForm({
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
                       ? error.message
                       : "";
                     return (

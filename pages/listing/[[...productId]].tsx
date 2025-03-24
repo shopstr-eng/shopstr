@@ -12,7 +12,7 @@ import { Event, nip19 } from "nostr-tools";
 const Listing = () => {
   const router = useRouter();
   const [productData, setProductData] = useState<ProductData | undefined>(
-    undefined,
+    undefined
   );
   const [productIdString, setProductIdString] = useState("");
 
@@ -27,7 +27,7 @@ const Listing = () => {
     if (router.isReady) {
       const { productId } = router.query;
       const productIdString = productId ? productId[0] : "";
-      setProductIdString(productIdString);
+      setProductIdString(productIdString!);
       if (!productIdString) {
         router.push("/marketplace"); // if there isn't a productId, redirect to home page
       }
@@ -54,7 +54,7 @@ const Listing = () => {
           // Check for matching event id
           const idMatch = event.id === productIdString;
           return naddrMatch || dTagMatch || idMatch;
-        },
+        }
       );
 
       if (matchingEvent) {

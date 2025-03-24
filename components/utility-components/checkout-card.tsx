@@ -66,7 +66,7 @@ export default function CheckoutCard({
   const [showAllImages, setShowAllImages] = useState(false);
   const [selectedImage, setSelectedImage] = useState(images[0]);
   const [selectedSize, setSelectedSize] = useState<string | undefined>(
-    undefined,
+    undefined
   );
   const [hasSizes, setHasSizes] = useState(false);
   const [isAdded, setIsAdded] = useState(false);
@@ -111,7 +111,7 @@ export default function CheckoutCard({
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      let cartList = localStorage.getItem("cart")
+      const cartList = localStorage.getItem("cart")
         ? JSON.parse(localStorage.getItem("cart") as string)
         : [];
       if (cartList && cartList.length > 0) {
@@ -122,7 +122,7 @@ export default function CheckoutCard({
 
   useEffect(() => {
     const productExists = cart.some(
-      (item: ProductData) => item.id === productData.id,
+      (item: ProductData) => item.id === productData.id
     );
     if (productExists) {
       setIsAdded(true);
@@ -170,7 +170,7 @@ export default function CheckoutCard({
         setProductReviews(
           productReviewValue !== undefined
             ? productReviewValue
-            : new Map<string, string[][]>(),
+            : new Map<string, string[][]>()
         );
       }
     }
@@ -180,7 +180,7 @@ export default function CheckoutCard({
   useEffect(() => {
     if (containerRef.current) {
       const resizeObserver = new ResizeObserver((entries) => {
-        for (let entry of entries) {
+        for (const entry of entries) {
           calculateVisibleImages(entry.contentRect.height);
         }
       });
@@ -191,6 +191,7 @@ export default function CheckoutCard({
         resizeObserver.disconnect();
       };
     }
+    return;
   }, [selectedImage]);
 
   useEffect(() => {
@@ -199,7 +200,7 @@ export default function CheckoutCard({
         sizes &&
         sizes.length > 0 &&
         sizes.some((size) => (sizeQuantities?.get(size) || 0) > 0)
-      ),
+      )
     );
   }, [sizes, sizeQuantities]);
 
@@ -227,14 +228,14 @@ export default function CheckoutCard({
       productData.totalCost < 1
     ) {
       setFailureText(
-        "The price and/or currency set for this listing was invalid.",
+        "The price and/or currency set for this listing was invalid."
       );
       setShowFailureModal(true);
       return;
     }
     let updatedCart = [];
     if (selectedSize) {
-      let productWithSize = { ...productData, selectedSize: selectedSize };
+      const productWithSize = { ...productData, selectedSize: selectedSize };
       updatedCart = [...cart, productWithSize];
     } else {
       updatedCart = [...cart, productData];
@@ -261,7 +262,7 @@ export default function CheckoutCard({
     } else {
       // Fallback for browsers that do not support the Web Share API
       navigator.clipboard.writeText(
-        `${window.location.origin}/listing/${naddr}`,
+        `${window.location.origin}/listing/${naddr}`
       );
       setShowSuccessModal(true);
     }
@@ -295,7 +296,7 @@ export default function CheckoutCard({
             >
               {size}
             </button>
-          ) : null,
+          ) : null
         )}
       </div>
     );
@@ -342,7 +343,7 @@ export default function CheckoutCard({
                               style={{ aspectRatio: "1 / 1" }}
                               onClick={() => setSelectedImage(image)}
                             />
-                          ),
+                          )
                         )}
                       </div>
                     </div>
@@ -599,7 +600,7 @@ export default function CheckoutCard({
                             })}
                           </div>
                         </div>
-                      ),
+                      )
                     )}
                   </div>
                 ) : (

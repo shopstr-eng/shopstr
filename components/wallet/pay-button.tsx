@@ -58,14 +58,14 @@ const PayButton = () => {
   };
 
   const onPaySubmit = async (data: { [x: string]: any }) => {
-    let invoiceString = data["invoice"];
+    const invoiceString = data["invoice"];
     await handlePay(invoiceString);
   };
 
   const calculateFee = async (invoice: string) => {
     setFeeReserveAmount("");
     if (invoice && /^lnbc/.test(invoice)) {
-      const mint = new CashuMint(mints[0]);
+      const mint = new CashuMint(mints[0]!);
       const wallet = new CashuWallet(mint);
       const meltQuote = await wallet?.createMeltQuote(invoice);
       if (meltQuote) {
@@ -83,11 +83,11 @@ const PayButton = () => {
     setPaymentFailed(false);
     setIsRedeeming(true);
     try {
-      const mint = new CashuMint(mints[0]);
+      const mint = new CashuMint(mints[0]!);
       const wallet = new CashuWallet(mint);
       const mintKeySetIds = await wallet.getKeySets();
       const filteredProofs = tokens.filter((p: Proof) =>
-        mintKeySetIds.some((keyset: MintKeyset) => keyset.id === p.id),
+        mintKeySetIds.some((keyset: MintKeyset) => keyset.id === p.id)
       );
       const meltQuote = await wallet.createMeltQuote(invoiceString);
       const meltQuoteTotal = meltQuote.amount + meltQuote.fee_reserve;
@@ -101,9 +101,9 @@ const PayButton = () => {
               event.proofs.some((proof: Proof) =>
                 filteredProofs.some(
                   (filteredProof) =>
-                    JSON.stringify(proof) === JSON.stringify(filteredProof),
-                ),
-              ),
+                    JSON.stringify(proof) === JSON.stringify(filteredProof)
+                )
+              )
             )
             .map((event) => event.id),
           ...walletContext.proofEvents
@@ -111,9 +111,9 @@ const PayButton = () => {
               event.proofs.some((proof: Proof) =>
                 keep.some(
                   (keepProof) =>
-                    JSON.stringify(proof) === JSON.stringify(keepProof),
-                ),
-              ),
+                    JSON.stringify(proof) === JSON.stringify(keepProof)
+                )
+              )
             )
             .map((event) => event.id),
           ...walletContext.proofEvents
@@ -121,9 +121,9 @@ const PayButton = () => {
               event.proofs.some((proof: Proof) =>
                 send.some(
                   (sendProof) =>
-                    JSON.stringify(proof) === JSON.stringify(sendProof),
-                ),
-              ),
+                    JSON.stringify(proof) === JSON.stringify(sendProof)
+                )
+              )
             )
             .map((event) => event.id),
         ]),
@@ -134,12 +134,12 @@ const PayButton = () => {
         Array.isArray(changeProofs) && changeProofs.length > 0
           ? changeProofs.reduce(
               (acc, current: Proof) => acc + current.amount,
-              0,
+              0
             )
           : 0;
       const remainingProofs = tokens.filter(
         (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id),
+          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id)
       );
       let proofArray;
       if (changeAmount >= 1 && changeProofs) {
@@ -150,7 +150,7 @@ const PayButton = () => {
       localStorage.setItem("tokens", JSON.stringify(proofArray));
       const filteredTokenAmount = filteredProofs.reduce(
         (acc, token: Proof) => acc + token.amount,
-        0,
+        0
       );
       const transactionAmount = filteredTokenAmount - changeAmount;
       localStorage.setItem(
@@ -162,16 +162,16 @@ const PayButton = () => {
             date: Math.floor(Date.now() / 1000),
           },
           ...history,
-        ]),
+        ])
       );
       await publishProofEvent(
         nostr!,
         signer!,
-        mints[0],
+        mints[0]!,
         changeProofs && changeProofs.length >= 1 ? changeProofs : [],
         "out",
         transactionAmount.toString(),
-        deletedEventIds,
+        deletedEventIds
       );
       setIsPaid(true);
       setIsRedeeming(false);
@@ -230,8 +230,8 @@ const PayButton = () => {
                   field: { onChange, onBlur, value },
                   fieldState: { error },
                 }) => {
-                  let isErrored = error !== undefined;
-                  let errorMessage: string = error?.message
+                  const isErrored = error !== undefined;
+                  const errorMessage: string = error?.message
                     ? error.message
                     : "";
                   return (

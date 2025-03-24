@@ -39,7 +39,7 @@ export const FileUploaderButton = ({
       if (isLoggedIn) {
         response = await nostrBuildUploadImages(
           imageFiles,
-          async (e) => await signer!.sign(e),
+          async (e) => await signer!.sign(e)
         );
       }
 

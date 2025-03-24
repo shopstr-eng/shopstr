@@ -65,7 +65,7 @@ export const ChatPanel = ({
   const [canReview, setCanReview] = useState(false);
 
   const [selectedThumb, setSelectedThumb] = useState<"up" | "down" | null>(
-    null,
+    null
   );
   const [reviewOptions, setReviewOptions] = useState<Map<string, number>>(
     new Map([
@@ -73,7 +73,7 @@ export const ChatPanel = ({
       ["quality", 0],
       ["delivery", 0],
       ["communication", 0],
-    ]),
+    ])
   );
   const [productAddress, setProductAddress] = useState("");
   const [orderId, setOrderId] = useState("");
@@ -135,10 +135,14 @@ export const ChatPanel = ({
 
   const onShippingSubmit = async (data: { [x: string]: any }) => {
     try {
-      let decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
-      let decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
-      let decodedRandomPubkeyForReceiver = nip19.decode(randomNpubForReceiver);
-      let decodedRandomPrivkeyForReceiver = nip19.decode(randomNsecForReceiver);
+      const decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
+      const decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
+      const decodedRandomPubkeyForReceiver = nip19.decode(
+        randomNpubForReceiver
+      );
+      const decodedRandomPrivkeyForReceiver = nip19.decode(
+        randomNsecForReceiver
+      );
 
       // Convert delivery days to future unix timestamp
       const daysToAdd = parseInt(data["Delivery Time"]);
@@ -147,7 +151,7 @@ export const ChatPanel = ({
 
       // Create a human-readable date format
       const humanReadableDate = new Date(
-        futureTimestamp * 1000,
+        futureTimestamp * 1000
       ).toLocaleDateString("en-US", {
         weekday: "long",
         year: "numeric",
@@ -155,9 +159,9 @@ export const ChatPanel = ({
         day: "numeric",
       });
 
-      let shippingCarrier = data["Shipping Carrier"];
-      let trackingNumber = data["Tracking Number"];
-      let message =
+      const shippingCarrier = data["Shipping Carrier"];
+      const trackingNumber = data["Tracking Number"];
+      const message =
         "Your order from " +
         userNPub +
         " is expected to arrive on " +
@@ -166,7 +170,7 @@ export const ChatPanel = ({
         shippingCarrier +
         " tracking number is: " +
         trackingNumber;
-      let giftWrappedMessageEvent = await constructGiftWrappedEvent(
+      const giftWrappedMessageEvent = await constructGiftWrappedEvent(
         decodedRandomPubkeyForSender.data as string,
         buyerPubkey,
         message,
@@ -180,20 +184,20 @@ export const ChatPanel = ({
           tracking: trackingNumber,
           carrier: shippingCarrier,
           eta: futureTimestamp, // Using the calculated future timestamp
-        },
+        }
       );
-      let sealedEvent = await constructMessageSeal(
+      const sealedEvent = await constructMessageSeal(
         signer!,
         giftWrappedMessageEvent,
         decodedRandomPubkeyForSender.data as string,
         buyerPubkey,
-        decodedRandomPrivkeyForSender.data as Uint8Array,
+        decodedRandomPrivkeyForSender.data as Uint8Array
       );
-      let giftWrappedEvent = await constructMessageGiftWrap(
+      const giftWrappedEvent = await constructMessageGiftWrap(
         sealedEvent,
         decodedRandomPubkeyForReceiver.data as string,
         decodedRandomPrivkeyForReceiver.data as Uint8Array,
-        buyerPubkey,
+        buyerPubkey
       );
       await sendGiftWrappedMessageEvent(giftWrappedEvent);
       handleToggleShippingModal();
@@ -216,22 +220,22 @@ export const ChatPanel = ({
       productReviewsData.set(userPubkey!, eventTags);
       await publishReviewEvent(nostr!, signer!, data.comment, eventTags);
       reviewsContext.updateProductReviewsData(
-        merchantPubkey,
-        dTag,
-        productReviewsData,
+        merchantPubkey!,
+        dTag!,
+        productReviewsData
       );
       const merchantScoresMap = reviewsContext.merchantReviewsData;
-      if (!merchantScoresMap.has(merchantPubkey)) {
-        merchantScoresMap.set(merchantPubkey, []);
+      if (!merchantScoresMap.has(merchantPubkey!)) {
+        merchantScoresMap.set(merchantPubkey!, []);
       }
       merchantScoresMap
-        .get(merchantPubkey)!
+        .get(merchantPubkey!)!
         .push(calculateWeightedScore(eventTags));
       reviewsContext.updateMerchantReviewsData(
-        merchantPubkey,
-        merchantScoresMap.get(merchantPubkey) || [
+        merchantPubkey!,
+        merchantScoresMap.get(merchantPubkey!) || [
           calculateWeightedScore(eventTags),
-        ],
+        ]
       );
       handleToggleReviewModal();
     } catch (error) {
@@ -279,7 +283,7 @@ export const ChatPanel = ({
         {messages
           .filter(
             (message, index, self) =>
-              index === self.findIndex((m) => m.id === message.id),
+              index === self.findIndex((m) => m.id === message.id)
           )
           .map((messageEvent: NostrMessageEvent, index) => {
             return (
@@ -367,8 +371,8 @@ export const ChatPanel = ({
                       field: { onChange, onBlur, value },
                       fieldState: { error },
                     }) => {
-                      let isErrored = error !== undefined;
-                      let errorMessage: string = error?.message
+                      const isErrored = error !== undefined;
+                      const errorMessage: string = error?.message
                         ? error.message
                         : "";
                       return (
@@ -398,8 +402,8 @@ export const ChatPanel = ({
                       field: { onChange, onBlur, value },
                       fieldState: { error },
                     }) => {
-                      let isErrored = error !== undefined;
-                      let errorMessage: string = error?.message
+                      const isErrored = error !== undefined;
+                      const errorMessage: string = error?.message
                         ? error.message
                         : "";
                       return (
@@ -427,8 +431,8 @@ export const ChatPanel = ({
                       field: { onChange, onBlur, value },
                       fieldState: { error },
                     }) => {
-                      let isErrored = error !== undefined;
-                      let errorMessage: string = error?.message
+                      const isErrored = error !== undefined;
+                      const errorMessage: string = error?.message
                         ? error.message
                         : "";
                       return (
@@ -581,7 +585,7 @@ export const ChatPanel = ({
                               const newMap = new Map(prev);
                               newMap.set(
                                 "communication",
-                                e.target.checked ? 1 : 0,
+                                e.target.checked ? 1 : 0
                               );
                               return newMap;
                             })

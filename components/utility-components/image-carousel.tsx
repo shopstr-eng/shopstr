@@ -23,7 +23,7 @@ export default function ImageCarousel({
     "absolute z-10 top-[calc(50%-(.5*50%/2))] cursor-pointer h-[30%] w-[8%] rounded-sm bg-purple-300 opacity-20 hover:bg-purple-500 hover:opacity-80 flex items-center";
 
   const displayImages = () => {
-    let className = "flex items-center justify-center " + classname + "";
+    const className = "flex items-center justify-center " + classname + "";
     if (!images || images.length == 0)
       return [
         <div className={className} key={"image" + 0}>

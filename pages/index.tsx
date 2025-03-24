@@ -27,7 +27,7 @@ export default function Landing() {
   }, [router.pathname, signerContext]);
 
   useEffect(() => {
-    let parsedProductsArray: ProductData[] = [];
+    const parsedProductsArray: ProductData[] = [];
     const products = productEventContext.productEvents;
     products.forEach((product: any) => {
       const parsedProduct = parseTags(product) as ProductData;
@@ -95,7 +95,7 @@ export default function Landing() {
                           identifier: product.d as string,
                           pubkey: product.pubkey,
                           kind: 30402,
-                        })}`,
+                        })}`
                       )
                     }
                   />

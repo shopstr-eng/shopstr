@@ -22,7 +22,7 @@ export const MyListingsPage = () => {
   const [selectedSection, setSelectedSection] = useState("Listings");
 
   const [selectedCategories, setSelectedCategories] = useState(
-    new Set<string>([]),
+    new Set<string>([])
   );
   const [categories, setCategories] = useState([""]);
 

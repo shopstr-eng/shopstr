@@ -63,8 +63,8 @@ export default function DisplayProductModal({
   const displayDate = (timestamp: number): [string, string] => {
     if (timestamp == 0 || !timestamp) return ["", ""];
     const d = new Date(timestamp * 1000);
-    const dateString = d.toLocaleString().split(",")[0].trim();
-    const timeString = d.toLocaleString().split(",")[1].trim();
+    const dateString = d.toLocaleString().split(",")[0]!.trim();
+    const timeString = d.toLocaleString().split(",")[1]!.trim();
     return [dateString, timeString];
   };
 
@@ -86,7 +86,7 @@ export default function DisplayProductModal({
     } else {
       // Fallback for browsers that do not support the Web Share API
       navigator.clipboard.writeText(
-        `${window.location.origin}/listing/${naddr}`,
+        `${window.location.origin}/listing/${naddr}`
       );
       setShowSuccessModal(true);
     }

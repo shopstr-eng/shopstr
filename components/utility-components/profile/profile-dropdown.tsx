@@ -66,7 +66,7 @@ export const ProfileWithDropdown = ({
     setPfp(
       profile && profile.content && profile.content.picture
         ? profile.content.picture
-        : `https://robohash.idena.io/${pubkey}`,
+        : `https://robohash.idena.io/${pubkey}`
     );
   }, [profileContext, pubkey]);
 
@@ -79,7 +79,7 @@ export const ProfileWithDropdown = ({
       className: "text-light-text dark:text-dark-text",
       startContent: <BuildingStorefrontIcon className={"h-5 w-5"} />,
       onClick: () => {
-        let npub = nip19.npubEncode(pubkey);
+        const npub = nip19.npubEncode(pubkey);
         router.push(`/marketplace/${npub}`);
       },
       label: "Visit Seller",
@@ -157,7 +157,7 @@ export const ProfileWithDropdown = ({
         <ClipboardIcon className="h-5 w-5" />
       ),
       onClick: () => {
-        let npub = nip19.npubEncode(pubkey);
+        const npub = nip19.npubEncode(pubkey);
         navigator.clipboard.writeText(npub);
         setIsNPubCopied(true);
         setTimeout(() => {

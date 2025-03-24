@@ -50,23 +50,23 @@ const DisplayProducts = ({
     if (!productEventContext) return;
     if (!productEventContext.isLoading && productEventContext.productEvents) {
       setIsProductLoading(true);
-      let sortedProductEvents = [
+      const sortedProductEvents = [
         ...productEventContext.productEvents.sort(
-          (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at,
+          (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
         ),
       ]; // sorts most recently created to least recently created
-      let parsedProductData: ProductData[] = [];
+      const parsedProductData: ProductData[] = [];
       sortedProductEvents.forEach((event) => {
         if (wotFilter) {
           if (!followsContext.isLoading && followsContext.followList) {
             const followList = followsContext.followList;
             if (followList.length > 0 && followList.includes(event.pubkey)) {
-              let parsedData = parseTags(event);
+              const parsedData = parseTags(event);
               if (parsedData) parsedProductData.push(parsedData);
             }
           }
         } else {
-          let parsedData = parseTags(event);
+          const parsedData = parseTags(event);
           if (parsedData) parsedProductData.push(parsedData);
         }
       });
@@ -77,7 +77,7 @@ const DisplayProducts = ({
 
   useEffect(() => {
     if (focusedPubkey && setCategories) {
-      let productCategories: string[] = [];
+      const productCategories: string[] = [];
       productEvents.forEach((event) => {
         if (event.pubkey === focusedPubkey) {
           productCategories.push(...event.categories);
@@ -192,6 +192,7 @@ const DisplayProducts = ({
         return false;
       }
     }
+    return;
   };
 
   const productSatisfiesAllFilters = (productData: ProductData) => {
@@ -241,7 +242,7 @@ const DisplayProducts = ({
         {isThereAFilter() &&
           !isProductsLoading &&
           !productEvents.some((product) =>
-            productSatisfiesAllFilters(product),
+            productSatisfiesAllFilters(product)
           ) && (
             <p className="mt-4 break-words text-center text-2xl text-light-text dark:text-dark-text">
               No products found...

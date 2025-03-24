@@ -78,7 +78,7 @@ const Keys = () => {
     } else {
       const { encryptedPrivKey, pubkey } = NostrNSecSigner.getEncryptedNSEC(
         privateKey,
-        passphrase,
+        passphrase
       );
       const signer = newSigner!("nsec", {
         encryptedPrivKey: encryptedPrivKey,

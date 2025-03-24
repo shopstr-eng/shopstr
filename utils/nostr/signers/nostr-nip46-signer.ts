@@ -48,7 +48,7 @@ export class NostrNIP46Signer implements NostrSigner {
       bunker: string;
       appPrivKey?: Uint8Array;
     },
-    challengeHandler: ChallengeHandler,
+    challengeHandler: ChallengeHandler
   ) {
     this.challengeHandler = challengeHandler;
     this.appPrivKey = appPrivKey ?? generateSecretKey();
@@ -63,7 +63,7 @@ export class NostrNIP46Signer implements NostrSigner {
 
     if (!bunkerPubkey)
       throw new Error(
-        "Invalid Bunker URL " + bunker + ": missing bunker pubkey",
+        "Invalid Bunker URL " + bunker + ": missing bunker pubkey"
       );
     if (!userPubkey)
       throw new Error("Invalid Bunker URL " + bunker + ": missing user pubkey");
@@ -89,7 +89,7 @@ export class NostrNIP46Signer implements NostrSigner {
         onevent: (event) => {
           this.onEvent(event);
         },
-      },
+      }
     );
   }
 
@@ -103,7 +103,7 @@ export class NostrNIP46Signer implements NostrSigner {
 
   public static fromJSON(
     json: { [key: string]: any },
-    challengeHandler: ChallengeHandler,
+    challengeHandler: ChallengeHandler
   ): NostrNIP46Signer | undefined {
     if (json.type !== "nip46" || !json.bunker) return undefined;
     return new NostrNIP46Signer(
@@ -111,14 +111,14 @@ export class NostrNIP46Signer implements NostrSigner {
         bunker: json.bunker,
         appPrivKey: hexToBytes(json.appPrivKey),
       },
-      challengeHandler,
+      challengeHandler
     );
   }
 
   private async onEvent(event: NostrEvent) {
     const conversationKey = nip44.getConversationKey(
       this.appPrivKey,
-      event.pubkey,
+      event.pubkey
     );
     event.content = nip44.decrypt(event.content, conversationKey);
     const content: any = JSON.parse(event.content);
@@ -139,7 +139,7 @@ export class NostrNIP46Signer implements NostrSigner {
           abortController.abort();
           this.pendingChallenges.delete(id);
         },
-        abortSignal,
+        abortSignal
       );
       // we are going to receive
       // another ack event after the auth challenge is completed
@@ -170,7 +170,7 @@ export class NostrNIP46Signer implements NostrSigner {
     args.push(this.bunker.bunkerPubkey);
     args.push(this.bunker.secret || "");
     args.push(
-      "sign_event:0,sign_event:5,sign_event:13,sign_event:1059,sign_event:7375,sign_event:7376,sign_event:10002,sign_event:17375,kind:30019,sign_event:30402,sign_event:30405,sign_event:30406,sign_event:31555,sign_event:31989,sign_event:31990,get_public_key,nip44_encrypt,nip44_decrypt",
+      "sign_event:0,sign_event:5,sign_event:13,sign_event:1059,sign_event:7375,sign_event:7376,sign_event:10002,sign_event:17375,kind:30019,sign_event:30402,sign_event:30405,sign_event:30406,sign_event:31555,sign_event:31989,sign_event:31990,get_public_key,nip44_encrypt,nip44_decrypt"
     );
     return await this.sendRPC("connect", args);
   }
@@ -204,7 +204,7 @@ export class NostrNIP46Signer implements NostrSigner {
 
   private async waitForResponse(
     method: string,
-    id: string,
+    id: string
   ): Promise<NostrEvent> {
     return await newPromiseWithTimeout<NostrEvent>((resolve, reject) => {
       this.listeners[id] = {
@@ -234,7 +234,7 @@ export class NostrNIP46Signer implements NostrSigner {
 
     const conversationKey = nip44.getConversationKey(
       this.appPrivKey,
-      remotePubKey,
+      remotePubKey
     );
     signEvent.content = nip44.encrypt(signEvent.content, conversationKey);
     const signedEvent = finalizeEvent(signEvent, this.appPrivKey);
@@ -243,7 +243,7 @@ export class NostrNIP46Signer implements NostrSigner {
     // to make sure we don't miss the response if it comes in before we have a chance to wait for it
     const respPromise: Promise<NostrEvent> = this.waitForResponse(
       method,
-      requestId,
+      requestId
     );
 
     await this.nostr.publish(signedEvent);

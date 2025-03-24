@@ -66,7 +66,7 @@ const MessageFeed = ({ isInquiry = false }) => {
       </div>
 
       <div className="flex h-[90vh] w-full flex-col bg-light-bg pt-4 dark:bg-dark-bg">
-        {showSpinner ? null : framer.selectedTab.children}
+        {showSpinner ? null : framer.selectedTab!.children}
       </div>
     </div>
   );

@@ -84,7 +84,7 @@ const SideShopNav = ({
         acc[category] = (acc[category] || 0) + 1;
         return acc;
       },
-      {} as Record<string, number>,
+      {} as Record<string, number>
     );
   };
 
@@ -170,7 +170,7 @@ const SideShopNav = ({
                         >
                           <span className="text-xl">{`- ${category} (${count})`}</span>
                         </Button>
-                      ),
+                      )
                     )}
                   </>
                 )}

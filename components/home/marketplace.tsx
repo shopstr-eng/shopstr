@@ -42,7 +42,7 @@ export function MarketplacePage({
 }) {
   const router = useRouter();
   const [selectedCategories, setSelectedCategories] = useState(
-    new Set<string>([]),
+    new Set<string>([])
   );
   const [selectedLocation, setSelectedLocation] = useState("");
   const [selectedSearch, setSelectedSearch] = useState("");
@@ -54,7 +54,7 @@ export function MarketplacePage({
   const [merchantQuality, setMerchantQuality] = useState("");
   const [filteredProducts, setFilteredProducts] = useState<ProductData[]>([]);
   const [productReviewMap, setProductReviewMap] = useState(
-    new Map<string, Map<string, string[][]>>(),
+    new Map<string, Map<string, string[][]>>()
   );
   const [isFetchingReviews, setIsFetchingReviews] = useState(false);
 
@@ -76,7 +76,7 @@ export function MarketplacePage({
     useContext(SignerContext);
 
   useEffect(() => {
-    let npub = router.query.npub;
+    const npub = router.query.npub;
     if (npub && typeof npub[0] === "string") {
       const { data } = nip19.decode(npub[0]);
       setFocusedPubkey(data as string);
@@ -265,7 +265,7 @@ export function MarketplacePage({
                         })}
                       </div>
                     </div>
-                  ),
+                  )
                 )}
               </div>
             </div>
@@ -359,7 +359,7 @@ export function MarketplacePage({
                     setSelectedCategories(new Set([]));
                   } else {
                     setSelectedCategories(
-                      new Set(event.target.value.split(",")),
+                      new Set(event.target.value.split(","))
                     );
                   }
                 }}

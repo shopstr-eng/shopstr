@@ -2,12 +2,12 @@ import React, { useMemo } from "react";
 import { Select, SelectItem, SelectSection } from "@nextui-org/react";
 import locations from "../../../public/locationSelection.json";
 
-const CountryDropdown = ({ value, ...props }: { [x: string]: any }) => {
+const CountryDropdown = ({ _value, ...props }: { [x: string]: any }) => {
   const countryOptions = useMemo(() => {
     const headingClasses =
       "flex w-full sticky top-1 z-20 py-1.5 px-2 dark:bg-dark-bg bg-light-bg shadow-small rounded-small";
 
-    let countryOptions = (
+    const countryOptions = (
       <SelectSection
         key={"countryOptions"}
         classNames={{

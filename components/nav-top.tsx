@@ -44,7 +44,7 @@ const TopNav = ({
 
   useEffect(() => {
     const fetchAndUpdateCartQuantity = async () => {
-      let cartList = localStorage.getItem("cart")
+      const cartList = localStorage.getItem("cart")
         ? JSON.parse(localStorage.getItem("cart") as string)
         : [];
       if (cartList) {
@@ -63,8 +63,8 @@ const TopNav = ({
 
   useEffect(() => {
     const getUnreadMessages = async () => {
-      let unreadMsgCount = await countNumberOfUnreadMessagesFromChatsContext(
-        chatsContext.chatsMap,
+      const unreadMsgCount = await countNumberOfUnreadMessagesFromChatsContext(
+        chatsContext.chatsMap
       );
       setUnreadMsgCount(unreadMsgCount);
     };

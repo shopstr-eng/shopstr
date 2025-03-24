@@ -80,7 +80,7 @@ const UserProfilePage = () => {
         },
         (err: any) => {
           console.error(err);
-        },
+        }
       );
     }
   }, [profileContext, userPubkey, signer, reset]);
@@ -92,7 +92,7 @@ const UserProfilePage = () => {
       nostr!,
       signer!,
       userPubkey!,
-      JSON.stringify(data),
+      JSON.stringify(data)
     );
     profileContext.updateProfileData({
       pubkey: userPubkey!,
@@ -258,8 +258,8 @@ const UserProfilePage = () => {
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
                       ? error.message
                       : "";
                     return (
@@ -291,8 +291,8 @@ const UserProfilePage = () => {
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
                       ? error.message
                       : "";
                     return (
@@ -324,8 +324,8 @@ const UserProfilePage = () => {
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
                       ? error.message
                       : "";
                     return (
@@ -357,8 +357,8 @@ const UserProfilePage = () => {
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
                       ? error.message
                       : "";
                     return (
@@ -389,8 +389,8 @@ const UserProfilePage = () => {
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
                       ? error.message
                       : "";
                     return (
@@ -422,8 +422,8 @@ const UserProfilePage = () => {
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
                       ? error.message
                       : "";
                     return (
