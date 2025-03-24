@@ -7,6 +7,8 @@
   "background_color": "#E8E8E8",
   "theme_color": "#E8E8E8",
   "orientation": "any",
+  "scope": "/",
+  "categories": ["shopping", "marketplace", "ecommerce"],
   "icons": [
     {
       "src": "/shopstr-144x144.png",
@@ -23,7 +25,80 @@
     {
       "src": "/shopstr-2000x2000.png",
       "sizes": "2000x2000",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Landing Page",
+      "short_name": "Landing",
+      "description": "View the landing page",
+      "url": "/",
+      "icons": [{ "src": "/shopstr-144x144.png", "sizes": "144x144" }]
+    },
+    {
+      "name": "Marketplace",
+      "short_name": "Market",
+      "description": "Browse the marketplace",
+      "url": "/marketplace",
+      "icons": [{ "src": "/shopstr-144x144.png", "sizes": "144x144" }]
+    },
+    {
+      "name": "Orders",
+      "short_name": "Orders",
+      "description": "View your orders",
+      "url": "/orders",
+      "icons": [{ "src": "/shopstr-144x144.png", "sizes": "144x144" }]
+    },
+    {
+      "name": "My Listings",
+      "short_name": "Listings",
+      "description": "Manage your shop listings",
+      "url": "/my-listings",
+      "icons": [{ "src": "/shopstr-144x144.png", "sizes": "144x144" }]
+    },
+    {
+      "name": "Settings",
+      "short_name": "Settings",
+      "description": "Manage your site settings",
+      "url": "/settings",
+      "icons": [{ "src": "/shopstr-144x144.png", "sizes": "144x144" }]
+    },
+    {
+      "name": "User Profile",
+      "short_name": "Profile",
+      "description": "Manage your profile settings",
+      "url": "/settings/user-profile",
+      "icons": [{ "src": "/shopstr-144x144.png", "sizes": "144x144" }]
+    },
+    {
+      "name": "Shop Settings",
+      "short_name": "Shop",
+      "description": "Manage your shop settings",
+      "url": "/settings/shop-settings",
+      "icons": [{ "src": "/shopstr-144x144.png", "sizes": "144x144" }]
+    },
+    {
+      "name": "Wallet",
+      "short_name": "Wallet",
+      "description": "Manage your wallet",
+      "url": "/wallet",
+      "icons": [{ "src": "/shopstr-144x144.png", "sizes": "144x144" }]
+    },
+    {
+      "name": "Shopping Cart",
+      "short_name": "Cart",
+      "description": "View your shopping cart",
+      "url": "/cart",
+      "icons": [{ "src": "/shopstr-144x144.png", "sizes": "144x144" }]
+    },
+    {
+      "name": "FAQ",
+      "short_name": "FAQ",
+      "description": "View frequently asked questions",
+      "url": "/faq",
+      "icons": [{ "src": "/shopstr-144x144.png", "sizes": "144x144" }]
     }
   ]
 }
