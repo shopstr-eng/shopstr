@@ -17,9 +17,18 @@ import {
   Chip,
   Image,
 } from "@nextui-org/react";
-import { InformationCircleIcon, TrashIcon } from "@heroicons/react/24/outline";
-import Carousal from "@itseasy21/react-elastic-carousel";
-import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  InformationCircleIcon,
+  TrashIcon,
+} from "@heroicons/react/24/outline";
+import { Carousel } from "react-responsive-carousel";
+import "react-responsive-carousel/lib/styles/carousel.min.css";
+import {
+  PREVNEXTBUTTONSTYLES,
+  SHOPSTRBUTTONCLASSNAMES,
+} from "./utility/STATIC-VARIABLES";
 import {
   PostListing,
   getLocalStorageData,
@@ -276,52 +285,121 @@ export default function NewForm({
                 );
               }}
             />
-            <Carousal
-              isRTL={false}
+            <Carousel
               showArrows={images.length > 1}
-              pagination={false}
-            >
-              {images.length > 0 ? (
-                images.map((image, index) => (
-                  <div key={index}>
-                    <div className="flex flex-row-reverse ">
-                      <ConfirmActionDropdown
-                        helpText="Are you sure you want to delete this image?"
-                        buttonLabel="Delete Image"
-                        onConfirm={deleteImage(index)}
-                      >
-                        <Button
-                          isIconOnly
-                          color="danger"
-                          aria-label="Trash"
-                          radius="full"
-                          className="right-3 top-12 z-20 bg-gradient-to-tr from-blue-950 to-red-950 text-white"
-                          variant="bordered"
-                        >
-                          <TrashIcon style={{ padding: 4 }} />
-                        </Button>
-                      </ConfirmActionDropdown>
-                    </div>
-                    <Image
-                      alt="Product Image"
-                      className="object-cover"
-                      width={350}
-                      src={image}
-                      srcSet={buildSrcSet(image)}
+              showStatus={false}
+              showIndicators={images.length > 1}
+              showThumbs={images.length > 1}
+              renderArrowPrev={(onClickHandler, hasPrev, label) =>
+                hasPrev && (
+                  <button
+                    className={"left-0 justify-start " + PREVNEXTBUTTONSTYLES}
+                    onClick={(e) => {
+                      onClickHandler();
+                      e.stopPropagation();
+                    }}
+                    title={label}
+                  >
+                    <ChevronLeftIcon className="h-7 w-7" />
+                  </button>
+                )
+              }
+              renderArrowNext={(onClickHandler, hasNext, label) =>
+                hasNext && (
+                  <button
+                    className={"right-0 justify-end " + PREVNEXTBUTTONSTYLES}
+                    onClick={(e) => {
+                      onClickHandler();
+                      e.stopPropagation();
+                    }}
+                    title={label}
+                  >
+                    <ChevronRightIcon className="h-7 w-7" />
+                  </button>
+                )
+              }
+              renderIndicator={(onClickHandler, isSelected, index, label) => {
+                const indicatorStyles =
+                  "inline-block w-3.5 h-3.5 rounded-full mr-3 z-10 cursor-pointer";
+                if (isSelected) {
+                  return (
+                    <li
+                      className={"bg-cyan-500 " + indicatorStyles}
+                      aria-label={`Selected: ${label} ${index + 1}`}
+                      title={`Selected: ${label} ${index + 1}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                      }}
                     />
-                  </div>
-                ))
-              ) : (
-                <div className="flex h-full w-full items-center justify-center">
-                  <Image
-                    alt="Product Image"
-                    className="object-cover"
-                    src="/no-image-placeholder.png"
-                    width={350}
+                  );
+                }
+                return (
+                  <li
+                    className={
+                      indicatorStyles + " bg-gray-300 hover:bg-gray-500"
+                    }
+                    onClick={(e) => {
+                      onClickHandler(e);
+                      e.stopPropagation();
+                    }}
+                    onKeyDown={onClickHandler}
+                    value={index}
+                    key={index}
+                    role="button"
+                    tabIndex={0}
+                    title={`${label} ${index + 1}`}
+                    aria-label={`${label} ${index + 1}`}
                   />
-                </div>
-              )}
-            </Carousal>
+                );
+              }}
+            >
+              {images.length > 0
+                ? images.map((image, index) => (
+                    <div
+                      key={index}
+                      className="relative flex h-full w-full items-center justify-center"
+                    >
+                      <div className="absolute right-2 top-2 z-20">
+                        <ConfirmActionDropdown
+                          helpText="Are you sure you want to delete this image?"
+                          buttonLabel="Delete Image"
+                          onConfirm={deleteImage(index)}
+                        >
+                          <Button
+                            isIconOnly
+                            color="danger"
+                            aria-label="Trash"
+                            radius="full"
+                            className="bg-gradient-to-tr from-blue-950 to-red-950 text-white"
+                            variant="bordered"
+                          >
+                            <TrashIcon style={{ padding: 4 }} />
+                          </Button>
+                        </ConfirmActionDropdown>
+                      </div>
+                      <Image
+                        alt="Product Image"
+                        className="object-cover"
+                        width={350}
+                        src={image}
+                        srcSet={buildSrcSet(image)}
+                      />
+                    </div>
+                  ))
+                : [
+                    <div
+                      key="placeholder"
+                      className="flex h-full w-full items-center justify-center"
+                    >
+                      <Image
+                        alt="Product Image"
+                        className="object-cover"
+                        src="/no-image-placeholder.png"
+                        width={350}
+                      />
+                    </div>,
+                  ]}
+            </Carousel>
             {imageError && <div className="text-red-600">{imageError}</div>}
             <FileUploaderButton
               isIconOnly={false}

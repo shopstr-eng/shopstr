@@ -100,15 +100,6 @@ const DisplayProducts = ({
     focusedPubkey,
   ]);
 
-  const isThereAFilter = () => {
-    return (
-      selectedCategories.size > 0 ||
-      selectedLocation ||
-      selectedSearch.length > 0 ||
-      focusedPubkey
-    );
-  };
-
   const handleDelete = async (productId: string) => {
     try {
       await deleteEvent(nostr!, signer!, [productId]);
@@ -239,17 +230,6 @@ const DisplayProducts = ({
             </p>
           )
         )}
-        {isThereAFilter() &&
-          !isProductsLoading &&
-          !productEvents.some((product) =>
-            productSatisfiesAllFilters(product)
-          ) && (
-            <p className="mt-4 break-words text-center text-2xl text-light-text dark:text-dark-text">
-              No products found...
-              <br></br>
-              <br></br>Try loading more!
-            </p>
-          )}
         {isMyListings &&
           !isProductsLoading &&
           !productEvents.some((product) => product.pubkey === userPubkey) && (
