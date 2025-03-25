@@ -1,3 +1,5 @@
+/* eslint-disable @next/next/no-img-element */
+
 import router from "next/router";
 import React, { useContext, useState, useEffect, useRef } from "react";
 import DisplayProducts from "../display-products";

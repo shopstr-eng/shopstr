@@ -36,7 +36,6 @@ if (typeof indexedDB !== "undefined") {
     db = new ItemsFetchedFromRelays();
     db.open()
       .then(() => {
-        console.log("IndexedDB opened successfully");
         indexedDBWorking = true;
       })
       .catch((e) => {

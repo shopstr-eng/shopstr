@@ -1,3 +1,5 @@
+/* eslint-disable @next/next/no-img-element */
+
 import React, { useContext, useEffect, useRef, useState } from "react";
 import { nip19 } from "nostr-tools";
 import { ProductData } from "../utility/product-parser-functions";

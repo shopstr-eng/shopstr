@@ -57,7 +57,7 @@ const UserProfilePage = () => {
   const watchBanner = watch("banner");
   const watchPicture = watch("picture");
   const defaultImage = useMemo(() => {
-    return "https://robohash.idena.io/" + userPubkey;
+    return "https://robohash.org/" + userPubkey;
   }, [userPubkey]);
 
   useEffect(() => {

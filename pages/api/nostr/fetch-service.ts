@@ -63,7 +63,7 @@ export const fetchAllPosts = async (
         );
         editProductContext(productArrayFromCache, false);
       } catch (error) {
-        console.log("Failed to fetch all listings from cache: ", error);
+        console.error("Failed to fetch all listings from cache: ", error);
       }
 
       const filter: Filter = {
@@ -75,7 +75,7 @@ export const fetchAllPosts = async (
 
       const fetchedEvents = await nostr.fetch([filter], {}, relays);
       if (!fetchedEvents.length) {
-        console.log("No product events found with filter: ", filter);
+        console.error("No products found with filter: ", filter);
       }
 
       for (const event of fetchedEvents) {
@@ -104,7 +104,6 @@ export const fetchAllPosts = async (
       editProductContext(productArrayFromRelay, false);
       removeProductFromCache(Array.from(deletedProductsInCacheSet));
     } catch (error) {
-      console.log("Failed to fetch all listings from relays: ", error);
       reject(error);
     }
   });
@@ -192,7 +191,6 @@ export const fetchCart = async (
 
       editCartContext(cartAddressesArray, false);
     } catch (error) {
-      console.log("Failed to fetch cart: ", error);
       reject(error);
     }
   });
@@ -289,7 +287,7 @@ export const fetchProfile = async (
         const profileData = await fetchProfileDataFromCache();
         editProfileContext(profileData, false);
       } catch (error) {
-        console.log("Failed to fetch profiles: ", error);
+        console.error("Failed to fetch profiles from cache: ", error);
       }
       const subParams: { kinds: number[]; authors?: string[] } = {
         kinds: [0],
@@ -455,7 +453,6 @@ export const fetchGiftWrappedChatsAndMessages = async (
         resolve({ profileSetFromChats: new Set(chatsMap.keys()) });
         editChatContext(chatsMap, false);
       } catch (error) {
-        console.log("Failed to fetch chats and messages: ", error);
         reject(error);
       }
     }
@@ -574,7 +571,6 @@ export const fetchReviews = async (
       editReviewsContext(merchantScoresMap, productReviewsMap, false);
       resolve({ merchantScoresMap, productReviewsMap });
     } catch (error) {
-      console.log("failed to fetch reviews: ", error);
       reject(error);
     }
   });
@@ -758,7 +754,6 @@ export const fetchAllRelays = async (
       });
       editRelaysContext(relayList, readRelayList, writeRelayList, false);
     } catch (error) {
-      console.log("failed to fetch follow list: ", error);
       reject(error);
     }
   });
@@ -907,7 +902,7 @@ export const fetchCashuWallet = async (
             incomingSpendingHistory.push(cashuWalletEventContent);
           }
         } catch (error) {
-          console.log("Error fetching cashu wallet: ", error);
+          console.error("Failed to fetch legacy Cashu wallet event: ", error);
         }
       }
 
@@ -997,7 +992,7 @@ export const fetchCashuWallet = async (
             await deleteEvent(nostr, signer!, outProofIds);
           }
         } catch (error) {
-          console.log("Error checking spent proofs: ", error);
+          console.error("Failed to check spent proofs: ", error);
         }
       }
 
@@ -1009,7 +1004,6 @@ export const fetchCashuWallet = async (
 
       editCashuWalletContext(proofEvents, cashuMints, cashuProofs, false);
     } catch (error) {
-      console.log("failed to fetch Cashu wallet: ", error);
       reject(error);
     }
   });

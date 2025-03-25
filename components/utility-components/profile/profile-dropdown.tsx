@@ -66,7 +66,7 @@ export const ProfileWithDropdown = ({
     setPfp(
       profile && profile.content && profile.content.picture
         ? profile.content.picture
-        : `https://robohash.idena.io/${pubkey}`
+        : `https://robohash.org/${pubkey}`
     );
   }, [profileContext, pubkey]);
 
