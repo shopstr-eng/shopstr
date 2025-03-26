@@ -1,10 +1,9 @@
-/** @type {import('next').NextConfig} */
+import { NextConfig } from "next";
 
 const withPWA = require("next-pwa")({
   dest: "public",
   register: true,
   skipWaiting: true,
-  disable: process.env.NODE_ENV === "development",
   runtimeCaching: [
     {
       // Cache static assets
@@ -47,7 +46,7 @@ const withPWA = require("next-pwa")({
   ],
 });
 
-const nextConfig = {
+const nextConfig: NextConfig = {
   output: "standalone",
   reactStrictMode: true,
   images: {
