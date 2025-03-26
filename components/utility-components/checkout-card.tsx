@@ -44,20 +44,6 @@ export default function CheckoutCard({
   setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
   uniqueKey?: string;
 }) {
-  const {
-    title,
-    images,
-    pubkey,
-    summary,
-    location,
-    sizes,
-    sizeQuantities,
-    condition,
-    d: dTag,
-    restrictions,
-    status,
-  } = productData;
-
   const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
 
   const router = useRouter();
@@ -66,7 +52,7 @@ export default function CheckoutCard({
   const [isBeingPaid, setIsBeingPaid] = useState(false);
   const [visibleImages, setVisibleImages] = useState<string[]>([]);
   const [showAllImages, setShowAllImages] = useState(false);
-  const [selectedImage, setSelectedImage] = useState(images[0]);
+  const [selectedImage, setSelectedImage] = useState(productData.images[0]);
   const [selectedSize, setSelectedSize] = useState<string | undefined>(
     undefined
   );
@@ -97,16 +83,16 @@ export default function CheckoutCard({
   };
 
   const renderSummary = () => {
-    if (summary.length <= SUMMARY_CHARACTER_LIMIT || isExpanded) {
-      return summary;
+    if (productData.summary.length <= SUMMARY_CHARACTER_LIMIT || isExpanded) {
+      return productData.summary;
     }
-    return `${summary.slice(0, SUMMARY_CHARACTER_LIMIT)}...`;
+    return `${productData.summary.slice(0, SUMMARY_CHARACTER_LIMIT)}...`;
   };
 
   const calculateVisibleImages = (containerHeight: number) => {
     const imageHeight = containerHeight / 3;
     const visibleCount = Math.floor(containerHeight / imageHeight);
-    setVisibleImages(images.slice(0, visibleCount));
+    setVisibleImages(productData.images.slice(0, visibleCount));
   };
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -129,45 +115,49 @@ export default function CheckoutCard({
     if (productExists) {
       setIsAdded(true);
     }
-  }, [cart]);
+  }, [cart, productData.id]);
 
   useEffect(() => {
     setIsFetchingShop(true);
     if (
-      pubkey &&
-      shopMapContext.shopData.has(pubkey) &&
-      typeof shopMapContext.shopData.get(pubkey) != "undefined"
+      productData.pubkey &&
+      shopMapContext.shopData.has(productData.pubkey) &&
+      typeof shopMapContext.shopData.get(productData.pubkey) != "undefined"
     ) {
       const shopSettings: ShopSettings | undefined =
-        shopMapContext.shopData.get(pubkey);
+        shopMapContext.shopData.get(productData.pubkey);
       if (shopSettings) {
         setShopBannerURL(shopSettings.content.ui.banner);
       }
     }
     setIsFetchingShop(false);
-  }, [pubkey, shopMapContext, shopBannerURL]);
+  }, [productData.pubkey, shopMapContext, shopBannerURL]);
 
   useEffect(() => {
     setIsFetchingReviews(true);
     if (
-      pubkey &&
-      reviewsContext.merchantReviewsData.has(pubkey) &&
-      typeof reviewsContext.merchantReviewsData.get(pubkey) != "undefined" &&
-      reviewsContext.productReviewsData.has(pubkey) &&
-      typeof reviewsContext.productReviewsData.get(pubkey) != "undefined"
+      productData.pubkey &&
+      reviewsContext.merchantReviewsData.has(productData.pubkey) &&
+      typeof reviewsContext.merchantReviewsData.get(productData.pubkey) !=
+        "undefined" &&
+      reviewsContext.productReviewsData.has(productData.pubkey) &&
+      typeof reviewsContext.productReviewsData.get(productData.pubkey) !=
+        "undefined"
     ) {
       const merchantScoresMap = reviewsContext.merchantReviewsData;
-      const productReviewScore = reviewsContext.productReviewsData.get(pubkey);
+      const productReviewScore = reviewsContext.productReviewsData.get(
+        productData.pubkey
+      );
       if (merchantScoresMap && productReviewScore) {
         for (const [productPubkey, scores] of merchantScoresMap.entries()) {
-          if (productPubkey === pubkey) {
+          if (productPubkey === productData.pubkey) {
             const averageScore =
               scores.reduce((a, b) => a + b, 0) / scores.length;
             setMerchantReview(averageScore);
           }
         }
-        const productReviewValue = dTag
-          ? productReviewScore.get(dTag)
+        const productReviewValue = productData.d
+          ? productReviewScore.get(productData.d)
           : undefined;
         setProductReviews(
           productReviewValue !== undefined
@@ -177,7 +167,7 @@ export default function CheckoutCard({
       }
     }
     setIsFetchingReviews(false);
-  }, [pubkey, reviewsContext]);
+  }, [productData.pubkey, reviewsContext, productData.d]);
 
   useEffect(() => {
     if (containerRef.current) {
@@ -199,15 +189,17 @@ export default function CheckoutCard({
   useEffect(() => {
     setHasSizes(
       !!(
-        sizes &&
-        sizes.length > 0 &&
-        sizes.some((size) => (sizeQuantities?.get(size) || 0) > 0)
+        productData.sizes &&
+        productData.sizes.length > 0 &&
+        productData.sizes.some(
+          (size) => (productData.sizeQuantities?.get(size) || 0) > 0
+        )
       )
     );
-  }, [sizes, sizeQuantities]);
+  }, [productData.sizes, productData.sizeQuantities]);
 
   useEffect(() => {
-    if (!reviewsContext.merchantReviewsData.has(pubkey)) {
+    if (!reviewsContext.merchantReviewsData.has(productData.pubkey)) {
       setMerchantQuality("");
     } else if (merchantReview >= 0.75) {
       setMerchantQuality("Trustworthy");
@@ -218,7 +210,7 @@ export default function CheckoutCard({
     } else {
       setMerchantQuality("Don't trust, don't bother verifying");
     }
-  }, [reviewsContext, merchantReview]);
+  }, [reviewsContext, merchantReview, productData.pubkey]);
 
   const toggleBuyNow = () => {
     setIsBeingPaid(!isBeingPaid);
@@ -254,7 +246,7 @@ export default function CheckoutCard({
     });
     // The content you want to share
     const shareData = {
-      title: title,
+      title: productData.title,
       url: `${window.location.origin}/listing/${naddr}`,
     };
     // Check if the Web Share API is available
@@ -285,8 +277,8 @@ export default function CheckoutCard({
   const renderSizeGrid = () => {
     return (
       <div className="grid grid-cols-3 gap-2 py-1">
-        {sizes?.map((size) =>
-          (sizeQuantities?.get(size) || 0) > 0 ? (
+        {productData.sizes?.map((size) =>
+          (productData.sizeQuantities?.get(size) || 0) > 0 ? (
             <button
               key={size}
               className={`rounded-md border p-2 text-sm ${
@@ -331,25 +323,26 @@ export default function CheckoutCard({
                           showAllImages ? "overflow-y-auto" : ""
                         }`}
                       >
-                        {(showAllImages ? images : visibleImages).map(
-                          (image, index) => (
-                            <img
-                              key={index}
-                              src={image}
-                              alt={`Product image ${index + 1}`}
-                              className={`w-full cursor-pointer object-cover ${
-                                image === selectedImage
-                                  ? "border-2 border-shopstr-purple dark:border-shopstr-yellow"
-                                  : ""
-                              }`}
-                              style={{ aspectRatio: "1 / 1" }}
-                              onClick={() => setSelectedImage(image)}
-                            />
-                          )
-                        )}
+                        {(showAllImages
+                          ? productData.images
+                          : visibleImages
+                        ).map((image, index) => (
+                          <img
+                            key={index}
+                            src={image}
+                            alt={`Product image ${index + 1}`}
+                            className={`w-full cursor-pointer object-cover ${
+                              image === selectedImage
+                                ? "border-2 border-shopstr-purple dark:border-shopstr-yellow"
+                                : ""
+                            }`}
+                            style={{ aspectRatio: "1 / 1" }}
+                            onClick={() => setSelectedImage(image)}
+                          />
+                        ))}
                       </div>
                     </div>
-                    {images.length > visibleImages.length && (
+                    {productData.images.length > visibleImages.length && (
                       <button
                         onClick={() => setShowAllImages(!showAllImages)}
                         className="mt-2 text-sm text-purple-500 hover:text-purple-700 dark:text-yellow-500 dark:hover:text-yellow-700"
@@ -372,9 +365,9 @@ export default function CheckoutCard({
                 <div className="flex w-full flex-col gap-4">
                   <div className="flex flex-wrap items-center gap-4">
                     <ProfileWithDropdown
-                      pubkey={pubkey}
+                      pubkey={productData.pubkey}
                       dropDownKeys={
-                        pubkey === userPubkey
+                        productData.pubkey === userPubkey
                           ? ["shop_settings"]
                           : ["shop", "inquiry", "copy_npub"]
                       }
@@ -413,24 +406,26 @@ export default function CheckoutCard({
                   </div>
                 </div>
                 <h2 className="mt-4 w-full text-left text-2xl font-bold text-light-text dark:text-dark-text">
-                  {title}
+                  {productData.title}
                 </h2>
-                {condition && (
+                {productData.condition && (
                   <div className="text-left text-xs text-light-text dark:text-dark-text">
-                    <span>Condition: {condition}</span>
+                    <span>Condition: {productData.condition}</span>
                   </div>
                 )}
-                {restrictions && (
+                {productData.restrictions && (
                   <div className="text-left text-xs text-light-text dark:text-dark-text">
                     <span>Restrictions: </span>
-                    <span className="text-red-500">{restrictions}</span>
+                    <span className="text-red-500">
+                      {productData.restrictions}
+                    </span>
                   </div>
                 )}
                 <div className="hidden sm:block">
                   <p className="mt-4 w-full text-left text-lg text-light-text dark:text-dark-text">
                     {renderSummary()}
                   </p>
-                  {summary.length > SUMMARY_CHARACTER_LIMIT && (
+                  {productData.summary.length > SUMMARY_CHARACTER_LIMIT && (
                     <button
                       onClick={toggleExpand}
                       className="mt-2 text-purple-500 hover:text-purple-700 dark:text-yellow-500 dark:hover:text-yellow-700"
@@ -443,14 +438,17 @@ export default function CheckoutCard({
                   <DisplayCheckoutCost monetaryInfo={productData} />
                 </div>
                 <div className="pb-1">
-                  <Chip key={location} startContent={locationAvatar(location)}>
-                    {location}
+                  <Chip
+                    key={productData.location}
+                    startContent={locationAvatar(productData.location)}
+                  >
+                    {productData.location}
                   </Chip>
                 </div>
                 {renderSizeGrid()}
                 <div className="flex w-full flex-col gap-2">
                   <div className="flex flex-wrap items-center gap-2">
-                    {status !== "sold" ? (
+                    {productData.status !== "sold" ? (
                       <>
                         <Button
                           className={`${SHOPSTRBUTTONCLASSNAMES} ${
@@ -494,7 +492,7 @@ export default function CheckoutCard({
                     </Button>
                   </div>
                 </div>
-                {pubkey !== userPubkey && (
+                {productData.pubkey !== userPubkey && (
                   <span
                     onClick={() => {
                       handleSendMessage(productData.pubkey);
@@ -514,7 +512,7 @@ export default function CheckoutCard({
               <p className="break-words-all w-full text-left text-lg text-light-text dark:text-dark-text">
                 {renderSummary()}
               </p>
-              {summary.length > SUMMARY_CHARACTER_LIMIT && (
+              {productData.summary.length > SUMMARY_CHARACTER_LIMIT && (
                 <button
                   onClick={toggleExpand}
                   className="mt-2 text-purple-500 hover:text-purple-700 dark:text-yellow-500 dark:hover:text-yellow-700"
@@ -617,7 +615,7 @@ export default function CheckoutCard({
       ) : (
         <>
           <div className="p-4 text-light-text dark:text-dark-text">
-            <h2 className="mb-4 text-2xl font-bold">{title}</h2>
+            <h2 className="mb-4 text-2xl font-bold">{productData.title}</h2>
             {selectedSize && (
               <p className="mb-4 text-lg">Size: {selectedSize}</p>
             )}

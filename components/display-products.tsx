@@ -38,7 +38,7 @@ const DisplayProducts = ({
   const productEventContext = useContext(ProductContext);
   const profileMapContext = useContext(ProfileMapContext);
   const followsContext = useContext(FollowsContext);
-  const [focusedProduct, setFocusedProduct] = useState(""); // product being viewed in modal
+  const [focusedProduct, setFocusedProduct] = useState<ProductData>(); // product being viewed in modal
   const [showModal, setShowModal] = useState(false);
 
   const router = useRouter();
@@ -113,7 +113,7 @@ const DisplayProducts = ({
     setShowModal(!showModal);
   };
 
-  const onProductClick = (product: any) => {
+  const onProductClick = (product: ProductData) => {
     setFocusedProduct(product);
     if (product.pubkey === userPubkey) {
       setShowModal(true);

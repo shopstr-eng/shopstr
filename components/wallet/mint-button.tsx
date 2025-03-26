@@ -61,10 +61,10 @@ const MintButton = () => {
     setShowInvoiceCard(false);
   };
 
-  const onMintSubmit = async (data: { [x: string]: any }) => {
+  const onMintSubmit = async (data: { [x: string]: number }) => {
     const numSats = data["sats"];
     setShowInvoiceCard(true);
-    await handleMint(numSats);
+    await handleMint(numSats!);
   };
 
   const handleMint = async (numSats: number) => {
@@ -78,7 +78,7 @@ const MintButton = () => {
       .then((url: string) => {
         setQrCodeUrl(url);
       })
-      .catch((err: any) => {
+      .catch((err: unknown) => {
         console.error("ERROR", err);
       });
 

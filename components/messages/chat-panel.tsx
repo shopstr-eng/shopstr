@@ -133,7 +133,7 @@ export const ChatPanel = ({
     setShowReviewModal(!showReviewModal);
   };
 
-  const onShippingSubmit = async (data: { [x: string]: any }) => {
+  const onShippingSubmit = async (data: { [x: string]: string }) => {
     try {
       const decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
       const decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
@@ -145,7 +145,7 @@ export const ChatPanel = ({
       );
 
       // Convert delivery days to future unix timestamp
-      const daysToAdd = parseInt(data["Delivery Time"]);
+      const daysToAdd = parseInt(data["Delivery Time"]!);
       const currentTimestamp = Math.floor(Date.now() / 1000); // Current unix timestamp in seconds
       const futureTimestamp = currentTimestamp + daysToAdd * 24 * 60 * 60; // Add days in seconds
 
@@ -206,7 +206,7 @@ export const ChatPanel = ({
     }
   };
 
-  const onReviewSubmit = async (data: { [x: string]: any }) => {
+  const onReviewSubmit = async (data: { [x: string]: string }) => {
     try {
       const [_, _kind, merchantPubkey, dTag] = productAddress.split(":");
       const eventTags = [
@@ -218,7 +218,7 @@ export const ChatPanel = ({
       });
       const productReviewsData = new Map<string, string[][]>();
       productReviewsData.set(userPubkey!, eventTags);
-      await publishReviewEvent(nostr!, signer!, data.comment, eventTags);
+      await publishReviewEvent(nostr!, signer!, data.comment!, eventTags);
       reviewsContext.updateProductReviewsData(
         merchantPubkey!,
         dTag!,
@@ -365,7 +365,6 @@ export const ChatPanel = ({
                     control={shippingControl}
                     rules={{
                       required: "Expected delivery time is required.",
-                      min: 1,
                     }}
                     render={({
                       field: { onChange, onBlur, value },
@@ -426,6 +425,11 @@ export const ChatPanel = ({
                     control={shippingControl}
                     rules={{
                       required: "A tracking number is required.",
+                      minLength: {
+                        value: 5,
+                        message:
+                          "Tracking number must be at least 5 characters.",
+                      },
                     }}
                     render={({
                       field: { onChange, onBlur, value },
@@ -600,13 +604,19 @@ export const ChatPanel = ({
                     <Controller
                       name="comment"
                       control={reviewControl}
-                      render={({ field }) => (
-                        <textarea
-                          {...field}
-                          className="w-full rounded-md border-2 border-light-fg bg-light-bg p-2 text-light-text dark:border-dark-fg dark:bg-dark-bg dark:text-dark-text"
-                          rows={4}
-                          placeholder="Write your review comment here..."
-                        />
+                      rules={{ required: "A comment is required." }}
+                      render={({ field, fieldState: { error } }) => (
+                        <div>
+                          <textarea
+                            {...field}
+                            className="w-full rounded-md border-2 border-light-fg bg-light-bg p-2 text-light-text dark:border-dark-fg dark:bg-dark-bg dark:text-dark-text"
+                            rows={4}
+                            placeholder="Write your review comment here..."
+                          />
+                          {error && (
+                            <p className="text-red-500">{error.message}</p>
+                          )}
+                        </div>
                       )}
                     />
                   </ModalBody>

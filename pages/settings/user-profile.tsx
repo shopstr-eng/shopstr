@@ -78,7 +78,7 @@ const UserProfilePage = () => {
         (nsec) => {
           setUserNSec(nsec);
         },
-        (err: any) => {
+        (err: unknown) => {
           console.error(err);
         }
       );

@@ -57,9 +57,9 @@ const PayButton = () => {
     setShowPayModal(!showPayModal);
   };
 
-  const onPaySubmit = async (data: { [x: string]: any }) => {
+  const onPaySubmit = async (data: { [x: string]: string }) => {
     const invoiceString = data["invoice"];
-    await handlePay(invoiceString);
+    await handlePay(invoiceString!);
   };
 
   const calculateFee = async (invoice: string) => {

@@ -73,9 +73,9 @@ const PreferencesPage = () => {
     reset: mintReset,
   } = useForm();
 
-  const onMintSubmit = async (data: { [x: string]: any }) => {
+  const onMintSubmit = async (data: { [x: string]: string }) => {
     const mint = data["mint"];
-    await replaceMint(mint);
+    await replaceMint(mint!);
   };
 
   const handleToggleMintModal = () => {
@@ -132,9 +132,9 @@ const PreferencesPage = () => {
     reset: relayReset,
   } = useForm();
 
-  const onRelaySubmit = async (data: { [x: string]: any }) => {
+  const onRelaySubmit = async (data: { [x: string]: string }) => {
     const relay = data["relay"];
-    await addRelay(relay, currentRelayType);
+    await addRelay(relay!, currentRelayType);
   };
 
   const handleToggleRelayModal = (type: "all" | "read" | "write" | "") => {

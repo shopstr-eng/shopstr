@@ -65,9 +65,9 @@ const SendButton = () => {
     setNewToken("");
   };
 
-  const onSendSubmit = async (data: { [x: string]: any }) => {
+  const onSendSubmit = async (data: { [x: string]: number }) => {
     const numSats = data["sats"];
-    await handleSend(numSats);
+    await handleSend(numSats!);
   };
 
   const handleSend = async (numSats: number) => {

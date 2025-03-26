@@ -51,9 +51,9 @@ const ReceiveButton = () => {
     setShowReceiveModal(!showReceiveModal);
   };
 
-  const onReceiveSubmit = async (data: { [x: string]: any }) => {
+  const onReceiveSubmit = async (data: { [x: string]: string }) => {
     const tokenString = data["token"];
-    await handleReceive(tokenString);
+    await handleReceive(tokenString!);
   };
 
   const handleReceive = async (tokenString: string) => {

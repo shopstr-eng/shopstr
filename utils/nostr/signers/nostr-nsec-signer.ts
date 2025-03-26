@@ -87,14 +87,6 @@ export class NostrNSecSigner implements NostrSigner {
     );
   }
 
-  public toJSON(): { [key: string]: any } {
-    return {
-      type: "nsec",
-      encryptedPrivKey: this.encryptedPrivKey,
-      pubkey: this.pubkey,
-    };
-  }
-
   public async connect(): Promise<string> {
     return "connected";
   }

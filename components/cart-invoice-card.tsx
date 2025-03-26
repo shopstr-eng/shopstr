@@ -333,7 +333,7 @@ export default function CartInvoiceCard({
     }
   };
 
-  const onShippingSubmit = async (data: { [x: string]: any }) => {
+  const onShippingSubmit = async (data: { [x: string]: string }) => {
     try {
       if (totalCost < 1) {
         throw new Error("Listing price is less than 1 sat.");
@@ -381,7 +381,7 @@ export default function CartInvoiceCard({
     }
   };
 
-  const onContactSubmit = async (data: { [x: string]: any }) => {
+  const onContactSubmit = async (data: { [x: string]: string }) => {
     try {
       if (totalCost < 1) {
         throw new Error("Listing price is less than 1 sat.");
@@ -431,7 +431,7 @@ export default function CartInvoiceCard({
     }
   };
 
-  const onCombinedSubmit = async (data: { [x: string]: any }) => {
+  const onCombinedSubmit = async (data: { [x: string]: string }) => {
     try {
       if (totalCost < 1) {
         throw new Error("Listing price is less than 1 sat.");
@@ -559,7 +559,7 @@ export default function CartInvoiceCard({
         .then((url: string) => {
           setQrCodeUrl(url);
         })
-        .catch((err: any) => {
+        .catch((err: unknown) => {
           console.error("ERROR", err);
         });
 

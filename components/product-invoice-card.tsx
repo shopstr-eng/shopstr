@@ -80,8 +80,6 @@ export default function ProductInvoiceCard({
   selectedSize?: string;
 }) {
   const router = useRouter();
-  const { pubkey, currency, totalCost, shippingType, required } = productData;
-  const pubkeyOfProductBeingSold = pubkey;
   const { mints, tokens, history } = getLocalStorageData();
   const {
     pubkey: userPubkey,
@@ -172,7 +170,7 @@ export default function ProductInvoiceCard({
       messageOptions = {
         isOrder: true,
         type: 3,
-        orderAmount: messageAmount ? messageAmount : totalCost,
+        orderAmount: messageAmount ? messageAmount : productData.totalCost,
         orderId,
         productData,
         paymentType,
@@ -279,24 +277,29 @@ export default function ProductInvoiceCard({
     }
   };
 
-  const onShippingSubmit = async (data: { [x: string]: any }) => {
+  const onShippingSubmit = async (data: { [x: string]: string }) => {
     try {
-      let price = totalCost;
-      if (!currencySelection.hasOwnProperty(currency.toUpperCase())) {
-        throw new Error(`${currency} is not a supported currency.`);
+      let price = productData.totalCost;
+      if (
+        !currencySelection.hasOwnProperty(productData.currency.toUpperCase())
+      ) {
+        throw new Error(`${productData.currency} is not a supported currency.`);
       } else if (
-        currencySelection.hasOwnProperty(currency.toUpperCase()) &&
-        currency.toLowerCase() !== "sats" &&
-        currency.toLowerCase() !== "sat"
+        currencySelection.hasOwnProperty(productData.currency.toUpperCase()) &&
+        productData.currency.toLowerCase() !== "sats" &&
+        productData.currency.toLowerCase() !== "sat"
       ) {
         try {
-          const currencyData = { amount: price, currency: currency };
+          const currencyData = {
+            amount: price,
+            currency: productData.currency,
+          };
           const numSats = await fiat.getSatoshiValue(currencyData);
           price = Math.round(numSats);
         } catch (err) {
           console.error("ERROR", err);
         }
-      } else if (currency.toLowerCase() === "btc") {
+      } else if (productData.currency.toLowerCase() === "btc") {
         price = price * 100000000;
       }
 
@@ -346,24 +349,29 @@ export default function ProductInvoiceCard({
     }
   };
 
-  const onContactSubmit = async (data: { [x: string]: any }) => {
+  const onContactSubmit = async (data: { [x: string]: string }) => {
     try {
-      let price = totalCost;
-      if (!currencySelection.hasOwnProperty(currency.toUpperCase())) {
-        throw new Error(`${currency} is not a supported currency.`);
+      let price = productData.totalCost;
+      if (
+        !currencySelection.hasOwnProperty(productData.currency.toUpperCase())
+      ) {
+        throw new Error(`${productData.currency} is not a supported currency.`);
       } else if (
-        currencySelection.hasOwnProperty(currency.toUpperCase()) &&
-        currency.toLowerCase() !== "sats" &&
-        currency.toLowerCase() !== "sat"
+        currencySelection.hasOwnProperty(productData.currency.toUpperCase()) &&
+        productData.currency.toLowerCase() !== "sats" &&
+        productData.currency.toLowerCase() !== "sat"
       ) {
         try {
-          const currencyData = { amount: price, currency: currency };
+          const currencyData = {
+            amount: price,
+            currency: productData.currency,
+          };
           const numSats = await fiat.getSatoshiValue(currencyData);
           price = Math.round(numSats);
         } catch (err) {
           console.error("ERROR", err);
         }
-      } else if (currency.toLowerCase() === "btc") {
+      } else if (productData.currency.toLowerCase() === "btc") {
         price = price * 100000000;
       }
 
@@ -481,7 +489,7 @@ export default function ProductInvoiceCard({
         .then((url: string) => {
           setQrCodeUrl(url);
         })
-        .catch((err: any) => {
+        .catch((err: unknown) => {
           console.error("ERROR", err);
         });
 
@@ -611,9 +619,7 @@ export default function ProductInvoiceCard({
     let remainingProofs = proofs;
     let sellerToken;
     let donationToken;
-    const sellerProfile = profileContext.profileData.get(
-      pubkeyOfProductBeingSold
-    );
+    const sellerProfile = profileContext.profileData.get(productData.pubkey);
     const donationPercentage = sellerProfile?.content?.shopstr_donation || 2.1;
     const donationAmount = Math.ceil((totalPrice * donationPercentage) / 100);
     const sellerAmount = totalPrice - donationAmount;
@@ -646,7 +652,6 @@ export default function ProductInvoiceCard({
       remainingProofs = keep;
     }
 
-    const { title } = productData;
     const orderId = crypto.randomUUID();
     const paymentPreference =
       sellerProfile?.content?.payment_preference || "ecash";
@@ -687,20 +692,20 @@ export default function ProductInvoiceCard({
               "You have received a payment from " +
               userNPub +
               " for your " +
-              title +
+              productData.title +
               " listing on Shopstr! Check your Lightning address (" +
               lnurl +
               ") for your sats.";
           } else {
             paymentMessage =
               "You have received a payment for your " +
-              title +
+              productData.title +
               " listing on Shopstr! Check your Lightning address (" +
               lnurl +
               ") for your sats.";
           }
           await sendPaymentAndContactMessage(
-            pubkeyOfProductBeingSold,
+            productData.pubkey,
             paymentMessage,
             true,
             false,
@@ -718,7 +723,7 @@ export default function ProductInvoiceCard({
             });
             const changeMessage = "Overpaid fee change: " + encodedChange;
             await sendPaymentAndContactMessage(
-              pubkeyOfProductBeingSold,
+              productData.pubkey,
               changeMessage,
               true,
               false,
@@ -750,18 +755,18 @@ export default function ProductInvoiceCard({
                 "This is a Cashu token payment from " +
                 userNPub +
                 " for your " +
-                title +
+                productData.title +
                 " listing on Shopstr: " +
                 unusedToken;
             } else {
               paymentMessage =
                 "This is a Cashu token payment for your " +
-                title +
+                productData.title +
                 " listing on Shopstr: " +
                 unusedToken;
             }
             await sendPaymentAndContactMessage(
-              pubkeyOfProductBeingSold,
+              productData.pubkey,
               paymentMessage,
               true,
               false,
@@ -783,18 +788,18 @@ export default function ProductInvoiceCard({
             "This is a Cashu token payment from " +
             userNPub +
             " for your " +
-            title +
+            productData.title +
             " listing on Shopstr: " +
             sellerToken;
         } else {
           paymentMessage =
             "This is a Cashu token payment for your " +
-            title +
+            productData.title +
             " listing on Shopstr: " +
             sellerToken;
         }
         await sendPaymentAndContactMessage(
-          pubkeyOfProductBeingSold,
+          productData.pubkey,
           paymentMessage,
           true,
           false,
@@ -823,7 +828,7 @@ export default function ProductInvoiceCard({
       const additionalMessage =
         "Additional customer information: " + additionalInfo;
       await sendPaymentAndContactMessage(
-        pubkeyOfProductBeingSold,
+        productData.pubkey,
         additionalMessage,
         false,
         false,
@@ -931,7 +936,7 @@ export default function ProductInvoiceCard({
             ".";
         }
         await sendPaymentAndContactMessage(
-          pubkeyOfProductBeingSold,
+          productData.pubkey,
           contactMessage,
           false,
           false,
@@ -954,7 +959,7 @@ export default function ProductInvoiceCard({
         if (selectedSize) {
           contactMessage =
             "To finalize the sale of your " +
-            title +
+            productData.title +
             " listing in a size " +
             selectedSize +
             " on Shopstr, please contact " +
@@ -974,7 +979,7 @@ export default function ProductInvoiceCard({
         } else {
           contactMessage =
             "To finalize the sale of your " +
-            title +
+            productData.title +
             " listing on Shopstr, please contact " +
             contact +
             " over " +
@@ -989,7 +994,7 @@ export default function ProductInvoiceCard({
             " as soon as they claim their payment.";
         }
         await sendPaymentAndContactMessage(
-          pubkeyOfProductBeingSold,
+          productData.pubkey,
           contactMessage,
           false,
           false,
@@ -1011,7 +1016,7 @@ export default function ProductInvoiceCard({
       const contactMessage =
         "This purchase was for a size " + selectedSize + ".";
       await sendPaymentAndContactMessage(
-        pubkeyOfProductBeingSold,
+        productData.pubkey,
         contactMessage,
         false,
         false,
@@ -1021,7 +1026,7 @@ export default function ProductInvoiceCard({
       if (userPubkey) {
         const receiptMessage =
           "Thank you for your purchase of " +
-          title +
+          productData.title +
           " in a size " +
           selectedSize +
           " from " +
@@ -1039,7 +1044,7 @@ export default function ProductInvoiceCard({
     } else if (userPubkey) {
       const receiptMessage =
         "Thank you for your purchase of " +
-        title +
+        productData.title +
         " from " +
         nip19.npubEncode(productData.pubkey) +
         ".";
@@ -1073,7 +1078,10 @@ export default function ProductInvoiceCard({
     });
   };
 
-  const formattedTotalCost = formatWithCommas(totalCost, currency);
+  const formattedTotalCost = formatWithCommas(
+    productData.totalCost,
+    productData.currency
+  );
 
   const handleCashuPayment = async (
     price: number,
@@ -1234,7 +1242,7 @@ export default function ProductInvoiceCard({
             type="submit"
             className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
             onClick={() => {
-              handleSendMessage(pubkeyOfProductBeingSold);
+              handleSendMessage(productData.pubkey);
             }}
             startContent={
               <EnvelopeIcon className="h-6 w-6 hover:text-yellow-500" />
@@ -1247,18 +1255,21 @@ export default function ProductInvoiceCard({
             className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
             onClick={() => {
               if (randomNsecForReceiver !== "" && randomNpubForSender !== "") {
-                if (shippingType === "Free" || shippingType === "Added Cost") {
+                if (
+                  productData.shippingType === "Free" ||
+                  productData.shippingType === "Added Cost"
+                ) {
                   setIsCashuPayment(false);
                   setNeedsShippingInfo(true);
                   setShowPurchaseTypeOption(true);
                 } else if (
-                  shippingType === "N/A" ||
-                  shippingType === "Pickup"
+                  productData.shippingType === "N/A" ||
+                  productData.shippingType === "Pickup"
                 ) {
                   setIsCashuPayment(false);
                   setNeedsShippingInfo(false);
                   setShowPurchaseTypeOption(true);
-                } else if (shippingType === "Free/Pickup") {
+                } else if (productData.shippingType === "Free/Pickup") {
                   setIsCashuPayment(false);
                   setShowShippingOption(true);
                 } else {
@@ -1283,18 +1294,21 @@ export default function ProductInvoiceCard({
                 return;
               }
               if (randomNsecForReceiver !== "" && randomNpubForSender !== "") {
-                if (shippingType === "Free" || shippingType === "Added Cost") {
+                if (
+                  productData.shippingType === "Free" ||
+                  productData.shippingType === "Added Cost"
+                ) {
                   setIsCashuPayment(true);
                   setNeedsShippingInfo(true);
                   setShowPurchaseTypeOption(true);
                 } else if (
-                  shippingType === "N/A" ||
-                  shippingType === "Pickup"
+                  productData.shippingType === "N/A" ||
+                  productData.shippingType === "Pickup"
                 ) {
                   setIsCashuPayment(true);
                   setNeedsShippingInfo(false);
                   setShowPurchaseTypeOption(true);
-                } else if (shippingType === "Free/Pickup") {
+                } else if (productData.shippingType === "Free/Pickup") {
                   setIsCashuPayment(true);
                   setShowShippingOption(true);
                 } else {
@@ -1409,24 +1423,26 @@ export default function ProductInvoiceCard({
                   className="text-light-text dark:text-dark-text"
                   onClick={async () => {
                     setShowShippingOption(false);
-                    let price = totalCost;
+                    let price = productData.totalCost;
                     if (
-                      !currencySelection.hasOwnProperty(currency.toUpperCase())
+                      !currencySelection.hasOwnProperty(
+                        productData.currency.toUpperCase()
+                      )
                     ) {
                       throw new Error(
-                        `${currency} is not a supported currency.`
+                        `${productData.currency} is not a supported currency.`
                       );
                     } else if (
                       currencySelection.hasOwnProperty(
-                        currency.toUpperCase()
+                        productData.currency.toUpperCase()
                       ) &&
-                      currency.toLowerCase() !== "sats" &&
-                      currency.toLowerCase() !== "sat"
+                      productData.currency.toLowerCase() !== "sats" &&
+                      productData.currency.toLowerCase() !== "sat"
                     ) {
                       try {
                         const currencyData = {
                           amount: price,
-                          currency: currency,
+                          currency: productData.currency,
                         };
                         const numSats =
                           await fiat.getSatoshiValue(currencyData);
@@ -1434,7 +1450,7 @@ export default function ProductInvoiceCard({
                       } catch (err) {
                         console.error("ERROR", err);
                       }
-                    } else if (currency.toLowerCase() === "btc") {
+                    } else if (productData.currency.toLowerCase() === "btc") {
                       price = price * 100000000;
                     }
                     if (isCashuPayment) {
@@ -1502,24 +1518,26 @@ export default function ProductInvoiceCard({
                   className="text-light-text dark:text-dark-text"
                   onClick={async () => {
                     setShowPurchaseTypeOption(false);
-                    let price = totalCost;
+                    let price = productData.totalCost;
                     if (
-                      !currencySelection.hasOwnProperty(currency.toUpperCase())
+                      !currencySelection.hasOwnProperty(
+                        productData.currency.toUpperCase()
+                      )
                     ) {
                       throw new Error(
-                        `${currency} is not a supported currency.`
+                        `${productData.currency} is not a supported currency.`
                       );
                     } else if (
                       currencySelection.hasOwnProperty(
-                        currency.toUpperCase()
+                        productData.currency.toUpperCase()
                       ) &&
-                      currency.toLowerCase() !== "sats" &&
-                      currency.toLowerCase() !== "sat"
+                      productData.currency.toLowerCase() !== "sats" &&
+                      productData.currency.toLowerCase() !== "sat"
                     ) {
                       try {
                         const currencyData = {
                           amount: price,
-                          currency: currency,
+                          currency: productData.currency,
                         };
                         const numSats =
                           await fiat.getSatoshiValue(currencyData);
@@ -1527,7 +1545,7 @@ export default function ProductInvoiceCard({
                       } catch (err) {
                         console.error("ERROR", err);
                       }
-                    } else if (currency.toLowerCase() === "btc") {
+                    } else if (productData.currency.toLowerCase() === "btc") {
                       price = price * 100000000;
                     }
                     if (isCashuPayment) {
@@ -1565,7 +1583,9 @@ export default function ProductInvoiceCard({
         handleShippingSubmit={handleShippingSubmit}
         onShippingSubmit={onShippingSubmit}
         shippingControl={shippingControl}
-        requiredInfo={required !== "" ? required : undefined}
+        requiredInfo={
+          productData.required !== "" ? productData.required : undefined
+        }
       />
 
       <ContactForm
@@ -1574,7 +1594,9 @@ export default function ProductInvoiceCard({
         handleContactSubmit={handleContactSubmit}
         onContactSubmit={onContactSubmit}
         contactControl={contactControl}
-        requiredInfo={required !== "" ? required : undefined}
+        requiredInfo={
+          productData.required !== "" ? productData.required : undefined
+        }
       />
 
       <SignInModal isOpen={isOpen} onClose={onClose} />

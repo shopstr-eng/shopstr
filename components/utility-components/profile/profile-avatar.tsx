@@ -38,7 +38,7 @@ export const ProfileAvatar = ({
         ? profile.content.picture
         : `https://robohash.org/${pubkey}`
     );
-  }, [profileContext, pubkey]);
+  }, [profileContext, pubkey, npub]);
 
   return (
     <User

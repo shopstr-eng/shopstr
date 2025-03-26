@@ -68,7 +68,7 @@ export const ProfileWithDropdown = ({
         ? profile.content.picture
         : `https://robohash.org/${pubkey}`
     );
-  }, [profileContext, pubkey]);
+  }, [profileContext, pubkey, npub]);
 
   const DropDownItems: {
     [key in DropDownKeys]: DropdownItemProps & { label: string };
