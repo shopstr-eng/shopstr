@@ -124,7 +124,7 @@ export default function SignInModal({
       } else {
         const { encryptedPrivKey, pubkey } = NostrNSecSigner.getEncryptedNSEC(
           privateKey,
-          passphrase,
+          passphrase
         );
 
         setTimeout(() => {
@@ -141,7 +141,7 @@ export default function SignInModal({
       }
     } else {
       setFailureText(
-        "The private key inputted was not valid! Generate a new key pair or try again.",
+        "The private key inputted was not valid! Generate a new key pair or try again."
       );
       setShowFailureModal(true);
     }

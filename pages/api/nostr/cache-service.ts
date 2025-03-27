@@ -15,7 +15,7 @@ const inMemoryStorage = {
 
 class ItemsFetchedFromRelays extends Dexie {
   public products!: Table<{ id: string; product: NostrEvent }>;
-  public profiles!: Table<{ id: string; profile: {} }>;
+  public profiles!: Table<{ id: string; profile: Record<string, unknown> }>;
   public chatMessages!: Table<{ id: string; message: NostrMessageEvent }>;
   public lastFetchedTime!: Table<{ itemType: string; time: number }>;
 
@@ -36,7 +36,6 @@ if (typeof indexedDB !== "undefined") {
     db = new ItemsFetchedFromRelays();
     db.open()
       .then(() => {
-        console.log("IndexedDB opened successfully");
         indexedDBWorking = true;
       })
       .catch((e) => {
@@ -47,12 +46,12 @@ if (typeof indexedDB !== "undefined") {
   }
 } else {
   console.warn(
-    "IndexedDB is not available. Using in-memory storage as fallback.",
+    "IndexedDB is not available. Using in-memory storage as fallback."
   );
 }
 
 export const getMinutesSinceLastFetch = async (
-  itemType: ItemType,
+  itemType: ItemType
 ): Promise<number> => {
   try {
     let lastFetchTime: number | { itemType: string; time: number } | undefined;
@@ -80,7 +79,7 @@ export const getMinutesSinceLastFetch = async (
 
 export const didXMinutesElapseSinceLastFetch = async (
   itemType: ItemType,
-  minutes: number,
+  minutes: number
 ): Promise<boolean> => {
   const timelapsedInMinutes = await getMinutesSinceLastFetch(itemType);
   return timelapsedInMinutes > minutes;
@@ -99,7 +98,7 @@ export const addProductToCache = async (product: NostrEvent): Promise<void> => {
 };
 
 export const addProductsToCache = async (
-  productsArray: NostrEvent[],
+  productsArray: NostrEvent[]
 ): Promise<void> => {
   try {
     for (const product of productsArray) {
@@ -112,7 +111,7 @@ export const addProductsToCache = async (
 };
 
 export const addProfilesToCache = async (
-  profileMap: Map<string, any>,
+  profileMap: Map<string, any>
 ): Promise<void> => {
   try {
     for (const [pubkey, profile] of profileMap.entries()) {
@@ -130,7 +129,7 @@ export const addProfilesToCache = async (
 };
 
 export const addChatMessageToCache = async (
-  chat: NostrMessageEvent,
+  chat: NostrMessageEvent
 ): Promise<void> => {
   try {
     if (indexedDBWorking && db) {
@@ -144,7 +143,7 @@ export const addChatMessageToCache = async (
 };
 
 export const addChatMessagesToCache = async (
-  chats: NostrMessageEvent[],
+  chats: NostrMessageEvent[]
 ): Promise<void> => {
   try {
     for (const chat of chats) {
@@ -156,7 +155,7 @@ export const addChatMessagesToCache = async (
 };
 
 export const removeProductFromCache = async (
-  productIds: string[],
+  productIds: string[]
 ): Promise<void> => {
   try {
     if (indexedDBWorking && db) {

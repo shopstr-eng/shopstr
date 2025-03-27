@@ -73,9 +73,9 @@ const PreferencesPage = () => {
     reset: mintReset,
   } = useForm();
 
-  const onMintSubmit = async (data: { [x: string]: any }) => {
-    let mint = data["mint"];
-    await replaceMint(mint);
+  const onMintSubmit = async (data: { [x: string]: string }) => {
+    const mint = data["mint"];
+    await replaceMint(mint!);
   };
 
   const handleToggleMintModal = () => {
@@ -97,13 +97,13 @@ const PreferencesPage = () => {
         handleToggleMintModal();
       } else {
         setFailureText(
-          `Failed to add mint! Could not fetch keys from ${newMint}/keys.`,
+          `Failed to add mint! Could not fetch keys from ${newMint}/keys.`
         );
         setShowFailureModal(true);
       }
     } catch {
       setFailureText(
-        `Failed to add mint! Could not fetch keys from ${newMint}/keys.`,
+        `Failed to add mint! Could not fetch keys from ${newMint}/keys.`
       );
       setShowFailureModal(true);
     }
@@ -132,9 +132,9 @@ const PreferencesPage = () => {
     reset: relayReset,
   } = useForm();
 
-  const onRelaySubmit = async (data: { [x: string]: any }) => {
-    let relay = data["relay"];
-    await addRelay(relay, currentRelayType);
+  const onRelaySubmit = async (data: { [x: string]: string }) => {
+    const relay = data["relay"];
+    await addRelay(relay!, currentRelayType);
   };
 
   const handleToggleRelayModal = (type: "all" | "read" | "write" | "") => {
@@ -145,7 +145,7 @@ const PreferencesPage = () => {
 
   const addRelay = async (
     newRelay: string,
-    type: "all" | "read" | "write" | "",
+    type: "all" | "read" | "write" | ""
   ) => {
     try {
       const relayTest = await Relay.connect(newRelay);
@@ -167,7 +167,7 @@ const PreferencesPage = () => {
 
   const deleteRelay = (
     relayToDelete: string,
-    type: "all" | "read" | "write" | "",
+    type: "all" | "read" | "write" | ""
   ) => {
     if (type === "read") {
       setReadRelays(readRelays.filter((relay) => relay !== relayToDelete));
@@ -294,8 +294,8 @@ const PreferencesPage = () => {
                         field: { onChange, onBlur, value },
                         fieldState: { error },
                       }) => {
-                        let isErrored = error !== undefined;
-                        let errorMessage: string = error?.message
+                        const isErrored = error !== undefined;
+                        const errorMessage: string = error?.message
                           ? error.message
                           : "";
                         return (
@@ -423,8 +423,8 @@ const PreferencesPage = () => {
                       field: { onChange, onBlur, value },
                       fieldState: { error },
                     }) => {
-                      let isErrored = error !== undefined;
-                      let errorMessage: string = error?.message
+                      const isErrored = error !== undefined;
+                      const errorMessage: string = error?.message
                         ? error.message
                         : "";
                       return (
@@ -553,8 +553,8 @@ const PreferencesPage = () => {
                       field: { onChange, onBlur, value },
                       fieldState: { error },
                     }) => {
-                      let isErrored = error !== undefined;
-                      let errorMessage: string = error?.message
+                      const isErrored = error !== undefined;
+                      const errorMessage: string = error?.message
                         ? error.message
                         : "";
                       return (
@@ -683,8 +683,8 @@ const PreferencesPage = () => {
                       field: { onChange, onBlur, value },
                       fieldState: { error },
                     }) => {
-                      let isErrored = error !== undefined;
-                      let errorMessage: string = error?.message
+                      const isErrored = error !== undefined;
+                      const errorMessage: string = error?.message
                         ? error.message
                         : "";
                       return (

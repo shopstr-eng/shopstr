@@ -41,3 +41,6 @@ export const SHIPPING_OPTIONS = [
 
 export const SHOPSTRBUTTONCLASSNAMES =
   "text-dark-text dark:text-light-text shadow-lg bg-gradient-to-tr from-shopstr-purple via-shopstr-purple-light to-shopstr-purple min-w-fit dark:from-shopstr-yellow dark:via-shopstr-yellow-light dark:to-shopstr-yellow";
+
+export const PREVNEXTBUTTONSTYLES =
+  "absolute z-10 top-[calc(50%-(.5*50%/2))] cursor-pointer h-[30%] w-[8%] rounded-sm bg-purple-300 opacity-20 hover:bg-purple-500 hover:opacity-80 flex items-center";

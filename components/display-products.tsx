@@ -38,7 +38,7 @@ const DisplayProducts = ({
   const productEventContext = useContext(ProductContext);
   const profileMapContext = useContext(ProfileMapContext);
   const followsContext = useContext(FollowsContext);
-  const [focusedProduct, setFocusedProduct] = useState(""); // product being viewed in modal
+  const [focusedProduct, setFocusedProduct] = useState<ProductData>(); // product being viewed in modal
   const [showModal, setShowModal] = useState(false);
 
   const router = useRouter();
@@ -50,23 +50,23 @@ const DisplayProducts = ({
     if (!productEventContext) return;
     if (!productEventContext.isLoading && productEventContext.productEvents) {
       setIsProductLoading(true);
-      let sortedProductEvents = [
+      const sortedProductEvents = [
         ...productEventContext.productEvents.sort(
-          (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at,
+          (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
         ),
       ]; // sorts most recently created to least recently created
-      let parsedProductData: ProductData[] = [];
+      const parsedProductData: ProductData[] = [];
       sortedProductEvents.forEach((event) => {
         if (wotFilter) {
           if (!followsContext.isLoading && followsContext.followList) {
             const followList = followsContext.followList;
             if (followList.length > 0 && followList.includes(event.pubkey)) {
-              let parsedData = parseTags(event);
+              const parsedData = parseTags(event);
               if (parsedData) parsedProductData.push(parsedData);
             }
           }
         } else {
-          let parsedData = parseTags(event);
+          const parsedData = parseTags(event);
           if (parsedData) parsedProductData.push(parsedData);
         }
       });
@@ -77,7 +77,7 @@ const DisplayProducts = ({
 
   useEffect(() => {
     if (focusedPubkey && setCategories) {
-      let productCategories: string[] = [];
+      const productCategories: string[] = [];
       productEvents.forEach((event) => {
         if (event.pubkey === focusedPubkey) {
           productCategories.push(...event.categories);
@@ -100,15 +100,6 @@ const DisplayProducts = ({
     focusedPubkey,
   ]);
 
-  const isThereAFilter = () => {
-    return (
-      selectedCategories.size > 0 ||
-      selectedLocation ||
-      selectedSearch.length > 0 ||
-      focusedPubkey
-    );
-  };
-
   const handleDelete = async (productId: string) => {
     try {
       await deleteEvent(nostr!, signer!, [productId]);
@@ -122,7 +113,7 @@ const DisplayProducts = ({
     setShowModal(!showModal);
   };
 
-  const onProductClick = (product: any) => {
+  const onProductClick = (product: ProductData) => {
     setFocusedProduct(product);
     if (product.pubkey === userPubkey) {
       setShowModal(true);
@@ -192,6 +183,7 @@ const DisplayProducts = ({
         return false;
       }
     }
+    return;
   };
 
   const productSatisfiesAllFilters = (productData: ProductData) => {
@@ -238,17 +230,6 @@ const DisplayProducts = ({
             </p>
           )
         )}
-        {isThereAFilter() &&
-          !isProductsLoading &&
-          !productEvents.some((product) =>
-            productSatisfiesAllFilters(product),
-          ) && (
-            <p className="mt-4 break-words text-center text-2xl text-light-text dark:text-dark-text">
-              No products found...
-              <br></br>
-              <br></br>Try loading more!
-            </p>
-          )}
         {isMyListings &&
           !isProductsLoading &&
           !productEvents.some((product) => product.pubkey === userPubkey) && (
@@ -266,12 +247,14 @@ const DisplayProducts = ({
           </div>
         ) : null}
       </div>
-      <DisplayProductModal
-        productData={focusedProduct}
-        showModal={showModal}
-        handleModalToggle={handleToggleModal}
-        handleDelete={handleDelete}
-      />
+      {focusedProduct && (
+        <DisplayProductModal
+          productData={focusedProduct}
+          showModal={showModal}
+          handleModalToggle={handleToggleModal}
+          handleDelete={handleDelete}
+        />
+      )}
     </>
   );
 };

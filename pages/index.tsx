@@ -12,6 +12,7 @@ import parseTags, {
 import { SignerContext } from "@/utils/context/nostr-context";
 import Link from "next/link";
 import { nip19 } from "nostr-tools";
+import { NostrEvent } from "@/utils/types/types";
 
 export default function Landing() {
   const router = useRouter();
@@ -27,9 +28,9 @@ export default function Landing() {
   }, [router.pathname, signerContext]);
 
   useEffect(() => {
-    let parsedProductsArray: ProductData[] = [];
+    const parsedProductsArray: ProductData[] = [];
     const products = productEventContext.productEvents;
-    products.forEach((product: any) => {
+    products.forEach((product: NostrEvent) => {
       const parsedProduct = parseTags(product) as ProductData;
       if (
         parsedProduct.images.length > 0 &&
@@ -95,7 +96,7 @@ export default function Landing() {
                           identifier: product.d as string,
                           pubkey: product.pubkey,
                           kind: 30402,
-                        })}`,
+                        })}`
                       )
                     }
                   />

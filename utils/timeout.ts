@@ -7,7 +7,7 @@
 export type PromiseWithTimeoutCallback<T> = (
   resolve: (val: T) => void,
   reject: (err: Error) => void,
-  abortSignal: AbortSignal,
+  abortSignal: AbortSignal
 ) => any;
 
 /**
@@ -18,7 +18,7 @@ export type PromiseWithTimeoutCallback<T> = (
  */
 export async function newPromiseWithTimeout<T>(
   callback: PromiseWithTimeoutCallback<T>,
-  { timeout = 60000 }: { timeout?: number } = {},
+  { timeout = 60000 }: { timeout?: number } = {}
 ): Promise<T> {
   return await new Promise<T>(
     (resolve: (val: T) => void, reject: (err: Error) => void) => {
@@ -40,6 +40,6 @@ export async function newPromiseWithTimeout<T>(
       if (p && p instanceof Promise) {
         p.catch((err) => wrap<Error>(reject)(err));
       }
-    },
+    }
   );
 }

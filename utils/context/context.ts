@@ -34,8 +34,8 @@ export interface ProductContextInterface {
 export const ProductContext = createContext({
   productEvents: {},
   isLoading: true,
-  addNewlyCreatedProductEvent: (productEvent: any) => {},
-  removeDeletedProductEvent: (productId: string) => {},
+  addNewlyCreatedProductEvent: (_productEvent: any) => {},
+  removeDeletedProductEvent: (_productId: string) => {},
 } as ProductContextInterface);
 
 export interface ReviewsContextInterface {
@@ -44,12 +44,12 @@ export interface ReviewsContextInterface {
   isLoading: boolean;
   updateMerchantReviewsData: (
     merchantPubkey: string,
-    merchantReviewsData: number[],
+    merchantReviewsData: number[]
   ) => void;
   updateProductReviewsData: (
     merchantPubkey: string,
     productDTag: string,
-    productReviewsData: Map<string, string[][]>,
+    productReviewsData: Map<string, string[][]>
   ) => void;
 }
 
@@ -58,13 +58,13 @@ export const ReviewsContext = createContext({
   productReviewsData: new Map(),
   isLoading: true,
   updateMerchantReviewsData: (
-    merchantPubkey: string,
-    merchantReviewsData: number[],
+    _merchantPubkey: string,
+    _merchantReviewsData: number[]
   ) => {},
   updateProductReviewsData: (
-    merchantPubkey: string,
-    productDTag: string,
-    productReviewsData: Map<string, string[][]>,
+    _merchantPubkey: string,
+    _productDTag: string,
+    _productReviewsData: Map<string, string[][]>
   ) => {},
 } as ReviewsContextInterface);
 
@@ -78,8 +78,8 @@ export interface CartContextInterface {
 export const CartContext = createContext({
   cartAddresses: [],
   isLoading: true,
-  addProductToCart: (productData: any) => {},
-  removeProductFromCart: (productData: any) => {},
+  addProductToCart: (_productData: any) => {},
+  removeProductFromCart: (_productData: any) => {},
 } as CartContextInterface);
 
 export type ChatsMap = Map<string, NostrMessageEvent[]>;
@@ -89,7 +89,7 @@ export interface ChatsContextInterface {
   isLoading: boolean;
   addNewlyCreatedMessageEvent: (
     messageEvent: NostrMessageEvent,
-    sent?: boolean,
+    sent?: boolean
   ) => void;
 }
 
@@ -97,8 +97,8 @@ export const ChatsContext = createContext({
   chatsMap: new Map(),
   isLoading: true,
   addNewlyCreatedMessageEvent: (
-    messageEvent: NostrMessageEvent,
-    sent?: boolean,
+    _messageEvent: NostrMessageEvent,
+    _sent?: boolean
   ) => {},
 } as ChatsContextInterface);
 

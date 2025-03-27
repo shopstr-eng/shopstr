@@ -42,7 +42,7 @@ const ShopstrSlider = () => {
           className="max-w-md text-light-text dark:text-dark-text"
           onChangeEnd={(value) => {
             if (Array.isArray(value)) {
-              setWot(value[0]);
+              setWot(value[0]!);
             } else {
               setWot(value);
             }

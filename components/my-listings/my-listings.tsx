@@ -1,3 +1,5 @@
+/* eslint-disable @next/next/no-img-element */
+
 import router from "next/router";
 import React, { useContext, useState, useEffect, useRef } from "react";
 import DisplayProducts from "../display-products";
@@ -22,7 +24,7 @@ export const MyListingsPage = () => {
   const [selectedSection, setSelectedSection] = useState("Listings");
 
   const [selectedCategories, setSelectedCategories] = useState(
-    new Set<string>([]),
+    new Set<string>([])
   );
   const [categories, setCategories] = useState([""]);
 

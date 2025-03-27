@@ -68,7 +68,7 @@ const ShopSettingsPage = () => {
       nostr!,
       signer!,
       userPubkey!,
-      JSON.stringify(transformedData),
+      JSON.stringify(transformedData)
     );
     shopContext.updateShopData({
       pubkey: userPubkey!,
@@ -152,8 +152,8 @@ const ShopSettingsPage = () => {
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
                       ? error.message
                       : "";
                     return (
@@ -191,8 +191,8 @@ const ShopSettingsPage = () => {
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
                       ? error.message
                       : "";
                     return (

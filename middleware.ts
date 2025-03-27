@@ -10,7 +10,7 @@ export function middleware(request: NextRequest) {
     !pathname.startsWith("/marketplace/")
   ) {
     return NextResponse.redirect(
-      new URL(`/marketplace${pathname}`, request.url),
+      new URL(`/marketplace${pathname}`, request.url)
     );
   }
 

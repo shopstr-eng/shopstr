@@ -75,7 +75,7 @@ export class NostrManager {
 
   public static signerFrom(
     args: { [key: string]: string },
-    challengeHandler: ChallengeHandler,
+    challengeHandler: ChallengeHandler
   ): NostrSigner {
     const signer =
       NostrNIP07Signer.fromJSON(args, challengeHandler) ??
@@ -126,7 +126,7 @@ export class NostrManager {
   public async subscribe(
     filters: NostrFilter[],
     params: SubscribeManyParams,
-    relayUrls?: string[],
+    relayUrls?: string[]
   ): Promise<NostrSub> {
     if (!this.params.readable) throw new Error("not readable");
 
@@ -151,7 +151,7 @@ export class NostrManager {
       _sub: this.pool.subscribeMany(
         relays.map((r) => r.url),
         filters,
-        params ?? {},
+        params ?? {}
       ),
       close: async () => {
         sub._sub.close();
@@ -172,7 +172,7 @@ export class NostrManager {
   public async fetch(
     filters: NostrFilter[],
     params?: SubscribeManyParams,
-    relayUrls?: string[],
+    relayUrls?: string[]
   ): Promise<NostrEvent[]> {
     return await newPromiseWithTimeout(async (resolve, _reject) => {
       if (!params) {
@@ -191,20 +191,18 @@ export class NostrManager {
       const onEose = params.oneose;
       const fetchedEvents: Array<NostrEvent> = [];
 
-      let sub: NostrSub | undefined;
-
       params.onevent = (event: NostrEvent) => {
         fetchedEvents.push(event);
         return onEvent!(event);
       };
 
       params.oneose = () => {
-        if (sub) sub.close();
+        sub!.close();
         resolve(fetchedEvents);
         return onEose!();
       };
 
-      sub = await this.subscribe(filters, params, relayUrls);
+      const sub = await this.subscribe(filters, params, relayUrls);
     });
   }
 
@@ -223,8 +221,8 @@ export class NostrManager {
     await Promise.allSettled(
       this.pool.publish(
         relays.map((r) => r.url),
-        event,
-      ),
+        event
+      )
     );
   }
 
@@ -232,7 +230,7 @@ export class NostrManager {
     relayUrl: string,
     params?: {
       connectionTimeout?: number;
-    },
+    }
   ): void {
     if (this.relays.find((r) => r.url === relayUrl)) return;
     const r = this.pool.ensureRelay(relayUrl, params);
@@ -256,7 +254,7 @@ export class NostrManager {
     relayUrls: string[],
     params?: {
       connectionTimeout?: number;
-    },
+    }
   ): void {
     for (const relayUrl of relayUrls) {
       this.addRelay(relayUrl, params);

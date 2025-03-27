@@ -1,0 +1,12 @@
+.next
+node_modules
+public
+out
+build
+coverage
+.github
+.husky
+.vscode
+*.log
+.env*
+package-lock.json

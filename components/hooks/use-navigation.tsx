@@ -10,7 +10,6 @@ const useNavigation = () => {
   const [isMessagesActive, setIsMessagesActive] = useState(false);
   const [isWalletActive, setIsWalletActive] = useState(false);
   const [isMyListingsActive, setIsMyListingsActive] = useState(false);
-  const [isMetricsActive, setIsMetricsActive] = useState(false);
   const [isProfileActive, setIsProfileActive] = useState(false);
 
   useEffect(() => {
@@ -18,7 +17,6 @@ const useNavigation = () => {
     setIsMessagesActive(false);
     setIsWalletActive(false);
     setIsMyListingsActive(false);
-    setIsMetricsActive(false);
     setIsProfileActive(false);
 
     switch (pathname) {
@@ -34,9 +32,6 @@ const useNavigation = () => {
       case "/my-listings":
         setIsMyListingsActive(true);
         break;
-      case "/metrics":
-        setIsMetricsActive(true);
-        break;
       case "/settings":
         setIsProfileActive(true);
         break;
@@ -51,7 +46,6 @@ const useNavigation = () => {
     isMessagesActive,
     isWalletActive,
     isMyListingsActive,
-    isMetricsActive,
     isProfileActive,
   };
 };
