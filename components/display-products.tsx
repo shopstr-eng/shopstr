@@ -247,12 +247,14 @@ const DisplayProducts = ({
           </div>
         ) : null}
       </div>
-      <DisplayProductModal
-        productData={focusedProduct}
-        showModal={showModal}
-        handleModalToggle={handleToggleModal}
-        handleDelete={handleDelete}
-      />
+      {focusedProduct && (
+        <DisplayProductModal
+          productData={focusedProduct}
+          showModal={showModal}
+          handleModalToggle={handleToggleModal}
+          handleDelete={handleDelete}
+        />
+      )}
     </>
   );
 };
