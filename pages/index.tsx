@@ -73,14 +73,13 @@ export default function Landing() {
           className={`${SHOPSTRBUTTONCLASSNAMES} flex items-center gap-2 px-10 py-7 text-lg shadow-lg duration-300 transition-all hover:shadow-xl md:px-12 md:text-xl`}
           onClick={() => router.push("/marketplace")}
         >
-          <ShoppingCartIcon className="h-5 w-5" />
           Start Shopping
         </Button>
       </section>
       {/* Product Carousel */}
       <section className="w-full overflow-hidden bg-light-fg/80 py-12 backdrop-blur-sm dark:bg-dark-fg/80">
         <h2 className="mb-8 text-center text-2xl font-bold text-light-text dark:text-dark-text">
-          Featured Products
+          Latest Products
         </h2>
         <div className="mx-auto max-w-[95vw]">
           <motion.div
@@ -132,13 +131,15 @@ export default function Landing() {
         <div className="grid gap-6 sm:gap-8 md:grid-cols-2 lg:grid-cols-3 lg:gap-10">
           {/* Feature 1 */}
           <div className="group rounded-xl border border-transparent bg-light-fg p-6 shadow-lg duration-300 transition-all hover:border-shopstr-purple/20 hover:shadow-xl dark:bg-dark-fg dark:hover:border-shopstr-yellow/20 md:p-8">
-            <div className="mb-5 inline-block rounded-full bg-shopstr-purple/10 p-3 dark:bg-shopstr-yellow/10">
-              <ShieldCheckIcon className="h-8 w-8 text-shopstr-purple dark:text-shopstr-yellow" />
+            <div className="mb-5 flex flex-col items-center">
+              <div className="rounded-full bg-shopstr-purple/10 p-3 dark:bg-shopstr-yellow/10">
+                <ShieldCheckIcon className="h-8 w-8 text-shopstr-purple dark:text-shopstr-yellow" />
+              </div>
+              <h3 className="mt-3 text-xl font-semibold text-shopstr-purple duration-300 transition-transform group-hover:translate-x-1 dark:text-shopstr-yellow md:text-2xl">
+                Permissionless Commerce
+              </h3>
             </div>
-            <h3 className="mb-4 text-xl font-semibold text-shopstr-purple duration-300 transition-transform group-hover:translate-x-1 dark:text-shopstr-yellow md:text-2xl">
-              Permissionless Commerce
-            </h3>
-            <p className="leading-relaxed text-light-text dark:text-dark-text">
+            <p className="text-center leading-relaxed text-light-text dark:text-dark-text">
               Built on{" "}
               <Link href="https://njump.me" passHref legacyBehavior>
                 <a
@@ -156,13 +157,15 @@ export default function Landing() {
 
           {/* Feature 2 */}
           <div className="group rounded-xl border border-transparent bg-light-fg p-6 shadow-lg duration-300 transition-all hover:border-shopstr-purple/20 hover:shadow-xl dark:bg-dark-fg dark:hover:border-shopstr-yellow/20 md:p-8">
-            <div className="mb-5 inline-block rounded-full bg-shopstr-purple/10 p-3 dark:bg-shopstr-yellow/10">
-              <BoltIcon className="h-8 w-8 text-shopstr-purple dark:text-shopstr-yellow" />
+            <div className="mb-5 flex flex-col items-center">
+              <div className="rounded-full bg-shopstr-purple/10 p-3 dark:bg-shopstr-yellow/10">
+                <BoltIcon className="h-8 w-8 text-shopstr-purple dark:text-shopstr-yellow" />
+              </div>
+              <h3 className="mt-3 text-xl font-semibold text-shopstr-purple duration-300 transition-transform group-hover:translate-x-1 dark:text-shopstr-yellow md:text-2xl">
+                Bitcoin Native
+              </h3>
             </div>
-            <h3 className="mb-4 text-xl font-semibold text-shopstr-purple duration-300 transition-transform group-hover:translate-x-1 dark:text-shopstr-yellow md:text-2xl">
-              Bitcoin Native
-            </h3>
-            <p className="leading-relaxed text-light-text dark:text-dark-text">
+            <p className="text-center leading-relaxed text-light-text dark:text-dark-text">
               Secure transactions using{" "}
               <Link href="https://lightning.network" passHref legacyBehavior>
                 <a
@@ -189,14 +192,16 @@ export default function Landing() {
 
           {/* Feature 3 */}
           <div className="group rounded-xl border border-transparent bg-light-fg p-6 shadow-lg duration-300 transition-all hover:border-shopstr-purple/20 hover:shadow-xl dark:bg-dark-fg dark:hover:border-shopstr-yellow/20 md:p-8">
-            <div className="mb-5 inline-block rounded-full bg-shopstr-purple/10 p-3 dark:bg-shopstr-yellow/10">
-              <UserCircleIcon className="h-8 w-8 text-shopstr-purple dark:text-shopstr-yellow" />
+            <div className="mb-5 flex flex-col items-center">
+              <div className="rounded-full bg-shopstr-purple/10 p-3 dark:bg-shopstr-yellow/10">
+                <UserCircleIcon className="h-8 w-8 text-shopstr-purple dark:text-shopstr-yellow" />
+              </div>
+              <h3 className="mt-3 text-xl font-semibold text-shopstr-purple duration-300 transition-transform group-hover:translate-x-1 dark:text-shopstr-yellow md:text-2xl">
+                Privacy First
+              </h3>
             </div>
-            <h3 className="mb-4 text-xl font-semibold text-shopstr-purple duration-300 transition-transform group-hover:translate-x-1 dark:text-shopstr-yellow md:text-2xl">
-              Privacy First
-            </h3>
-            <p className="leading-relaxed text-light-text dark:text-dark-text">
-              No purchases or sales are viewable by any third-party. Your data
+            <p className="text-center leading-relaxed text-light-text dark:text-dark-text">
+              No purchases or sales are viewable by any third party. Your data
               is encrypted and stored on your selected{" "}
               <Link href="https://nostr.how/en/relays" passHref legacyBehavior>
                 <a
@@ -258,7 +263,7 @@ export default function Landing() {
                 <p className="mb-8 text-light-text dark:text-dark-text md:text-lg">
                   Set up your profile
                 </p>
-                <div className="relative overflow-hidden rounded-xl shadow-lg duration-300 transition-all hover:shadow-xl">
+                <div className="relative mt-6 overflow-hidden rounded-xl shadow-lg duration-300 transition-all hover:shadow-xl">
                   <Image
                     alt="Step 2"
                     src="/profile-step-dark.png"
@@ -285,7 +290,7 @@ export default function Landing() {
                 <p className="mb-8 text-light-text dark:text-dark-text md:text-lg">
                   List your products
                 </p>
-                <div className="relative overflow-hidden rounded-xl shadow-lg duration-300 transition-all hover:shadow-xl">
+                <div className="relative mt-6 overflow-hidden rounded-xl shadow-lg duration-300 transition-all hover:shadow-xl">
                   <Image
                     alt="Step 3"
                     src="/listing-step-dark.png"
@@ -312,7 +317,7 @@ export default function Landing() {
                 <p className="mb-8 text-light-text dark:text-dark-text md:text-lg">
                   Start buying and selling
                 </p>
-                <div className="relative overflow-hidden rounded-xl shadow-lg duration-300 transition-all hover:shadow-xl">
+                <div className="relative  mt-6 overflow-hidden rounded-xl shadow-lg duration-300 transition-all hover:shadow-xl">
                   <Image
                     alt="Step 4"
                     src="/payment-step-dark.png"

@@ -20,6 +20,35 @@ const cardWidth = 380;
 const cardxMargin = 2.5;
 export const TOTALPRODUCTCARDWIDTH = cardWidth + cardxMargin * 2 + 10;
 
+type ProductImage = {
+  url: string;
+  alt?: string;
+};
+
+const FixedImageCarousel = ({
+  images,
+  showThumbs = false,
+}: {
+  images: ProductImage[] | string[];
+  showThumbs?: boolean;
+}) => {
+  if (!images || images.length === 0) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-gray-100 dark:bg-gray-800">
+        <p className="text-gray-500 dark:text-gray-400">No image available</p>
+      </div>
+    );
+  }
+
+  return (
+    <ImageCarousel
+      images={images}
+      classname="w-full h-full object-cover"
+      showThumbs={showThumbs}
+    />
+  );
+};
+
 export default function ProductCard({
   productData,
   onProductClick,
@@ -61,13 +90,11 @@ export default function ProductCard({
             </div>
           </div>
           <div className="mb-5">
-            <div className="overflow-hidden rounded-lg">
-              <ImageCarousel
-                images={images}
-                classname="w-full h-[300px]"
-                showThumbs={false}
-              />
+            {/* Fixed height container for images */}
+            <div className="relative h-[250px] w-full overflow-hidden md:h-[300px]">
+              <FixedImageCarousel images={images} showThumbs={false} />
             </div>
+
             <div className="mt-4 flex flex-row items-center justify-between">
               <Chip
                 key={location}
@@ -129,12 +156,9 @@ export default function ProductCard({
             onProductClick && onProductClick(productData);
           }}
         >
-          <div className="relative overflow-hidden">
-            <ImageCarousel
-              images={images}
-              classname="w-full h-[300px]"
-              showThumbs={false}
-            />
+          {/* Fixed height container for images */}
+          <div className="relative h-[250px] w-full overflow-hidden">
+            <FixedImageCarousel images={images} showThumbs={false} />
             {status && (
               <div className="absolute right-3 top-3 z-10">
                 {status === "active" && (
@@ -151,13 +175,13 @@ export default function ProductCard({
             )}
           </div>
           <CardBody className="p-4">
-            {router.pathname !== "/" && (
-              <div className="mb-2">
+            <div className="mb-2 h-6">
+              {router.pathname !== "/" && (
                 <h2 className="line-clamp-1 text-xl font-bold text-shopstr-purple dark:text-shopstr-yellow">
                   {title}
                 </h2>
-              </div>
-            )}
+              )}
+            </div>
 
             <div className="mb-3 flex items-center justify-between">
               <ProfileWithDropdown

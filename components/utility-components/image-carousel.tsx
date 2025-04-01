@@ -11,48 +11,66 @@ interface ImageCarouselProps {
   images: string[];
   classname?: string;
   showThumbs?: boolean;
+  fixedHeight?: boolean;
 }
+
 export default function ImageCarousel({
   images,
-  classname,
-  showThumbs,
+  classname = "",
+  showThumbs = false,
+  fixedHeight = true,
 }: ImageCarouselProps) {
   const router = useRouter();
-  /** SHARED STYLES **/
+
   const PREVNEXTBUTTONSTYLES =
     "absolute z-10 top-[calc(50%-(.5*50%/2))] cursor-pointer h-[30%] w-[8%] rounded-sm bg-purple-300 opacity-20 hover:bg-purple-500 hover:opacity-80 flex items-center";
 
+  const containerClass = `flex items-center justify-center ${classname}`;
+
+  const imageClass = fixedHeight
+    ? "h-full w-full object-cover"
+    : "h-full w-full object-contain";
+
   const displayImages = () => {
-    let className = "flex items-center justify-center " + classname + "";
-    if (!images || images.length == 0)
+    if (!images || images.length === 0) {
       return [
-        <div className={className} key={"image" + 0}>
+        <div className={containerClass} key="no-image">
           <Image
             src="/no-image-placeholder.png"
-            className="h-full w-full object-contain"
+            className={imageClass}
             alt="No image placeholder"
           />
         </div>,
       ];
-    return images.map((image, index) => {
-      return (
-        <div className={className} key={"image" + index}>
-          <Image
-            src={image}
-            srcSet={buildSrcSet(image)}
-            className="h-full w-full object-contain"
-            alt="Product image"
-          />
-        </div>
-      );
-    });
+    }
+
+    return images.map((image, index) => (
+      <div className={containerClass} key={`image-${index}`}>
+        <Image
+          src={image}
+          srcSet={buildSrcSet(image)}
+          className={imageClass}
+          alt={`Product image ${index + 1}`}
+          radius="none"
+          style={{
+            width: "100%",
+            height: "100%",
+          }}
+          disableSkeleton={true}
+        />
+      </div>
+    ));
   };
+
   return (
     <Carousel
       showArrows={images && images.length > 1}
       showStatus={false}
       showIndicators={router.pathname !== "/" && images && images.length > 1}
       showThumbs={showThumbs}
+      infiniteLoop={true}
+      preventMovementUntilSwipeScrollTolerance={true}
+      swipeScrollTolerance={50}
       renderArrowPrev={(onClickHandler, hasPrev, label) =>
         hasPrev && (
           <button
