@@ -1,7 +1,7 @@
 import React from "react";
 import { Accordion, AccordionItem } from "@nextui-org/react";
 
-export default function FAQ() {
+export default function Faq() {
   const faqItems = [
     {
       title: "What is Shopstr?",

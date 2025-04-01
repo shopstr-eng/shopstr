@@ -29,7 +29,7 @@ import { ShopSettings } from "../../utils/types/types";
 import SideShopNav from "./side-shop-nav";
 import FailureModal from "../utility-components/failure-modal";
 
-export function MarketplacePage({
+function MarketplacePage({
   focusedPubkey,
   setFocusedPubkey,
   selectedSection,

@@ -17,7 +17,7 @@ function isDecodableToken(token: string): boolean {
   }
 }
 
-export const ChatMessage = ({
+const ChatMessage = ({
   messageEvent,
   index = 0,
   currentChatPubkey,

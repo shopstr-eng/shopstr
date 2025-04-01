@@ -33,7 +33,7 @@ import { calculateWeightedScore } from "../utility/review-parser-functions";
 import { ReviewsContext } from "../../utils/context/context";
 import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
 
-export const ChatPanel = ({
+const ChatPanel = ({
   handleGoBack,
   handleSendMessage,
   currentChatPubkey,

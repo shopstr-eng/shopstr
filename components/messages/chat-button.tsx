@@ -3,7 +3,7 @@ import { ChatObject } from "../../utils/types/types";
 import { timeSinceMessageDisplayText } from "../../utils/messages/utils";
 import { ProfileAvatar } from "@/components/utility-components/profile/profile-avatar";
 
-export const ChatButton = ({
+const ChatButton = ({
   pubkeyOfChat,
   chatObject,
   openedChatPubkey,

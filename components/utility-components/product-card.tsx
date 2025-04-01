@@ -14,7 +14,7 @@ import { SignerContext } from "@/utils/context/nostr-context";
 
 const cardWidth = 380;
 const cardxMargin = 2.5;
-export const TOTALPRODUCTCARDWIDTH = cardWidth + cardxMargin * 2 + 10;
+const TOTALPRODUCTCARDWIDTH = cardWidth + cardxMargin * 2 + 10;
 
 export default function ProductCard({
   productData,

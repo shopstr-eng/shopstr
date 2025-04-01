@@ -26,7 +26,7 @@ import SuccessModal from "../utility-components/success-modal";
 import currencySelection from "../../public/currencySelection.json";
 import { SignerContext } from "@/utils/context/nostr-context";
 
-export const TOTALPRODUCTCARDWIDTH = 380 + 5;
+const TOTALPRODUCTCARDWIDTH = 380 + 5;
 const SUMMARY_CHARACTER_LIMIT = 100;
 
 export default function CheckoutCard({

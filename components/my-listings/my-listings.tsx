@@ -13,7 +13,7 @@ import { ShopSettings } from "../../utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import SideShopNav from "../home/side-shop-nav";
 
-export const MyListingsPage = () => {
+const MyListingsPage = () => {
   const { pubkey: usersPubkey } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
 
