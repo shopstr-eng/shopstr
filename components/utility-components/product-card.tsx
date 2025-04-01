@@ -12,10 +12,6 @@ import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { useRouter } from "next/router";
 import { SignerContext } from "@/utils/context/nostr-context";
 
-const cardWidth = 380;
-const cardxMargin = 2.5;
-const TOTALPRODUCTCARDWIDTH = cardWidth + cardxMargin * 2 + 10;
-
 export default function ProductCard({
   productData,
   onProductClick,

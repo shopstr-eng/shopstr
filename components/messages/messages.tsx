@@ -11,8 +11,8 @@ import {
 } from "../utility/nostr-helper-functions";
 import { ChatsContext } from "../../utils/context/context";
 import ShopstrSpinner from "../utility-components/shopstr-spinner";
-import { ChatPanel } from "./chat-panel";
-import { ChatButton } from "./chat-button";
+import ChatPanel from "./chat-panel";
+import ChatButton from "./chat-button";
 import { NostrMessageEvent, ChatObject } from "../../utils/types/types";
 import {
   addChatMessagesToCache,

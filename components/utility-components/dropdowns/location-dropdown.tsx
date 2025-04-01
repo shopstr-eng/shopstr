@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import { Select, SelectItem, SelectSection, Avatar } from "@nextui-org/react";
 import locations from "../../../public/locationSelection.json";
 
-const locationAvatar = (location: string) => {
+export const locationAvatar = (location: string) => {
   const getLocationMap = () => {
     const countries = locations.countries.map(
       (country) => [country.country, country.iso3166] as const

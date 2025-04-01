@@ -19,7 +19,7 @@ import {
   HandThumbUpIcon,
 } from "@heroicons/react/24/outline";
 import { ChatObject, NostrMessageEvent } from "../../utils/types/types";
-import { ChatMessage } from "./chat-message";
+import ChatMessage from "./chat-message";
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
 import {
   constructGiftWrappedEvent,
