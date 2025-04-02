@@ -46,7 +46,7 @@ import {
   publishProofEvent,
   generateKeys,
 } from "@/utils/nostr/nostr-helper-functions";
-import { addChatMessagesToCache } from "@/utils/nostr//cache-service";
+import { addChatMessagesToCache } from "@/utils/nostr/cache-service";
 import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
 import { nip19 } from "nostr-tools";

@@ -515,7 +515,7 @@ function Shopstr({ props }: { props: AppProps }) {
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
         navigator.serviceWorker
-          .register("/sw.js")
+          .register("/service-worker.js")
           .catch((registrationError) => {
             console.error(
               "Service Worker registration failed: ",

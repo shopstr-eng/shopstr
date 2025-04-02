@@ -49,6 +49,6 @@ export class NostrNIP07Signer implements NostrSigner {
   }
 
   public async close(): Promise<void> {
-    // noop
+    return;
   }
 }
