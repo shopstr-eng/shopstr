@@ -15,7 +15,7 @@ import {
   UseFormHandleSubmit,
   FieldValues,
 } from "react-hook-form";
-import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import CountryDropdown from "./utility-components/dropdowns/country-dropdown";
 
 export default function CombinedContactForm({

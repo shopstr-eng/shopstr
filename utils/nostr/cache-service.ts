@@ -1,6 +1,5 @@
-import { NostrEvent } from "../../../utils/types/types";
+import { NostrEvent, ItemType, NostrMessageEvent } from "../types/types";
 import Dexie, { Table } from "dexie";
-import { ItemType, NostrMessageEvent } from "../../../utils/types/types";
 
 export let db: ItemsFetchedFromRelays | null = null;
 let indexedDBWorking = false;

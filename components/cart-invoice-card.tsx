@@ -45,23 +45,26 @@ import {
   generateKeys,
   getLocalStorageData,
   publishProofEvent,
-} from "./utility/nostr-helper-functions";
-import { addChatMessagesToCache } from "../pages/api/nostr/cache-service";
+} from "@/utils/nostr/nostr-helper-functions";
+import { addChatMessagesToCache } from "@/utils/nostr/cache-service";
 import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
 import { nip19 } from "nostr-tools";
-import { ProductData } from "./utility/product-parser-functions";
+import { ProductData } from "@/utils/parsers/product-parser-functions";
 import {
   DisplayCostBreakdown,
   formatWithCommas,
 } from "./utility-components/display-monetary-info";
-import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import SignInModal from "./sign-in/SignInModal";
 import FailureModal from "@/components/utility-components/failure-modal";
 import ShippingForm from "./shipping-form";
 import ContactForm from "./contact-form";
 import CombinedContactForm from "./combined-contact-form";
-import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
+import {
+  NostrContext,
+  SignerContext,
+} from "@/components/utility-components/nostr-context-provider";
 import {
   ShippingFormData,
   ContactFormData,

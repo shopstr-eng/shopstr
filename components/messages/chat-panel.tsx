@@ -10,7 +10,7 @@ import {
   ModalHeader,
   ModalBody,
 } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   ArrowUturnLeftIcon,
   ArrowsUpDownIcon,
@@ -28,10 +28,13 @@ import {
   sendGiftWrappedMessageEvent,
   publishReviewEvent,
   generateKeys,
-} from "../utility/nostr-helper-functions";
-import { calculateWeightedScore } from "../utility/review-parser-functions";
+} from "@/utils/nostr/nostr-helper-functions";
+import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
 import { ReviewsContext } from "../../utils/context/context";
-import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
+import {
+  NostrContext,
+  SignerContext,
+} from "@/components/utility-components/nostr-context-provider";
 
 const ChatPanel = ({
   handleGoBack,

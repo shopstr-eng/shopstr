@@ -2,7 +2,7 @@
 
 import React, { useContext, useEffect, useRef, useState } from "react";
 import { nip19 } from "nostr-tools";
-import { ProductData } from "../utility/product-parser-functions";
+import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import {
   DisplayCostBreakdown,
@@ -10,7 +10,7 @@ import {
 } from "./display-monetary-info";
 import ProductInvoiceCard from "../product-invoice-card";
 import { useRouter } from "next/router";
-import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { Button, Chip } from "@nextui-org/react";
 import { locationAvatar } from "./dropdowns/location-dropdown";
 import {
@@ -24,7 +24,7 @@ import { sanitizeUrl } from "@braintree/sanitize-url";
 import FailureModal from "../utility-components/failure-modal";
 import SuccessModal from "../utility-components/success-modal";
 import currencySelection from "../../public/currencySelection.json";
-import { SignerContext } from "@/utils/context/nostr-context";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 
 const SUMMARY_CHARACTER_LIMIT = 100;
 

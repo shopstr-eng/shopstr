@@ -5,7 +5,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import { Image } from "@nextui-org/react";
 import { buildSrcSet } from "@/utils/images";
 import { useRouter } from "next/router";
-import { PREVNEXTBUTTONSTYLES } from "../utility/STATIC-VARIABLES";
+import { PREVNEXTBUTTONSTYLES } from "@/utils/STATIC-VARIABLES";
 
 interface ImageCarouselProps {
   images: string[];

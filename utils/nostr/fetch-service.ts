@@ -18,12 +18,12 @@ import { ChatsMap } from "@/utils/context/context";
 import {
   getLocalStorageData,
   deleteEvent,
-} from "@/components/utility/nostr-helper-functions";
+} from "@/utils/nostr/nostr-helper-functions";
 import {
   ProductData,
   parseTags,
-} from "@/components/utility/product-parser-functions";
-import { calculateWeightedScore } from "@/components/utility/review-parser-functions";
+} from "@/utils/parsers/product-parser-functions";
+import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
 import { hashToCurve } from "@cashu/crypto/modules/common";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";

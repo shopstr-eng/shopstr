@@ -5,9 +5,12 @@ import { ArrowUpOnSquareIcon } from "@heroicons/react/24/outline";
 
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { ShopMapContext } from "@/utils/context/context";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
-import { SignerContext, NostrContext } from "@/utils/context/nostr-context";
-import { createNostrShopEvent } from "@/components/utility/nostr-helper-functions";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import {
+  SignerContext,
+  NostrContext,
+} from "@/components/utility-components/nostr-context-provider";
+import { createNostrShopEvent } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 

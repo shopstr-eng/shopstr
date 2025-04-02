@@ -4,7 +4,7 @@ import { Modal, ModalContent, ModalHeader, ModalBody } from "@nextui-org/react";
 import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/outline";
 import parseTags, {
   ProductData,
-} from "../../components/utility/product-parser-functions";
+} from "@/utils/parsers/product-parser-functions";
 import ListingPage from "../../components/listing-page";
 import { ProductContext } from "../../utils/context/context";
 import { Event, nip19 } from "nostr-tools";

@@ -1,15 +1,15 @@
 import { Button, Image } from "@nextui-org/react";
 import { ArrowUpRightIcon } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { useContext, useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ProductContext } from "../utils/context/context";
+import { ProductContext } from "@/utils/context/context";
 import ProductCard from "@/components/utility-components/product-card";
 import parseTags, {
   ProductData,
-} from "@/components/utility/product-parser-functions";
-import { SignerContext } from "@/utils/context/nostr-context";
+} from "@/utils/parsers/product-parser-functions";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import Link from "next/link";
 import { nip19 } from "nostr-tools";
 import { NostrEvent } from "@/utils/types/types";

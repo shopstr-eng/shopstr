@@ -1,4 +1,4 @@
-import { LogOut } from "@/components/utility/nostr-helper-functions";
+import { LogOut } from "@/utils/nostr/nostr-helper-functions";
 import { ProfileMapContext } from "@/utils/context/context";
 import {
   Dropdown,
@@ -21,7 +21,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import FailureModal from "../failure-modal";
-import { SignerContext } from "@/utils/context/nostr-context";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 
 type DropDownKeys =
   | "shop"

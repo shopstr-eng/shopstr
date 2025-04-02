@@ -28,21 +28,25 @@ import "react-responsive-carousel/lib/styles/carousel.min.css";
 import {
   PREVNEXTBUTTONSTYLES,
   SHOPSTRBUTTONCLASSNAMES,
-} from "./utility/STATIC-VARIABLES";
+  CATEGORIES,
+  SHIPPING_OPTIONS,
+} from "@/utils/STATIC-VARIABLES";
 import {
   PostListing,
   getLocalStorageData,
-} from "./utility/nostr-helper-functions";
-import { CATEGORIES, SHIPPING_OPTIONS } from "./utility/STATIC-VARIABLES";
+} from "@/utils/nostr/nostr-helper-functions";
 import LocationDropdown from "./utility-components/dropdowns/location-dropdown";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 import { ProductContext, ProfileMapContext } from "../utils/context/context";
-import { addProductToCache } from "../pages/api/nostr/cache-service";
-import { ProductData } from "./utility/product-parser-functions";
+import { addProductToCache } from "@/utils/nostr//cache-service";
+import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { buildSrcSet } from "@/utils/images";
 import { FileUploaderButton } from "./utility-components/file-uploader";
 import currencySelection from "../public/currencySelection.json";
-import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
+import {
+  NostrContext,
+  SignerContext,
+} from "@/components/utility-components/nostr-context-provider";
 import { ProductFormValues } from "../utils/types/types";
 
 interface ProductFormProps {
@@ -53,7 +57,7 @@ interface ProductFormProps {
   onSubmitCallback?: () => void;
 }
 
-export default function NewForm({
+export default function ProductForm({
   showModal,
   handleModalToggle,
   oldValues,

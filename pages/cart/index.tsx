@@ -11,8 +11,8 @@ import {
 import {
   SHOPSTRBUTTONCLASSNAMES,
   ShippingOptionsType,
-} from "../../components/utility/STATIC-VARIABLES";
-import { ProductData } from "../../components/utility/product-parser-functions";
+} from "@/utils/STATIC-VARIABLES";
+import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { DisplayCostBreakdown } from "../../components/utility-components/display-monetary-info";
 import CartInvoiceCard from "../../components/cart-invoice-card";
 import { fiat } from "@getalby/lightning-tools";

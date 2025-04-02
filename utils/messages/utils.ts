@@ -1,4 +1,4 @@
-import { fetchChatMessagesFromCache } from "../../pages/api/nostr/cache-service";
+import { fetchChatMessagesFromCache } from "@/utils/nostr/cache-service";
 import { ChatsMap } from "../context/context";
 import { NostrMessageEvent } from "../types/types";
 

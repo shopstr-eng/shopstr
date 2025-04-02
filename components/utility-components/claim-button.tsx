@@ -23,9 +23,9 @@ import {
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
-} from "../utility/nostr-helper-functions";
-import { addChatMessagesToCache } from "../../pages/api/nostr/cache-service";
-import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
+} from "@/utils/nostr/nostr-helper-functions";
+import { addChatMessagesToCache } from "@/utils/nostr/cache-service";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { LightningAddress } from "@getalby/lightning-tools";
 import { nip19 } from "nostr-tools";
 import {
@@ -36,7 +36,10 @@ import {
   getEncodedToken,
 } from "@cashu/cashu-ts";
 import { formatWithCommas } from "./display-monetary-info";
-import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
+import {
+  NostrContext,
+  SignerContext,
+} from "@/components/utility-components/nostr-context-provider";
 
 export default function ClaimButton({ token }: { token: string }) {
   const [lnurl, setLnurl] = useState("");

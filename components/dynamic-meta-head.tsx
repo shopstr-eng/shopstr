@@ -2,7 +2,7 @@ import Head from "next/head";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { NostrEvent, ShopSettings } from "@/utils/types/types";
-import parseTags from "./utility/product-parser-functions";
+import parseTags from "@/utils/parsers/product-parser-functions";
 import { nip19 } from "nostr-tools";
 
 type MetaTagsType = {

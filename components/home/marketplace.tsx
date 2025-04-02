@@ -20,9 +20,9 @@ import {
 import DisplayProducts from "../display-products";
 import LocationDropdown from "../utility-components/dropdowns/location-dropdown";
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
-import { CATEGORIES } from "../utility/STATIC-VARIABLES";
-import { SignerContext } from "@/utils/context/nostr-context";
-import { ProductData } from "../utility/product-parser-functions";
+import { CATEGORIES } from "@/utils/STATIC-VARIABLES";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import { ProductData } from "@/utils/parsers/product-parser-functions";
 import SignInModal from "../sign-in/SignInModal";
 import ShopstrSwitch from "../utility-components/shopstr-switch";
 import { ShopSettings } from "../../utils/types/types";

@@ -8,17 +8,17 @@ import {
   Input,
   InputProps,
 } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   setLocalStorageDataOnSignIn,
   validateNSecKey,
   parseBunkerToken,
-} from "@/components/utility/nostr-helper-functions";
+} from "@/utils/nostr/nostr-helper-functions";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 import { RelaysContext } from "../../utils/context/context";
 import { useRouter } from "next/router";
 import FailureModal from "../../components/utility-components/failure-modal";
-import { SignerContext } from "@/utils/context/nostr-context";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
 export default function SignInModal({

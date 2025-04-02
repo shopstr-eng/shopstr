@@ -1,5 +1,5 @@
 import React from "react";
-import { ShippingOptionsType } from "../utility/STATIC-VARIABLES";
+import { ShippingOptionsType } from "@/utils/STATIC-VARIABLES";
 
 type ProductMonetaryInfo = {
   shippingType?: ShippingOptionsType;

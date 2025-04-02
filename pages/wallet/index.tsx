@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/router";
-import { getLocalStorageData } from "../../components/utility/nostr-helper-functions";
+import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
 import MintButton from "../../components/wallet/mint-button";
 import ReceiveButton from "../../components/wallet/receive-button";
 import SendButton from "../../components/wallet/send-button";

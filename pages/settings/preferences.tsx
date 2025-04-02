@@ -17,17 +17,20 @@ import {
   RadioGroup,
 } from "@nextui-org/react";
 import { Relay } from "nostr-tools";
-import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   createNostrRelayEvent,
   getLocalStorageData,
   publishWalletEvent,
-} from "../../components/utility/nostr-helper-functions";
+} from "@/utils/nostr/nostr-helper-functions";
 import { useTheme } from "next-themes";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import ShopstrSlider from "../../components/utility-components/shopstr-slider";
 import FailureModal from "../../components/utility-components/failure-modal";
-import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
+import {
+  NostrContext,
+  SignerContext,
+} from "@/components/utility-components/nostr-context-provider";
 
 const PreferencesPage = () => {
   const { nostr } = useContext(NostrContext);

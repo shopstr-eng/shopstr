@@ -8,7 +8,7 @@ import {
   sendGiftWrappedMessageEvent,
   decryptNpub,
   generateKeys,
-} from "../utility/nostr-helper-functions";
+} from "@/utils/nostr/nostr-helper-functions";
 import { ChatsContext } from "../../utils/context/context";
 import ShopstrSpinner from "../utility-components/shopstr-spinner";
 import ChatPanel from "./chat-panel";
@@ -17,10 +17,10 @@ import { NostrMessageEvent, ChatObject } from "../../utils/types/types";
 import {
   addChatMessagesToCache,
   fetchChatMessagesFromCache,
-} from "../../pages/api/nostr/cache-service";
-import { useKeyPress } from "../utility/functions";
+} from "@/utils/nostr/cache-service";
+import { useKeyPress } from "@/utils/keypress-handler";
 import FailureModal from "../utility-components/failure-modal";
-import { SignerContext } from "@/utils/context/nostr-context";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 
 const Messages = ({ isPayment }: { isPayment: boolean }) => {
   const router = useRouter();

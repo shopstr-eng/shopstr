@@ -26,7 +26,7 @@ import {
   getLocalStorageData,
   getDefaultRelays,
   LogOut,
-} from "../components/utility/nostr-helper-functions";
+} from "@/utils/nostr/nostr-helper-functions";
 import { NextUIProvider } from "@nextui-org/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import {
@@ -38,7 +38,7 @@ import {
   fetchAllRelays,
   fetchCashuWallet,
   fetchGiftWrappedChatsAndMessages,
-} from "./api/nostr/fetch-service";
+} from "@/utils/nostr/fetch-service";
 import {
   NostrEvent,
   ProfileData,
@@ -53,7 +53,7 @@ import {
   SignerContextProvider,
   NostrContext,
   SignerContext,
-} from "@/utils/context/nostr-context";
+} from "@/components/utility-components/nostr-context-provider";
 
 function Shopstr({ props }: { props: AppProps }) {
   const { Component, pageProps } = props;
@@ -515,7 +515,7 @@ function Shopstr({ props }: { props: AppProps }) {
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
         navigator.serviceWorker
-          .register("/service-worker.js")
+          .register("/sw.js")
           .catch((registrationError) => {
             console.error(
               "Service Worker registration failed: ",

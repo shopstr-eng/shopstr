@@ -2,7 +2,7 @@ import React from "react";
 import { Button } from "@nextui-org/react";
 import { useRouter } from "next/router";
 import Link from "next/link";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
 export default function Custom404() {
   const router = useRouter();

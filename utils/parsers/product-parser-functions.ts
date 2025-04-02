@@ -1,5 +1,5 @@
-import { ShippingOptionsType } from "./STATIC-VARIABLES";
-import { calculateTotalCost } from "../utility-components/display-monetary-info";
+import { ShippingOptionsType } from "@/utils/STATIC-VARIABLES";
+import { calculateTotalCost } from "@/components/utility-components/display-monetary-info";
 import { NostrEvent } from "@/utils/types/types";
 
 export type ProductData = {

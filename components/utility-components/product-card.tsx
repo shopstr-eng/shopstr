@@ -7,10 +7,10 @@ import ImageCarousel from "./image-carousel";
 import CompactPriceDisplay, {
   DisplayCostBreakdown,
 } from "./display-monetary-info";
-import { ProductData } from "../utility/product-parser-functions";
+import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { useRouter } from "next/router";
-import { SignerContext } from "@/utils/context/nostr-context";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 
 export default function ProductCard({
   productData,

@@ -9,11 +9,11 @@ import {
 } from "nostr-tools";
 import crypto from "crypto";
 import { NostrEvent, ProductFormValues } from "@/utils/types/types";
-import { ProductData } from "@/components/utility/product-parser-functions";
+import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { Proof } from "@cashu/cashu-ts";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
-import { removeProductFromCache } from "@/pages/api/nostr/cache-service";
+import { removeProductFromCache } from "@/utils/nostr/cache-service";
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
