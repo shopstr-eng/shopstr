@@ -54,11 +54,13 @@ export default function ProductCard({
   onProductClick,
   isReview,
   footerContent,
+  isLanding = false,
 }: {
   productData: ProductData;
   onProductClick?: (productId: any) => void;
   isReview?: boolean;
   footerContent?: ReactNode;
+  isLanding?: boolean;
 }) {
   const router = useRouter();
   const { pubkey: userPubkey } = useContext(SignerContext);
@@ -159,7 +161,7 @@ export default function ProductCard({
           {/* Fixed height container for images */}
           <div className="relative h-[250px] w-full overflow-hidden">
             <FixedImageCarousel images={images} showThumbs={false} />
-            {status && (
+            {!isLanding && status && (
               <div className="absolute right-3 top-3 z-10">
                 {status === "active" && (
                   <span className="rounded-full bg-gradient-to-r from-green-500 to-green-600 px-3 py-1 text-xs font-semibold text-white shadow-md">

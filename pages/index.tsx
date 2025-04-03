@@ -102,6 +102,7 @@ export default function Landing() {
                   <ProductCard
                     key={product.id + "-" + index}
                     productData={product}
+                    isLanding={true}
                     onProductClick={() =>
                       router.push(
                         `/listing/${nip19.naddrEncode({

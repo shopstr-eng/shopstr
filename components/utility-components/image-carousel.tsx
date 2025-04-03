@@ -29,7 +29,7 @@ export default function ImageCarousel({
 
   const imageClass = fixedHeight
     ? "h-full w-full object-cover"
-    : "h-full w-full object-contain";
+    : "h-full w-full object-cover";
 
   const displayImages = () => {
     if (!images || images.length === 0) {
