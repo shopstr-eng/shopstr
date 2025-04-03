@@ -57,6 +57,7 @@ import {
 
 function Shopstr({ props }: { props: AppProps }) {
   const { Component, pageProps } = props;
+  const router = useRouter();
   const { nostr } = useContext(NostrContext);
   const { signer, isLoggedIn } = useContext(SignerContext);
   const [productContext, setProductContext] = useState<ProductContextInterface>(
@@ -334,8 +335,6 @@ function Shopstr({ props }: { props: AppProps }) {
   const [focusedPubkey, setFocusedPubkey] = useState("");
   const [selectedSection, setSelectedSection] = useState("");
 
-  const router = useRouter();
-
   /** FETCH initial FOLLOWS, RELAYS, PRODUCTS, and PROFILES **/
   useEffect(() => {
     async function fetchData() {
@@ -468,6 +467,23 @@ function Shopstr({ props }: { props: AppProps }) {
     }
   }, []);
 
+  // Handle route changes
+  useEffect(() => {
+    const handleRouteChange = (url: string) => {
+      // Prevent navigation to the same URL
+      if (url === router.asPath) {
+        router.events.emit('routeChangeError', { cancelled: true });
+        return;
+      }
+    };
+
+    router.events.on('routeChangeStart', handleRouteChange);
+
+    return () => {
+      router.events.off('routeChangeStart', handleRouteChange);
+    };
+  }, [router]);
+
   return (
     <>
       <DynamicHead
@@ -522,17 +538,15 @@ function Shopstr({ props }: { props: AppProps }) {
 
 function App(props: AppProps) {
   return (
-    <>
+    <NextThemesProvider attribute="class" defaultTheme="system" enableSystem>
       <NextUIProvider>
-        <NextThemesProvider attribute="class">
+        <SignerContextProvider>
           <NostrContextProvider>
-            <SignerContextProvider>
-              <Shopstr props={props} />
-            </SignerContextProvider>
+            <Shopstr props={props} />
           </NostrContextProvider>
-        </NextThemesProvider>
+        </SignerContextProvider>
       </NextUIProvider>
-    </>
+    </NextThemesProvider>
   );
 }
 

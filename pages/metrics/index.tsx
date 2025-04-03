@@ -99,24 +99,24 @@ export default function MetricsPage() {
             Today
           </DateRangePickerItem>
           <DateRangePickerItem
-            key="sevenDats"
-            value="sevenDats"
+            key="sevenDays"
+            value="sevenDays"
             from={DateTime.now().minus({ days: 7 }).toJSDate()}
             to={DateTime.now().toJSDate()}
           >
             Last 7 Days
           </DateRangePickerItem>
           <DateRangePickerItem
-            key="thirtyDats"
-            value="thirtyDats"
+            key="thirtyDays"
+            value="thirtyDays"
             from={DateTime.now().minus({ days: 30 }).toJSDate()}
             to={DateTime.now().toJSDate()}
           >
             Last 30 Days
           </DateRangePickerItem>
           <DateRangePickerItem
-            key="threehundredsixtyfiveDats"
-            value="threehundredsixtyfiveDats"
+            key="threehundredsixtyfiveDays"
+            value="threehundredsixtyfiveDays"
             from={DateTime.now().minus({ days: 365 }).toJSDate()}
             to={DateTime.now().toJSDate()}
           >

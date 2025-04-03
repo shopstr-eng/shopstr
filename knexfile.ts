@@ -1,13 +1,27 @@
 import type { Knex } from "knex";
 import "dotenv/config";
 
-// Update with your config settings.
+// Parse the connection string to get individual components
+const connectionString = process.env["DATABASE_URL"] || "";
+const matches = connectionString.match(/mysql:\/\/([^:]+):([^@]+)@([^:]+):(\d+)\/(.+)/);
 
+if (!matches) {
+  console.error("Invalid DATABASE_URL format");
+  throw new Error("Invalid DATABASE_URL format");
+}
+
+const [, user, password, host, port, database] = matches;
+
+// Update with your config settings.
 const config: { [key: string]: Knex.Config } = {
   development: {
-    client: "pg",
+    client: "mysql2",
     connection: {
-      connectionString: process.env["DATABASE_URL"],
+      host,
+      port: parseInt(port, 10),
+      user,
+      password,
+      database,
     },
     migrations: {
       tableName: "knex_migrations",
@@ -18,9 +32,13 @@ const config: { [key: string]: Knex.Config } = {
     },
   },
   production: {
-    client: "pg",
+    client: "mysql2",
     connection: {
-      connectionString: process.env["DATABASE_URL"],
+      host,
+      port: parseInt(port, 10),
+      user,
+      password,
+      database,
     },
     migrations: {
       tableName: "knex_migrations",
