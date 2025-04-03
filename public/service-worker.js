@@ -7,43 +7,56 @@ const PRECACHE_RESOURCES = [
   "/shopstr-144x144.png",
   "/shopstr-512x512.png",
   "/shopstr-2000x2000.png",
+  "/offline",
+  "/_next/static/css/app.css",
+  "/_next/static/js/main.js"
 ];
 
 self.addEventListener("install", (event) => {
   console.log("Service Worker: Installing");
   event.waitUntil(
-    caches
-      .open(CACHE_NAME)
-      .then((cache) => {
+    Promise.all([
+      caches.open(CACHE_NAME).then((cache) => {
         console.log("Service Worker: Caching Files");
         return cache.addAll(PRECACHE_RESOURCES);
-      })
-      .then(() => self.skipWaiting()),
+      }),
+      self.skipWaiting()
+    ])
   );
 });
 
 self.addEventListener("activate", (event) => {
   console.log("Service Worker: Activated");
-  // Clean up old caches
+  // Clean up old caches and claim clients
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cache) => {
-          if (cache !== CACHE_NAME) {
-            console.log("Service Worker: Clearing Old Cache");
-            return caches.delete(cache);
-          }
-        }),
-      );
-    }),
+    Promise.all([
+      caches.keys().then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((cache) => {
+            if (cache !== CACHE_NAME) {
+              console.log("Service Worker: Clearing Old Cache");
+              return caches.delete(cache);
+            }
+          }),
+        );
+      }),
+      self.clients.claim()
+    ])
   );
 });
 
 // Enhanced fetch handler with offline support
 self.addEventListener("fetch", (event) => {
-  // Skip non-HTTP(S) requests and chrome-extension URLs
-  if (!event.request.url.startsWith('http') || event.request.url.startsWith('chrome-extension://')) {
-    return;
+  // Skip non-HTTP(S) requests, chrome-extension URLs, and all development-related requests
+  if (!event.request.url.startsWith('http') || 
+      event.request.url.startsWith('chrome-extension://') ||
+      event.request.url.includes('webpack') ||
+      event.request.url.includes('hot-update') ||
+      event.request.url.includes('on-demand-entries') ||
+      event.request.url.includes('_next/static/webpack') ||
+      event.request.url.includes('_next/static/development') ||
+      event.request.url.includes('__webpack_hmr')) {
+    return fetch(event.request);
   }
 
   // Handle only GET requests
