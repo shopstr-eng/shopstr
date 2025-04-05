@@ -23,15 +23,15 @@ export const ProfileAvatar = ({
   useEffect(() => {
     const profileMap = profileContext.profileData;
     const profile = profileMap.has(pubkey) ? profileMap.get(pubkey) : undefined;
-    setDisplayName(() => {
-      let displayName =
-        profile && profile.content.name ? profile.content.name : npub;
-      displayName =
-        displayName.length > 20
-          ? displayName.slice(0, 20) + "..."
-          : displayName;
-      return displayName;
-    });
+    const updateDisplayName = () => {
+      let name = profile && profile.content.name ? profile.content.name : npub;
+      if (profile?.content?.nip05 && profile.nip05Verified) {
+        name = profile.content.nip05;
+      }
+      name = name.length > 20 ? name.slice(0, 20) + "..." : name;
+      setDisplayName(name);
+    };
+    updateDisplayName();
 
     setPfp(
       profile && profile.content.picture
@@ -39,6 +39,7 @@ export const ProfileAvatar = ({
         : `https://robohash.idena.io/${pubkey}`,
     );
   }, [profileContext, pubkey]);
+  const isNip05Verified = profileContext.profileData.get(pubkey)?.nip05Verified || false;
 
   return (
     <User
@@ -47,7 +48,9 @@ export const ProfileAvatar = ({
       }}
       className={"transition-transform"}
       classNames={{
-        name: "overflow-hidden text-ellipsis whitespace-nowrap text-light-text dark:text-dark-text hidden block",
+        name: `overflow-hidden text-ellipsis whitespace-nowrap text-light-text dark:text-dark-text hidden block ${
+          isNip05Verified ? "text-shopstr-purple dark:text-shopstr-yellow" : ""
+        }`,
         base: `${baseClassname}`,
         description: `${descriptionClassname}`,
         wrapper: `${wrapperClassname}`,

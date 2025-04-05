@@ -54,21 +54,22 @@ export const ProfileWithDropdown = ({
   useEffect(() => {
     const profileMap = profileContext.profileData;
     const profile = profileMap.has(pubkey) ? profileMap.get(pubkey) : undefined;
-    setDisplayName(() => {
-      let displayName =
-        profile && profile.content.name ? profile.content.name : npub;
-      displayName =
-        displayName.length > 15
-          ? displayName.slice(0, 15) + "..."
-          : displayName;
-      return displayName;
-    });
+    const updateDisplayName = () => {
+      let name = profile && profile.content.name ? profile.content.name : npub;
+      if (profile?.content?.nip05 && profile.nip05Verified) {
+        name = profile.content.nip05;
+      }
+      name = name.length > 15 ? name.slice(0, 15) + "..." : name;
+      setDisplayName(name);
+    };
+    updateDisplayName();
     setPfp(
       profile && profile.content && profile.content.picture
         ? profile.content.picture
         : `https://robohash.idena.io/${pubkey}`,
     );
   }, [profileContext, pubkey]);
+  const isNip05Verified = profileContext.profileData.get(pubkey)?.nip05Verified || false;
 
   const DropDownItems: {
     [key in DropDownKeys]: DropdownItemProps & { label: string };
@@ -179,7 +180,9 @@ export const ProfileWithDropdown = ({
             }}
             className={"transition-transform"}
             classNames={{
-              name: `overflow-hidden text-ellipsis whitespace-nowrap text-light-text dark:text-dark-text hidden ${nameClassname}`,
+              name: `overflow-hidden text-ellipsis whitespace-nowrap text-light-text dark:text-dark-text hidden ${nameClassname} ${
+                isNip05Verified ? "text-shopstr-purple dark:text-shopstr-yellow" : ""
+              }`,
               base: `${baseClassname}`,
             }}
             name={displayName}
