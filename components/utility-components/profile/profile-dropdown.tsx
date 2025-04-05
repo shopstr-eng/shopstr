@@ -55,15 +55,14 @@ export const ProfileWithDropdown = ({
   useEffect(() => {
     const profileMap = profileContext.profileData;
     const profile = profileMap.has(pubkey) ? profileMap.get(pubkey) : undefined;
-    const updateDisplayName = () => {
+    setDisplayName(() => {
       let name = profile && profile.content.name ? profile.content.name : npub;
       if (profile?.content?.nip05 && profile.nip05Verified) {
         name = profile.content.nip05;
       }
       name = name.length > 15 ? name.slice(0, 15) + "..." : name;
-      setDisplayName(name);
-    };
-    updateDisplayName();
+      return name;
+    });
     setPfp(
       profile && profile.content && profile.content.picture
         ? profile.content.picture
