@@ -42,7 +42,7 @@ const FixedImageCarousel = ({
 
   return (
     <ImageCarousel
-      images={images}
+      images={images as ProductImage[]}
       classname="w-full h-full object-cover"
       showThumbs={showThumbs}
     />

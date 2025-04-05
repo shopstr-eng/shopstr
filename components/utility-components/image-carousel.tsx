@@ -1,18 +1,22 @@
 /* eslint-disable @next/next/no-img-element */
 import React from "react";
 import { Carousel } from "react-responsive-carousel";
-import "react-responsive-carousel/lib/styles/carousel.min.css"; // requires a loader
+import "react-responsive-carousel/lib/styles/carousel.min.css";
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import { Image } from "@nextui-org/react";
 import { buildSrcSet } from "@/utils/images";
 import { useRouter } from "next/router";
 
 interface ImageCarouselProps {
-  images: string[];
+  images: ProductImage[];
   classname?: string;
   showThumbs?: boolean;
   fixedHeight?: boolean;
 }
+type ProductImage = {
+  url: string;
+  alt?: string;
+};
 
 export default function ImageCarousel({
   images,
@@ -47,8 +51,8 @@ export default function ImageCarousel({
     return images.map((image, index) => (
       <div className={containerClass} key={`image-${index}`}>
         <Image
-          src={image}
-          srcSet={buildSrcSet(image)}
+          src={image.url}
+          srcSet={buildSrcSet(image.url)}
           className={imageClass}
           alt={`Product image ${index + 1}`}
           radius="none"
