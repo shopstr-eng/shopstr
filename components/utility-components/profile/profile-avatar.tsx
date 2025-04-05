@@ -35,10 +35,10 @@ export const ProfileAvatar = ({
     setPfp(
       profile && profile.content.picture
         ? profile.content.picture
-        : `https://robohash.idena.io/${pubkey}`,
+        : `https://robohash.org/${pubkey}`
     );
     setIsNip05Verified(profile?.nip05Verified || false);
-  }, [profileContext, pubkey]);
+  }, [profileContext, pubkey, npub]);
 
   return (
     <User

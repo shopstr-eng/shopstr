@@ -21,11 +21,11 @@ import {
   Button,
   Input,
 } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   getLocalStorageData,
   publishProofEvent,
-} from "../utility/nostr-helper-functions";
+} from "@/utils/nostr/nostr-helper-functions";
 import {
   CashuMint,
   CashuWallet,
@@ -34,7 +34,10 @@ import {
   Proof,
 } from "@cashu/cashu-ts";
 import { CashuWalletContext } from "../../utils/context/context";
-import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
+import {
+  NostrContext,
+  SignerContext,
+} from "@/components/utility-components/nostr-context-provider";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
 
 const SendButton = () => {
@@ -65,22 +68,22 @@ const SendButton = () => {
     setNewToken("");
   };
 
-  const onSendSubmit = async (data: { [x: string]: any }) => {
-    let numSats = data["sats"];
-    await handleSend(numSats);
+  const onSendSubmit = async (data: { [x: string]: number }) => {
+    const numSats = data["sats"];
+    await handleSend(numSats!);
   };
 
   const handleSend = async (numSats: number) => {
     setSendFailed(false);
     try {
-      const mint = new CashuMint(mints[0]);
+      const mint = new CashuMint(mints[0]!);
       const wallet = new CashuWallet(mint);
       const mintKeySetIds = await wallet.getKeySets();
       const filteredProofs = tokens.filter(
         (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id),
+          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
-      let sendTotal = (numSats / 10) * 10;
+      const sendTotal = (numSats / 10) * 10;
       const { keep, send } = await wallet.send(sendTotal, filteredProofs, {
         includeFees: true,
       });
@@ -92,9 +95,9 @@ const SendButton = () => {
               event.proofs.some((proof: Proof) =>
                 filteredProofs.some(
                   (filteredProof) =>
-                    JSON.stringify(proof) === JSON.stringify(filteredProof),
-                ),
-              ),
+                    JSON.stringify(proof) === JSON.stringify(filteredProof)
+                )
+              )
             )
             .map((event) => event.id),
           ...walletContext.proofEvents
@@ -102,9 +105,9 @@ const SendButton = () => {
               event.proofs.some((proof: Proof) =>
                 keep.some(
                   (keepProof) =>
-                    JSON.stringify(proof) === JSON.stringify(keepProof),
-                ),
-              ),
+                    JSON.stringify(proof) === JSON.stringify(keepProof)
+                )
+              )
             )
             .map((event) => event.id),
           ...walletContext.proofEvents
@@ -112,16 +115,16 @@ const SendButton = () => {
               event.proofs.some((proof: Proof) =>
                 send.some(
                   (sendProof) =>
-                    JSON.stringify(proof) === JSON.stringify(sendProof),
-                ),
-              ),
+                    JSON.stringify(proof) === JSON.stringify(sendProof)
+                )
+              )
             )
             .map((event) => event.id),
         ]),
       ];
 
       const encodedSendToken = getEncodedToken({
-        mint: mints[0],
+        mint: mints[0]!,
         proofs: send,
       });
       setShowTokenCard(true);
@@ -129,7 +132,7 @@ const SendButton = () => {
       const changeProofs = keep;
       const remainingProofs = tokens.filter(
         (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id),
+          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id)
       );
       let proofArray;
       if (changeProofs.length >= 1 && changeProofs) {
@@ -143,16 +146,16 @@ const SendButton = () => {
         JSON.stringify([
           { type: 2, amount: numSats, date: Math.floor(Date.now() / 1000) },
           ...history,
-        ]),
+        ])
       );
       await publishProofEvent(
         nostr!,
         signer!,
-        mints[0],
+        mints[0]!,
         changeProofs && changeProofs.length >= 1 ? changeProofs : [],
         "out",
         sendTotal.toString(),
-        deletedEventIds,
+        deletedEventIds
       );
     } catch (_) {
       setSendFailed(true);
@@ -215,8 +218,8 @@ const SendButton = () => {
                   field: { onChange, onBlur, value },
                   fieldState: { error },
                 }) => {
-                  let isErrored = error !== undefined;
-                  let errorMessage: string = error?.message
+                  const isErrored = error !== undefined;
+                  const errorMessage: string = error?.message
                     ? error.message
                     : "";
                   return (

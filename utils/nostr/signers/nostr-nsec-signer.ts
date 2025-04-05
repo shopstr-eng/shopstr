@@ -30,7 +30,7 @@ export class NostrNSecSigner implements NostrSigner {
 
   public static getEncryptedNSEC(
     privKey: Uint8Array | string,
-    passphrase: string,
+    passphrase: string
   ): {
     encryptedPrivKey: string;
     passphrase: string;
@@ -41,7 +41,7 @@ export class NostrNSecSigner implements NostrSigner {
       privKey = nip19.nsecEncode(privKey);
     }
     const pubkey = getPublicKey(
-      nip19.decode(privKey as string).data as Uint8Array,
+      nip19.decode(privKey as string).data as Uint8Array
     );
 
     privKey = CryptoJS.AES.encrypt(privKey as string, passphrase).toString();
@@ -62,7 +62,7 @@ export class NostrNSecSigner implements NostrSigner {
       passphrase?: string;
       pubkey?: string;
     },
-    challengeHandler: ChallengeHandler,
+    challengeHandler: ChallengeHandler
   ) {
     this.encryptedPrivKey = encryptedPrivKey;
     this.challengeHandler = challengeHandler;
@@ -74,7 +74,7 @@ export class NostrNSecSigner implements NostrSigner {
     json: {
       [key: string]: any;
     },
-    challengeHandler: ChallengeHandler,
+    challengeHandler: ChallengeHandler
   ): NostrNSecSigner | undefined {
     if (json.type !== "nsec" || !json.encryptedPrivKey) return undefined;
     return new NostrNSecSigner(
@@ -83,7 +83,7 @@ export class NostrNSecSigner implements NostrSigner {
         passphrase: json.passphrase,
         pubkey: json.pubkey,
       },
-      challengeHandler,
+      challengeHandler
     );
   }
 
@@ -100,8 +100,8 @@ export class NostrNSecSigner implements NostrSigner {
   }
 
   private async getPassphrase(
-    abort: () => {},
-    error?: Error,
+    abort: () => void,
+    error?: Error
   ): Promise<[string, boolean]> {
     let passphrase: string | undefined = this.passphrase;
     let remind: boolean = false;
@@ -121,7 +121,7 @@ export class NostrNSecSigner implements NostrSigner {
           return abort();
         },
         abortController.signal,
-        error,
+        error
       );
       ({ res: passphrase, remind } = res);
     }
@@ -137,12 +137,12 @@ export class NostrNSecSigner implements NostrSigner {
       try {
         const [passphrase, remember] = await this.getPassphrase(
           () => (aborted = true),
-          error,
+          error
         );
 
         const privkey = CryptoJS.AES.decrypt(
           this.encryptedPrivKey,
-          passphrase,
+          passphrase
         ).toString(CryptoJS.enc.Utf8);
         if (!privkey) throw new Error("Invalid passphrase");
 
@@ -191,7 +191,7 @@ export class NostrNSecSigner implements NostrSigner {
   public async encrypt(pubkey: string, plainText: string): Promise<string> {
     const conversationKey = nip44.getConversationKey(
       await this._getPrivKey(),
-      pubkey,
+      pubkey
     );
     return nip44.encrypt(plainText, conversationKey);
   }
@@ -199,7 +199,7 @@ export class NostrNSecSigner implements NostrSigner {
   public async decrypt(pubkey: string, cipherText: string): Promise<string> {
     const conversationKey = nip44.getConversationKey(
       await this._getPrivKey(),
-      pubkey,
+      pubkey
     );
     const decrypted = nip44.decrypt(cipherText, conversationKey);
     return decrypted;

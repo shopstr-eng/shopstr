@@ -1,7 +1,7 @@
 import React from "react";
 import { Accordion, AccordionItem } from "@nextui-org/react";
 
-export default function FAQ() {
+export default function Faq() {
   const faqItems = [
     {
       title: "What is Shopstr?",
@@ -9,7 +9,7 @@ export default function FAQ() {
         "Shopstr is a permissionless marketplace built on Nostr that enables peer-to-peer commerce using Bitcoin. It provides a secure and private way to buy and sell items via the Lightning Network and Cashu token payments.",
     },
     {
-      title: "What is Nostr",
+      title: "What is Nostr?",
       content:
         "Nostr is a protocol that allows you to take control of your digital identity and data. No one can stop you from posting what you want, and you can use your Nostr keys to sign into any other compatible Nostr applications, taking your content with you.",
     },

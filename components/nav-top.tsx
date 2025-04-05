@@ -4,9 +4,9 @@ import { Button, Image, useDisclosure } from "@nextui-org/react";
 import { Bars4Icon } from "@heroicons/react/24/outline";
 import { countNumberOfUnreadMessagesFromChatsContext } from "@/utils/messages/utils";
 import { ChatsContext, ShopMapContext } from "@/utils/context/context";
-import { db } from "../pages/api/nostr/cache-service";
+import { db } from "@/utils/nostr/cache-service";
 import { useLiveQuery } from "dexie-react-hooks";
-import { SignerContext } from "@/utils/context/nostr-context";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { useRouter } from "next/router";
 import SignInModal from "./sign-in/SignInModal";
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
@@ -44,7 +44,7 @@ const TopNav = ({
 
   useEffect(() => {
     const fetchAndUpdateCartQuantity = async () => {
-      let cartList = localStorage.getItem("cart")
+      const cartList = localStorage.getItem("cart")
         ? JSON.parse(localStorage.getItem("cart") as string)
         : [];
       if (cartList) {
@@ -63,8 +63,8 @@ const TopNav = ({
 
   useEffect(() => {
     const getUnreadMessages = async () => {
-      let unreadMsgCount = await countNumberOfUnreadMessagesFromChatsContext(
-        chatsContext.chatsMap,
+      const unreadMsgCount = await countNumberOfUnreadMessagesFromChatsContext(
+        chatsContext.chatsMap
       );
       setUnreadMsgCount(unreadMsgCount);
     };
@@ -105,7 +105,7 @@ const TopNav = ({
   }, [router.pathname, shopMapContext, userPubkey]);
 
   const handleRoute = (path: string) => {
-    if (signedIn || (!signedIn && path === "/metrics")) {
+    if (signedIn) {
       router.push(path);
       setIsMobileMenuOpen(false);
     } else {
@@ -151,12 +151,6 @@ const TopNav = ({
         onClick={() => handleRoute("/cart")}
       >
         Cart {cartQuantity > 0 && `(${cartQuantity})`}
-      </Button>
-      <Button
-        className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-        onClick={() => handleRoute("/metrics")}
-      >
-        Metrics
       </Button>
     </div>
   );
@@ -249,15 +243,8 @@ const TopNav = ({
             Cart {cartQuantity > 0 && `(${cartQuantity})`}
           </Button>
           |
-          <Button
-            className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-            onClick={() => handleRoute("/metrics")}
-          >
-            Metrics
-          </Button>
           {signedIn ? (
             <>
-              |
               <ProfileWithDropdown
                 pubkey={userPubkey!}
                 baseClassname="justify-start dark:hover:shopstr-yellow-light pl-4 rounded-3xl py-2 hover:scale-105 hover:bg-light-bg hover:shadow-lg dark:hover:bg-dark-bg"
@@ -272,7 +259,6 @@ const TopNav = ({
             </>
           ) : (
             <>
-              |
               <Button
                 onClick={onOpen}
                 className={`bg-transparent text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${

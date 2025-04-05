@@ -1,9 +1,9 @@
-import { fetchChatMessagesFromCache } from "../../pages/api/nostr/cache-service";
+import { fetchChatMessagesFromCache } from "@/utils/nostr/cache-service";
 import { ChatsMap } from "../context/context";
 import { NostrMessageEvent } from "../types/types";
 
 export const timeSinceMessageDisplayText = (
-  timeSent: number,
+  timeSent: number
 ): { long: string; short: string; dateTime: string } => {
   // Calculate the time difference in milliseconds
   const timeDifference = new Date().getTime() - timeSent * 1000;
@@ -46,13 +46,13 @@ export const timeSinceMessageDisplayText = (
 };
 
 export const countNumberOfUnreadMessagesFromChatsContext = async (
-  chatsMap: ChatsMap,
+  chatsMap: ChatsMap
 ) => {
-  let chatMessagesFromCache: Map<string, NostrMessageEvent> =
+  const chatMessagesFromCache: Map<string, NostrMessageEvent> =
     await fetchChatMessagesFromCache();
   let numberOfUnread = 0;
-  for (let entry of chatsMap) {
-    let chat = entry[1] as NostrMessageEvent[];
+  for (const entry of chatsMap) {
+    const chat = entry[1] as NostrMessageEvent[];
     chat.forEach((messageEvent: NostrMessageEvent) => {
       if (chatMessagesFromCache.get(messageEvent.id)?.read === false) {
         numberOfUnread++;

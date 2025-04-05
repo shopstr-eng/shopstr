@@ -3,8 +3,8 @@ import { Button } from "@nextui-org/react";
 import { Slider } from "@nextui-org/react";
 import { useTheme } from "next-themes";
 import { FollowsContext } from "../../utils/context/context";
-import { getLocalStorageData } from "../../components/utility/nostr-helper-functions";
-import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
+import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
 const ShopstrSlider = () => {
   const { theme } = useTheme();
@@ -42,7 +42,7 @@ const ShopstrSlider = () => {
           className="max-w-md text-light-text dark:text-dark-text"
           onChangeEnd={(value) => {
             if (Array.isArray(value)) {
-              setWot(value[0]);
+              setWot(value[0]!);
             } else {
               setWot(value);
             }

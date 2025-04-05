@@ -17,10 +17,13 @@ import {
   EyeSlashIcon,
   EyeIcon,
 } from "@heroicons/react/24/outline";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
-import { SignerContext, NostrContext } from "@/utils/context/nostr-context";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import {
+  SignerContext,
+  NostrContext,
+} from "@/components/utility-components/nostr-context-provider";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
-import { createNostrProfileEvent } from "@/components/utility/nostr-helper-functions";
+import { createNostrProfileEvent } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 
@@ -57,7 +60,7 @@ const UserProfilePage = () => {
   const watchBanner = watch("banner");
   const watchPicture = watch("picture");
   const defaultImage = useMemo(() => {
-    return "https://robohash.idena.io/" + userPubkey;
+    return "https://robohash.org/" + userPubkey;
   }, [userPubkey]);
 
   useEffect(() => {
@@ -78,9 +81,9 @@ const UserProfilePage = () => {
         (nsec) => {
           setUserNSec(nsec);
         },
-        (err: any) => {
+        (err: unknown) => {
           console.error(err);
-        },
+        }
       );
     }
   }, [profileContext, userPubkey, signer, reset]);
@@ -92,7 +95,7 @@ const UserProfilePage = () => {
       nostr!,
       signer!,
       userPubkey!,
-      JSON.stringify(data),
+      JSON.stringify(data)
     );
     profileContext.updateProfileData({
       pubkey: userPubkey!,
@@ -258,8 +261,8 @@ const UserProfilePage = () => {
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
                       ? error.message
                       : "";
                     return (
@@ -291,8 +294,8 @@ const UserProfilePage = () => {
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
                       ? error.message
                       : "";
                     return (
@@ -324,8 +327,8 @@ const UserProfilePage = () => {
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
                       ? error.message
                       : "";
                     return (
@@ -357,8 +360,8 @@ const UserProfilePage = () => {
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
                       ? error.message
                       : "";
                     return (
@@ -389,8 +392,8 @@ const UserProfilePage = () => {
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
                       ? error.message
                       : "";
                     return (
@@ -422,8 +425,8 @@ const UserProfilePage = () => {
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
                       ? error.message
                       : "";
                     return (

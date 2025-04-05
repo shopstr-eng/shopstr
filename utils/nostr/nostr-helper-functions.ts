@@ -7,12 +7,13 @@ import {
   nip98,
   SimplePool,
 } from "nostr-tools";
+import crypto from "crypto";
 import { NostrEvent, ProductFormValues } from "@/utils/types/types";
-import { ProductData } from "@/components/utility/product-parser-functions";
+import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { Proof } from "@cashu/cashu-ts";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
-import { removeProductFromCache } from "@/pages/api/nostr/cache-service";
+import { removeProductFromCache } from "@/utils/nostr/cache-service";
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
@@ -63,7 +64,6 @@ function generateEventId(event: EncryptedMessageEvent) {
   });
 
   // Step 3: Create SHA256 hash of the serialized string
-  const crypto = require("crypto");
   const hash = crypto.createHash("sha256");
   hash.update(serialized);
   return hash.digest("hex");
@@ -72,15 +72,15 @@ function generateEventId(event: EncryptedMessageEvent) {
 export async function deleteEvent(
   nostr: NostrManager,
   signer: NostrSigner,
-  event_ids_to_delete: string[],
+  event_ids_to_delete: string[]
 ) {
   const userPubkey: string = await signer.getPubKey();
-  let deletionEvent = await createNostrDeleteEvent(
+  const deletionEvent = await createNostrDeleteEvent(
     nostr,
     signer,
     event_ids_to_delete,
     userPubkey,
-    "NIP-99 listing deletion request",
+    "NIP-99 listing deletion request"
   );
 
   await finalizeAndSendNostrEvent(signer, nostr, deletionEvent);
@@ -92,10 +92,10 @@ export async function createNostrDeleteEvent(
   signer: NostrSigner,
   event_ids: string[],
   pubkey: string,
-  content: string,
+  content: string
 ) {
   if (!signer || !nostr) throw new Error("Login required");
-  let msg = {
+  const msg = {
     kind: 5,
     content: content,
     tags: [],
@@ -105,7 +105,7 @@ export async function createNostrDeleteEvent(
     sig: "",
   } as NostrEvent;
 
-  for (let event_id of event_ids) {
+  for (const event_id of event_ids) {
     msg.tags.push(["e", event_id]);
   }
 
@@ -151,9 +151,9 @@ export async function createNostrProfileEvent(
   nostr: NostrManager,
   signer: NostrSigner,
   pubkey: string,
-  content: string,
+  content: string
 ) {
-  let msg = {
+  const msg = {
     kind: 0,
     content: content,
     tags: [],
@@ -171,7 +171,7 @@ export async function PostListing(
   values: ProductFormValues,
   signer: NostrSigner,
   isLoggedIn: boolean,
-  nostr: NostrManager,
+  nostr: NostrManager
 ) {
   const { relays, writeRelays } = getLocalStorageData();
 
@@ -215,7 +215,7 @@ export async function PostListing(
     kind: 31989,
     tags: [
       ["d", "30402"],
-      ["a", "31990:" + userPubkey + ":" + handlerDTag, relays[0], "web"],
+      ["a", "31990:" + userPubkey! + ":" + handlerDTag!, relays[0]!, "web"],
     ],
     content: "",
     created_at: Math.floor(Date.now() / 1000),
@@ -237,9 +237,9 @@ export async function createNostrShopEvent(
   nostr: NostrManager,
   signer: NostrSigner,
   pubkey: string,
-  content: string,
+  content: string
 ) {
-  let msg = {
+  const msg = {
     kind: 30019, // NIP-15 - Stall Metadata
     content: content,
     tags: [],
@@ -291,7 +291,7 @@ export async function constructGiftWrappedEvent(
     carrier?: string;
     eta?: number;
     isOrder?: boolean;
-  } = {},
+  } = {}
 ): Promise<GiftWrappedMessageEvent> {
   const { relays } = getLocalStorageData();
   const {
@@ -312,8 +312,8 @@ export async function constructGiftWrappedEvent(
     isOrder,
   } = options;
 
-  let tags = [
-    ["p", recipientPubkey, relays[0]],
+  const tags = [
+    ["p", recipientPubkey, relays[0]!],
     ["subject", subject],
   ];
 
@@ -346,10 +346,10 @@ export async function constructGiftWrappedEvent(
       tags.push([
         "a",
         `30402:${productData.pubkey}:${productData.d}`,
-        relays[0],
+        relays[0]!,
       ]);
     } else if (productAddress) {
-      tags.push(["a", productAddress, relays[0]]);
+      tags.push(["a", productAddress, relays[0]!]);
     }
   }
 
@@ -373,21 +373,21 @@ export async function constructMessageSeal(
   messageEvent: GiftWrappedMessageEvent,
   senderPubkey: string,
   recipientPubkey: string,
-  randomPrivkey?: Uint8Array,
+  randomPrivkey?: Uint8Array
 ): Promise<NostrEvent> {
-  let stringifiedEvent = JSON.stringify(messageEvent);
+  const stringifiedEvent = JSON.stringify(messageEvent);
   let encryptedContent;
   if (randomPrivkey) {
-    let conversationKey = nip44.getConversationKey(
+    const conversationKey = nip44.getConversationKey(
       randomPrivkey,
-      recipientPubkey,
+      recipientPubkey
     );
     encryptedContent = nip44.encrypt(stringifiedEvent, conversationKey);
   } else {
     encryptedContent = await signer.encrypt(recipientPubkey, stringifiedEvent);
   }
 
-  let sealEvent = {
+  const sealEvent = {
     pubkey: senderPubkey,
     created_at: generateRandomTimestamp(),
     content: encryptedContent,
@@ -407,28 +407,28 @@ export async function constructMessageGiftWrap(
   sealEvent: NostrEvent,
   randomPubkey: string,
   randomPrivkey: Uint8Array,
-  recipientPubkey: string,
+  recipientPubkey: string
 ): Promise<NostrEvent> {
   const { relays } = getLocalStorageData();
-  let stringifiedEvent = JSON.stringify(sealEvent);
-  let conversationKey = nip44.getConversationKey(
+  const stringifiedEvent = JSON.stringify(sealEvent);
+  const conversationKey = nip44.getConversationKey(
     randomPrivkey,
-    recipientPubkey,
+    recipientPubkey
   );
-  let encryptedEvent = nip44.encrypt(stringifiedEvent, conversationKey);
-  let giftWrapEvent = {
+  const encryptedEvent = nip44.encrypt(stringifiedEvent, conversationKey);
+  const giftWrapEvent = {
     pubkey: randomPubkey,
     created_at: generateRandomTimestamp(),
     content: encryptedEvent,
     kind: 1059,
-    tags: [["p", recipientPubkey, relays[0]]],
+    tags: [["p", recipientPubkey, relays[0]!]],
   };
-  let signedEvent = finalizeEvent(giftWrapEvent, randomPrivkey);
+  const signedEvent = finalizeEvent(giftWrapEvent, randomPrivkey);
   return signedEvent;
 }
 
 export async function sendGiftWrappedMessageEvent(
-  giftWrappedMessageEvent: NostrEvent,
+  giftWrappedMessageEvent: NostrEvent
 ) {
   const { relays, writeRelays } = getLocalStorageData();
   const pool = new SimplePool();
@@ -441,7 +441,7 @@ export async function publishReviewEvent(
   nostr: NostrManager,
   signer: NostrSigner,
   content: string,
-  eventTags: string[][],
+  eventTags: string[][]
 ) {
   try {
     const { relays, writeRelays } = getLocalStorageData();
@@ -449,7 +449,7 @@ export async function publishReviewEvent(
 
     const userPubkey = await signer?.getPubKey?.();
 
-    let reviewEvent = {
+    const reviewEvent = {
       pubkey: userPubkey,
       created_at: Math.floor(Date.now() / 1000),
       content: content,
@@ -457,23 +457,22 @@ export async function publishReviewEvent(
       tags: eventTags,
     };
 
-    let signedEvent = await signer.sign(reviewEvent);
+    const signedEvent = await signer.sign(reviewEvent);
     await nostr.publish(signedEvent, allWriteRelays);
-  } catch (e: any) {
-    alert("Failed to send event: " + e.message);
-    return { error: e };
+  } catch (_) {
+    return;
   }
 }
 export async function createNostrRelayEvent(
   nostr: NostrManager,
   signer: NostrSigner,
-  pubkey: string,
+  pubkey: string
 ) {
   if (!signer || !nostr) throw new Error("Login required");
   const relayList = getLocalStorageData().relays;
   const readRelayList = getLocalStorageData().readRelays;
   const writeRelayList = getLocalStorageData().writeRelays;
-  let relayTags = [];
+  const relayTags = [];
   if (relayList.length != 0) {
     for (const relay of relayList) {
       const relayTag = ["r", relay];
@@ -492,7 +491,7 @@ export async function createNostrRelayEvent(
       relayTags.push(relayTag);
     }
   }
-  let relayEvent = {
+  const relayEvent = {
     kind: 10002, // NIP-65 - Relay List Metadata
     content: "",
     tags: relayTags,
@@ -514,7 +513,7 @@ export async function publishSavedForLaterEvent(
   userPubkey: string,
   cartAddresses: string[][],
   product: ProductData,
-  quantity?: number,
+  quantity?: number
 ) {
   try {
     const { relays, writeRelays } = getLocalStorageData();
@@ -524,7 +523,7 @@ export async function publishSavedForLaterEvent(
 
     if (quantity && quantity < 0) {
       cartTags = [...cartAddresses].filter(
-        (address) => !address[1].includes(`:${product.d}`),
+        (address) => !address[1]!.includes(`:${product.d}`)
       );
     } else if (quantity && quantity > 0) {
       for (let i = 0; i < quantity; i++) {
@@ -537,12 +536,15 @@ export async function publishSavedForLaterEvent(
       ...[
         ["d", crypto.randomUUID()],
         ["title", type],
-      ],
+      ]
     );
-    let productAddressTags = JSON.stringify(cartTags);
-    let encryptedContent = await signer.encrypt(userPubkey, productAddressTags);
+    const productAddressTags = JSON.stringify(cartTags);
+    const encryptedContent = await signer.encrypt(
+      userPubkey,
+      productAddressTags
+    );
 
-    let cartEvent = {
+    const cartEvent = {
       pubkey: userPubkey,
       created_at: Math.floor(Date.now() / 1000),
       content: encryptedContent,
@@ -550,24 +552,23 @@ export async function publishSavedForLaterEvent(
       tags: [],
     };
 
-    let signedEvent = await signer.sign(cartEvent);
+    const signedEvent = await signer.sign(cartEvent);
 
     await nostr.publish(signedEvent, allWriteRelays);
-  } catch (e: any) {
-    alert("Failed to send event: " + e.message);
-    return { error: e };
+  } catch (_) {
+    return;
   }
 }
 
 export async function publishWalletEvent(
   nostr: NostrManager,
-  signer: NostrSigner,
+  signer: NostrSigner
 ) {
   try {
     const { mints, relays, writeRelays } = getLocalStorageData();
     const userPubkey = await signer.getPubKey();
 
-    let mintTagsSet = new Set<string>();
+    const mintTagsSet = new Set<string>();
 
     let walletMints = [];
 
@@ -581,15 +582,14 @@ export async function publishWalletEvent(
       tags: [],
       content: await window.nostr.nip44.encrypt(
         userPubkey,
-        JSON.stringify(walletContent),
+        JSON.stringify(walletContent)
       ),
       created_at: Math.floor(Date.now() / 1000),
     };
     const signedEvent = await signer.sign(cashuWalletEvent);
     await nostr.publish(signedEvent, allWriteRelays);
-  } catch (e: any) {
-    alert("Failed to send event: " + e.message);
-    return { error: e };
+  } catch (_) {
+    return;
   }
 }
 
@@ -600,7 +600,7 @@ export async function publishProofEvent(
   proofs: Proof[],
   direction: "in" | "out",
   amount: string,
-  deletedEventsArray?: string[],
+  deletedEventsArray?: string[]
 ) {
   try {
     const { relays, writeRelays } = getLocalStorageData();
@@ -633,11 +633,10 @@ export async function publishProofEvent(
       direction,
       amount,
       signedEvent && signedEvent.id ? signedEvent.id : "",
-      deletedEventsArray,
+      deletedEventsArray
     );
-  } catch (e: any) {
-    alert("Failed to send event: " + e.message);
-    return { error: e };
+  } catch (_) {
+    return;
   }
 }
 
@@ -647,7 +646,7 @@ export async function publishSpendingHistoryEvent(
   direction: string,
   amount: string,
   keptEventId: string,
-  sentEventIds?: string[],
+  sentEventIds?: string[]
 ) {
   try {
     const { relays, writeRelays } = getLocalStorageData();
@@ -660,42 +659,39 @@ export async function publishSpendingHistoryEvent(
     const userPubkey = await signer?.getPubKey?.();
     if (sentEventIds && sentEventIds.length > 0) {
       sentEventIds.forEach((eventId) => {
-        eventContent.push(["e", eventId, allWriteRelays[0], "destroyed"]);
+        eventContent.push(["e", eventId, allWriteRelays[0]!, "destroyed"]);
       });
     }
 
     if (keptEventId !== "") {
-      eventContent.push(["e", keptEventId, allWriteRelays[0], "created"]);
+      eventContent.push(["e", keptEventId, allWriteRelays[0]!, "created"]);
     }
 
-    let signedEvent;
     const cashuSpendingHistoryEvent = {
       kind: 7376,
       tags: [],
       content: await signer!.encrypt(userPubkey, JSON.stringify(eventContent)),
       created_at: Math.floor(Date.now() / 1000),
     };
-    signedEvent = await signer!.sign(cashuSpendingHistoryEvent);
+    const signedEvent = await signer!.sign(cashuSpendingHistoryEvent);
     await nostr!.publish(signedEvent, allWriteRelays);
-  } catch (e: any) {
-    alert("Failed to send event: " + e.message);
-    return { error: e };
+  } catch (_) {
+    return;
   }
 }
 
 export async function finalizeAndSendNostrEvent(
   signer: NostrSigner,
   nostr: NostrManager,
-  nostrEvent: NostrEvent,
+  nostrEvent: NostrEvent
 ) {
   try {
     const { writeRelays, relays } = getLocalStorageData();
     const signedEvent = await signer.sign(nostrEvent);
     const allWriteRelays = withBlastr([...writeRelays, ...relays]);
     await nostr.publish(signedEvent, allWriteRelays);
-  } catch (e: any) {
-    alert("Failed to send event: " + e.message);
-    return { error: e };
+  } catch (_) {
+    return;
   }
 }
 
@@ -731,7 +727,7 @@ export type DraftNostrEvent = Omit<NostrEvent, "pubkey" | "id" | "sig">;
 
 export async function nostrBuildUploadImages(
   images: File[],
-  sign?: (draft: DraftNostrEvent) => Promise<NostrEvent>,
+  sign?: (draft: DraftNostrEvent) => Promise<NostrEvent>
 ) {
   if (images.some((img) => !img.type.includes("image")))
     throw new Error("Only images are supported");
@@ -820,28 +816,28 @@ export const setLocalStorageDataOnSignIn = ({
   if (encryptedPrivateKey) {
     localStorage.setItem(
       LOCALSTORAGECONSTANTS.encryptedPrivateKey,
-      encryptedPrivateKey,
+      encryptedPrivateKey
     );
   }
 
   localStorage.setItem(
     LOCALSTORAGECONSTANTS.relays,
-    JSON.stringify(relays && relays.length != 0 ? relays : getDefaultRelays()),
+    JSON.stringify(relays && relays.length != 0 ? relays : getDefaultRelays())
   );
 
   localStorage.setItem(
     LOCALSTORAGECONSTANTS.readRelays,
-    JSON.stringify(readRelays && readRelays.length != 0 ? readRelays : []),
+    JSON.stringify(readRelays && readRelays.length != 0 ? readRelays : [])
   );
 
   localStorage.setItem(
     LOCALSTORAGECONSTANTS.writeRelays,
-    JSON.stringify(writeRelays && writeRelays.length != 0 ? writeRelays : []),
+    JSON.stringify(writeRelays && writeRelays.length != 0 ? writeRelays : [])
   );
 
   localStorage.setItem(
     LOCALSTORAGECONSTANTS.mints,
-    JSON.stringify(mints ? mints : [getDefaultMint()]),
+    JSON.stringify(mints ? mints : [getDefaultMint()])
   );
 
   localStorage.setItem(LOCALSTORAGECONSTANTS.wot, String(wot ? wot : 3));
@@ -851,13 +847,13 @@ export const setLocalStorageDataOnSignIn = ({
     localStorage.setItem(LOCALSTORAGECONSTANTS.clientPrivkey, clientPrivkey);
     localStorage.setItem(
       LOCALSTORAGECONSTANTS.bunkerRemotePubkey,
-      bunkerRemotePubkey,
+      bunkerRemotePubkey
     );
     localStorage.setItem(
       LOCALSTORAGECONSTANTS.bunkerRelays,
       JSON.stringify(
-        bunkerRelays && bunkerRelays.length != 0 ? bunkerRelays : [],
-      ),
+        bunkerRelays && bunkerRelays.length != 0 ? bunkerRelays : []
+      )
     );
     if (bunkerSecret) {
       localStorage.setItem(LOCALSTORAGECONSTANTS.bunkerSecret, bunkerSecret);
@@ -909,7 +905,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
 
   if (typeof window !== "undefined") {
     encryptedPrivateKey = localStorage.getItem(
-      LOCALSTORAGECONSTANTS.encryptedPrivateKey,
+      LOCALSTORAGECONSTANTS.encryptedPrivateKey
     );
 
     signInMethod = localStorage.getItem(LOCALSTORAGECONSTANTS.signInMethod);
@@ -944,7 +940,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     readRelays = localStorage.getItem(LOCALSTORAGECONSTANTS.readRelays)
       ? (
           JSON.parse(
-            localStorage.getItem(LOCALSTORAGECONSTANTS.readRelays) as string,
+            localStorage.getItem(LOCALSTORAGECONSTANTS.readRelays) as string
           ) as string[]
         ).filter((r) => r)
       : [];
@@ -952,7 +948,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     writeRelays = localStorage.getItem(LOCALSTORAGECONSTANTS.writeRelays)
       ? (
           JSON.parse(
-            localStorage.getItem(LOCALSTORAGECONSTANTS.writeRelays) as string,
+            localStorage.getItem(LOCALSTORAGECONSTANTS.writeRelays) as string
           ) as string[]
         ).filter((r) => r)
       : [];
@@ -982,14 +978,14 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       ? localStorage.getItem(LOCALSTORAGECONSTANTS.clientPrivkey)
       : undefined;
     bunkerRemotePubkey = localStorage.getItem(
-      LOCALSTORAGECONSTANTS.bunkerRemotePubkey,
+      LOCALSTORAGECONSTANTS.bunkerRemotePubkey
     )
       ? localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerRemotePubkey)
       : undefined;
     bunkerRelays = localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerRelays)
       ? (
           JSON.parse(
-            localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerRelays) as string,
+            localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerRelays) as string
           ) as string[]
         ).filter((r) => r)
       : [];
@@ -997,8 +993,8 @@ export const getLocalStorageData = (): LocalStorageInterface => {
       ? localStorage.getItem(LOCALSTORAGECONSTANTS.bunkerSecret)
       : undefined;
 
-    let signerData: string | null = localStorage.getItem(
-      LOCALSTORAGECONSTANTS.signer,
+    const signerData: string | null = localStorage.getItem(
+      LOCALSTORAGECONSTANTS.signer
     );
     if (signerData) {
       signer = JSON.parse(signerData);

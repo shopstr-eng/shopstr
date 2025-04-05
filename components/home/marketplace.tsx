@@ -20,16 +20,16 @@ import {
 import DisplayProducts from "../display-products";
 import LocationDropdown from "../utility-components/dropdowns/location-dropdown";
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
-import { CATEGORIES } from "../utility/STATIC-VARIABLES";
-import { SignerContext } from "@/utils/context/nostr-context";
-import { ProductData } from "../utility/product-parser-functions";
+import { CATEGORIES } from "@/utils/STATIC-VARIABLES";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import { ProductData } from "@/utils/parsers/product-parser-functions";
 import SignInModal from "../sign-in/SignInModal";
 import ShopstrSwitch from "../utility-components/shopstr-switch";
 import { ShopSettings } from "../../utils/types/types";
 import SideShopNav from "./side-shop-nav";
 import FailureModal from "../utility-components/failure-modal";
 
-export function MarketplacePage({
+function MarketplacePage({
   focusedPubkey,
   setFocusedPubkey,
   selectedSection,
@@ -42,7 +42,7 @@ export function MarketplacePage({
 }) {
   const router = useRouter();
   const [selectedCategories, setSelectedCategories] = useState(
-    new Set<string>([]),
+    new Set<string>([])
   );
   const [selectedLocation, setSelectedLocation] = useState("");
   const [selectedSearch, setSelectedSearch] = useState("");
@@ -54,7 +54,7 @@ export function MarketplacePage({
   const [merchantQuality, setMerchantQuality] = useState("");
   const [filteredProducts, setFilteredProducts] = useState<ProductData[]>([]);
   const [productReviewMap, setProductReviewMap] = useState(
-    new Map<string, Map<string, string[][]>>(),
+    new Map<string, Map<string, string[][]>>()
   );
   const [isFetchingReviews, setIsFetchingReviews] = useState(false);
 
@@ -76,27 +76,13 @@ export function MarketplacePage({
     useContext(SignerContext);
 
   useEffect(() => {
-    let npub = router.query.npub;
+    const npub = router.query.npub;
     if (npub && typeof npub[0] === "string") {
       const { data } = nip19.decode(npub[0]);
       setFocusedPubkey(data as string);
       setSelectedSection("shop");
     }
   }, [router.query.npub]);
-
-  useEffect(() => {
-    if (loggedIn) {
-      fetch("/api/metrics/post-shopper", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: userPubkey,
-        }),
-      });
-    }
-  }, [userPubkey, loggedIn]);
 
   useEffect(() => {
     setIsFetchingReviews(true);
@@ -279,7 +265,7 @@ export function MarketplacePage({
                         })}
                       </div>
                     </div>
-                  ),
+                  )
                 )}
               </div>
             </div>
@@ -373,7 +359,7 @@ export function MarketplacePage({
                     setSelectedCategories(new Set([]));
                   } else {
                     setSelectedCategories(
-                      new Set(event.target.value.split(",")),
+                      new Set(event.target.value.split(","))
                     );
                   }
                 }}

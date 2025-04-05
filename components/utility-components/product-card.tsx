@@ -7,14 +7,10 @@ import ImageCarousel from "./image-carousel";
 import CompactPriceDisplay, {
   DisplayCostBreakdown,
 } from "./display-monetary-info";
-import { ProductData } from "../utility/product-parser-functions";
+import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { useRouter } from "next/router";
-import { SignerContext } from "@/utils/context/nostr-context";
-
-const cardWidth = 380;
-const cardxMargin = 2.5;
-export const TOTALPRODUCTCARDWIDTH = cardWidth + cardxMargin * 2 + 10;
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 
 export default function ProductCard({
   productData,
@@ -23,14 +19,13 @@ export default function ProductCard({
   footerContent,
 }: {
   productData: ProductData;
-  onProductClick?: (productId: any) => void;
+  onProductClick?: (productId: ProductData) => void;
   isReview?: boolean;
   footerContent?: ReactNode;
 }) {
   const router = useRouter();
   const { pubkey: userPubkey } = useContext(SignerContext);
   if (!productData) return null;
-  const { pubkey, title, images, categories, location, status } = productData;
   if (isReview)
     return (
       <Card className={"mx-[2.5px] my-3 w-[100%] rounded-lg"}>
@@ -50,25 +45,28 @@ export default function ProductCard({
               }
             />
             <div className="flex flex-col justify-center">
-              <CompactCategories categories={categories} />
+              <CompactCategories categories={productData.categories} />
             </div>
           </div>
           <div className="mb-5">
             <ImageCarousel
-              images={images}
+              images={productData.images}
               classname="w-full h-[300px]"
               showThumbs={false}
             />
             <div className="mt-3 flex flex-row justify-between">
-              <Chip key={location} startContent={locationAvatar(location)}>
-                {location}
+              <Chip
+                key={productData.location}
+                startContent={locationAvatar(productData.location)}
+              >
+                {productData.location}
               </Chip>
               <CompactPriceDisplay monetaryInfo={productData} />
             </div>
           </div>
           <Divider />
           <div className="mt-5 flex w-full flex-col items-center ">
-            <h2 className="mb-4 text-2xl font-bold">{title}</h2>
+            <h2 className="mb-4 text-2xl font-bold">{productData.title}</h2>
           </div>
           <Divider />
           <span className="mt-4 text-xl font-semibold">Summary: </span>
@@ -106,7 +104,7 @@ export default function ProductCard({
         >
           <div className="mb-2">
             <ImageCarousel
-              images={images}
+              images={productData.images}
               classname="w-full h-[300px]"
               showThumbs={false}
             />
@@ -115,15 +113,15 @@ export default function ProductCard({
             {router.pathname !== "/" && (
               <div className="flex items-center justify-between">
                 <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
-                  {title}
+                  {productData.title}
                 </h2>
                 <div>
-                  {status === "active" && (
+                  {productData.status === "active" && (
                     <span className="mr-2 rounded-full bg-green-500 px-2 py-1 text-xs font-semibold text-white">
                       Active
                     </span>
                   )}
-                  {status === "sold" && (
+                  {productData.status === "sold" && (
                     <span className="mr-2 rounded-full bg-red-500 px-2 py-1 text-xs font-semibold text-white">
                       Sold
                     </span>
@@ -134,9 +132,9 @@ export default function ProductCard({
 
             <div className="z-10 mb-2 flex w-full justify-between">
               <ProfileWithDropdown
-                pubkey={pubkey}
+                pubkey={productData.pubkey}
                 dropDownKeys={
-                  pubkey === userPubkey
+                  productData.pubkey === userPubkey
                     ? ["shop_settings"]
                     : ["shop", "inquiry", "copy_npub"]
                 }

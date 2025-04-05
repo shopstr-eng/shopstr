@@ -6,7 +6,7 @@ import ClaimButton from "../utility-components/claim-button";
 import { NostrMessageEvent } from "../../utils/types/types";
 import { timeSinceMessageDisplayText } from "../../utils/messages/utils";
 import { getDecodedToken } from "@cashu/cashu-ts";
-import { SignerContext } from "@/utils/context/nostr-context";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 
 function isDecodableToken(token: string): boolean {
   try {
@@ -17,7 +17,7 @@ function isDecodableToken(token: string): boolean {
   }
 }
 
-export const ChatMessage = ({
+const ChatMessage = ({
   messageEvent,
   index = 0,
   currentChatPubkey,
@@ -43,7 +43,7 @@ export const ChatMessage = ({
       // Find word containing npub using regex
       const npubMatch = messageEvent.content.match(/npub[a-zA-Z0-9]+/);
       if (npubMatch && setBuyerPubkey) {
-        let { data: buyerPubkey } = nip19.decode(npubMatch[0]);
+        const { data: buyerPubkey } = nip19.decode(npubMatch[0]);
         setBuyerPubkey(buyerPubkey as string);
       }
     } else {
@@ -52,25 +52,25 @@ export const ChatMessage = ({
   }, [messageEvent?.content, setBuyerPubkey]);
 
   useEffect(() => {
-    let tagsMap = new Map(
+    const tagsMap = new Map(
       messageEvent.tags
         .map((tag) => [tag[0], tag[1]]) // Take first two elements regardless of length
         .filter(
           (pair): pair is [string, string] =>
-            pair[0] !== undefined && pair[1] !== undefined, // Ensure both elements exist
-        ),
+            pair[0] !== undefined && pair[1] !== undefined // Ensure both elements exist
+        )
     );
-    let subject = tagsMap.get("subject") ? tagsMap.get("subject") : null;
-    let productAddress = tagsMap.get("a")
+    const subject = tagsMap.get("subject") ? tagsMap.get("subject") : null;
+    const productAddress = tagsMap.get("a")
       ? tagsMap.get("a")
       : tagsMap.get("item")
         ? tagsMap.get("item")
         : "";
-    let orderId = tagsMap.get("order") ? tagsMap.get("order") : "";
+    const orderId = tagsMap.get("order") ? tagsMap.get("order") : "";
     setCanReview?.(
       subject === "order-info" ||
         subject === "order-receipt" ||
-        subject === "shipping-info",
+        subject === "shipping-info"
     );
     setProductAddress?.(productAddress as string);
     setOrderId?.(orderId as string);
@@ -143,7 +143,7 @@ export const ChatMessage = ({
         <p className={`inline-block flex-wrap overflow-x-hidden break-all`}>
           {cashuPrefix && canDecodeToken && tokenAfterCashuVersion ? (
             <>
-              {renderMessageContent(contentBeforeCashu)}
+              {renderMessageContent(contentBeforeCashu!)}
               <div className="flex items-center">
                 <ClaimButton token={cashuPrefix + tokenAfterCashuVersion} />
                 <ClipboardIcon

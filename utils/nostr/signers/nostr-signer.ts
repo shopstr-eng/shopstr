@@ -15,7 +15,7 @@ export type ChallengeHandler = (
   challenge: string,
   abort: () => void,
   abortSignal: AbortSignal,
-  lastError?: Error,
+  lastError?: Error
 ) => Promise<{
   res: string;
   remind: boolean;

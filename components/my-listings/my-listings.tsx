@@ -1,17 +1,19 @@
+/* eslint-disable @next/next/no-img-element */
+
 import router from "next/router";
 import React, { useContext, useState, useEffect, useRef } from "react";
 import DisplayProducts from "../display-products";
-import { SignerContext } from "@/utils/context/nostr-context";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { Button, useDisclosure } from "@nextui-org/react";
 import { Bars3Icon } from "@heroicons/react/24/outline";
-import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import SignInModal from "../sign-in/SignInModal";
 import { ShopMapContext } from "@/utils/context/context";
 import { ShopSettings } from "../../utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import SideShopNav from "../home/side-shop-nav";
 
-export const MyListingsPage = () => {
+const MyListingsPage = () => {
   const { pubkey: usersPubkey } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
 
@@ -22,7 +24,7 @@ export const MyListingsPage = () => {
   const [selectedSection, setSelectedSection] = useState("Listings");
 
   const [selectedCategories, setSelectedCategories] = useState(
-    new Set<string>([]),
+    new Set<string>([])
   );
   const [categories, setCategories] = useState([""]);
 

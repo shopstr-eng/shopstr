@@ -23,9 +23,9 @@ import {
   constructMessageSeal,
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
-} from "../utility/nostr-helper-functions";
-import { addChatMessagesToCache } from "../../pages/api/nostr/cache-service";
-import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
+} from "@/utils/nostr/nostr-helper-functions";
+import { addChatMessagesToCache } from "@/utils/nostr/cache-service";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { LightningAddress } from "@getalby/lightning-tools";
 import { nip19 } from "nostr-tools";
 import {
@@ -36,7 +36,10 @@ import {
   getEncodedToken,
 } from "@cashu/cashu-ts";
 import { formatWithCommas } from "./display-monetary-info";
-import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
+import {
+  NostrContext,
+  SignerContext,
+} from "@/components/utility-components/nostr-context-provider";
 
 export default function ClaimButton({ token }: { token: string }) {
   const [lnurl, setLnurl] = useState("");
@@ -109,12 +112,12 @@ export default function ClaimButton({ token }: { token: string }) {
     const checkProofsSpent = async () => {
       try {
         if (proofs.length > 0) {
-          let proofsStates = await wallet?.checkProofsStates(proofs);
+          const proofsStates = await wallet?.checkProofsStates(proofs);
           if (proofsStates) {
             const spentYs = new Set(
               proofsStates
                 .filter((state) => state.state === "SPENT")
-                .map((state) => state.Y),
+                .map((state) => state.Y)
             );
             if (spentYs.size > 0) {
               setIsRedeemed(true);
@@ -136,9 +139,9 @@ export default function ClaimButton({ token }: { token: string }) {
     setLnurl(
       sellerProfile && sellerProfile.content.lud16
         ? sellerProfile.content.lud16
-        : "invalid",
+        : "invalid"
     );
-  }, [profileContext, tokenMint]);
+  }, [profileContext, tokenMint, userPubkey]);
 
   const handleClaimType = async (type: string) => {
     if (type === "receive") {
@@ -161,17 +164,17 @@ export default function ClaimButton({ token }: { token: string }) {
     setIsInvalidToken(false);
     setIsRedeeming(true);
     try {
-      let proofsStates = await wallet?.checkProofsStates(proofs);
+      const proofsStates = await wallet?.checkProofsStates(proofs);
       const spentYs = proofsStates
         ? new Set(
             proofsStates
               .filter((state) => state.state === "SPENT")
-              .map((state) => state.Y),
+              .map((state) => state.Y)
           )
         : new Set();
       if (spentYs.size === 0) {
         const uniqueProofs = proofs.filter(
-          (proof: Proof) => !tokens.some((token: Proof) => token.C === proof.C),
+          (proof: Proof) => !tokens.some((token: Proof) => token.C === proof.C)
         );
         if (JSON.stringify(uniqueProofs) != JSON.stringify(proofs)) {
           setIsDuplicateToken(true);
@@ -184,7 +187,7 @@ export default function ClaimButton({ token }: { token: string }) {
           tokenMint,
           uniqueProofs,
           "in",
-          tokenAmount.toString(),
+          tokenAmount.toString()
         );
         const tokenArray = [...tokens, ...uniqueProofs];
         localStorage.setItem("tokens", JSON.stringify(tokenArray));
@@ -207,7 +210,7 @@ export default function ClaimButton({ token }: { token: string }) {
               date: Math.floor(Date.now() / 1000),
             },
             ...history,
-          ]),
+          ])
         );
       } else {
         setIsSpent(true);
@@ -243,43 +246,43 @@ export default function ClaimButton({ token }: { token: string }) {
             Array.isArray(changeProofs) && changeProofs.length > 0
               ? changeProofs.reduce(
                   (acc, current: Proof) => acc + current.amount,
-                  0,
+                  0
                 )
               : 0;
           if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
-            let decodedRandomPubkeyForSender =
+            const decodedRandomPubkeyForSender =
               nip19.decode(randomNpubForSender);
-            let decodedRandomPrivkeyForSender =
+            const decodedRandomPrivkeyForSender =
               nip19.decode(randomNsecForSender);
-            let decodedRandomPubkeyForReceiver = nip19.decode(
-              randomNpubForReceiver,
+            const decodedRandomPubkeyForReceiver = nip19.decode(
+              randomNpubForReceiver
             );
-            let decodedRandomPrivkeyForReceiver = nip19.decode(
-              randomNsecForReceiver,
+            const decodedRandomPrivkeyForReceiver = nip19.decode(
+              randomNsecForReceiver
             );
-            let encodedChange = getEncodedToken({
+            const encodedChange = getEncodedToken({
               mint: tokenMint,
               proofs: changeProofs,
             });
             const paymentMessage = "Overpaid fee change: " + encodedChange;
-            let giftWrappedMessageEvent = await constructGiftWrappedEvent(
+            const giftWrappedMessageEvent = await constructGiftWrappedEvent(
               decodedRandomPubkeyForSender.data as string,
               userPubkey!,
               paymentMessage,
-              "payment-change",
+              "payment-change"
             );
-            let sealedEvent = await constructMessageSeal(
+            const sealedEvent = await constructMessageSeal(
               signer!,
               giftWrappedMessageEvent,
               decodedRandomPubkeyForSender.data as string,
               userPubkey!,
-              decodedRandomPrivkeyForSender.data as Uint8Array,
+              decodedRandomPrivkeyForSender.data as Uint8Array
             );
-            let giftWrappedEvent = await constructMessageGiftWrap(
+            const giftWrappedEvent = await constructMessageGiftWrap(
               sealedEvent,
               decodedRandomPubkeyForReceiver.data as string,
               decodedRandomPrivkeyForReceiver.data as Uint8Array,
-              userPubkey!,
+              userPubkey!
             );
             await sendGiftWrappedMessageEvent(giftWrappedEvent);
             chatsContext.addNewlyCreatedMessageEvent(
@@ -288,7 +291,7 @@ export default function ClaimButton({ token }: { token: string }) {
                 sig: "",
                 read: false,
               },
-              true,
+              true
             );
             addChatMessagesToCache([
               { ...giftWrappedMessageEvent, sig: "", read: false },

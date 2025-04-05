@@ -45,26 +45,26 @@ import {
   getLocalStorageData,
   publishProofEvent,
   generateKeys,
-} from "./utility/nostr-helper-functions";
-import { addChatMessagesToCache } from "../pages/api/nostr/cache-service";
+} from "@/utils/nostr/nostr-helper-functions";
+import { addChatMessagesToCache } from "@/utils/nostr/cache-service";
 import { LightningAddress } from "@getalby/lightning-tools";
+import QRCode from "qrcode";
 import { nip19 } from "nostr-tools";
-import { ProductData } from "./utility/product-parser-functions";
+import { ProductData } from "@/utils/parsers/product-parser-functions";
 import {
   DisplayCostBreakdown,
   formatWithCommas,
 } from "./utility-components/display-monetary-info";
-import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
-import {
-  captureCashuPaidMetric,
-  captureInvoicePaidmetric,
-} from "./utility/metrics-helper-functions";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import SignInModal from "./sign-in/SignInModal";
 import currencySelection from "../public/currencySelection.json";
 import FailureModal from "@/components/utility-components/failure-modal";
 import ShippingForm from "./shipping-form";
 import ContactForm from "./contact-form";
-import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
+import {
+  NostrContext,
+  SignerContext,
+} from "@/components/utility-components/nostr-context-provider";
 import { ShippingFormData, ContactFormData } from "@/utils/types/types";
 
 export default function ProductInvoiceCard({
@@ -83,8 +83,6 @@ export default function ProductInvoiceCard({
   selectedSize?: string;
 }) {
   const router = useRouter();
-  const { pubkey, currency, totalCost, shippingType, required } = productData;
-  const pubkeyOfProductBeingSold = pubkey;
   const { mints, tokens, history } = getLocalStorageData();
   const {
     pubkey: userPubkey,
@@ -161,12 +159,12 @@ export default function ProductInvoiceCard({
     paymentType?: string,
     paymentProof?: string,
     paymentMint?: string,
-    messageAmount?: number,
+    messageAmount?: number
   ) => {
-    let decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
-    let decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
-    let decodedRandomPubkeyForReceiver = nip19.decode(randomNpubForReceiver);
-    let decodedRandomPrivkeyForReceiver = nip19.decode(randomNsecForReceiver);
+    const decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
+    const decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
+    const decodedRandomPubkeyForReceiver = nip19.decode(randomNpubForReceiver);
+    const decodedRandomPrivkeyForReceiver = nip19.decode(randomNsecForReceiver);
 
     let messageSubject = "";
     let messageOptions = {};
@@ -175,7 +173,7 @@ export default function ProductInvoiceCard({
       messageOptions = {
         isOrder: true,
         type: 3,
-        orderAmount: messageAmount ? messageAmount : totalCost,
+        orderAmount: messageAmount ? messageAmount : productData.totalCost,
         orderId,
         productData,
         paymentType,
@@ -205,25 +203,25 @@ export default function ProductInvoiceCard({
       };
     }
 
-    let giftWrappedMessageEvent = await constructGiftWrappedEvent(
+    const giftWrappedMessageEvent = await constructGiftWrappedEvent(
       decodedRandomPubkeyForSender.data as string,
       pubkeyToReceiveMessage,
       message,
       messageSubject,
-      messageOptions,
+      messageOptions
     );
-    let sealedEvent = await constructMessageSeal(
+    const sealedEvent = await constructMessageSeal(
       signer!,
       giftWrappedMessageEvent,
       decodedRandomPubkeyForSender.data as string,
       pubkeyToReceiveMessage,
-      decodedRandomPrivkeyForSender.data as Uint8Array,
+      decodedRandomPrivkeyForSender.data as Uint8Array
     );
-    let giftWrappedEvent = await constructMessageGiftWrap(
+    const giftWrappedEvent = await constructMessageGiftWrap(
       sealedEvent,
       decodedRandomPubkeyForReceiver.data as string,
       decodedRandomPrivkeyForReceiver.data as Uint8Array,
-      pubkeyToReceiveMessage,
+      pubkeyToReceiveMessage
     );
     await sendGiftWrappedMessageEvent(giftWrappedEvent);
 
@@ -234,7 +232,7 @@ export default function ProductInvoiceCard({
           sig: "",
           read: false,
         },
-        true,
+        true
       );
       addChatMessagesToCache([
         { ...giftWrappedMessageEvent, sig: "", read: false },
@@ -244,7 +242,7 @@ export default function ProductInvoiceCard({
 
   const validatePaymentData = (
     price: number,
-    data?: ShippingFormData | ContactFormData,
+    data?: ShippingFormData | ContactFormData
   ) => {
     if (price < 1) {
       throw new Error("Payment amount must be greater than 0 sats");
@@ -282,24 +280,29 @@ export default function ProductInvoiceCard({
     }
   };
 
-  const onShippingSubmit = async (data: { [x: string]: any }) => {
+  const onShippingSubmit = async (data: { [x: string]: string }) => {
     try {
-      let price = totalCost;
-      if (!currencySelection.hasOwnProperty(currency.toUpperCase())) {
-        throw new Error(`${currency} is not a supported currency.`);
+      let price = productData.totalCost;
+      if (
+        !currencySelection.hasOwnProperty(productData.currency.toUpperCase())
+      ) {
+        throw new Error(`${productData.currency} is not a supported currency.`);
       } else if (
-        currencySelection.hasOwnProperty(currency.toUpperCase()) &&
-        currency.toLowerCase() !== "sats" &&
-        currency.toLowerCase() !== "sat"
+        currencySelection.hasOwnProperty(productData.currency.toUpperCase()) &&
+        productData.currency.toLowerCase() !== "sats" &&
+        productData.currency.toLowerCase() !== "sat"
       ) {
         try {
-          const currencyData = { amount: price, currency: currency };
+          const currencyData = {
+            amount: price,
+            currency: productData.currency,
+          };
           const numSats = await fiat.getSatoshiValue(currencyData);
           price = Math.round(numSats);
         } catch (err) {
           console.error("ERROR", err);
         }
-      } else if (currency.toLowerCase() === "btc") {
+      } else if (productData.currency.toLowerCase() === "btc") {
         price = price * 100000000;
       }
 
@@ -307,14 +310,14 @@ export default function ProductInvoiceCard({
         throw new Error("Listing price is less than 1 sat.");
       }
 
-      let shippingName = data["Name"];
-      let shippingAddress = data["Address"];
-      let shippingUnitNo = data["Unit"];
-      let shippingCity = data["City"];
-      let shippingPostalCode = data["Postal Code"];
-      let shippingState = data["State/Province"];
-      let shippingCountry = data["Country"];
-      let additionalInfo = data["Required"];
+      const shippingName = data["Name"];
+      const shippingAddress = data["Address"];
+      const shippingUnitNo = data["Unit"];
+      const shippingCity = data["City"];
+      const shippingPostalCode = data["Postal Code"];
+      const shippingState = data["State/Province"];
+      const shippingCountry = data["Country"];
+      const additionalInfo = data["Required"];
       setShowShippingModal(false);
       if (isCashuPayment) {
         await handleCashuPayment(
@@ -326,7 +329,7 @@ export default function ProductInvoiceCard({
           shippingPostalCode,
           shippingState,
           shippingCountry,
-          additionalInfo,
+          additionalInfo
         );
       } else {
         await handleLightningPayment(
@@ -338,7 +341,7 @@ export default function ProductInvoiceCard({
           shippingPostalCode,
           shippingState,
           shippingCountry,
-          additionalInfo,
+          additionalInfo
         );
       }
     } catch (error) {
@@ -349,24 +352,29 @@ export default function ProductInvoiceCard({
     }
   };
 
-  const onContactSubmit = async (data: { [x: string]: any }) => {
+  const onContactSubmit = async (data: { [x: string]: string }) => {
     try {
-      let price = totalCost;
-      if (!currencySelection.hasOwnProperty(currency.toUpperCase())) {
-        throw new Error(`${currency} is not a supported currency.`);
+      let price = productData.totalCost;
+      if (
+        !currencySelection.hasOwnProperty(productData.currency.toUpperCase())
+      ) {
+        throw new Error(`${productData.currency} is not a supported currency.`);
       } else if (
-        currencySelection.hasOwnProperty(currency.toUpperCase()) &&
-        currency.toLowerCase() !== "sats" &&
-        currency.toLowerCase() !== "sat"
+        currencySelection.hasOwnProperty(productData.currency.toUpperCase()) &&
+        productData.currency.toLowerCase() !== "sats" &&
+        productData.currency.toLowerCase() !== "sat"
       ) {
         try {
-          const currencyData = { amount: price, currency: currency };
+          const currencyData = {
+            amount: price,
+            currency: productData.currency,
+          };
           const numSats = await fiat.getSatoshiValue(currencyData);
           price = Math.round(numSats);
         } catch (err) {
           console.error("ERROR", err);
         }
-      } else if (currency.toLowerCase() === "btc") {
+      } else if (productData.currency.toLowerCase() === "btc") {
         price = price * 100000000;
       }
 
@@ -374,10 +382,10 @@ export default function ProductInvoiceCard({
         throw new Error("Listing price is less than 1 sat.");
       }
 
-      let contact = data["Contact"];
-      let contactType = data["Contact Type"];
-      let contactInstructions = data["Instructions"];
-      let additionalInfo = data["Required"];
+      const contact = data["Contact"];
+      const contactType = data["Contact Type"];
+      const contactInstructions = data["Instructions"];
+      const additionalInfo = data["Required"];
       setShowContactModal(false);
       if (isCashuPayment) {
         await handleCashuPayment(
@@ -392,7 +400,7 @@ export default function ProductInvoiceCard({
           contact,
           contactType,
           contactInstructions,
-          additionalInfo,
+          additionalInfo
         );
       } else {
         await handleLightningPayment(
@@ -407,7 +415,7 @@ export default function ProductInvoiceCard({
           contact,
           contactType,
           contactInstructions,
-          additionalInfo,
+          additionalInfo
         );
       }
     } catch (error) {
@@ -440,7 +448,7 @@ export default function ProductInvoiceCard({
     contact?: string,
     contactType?: string,
     contactInstructions?: string,
-    additionalInfo?: string,
+    additionalInfo?: string
   ) => {
     try {
       if (
@@ -473,20 +481,18 @@ export default function ProductInvoiceCard({
       }
 
       setShowInvoiceCard(true);
-      const wallet = new CashuWallet(new CashuMint(mints[0]));
+      const wallet = new CashuWallet(new CashuMint(mints[0]!));
 
       const { request: pr, quote: hash } =
         await wallet.createMintQuote(convertedPrice);
 
       setInvoice(pr);
 
-      const QRCode = require("qrcode");
-
       QRCode.toDataURL(pr)
         .then((url: string) => {
           setQrCodeUrl(url);
         })
-        .catch((err: any) => {
+        .catch((err: unknown) => {
           console.error("ERROR", err);
         });
 
@@ -523,7 +529,7 @@ export default function ProductInvoiceCard({
         contact ? contact : undefined,
         contactType ? contactType : undefined,
         contactInstructions ? contactInstructions : undefined,
-        additionalInfo ? additionalInfo : undefined,
+        additionalInfo ? additionalInfo : undefined
       );
     } catch (error) {
       console.error(error);
@@ -551,7 +557,7 @@ export default function ProductInvoiceCard({
     contact?: string,
     contactType?: string,
     contactInstructions?: string,
-    additionalInfo?: string,
+    additionalInfo?: string
   ) {
     while (true) {
       try {
@@ -571,9 +577,8 @@ export default function ProductInvoiceCard({
             contact ? contact : undefined,
             contactType ? contactType : undefined,
             contactInstructions ? contactInstructions : undefined,
-            additionalInfo ? additionalInfo : undefined,
+            additionalInfo ? additionalInfo : undefined
           );
-          await captureInvoicePaidmetric(hash, productData);
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           if (setInvoiceIsPaid) {
@@ -588,7 +593,7 @@ export default function ProductInvoiceCard({
           setInvoice("");
           setQrCodeUrl(null);
           setFailureText(
-            "Failed to validate invoice! Change your mint in settings and/or please try again.",
+            "Failed to validate invoice! Change your mint in settings and/or please try again."
           );
           setShowFailureModal(true);
           break;
@@ -612,14 +617,12 @@ export default function ProductInvoiceCard({
     contact?: string,
     contactType?: string,
     contactInstructions?: string,
-    additionalInfo?: string,
+    additionalInfo?: string
   ) => {
     let remainingProofs = proofs;
     let sellerToken;
     let donationToken;
-    const sellerProfile = profileContext.profileData.get(
-      pubkeyOfProductBeingSold,
-    );
+    const sellerProfile = profileContext.profileData.get(productData.pubkey);
     const donationPercentage = sellerProfile?.content?.shopstr_donation || 2.1;
     const donationAmount = Math.ceil((totalPrice * donationPercentage) / 100);
     const sellerAmount = totalPrice - donationAmount;
@@ -631,7 +634,7 @@ export default function ProductInvoiceCard({
       });
       sellerProofs = send;
       sellerToken = getEncodedToken({
-        mint: mints[0],
+        mint: mints[0]!,
         proofs: send,
       });
       remainingProofs = keep;
@@ -643,17 +646,16 @@ export default function ProductInvoiceCard({
         remainingProofs,
         {
           includeFees: true,
-        },
+        }
       );
       donationToken = getEncodedToken({
-        mint: mints[0],
+        mint: mints[0]!,
         proofs: send,
       });
       remainingProofs = keep;
     }
 
-    const { title } = productData;
-    let orderId = crypto.randomUUID();
+    const orderId = crypto.randomUUID();
     const paymentPreference =
       sellerProfile?.content?.payment_preference || "ecash";
     const lnurl = sellerProfile?.content?.lud16 || "";
@@ -684,7 +686,7 @@ export default function ProductInvoiceCard({
             Array.isArray(changeProofs) && changeProofs.length > 0
               ? changeProofs.reduce(
                   (acc, current: Proof) => acc + current.amount,
-                  0,
+                  0
                 )
               : 0;
           let paymentMessage = "";
@@ -693,20 +695,20 @@ export default function ProductInvoiceCard({
               "You have received a payment from " +
               userNPub +
               " for your " +
-              title +
+              productData.title +
               " listing on Shopstr! Check your Lightning address (" +
               lnurl +
               ") for your sats.";
           } else {
             paymentMessage =
               "You have received a payment for your " +
-              title +
+              productData.title +
               " listing on Shopstr! Check your Lightning address (" +
               lnurl +
               ") for your sats.";
           }
           await sendPaymentAndContactMessage(
-            pubkeyOfProductBeingSold,
+            productData.pubkey,
             paymentMessage,
             true,
             false,
@@ -715,16 +717,16 @@ export default function ProductInvoiceCard({
             "lightning",
             invoicePaymentRequest,
             invoice.preimage ? invoice.preimage : invoice.paymentHash,
-            meltAmount,
+            meltAmount
           );
           if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
-            let encodedChange = getEncodedToken({
-              mint: mints[0],
+            const encodedChange = getEncodedToken({
+              mint: mints[0]!,
               proofs: changeProofs,
             });
             const changeMessage = "Overpaid fee change: " + encodedChange;
             await sendPaymentAndContactMessage(
-              pubkeyOfProductBeingSold,
+              productData.pubkey,
               changeMessage,
               true,
               false,
@@ -733,7 +735,7 @@ export default function ProductInvoiceCard({
               "ecash",
               JSON.stringify(changeProofs),
               mints[0],
-              changeAmount,
+              changeAmount
             );
           }
         } else {
@@ -742,11 +744,11 @@ export default function ProductInvoiceCard({
             Array.isArray(unusedProofs) && unusedProofs.length > 0
               ? unusedProofs.reduce(
                   (acc, current: Proof) => acc + current.amount,
-                  0,
+                  0
                 )
               : 0;
           const unusedToken = getEncodedToken({
-            mint: mints[0],
+            mint: mints[0]!,
             proofs: unusedProofs,
           });
           let paymentMessage = "";
@@ -756,18 +758,18 @@ export default function ProductInvoiceCard({
                 "This is a Cashu token payment from " +
                 userNPub +
                 " for your " +
-                title +
+                productData.title +
                 " listing on Shopstr: " +
                 unusedToken;
             } else {
               paymentMessage =
                 "This is a Cashu token payment for your " +
-                title +
+                productData.title +
                 " listing on Shopstr: " +
                 unusedToken;
             }
             await sendPaymentAndContactMessage(
-              pubkeyOfProductBeingSold,
+              productData.pubkey,
               paymentMessage,
               true,
               false,
@@ -776,7 +778,7 @@ export default function ProductInvoiceCard({
               "ecash",
               JSON.stringify(unusedProofs),
               mints[0],
-              unusedAmount,
+              unusedAmount
             );
           }
         }
@@ -789,18 +791,18 @@ export default function ProductInvoiceCard({
             "This is a Cashu token payment from " +
             userNPub +
             " for your " +
-            title +
+            productData.title +
             " listing on Shopstr: " +
             sellerToken;
         } else {
           paymentMessage =
             "This is a Cashu token payment for your " +
-            title +
+            productData.title +
             " listing on Shopstr: " +
             sellerToken;
         }
         await sendPaymentAndContactMessage(
-          pubkeyOfProductBeingSold,
+          productData.pubkey,
           paymentMessage,
           true,
           false,
@@ -809,7 +811,7 @@ export default function ProductInvoiceCard({
           "ecash",
           JSON.stringify(sellerProofs),
           mints[0],
-          sellerAmount,
+          sellerAmount
         );
       }
     }
@@ -821,20 +823,20 @@ export default function ProductInvoiceCard({
         donationMessage,
         false,
         false,
-        true,
+        true
       );
     }
 
     if (additionalInfo) {
-      let additionalMessage =
+      const additionalMessage =
         "Additional customer information: " + additionalInfo;
       await sendPaymentAndContactMessage(
-        pubkeyOfProductBeingSold,
+        productData.pubkey,
         additionalMessage,
         false,
         false,
         false,
-        orderId,
+        orderId
       );
     }
 
@@ -860,7 +862,7 @@ export default function ProductInvoiceCard({
         shippingState &&
         shippingCountry
       ) {
-        let receiptMessage =
+        const receiptMessage =
           "Your order for " +
           productData.title +
           " was processed successfully. You should be receiving tracking information from " +
@@ -937,12 +939,12 @@ export default function ProductInvoiceCard({
             ".";
         }
         await sendPaymentAndContactMessage(
-          pubkeyOfProductBeingSold,
+          productData.pubkey,
           contactMessage,
           false,
           false,
           false,
-          orderId,
+          orderId
         );
         if (userPubkey) {
           await sendPaymentAndContactMessage(
@@ -951,7 +953,7 @@ export default function ProductInvoiceCard({
             false,
             true,
             false,
-            orderId,
+            orderId
           );
         }
       } else if (contact && contactType && contactInstructions) {
@@ -960,7 +962,7 @@ export default function ProductInvoiceCard({
         if (selectedSize) {
           contactMessage =
             "To finalize the sale of your " +
-            title +
+            productData.title +
             " listing in a size " +
             selectedSize +
             " on Shopstr, please contact " +
@@ -980,7 +982,7 @@ export default function ProductInvoiceCard({
         } else {
           contactMessage =
             "To finalize the sale of your " +
-            title +
+            productData.title +
             " listing on Shopstr, please contact " +
             contact +
             " over " +
@@ -995,12 +997,12 @@ export default function ProductInvoiceCard({
             " as soon as they claim their payment.";
         }
         await sendPaymentAndContactMessage(
-          pubkeyOfProductBeingSold,
+          productData.pubkey,
           contactMessage,
           false,
           false,
           false,
-          orderId,
+          orderId
         );
         if (userPubkey) {
           await sendPaymentAndContactMessage(
@@ -1009,24 +1011,25 @@ export default function ProductInvoiceCard({
             false,
             true,
             false,
-            orderId,
+            orderId
           );
         }
       }
     } else if (selectedSize) {
-      let contactMessage = "This purchase was for a size " + selectedSize + ".";
+      const contactMessage =
+        "This purchase was for a size " + selectedSize + ".";
       await sendPaymentAndContactMessage(
-        pubkeyOfProductBeingSold,
+        productData.pubkey,
         contactMessage,
         false,
         false,
         false,
-        orderId,
+        orderId
       );
       if (userPubkey) {
-        let receiptMessage =
+        const receiptMessage =
           "Thank you for your purchase of " +
-          title +
+          productData.title +
           " in a size " +
           selectedSize +
           " from " +
@@ -1038,13 +1041,13 @@ export default function ProductInvoiceCard({
           false,
           true,
           false,
-          orderId,
+          orderId
         );
       }
     } else if (userPubkey) {
-      let receiptMessage =
+      const receiptMessage =
         "Thank you for your purchase of " +
-        title +
+        productData.title +
         " from " +
         nip19.npubEncode(productData.pubkey) +
         ".";
@@ -1054,7 +1057,7 @@ export default function ProductInvoiceCard({
         false,
         true,
         false,
-        orderId,
+        orderId
       );
     }
   };
@@ -1078,7 +1081,10 @@ export default function ProductInvoiceCard({
     });
   };
 
-  const formattedTotalCost = formatWithCommas(totalCost, currency);
+  const formattedTotalCost = formatWithCommas(
+    productData.totalCost,
+    productData.currency
+  );
 
   const handleCashuPayment = async (
     price: number,
@@ -1092,7 +1098,7 @@ export default function ProductInvoiceCard({
     contact?: string,
     contactType?: string,
     contactInstructions?: string,
-    additionalInfo?: string,
+    additionalInfo?: string
   ) => {
     try {
       if (!mints || mints.length === 0) {
@@ -1132,12 +1138,12 @@ export default function ProductInvoiceCard({
         validatePaymentData(price);
       }
 
-      const mint = new CashuMint(mints[0]);
+      const mint = new CashuMint(mints[0]!);
       const wallet = new CashuWallet(mint);
       const mintKeySetIds = await wallet.getKeySets();
       const filteredProofs = tokens.filter(
         (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id),
+          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
       const { keep, send } = await wallet.send(price, filteredProofs, {
         includeFees: true,
@@ -1149,9 +1155,9 @@ export default function ProductInvoiceCard({
               event.proofs.some((proof: Proof) =>
                 filteredProofs.some(
                   (filteredProof) =>
-                    JSON.stringify(proof) === JSON.stringify(filteredProof),
-                ),
-              ),
+                    JSON.stringify(proof) === JSON.stringify(filteredProof)
+                )
+              )
             )
             .map((event) => event.id),
           ...walletContext.proofEvents
@@ -1159,9 +1165,9 @@ export default function ProductInvoiceCard({
               event.proofs.some((proof: Proof) =>
                 keep.some(
                   (keepProof) =>
-                    JSON.stringify(proof) === JSON.stringify(keepProof),
-                ),
-              ),
+                    JSON.stringify(proof) === JSON.stringify(keepProof)
+                )
+              )
             )
             .map((event) => event.id),
           ...walletContext.proofEvents
@@ -1169,9 +1175,9 @@ export default function ProductInvoiceCard({
               event.proofs.some((proof: Proof) =>
                 send.some(
                   (sendProof) =>
-                    JSON.stringify(proof) === JSON.stringify(sendProof),
-                ),
-              ),
+                    JSON.stringify(proof) === JSON.stringify(sendProof)
+                )
+              )
             )
             .map((event) => event.id),
         ]),
@@ -1190,18 +1196,12 @@ export default function ProductInvoiceCard({
         contact ? contact : undefined,
         contactType ? contactType : undefined,
         contactInstructions ? contactInstructions : undefined,
-        additionalInfo ? additionalInfo : undefined,
-      )
-        .then(() => {
-          captureCashuPaidMetric(productData);
-        })
-        .catch((error) => {
-          console.error(error);
-        });
+        additionalInfo ? additionalInfo : undefined
+      );
       const changeProofs = keep;
       const remainingProofs = tokens.filter(
         (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id),
+          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id !== p.id)
       );
       let proofArray;
       if (changeProofs.length >= 1 && changeProofs) {
@@ -1215,16 +1215,16 @@ export default function ProductInvoiceCard({
         JSON.stringify([
           { type: 5, amount: price, date: Math.floor(Date.now() / 1000) },
           ...history,
-        ]),
+        ])
       );
       await publishProofEvent(
         nostr!,
         signer!,
-        mints[0],
+        mints[0]!,
         changeProofs && changeProofs.length >= 1 ? changeProofs : [],
         "out",
         price.toString(),
-        deletedEventIds,
+        deletedEventIds
       );
       if (setCashuPaymentSent) {
         setCashuPaymentSent(true);
@@ -1245,7 +1245,7 @@ export default function ProductInvoiceCard({
             type="submit"
             className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
             onClick={() => {
-              handleSendMessage(pubkeyOfProductBeingSold);
+              handleSendMessage(productData.pubkey);
             }}
             startContent={
               <EnvelopeIcon className="h-6 w-6 hover:text-yellow-500" />
@@ -1258,18 +1258,21 @@ export default function ProductInvoiceCard({
             className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
             onClick={() => {
               if (randomNsecForReceiver !== "" && randomNpubForSender !== "") {
-                if (shippingType === "Free" || shippingType === "Added Cost") {
+                if (
+                  productData.shippingType === "Free" ||
+                  productData.shippingType === "Added Cost"
+                ) {
                   setIsCashuPayment(false);
                   setNeedsShippingInfo(true);
                   setShowPurchaseTypeOption(true);
                 } else if (
-                  shippingType === "N/A" ||
-                  shippingType === "Pickup"
+                  productData.shippingType === "N/A" ||
+                  productData.shippingType === "Pickup"
                 ) {
                   setIsCashuPayment(false);
                   setNeedsShippingInfo(false);
                   setShowPurchaseTypeOption(true);
-                } else if (shippingType === "Free/Pickup") {
+                } else if (productData.shippingType === "Free/Pickup") {
                   setIsCashuPayment(false);
                   setShowShippingOption(true);
                 } else {
@@ -1294,18 +1297,21 @@ export default function ProductInvoiceCard({
                 return;
               }
               if (randomNsecForReceiver !== "" && randomNpubForSender !== "") {
-                if (shippingType === "Free" || shippingType === "Added Cost") {
+                if (
+                  productData.shippingType === "Free" ||
+                  productData.shippingType === "Added Cost"
+                ) {
                   setIsCashuPayment(true);
                   setNeedsShippingInfo(true);
                   setShowPurchaseTypeOption(true);
                 } else if (
-                  shippingType === "N/A" ||
-                  shippingType === "Pickup"
+                  productData.shippingType === "N/A" ||
+                  productData.shippingType === "Pickup"
                 ) {
                   setIsCashuPayment(true);
                   setNeedsShippingInfo(false);
                   setShowPurchaseTypeOption(true);
-                } else if (shippingType === "Free/Pickup") {
+                } else if (productData.shippingType === "Free/Pickup") {
                   setIsCashuPayment(true);
                   setShowShippingOption(true);
                 } else {
@@ -1351,7 +1357,7 @@ export default function ProductInvoiceCard({
                         {invoice.length > 30
                           ? `${invoice.substring(0, 10)}...${invoice.substring(
                               invoice.length - 10,
-                              invoice.length,
+                              invoice.length
                             )}`
                           : invoice}
                       </p>
@@ -1420,24 +1426,26 @@ export default function ProductInvoiceCard({
                   className="text-light-text dark:text-dark-text"
                   onClick={async () => {
                     setShowShippingOption(false);
-                    let price = totalCost;
+                    let price = productData.totalCost;
                     if (
-                      !currencySelection.hasOwnProperty(currency.toUpperCase())
+                      !currencySelection.hasOwnProperty(
+                        productData.currency.toUpperCase()
+                      )
                     ) {
                       throw new Error(
-                        `${currency} is not a supported currency.`,
+                        `${productData.currency} is not a supported currency.`
                       );
                     } else if (
                       currencySelection.hasOwnProperty(
-                        currency.toUpperCase(),
+                        productData.currency.toUpperCase()
                       ) &&
-                      currency.toLowerCase() !== "sats" &&
-                      currency.toLowerCase() !== "sat"
+                      productData.currency.toLowerCase() !== "sats" &&
+                      productData.currency.toLowerCase() !== "sat"
                     ) {
                       try {
                         const currencyData = {
                           amount: price,
-                          currency: currency,
+                          currency: productData.currency,
                         };
                         const numSats =
                           await fiat.getSatoshiValue(currencyData);
@@ -1445,7 +1453,7 @@ export default function ProductInvoiceCard({
                       } catch (err) {
                         console.error("ERROR", err);
                       }
-                    } else if (currency.toLowerCase() === "btc") {
+                    } else if (productData.currency.toLowerCase() === "btc") {
                       price = price * 100000000;
                     }
                     if (isCashuPayment) {
@@ -1513,24 +1521,26 @@ export default function ProductInvoiceCard({
                   className="text-light-text dark:text-dark-text"
                   onClick={async () => {
                     setShowPurchaseTypeOption(false);
-                    let price = totalCost;
+                    let price = productData.totalCost;
                     if (
-                      !currencySelection.hasOwnProperty(currency.toUpperCase())
+                      !currencySelection.hasOwnProperty(
+                        productData.currency.toUpperCase()
+                      )
                     ) {
                       throw new Error(
-                        `${currency} is not a supported currency.`,
+                        `${productData.currency} is not a supported currency.`
                       );
                     } else if (
                       currencySelection.hasOwnProperty(
-                        currency.toUpperCase(),
+                        productData.currency.toUpperCase()
                       ) &&
-                      currency.toLowerCase() !== "sats" &&
-                      currency.toLowerCase() !== "sat"
+                      productData.currency.toLowerCase() !== "sats" &&
+                      productData.currency.toLowerCase() !== "sat"
                     ) {
                       try {
                         const currencyData = {
                           amount: price,
-                          currency: currency,
+                          currency: productData.currency,
                         };
                         const numSats =
                           await fiat.getSatoshiValue(currencyData);
@@ -1538,7 +1548,7 @@ export default function ProductInvoiceCard({
                       } catch (err) {
                         console.error("ERROR", err);
                       }
-                    } else if (currency.toLowerCase() === "btc") {
+                    } else if (productData.currency.toLowerCase() === "btc") {
                       price = price * 100000000;
                     }
                     if (isCashuPayment) {
@@ -1576,7 +1586,9 @@ export default function ProductInvoiceCard({
         handleShippingSubmit={handleShippingSubmit}
         onShippingSubmit={onShippingSubmit}
         shippingControl={shippingControl}
-        requiredInfo={required !== "" ? required : undefined}
+        requiredInfo={
+          productData.required !== "" ? productData.required : undefined
+        }
       />
 
       <ContactForm
@@ -1585,7 +1597,9 @@ export default function ProductInvoiceCard({
         handleContactSubmit={handleContactSubmit}
         onContactSubmit={onContactSubmit}
         contactControl={contactControl}
-        requiredInfo={required !== "" ? required : undefined}
+        requiredInfo={
+          productData.required !== "" ? productData.required : undefined
+        }
       />
 
       <SignInModal isOpen={isOpen} onClose={onClose} />
