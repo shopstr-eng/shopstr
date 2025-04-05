@@ -78,6 +78,7 @@ const nextConfig = {
     styledComponents: true,
   },
   webpack: (config, { dev, isServer }) => {
+<<<<<<< HEAD
     if (dev && !isServer) {
       config.watchOptions = {
         ignored: ['**/.git/**', '**/node_modules/**'],
@@ -91,6 +92,17 @@ const nextConfig = {
         runtimeChunk: 'single',
       };
     }
+=======
+    // Fix for Fast Refresh issues
+    if (dev) {
+      config.watchOptions = {
+        ignored: ['**/.git/**', '**/node_modules/**'],
+        aggregateTimeout: 300,
+        poll: 1000,
+      };
+    }
+    
+>>>>>>> 46133c3906daa13954ffc4467d4431ccca097568
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
@@ -99,6 +111,10 @@ const nextConfig = {
         tls: false,
       };
       
+<<<<<<< HEAD
+=======
+      // Fix for Headless UI issues
+>>>>>>> 46133c3906daa13954ffc4467d4431ccca097568
       config.module.rules.push({
         test: /node_modules\/@headlessui\/react/,
         use: {
@@ -112,6 +128,27 @@ const nextConfig = {
         },
       });
     }
+<<<<<<< HEAD
+=======
+    
+    // Fix for Fast Refresh issues with styled-components
+    if (dev && !isServer) {
+      config.module.rules.push({
+        test: /\.(js|jsx|ts|tsx)$/,
+        exclude: /node_modules/,
+        use: {
+          loader: 'babel-loader',
+          options: {
+            presets: ['next/babel'],
+            plugins: [
+              ['@babel/plugin-transform-runtime', { regenerator: true }],
+            ],
+          },
+        },
+      });
+    }
+    
+>>>>>>> 46133c3906daa13954ffc4467d4431ccca097568
     return config;
   },
 };
