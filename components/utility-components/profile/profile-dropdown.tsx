@@ -47,6 +47,7 @@ export const ProfileWithDropdown = ({
   const [displayName, setDisplayName] = useState("");
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [isNPubCopied, setIsNPubCopied] = useState(false);
+  const [isNip05Verified, setIsNip05Verified] = useState(false);
   const profileContext = useContext(ProfileMapContext);
   const npub = pubkey ? nip19.npubEncode(pubkey) : "";
   const router = useRouter();
@@ -68,8 +69,8 @@ export const ProfileWithDropdown = ({
         ? profile.content.picture
         : `https://robohash.idena.io/${pubkey}`,
     );
+    setIsNip05Verified(profile?.nip05Verified || false);
   }, [profileContext, pubkey]);
-  const isNip05Verified = profileContext.profileData.get(pubkey)?.nip05Verified || false;
 
   const DropDownItems: {
     [key in DropDownKeys]: DropdownItemProps & { label: string };

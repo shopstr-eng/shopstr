@@ -18,6 +18,7 @@ export const ProfileAvatar = ({
 }) => {
   const [pfp, setPfp] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [isNip05Verified, setIsNip05Verified] = useState(false);
   const profileContext = useContext(ProfileMapContext);
   const npub = pubkey ? nip19.npubEncode(pubkey) : "";
   useEffect(() => {
@@ -38,8 +39,9 @@ export const ProfileAvatar = ({
         ? profile.content.picture
         : `https://robohash.idena.io/${pubkey}`,
     );
+    
+    setIsNip05Verified(profile?.nip05Verified || false);
   }, [profileContext, pubkey]);
-  const isNip05Verified = profileContext.profileData.get(pubkey)?.nip05Verified || false;
 
   return (
     <User
