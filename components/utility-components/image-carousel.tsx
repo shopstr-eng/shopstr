@@ -5,18 +5,14 @@ import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import { Image } from "@nextui-org/react";
 import { buildSrcSet } from "@/utils/images";
 import { useRouter } from "next/router";
-import { PREVNEXTBUTTONSTYLES } from "@/utils/STATIC-VARIABLES";
+import { PREVNEXTBUTTONSTYLES as STATIC_STYLES } from "@/utils/STATIC-VARIABLES";
 
 interface ImageCarouselProps {
-  images: ProductImage[];
+  images: string[];
   classname?: string;
   showThumbs?: boolean;
   fixedHeight?: boolean;
 }
-type ProductImage = {
-  url: string;
-  alt?: string;
-};
 
 export default function ImageCarousel({
   images,
@@ -25,12 +21,9 @@ export default function ImageCarousel({
   fixedHeight = true,
 }: ImageCarouselProps) {
   const router = useRouter();
-<<<<<<< HEAD
 
   const PREVNEXTBUTTONSTYLES =
     "absolute z-10 top-[calc(50%-(.5*50%/2))] cursor-pointer h-[30%] w-[8%] rounded-sm bg-purple-300 opacity-20 hover:bg-purple-500 hover:opacity-80 flex items-center";
-=======
->>>>>>> 48e5b484293f5bda92d01fcf8df3ebc81e8ed917
 
   const containerClass = `flex items-center justify-center ${classname}`;
 
@@ -39,12 +32,7 @@ export default function ImageCarousel({
     : "h-full w-full object-cover";
 
   const displayImages = () => {
-<<<<<<< HEAD
     if (!images || images.length === 0) {
-=======
-    const className = "flex items-center justify-center " + classname + "";
-    if (!images || images.length == 0)
->>>>>>> 48e5b484293f5bda92d01fcf8df3ebc81e8ed917
       return [
         <div className={containerClass} key="no-image">
           <Image
@@ -59,10 +47,10 @@ export default function ImageCarousel({
     return images.map((image, index) => (
       <div className={containerClass} key={`image-${index}`}>
         <Image
-          src={image.url}
-          srcSet={buildSrcSet(image.url)}
+          src={image}
+          srcSet={buildSrcSet(image)}
           className={imageClass}
-          alt={`Product image ${index + 1}`}
+          alt={image || `Product image ${index + 1}`}
           radius="none"
           style={{
             width: "100%",
@@ -123,6 +111,7 @@ export default function ImageCarousel({
               onClick={(e) => {
                 e.stopPropagation();
               }}
+              key={index}
             />
           );
         }

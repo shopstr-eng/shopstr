@@ -96,13 +96,8 @@ export default function Landing() {
               restDelta: 0.001,
             }}
           >
-<<<<<<< HEAD
-            <div className="flex gap-6 md:gap-8">
-              {[...parsedProducts].map((product, index) => (
-=======
             <div className="flex gap-4 md:gap-8">
               {parsedProducts.slice(0, 21).map((product, index) => (
->>>>>>> 48e5b484293f5bda92d01fcf8df3ebc81e8ed917
                 <div
                   key={`${product.id}-${index}`}
                   className="min-w-[270px] transform duration-300 transition-transform hover:scale-105 md:min-w-[300px]"
@@ -110,7 +105,6 @@ export default function Landing() {
                   <ProductCard
                     key={product.id + "-" + index}
                     productData={product}
-                    isLanding={true}
                     onProductClick={() =>
                       router.push(
                         `/listing/${nip19.naddrEncode({
