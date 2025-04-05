@@ -9,9 +9,8 @@ export function middleware(request: NextRequest) {
     pathname.match(/^\/npub[a-zA-Z0-9]+$/) &&
     !pathname.startsWith("/marketplace/")
   ) {
-    return NextResponse.redirect(
-      new URL(`/marketplace${pathname}`, request.url),
-    );
+    const url = new URL(`/marketplace${pathname}`, request.url);
+    return NextResponse.redirect(url);
   }
 
   // Handle naddr redirects, but ignore if already in listing page route
@@ -19,14 +18,9 @@ export function middleware(request: NextRequest) {
     pathname.match(/^\/naddr[a-zA-Z0-9]+$/) &&
     !pathname.startsWith("/listing/")
   ) {
-    return NextResponse.redirect(new URL(`/listing${pathname}`, request.url));
+    const url = new URL(`/listing${pathname}`, request.url);
+    return NextResponse.redirect(url);
   }
 
   return NextResponse.next();
 }
-
-export const config = {
-  matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|manifest.json|service-worker.js).*)",
-  ],
-};

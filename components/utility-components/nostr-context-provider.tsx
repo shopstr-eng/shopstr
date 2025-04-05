@@ -14,7 +14,7 @@ import { NostrManager } from "@/utils/nostr/nostr-manager";
 import {
   getLocalStorageData,
   setLocalStorageDataOnSignIn,
-} from "@/components/utility/nostr-helper-functions";
+} from "@/utils/nostr/nostr-helper-functions";
 import PassphraseChallengeModal from "@/components/utility-components/request-passphrase-modal";
 import AuthUrlChallengeModal from "@/components/utility-components/auth-challenge-modal";
 import { NostrNIP07Signer } from "@/utils/nostr/signers/nostr-nip07-signer";
@@ -67,7 +67,7 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
     challenge,
     abort,
     abortSignal,
-    error,
+    error
   ) => {
     return new Promise((resolve, _reject) => {
       setError(error);
@@ -130,11 +130,11 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
             getLocalStorageData().bunkerRemotePubkey +
             "?secret=" +
             getLocalStorageData().bunkerSecret;
-          let bunkerRelays = getLocalStorageData().bunkerRelays;
+          const bunkerRelays = getLocalStorageData().bunkerRelays;
           for (const relay of bunkerRelays!) {
             bunker += "&relay=" + relay;
           }
-          let appPrivKey = getLocalStorageData().clientPrivkey;
+          const appPrivKey = getLocalStorageData().clientPrivkey;
           existingSigner = {
             type: "nip46",
             bunker,
@@ -149,7 +149,7 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
           break;
         }
         case "nsec": {
-          let encryptedPrivateKey = getLocalStorageData().encryptedPrivateKey;
+          const encryptedPrivateKey = getLocalStorageData().encryptedPrivateKey;
           existingSigner = {
             type: "nsec",
             encryptedPrivKey: encryptedPrivateKey!,
@@ -169,7 +169,7 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
 
     const signerObject: NostrSigner = NostrManager.signerFrom(
       existingSigner!,
-      challengeHandler,
+      challengeHandler
     );
     if (!signerObject) return;
     setLocalStorageDataOnSignIn({

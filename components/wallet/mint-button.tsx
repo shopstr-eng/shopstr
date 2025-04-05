@@ -20,14 +20,18 @@ import {
   Image,
   Input,
 } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   getLocalStorageData,
   publishProofEvent,
-} from "../utility/nostr-helper-functions";
+} from "@/utils/nostr/nostr-helper-functions";
 import { CashuMint, CashuWallet } from "@cashu/cashu-ts";
+import QRCode from "qrcode";
 import FailureModal from "@/components/utility-components/failure-modal";
-import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
+import {
+  NostrContext,
+  SignerContext,
+} from "@/components/utility-components/nostr-context-provider";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
 
 const MintButton = () => {
@@ -60,26 +64,24 @@ const MintButton = () => {
     setShowInvoiceCard(false);
   };
 
-  const onMintSubmit = async (data: { [x: string]: any }) => {
-    let numSats = data["sats"];
+  const onMintSubmit = async (data: { [x: string]: number }) => {
+    const numSats = data["sats"];
     setShowInvoiceCard(true);
-    await handleMint(numSats);
+    await handleMint(numSats!);
   };
 
   const handleMint = async (numSats: number) => {
-    const wallet = new CashuWallet(new CashuMint(mints[0]));
+    const wallet = new CashuWallet(new CashuMint(mints[0]!));
 
     const { request: pr, quote: hash } = await wallet.createMintQuote(numSats);
 
     setInvoice(pr);
 
-    const QRCode = require("qrcode");
-
     QRCode.toDataURL(pr)
       .then((url: string) => {
         setQrCodeUrl(url);
       })
-      .catch((err: any) => {
+      .catch((err: unknown) => {
         console.error("ERROR", err);
       });
 
@@ -109,7 +111,7 @@ const MintButton = () => {
   async function invoiceHasBeenPaid(
     wallet: CashuWallet,
     numSats: number,
-    hash: string,
+    hash: string
   ) {
     while (true) {
       try {
@@ -123,15 +125,15 @@ const MintButton = () => {
             JSON.stringify([
               { type: 3, amount: numSats, date: Math.floor(Date.now() / 1000) },
               ...history,
-            ]),
+            ])
           );
           await publishProofEvent(
             nostr!,
             signer!,
-            mints[0],
+            mints[0]!,
             proofs,
             "in",
-            numSats.toString(),
+            numSats.toString()
           );
           // potentially capture a metric for the mint invoice
           setPaymentConfirmed(true);
@@ -148,7 +150,7 @@ const MintButton = () => {
           setInvoice("");
           setQrCodeUrl(null);
           setFailureText(
-            "Failed to validate invoice! Change your mint in settings and/or please try again.",
+            "Failed to validate invoice! Change your mint in settings and/or please try again."
           );
           setShowFailureModal(true);
           break;
@@ -214,8 +216,8 @@ const MintButton = () => {
                   field: { onChange, onBlur, value },
                   fieldState: { error },
                 }) => {
-                  let isErrored = error !== undefined;
-                  let errorMessage: string = error?.message
+                  const isErrored = error !== undefined;
+                  const errorMessage: string = error?.message
                     ? error.message
                     : "";
                   return (
@@ -267,10 +269,10 @@ const MintButton = () => {
                                 {invoice.length > 30
                                   ? `${invoice.substring(
                                       0,
-                                      10,
+                                      10
                                     )}...${invoice.substring(
                                       invoice.length - 10,
-                                      invoice.length,
+                                      invoice.length
                                     )}`
                                   : invoice}
                               </p>

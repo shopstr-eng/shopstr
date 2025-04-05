@@ -11,7 +11,7 @@ import ImageCarousel from "./image-carousel";
 import CompactPriceDisplay, {
   DisplayCostBreakdown,
 } from "./display-monetary-info";
-import { ProductData } from "../utility/product-parser-functions";
+import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { useRouter } from "next/router";
 import { SignerContext } from "@/utils/context/nostr-context";
@@ -19,35 +19,6 @@ import { SignerContext } from "@/utils/context/nostr-context";
 const cardWidth = 380;
 const cardxMargin = 2.5;
 export const TOTALPRODUCTCARDWIDTH = cardWidth + cardxMargin * 2 + 10;
-
-type ProductImage = {
-  url: string;
-  alt?: string;
-};
-
-const FixedImageCarousel = ({
-  images,
-  showThumbs = false,
-}: {
-  images: ProductImage[] | string[];
-  showThumbs?: boolean;
-}) => {
-  if (!images || images.length === 0) {
-    return (
-      <div className="flex h-full w-full items-center justify-center bg-gray-100 dark:bg-gray-800">
-        <p className="text-gray-500 dark:text-gray-400">No image available</p>
-      </div>
-    );
-  }
-
-  return (
-    <ImageCarousel
-      images={images as ProductImage[]}
-      classname="w-full h-full object-cover"
-      showThumbs={showThumbs}
-    />
-  );
-};
 
 export default function ProductCard({
   productData,
@@ -57,7 +28,7 @@ export default function ProductCard({
   isLanding = false,
 }: {
   productData: ProductData;
-  onProductClick?: (productId: any) => void;
+  onProductClick?: (productId: ProductData) => void;
   isReview?: boolean;
   footerContent?: ReactNode;
   isLanding?: boolean;
@@ -66,9 +37,7 @@ export default function ProductCard({
   const { pubkey: userPubkey } = useContext(SignerContext);
 
   if (!productData) return null;
-
   const { pubkey, title, images, categories, location, status } = productData;
-
   if (isReview)
     return (
       <Card className="mx-[2.5px] my-3 w-[100%] overflow-hidden rounded-lg border border-transparent shadow-md duration-300 transition-all hover:border-shopstr-purple/20 dark:hover:border-shopstr-yellow/20">
@@ -88,31 +57,25 @@ export default function ProductCard({
               }
             />
             <div className="flex flex-col justify-center">
-              <CompactCategories categories={categories} />
+              <CompactCategories categories={productData.categories} />
             </div>
           </div>
           <div className="mb-5">
-            {/* Fixed height container for images */}
-            <div className="relative h-[250px] w-full overflow-hidden md:h-[300px]">
-              <FixedImageCarousel images={images} showThumbs={false} />
-            </div>
-
-            <div className="mt-4 flex flex-row items-center justify-between">
-              <Chip
-                key={location}
-                startContent={locationAvatar(location)}
-                className="bg-shopstr-purple/10 text-shopstr-purple dark:bg-shopstr-yellow/10 dark:text-shopstr-yellow"
-              >
+            <ImageCarousel
+              images={images}
+              classname="w-full h-[300px]"
+              showThumbs={false}
+            />
+            <div className="mt-3 flex flex-row justify-between">
+              <Chip key={location} startContent={locationAvatar(location)}>
                 {location}
               </Chip>
               <CompactPriceDisplay monetaryInfo={productData} />
             </div>
           </div>
-          <Divider className="my-4 opacity-50" />
-          <div className="flex w-full flex-col items-center">
-            <h2 className="mb-4 text-2xl font-bold text-shopstr-purple dark:text-shopstr-yellow">
-              {title}
-            </h2>
+          <Divider />
+          <div className="mt-5 flex w-full flex-col items-center ">
+            <h2 className="mb-4 text-2xl font-bold">{title}</h2>
           </div>
           <Divider className="my-4 opacity-50" />
           <div className="space-y-2">
@@ -158,21 +121,31 @@ export default function ProductCard({
             onProductClick && onProductClick(productData);
           }}
         >
-          {/* Fixed height container for images */}
-          <div className="relative h-[250px] w-full overflow-hidden">
-            <FixedImageCarousel images={images} showThumbs={false} />
-            {!isLanding && status && (
-              <div className="absolute right-3 top-3 z-10">
-                {status === "active" && (
-                  <span className="rounded-full bg-gradient-to-r from-green-500 to-green-600 px-3 py-1 text-xs font-semibold text-white shadow-md">
-                    Active
-                  </span>
-                )}
-                {status === "sold" && (
-                  <span className="rounded-full bg-gradient-to-r from-red-500 to-red-600 px-3 py-1 text-xs font-semibold text-white shadow-md">
-                    Sold
-                  </span>
-                )}
+          <div className="mb-2">
+            <ImageCarousel
+              images={images}
+              classname="w-full h-[300px]"
+              showThumbs={false}
+            />
+          </div>
+          <div className="justify-left flex flex-col p-4">
+            {router.pathname !== "/" && (
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
+                  {title}
+                </h2>
+                <div>
+                  {status === "active" && (
+                    <span className="mr-2 rounded-full bg-green-500 px-2 py-1 text-xs font-semibold text-white">
+                      Active
+                    </span>
+                  )}
+                  {status === "sold" && (
+                    <span className="mr-2 rounded-full bg-red-500 px-2 py-1 text-xs font-semibold text-white">
+                      Sold
+                    </span>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -187,9 +160,9 @@ export default function ProductCard({
 
             <div className="mb-3 flex items-center justify-between">
               <ProfileWithDropdown
-                pubkey={pubkey}
+                pubkey={productData.pubkey}
                 dropDownKeys={
-                  pubkey === userPubkey
+                  productData.pubkey === userPubkey
                     ? ["shop_settings"]
                     : ["shop", "inquiry", "copy_npub"]
                 }

@@ -7,17 +7,18 @@ import {
   UserCircleIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { useContext, useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ProductContext } from "../utils/context/context";
+import { ProductContext } from "@/utils/context/context";
 import ProductCard from "@/components/utility-components/product-card";
 import parseTags, {
   ProductData,
-} from "@/components/utility/product-parser-functions";
-import { SignerContext } from "@/utils/context/nostr-context";
+} from "@/utils/parsers/product-parser-functions";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import Link from "next/link";
 import { nip19 } from "nostr-tools";
+import { NostrEvent } from "@/utils/types/types";
 
 export default function Landing() {
   const router = useRouter();
@@ -33,9 +34,9 @@ export default function Landing() {
   }, [router.pathname, signerContext]);
 
   useEffect(() => {
-    let parsedProductsArray: ProductData[] = [];
+    const parsedProductsArray: ProductData[] = [];
     const products = productEventContext.productEvents;
-    products.forEach((product: any) => {
+    products.forEach((product: NostrEvent) => {
       const parsedProduct = parseTags(product) as ProductData;
       if (
         parsedProduct.images.length > 0 &&
@@ -91,10 +92,17 @@ export default function Landing() {
               duration: 30,
               repeat: Infinity,
               ease: "linear",
+              restSpeed: 0.001,
+              restDelta: 0.001,
             }}
           >
+<<<<<<< HEAD
             <div className="flex gap-6 md:gap-8">
               {[...parsedProducts].map((product, index) => (
+=======
+            <div className="flex gap-4 md:gap-8">
+              {parsedProducts.slice(0, 21).map((product, index) => (
+>>>>>>> 48e5b484293f5bda92d01fcf8df3ebc81e8ed917
                 <div
                   key={`${product.id}-${index}`}
                   className="min-w-[270px] transform duration-300 transition-transform hover:scale-105 md:min-w-[300px]"
@@ -109,7 +117,7 @@ export default function Landing() {
                           identifier: product.d as string,
                           pubkey: product.pubkey,
                           kind: 30402,
-                        })}`,
+                        })}`
                       )
                     }
                   />

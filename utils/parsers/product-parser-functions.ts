@@ -1,5 +1,5 @@
-import { ShippingOptionsType } from "./STATIC-VARIABLES";
-import { calculateTotalCost } from "../utility-components/display-monetary-info";
+import { ShippingOptionsType } from "@/utils/STATIC-VARIABLES";
+import { calculateTotalCost } from "@/components/utility-components/display-monetary-info";
 import { NostrEvent } from "@/utils/types/types";
 
 export type ProductData = {
@@ -31,7 +31,7 @@ export type ProductData = {
 };
 
 export const parseTags = (productEvent: NostrEvent) => {
-  let parsedData: ProductData = {
+  const parsedData: ProductData = {
     id: "",
     pubkey: "",
     createdAt: 0,
@@ -54,29 +54,29 @@ export const parseTags = (productEvent: NostrEvent) => {
     const [key, ...values] = tag;
     switch (key) {
       case "title":
-        parsedData.title = values[0];
+        parsedData.title = values[0]!;
         break;
       case "summary":
-        parsedData.summary = values[0];
+        parsedData.summary = values[0]!;
         break;
       case "published_at":
-        parsedData.publishedAt = values[0];
+        parsedData.publishedAt = values[0]!;
         break;
       case "image":
         if (parsedData.images === undefined) parsedData.images = [];
-        parsedData.images.push(values[0]);
+        parsedData.images.push(values[0]!);
         break;
       case "t":
         if (parsedData.categories === undefined) parsedData.categories = [];
-        parsedData.categories.push(values[0]);
+        parsedData.categories.push(values[0]!);
         break;
       case "location":
-        parsedData.location = values[0];
+        parsedData.location = values[0]!;
         break;
       case "price":
         const [amount, currency] = values;
         parsedData.price = Number(amount);
-        parsedData.currency = currency;
+        parsedData.currency = currency!;
         break;
       case "shipping":
         if (values.length === 3) {
@@ -124,10 +124,10 @@ export const parseTags = (productEvent: NostrEvent) => {
       case "size":
         const [size, quantity] = values;
         if (parsedData.sizes === undefined) parsedData.sizes = [];
-        parsedData.sizes?.push(size);
+        parsedData.sizes?.push(size!);
         if (parsedData.sizeQuantities === undefined)
           parsedData.sizeQuantities = new Map<string, number>();
-        parsedData.sizeQuantities.set(size, Number(quantity));
+        parsedData.sizeQuantities.set(size!, Number(quantity));
         break;
       case "condition":
         parsedData.condition = values[0];

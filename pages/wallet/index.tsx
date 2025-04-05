@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/router";
-import { getLocalStorageData } from "../../components/utility/nostr-helper-functions";
+import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
 import MintButton from "../../components/wallet/mint-button";
 import ReceiveButton from "../../components/wallet/receive-button";
 import SendButton from "../../components/wallet/send-button";
@@ -20,9 +20,9 @@ const Wallet = () => {
   const { mints, tokens } = localStorageData;
 
   useEffect(() => {
-    let currentMint = new CashuMint(mints[0]);
-    setMint(mints[0]);
-    let cashuWallet = new CashuWallet(currentMint);
+    const currentMint = new CashuMint(mints[0]!);
+    setMint(mints[0]!);
+    const cashuWallet = new CashuWallet(currentMint);
     setWallet(cashuWallet);
   }, [mints]);
 
@@ -42,7 +42,7 @@ const Wallet = () => {
     if (mints && tokens && mintKeySetIds) {
       return tokens.filter(
         (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id),
+          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
     }
     return [];
@@ -72,20 +72,20 @@ const Wallet = () => {
           newTokens.length >= 1
             ? newTokens.reduce(
                 (acc: number, token: Proof) => acc + token.amount,
-                0,
+                0
               )
             : 0;
         setTotalBalance(tokensTotal);
 
         if (mintKeySetIds) {
           const newFilteredProofs = newTokens.filter((p: Proof) =>
-            mintKeySetIds.some((keysetId: MintKeyset) => keysetId.id === p.id),
+            mintKeySetIds.some((keysetId: MintKeyset) => keysetId.id === p.id)
           );
           const newWalletTotal =
             newFilteredProofs.length >= 1
               ? newFilteredProofs.reduce(
                   (acc: number, p: Proof) => acc + p.amount,
-                  0,
+                  0
                 )
               : 0;
           setWalletBalance(newWalletTotal);

@@ -3,7 +3,7 @@ import { ChatObject } from "../../utils/types/types";
 import { timeSinceMessageDisplayText } from "../../utils/messages/utils";
 import { ProfileAvatar } from "@/components/utility-components/profile/profile-avatar";
 
-export const ChatButton = ({
+const ChatButton = ({
   pubkeyOfChat,
   chatObject,
   openedChatPubkey,
@@ -14,12 +14,12 @@ export const ChatButton = ({
   openedChatPubkey: string;
   handleClickChat: (pubkey: string) => void;
 }) => {
-  let messages = chatObject?.decryptedChat;
-  let lastMessage =
+  const messages = chatObject?.decryptedChat;
+  const lastMessage =
     messages && messages.length > 0 && messages[messages.length - 1];
-  let unreadCount = chatObject?.unreadCount;
+  const unreadCount = chatObject?.unreadCount;
 
-  let divRef = useRef<HTMLDivElement>(null);
+  const divRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (pubkeyOfChat === openedChatPubkey) {

@@ -18,15 +18,16 @@ import ProductForm from "./product-form";
 import ImageCarousel from "./utility-components/image-carousel";
 import CompactCategories from "./utility-components/compact-categories";
 import { locationAvatar } from "./utility-components/dropdowns/location-dropdown";
-import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
 import SuccessModal from "./utility-components/success-modal";
-import { SignerContext } from "@/utils/context/nostr-context";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { nip19 } from "nostr-tools";
+import { ProductData } from "@/utils/parsers/product-parser-functions";
 
 interface ProductModalProps {
-  productData: any;
+  productData: ProductData;
   handleModalToggle: () => void;
   showModal: boolean;
   handleDelete: (productId: string) => void;
@@ -38,22 +39,6 @@ export default function DisplayProductModal({
   handleModalToggle,
   handleDelete,
 }: ProductModalProps) {
-  const {
-    pubkey,
-    createdAt,
-    title,
-    images,
-    categories,
-    location,
-    sizes,
-    sizeQuantities,
-    condition,
-    status,
-    quantity,
-    required,
-    restrictions,
-  } = productData;
-
   const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showProductForm, setShowProductForm] = useState(false);
@@ -63,8 +48,8 @@ export default function DisplayProductModal({
   const displayDate = (timestamp: number): [string, string] => {
     if (timestamp == 0 || !timestamp) return ["", ""];
     const d = new Date(timestamp * 1000);
-    const dateString = d.toLocaleString().split(",")[0].trim();
-    const timeString = d.toLocaleString().split(",")[1].trim();
+    const dateString = d.toLocaleString().split(",")[0]!.trim();
+    const timeString = d.toLocaleString().split(",")[1]!.trim();
     return [dateString, timeString];
   };
 
@@ -76,7 +61,7 @@ export default function DisplayProductModal({
     });
     // The content you want to share
     const shareData = {
-      title: title,
+      title: productData.title,
       url: `${window.location.origin}/listing/${naddr}`,
     };
     // Check if the Web Share API is available
@@ -86,7 +71,7 @@ export default function DisplayProductModal({
     } else {
       // Fallback for browsers that do not support the Web Share API
       navigator.clipboard.writeText(
-        `${window.location.origin}/listing/${naddr}`,
+        `${window.location.origin}/listing/${naddr}`
       );
       setShowSuccessModal(true);
     }
@@ -132,15 +117,15 @@ export default function DisplayProductModal({
           <ModalHeader className="flex flex-col text-light-text dark:text-dark-text">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
-                {title}
+                {productData.title}
               </h2>
               <div>
-                {status === "active" && (
+                {productData.status === "active" && (
                   <span className="mr-2 rounded-full bg-green-500 px-2 py-1 text-xs font-semibold text-white">
                     Active
                   </span>
                 )}
-                {status === "sold" && (
+                {productData.status === "sold" && (
                   <span className="mr-2 rounded-full bg-red-500 px-2 py-1 text-xs font-semibold text-white">
                     Sold
                   </span>
@@ -149,10 +134,10 @@ export default function DisplayProductModal({
             </div>
           </ModalHeader>
           <ModalBody className="text-light-text dark:text-dark-text">
-            {images ? (
+            {productData.images ? (
               <ImageCarousel
-                images={images}
-                showThumbs={images.length > 1}
+                images={productData.images}
+                showThumbs={productData.images.length > 1}
                 classname="max-h-[80vh]"
               />
             ) : null}
@@ -166,13 +151,20 @@ export default function DisplayProductModal({
                     : ["shop", "inquiry", "copy_npub"]
                 }
               />
-              <Chip key={location} startContent={locationAvatar(location)}>
-                {location}
+              <Chip
+                key={productData.location}
+                startContent={locationAvatar(productData.location)}
+              >
+                {productData.location}
               </Chip>
-              <CompactCategories categories={categories} />
+              <CompactCategories categories={productData.categories} />
               <div>
-                <p className="text-md">{displayDate(createdAt)[0]}</p>
-                <p className="text-md">{displayDate(createdAt)[1]}</p>
+                <p className="text-md">
+                  {displayDate(productData.createdAt)[0]}
+                </p>
+                <p className="text-md">
+                  {displayDate(productData.createdAt)[1]}
+                </p>
               </div>
             </div>
             <Divider />
@@ -180,54 +172,56 @@ export default function DisplayProductModal({
             <span className="whitespace-break-spaces break-all">
               {productData.summary}
             </span>
-            {sizes && sizes.length > 0 ? (
+            {productData.sizes && productData.sizes.length > 0 ? (
               <>
                 <span className="text-xl font-semibold">Sizes: </span>
                 <div className="flex flex-wrap items-center">
-                  {sizes && sizes.length > 0
-                    ? sizes.map((size: string) => (
+                  {productData.sizes && productData.sizes.length > 0
+                    ? productData.sizes.map((size: string) => (
                         <span
                           key={size}
                           className="mb-2 mr-4 text-light-text dark:text-dark-text"
                         >
-                          {size}: {sizeQuantities?.get(size) || 0}
+                          {size}: {productData.sizeQuantities?.get(size) || 0}
                         </span>
                       ))
                     : null}
                 </div>
               </>
             ) : null}
-            {condition && (
+            {productData.condition && (
               <>
                 <div className="text-left text-xs text-light-text dark:text-dark-text">
                   <span className="text-xl font-semibold">Condition: </span>
-                  <span className="text-xl">{condition}</span>
+                  <span className="text-xl">{productData.condition}</span>
                 </div>
               </>
             )}
-            {quantity && (
+            {productData.quantity && (
               <>
                 <div className="text-left text-xs text-light-text dark:text-dark-text">
                   <span className="text-xl font-semibold">Quantity: </span>
-                  <span className="text-xl">{quantity}</span>
+                  <span className="text-xl">{productData.quantity}</span>
                 </div>
               </>
             )}
-            {restrictions && (
+            {productData.restrictions && (
               <>
                 <div className="text-left text-xs text-light-text dark:text-dark-text">
                   <span className="text-xl font-semibold">Restrictions: </span>
-                  <span className="text-xl text-red-500">{restrictions}</span>
+                  <span className="text-xl text-red-500">
+                    {productData.restrictions}
+                  </span>
                 </div>
               </>
             )}
-            {required && (
+            {productData.required && (
               <>
                 <div className="text-left text-xs text-light-text dark:text-dark-text">
                   <span className="text-xl font-semibold">
                     Required Customer Information:{" "}
                   </span>
-                  <span className="text-xl">{required}</span>
+                  <span className="text-xl">{productData.required}</span>
                 </div>
               </>
             )}
@@ -247,7 +241,7 @@ export default function DisplayProductModal({
               >
                 Share
               </Button>
-              {userPubkey === pubkey && (
+              {userPubkey === productData.pubkey && (
                 <>
                   <Button
                     type="submit"
@@ -282,7 +276,7 @@ export default function DisplayProductModal({
           </ModalFooter>
         </ModalContent>
       </Modal>
-      {userPubkey === pubkey && (
+      {userPubkey === productData.pubkey && (
         <ProductForm
           showModal={showProductForm}
           handleModalToggle={handleEditToggle}

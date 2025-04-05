@@ -17,24 +17,36 @@ import {
   Chip,
   Image,
 } from "@nextui-org/react";
-import { InformationCircleIcon, TrashIcon } from "@heroicons/react/24/outline";
-import Carousal from "@itseasy21/react-elastic-carousel";
-import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  InformationCircleIcon,
+  TrashIcon,
+} from "@heroicons/react/24/outline";
+import { Carousel } from "react-responsive-carousel";
+import "react-responsive-carousel/lib/styles/carousel.min.css";
+import {
+  PREVNEXTBUTTONSTYLES,
+  SHOPSTRBUTTONCLASSNAMES,
+  CATEGORIES,
+  SHIPPING_OPTIONS,
+} from "@/utils/STATIC-VARIABLES";
 import {
   PostListing,
   getLocalStorageData,
-} from "./utility/nostr-helper-functions";
-import { CATEGORIES, SHIPPING_OPTIONS } from "./utility/STATIC-VARIABLES";
+} from "@/utils/nostr/nostr-helper-functions";
 import LocationDropdown from "./utility-components/dropdowns/location-dropdown";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 import { ProductContext, ProfileMapContext } from "../utils/context/context";
-import { capturePostListingMetric } from "./utility/metrics-helper-functions";
-import { addProductToCache } from "../pages/api/nostr/cache-service";
-import { ProductData } from "./utility/product-parser-functions";
+import { addProductToCache } from "@/utils/nostr/cache-service";
+import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { buildSrcSet } from "@/utils/images";
 import { FileUploaderButton } from "./utility-components/file-uploader";
 import currencySelection from "../public/currencySelection.json";
-import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
+import {
+  NostrContext,
+  SignerContext,
+} from "@/components/utility-components/nostr-context-provider";
 import { ProductFormValues } from "../utils/types/types";
 
 interface ProductFormProps {
@@ -45,7 +57,7 @@ interface ProductFormProps {
   onSubmitCallback?: () => void;
 }
 
-export default function NewForm({
+export default function ProductForm({
   showModal,
   handleModalToggle,
   oldValues,
@@ -55,6 +67,7 @@ export default function NewForm({
   const router = useRouter();
   const [images, setImages] = useState<string[]>([]);
   const [imageError, setImageError] = useState<string | null>(null);
+  const [currentSlide, setCurrentSlide] = useState(0);
   const [pubkey, setPubkey] = useState("");
   const [relayHint, setRelayHint] = useState("");
   const [isEdit, setIsEdit] = useState(false);
@@ -100,7 +113,7 @@ export default function NewForm({
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      let { relays } = getLocalStorageData();
+      const { relays } = getLocalStorageData();
       setPubkey(signerPubKey as string);
       setRelayHint(relays[0] as string);
     }
@@ -123,10 +136,10 @@ export default function NewForm({
 
     setIsPostingOrUpdatingProduct(true);
     const hashHex = CryptoJS.SHA256(data["Product Name"] as string).toString(
-      CryptoJS.enc.Hex,
+      CryptoJS.enc.Hex
     );
 
-    let tags: ProductFormValues = [
+    const tags: ProductFormValues = [
       ["d", oldValues?.d || hashHex],
       ["alt", ("Product listing: " + data["Product Name"]) as string],
       [
@@ -186,9 +199,7 @@ export default function NewForm({
       tags.push(["restrictions", data["Restrictions"] as string]);
     }
 
-    let newListing = await PostListing(tags, signer!, isLoggedIn!, nostr!);
-
-    await capturePostListingMetric(signer!, newListing.id, tags);
+    const newListing = await PostListing(tags, signer!, isLoggedIn!, nostr!);
 
     if (isEdit) {
       if (handleDelete && oldValues?.id) {
@@ -209,10 +220,11 @@ export default function NewForm({
     handleModalToggle();
     setImages([]);
     reset();
+    setCurrentSlide(0);
   };
 
-  const watchShippingOption = watch("Shipping Option"); // acts as state for shippingOption input. when shippingOption changes, this variable changes as well
-  const watchCurrency = watch("Currency"); // acts as state for currency input. when currency changes, this variable changes as well
+  const watchShippingOption = watch("Shipping Option");
+  const watchCurrency = watch("Currency");
 
   const deleteImage = (index: number) => () => {
     setImages((prevValues) => {
@@ -220,6 +232,8 @@ export default function NewForm({
       if (index > -1) {
         updatedImages.splice(index, 1);
       }
+      const newCurrentSlide = Math.min(currentSlide, updatedImages.length - 1);
+      setCurrentSlide(newCurrentSlide >= 0 ? newCurrentSlide : 0);
       return updatedImages;
     });
   };
@@ -257,8 +271,10 @@ export default function NewForm({
                 field: { onChange, onBlur, value },
                 fieldState: { error },
               }) => {
-                let isErrored = error !== undefined;
-                let errorMessage: string = error?.message ? error.message : "";
+                const isErrored = error !== undefined;
+                const errorMessage: string = error?.message
+                  ? error.message
+                  : "";
                 return (
                   <Input
                     className="text-light-text dark:text-dark-text"
@@ -277,52 +293,123 @@ export default function NewForm({
                 );
               }}
             />
-            <Carousal
-              isRTL={false}
+            <Carousel
               showArrows={images.length > 1}
-              pagination={false}
-            >
-              {images.length > 0 ? (
-                images.map((image, index) => (
-                  <div key={index}>
-                    <div className="flex flex-row-reverse ">
-                      <ConfirmActionDropdown
-                        helpText="Are you sure you want to delete this image?"
-                        buttonLabel="Delete Image"
-                        onConfirm={deleteImage(index)}
-                      >
-                        <Button
-                          isIconOnly
-                          color="danger"
-                          aria-label="Trash"
-                          radius="full"
-                          className="right-3 top-12 z-20 bg-gradient-to-tr from-blue-950 to-red-950 text-white"
-                          variant="bordered"
-                        >
-                          <TrashIcon style={{ padding: 4 }} />
-                        </Button>
-                      </ConfirmActionDropdown>
-                    </div>
-                    <Image
-                      alt="Product Image"
-                      className="object-cover"
-                      width={350}
-                      src={image}
-                      srcSet={buildSrcSet(image)}
+              showStatus={false}
+              showIndicators={images.length > 1}
+              showThumbs={images.length > 1}
+              selectedItem={currentSlide}
+              onChange={(index) => setCurrentSlide(index)}
+              renderArrowPrev={(onClickHandler, hasPrev, label) =>
+                hasPrev && (
+                  <button
+                    className={"left-0 justify-start " + PREVNEXTBUTTONSTYLES}
+                    onClick={(e) => {
+                      onClickHandler();
+                      e.stopPropagation();
+                    }}
+                    title={label}
+                  >
+                    <ChevronLeftIcon className="h-7 w-7" />
+                  </button>
+                )
+              }
+              renderArrowNext={(onClickHandler, hasNext, label) =>
+                hasNext && (
+                  <button
+                    className={"right-0 justify-end " + PREVNEXTBUTTONSTYLES}
+                    onClick={(e) => {
+                      onClickHandler();
+                      e.stopPropagation();
+                    }}
+                    title={label}
+                  >
+                    <ChevronRightIcon className="h-7 w-7" />
+                  </button>
+                )
+              }
+              renderIndicator={(onClickHandler, isSelected, index, label) => {
+                const indicatorStyles =
+                  "inline-block w-3.5 h-3.5 rounded-full mr-3 z-10 cursor-pointer";
+                if (isSelected) {
+                  return (
+                    <li
+                      className={"bg-cyan-500 " + indicatorStyles}
+                      aria-label={`Selected: ${label} ${index + 1}`}
+                      title={`Selected: ${label} ${index + 1}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                      }}
                     />
-                  </div>
-                ))
-              ) : (
-                <div className="flex h-full w-full items-center justify-center">
-                  <Image
-                    alt="Product Image"
-                    className="object-cover"
-                    src="/no-image-placeholder.png"
-                    width={350}
+                  );
+                }
+                return (
+                  <li
+                    className={
+                      indicatorStyles + " bg-gray-300 hover:bg-gray-500"
+                    }
+                    onClick={(e) => {
+                      onClickHandler(e);
+                      e.stopPropagation();
+                    }}
+                    onKeyDown={onClickHandler}
+                    value={index}
+                    key={index}
+                    role="button"
+                    tabIndex={0}
+                    title={`${label} ${index + 1}`}
+                    aria-label={`${label} ${index + 1}`}
                   />
-                </div>
-              )}
-            </Carousal>
+                );
+              }}
+            >
+              {images.length > 0
+                ? images.map((image, index) => (
+                    <div
+                      key={index}
+                      className="relative flex h-full w-full items-center justify-center"
+                    >
+                      <div className="absolute right-2 top-2 z-20">
+                        <ConfirmActionDropdown
+                          helpText="Are you sure you want to delete this image?"
+                          buttonLabel="Delete Image"
+                          onConfirm={deleteImage(index)}
+                        >
+                          <Button
+                            isIconOnly
+                            color="danger"
+                            aria-label="Trash"
+                            radius="full"
+                            className="bg-gradient-to-tr from-blue-950 to-red-950 text-white"
+                            variant="bordered"
+                          >
+                            <TrashIcon style={{ padding: 4 }} />
+                          </Button>
+                        </ConfirmActionDropdown>
+                      </div>
+                      <Image
+                        alt="Product Image"
+                        className="object-cover"
+                        width={350}
+                        src={image}
+                        srcSet={buildSrcSet(image)}
+                      />
+                    </div>
+                  ))
+                : [
+                    <div
+                      key="placeholder"
+                      className="flex h-full w-full items-center justify-center"
+                    >
+                      <Image
+                        alt="Product Image"
+                        className="object-cover"
+                        src="/no-image-placeholder.png"
+                        width={350}
+                      />
+                    </div>,
+                  ]}
+            </Carousel>
             {imageError && <div className="text-red-600">{imageError}</div>}
             <FileUploaderButton
               isIconOnly={false}
@@ -346,8 +433,10 @@ export default function NewForm({
                 field: { onChange, onBlur, value },
                 fieldState: { error },
               }) => {
-                let isErrored = error !== undefined;
-                let errorMessage: string = error?.message ? error.message : "";
+                const isErrored = error !== undefined;
+                const errorMessage: string = error?.message
+                  ? error.message
+                  : "";
                 return (
                   <Textarea
                     className="text-light-text dark:text-dark-text"
@@ -377,8 +466,10 @@ export default function NewForm({
                 field: { onChange, onBlur, value },
                 fieldState: { error },
               }) => {
-                let isErrored = error !== undefined;
-                let errorMessage: string = error?.message ? error.message : "";
+                const isErrored = error !== undefined;
+                const errorMessage: string = error?.message
+                  ? error.message
+                  : "";
                 return (
                   <Input
                     className="text-light-text dark:text-dark-text"
@@ -458,8 +549,10 @@ export default function NewForm({
                 field: { onChange, onBlur, value },
                 fieldState: { error },
               }) => {
-                let isErrored = error !== undefined;
-                let errorMessage: string = error?.message ? error.message : "";
+                const isErrored = error !== undefined;
+                const errorMessage: string = error?.message
+                  ? error.message
+                  : "";
                 return (
                   <LocationDropdown
                     autoFocus
@@ -488,8 +581,10 @@ export default function NewForm({
                 field: { onChange, onBlur, value },
                 fieldState: { error },
               }) => {
-                let isErrored = error !== undefined;
-                let errorMessage: string = error?.message ? error.message : "";
+                const isErrored = error !== undefined;
+                const errorMessage: string = error?.message
+                  ? error.message
+                  : "";
                 return (
                   <Select
                     className="text-light-text dark:text-dark-text"
@@ -531,8 +626,8 @@ export default function NewForm({
                   field: { onChange, onBlur, value },
                   fieldState: { error },
                 }) => {
-                  let isErrored = error !== undefined;
-                  let errorMessage: string = error?.message
+                  const isErrored = error !== undefined;
+                  const errorMessage: string = error?.message
                     ? error.message
                     : "";
                   return (
@@ -583,8 +678,10 @@ export default function NewForm({
                 field: { onChange, onBlur, value },
                 fieldState: { error },
               }) => {
-                let isErrored = error !== undefined;
-                let errorMessage: string = error?.message ? error.message : "";
+                const isErrored = error !== undefined;
+                const errorMessage: string = error?.message
+                  ? error.message
+                  : "";
                 return (
                   <Select
                     variant="bordered"
@@ -655,8 +752,8 @@ export default function NewForm({
                     field: { onChange, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage = error?.message || "";
+                    const isErrored = error !== undefined;
+                    const errorMessage = error?.message || "";
                     return (
                       <div className="flex flex-col">
                         <Input
@@ -687,8 +784,8 @@ export default function NewForm({
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage = error?.message || "";
+                    const isErrored = error !== undefined;
+                    const errorMessage = error?.message || "";
 
                     const selectedSizes = Array.isArray(value)
                       ? value
@@ -756,7 +853,7 @@ export default function NewForm({
                   }) => {
                     const handleQuantityChange = (
                       size: string,
-                      quantity: number,
+                      quantity: number
                     ) => {
                       const newQuantities = new Map(value);
                       newQuantities.set(size, quantity);
@@ -782,7 +879,7 @@ export default function NewForm({
                               onChange={(e) =>
                                 handleQuantityChange(
                                   size,
-                                  parseInt(e.target.value) || 0,
+                                  parseInt(e.target.value) || 0
                                 )
                               }
                               className="w-20"
@@ -801,8 +898,8 @@ export default function NewForm({
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
                       ? error.message
                       : "";
                     return (
@@ -862,8 +959,8 @@ export default function NewForm({
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
                       ? error.message
                       : "";
                     return (
@@ -902,8 +999,8 @@ export default function NewForm({
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
                       ? error.message
                       : "";
                     return (
@@ -933,8 +1030,8 @@ export default function NewForm({
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
                       ? error.message
                       : "";
                     return (

@@ -2,13 +2,15 @@ import { useState, useEffect, useContext } from "react";
 import { useRouter } from "next/router";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
-import { setLocalStorageDataOnSignIn } from "@/components/utility/nostr-helper-functions";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import {
+  generateKeys,
+  setLocalStorageDataOnSignIn,
+} from "@/utils/nostr/nostr-helper-functions";
 import { RelaysContext } from "../../utils/context/context";
-import { SignerContext } from "@/utils/context/nostr-context";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
-import { generateKeys } from "@/components/utility/nostr-helper-functions";
 import FailureModal from "../../components/utility-components/failure-modal";
 import SuccessModal from "../../components/utility-components/success-modal";
 
@@ -78,7 +80,7 @@ const Keys = () => {
     } else {
       const { encryptedPrivKey, pubkey } = NostrNSecSigner.getEncryptedNSEC(
         privateKey,
-        passphrase,
+        passphrase
       );
       const signer = newSigner!("nsec", {
         encryptedPrivKey: encryptedPrivKey,

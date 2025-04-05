@@ -6,7 +6,7 @@ import {
   BoltIcon,
   ShoppingBagIcon,
 } from "@heroicons/react/24/outline";
-import { getLocalStorageData } from "../../components/utility/nostr-helper-functions";
+import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
 import { Transaction } from "@/utils/types/types";
 
 // add found proofs as nutsack deposit with different icon
