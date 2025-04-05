@@ -393,7 +393,7 @@ function Shopstr({ props }: { props: AppProps }) {
         // Handle profile fetching
         let pubkeysToFetchProfilesFor = [...profileSetFromProducts];
         const userPubkey = (await signer?.getPubKey()) || undefined;
-        let profileSetFromChats = new Set<string>();
+        const profileSetFromChats = new Set<string>();
 
         if (isLoggedIn) {
           const { profileSetFromChats: newProfileSetFromChats } =
