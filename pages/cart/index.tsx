@@ -1,3 +1,5 @@
+/* eslint-disable @next/next/no-img-element */
+
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { Button, Input } from "@nextui-org/react";
@@ -9,8 +11,8 @@ import {
 import {
   SHOPSTRBUTTONCLASSNAMES,
   ShippingOptionsType,
-} from "../../components/utility/STATIC-VARIABLES";
-import { ProductData } from "../../components/utility/product-parser-functions";
+} from "@/utils/STATIC-VARIABLES";
+import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { DisplayCostBreakdown } from "../../components/utility-components/display-monetary-info";
 import CartInvoiceCard from "../../components/cart-invoice-card";
 import { fiat } from "@getalby/lightning-tools";
@@ -19,7 +21,7 @@ import currencySelection from "../../public/currencySelection.json";
 export default function Component() {
   const [products, setProducts] = useState<ProductData[]>([]);
   const [satPrices, setSatPrices] = useState<{ [key: string]: number | null }>(
-    {},
+    {}
   );
   const [shippingSatPrices, setShippingSatPrices] = useState<{
     [key: string]: number | null;
@@ -44,7 +46,7 @@ export default function Component() {
 
   // Use the initialized quantities
   const [quantities, setQuantities] = useState<{ [key: string]: number }>(() =>
-    initializeQuantities(products),
+    initializeQuantities(products)
   );
   const [hasReachedMax, setHasReachedMax] = useState<{
     [key: string]: boolean;
@@ -55,7 +57,7 @@ export default function Component() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      let cartList = localStorage.getItem("cart")
+      const cartList = localStorage.getItem("cart")
         ? JSON.parse(localStorage.getItem("cart") as string)
         : [];
       if (cartList && cartList.length > 0) {
@@ -95,12 +97,12 @@ export default function Component() {
 
           if (subtotalSatPrice !== null || shippingSatPrice !== null) {
             if (quantities[product.id]) {
-              subtotalAmount += subtotalSatPrice * quantities[product.id];
-              subtotal = subtotalSatPrice * quantities[product.id];
-              shippingCostAmount += shippingSatPrice * quantities[product.id];
-              shippingCost = shippingSatPrice * quantities[product.id];
-              totalCostAmount += totalSatPrice * quantities[product.id];
-              totalCost = totalSatPrice * quantities[product.id];
+              subtotalAmount += subtotalSatPrice * quantities[product.id]!;
+              subtotal = subtotalSatPrice * quantities[product.id]!;
+              shippingCostAmount += shippingSatPrice * quantities[product.id]!;
+              shippingCost = shippingSatPrice * quantities[product.id]!;
+              totalCostAmount += totalSatPrice * quantities[product.id]!;
+              totalCost = totalSatPrice * quantities[product.id]!;
             } else {
               subtotalAmount += subtotalSatPrice;
               subtotal = subtotalSatPrice;
@@ -116,7 +118,7 @@ export default function Component() {
         } catch (error) {
           console.error(
             `Error converting price for product ${product.id}:`,
-            error,
+            error
           );
           prices[product.id] = null;
           shipping[product.id] = null;
@@ -151,12 +153,12 @@ export default function Component() {
   };
 
   const handleRemoveFromCart = (productId: string) => {
-    let cartContent = localStorage.getItem("cart")
+    const cartContent = localStorage.getItem("cart")
       ? JSON.parse(localStorage.getItem("cart") as string)
       : [];
     if (cartContent.length > 0) {
-      let updatedCart = cartContent.filter(
-        (obj: ProductData) => obj.id !== productId,
+      const updatedCart = cartContent.filter(
+        (obj: ProductData) => obj.id !== productId
       );
       setProducts(updatedCart);
       localStorage.setItem("cart", JSON.stringify(updatedCart));
@@ -171,7 +173,7 @@ export default function Component() {
       const availableQuantity = parseInt(String(product.quantity));
       const newQuantity = Math.max(
         1,
-        Math.min(availableQuantity, prev[id] + change),
+        Math.min(availableQuantity, prev[id]! + change)
       );
 
       setHasReachedMax((prevState) => ({
@@ -218,9 +220,9 @@ export default function Component() {
   };
 
   const convertShippingToSats = async (
-    product: ProductData,
+    product: ProductData
   ): Promise<number> => {
-    let shippingCost = product.shippingCost ? product.shippingCost : 0;
+    const shippingCost = product.shippingCost ? product.shippingCost : 0;
     if (
       product.currency.toLowerCase() === "sats" ||
       product.currency.toLowerCase() === "sat"
@@ -322,7 +324,7 @@ export default function Component() {
                               {product.quantity} in stock
                             </p>
                             <div className="mt-2 flex items-center">
-                              {quantities[product.id] > 1 && (
+                              {quantities[product.id]! > 1 && (
                                 <Button
                                   isIconOnly
                                   size="sm"
@@ -344,11 +346,11 @@ export default function Component() {
                                   const newQuantity =
                                     parseInt(e.target.value) || 1;
                                   const maxQuantity = parseInt(
-                                    String(product.quantity) || "1",
+                                    String(product.quantity) || "1"
                                   );
                                   const finalQuantity = Math.min(
                                     newQuantity,
-                                    maxQuantity,
+                                    maxQuantity
                                   );
                                   setQuantities((prev) => ({
                                     ...prev,
@@ -362,7 +364,7 @@ export default function Component() {
                                   }));
                                 }}
                               />
-                              {quantities[product.id] <
+                              {quantities[product.id]! <
                                 parseInt(String(product.quantity || "1")) && (
                                 <Button
                                   isIconOnly
@@ -445,7 +447,7 @@ export default function Component() {
                           Size: {product.selectedSize}
                         </p>
                       )}
-                      {quantities[product.id] > 1 && (
+                      {quantities[product.id]! > 1 && (
                         <p className="mb-4 text-lg">
                           Quantity: {quantities[product.id]}
                         </p>

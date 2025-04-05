@@ -5,9 +5,12 @@ import { ArrowUpOnSquareIcon } from "@heroicons/react/24/outline";
 
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { ShopMapContext } from "@/utils/context/context";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/components/utility/STATIC-VARIABLES";
-import { SignerContext, NostrContext } from "@/utils/context/nostr-context";
-import { createNostrShopEvent } from "@/components/utility/nostr-helper-functions";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import {
+  SignerContext,
+  NostrContext,
+} from "@/components/utility-components/nostr-context-provider";
+import { createNostrShopEvent } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 
@@ -68,7 +71,7 @@ const ShopSettingsPage = () => {
       nostr!,
       signer!,
       userPubkey!,
-      JSON.stringify(transformedData),
+      JSON.stringify(transformedData)
     );
     shopContext.updateShopData({
       pubkey: userPubkey!,
@@ -152,8 +155,8 @@ const ShopSettingsPage = () => {
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
                       ? error.message
                       : "";
                     return (
@@ -191,8 +194,8 @@ const ShopSettingsPage = () => {
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
                       ? error.message
                       : "";
                     return (

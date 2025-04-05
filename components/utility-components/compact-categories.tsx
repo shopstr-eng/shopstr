@@ -1,5 +1,5 @@
 import React from "react";
-import { CATEGORIES } from "../utility/STATIC-VARIABLES";
+import { CATEGORIES } from "@/utils/STATIC-VARIABLES";
 import { Chip, Tooltip } from "@nextui-org/react";
 
 const CompactCategories = ({ categories }: { categories: string[] }) => {

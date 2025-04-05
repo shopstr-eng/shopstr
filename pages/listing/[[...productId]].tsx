@@ -4,7 +4,7 @@ import { Modal, ModalContent, ModalHeader, ModalBody } from "@nextui-org/react";
 import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/outline";
 import parseTags, {
   ProductData,
-} from "../../components/utility/product-parser-functions";
+} from "@/utils/parsers/product-parser-functions";
 import ListingPage from "../../components/listing-page";
 import { ProductContext } from "../../utils/context/context";
 import { Event, nip19 } from "nostr-tools";
@@ -12,7 +12,7 @@ import { Event, nip19 } from "nostr-tools";
 const Listing = () => {
   const router = useRouter();
   const [productData, setProductData] = useState<ProductData | undefined>(
-    undefined,
+    undefined
   );
   const [productIdString, setProductIdString] = useState("");
 
@@ -27,7 +27,7 @@ const Listing = () => {
     if (router.isReady) {
       const { productId } = router.query;
       const productIdString = productId ? productId[0] : "";
-      setProductIdString(productIdString);
+      setProductIdString(productIdString!);
       if (!productIdString) {
         router.push("/marketplace"); // if there isn't a productId, redirect to home page
       }
@@ -54,7 +54,7 @@ const Listing = () => {
           // Check for matching event id
           const idMatch = event.id === productIdString;
           return naddrMatch || dTagMatch || idMatch;
-        },
+        }
       );
 
       if (matchingEvent) {

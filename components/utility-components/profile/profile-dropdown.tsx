@@ -1,4 +1,4 @@
-import { LogOut } from "@/components/utility/nostr-helper-functions";
+import { LogOut } from "@/utils/nostr/nostr-helper-functions";
 import { ProfileMapContext } from "@/utils/context/context";
 import {
   Dropdown,
@@ -21,7 +21,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import FailureModal from "../failure-modal";
-import { SignerContext } from "@/utils/context/nostr-context";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 
 type DropDownKeys =
   | "shop"
@@ -66,9 +66,9 @@ export const ProfileWithDropdown = ({
     setPfp(
       profile && profile.content && profile.content.picture
         ? profile.content.picture
-        : `https://robohash.idena.io/${pubkey}`,
+        : `https://robohash.org/${pubkey}`
     );
-  }, [profileContext, pubkey]);
+  }, [profileContext, pubkey, npub]);
 
   const DropDownItems: {
     [key in DropDownKeys]: DropdownItemProps & { label: string };
@@ -79,7 +79,7 @@ export const ProfileWithDropdown = ({
       className: "text-light-text dark:text-dark-text",
       startContent: <BuildingStorefrontIcon className={"h-5 w-5"} />,
       onClick: () => {
-        let npub = nip19.npubEncode(pubkey);
+        const npub = nip19.npubEncode(pubkey);
         router.push(`/marketplace/${npub}`);
       },
       label: "Visit Seller",
@@ -157,7 +157,7 @@ export const ProfileWithDropdown = ({
         <ClipboardIcon className="h-5 w-5" />
       ),
       onClick: () => {
-        let npub = nip19.npubEncode(pubkey);
+        const npub = nip19.npubEncode(pubkey);
         navigator.clipboard.writeText(npub);
         setIsNPubCopied(true);
         setTimeout(() => {

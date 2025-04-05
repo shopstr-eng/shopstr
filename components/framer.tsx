@@ -22,7 +22,7 @@ const Tabs = ({
   setSelectedTab,
 }: Props): JSX.Element => {
   const [buttonRefs, setButtonRefs] = useState<Array<HTMLButtonElement | null>>(
-    [],
+    []
   );
 
   useEffect(() => {
@@ -70,7 +70,7 @@ const Tabs = ({
               {
                 "text-light-text/60 dark:text-dark-text/60": !isActive, // Default color for non-active tabs
                 "font-bold text-light-text/90 dark:text-dark-text/90": isActive, // Color for active tabs
-              },
+              }
             )}
             ref={(el) => (buttonRefs[i] = el)}
             onClick={() => {

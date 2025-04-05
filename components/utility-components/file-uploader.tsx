@@ -1,9 +1,9 @@
 import { useContext } from "react";
 import { Button, Input } from "@nextui-org/react";
 import { useRef, useState } from "react";
-import { nostrBuildUploadImages } from "../utility/nostr-helper-functions";
+import { nostrBuildUploadImages } from "@/utils/nostr/nostr-helper-functions";
 import FailureModal from "./failure-modal";
-import { SignerContext } from "@/utils/context/nostr-context";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 
 export const FileUploaderButton = ({
   disabled,
@@ -39,7 +39,7 @@ export const FileUploaderButton = ({
       if (isLoggedIn) {
         response = await nostrBuildUploadImages(
           imageFiles,
-          async (e) => await signer!.sign(e),
+          async (e) => await signer!.sign(e)
         );
       }
 

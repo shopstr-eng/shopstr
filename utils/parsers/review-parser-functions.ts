@@ -1,6 +1,6 @@
 export const getRatingValue = (tags: string[][], type: string): number => {
   const ratingTag = tags.find((tag) => tag[0] === "rating" && tag[2] === type);
-  return ratingTag ? parseFloat(ratingTag[1]) : 0;
+  return ratingTag ? parseFloat(ratingTag[1]!) : 0;
 };
 
 export const calculateWeightedScore = (tags: string[][]): number => {
@@ -20,7 +20,7 @@ export const calculateWeightedScore = (tags: string[][]): number => {
 
   // Calculate score for remaining ratings
   const remainingScore = ratingTags.reduce((total, ratingType) => {
-    return total + getRatingValue(tags, ratingType) * individualWeight;
+    return total + getRatingValue(tags, ratingType!) * individualWeight;
   }, 0);
 
   return thumbScore + remainingScore;

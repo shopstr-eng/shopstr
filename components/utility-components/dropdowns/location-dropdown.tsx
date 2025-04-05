@@ -4,11 +4,11 @@ import locations from "../../../public/locationSelection.json";
 
 export const locationAvatar = (location: string) => {
   const getLocationMap = () => {
-    let countries = locations.countries.map(
-      (country) => [country.country, country.iso3166] as const,
+    const countries = locations.countries.map(
+      (country) => [country.country, country.iso3166] as const
     );
-    let states = locations.states.map(
-      (state) => [state.state, state.iso3166] as const,
+    const states = locations.states.map(
+      (state) => [state.state, state.iso3166] as const
     );
     return new Map([...countries, ...states]);
   };
@@ -27,7 +27,7 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
     const headingClasses =
       "flex w-full sticky top-1 z-20 py-1.5 px-2 dark:bg-dark-bg bg-light-bg shadow-small rounded-small";
 
-    let countryOptions = (
+    const countryOptions = (
       <SelectSection
         key={"countryOptions"}
         title="Countries"
@@ -58,7 +58,7 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
       </SelectSection>
     );
 
-    let stateOptions = (
+    const stateOptions = (
       <SelectSection
         key={"stateOptions"}
         title="U.S. States"
@@ -86,7 +86,7 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
       </SelectSection>
     );
 
-    let regionalOptions = (
+    const regionalOptions = (
       <SelectSection
         key={"regionalOptions"}
         title="Regional"

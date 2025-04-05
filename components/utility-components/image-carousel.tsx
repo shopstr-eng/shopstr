@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
 import React from "react";
 import { Carousel } from "react-responsive-carousel";
 import "react-responsive-carousel/lib/styles/carousel.min.css"; // requires a loader
@@ -6,6 +5,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import { Image } from "@nextui-org/react";
 import { buildSrcSet } from "@/utils/images";
 import { useRouter } from "next/router";
+import { PREVNEXTBUTTONSTYLES } from "@/utils/STATIC-VARIABLES";
 
 interface ImageCarouselProps {
   images: string[];
@@ -18,12 +18,9 @@ export default function ImageCarousel({
   showThumbs,
 }: ImageCarouselProps) {
   const router = useRouter();
-  /** SHARED STYLES **/
-  const PREVNEXTBUTTONSTYLES =
-    "absolute z-10 top-[calc(50%-(.5*50%/2))] cursor-pointer h-[30%] w-[8%] rounded-sm bg-purple-300 opacity-20 hover:bg-purple-500 hover:opacity-80 flex items-center";
 
   const displayImages = () => {
-    let className = "flex items-center justify-center " + classname + "";
+    const className = "flex items-center justify-center " + classname + "";
     if (!images || images.length == 0)
       return [
         <div className={className} key={"image" + 0}>
