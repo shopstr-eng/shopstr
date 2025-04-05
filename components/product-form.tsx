@@ -67,6 +67,7 @@ export default function ProductForm({
   const router = useRouter();
   const [images, setImages] = useState<string[]>([]);
   const [imageError, setImageError] = useState<string | null>(null);
+  const [currentSlide, setCurrentSlide] = useState(0);
   const [pubkey, setPubkey] = useState("");
   const [relayHint, setRelayHint] = useState("");
   const [isEdit, setIsEdit] = useState(false);
@@ -219,10 +220,11 @@ export default function ProductForm({
     handleModalToggle();
     setImages([]);
     reset();
+    setCurrentSlide(0);
   };
 
-  const watchShippingOption = watch("Shipping Option"); // acts as state for shippingOption input. when shippingOption changes, this variable changes as well
-  const watchCurrency = watch("Currency"); // acts as state for currency input. when currency changes, this variable changes as well
+  const watchShippingOption = watch("Shipping Option");
+  const watchCurrency = watch("Currency");
 
   const deleteImage = (index: number) => () => {
     setImages((prevValues) => {
@@ -230,6 +232,8 @@ export default function ProductForm({
       if (index > -1) {
         updatedImages.splice(index, 1);
       }
+      const newCurrentSlide = Math.min(currentSlide, updatedImages.length - 1);
+      setCurrentSlide(newCurrentSlide >= 0 ? newCurrentSlide : 0);
       return updatedImages;
     });
   };
@@ -294,6 +298,8 @@ export default function ProductForm({
               showStatus={false}
               showIndicators={images.length > 1}
               showThumbs={images.length > 1}
+              selectedItem={currentSlide}
+              onChange={(index) => setCurrentSlide(index)}
               renderArrowPrev={(onClickHandler, hasPrev, label) =>
                 hasPrev && (
                   <button

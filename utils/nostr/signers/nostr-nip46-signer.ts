@@ -6,7 +6,7 @@ import {
   generateSecretKey,
 } from "nostr-tools";
 import { newPromiseWithTimeout } from "@/utils/timeout";
-import { hexToBytes } from "@noble/hashes/utils";
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
 import { NostrEventTemplate, NostrManager } from "@/utils/nostr/nostr-manager";
 import {
   ChallengeHandler,
@@ -91,6 +91,14 @@ export class NostrNIP46Signer implements NostrSigner {
         },
       }
     );
+  }
+
+  public toJSON(): { [key: string]: any } {
+    return {
+      type: "nip46",
+      bunker: this.bunker.url,
+      appPrivKey: bytesToHex(this.appPrivKey),
+    };
   }
 
   public static fromJSON(

@@ -10,6 +10,12 @@ export class NostrNIP07Signer implements NostrSigner {
     this.checkExtension();
   }
 
+  public toJSON(): { [key: string]: any } {
+    return {
+      type: "nip07",
+    };
+  }
+
   private checkExtension(): any {
     if (!window?.nostr) throw new Error("Nostr extension not found");
     if (!window?.nostr?.nip44) {

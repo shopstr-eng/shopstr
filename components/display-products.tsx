@@ -244,9 +244,10 @@ const DisplayProducts = ({
               <br></br>Try adding a new listing!
             </p>
           )}
-        {profileMapContext.isLoading ||
-        productEventContext.isLoading ||
-        isProductsLoading ? (
+        {!isMyListings &&
+        (profileMapContext.isLoading ||
+          productEventContext.isLoading ||
+          isProductsLoading) ? (
           <div className="mb-6 mt-6 flex items-center justify-center">
             <ShopstrSpinner />
           </div>
