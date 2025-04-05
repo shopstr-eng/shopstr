@@ -12,14 +12,15 @@ import parseTags, {
 import { SignerContext } from "@/utils/context/nostr-context";
 import Link from "next/link";
 import { nip19 } from "nostr-tools";
+import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 
 export default function Landing() {
   const router = useRouter();
   const productEventContext = useContext(ProductContext);
-
   const [parsedProducts, setParsedProducts] = useState<ProductData[]>([]);
-
+  const [isLoading, setIsLoading] = useState(true);
   const signerContext = useContext(SignerContext);
+
   useEffect(() => {
     if (router.pathname === "/" && signerContext.isLoggedIn) {
       router.push("/marketplace");
@@ -27,20 +28,38 @@ export default function Landing() {
   }, [router.pathname, signerContext]);
 
   useEffect(() => {
-    let parsedProductsArray: ProductData[] = [];
-    const products = productEventContext.productEvents;
-    products.forEach((product: any) => {
-      const parsedProduct = parseTags(product) as ProductData;
-      if (
-        parsedProduct.images.length > 0 &&
-        parsedProduct.currency &&
-        !parsedProduct.contentWarning
-      ) {
-        parsedProductsArray.push(parsedProduct);
-      }
-    });
-    setParsedProducts(parsedProductsArray);
-  }, [productEventContext.productEvents]);
+    if (!productEventContext.productEvents || productEventContext.isLoading) {
+      setIsLoading(true);
+      return;
+    }
+
+    try {
+      let parsedProductsArray: ProductData[] = [];
+      const products = productEventContext.productEvents;
+      
+      products.forEach((product: any) => {
+        try {
+          const parsedProduct = parseTags(product);
+          if (
+            parsedProduct &&
+            parsedProduct.images.length > 0 &&
+            parsedProduct.currency &&
+            !parsedProduct.contentWarning
+          ) {
+            parsedProductsArray.push(parsedProduct);
+          }
+        } catch (error) {
+          console.error("Error parsing product:", error);
+        }
+      });
+
+      setParsedProducts(parsedProductsArray);
+    } catch (error) {
+      console.error("Error processing products:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [productEventContext.productEvents, productEventContext.isLoading]);
 
   return (
     <div className="min-h-screen w-full bg-light-bg dark:bg-dark-bg">
@@ -69,40 +88,50 @@ export default function Landing() {
 
       <section className="w-full overflow-hidden bg-light-fg py-7 dark:bg-dark-fg">
         <div className="mx-auto max-w-[95vw]">
-          <motion.div
-            className="flex"
-            animate={{
-              x: ["0%", "-210%"],
-            }}
-            transition={{
-              duration: 30,
-              repeat: Infinity,
-              ease: "linear",
-            }}
-          >
-            <div className="flex gap-4 md:gap-8">
-              {[...parsedProducts].map((product, index) => (
-                <div
-                  key={`${product.id}-${index}`}
-                  className="min-w-[250px] md:min-w-[300px]"
-                >
-                  <ProductCard
-                    key={product.id + "-" + index}
-                    productData={product}
-                    onProductClick={() =>
-                      router.push(
-                        `/listing/${nip19.naddrEncode({
-                          identifier: product.d as string,
-                          pubkey: product.pubkey,
-                          kind: 30402,
-                        })}`,
-                      )
-                    }
-                  />
-                </div>
-              ))}
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <ShopstrSpinner />
             </div>
-          </motion.div>
+          ) : parsedProducts.length > 0 ? (
+            <motion.div
+              className="flex"
+              animate={{
+                x: ["0%", "-210%"],
+              }}
+              transition={{
+                duration: 30,
+                repeat: Infinity,
+                ease: "linear",
+              }}
+            >
+              <div className="flex gap-4 md:gap-8">
+                {parsedProducts.map((product, index) => (
+                  <div
+                    key={`${product.id}-${index}`}
+                    className="min-w-[250px] md:min-w-[300px]"
+                  >
+                    <ProductCard
+                      key={product.id + "-" + index}
+                      productData={product}
+                      onProductClick={() =>
+                        router.push(
+                          `/listing/${nip19.naddrEncode({
+                            identifier: product.d as string,
+                            pubkey: product.pubkey,
+                            kind: 30402,
+                          })}`,
+                        )
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          ) : (
+            <div className="text-center text-light-text dark:text-dark-text">
+              No products available at the moment.
+            </div>
+          )}
         </div>
       </section>
 
@@ -198,90 +227,40 @@ export default function Landing() {
                 <div className="mb-4 text-2xl font-bold text-shopstr-purple dark:text-shopstr-yellow md:text-3xl">
                   1
                 </div>
-                <p className="mb-5 text-sm text-light-text dark:text-dark-text md:text-base">
-                  Generate new Nostr keys or sign in with an existing pair
+                <p className="text-light-text dark:text-dark-text">
+                  Connect your Nostr account
                 </p>
-                <Image
-                  alt="Step 1"
-                  src="/sign-in-step-dark.png"
-                  width={200}
-                  height={150}
-                  className="mx-auto hidden rounded-lg dark:flex"
-                />
-                <Image
-                  alt="Step 1"
-                  src="/sign-in-step-light.png"
-                  width={200}
-                  height={150}
-                  className="mx-auto flex rounded-lg dark:hidden"
-                />
               </div>
             </div>
-            <div className="flex flex-col items-center">
-              <div className="mb-4 text-2xl font-bold text-shopstr-purple dark:text-shopstr-yellow md:text-3xl">
-                2
+            <div className="text-center">
+              <div className="flex flex-col items-center">
+                <div className="mb-4 text-2xl font-bold text-shopstr-purple dark:text-shopstr-yellow md:text-3xl">
+                  2
+                </div>
+                <p className="text-light-text dark:text-dark-text">
+                  Browse products
+                </p>
               </div>
-              <p className="mb-10 text-sm text-light-text dark:text-dark-text md:text-base">
-                Set up your profile
-              </p>
-              <Image
-                alt="Step 2"
-                src="/profile-step-dark.png"
-                width={200}
-                height={150}
-                className="mx-auto hidden rounded-lg dark:flex"
-              />
-              <Image
-                alt="Step 2"
-                src="/profile-step-light.png"
-                width={200}
-                height={150}
-                className="mx-auto flex rounded-lg dark:hidden"
-              />
             </div>
-            <div className="flex flex-col items-center">
-              <div className="mb-4 text-2xl font-bold text-shopstr-purple dark:text-shopstr-yellow md:text-3xl">
-                3
+            <div className="text-center">
+              <div className="flex flex-col items-center">
+                <div className="mb-4 text-2xl font-bold text-shopstr-purple dark:text-shopstr-yellow md:text-3xl">
+                  3
+                </div>
+                <p className="text-light-text dark:text-dark-text">
+                  Pay with Bitcoin
+                </p>
               </div>
-              <p className="mb-10 text-sm text-light-text dark:text-dark-text md:text-base">
-                List your products
-              </p>
-              <Image
-                alt="Step 3"
-                src="/listing-step-dark.png"
-                width={200}
-                height={150}
-                className="mx-auto hidden rounded-lg dark:flex"
-              />
-              <Image
-                alt="Step 3"
-                src="/listing-step-light.png"
-                width={200}
-                height={150}
-                className="mx-auto flex rounded-lg dark:hidden"
-              />
             </div>
-            <div className="flex flex-col items-center">
-              <div className="mb-4 text-2xl font-bold text-shopstr-purple dark:text-shopstr-yellow md:text-3xl">
-                4
+            <div className="text-center">
+              <div className="flex flex-col items-center">
+                <div className="mb-4 text-2xl font-bold text-shopstr-purple dark:text-shopstr-yellow md:text-3xl">
+                  4
+                </div>
+                <p className="text-light-text dark:text-dark-text">
+                  Receive your items
+                </p>
               </div>
-              <p className="mb-10 text-sm text-light-text dark:text-dark-text md:text-base">
-                Start buying and selling
-              </p>
-              <Image
-                alt="Step 4"
-                src="/payment-step-dark.png"
-                width={200}
-                height={150}
-                className="mx-auto hidden rounded-lg dark:flex"
-              />
-              <Image
-                alt="Step 4"
-                src="/payment-step-light.png"
-                width={200}
-                height={150}
-                className="mx-auto flex rounded-lg dark:hidden"
-              />
             </div>
           </div>
         </div>

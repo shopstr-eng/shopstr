@@ -14,85 +14,245 @@ import SuccessModal from "../../components/utility-components/success-modal";
 
 const Keys = () => {
   const router = useRouter();
+  const signerContext = useContext(SignerContext);
+  const relaysContext = useContext(RelaysContext);
 
   const [npub, setNPub] = useState<string>("");
   const [privateKey, setPrivateKey] = useState<string>("");
   const [passphrase, setPassphrase] = useState<string>("");
   const [viewState, setViewState] = useState<"shown" | "hidden">("hidden");
+  const [isLoading, setIsLoading] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
 
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successText, setSuccessText] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
 
-  const { newSigner } = useContext(SignerContext);
-  const relaysContext = useContext(RelaysContext);
+  useEffect(() => {
+    if (!signerContext) {
+      console.error("SignerContext not initialized");
+      setErrorMessage("Application not properly initialized. Please refresh the page.");
+      setShowFailureModal(true);
+      return;
+    }
+
+    if (!signerContext.newSigner) {
+      console.error("newSigner function not available");
+      setErrorMessage("Signer functionality not available. Please refresh the page.");
+      setShowFailureModal(true);
+      return;
+    }
+  }, [signerContext]);
 
   const saveSigner = (signer: NostrSigner) => {
-    if (
-      !relaysContext.isLoading &&
-      relaysContext.relayList.length >= 0 &&
-      relaysContext.readRelayList &&
-      relaysContext.writeRelayList
-    ) {
-      const generalRelays = relaysContext.relayList;
-      const readRelays = relaysContext.readRelayList;
-      const writeRelays = relaysContext.writeRelayList;
-      setLocalStorageDataOnSignIn({
-        signer,
-        relays: generalRelays,
-        readRelays: readRelays,
-        writeRelays: writeRelays,
-      });
-    } else {
-      setLocalStorageDataOnSignIn({
-        signer,
-      });
+    try {
+      if (
+        !relaysContext.isLoading &&
+        relaysContext.relayList.length >= 0 &&
+        relaysContext.readRelayList &&
+        relaysContext.writeRelayList
+      ) {
+        const generalRelays = relaysContext.relayList;
+        const readRelays = relaysContext.readRelayList;
+        const writeRelays = relaysContext.writeRelayList;
+        setLocalStorageDataOnSignIn({
+          signer,
+          relays: generalRelays,
+          readRelays: readRelays,
+          writeRelays: writeRelays,
+        });
+      } else {
+        setLocalStorageDataOnSignIn({
+          signer,
+        });
+      }
+    } catch (error) {
+      console.error("Error saving signer:", error);
+      setErrorMessage("Failed to save signer data");
+      setShowFailureModal(true);
     }
   };
 
   useEffect(() => {
     const fetchKeys = async () => {
-      const { nsec, npub } = await generateKeys();
-      setNPub(npub);
-      setPrivateKey(nsec);
+      try {
+        setIsLoading(true);
+        const { nsec, npub } = await generateKeys();
+        setNPub(npub);
+        setPrivateKey(nsec);
+      } catch (error) {
+        console.error("Error generating keys:", error);
+        setErrorMessage("Failed to generate keys");
+        setShowFailureModal(true);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     fetchKeys();
   }, []);
 
   const handleCopyPubkey = () => {
-    navigator.clipboard.writeText(npub);
-    setSuccessText("Public key was copied to clipboard!");
-    setShowSuccessModal(true);
-  };
-
-  const handleCopyPrivkey = () => {
-    navigator.clipboard.writeText(privateKey);
-    setSuccessText("Private key was copied to clipboard!");
-    setShowSuccessModal(true);
-  };
-
-  const handleSignIn = async () => {
-    if (passphrase === "" || passphrase === null) {
+    try {
+      navigator.clipboard.writeText(npub);
+      setSuccessText("Public key was copied to clipboard!");
+      setShowSuccessModal(true);
+    } catch (error) {
+      console.error("Error copying public key:", error);
+      setErrorMessage("Failed to copy public key");
       setShowFailureModal(true);
-    } else {
-      const { encryptedPrivKey, pubkey } = NostrNSecSigner.getEncryptedNSEC(
-        privateKey,
-        passphrase,
-      );
-      const signer = newSigner!("nsec", {
-        encryptedPrivKey: encryptedPrivKey,
-        pubkey,
-      });
-      await signer.getPubKey();
-      saveSigner(signer);
-      router.push("/marketplace");
     }
   };
 
+  const handleCopyPrivkey = () => {
+    try {
+      navigator.clipboard.writeText(privateKey);
+      setSuccessText("Private key was copied to clipboard!");
+      setShowSuccessModal(true);
+    } catch (error) {
+      console.error("Error copying private key:", error);
+      setErrorMessage("Failed to copy private key");
+      setShowFailureModal(true);
+    }
+  };
+
+  const handleSignIn = async () => {
+    if (!signerContext) {
+      setErrorMessage("Signer context not initialized. Please refresh the page.");
+      setShowFailureModal(true);
+      return;
+    }
+
+    if (!signerContext.newSigner) {
+      setErrorMessage("Signer creation function not available. Please refresh the page.");
+      setShowFailureModal(true);
+      return;
+    }
+
+    if (passphrase === "" || passphrase === null) {
+      setErrorMessage("No passphrase provided!");
+      setShowFailureModal(true);
+      return;
+    }
+
+    if (isNavigating) {
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      
+      let encryptedPrivKey, pubkey;
+      try {
+        const result = NostrNSecSigner.getEncryptedNSEC(
+          privateKey,
+          passphrase,
+        );
+        encryptedPrivKey = result.encryptedPrivKey;
+        pubkey = result.pubkey;
+      } catch (error) {
+        console.error("Error encrypting private key:", error);
+        setErrorMessage("Failed to encrypt private key. Please try again.");
+        setShowFailureModal(true);
+        return;
+      }
+
+      let signer;
+      try {
+        if (typeof signerContext.newSigner !== 'function') {
+          throw new Error("newSigner is not a function");
+        }
+        
+        signer = signerContext.newSigner("nsec", {
+          encryptedPrivKey: encryptedPrivKey,
+          pubkey,
+        });
+      } catch (error) {
+        console.error("Error creating signer:", error);
+        setErrorMessage("Failed to create signer. Please try again.");
+        setShowFailureModal(true);
+        return;
+      }
+
+      try {
+        if (!signer || typeof signer.getPubKey !== 'function') {
+          throw new Error("Signer or getPubKey is not available");
+        }
+        await signer.getPubKey();
+      } catch (error) {
+        console.error("Error getting public key:", error);
+        setErrorMessage("Failed to get public key. Please try again.");
+        setShowFailureModal(true);
+        return;
+      }
+
+      saveSigner(signer);
+      
+      if (router.pathname !== "/marketplace") {
+        setIsNavigating(true);
+        try {
+          if (router.asPath === "/marketplace") {
+            console.log("Already on marketplace page");
+            return;
+          }
+          
+          await router.replace("/marketplace");
+        } catch (error: any) {
+          if (error?.cancelled) {
+            console.log("Navigation cancelled");
+          } else {
+            console.error("Navigation error:", error);
+            setErrorMessage("Navigation failed. Please try again.");
+            setShowFailureModal(true);
+          }
+        } finally {
+          setIsNavigating(false);
+        }
+      }
+    } catch (error) {
+      console.error("Error during sign in:", error);
+      setErrorMessage("Failed to sign in. Please try again.");
+      setShowFailureModal(true);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleRouteChangeError = (err: any) => {
+      if (err.cancelled) {
+        console.log("Route change cancelled");
+      } else {
+        console.error("Route change error:", err);
+        setErrorMessage("Navigation failed. Please try again.");
+        setShowFailureModal(true);
+      }
+    };
+
+    router.events.on("routeChangeError", handleRouteChangeError);
+
+    return () => {
+      router.events.off("routeChangeError", handleRouteChangeError);
+    };
+  }, [router]);
+
+  if (isLoading) {
+    return (
+      <div className="flex h-[100vh] items-center justify-center bg-light-bg dark:bg-dark-bg">
+        <div className="text-center">
+          <div className="mb-4 text-xl text-light-text dark:text-dark-text">
+            Generating your keys...
+          </div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-shopstr-purple dark:border-shopstr-yellow mx-auto"></div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
-      <div className="f3 books about my learnings along the way. Tweets about the career path of entrepreneurship & the buslex h-[100vh] flex-col bg-light-bg pt-24 dark:bg-dark-bg">
+      <div className="flex h-[100vh] flex-col bg-light-bg pt-24 dark:bg-dark-bg">
         <div className="p-4">
           <Card>
             <CardBody>
@@ -173,6 +333,7 @@ const Keys = () => {
                 <Button
                   className={SHOPSTRBUTTONCLASSNAMES}
                   onClick={handleSignIn}
+                  isLoading={isLoading || isNavigating}
                 >
                   Sign In
                 </Button>
@@ -182,7 +343,7 @@ const Keys = () => {
         </div>
       </div>
       <FailureModal
-        bodyText="No passphrase provided!"
+        bodyText={errorMessage || "No passphrase provided!"}
         isOpen={showFailureModal}
         onClose={() => setShowFailureModal(false)}
       />

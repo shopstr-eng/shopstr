@@ -30,11 +30,13 @@ interface SignerContextInterface {
 }
 
 export const SignerContext = createContext({
-  signer: {} as NostrSigner,
+  signer: undefined as NostrSigner | undefined,
   isLoggedIn: false,
   pubkey: "",
   npub: "",
-  newSigner: {},
+  newSigner: (type: string, args: any) => {
+    throw new Error("SignerContext not initialized. Please ensure you are using this context within a SignerContextProvider.");
+  },
 } as SignerContextInterface);
 
 interface NostrContextInterface {
@@ -198,15 +200,17 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
       case "nip46": {
         return new NostrNIP46Signer(args, challengeHandler);
       }
+      case "nip07": {
+        return new NostrNIP07Signer(challengeHandler);
+      }
       case "nsec": {
         return new NostrNSecSigner(args, challengeHandler);
       }
-      default:
-      case "nip07": {
-        return new NostrNIP07Signer(args);
+      default: {
+        throw new Error(`Unknown signer type: ${type}`);
       }
     }
-  }, []);
+  }, [challengeHandler]);
 
   return (
     <>

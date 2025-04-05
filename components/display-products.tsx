@@ -203,12 +203,31 @@ const DisplayProducts = ({
   };
 
   const displayProductCard = (productData: ProductData, index: number) => {
-    if (focusedPubkey && productData.pubkey !== focusedPubkey) return;
-    if (!productSatisfiesAllFilters(productData)) return;
-    if (!productData.currency) return;
-    if (productData.images.length === 0) return;
-    if (productData.contentWarning) return;
+    // Add debugging to see which condition is filtering out products
+    console.log(`Product ${index}:`, productData.title);
+    
+    if (focusedPubkey && productData.pubkey !== focusedPubkey) {
+      console.log(`Product ${index} filtered: pubkey mismatch`);
+      return;
+    }
+    if (!productSatisfiesAllFilters(productData)) {
+      console.log(`Product ${index} filtered: doesn't satisfy filters`);
+      return;
+    }
+    if (!productData.currency) {
+      console.log(`Product ${index} filtered: no currency`);
+      return;
+    }
+    if (!productData.images || productData.images.length === 0) {
+      console.log(`Product ${index} filtered: no images`);
+      return;
+    }
+    if (productData.contentWarning) {
+      console.log(`Product ${index} filtered: has content warning`);
+      return;
+    }
 
+    console.log(`Product ${index} passed all filters and will be displayed`);
     return (
       <ProductCard
         key={productData.id + "-" + index}

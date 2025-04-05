@@ -1,12 +1,11 @@
 /** @type {import('next').NextConfig} */
 
-import withPWA from "next-pwa";
-
-const config = withPWA({
+const withPWA = require("next-pwa")({
   dest: "public",
   register: true,
   skipWaiting: true,
   disable: process.env.NODE_ENV === "development",
+  buildExcludes: [/middleware-manifest\.json$/],
   runtimeCaching: [
     {
       // Cache static assets
@@ -35,7 +34,7 @@ const config = withPWA({
     },
     {
       // Cache other requests
-      urlPattern: /^https?.*/,
+      urlPattern: /^https?.*/, 
       handler: "NetworkFirst",
       options: {
         cacheName: "general-cache",
@@ -52,6 +51,10 @@ const config = withPWA({
 const nextConfig = {
   output: "standalone",
   reactStrictMode: true,
+  experimental: {
+    optimizeCss: true,
+    optimizePackageImports: ["@tremor/react"],
+  },
   images: {
     domains: [
       "www.google.com",
@@ -65,8 +68,52 @@ const nextConfig = {
       "www.reddit.com",
       "www.quora.com",
       "www.wikipedia.org",
+      "i.imgur.com",
+      "imgur.com",
+      "i.ibb.co",
+      "ibb.co",
     ],
+  },
+  compiler: {
+    styledComponents: true,
+  },
+  webpack: (config, { dev, isServer }) => {
+    if (dev && !isServer) {
+      config.watchOptions = {
+        ignored: ['**/.git/**', '**/node_modules/**'],
+        aggregateTimeout: 100,  // Reduced from 300 to 100
+        poll: 500,  // Reduced from 1000 to 500
+      };
+      
+      // Add hot module replacement settings
+      config.optimization = {
+        ...config.optimization,
+        runtimeChunk: 'single',
+      };
+    }
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+      };
+      
+      config.module.rules.push({
+        test: /node_modules\/@headlessui\/react/,
+        use: {
+          loader: 'babel-loader',
+          options: {
+            presets: ['next/babel'],
+            plugins: [
+              ['@babel/plugin-transform-runtime', { regenerator: true }],
+            ],
+          },
+        },
+      });
+    }
+    return config;
   },
 };
 
-export default config(nextConfig);
+module.exports = withPWA(nextConfig);
