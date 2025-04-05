@@ -1091,3 +1091,22 @@ export function withBlastr(relays: string[]): string[] {
 export function getDefaultMint(): string {
   return "https://mint.minibits.cash/Bitcoin";
 }
+
+export async function verifyNip05Identifier(nip05: string, pubkey: string): Promise<boolean> {
+  try {
+    const [username, domain] = nip05.split('@');
+    if (!username || !domain) return false;
+
+    const url = `https://${domain}/.well-known/nostr.json?name=${username}`;
+    const response = await fetch(url);
+    if (!response.ok) return false;
+
+    const data = await response.json();
+    const names = data.names || {};
+    
+    return names[username] === pubkey || names[username.toLowerCase()] === pubkey;
+  } catch (error) {
+    // Silently handle errors to avoid console spam
+    return false;
+  }
+}

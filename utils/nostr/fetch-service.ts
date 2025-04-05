@@ -18,6 +18,7 @@ import { ChatsMap } from "@/utils/context/context";
 import {
   getLocalStorageData,
   deleteEvent,
+  verifyNip05Identifier,
 } from "@/utils/nostr/nostr-helper-functions";
 import {
   ProductData,
@@ -307,11 +308,17 @@ export const fetchProfile = async (
           // update only if the profile is not already set or the new event is newer
           try {
             const content = JSON.parse(event.content);
-            profileMap.set(event.pubkey, {
+            const profile = {
               pubkey: event.pubkey,
               created_at: event.created_at,
               content: content,
-            });
+              nip05Verified: false,
+            };
+            if (content.nip05) {
+              profile.nip05Verified = await verifyNip05Identifier(content.nip05, event.pubkey);
+            }
+
+            profileMap.set(event.pubkey, profile);
           } catch (error) {
             console.error(
               `Failed parse profile for pubkey: ${event.pubkey}, ${event.content}`,
