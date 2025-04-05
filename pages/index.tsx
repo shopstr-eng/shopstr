@@ -79,10 +79,12 @@ export default function Landing() {
               duration: 30,
               repeat: Infinity,
               ease: "linear",
+              restSpeed: 0.001,
+              restDelta: 0.001,
             }}
           >
             <div className="flex gap-4 md:gap-8">
-              {[...parsedProducts].map((product, index) => (
+              {parsedProducts.slice(0, 21).map((product, index) => (
                 <div
                   key={`${product.id}-${index}`}
                   className="min-w-[250px] md:min-w-[300px]"

@@ -1,13 +1,20 @@
 /** @type {import('next').NextConfig} */
 
-const withPWA = require("next-pwa");
+const withPWA = require("next-pwa")({
+  dest: "public",
+  register: true,
+  skipWaiting: true,
+  sw: {
+    swSrc: "./public/service-worker.js",
+    swDest: "service-worker.js",
+  },
+});
 
 const nextConfig = {
   output: "standalone",
+  reactStrictMode: true,
   pwa: {
     dest: "public",
-    register: true,
-    skipWaiting: true,
     disable: process.env.NODE_ENV === "development",
     runtimeCaching: [
       {
@@ -50,7 +57,6 @@ const nextConfig = {
       },
     ],
   },
-  reactStrictMode: true,
   images: {
     domains: [
       "www.google.com",
