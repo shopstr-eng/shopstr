@@ -32,6 +32,7 @@ export const ProfileAvatar = ({
       name = name.length > 20 ? name.slice(0, 20) + "..." : name;
       return name;
     });
+
     setPfp(
       profile && profile.content.picture
         ? profile.content.picture

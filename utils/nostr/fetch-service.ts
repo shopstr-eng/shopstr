@@ -18,12 +18,8 @@ import { ChatsMap } from "@/utils/context/context";
 import {
   getLocalStorageData,
   deleteEvent,
-<<<<<<< HEAD:pages/api/nostr/fetch-service.ts
   verifyNip05Identifier,
-} from "@/components/utility/nostr-helper-functions";
-=======
 } from "@/utils/nostr/nostr-helper-functions";
->>>>>>> origin/main:utils/nostr/fetch-service.ts
 import {
   ProductData,
   parseTags,

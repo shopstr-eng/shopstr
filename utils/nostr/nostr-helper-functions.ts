@@ -1104,7 +1104,6 @@ export async function verifyNip05Identifier(nip05: string, pubkey: string): Prom
     const data = await response.json();
     const names = data.names || {};
     
-    // Check both original and lowercase username
     return names[username] === pubkey || names[username.toLowerCase()] === pubkey;
   } catch (error) {
     // Silently handle errors to avoid console spam
