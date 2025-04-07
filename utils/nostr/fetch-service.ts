@@ -53,8 +53,7 @@ export const fetchAllPosts = async (
   productEvents: NostrEvent[];
   profileSetFromProducts: Set<string>;
 }> => {
-  // TODO refactor this to not use new Promise
-  return new Promise(async function (resolve, reject) {
+  
     try {
       let deletedProductsInCacheSet: Set<any> = new Set(); // used to remove deleted items from cache
       try {
@@ -97,18 +96,19 @@ export const fetchAllPosts = async (
         }
       }
 
-      resolve({
-        productEvents: productArrayFromRelay,
-        profileSetFromProducts,
-      });
-
       editProductContext(productArrayFromRelay, false);
       removeProductFromCache(Array.from(deletedProductsInCacheSet));
+
+      return{
+        productEvents: productArrayFromRelay,
+        profileSetFromProducts,
+      }
+
     } catch (error) {
-      reject(error);
+      throw error;
     }
-  });
-};
+  };
+
 
 export const fetchCart = async (
   nostr: NostrManager,
