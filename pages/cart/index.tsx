@@ -413,7 +413,7 @@ export default function Component() {
                   Your cart is empty
                 </h2>
                 <p className="mb-6 text-center text-gray-500 dark:text-gray-400 max-w-md">
-                  Looks like you haven't added any items to your cart yet.
+                  Looks like you haven&apos;t added any items to your cart yet.
                 </p>
                 <Button
                   className={SHOPSTRBUTTONCLASSNAMES}
