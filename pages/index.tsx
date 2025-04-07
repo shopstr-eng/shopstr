@@ -141,7 +141,7 @@ export default function Landing() {
   return (
     <ThemeProvider theme={shopstrTheme}>
       <Box sx={{ bgcolor: 'background.default', minHeight: '100vh' }}>
-        {/* Header */}
+        {/* Header - Made sticky and responsive */}
         <AppBar position="sticky" color="transparent" elevation={0}>
           <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 6 } }}>
             <motion.div whileHover={{ scale: 1.05 }}>
@@ -162,7 +162,7 @@ export default function Landing() {
           </Toolbar>
         </AppBar>
 
-        {/* Hero Section */}
+        {/* Hero Section - Fully responsive */}
         <Container maxWidth="lg" sx={{ py: 8, textAlign: 'center' }}>
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -452,99 +452,99 @@ export default function Landing() {
                 }
               ].map((feature, index) => (
                 <Grid item xs={12} md={6} component="div" key={feature.title}>
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.5, delay: index * 0.1 }}
-                      whileHover={{ y: -5 }}
-                    >
-                      <Paper
-                        elevation={6}
-                        sx={{
-                          p: 4,
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: index * 0.1 }}
+                    whileHover={{ y: -5 }}
+                  >
+                    <Paper
+                      elevation={6}
+                      sx={{
+                        p: 4,
+                        height: '100%',
+                        borderRadius: 4,
+                        background: darkMode
+                          ? 'rgba(18, 18, 18, 0.7)'
+                          : 'rgba(255, 255, 255, 0.9)',
+                        backdropFilter: 'blur(10px)',
+                        border: '1px solid',
+                        borderColor: darkMode
+                          ? 'rgba(255, 255, 255, 0.1)'
+                          : 'rgba(0, 0, 0, 0.05)',
+                        transition: 'all 0.3s ease',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        '&::before': {
+                          content: '""',
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '6px',
                           height: '100%',
-                          borderRadius: 4,
-                          background: darkMode
-                            ? 'rgba(18, 18, 18, 0.7)'
-                            : 'rgba(255, 255, 255, 0.9)',
-                          backdropFilter: 'blur(10px)',
-                          border: '1px solid',
-                          borderColor: darkMode
-                            ? 'rgba(255, 255, 255, 0.1)'
-                            : 'rgba(0, 0, 0, 0.05)',
-                          transition: 'all 0.3s ease',
-                          position: 'relative',
-                          overflow: 'hidden',
-                          '&::before': {
-                            content: '""',
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            width: '6px',
-                            height: '100%',
-                            backgroundColor: feature.color,
-                          }
-                        }}
-                      >
+                          backgroundColor: feature.color,
+                        }
+                      }}
+                    >
+                      <Box sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        mb: 2,
+                        gap: 2
+                      }}>
                         <Box sx={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          mb: 2,
-                          gap: 2
+                          p: 1.5,
+                          borderRadius: '12px',
+                          bgcolor: `${feature.color}20`,
+                          color: feature.color,
+                          display: 'flex'
                         }}>
-                          <Box sx={{
-                            p: 1.5,
-                            borderRadius: '12px',
-                            bgcolor: `${feature.color}20`,
-                            color: feature.color,
-                            display: 'flex'
-                          }}>
-                            {feature.icon}
-                          </Box>
-                          <Typography
-                            variant="h5"
-                            gutterBottom
-                            sx={{
-                              fontWeight: 700,
-                              color: 'text.primary',
-                              mb: 0
-                            }}
-                          >
-                            {feature.title}
-                          </Typography>
+                          {feature.icon}
                         </Box>
                         <Typography
-                          variant="body1"
-                          paragraph
+                          variant="h5"
+                          gutterBottom
                           sx={{
-                            color: 'text.secondary',
-                            mb: 3
+                            fontWeight: 700,
+                            color: 'text.primary',
+                            mb: 0
                           }}
                         >
-                          {feature.content}
+                          {feature.title}
                         </Typography>
-                        <Box sx={{
-                          display: 'flex',
-                          flexWrap: 'wrap',
-                          gap: 1,
+                      </Box>
+                      <Typography
+                        variant="body1"
+                        paragraph
+                        sx={{
+                          color: 'text.secondary',
                           mb: 3
-                        }}>
-                          {feature.features.map(tag => (
-                            <Chip
-                              key={tag}
-                              label={tag}
-                              size="small"
-                              sx={{
-                                bgcolor: `${feature.color}15`,
-                                color: feature.color,
-                                borderRadius: '4px',
-                                fontWeight: 500
-                              }}
-                            />
-                          ))}
-                        </Box>
-                      </Paper>
-                    </motion.div>
+                        }}
+                      >
+                        {feature.content}
+                      </Typography>
+                      <Box sx={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 1,
+                        mb: 3
+                      }}>
+                        {feature.features.map(tag => (
+                          <Chip
+                            key={tag}
+                            label={tag}
+                            size="small"
+                            sx={{
+                              bgcolor: `${feature.color}15`,
+                              color: feature.color,
+                              borderRadius: '4px',
+                              fontWeight: 500
+                            }}
+                          />
+                        ))}
+                      </Box>
+                    </Paper>
+                  </motion.div>
                 </Grid>
               ))}
             </Grid>
@@ -762,19 +762,7 @@ export default function Landing() {
             : 'linear-gradient(135deg, #9c27b0 0%, #6a1b9a 100%)',
           color: 'white',
         }}>
-          {/* Decorative background elements */}
-          <Box sx={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            opacity: 0.05,
-            background: 'url("/pattern-bg.png")',
-            backgroundSize: 'cover',
-            zIndex: 1
-          }} />
-
+          
           {/* Animated shape */}
           <Box sx={{
             position: 'absolute',
@@ -874,24 +862,9 @@ export default function Landing() {
                         '&:hover': { bgcolor: '#f3e5f5' },
                       }}
                     >
-                      Start Trading Now
+                      Join Now
                     </Button>
                   </motion.div>
-                </motion.div>
-              </Grid>
-              <Grid item xs={12} md={5}>
-                <motion.div
-                  initial={{ opacity: 0, x: 20 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.6 }}
-                >
-                  <Image
-                    src="/free-market-illustration.png"
-                    alt="Free Market Revolution"
-                    width={500}
-                    height={500}
-                    style={{ maxWidth: '100%', borderRadius: '8px' }}
-                  />
                 </motion.div>
               </Grid>
             </Grid>
