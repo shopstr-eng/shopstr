@@ -47,6 +47,7 @@ export const ProfileWithDropdown = ({
   const [displayName, setDisplayName] = useState("");
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [isNPubCopied, setIsNPubCopied] = useState(false);
+  const [isNip05Verified, setIsNip05Verified] = useState(false);
   const profileContext = useContext(ProfileMapContext);
   const npub = pubkey ? nip19.npubEncode(pubkey) : "";
   const router = useRouter();
@@ -55,19 +56,19 @@ export const ProfileWithDropdown = ({
     const profileMap = profileContext.profileData;
     const profile = profileMap.has(pubkey) ? profileMap.get(pubkey) : undefined;
     setDisplayName(() => {
-      let displayName =
-        profile && profile.content.name ? profile.content.name : npub;
-      displayName =
-        displayName.length > 15
-          ? displayName.slice(0, 15) + "..."
-          : displayName;
-      return displayName;
+      let name = profile && profile.content.name ? profile.content.name : npub;
+      if (profile?.content?.nip05 && profile.nip05Verified) {
+        name = profile.content.nip05;
+      }
+      name = name.length > 15 ? name.slice(0, 15) + "..." : name;
+      return name;
     });
     setPfp(
       profile && profile.content && profile.content.picture
         ? profile.content.picture
         : `https://robohash.org/${pubkey}`
     );
+    setIsNip05Verified(profile?.nip05Verified || false);
   }, [profileContext, pubkey, npub]);
 
   const DropDownItems: {
@@ -179,7 +180,9 @@ export const ProfileWithDropdown = ({
             }}
             className={"transition-transform"}
             classNames={{
-              name: `overflow-hidden text-ellipsis whitespace-nowrap text-light-text dark:text-dark-text hidden ${nameClassname}`,
+              name: `overflow-hidden text-ellipsis whitespace-nowrap text-light-text dark:text-dark-text hidden ${nameClassname} ${
+                isNip05Verified ? "text-shopstr-purple dark:text-shopstr-yellow" : ""
+              }`,
               base: `${baseClassname}`,
             }}
             name={displayName}
