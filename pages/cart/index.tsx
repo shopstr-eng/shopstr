@@ -405,8 +405,8 @@ export default function Component() {
               </>
             ) : (
               <div className="flex flex-col items-center min-h-[60vh] justify-center py-16 rounded-lg border border-gray-300 shadow-sm dark:border-gray-700 dark:shadow-none">
-                <div className="mb-8 rounded-full p-6 bg-purple-600 flex items-center justify-center">
-                  <ShoppingBagIcon className="h-16 w-16 text-yellow-400" />
+                <div className="mb-8 rounded-full p-6 bg-gray-100 border border-gray-300 dark:bg-gray-700 dark:border-gray-600 flex items-center justify-center">
+                  <ShoppingBagIcon className="h-16 w-16 text-gray-800 dark:text-gray-200" />
                 </div>
 
                 <h2 className="mb-2 text-3xl font-bold text-center text-light-text dark:text-dark-text">

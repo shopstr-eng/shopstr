@@ -190,7 +190,7 @@ const PreferencesPage = () => {
   return (
     <>
       <div className="flex min-h-screen flex-col bg-light-bg pb-6 pt-24 dark:bg-dark-bg">
-        <div className="px-4">
+        <div className="px-4 mx-auto">
           <SettingsBreadCrumbs />
           <span className="my-4 flex  text-2xl font-bold text-light-text dark:text-dark-text">
             Mint
