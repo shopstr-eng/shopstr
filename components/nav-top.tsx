@@ -1,117 +1,84 @@
 import React, { useContext, useEffect, useState } from "react";
-import useNavigation from "@/components/hooks/use-navigation";
+import { useRouter } from "next/router";
 import { Button, Image, useDisclosure } from "@nextui-org/react";
-import { Bars4Icon } from "@heroicons/react/24/outline";
-import { countNumberOfUnreadMessagesFromChatsContext } from "@/utils/messages/utils";
+import { Bars4Icon, ShoppingCartIcon } from "@heroicons/react/24/outline";
 import { ChatsContext, ShopMapContext } from "@/utils/context/context";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { db } from "@/utils/nostr/cache-service";
 import { useLiveQuery } from "dexie-react-hooks";
-import { SignerContext } from "@/components/utility-components/nostr-context-provider";
-import { useRouter } from "next/router";
-import SignInModal from "./sign-in/SignInModal";
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
+import SignInModal from "./sign-in/SignInModal";
 import { ShopSettings } from "../utils/types/types";
+import { countNumberOfUnreadMessagesFromChatsContext } from "@/utils/messages/utils";
+import cn from "classnames";
 
-const TopNav = ({
-  setFocusedPubkey,
-  setSelectedSection,
-}: {
+interface TopNavProps {
   setFocusedPubkey: (value: string) => void;
   setSelectedSection: (value: string) => void;
-}) => {
-  const { isHomeActive, isProfileActive } = useNavigation();
-  const router = useRouter();
+}
 
+const TopNav: React.FC<TopNavProps> = ({ setFocusedPubkey, setSelectedSection }) => {
+  const [shopLogoURL, setShopLogoURL] = useState("");
+  const [shopName, setShopName] = useState("Shopstr"); // default brand name
+  const [cartQuantity, setCartQuantity] = useState(0);
+  const [unreadMsgCount, setUnreadMsgCount] = useState(0);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { isOpen, onOpen, onClose } = useDisclosure();
+
+  const { isLoggedIn: signedIn, pubkey: userPubkey } = useContext(SignerContext);
   const chatsContext = useContext(ChatsContext);
   const shopMapContext = useContext(ShopMapContext);
 
-  const [unreadMsgCount, setUnreadMsgCount] = useState(0);
-  const [cartQuantity, setCartQuantity] = useState(0);
-  const { isOpen, onOpen, onClose } = useDisclosure();
-  const { isLoggedIn: signedIn, pubkey: userPubkey } =
-    useContext(SignerContext);
-
-  const [shopLogoURL, setShopLogoURL] = useState("");
-  const [shopName, setShopName] = useState("");
-
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
+  const router = useRouter();
   const liveChatMessagesFromCache = useLiveQuery(async () => {
-    if (db) {
-      await db.table("chatMessages").toArray();
-    }
+    if (db) return db.table("chatMessages").toArray();
   });
 
+  // Fetch cart quantity from localStorage
   useEffect(() => {
-    const fetchAndUpdateCartQuantity = async () => {
+    const fetchAndUpdateCartQuantity = () => {
       const cartList = localStorage.getItem("cart")
         ? JSON.parse(localStorage.getItem("cart") as string)
         : [];
-      if (cartList) {
-        setCartQuantity(cartList.length);
-      }
+      setCartQuantity(cartList?.length || 0);
     };
 
     fetchAndUpdateCartQuantity();
-
-    const interval = setInterval(() => {
-      fetchAndUpdateCartQuantity();
-    }, 1000);
-
+    const interval = setInterval(() => fetchAndUpdateCartQuantity(), 1000);
     return () => clearInterval(interval);
   }, []);
 
+  // Count unread messages
   useEffect(() => {
-    const getUnreadMessages = async () => {
-      const unreadMsgCount = await countNumberOfUnreadMessagesFromChatsContext(
-        chatsContext.chatsMap
-      );
-      setUnreadMsgCount(unreadMsgCount);
-    };
-    getUnreadMessages();
+    (async () => {
+      const count = await countNumberOfUnreadMessagesFromChatsContext(chatsContext.chatsMap);
+      setUnreadMsgCount(count);
+    })();
   }, [chatsContext, liveChatMessagesFromCache]);
 
+  // Fetch brand information based on router pathname
   useEffect(() => {
-    const npub = router.pathname
-      .split("/")
-      .find((segment) => segment.includes("npub"));
-    if (
-      npub &&
-      shopMapContext.shopData.has(npub) &&
-      typeof shopMapContext.shopData.get(npub) != "undefined"
-    ) {
-      const shopSettings: ShopSettings | undefined =
-        shopMapContext.shopData.get(npub);
+    const npub = router.pathname.split("/").find((segment) => segment.includes("npub"));
+    if (npub && shopMapContext.shopData.has(npub)) {
+      const shopSettings: ShopSettings | undefined = shopMapContext.shopData.get(npub);
       if (shopSettings) {
         setShopLogoURL(shopSettings.content.ui.picture);
         setShopName(shopSettings.content.name);
       }
-    } else if (
-      router.pathname.includes("my-listings") &&
-      userPubkey &&
-      shopMapContext.shopData.has(userPubkey) &&
-      typeof shopMapContext.shopData.get(userPubkey) != "undefined"
-    ) {
-      const shopSettings: ShopSettings | undefined =
-        shopMapContext.shopData.get(userPubkey);
+    } else if (router.pathname.includes("my-listings") && userPubkey && shopMapContext.shopData.has(userPubkey)) {
+      const shopSettings: ShopSettings | undefined = shopMapContext.shopData.get(userPubkey);
       if (shopSettings) {
         setShopLogoURL(shopSettings.content.ui.picture);
         setShopName(shopSettings.content.name);
       }
     } else {
       setShopLogoURL("");
-      setShopName("");
+      setShopName("Shopstr");
     }
   }, [router.pathname, shopMapContext, userPubkey]);
 
-  const handleRoute = (path: string) => {
-    if (signedIn) {
-      router.push(path);
-      setIsMobileMenuOpen(false);
-    } else {
-      onOpen();
-    }
-  };
+  // Helpers to determine active state based on current route
+  const isActive = (path: string) => router.pathname.startsWith(path);
 
   const handleHomeClick = () => {
     setFocusedPubkey("");
@@ -120,162 +87,188 @@ const TopNav = ({
     setIsMobileMenuOpen(false);
   };
 
+  const handleRoute = (path: string) => {
+    if (signedIn) {
+      router.push(path);
+      setIsMobileMenuOpen(false);
+    } else {
+      onOpen(); // open sign-in modal
+    }
+  };
+
+  // Mobile menu component with active styling
   const MobileMenu = () => (
-    <div className="absolute left-0 top-full w-full bg-light-fg shadow-lg dark:bg-dark-fg">
-      <Button
-        className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+    <div className="absolute inset-x-0 top-full z-50 bg-white dark:bg-dark-fg shadow-md flex flex-col">
+      <button
+        className={cn("px-12 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-800", {
+          "text-purple-700 font-bold": isActive("/marketplace"),
+        })}
         onClick={handleHomeClick}
       >
         Marketplace
-      </Button>
-      <Button
-        className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+      </button>
+      <button
+        className={cn("px-12 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-800", {
+          "text-purple-700 font-bold": isActive("/orders"),
+        })}
         onClick={() => handleRoute("/orders")}
       >
         Orders {unreadMsgCount > 0 && `(${unreadMsgCount})`}
-      </Button>
-      <Button
-        className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+      </button>
+      <button
+        className={cn("px-12 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-800", {
+          "text-purple-700 font-bold": isActive("/wallet"),
+        })}
         onClick={() => handleRoute("/wallet")}
       >
         Wallet
-      </Button>
-      <Button
-        className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+      </button>
+      <button
+        className={cn("px-12 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-800", {
+          "text-purple-700 font-bold": isActive("/my-listings"),
+        })}
         onClick={() => handleRoute("/my-listings")}
       >
         My Listings
-      </Button>
-      <Button
-        className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+      </button>
+      <button
+        className={cn("px-12 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-800", {
+          "text-purple-700 font-bold": isActive("/cart"),
+        })}
         onClick={() => handleRoute("/cart")}
       >
         Cart {cartQuantity > 0 && `(${cartQuantity})`}
-      </Button>
+      </button>
     </div>
   );
 
   return (
-    <div className="fixed top-0 z-50 w-full border-b border-zinc-200 bg-light-fg shadow-lg dark:border-zinc-800 dark:bg-dark-fg">
-      <div className="flex items-center justify-between py-2 pr-4">
-        <div className="flex items-center">
-          <Button
-            onClick={handleHomeClick}
-            className={`flex items-center bg-transparent text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text`}
-          >
-            <Image
-              alt="Shopstr logo"
-              height={40}
-              radius="sm"
-              src={shopLogoURL != "" ? shopLogoURL : "/shopstr-2000x2000.png"}
-              width={40}
+    <nav className="fixed top-0 z-50 w-full bg-white dark:bg-dark-fg border-b dark:border-gray-700 shadow-sm">
+      <div className="mx-auto flex items-center justify-between py-3 px-4">
+        {/* Left section: brand */}
+        <div className="flex items-center space-x-2">
+          <button onClick={handleHomeClick} className="flex items-center focus:outline-none">
+          <Image
+            alt="Shopstr logo"
+            src={shopLogoURL !== "" ? shopLogoURL : "/shopstr-2000x2000.png"}
+            width={52}
+            height={52}
+            radius="sm"
+            className="object-cover"
             />
             <span
-              className={`ml-2 text-xl md:flex ${
-                isHomeActive ? "font-bold" : ""
-              }`}
+              className={cn("ml-2 text-lg font-bold transition-colors duration-200 rounded p-1", {
+              })}
             >
-              {shopName != "" ? shopName : "Shopstr"}
+              {shopName !== "" ? shopName : "Shopstr"}
             </span>
-          </Button>
+          </button>
         </div>
-        <div className="flex flex-row items-center md:hidden">
+
+        {/* Desktop nav (hidden on mobile) */}
+        <div className="hidden md:flex items-center space-x-6">
           <Button
-            className="bg-transparent"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className={cn("bg-transparent hover:text-purple-700 dark:hover:text-accent-dark-text focus:outline-none", {
+              "border border-purple-500/30 rounded-lg": isActive("/marketplace"),
+            })}
+            onClick={handleHomeClick}
           >
-            <Bars4Icon className="h-6 w-6 text-light-text dark:text-dark-text" />
+            Marketplace
+          </Button>
+          <Button
+            className={cn("bg-transparent hover:text-purple-700 dark:hover:text-accent-dark-text focus:outline-none", {
+              "border border-purple-500/30 rounded-lg": isActive("/orders"),
+            })}
+            onClick={() => handleRoute("/orders")}
+          >
+            Orders {unreadMsgCount > 0 && `(${unreadMsgCount})`}
+          </Button>
+          <Button
+            className={cn("bg-transparent hover:text-purple-700 dark:hover:text-accent-dark-text focus:outline-none", {
+              "border border-purple-500/30 rounded-lg": isActive("/wallet"),
+            })}
+            onClick={() => handleRoute("/wallet")}
+          >
+            Wallet
+          </Button>
+          <Button
+            className={cn("bg-transparent hover:text-purple-700 dark:hover:text-accent-dark-text focus:outline-none", {
+              "border border-purple-500/30 rounded-lg": isActive("/my-listings"),
+            })}
+            onClick={() => handleRoute("/my-listings")}
+          >
+            My Listings
+          </Button>
+          <Button
+            className={cn("bg-transparent hover:text-purple-700 dark:hover:text-accent-dark-text focus:outline-none relative", {
+              "border border-purple-500/30 rounded-lg": isActive("/cart"),
+            })}
+            onClick={() => handleRoute("/cart")}
+          >
+            <div className="flex items-center">
+              <ShoppingCartIcon className="h-5 w-5 mr-1" />
+              Cart
+              {cartQuantity > 0 && (
+                <span className="ml-1 rounded-full bg-purple-600 px-2 py-0.5 text-xs text-white">
+                  {cartQuantity}
+                </span>
+              )}
+            </div>
           </Button>
           {signedIn ? (
             <ProfileWithDropdown
               pubkey={userPubkey!}
-              baseClassname="w-full dark:hover:shopstr-yellow-light rounded-3xl hover:scale-105 hover:bg-light-bg hover:shadow-lg dark:hover:bg-dark-bg"
+              baseClassname="hover:scale-105"
               dropDownKeys={[
                 "shop_settings",
                 "user_profile",
                 "settings",
                 "logout",
               ]}
-              nameClassname="md:block"
             />
           ) : (
             <Button
               onClick={onOpen}
-              className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+              className="bg-transparent hover:text-purple-700 dark:hover:text-accent-dark-text focus:outline-none"
             >
               Sign In
             </Button>
           )}
         </div>
-        <div className="hidden items-center font-bold text-light-text dark:text-dark-text md:flex">
-          <Button
-            className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-            onClick={handleHomeClick}
+
+        {/* Mobile: hamburger + optional user sign in */}
+        <div className="flex items-center space-x-2 md:hidden">
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="focus:outline-none"
           >
-            Marketplace
-          </Button>
-          |
-          <Button
-            className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-            onClick={() => handleRoute("/orders")}
-          >
-            Orders {unreadMsgCount > 0 && `(${unreadMsgCount})`}
-          </Button>
-          |
-          <Button
-            className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-            onClick={() => handleRoute("/wallet")}
-          >
-            Wallet
-          </Button>
-          |
-          <Button
-            className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-            onClick={() => handleRoute("/my-listings")}
-          >
-            My Listings
-          </Button>
-          |
-          <Button
-            className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-            onClick={() => handleRoute("/cart")}
-          >
-            Cart {cartQuantity > 0 && `(${cartQuantity})`}
-          </Button>
-          |
+            <Bars4Icon className="h-6 w-6" />
+          </button>
           {signedIn ? (
-            <>
-              <ProfileWithDropdown
-                pubkey={userPubkey!}
-                baseClassname="justify-start dark:hover:shopstr-yellow-light pl-4 rounded-3xl py-2 hover:scale-105 hover:bg-light-bg hover:shadow-lg dark:hover:bg-dark-bg"
-                dropDownKeys={[
-                  "shop_settings",
-                  "user_profile",
-                  "settings",
-                  "logout",
-                ]}
-                nameClassname="md:block"
-              />
-            </>
+            <ProfileWithDropdown
+              pubkey={userPubkey!}
+              dropDownKeys={[
+                "shop_settings",
+                "user_profile",
+                "settings",
+                "logout",
+              ]}
+            />
           ) : (
-            <>
-              <Button
-                onClick={onOpen}
-                className={`bg-transparent text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
-                  isProfileActive
-                    ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
-                    : ""
-                }`}
-              >
-                Sign In
-              </Button>
-            </>
+            <Button onClick={onOpen} className="bg-transparent hover:text-purple-700 focus:outline-none">
+              Sign In
+            </Button>
           )}
         </div>
       </div>
-      {isMobileMenuOpen && <MobileMenu />}
+      {/* Mobile menu */}
+      {isMobileMenuOpen && (
+        <div className="md:hidden">
+          <MobileMenu />
+        </div>
+      )}
       <SignInModal isOpen={isOpen} onClose={onClose} />
-    </div>
+    </nav>
   );
 };
 
