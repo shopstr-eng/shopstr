@@ -1092,21 +1092,55 @@ export function getDefaultMint(): string {
   return "https://mint.minibits.cash/Bitcoin";
 }
 
-export async function verifyNip05Identifier(nip05: string, pubkey: string): Promise<boolean> {
+export async function verifyNip05Identifier(
+  nip05: string,
+  pubkey: string
+): Promise<boolean> {
   try {
-    const [username, domain] = nip05.split('@');
+    if (!nip05 || !pubkey) return false;
+
+    const parts = nip05.split("@");
+    if (parts.length !== 2) return false;
+
+    const [username, domain] = parts;
     if (!username || !domain) return false;
 
-    const url = `https://${domain}/.well-known/nostr.json?name=${username}`;
-    const response = await fetch(url);
-    if (!response.ok) return false;
+    let url;
+    try {
+      url = `https://${domain}/.well-known/nostr.json?name=${username}`;
+    } catch {
+      return false;
+    }
 
-    const data = await response.json();
-    const names = data.names || {};
-    
-    return names[username] === pubkey || names[username.toLowerCase()] === pubkey;
-  } catch (error) {
-    // Silently handle errors to avoid console spam
+    try {
+      // Use a timeout to prevent hanging requests
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+      const response = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) return false;
+
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        return false;
+      }
+
+      if (!data || typeof data !== "object") return false;
+
+      const names = data.names || {};
+      return (
+        names[username] === pubkey || names[username.toLowerCase()] === pubkey
+      );
+    } catch {
+      // This will catch fetch errors, timeout errors, etc.
+      return false;
+    }
+  } catch {
+    // Catch any unexpected errors
     return false;
   }
 }

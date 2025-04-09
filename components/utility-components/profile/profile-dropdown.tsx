@@ -181,7 +181,9 @@ export const ProfileWithDropdown = ({
             className={"transition-transform"}
             classNames={{
               name: `overflow-hidden text-ellipsis whitespace-nowrap text-light-text dark:text-dark-text hidden ${nameClassname} ${
-                isNip05Verified ? "text-shopstr-purple dark:text-shopstr-yellow" : ""
+                isNip05Verified
+                  ? "text-shopstr-purple dark:text-shopstr-yellow"
+                  : ""
               }`,
               base: `${baseClassname}`,
             }}
