@@ -422,16 +422,6 @@ export default function Component() {
                 >
                   Continue Shopping
                 </Button>
-                <div className="mt-3 text-center">
-                <p className="text-base text-gray-500 dark:text-gray-400">
-                  or
-                </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                  <span className="cursor-pointer hover:text-light-text dark:hover:text-dark-text">
-                  Check your saved for later items
-                  </span>
-                </p>
-                </div>
               </div>
             )}
           </div>
@@ -503,7 +493,7 @@ export default function Component() {
                   totalCost={totalCost}
                 />
               <Button
-                className="mt-4"
+                className={`mt-4 ${SHOPSTRBUTTONCLASSNAMES}`}
                 color="primary"
                 variant="light"
                 onClick={toggleCheckout}
