@@ -7,6 +7,7 @@ import {
   PlusIcon,
   MinusIcon,
   InformationCircleIcon,
+  ShoppingBagIcon
 } from "@heroicons/react/24/outline";
 import {
   SHOPSTRBUTTONCLASSNAMES,
@@ -35,6 +36,7 @@ export default function Component() {
   const [shippingTypes, setShippingTypes] = useState<{
     [key: string]: ShippingOptionsType;
   }>({});
+
   // Initialize quantities state
   const initializeQuantities = (products: ProductData[]) => {
     const initialQuantities: { [key: string]: number } = {};
@@ -219,9 +221,7 @@ export default function Component() {
     return price;
   };
 
-  const convertShippingToSats = async (
-    product: ProductData
-  ): Promise<number> => {
+  const convertShippingToSats = async (product: ProductData): Promise<number> => {
     const shippingCost = product.shippingCost ? product.shippingCost : 0;
     if (
       product.currency.toLowerCase() === "sats" ||
@@ -288,170 +288,171 @@ export default function Component() {
     <>
       {!isBeingPaid ? (
         <div className="flex min-h-screen flex-col bg-light-bg p-4 text-light-text dark:bg-dark-bg dark:text-dark-text">
-          <div className="w-full pt-20">
-            <div className="mb-4 flex items-center justify-between">
-              <h1 className="text-2xl font-bold">Shopping Cart</h1>
+          <div className="w-full max-w-4xl mx-auto pt-20">
+            <div className="mb-6 flex items-center">
+              <h1 className="text-2xl font-bold text-left w-full">Shopping Cart</h1>
             </div>
             {products.length > 0 ? (
               <>
-                {products.map((product) => (
-                  <div
-                    key={product.id}
-                    className="relative mb-4 flex flex-col border-b pb-4"
-                  >
-                    <div className="flex items-start">
-                      <img
-                        src={product.images[0]}
-                        alt={product.title}
-                        className="mr-4 h-24 w-24 object-cover"
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-start justify-between">
-                          <h2 className="text-lg font-semibold">
-                            {product.title}
-                          </h2>
-                          <p className="ml-4 text-lg font-bold">
-                            {satPrices[product.id] !== undefined
-                              ? satPrices[product.id] !== null
-                                ? `${satPrices[product.id]} sats`
-                                : "Price unavailable"
-                              : "Loading..."}
-                          </p>
-                        </div>
-                        {product.quantity && (
-                          <div>
-                            <p className="text-sm text-green-600">
-                              {product.quantity} in stock
+                <div className="space-y-4">
+                  {products.map((product) => (
+                    <div
+                      key={product.id}
+                      className="relative flex flex-col md:flex-row border border-gray-300 dark:border-gray-700 rounded-lg p-4 shadow-sm"
+                    >
+                      <div className="flex items-start w-full">
+                        <img
+                          src={product.images[0]}
+                          alt={product.title}
+                          className="mr-4 h-24 w-24 object-cover rounded-md"
+                        />
+                        <div className="flex-1">
+                          <div className="flex flex-col md:flex-row md:items-start md:justify-between">
+                            <h2 className="text-lg font-semibold mb-2 md:mb-0">{product.title}</h2>
+                            <p className="text-lg font-bold">
+                              {satPrices[product.id] !== undefined
+                                ? satPrices[product.id] !== null
+                                  ? `${satPrices[product.id]} sats`
+                                  : "Price unavailable"
+                                : "Loading..."}
                             </p>
-                            <div className="mt-2 flex items-center">
-                              {quantities[product.id]! > 1 && (
+                          </div>
+                          {product.quantity && (
+                            <div className="mt-2">
+                              <p className="text-sm text-green-600 mb-2">
+                                {product.quantity} in stock
+                              </p>
+                              <div className="flex items-center">
                                 <Button
                                   isIconOnly
                                   size="sm"
                                   variant="light"
-                                  onClick={() =>
-                                    handleQuantityChange(product.id, -1)
-                                  }
+                                  disabled={quantities[product.id]! <= 1}
+                                  onClick={() => handleQuantityChange(product.id, -1)}
                                 >
                                   <MinusIcon className="h-4 w-4" />
                                 </Button>
-                              )}
-                              <Input
-                                type="number"
-                                value={(quantities[product.id] || 1).toString()}
-                                min="1"
-                                max={String(product.quantity)}
-                                className="mx-2 w-16"
-                                onChange={(e) => {
-                                  const newQuantity =
-                                    parseInt(e.target.value) || 1;
-                                  const maxQuantity = parseInt(
-                                    String(product.quantity) || "1"
-                                  );
-                                  const finalQuantity = Math.min(
-                                    newQuantity,
-                                    maxQuantity
-                                  );
-                                  setQuantities((prev) => ({
-                                    ...prev,
-                                    [product.id]: finalQuantity,
-                                  }));
-                                  setHasReachedMax((prevState) => ({
-                                    ...prevState,
-                                    [product.id]:
-                                      finalQuantity === maxQuantity &&
-                                      maxQuantity !== 1,
-                                  }));
-                                }}
-                              />
-                              {quantities[product.id]! <
-                                parseInt(String(product.quantity || "1")) && (
+                                <Input
+                                  type="number"
+                                  value={(quantities[product.id] || 1).toString()}
+                                  min="1"
+                                  max={String(product.quantity)}
+                                  className="mx-2 w-16 text-center"
+                                  onChange={(e) => {
+                                    const newQuantity = parseInt(e.target.value) || 1;
+                                    const maxQuantity = parseInt(String(product.quantity) || "1");
+                                    const finalQuantity = Math.min(newQuantity, maxQuantity);
+                                    setQuantities((prev) => ({
+                                      ...prev,
+                                      [product.id]: finalQuantity,
+                                    }));
+                                    setHasReachedMax((prevState) => ({
+                                      ...prevState,
+                                      [product.id]:
+                                        finalQuantity === maxQuantity && maxQuantity !== 1,
+                                    }));
+                                  }}
+                                />
                                 <Button
                                   isIconOnly
                                   size="sm"
                                   variant="light"
-                                  onClick={() =>
-                                    handleQuantityChange(product.id, 1)
+                                  disabled={
+                                    quantities[product.id]! >=
+                                    parseInt(String(product.quantity || "1"))
                                   }
+                                  onClick={() => handleQuantityChange(product.id, 1)}
                                 >
                                   <PlusIcon className="h-4 w-4" />
                                 </Button>
+                              </div>
+                              {hasReachedMax[product.id] && (
+                                <p className="mt-1 text-xs text-red-500">
+                                  Maximum quantity reached
+                                </p>
                               )}
                             </div>
-                            {hasReachedMax[product.id] && (
-                              <p className="mt-1 text-xs text-red-500">
-                                Maximum quantity reached
-                              </p>
-                            )}
-                          </div>
-                        )}
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-4 md:mt-0 md:absolute md:bottom-4 md:right-4 flex">
+                        <Button
+                          size="sm"
+                          color="danger"
+                          variant="light"
+                          className="ml-auto"
+                          onClick={() => handleRemoveFromCart(product.id)}
+                        >
+                          Remove
+                        </Button>
                       </div>
                     </div>
-                    <div className="absolute bottom-4 right-4 flex">
-                      <Button
-                        size="sm"
-                        color="danger"
-                        variant="light"
-                        className="mr-2"
-                        onClick={() => handleRemoveFromCart(product.id)}
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-                <div className="mt-4 flex flex-col items-end">
-                  <p className="mb-2 text-xl font-bold">
-                    Subtotal ({products.length} items): {subtotal} sats
+                  ))}
+                </div>
+                <div className="mt-6 flex flex-col items-end border-t border-gray-300 pt-4 dark:border-gray-700">
+                  <p className="mb-4 text-xl font-bold">
+                    Subtotal ({products.length}{" "}
+                    {products.length === 1 ? "item" : "items"}): {subtotal} sats
                   </p>
                   <Button
                     className={SHOPSTRBUTTONCLASSNAMES}
                     onClick={toggleCheckout}
+                    size="lg"
                   >
                     Proceed To Checkout
                   </Button>
                 </div>
               </>
             ) : (
-              <div className="break-words text-center text-2xl text-light-text dark:text-dark-text">
-                Your cart is empty . . .<br></br>
-                <span className="cursor-pointer text-sm text-gray-500">
-                  Check your saved for later items or{" "}
-                  <span
-                    className="underline hover:text-light-text dark:hover:text-dark-text"
-                    onClick={() => router.push("/marketplace")}
-                  >
-                    continue shopping.
-                  </span>
-                </span>
+              <div className="flex flex-col items-center min-h-[60vh] justify-center py-16 rounded-lg border border-gray-300 shadow-sm dark:border-gray-700 dark:shadow-none">
+                <div className="mb-8 rounded-full p-6 bg-gray-100 border border-gray-300 dark:bg-gray-700 dark:border-gray-600 flex items-center justify-center">
+                  <ShoppingBagIcon className="h-16 w-16 text-gray-800 dark:text-gray-200" />
+                </div>
+
+                <h2 className="mb-2 text-3xl font-bold text-center text-light-text dark:text-dark-text">
+                  Your cart is empty
+                </h2>
+                <p className="mb-6 text-center text-gray-500 dark:text-gray-400 max-w-md">
+                  Looks like you haven&apos;t added any items to your cart yet.
+                </p>
+                <Button
+                  className={SHOPSTRBUTTONCLASSNAMES}
+                  size="lg"
+                  onClick={() => router.push("/marketplace")}
+                >
+                  Continue Shopping
+                </Button>
               </div>
             )}
           </div>
         </div>
       ) : (
-        <>
-          <div className="flex w-full bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text sm:items-center sm:justify-center">
-            <div className="flex flex-col pb-4 pt-20">
-              {products.length > 0 && (
-                <>
-                  {products.map((product) => (
-                    <div
-                      key={product.id}
-                      className="p-4 text-light-text dark:text-dark-text"
-                    >
-                      <h2 className="mb-4 text-2xl font-bold">
-                        {product.title}
-                      </h2>
+        <div className="flex min-h-screen w-full bg-light-bg p-4 text-light-text dark:bg-dark-bg dark:text-dark-text sm:items-center sm:justify-center">
+          <div className="w-full max-w-4xl mx-auto px-4 flex flex-col pb-4 pt-20">
+            <h1 className="text-2xl font-bold mb-6">Checkout</h1>
+            {products.length > 0 && (
+              <>
+                {products.map((product) => (
+                  <div
+                    key={product.id}
+                    className="mb-6 p-4 border border-gray-300 dark:border-gray-700 rounded-lg shadow-sm"
+                  >
+                    <h2 className="mb-4 text-xl font-bold">{product.title}</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {product.selectedSize && (
-                        <p className="mb-4 text-lg">
-                          Size: {product.selectedSize}
+                        <p className="text-base">
+                          <span className="font-medium">Size:</span>{" "}
+                          {product.selectedSize}
                         </p>
                       )}
                       {quantities[product.id]! > 1 && (
-                        <p className="mb-4 text-lg">
-                          Quantity: {quantities[product.id]}
+                        <p className="text-base">
+                          <span className="font-medium">Quantity:</span>{" "}
+                          {quantities[product.id]}
                         </p>
                       )}
+                    </div>
+                    <div className="mt-4 border-t border-gray-300 pt-4 dark:border-gray-700">
                       <DisplayCostBreakdown
                         subtotal={
                           satPrices[product.id]
@@ -471,18 +472,18 @@ export default function Component() {
                         }
                       />
                     </div>
-                  ))}
-                  <div className="mx-4 mt-2 flex items-center justify-center text-center">
-                    <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-                    <p className="ml-2 text-xs text-light-text dark:text-dark-text">
-                      Once purchased, each seller will receive a DM with your
-                      order details.
-                    </p>
                   </div>
-                </>
-              )}
-              <div className="flex flex-col items-center">
-                <CartInvoiceCard
+                ))}
+                <div className="mb-6 p-4 bg-gray-50 border border-gray-200 dark:bg-gray-800 dark:border-gray-700 rounded-lg flex items-center justify-center text-center">
+                  <InformationCircleIcon className="h-5 w-5 text-gray-600 dark:text-gray-400 mr-2 flex-shrink-0" />
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    Once purchased, each seller will receive a DM with your order details.
+                  </p>
+                </div>
+              </>
+            )}
+            <div className="flex flex-col items-center">
+            <CartInvoiceCard
                   products={products}
                   quantities={quantities}
                   shippingTypes={shippingTypes}
@@ -491,10 +492,17 @@ export default function Component() {
                   totalShippingCost={totalShippingCost}
                   totalCost={totalCost}
                 />
-              </div>
+              <Button
+                className={`mt-4 ${SHOPSTRBUTTONCLASSNAMES}`}
+                color="primary"
+                variant="light"
+                onClick={toggleCheckout}
+              >
+                Return to Cart
+              </Button>
             </div>
           </div>
-        </>
+        </div>
       )}
     </>
   );

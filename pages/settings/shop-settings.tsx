@@ -88,7 +88,7 @@ const ShopSettingsPage = () => {
   return (
     <>
       <div className="flex min-h-screen flex-col bg-light-bg pt-24 dark:bg-dark-bg md:pb-20">
-        <div className="h-full w-full px-4 lg:w-1/2">
+        <div className="h-full w-full px-4 lg:w-1/2 mx-auto">
           <SettingsBreadCrumbs />
           {isFetchingShop ? (
             <ShopstrSpinner />
