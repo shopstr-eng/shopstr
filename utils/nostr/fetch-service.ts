@@ -53,7 +53,6 @@ export const fetchAllPosts = async (
   productEvents: NostrEvent[];
   profileSetFromProducts: Set<string>;
 }> => {
-  // TODO refactor this to not use new Promise
   return new Promise(async function (resolve, reject) {
     try {
       let deletedProductsInCacheSet: Set<any> = new Set(); // used to remove deleted items from cache
@@ -119,7 +118,6 @@ export const fetchCart = async (
 ): Promise<{
   cartList: ProductData[];
 }> => {
-  // TODO refactor this to not use new Promise
   return new Promise(async function (resolve, reject) {
     try {
       if (!signer) {
@@ -208,7 +206,6 @@ export const fetchShopSettings = async (
 ): Promise<{
   shopSettingsMap: Map<string, ShopSettings>;
 }> => {
-  // TODO refactor this to not use new Promise
   return new Promise(async function (resolve, reject) {
     try {
       const shopEvents: NostrEvent[] = [];
@@ -275,7 +272,6 @@ export const fetchProfile = async (
 ): Promise<{
   profileMap: Map<string, any>;
 }> => {
-  // TODO: refactor this to not use new Promise
   return new Promise(async function (resolve, reject) {
     try {
       if (!pubkeyProfilesToFetch.length) {
@@ -347,8 +343,6 @@ export const fetchGiftWrappedChatsAndMessages = async (
 ): Promise<{
   profileSetFromChats: Set<string>;
 }> => {
-  // TODO refactor this to not use new Promise
-  // TODO pull pubkey from signer?
   return new Promise(async function (resolve, reject) {
     // if no userPubkey, user is not signed in
     if (!userPubkey) {
@@ -482,7 +476,6 @@ export const fetchReviews = async (
   merchantScoresMap: Map<string, number[]>;
   productReviewsMap: Map<string, Map<string, Map<string, string[][]>>>;
 }> => {
-  // TODO refactor this to not use new Promise
   return new Promise(async function (resolve, reject) {
     try {
       const addresses = products
@@ -697,7 +690,6 @@ export const fetchAllRelays = async (
   readRelayList: string[];
   writeRelayList: string[];
 }> => {
-  // TODO refactor this to not use new Promise
   return new Promise(async function (resolve, reject) {
     try {
       const relayList: string[] = [];
@@ -784,7 +776,6 @@ export const fetchCashuWallet = async (
   cashuMints: string[];
   cashuProofs: Proof[];
 }> => {
-  // TODO: refactor this to not use new Promise
   return new Promise(async function (resolve, reject) {
     const { tokens } = getLocalStorageData();
     const userPubkey = await signer?.getPubKey?.();

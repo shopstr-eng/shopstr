@@ -21,7 +21,7 @@ const SettingsPage = () => {
   const startIconClassnames = "h-6 w-6 text-light-text dark:text-dark-text";
   return (
     <div className="flex h-full flex-col bg-light-bg pt-24 dark:bg-dark-bg">
-      <div className="bg h-screen w-full lg:w-1/2 lg:pl-4 mx-auto">
+      <div className="bg mx-auto h-screen w-full lg:w-1/2 lg:pl-4">
         <SettingsBreadCrumbs />
         <Listbox variant="flat" aria-label="Listbox menu with sections">
           <ListboxSection

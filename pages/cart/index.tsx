@@ -7,7 +7,7 @@ import {
   PlusIcon,
   MinusIcon,
   InformationCircleIcon,
-  ShoppingBagIcon
+  ShoppingBagIcon,
 } from "@heroicons/react/24/outline";
 import {
   SHOPSTRBUTTONCLASSNAMES,
@@ -221,7 +221,9 @@ export default function Component() {
     return price;
   };
 
-  const convertShippingToSats = async (product: ProductData): Promise<number> => {
+  const convertShippingToSats = async (
+    product: ProductData
+  ): Promise<number> => {
     const shippingCost = product.shippingCost ? product.shippingCost : 0;
     if (
       product.currency.toLowerCase() === "sats" ||
@@ -288,9 +290,11 @@ export default function Component() {
     <>
       {!isBeingPaid ? (
         <div className="flex min-h-screen flex-col bg-light-bg p-4 text-light-text dark:bg-dark-bg dark:text-dark-text">
-          <div className="w-full max-w-4xl mx-auto pt-20">
+          <div className="mx-auto w-full max-w-4xl pt-20">
             <div className="mb-6 flex items-center">
-              <h1 className="text-2xl font-bold text-left w-full">Shopping Cart</h1>
+              <h1 className="w-full text-left text-2xl font-bold">
+                Shopping Cart
+              </h1>
             </div>
             {products.length > 0 ? (
               <>
@@ -298,17 +302,19 @@ export default function Component() {
                   {products.map((product) => (
                     <div
                       key={product.id}
-                      className="relative flex flex-col md:flex-row border border-gray-300 dark:border-gray-700 rounded-lg p-4 shadow-sm"
+                      className="relative flex flex-col rounded-lg border border-gray-300 p-4 shadow-sm dark:border-gray-700 md:flex-row"
                     >
-                      <div className="flex items-start w-full">
+                      <div className="flex w-full items-start">
                         <img
                           src={product.images[0]}
                           alt={product.title}
-                          className="mr-4 h-24 w-24 object-cover rounded-md"
+                          className="mr-4 h-24 w-24 rounded-md object-cover"
                         />
                         <div className="flex-1">
                           <div className="flex flex-col md:flex-row md:items-start md:justify-between">
-                            <h2 className="text-lg font-semibold mb-2 md:mb-0">{product.title}</h2>
+                            <h2 className="mb-2 text-lg font-semibold md:mb-0">
+                              {product.title}
+                            </h2>
                             <p className="text-lg font-bold">
                               {satPrices[product.id] !== undefined
                                 ? satPrices[product.id] !== null
@@ -319,7 +325,7 @@ export default function Component() {
                           </div>
                           {product.quantity && (
                             <div className="mt-2">
-                              <p className="text-sm text-green-600 mb-2">
+                              <p className="mb-2 text-sm text-green-600">
                                 {product.quantity} in stock
                               </p>
                               <div className="flex items-center">
@@ -328,20 +334,30 @@ export default function Component() {
                                   size="sm"
                                   variant="light"
                                   disabled={quantities[product.id]! <= 1}
-                                  onClick={() => handleQuantityChange(product.id, -1)}
+                                  onClick={() =>
+                                    handleQuantityChange(product.id, -1)
+                                  }
                                 >
                                   <MinusIcon className="h-4 w-4" />
                                 </Button>
                                 <Input
                                   type="number"
-                                  value={(quantities[product.id] || 1).toString()}
+                                  value={(
+                                    quantities[product.id] || 1
+                                  ).toString()}
                                   min="1"
                                   max={String(product.quantity)}
                                   className="mx-2 w-16 text-center"
                                   onChange={(e) => {
-                                    const newQuantity = parseInt(e.target.value) || 1;
-                                    const maxQuantity = parseInt(String(product.quantity) || "1");
-                                    const finalQuantity = Math.min(newQuantity, maxQuantity);
+                                    const newQuantity =
+                                      parseInt(e.target.value) || 1;
+                                    const maxQuantity = parseInt(
+                                      String(product.quantity) || "1"
+                                    );
+                                    const finalQuantity = Math.min(
+                                      newQuantity,
+                                      maxQuantity
+                                    );
                                     setQuantities((prev) => ({
                                       ...prev,
                                       [product.id]: finalQuantity,
@@ -349,7 +365,8 @@ export default function Component() {
                                     setHasReachedMax((prevState) => ({
                                       ...prevState,
                                       [product.id]:
-                                        finalQuantity === maxQuantity && maxQuantity !== 1,
+                                        finalQuantity === maxQuantity &&
+                                        maxQuantity !== 1,
                                     }));
                                   }}
                                 />
@@ -361,7 +378,9 @@ export default function Component() {
                                     quantities[product.id]! >=
                                     parseInt(String(product.quantity || "1"))
                                   }
-                                  onClick={() => handleQuantityChange(product.id, 1)}
+                                  onClick={() =>
+                                    handleQuantityChange(product.id, 1)
+                                  }
                                 >
                                   <PlusIcon className="h-4 w-4" />
                                 </Button>
@@ -375,7 +394,7 @@ export default function Component() {
                           )}
                         </div>
                       </div>
-                      <div className="mt-4 md:mt-0 md:absolute md:bottom-4 md:right-4 flex">
+                      <div className="mt-4 flex md:absolute md:bottom-4 md:right-4 md:mt-0">
                         <Button
                           size="sm"
                           color="danger"
@@ -404,15 +423,15 @@ export default function Component() {
                 </div>
               </>
             ) : (
-              <div className="flex flex-col items-center min-h-[60vh] justify-center py-16 rounded-lg border border-gray-300 shadow-sm dark:border-gray-700 dark:shadow-none">
-                <div className="mb-8 rounded-full p-6 bg-gray-100 border border-gray-300 dark:bg-gray-700 dark:border-gray-600 flex items-center justify-center">
+              <div className="flex min-h-[60vh] flex-col items-center justify-center rounded-lg border border-gray-300 py-16 shadow-sm dark:border-gray-700 dark:shadow-none">
+                <div className="mb-8 flex items-center justify-center rounded-full border border-gray-300 bg-gray-100 p-6 dark:border-gray-600 dark:bg-gray-700">
                   <ShoppingBagIcon className="h-16 w-16 text-gray-800 dark:text-gray-200" />
                 </div>
 
-                <h2 className="mb-2 text-3xl font-bold text-center text-light-text dark:text-dark-text">
+                <h2 className="mb-2 text-center text-3xl font-bold text-light-text dark:text-dark-text">
                   Your cart is empty
                 </h2>
-                <p className="mb-6 text-center text-gray-500 dark:text-gray-400 max-w-md">
+                <p className="mb-6 max-w-md text-center text-gray-500 dark:text-gray-400">
                   Looks like you haven&apos;t added any items to your cart yet.
                 </p>
                 <Button
@@ -428,17 +447,17 @@ export default function Component() {
         </div>
       ) : (
         <div className="flex min-h-screen w-full bg-light-bg p-4 text-light-text dark:bg-dark-bg dark:text-dark-text sm:items-center sm:justify-center">
-          <div className="w-full max-w-4xl mx-auto px-4 flex flex-col pb-4 pt-20">
-            <h1 className="text-2xl font-bold mb-6">Checkout</h1>
+          <div className="mx-auto flex w-full max-w-4xl flex-col px-4 pb-4 pt-20">
+            <h1 className="mb-6 text-2xl font-bold">Checkout</h1>
             {products.length > 0 && (
               <>
                 {products.map((product) => (
                   <div
                     key={product.id}
-                    className="mb-6 p-4 border border-gray-300 dark:border-gray-700 rounded-lg shadow-sm"
+                    className="mb-6 rounded-lg border border-gray-300 p-4 shadow-sm dark:border-gray-700"
                   >
                     <h2 className="mb-4 text-xl font-bold">{product.title}</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       {product.selectedSize && (
                         <p className="text-base">
                           <span className="font-medium">Size:</span>{" "}
@@ -474,24 +493,25 @@ export default function Component() {
                     </div>
                   </div>
                 ))}
-                <div className="mb-6 p-4 bg-gray-50 border border-gray-200 dark:bg-gray-800 dark:border-gray-700 rounded-lg flex items-center justify-center text-center">
-                  <InformationCircleIcon className="h-5 w-5 text-gray-600 dark:text-gray-400 mr-2 flex-shrink-0" />
+                <div className="mb-6 flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 p-4 text-center dark:border-gray-700 dark:bg-gray-800">
+                  <InformationCircleIcon className="mr-2 h-5 w-5 flex-shrink-0 text-gray-600 dark:text-gray-400" />
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Once purchased, each seller will receive a DM with your order details.
+                    Once purchased, each seller will receive a DM with your
+                    order details.
                   </p>
                 </div>
               </>
             )}
             <div className="flex flex-col items-center">
-            <CartInvoiceCard
-                  products={products}
-                  quantities={quantities}
-                  shippingTypes={shippingTypes}
-                  totalCostsInSats={totalCostsInSats}
-                  subtotal={subtotal}
-                  totalShippingCost={totalShippingCost}
-                  totalCost={totalCost}
-                />
+              <CartInvoiceCard
+                products={products}
+                quantities={quantities}
+                shippingTypes={shippingTypes}
+                totalCostsInSats={totalCostsInSats}
+                subtotal={subtotal}
+                totalShippingCost={totalShippingCost}
+                totalCost={totalCost}
+              />
               <Button
                 className={`mt-4 ${SHOPSTRBUTTONCLASSNAMES}`}
                 color="primary"
