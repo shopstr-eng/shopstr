@@ -45,6 +45,7 @@ import {
   getLocalStorageData,
   publishProofEvent,
   generateKeys,
+  generateUUID,
 } from "@/utils/nostr/nostr-helper-functions";
 import { addChatMessagesToCache } from "@/utils/nostr/cache-service";
 import { LightningAddress } from "@getalby/lightning-tools";
@@ -655,7 +656,7 @@ export default function ProductInvoiceCard({
       remainingProofs = keep;
     }
 
-    const orderId = crypto.randomUUID();
+    const orderId = generateUUID();
     const paymentPreference =
       sellerProfile?.content?.payment_preference || "ecash";
     const lnurl = sellerProfile?.content?.lud16 || "";

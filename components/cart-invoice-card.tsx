@@ -43,6 +43,7 @@ import {
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
   generateKeys,
+  generateUUID,
   getLocalStorageData,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
@@ -739,7 +740,7 @@ export default function CartInvoiceCard({
         remainingProofs = keep;
       }
 
-      const orderId = crypto.randomUUID();
+      const orderId = generateUUID();
       const paymentPreference =
         sellerProfile?.content?.payment_preference || "ecash";
       const lnurl = sellerProfile?.content?.lud16 || "";

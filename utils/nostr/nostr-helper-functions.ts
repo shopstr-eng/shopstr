@@ -69,6 +69,37 @@ function generateEventId(event: EncryptedMessageEvent) {
   return hash.digest("hex");
 }
 
+// Generate a random UUID using a custom implementation
+export const generateUUID = () => {
+  // Generate a random hexadecimal string of specified length
+  const randomHex = (length: number) => {
+    let result = "";
+    const hexChars = "0123456789abcdef";
+    for (let i = 0; i < length; i++) {
+      result += hexChars[Math.floor(Math.random() * 16)];
+    }
+    return result;
+  };
+
+  // Format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+  // where y is one of: 8, 9, a, or b
+  const uuid =
+    randomHex(8) +
+    "-" +
+    randomHex(4) +
+    "-" +
+    "4" +
+    randomHex(3) +
+    "-" +
+    // The first character of this group is limited to 8, 9, a, or b
+    [8, 9, "a", "b"][Math.floor(Math.random() * 4)] +
+    randomHex(3) +
+    "-" +
+    randomHex(12);
+
+  return uuid;
+};
+
 export async function deleteEvent(
   nostr: NostrManager,
   signer: NostrSigner,
@@ -192,7 +223,7 @@ export async function PostListing(
     content: summary,
   };
 
-  const handlerDTag = crypto.randomUUID();
+  const handlerDTag = generateUUID();
 
   const origin =
     window && typeof window !== undefined
@@ -319,7 +350,7 @@ export async function constructGiftWrappedEvent(
 
   // Add order-specific tags
   if (isOrder) {
-    tags.push(["order", orderId ? orderId : crypto.randomUUID()]);
+    tags.push(["order", orderId ? orderId : generateUUID()]);
 
     if (type) tags.push(["type", type.toString()]);
     if (orderAmount) tags.push(["amount", orderAmount.toString()]);
@@ -534,7 +565,7 @@ export async function publishSavedForLaterEvent(
 
     cartTags.push(
       ...[
-        ["d", crypto.randomUUID()],
+        ["d", generateUUID()],
         ["title", type],
       ]
     );
