@@ -13,6 +13,7 @@ import { ShopSettings } from "../../utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import SideShopNav from "../home/side-shop-nav";
 
+
 const MyListingsPage = () => {
   const { pubkey: usersPubkey } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -243,12 +244,21 @@ const MyListingsPage = () => {
             </div>
           )}
           {selectedSection === "About" && !shopAbout && (
-            <div className="flex w-full flex-col justify-start bg-transparent px-4 py-8 text-light-text dark:text-dark-text">
-              <p className="text-base">
-                Nothing here . . . yet!<br></br>
-                <br></br>
-                Set up your shop in settings!
-              </p>
+            <div className="flex-grow flex items-center justify-center py-10 mt-20">
+              <div className="max-w-lg w-full p-8 rounded-lg shadow-lg bg-light-fg dark:bg-dark-fg text-center">
+                <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
+                  Nothing here . . . yet!
+                </p>
+                <p className="mt-4 text-lg text-light-text dark:text-dark-text">
+                  Set up your shop in settings!
+                </p>
+                <Button
+                  className={`${SHOPSTRBUTTONCLASSNAMES} mt-6`}
+                  onClick={() => router.push("settings/shop-settings")}
+                >
+                  Go to Settings
+                </Button>
+              </div>
             </div>
           )}
         </div>

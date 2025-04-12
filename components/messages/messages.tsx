@@ -290,29 +290,56 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
     }
   };
 
+  // Function to handle page reload
+  const handleReload = () => {
+    window.location.reload();
+  };
+
   return (
-    <div className="h-[100vh] bg-light-bg dark:bg-dark-bg">
-      <div>
+    <div className="min-h-screen bg-light-bg dark:bg-dark-bg text-gray-800 dark:text-gray-200">
+      <div className="container mx-auto px-4 py-10">
         {chatsMap.size === 0 ? (
-          <div className="mt-2 flex items-center justify-center">
+          <div className="flex h-[66vh] items-center justify-center">
             {isChatsLoading ? (
-              <div className="mt-8 flex items-center justify-center">
+              <div className="flex items-center justify-center">
                 <ShopstrSpinner />
               </div>
             ) : (
-              <div className="break-words text-center text-2xl text-light-text dark:text-dark-text">
-                {isClient && userPubkey ? (
-                  <>
-                    No messages . . . yet!
-                    <br></br>
-                    <br></br>
-                    Just logged in?
-                    <br></br>
-                    Try reloading the page.
-                  </>
-                ) : (
-                  <>You must be signed in to see your chats!</>
-                )}
+              <div className="mx-auto w-full max-w-lg rounded-xl bg-white shadow-xl dark:bg-gray-800 p-10 transition-all">
+                <div className="text-center">
+                  {isClient && userPubkey ? (
+                    <div className="space-y-6">
+                      <h2 className="text-3xl font-semibold text-gray-700 dark:text-gray-100">
+                        No messages... yet!
+                      </h2>
+                      <div className="mt-2 text-base text-gray-600 dark:text-gray-300">
+                        <p>Just logged in?</p>
+                        <p className="mt-1 font-medium">
+                          Try reloading the page.
+                        </p>
+                      </div>
+                      <div className="pt-4">
+                        <button
+                          onClick={handleReload}
+                          className="rounded-full bg-purple-600 dark:bg-yellow-300 px-8 py-2 text-white dark:text-gray-800 shadow-md transition-colors duration-200 hover:bg-purple-500 dark:hover:bg-yellow-200 focus:outline-none focus:ring-2 focus:ring-purple-400 dark:focus:ring-yellow-400 focus:ring-offset-2"
+                        >
+                          Reload
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <h2 className="text-2xl font-bold text-gray-700 dark:text-gray-100">
+                        You must be signed in to see your chats!
+                      </h2>
+                      <div className="pt-4">
+                        <button className="rounded-full bg-purple-600 px-6 py-2 text-white shadow-md transition-colors duration-200 hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2">
+                          Sign In
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
