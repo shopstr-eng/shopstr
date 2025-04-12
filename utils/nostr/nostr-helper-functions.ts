@@ -7,8 +7,7 @@ import {
   nip98,
   SimplePool,
 } from "nostr-tools";
-import SHA256 from "crypto-js/sha256";
-import hex from "crypto-js/enc-hex";
+import CryptoJS from "crypto-js";
 import { v4 as uuidv4 } from "uuid";
 import { NostrEvent, ProductFormValues } from "@/utils/types/types";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
@@ -66,8 +65,8 @@ function generateEventId(event: EncryptedMessageEvent) {
   });
 
   // Step 3: Create SHA256 hash of the serialized string
-  const hash = SHA256(serialized);
-  return hash.toString(hex);
+  const hashHex = CryptoJS.SHA256(serialized).toString(CryptoJS.enc.Hex);
+  return hashHex;
 }
 
 export async function deleteEvent(
