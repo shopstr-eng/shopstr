@@ -43,13 +43,13 @@ import {
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
   generateKeys,
-  generateUUID,
   getLocalStorageData,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import { addChatMessagesToCache } from "@/utils/nostr/cache-service";
 import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
+import { v4 as uuidv4 } from "uuid";
 import { nip19 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import {
@@ -740,7 +740,7 @@ export default function CartInvoiceCard({
         remainingProofs = keep;
       }
 
-      const orderId = generateUUID();
+      const orderId = uuidv4();
       const paymentPreference =
         sellerProfile?.content?.payment_preference || "ecash";
       const lnurl = sellerProfile?.content?.lud16 || "";

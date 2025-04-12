@@ -7,7 +7,9 @@ import {
   nip98,
   SimplePool,
 } from "nostr-tools";
-import crypto from "crypto";
+import SHA256 from "crypto-js/sha256";
+import hex from "crypto-js/enc-hex";
+import { v4 as uuidv4 } from "uuid";
 import { NostrEvent, ProductFormValues } from "@/utils/types/types";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { Proof } from "@cashu/cashu-ts";
@@ -64,41 +66,9 @@ function generateEventId(event: EncryptedMessageEvent) {
   });
 
   // Step 3: Create SHA256 hash of the serialized string
-  const hash = crypto.createHash("sha256");
-  hash.update(serialized);
-  return hash.digest("hex");
+  const hash = SHA256(serialized);
+  return hash.toString(hex);
 }
-
-// Generate a random UUID using a custom implementation
-export const generateUUID = () => {
-  // Generate a random hexadecimal string of specified length
-  const randomHex = (length: number) => {
-    let result = "";
-    const hexChars = "0123456789abcdef";
-    for (let i = 0; i < length; i++) {
-      result += hexChars[Math.floor(Math.random() * 16)];
-    }
-    return result;
-  };
-
-  // Format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
-  // where y is one of: 8, 9, a, or b
-  const uuid =
-    randomHex(8) +
-    "-" +
-    randomHex(4) +
-    "-" +
-    "4" +
-    randomHex(3) +
-    "-" +
-    // The first character of this group is limited to 8, 9, a, or b
-    [8, 9, "a", "b"][Math.floor(Math.random() * 4)] +
-    randomHex(3) +
-    "-" +
-    randomHex(12);
-
-  return uuid;
-};
 
 export async function deleteEvent(
   nostr: NostrManager,
@@ -223,7 +193,7 @@ export async function PostListing(
     content: summary,
   };
 
-  const handlerDTag = generateUUID();
+  const handlerDTag = uuidv4();
 
   const origin =
     window && typeof window !== undefined
@@ -350,7 +320,7 @@ export async function constructGiftWrappedEvent(
 
   // Add order-specific tags
   if (isOrder) {
-    tags.push(["order", orderId ? orderId : generateUUID()]);
+    tags.push(["order", orderId ? orderId : uuidv4()]);
 
     if (type) tags.push(["type", type.toString()]);
     if (orderAmount) tags.push(["amount", orderAmount.toString()]);
@@ -565,7 +535,7 @@ export async function publishSavedForLaterEvent(
 
     cartTags.push(
       ...[
-        ["d", generateUUID()],
+        ["d", uuidv4()],
         ["title", type],
       ]
     );
