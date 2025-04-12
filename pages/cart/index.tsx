@@ -429,10 +429,10 @@ export default function Component() {
                 </div>
 
                 <h2 className="mb-2 text-center text-3xl font-bold text-light-text dark:text-dark-text">
-                  Your cart is empty
+                  Your cart is empty . . .
                 </h2>
                 <p className="mb-6 max-w-md text-center text-gray-500 dark:text-gray-400">
-                  Looks like you haven&apos;t added any items to your cart yet.
+                  Go add some items to your cart!
                 </p>
                 <Button
                   className={SHOPSTRBUTTONCLASSNAMES}
@@ -512,14 +512,12 @@ export default function Component() {
                 totalShippingCost={totalShippingCost}
                 totalCost={totalCost}
               />
-              <Button
-                className={`mt-4 ${SHOPSTRBUTTONCLASSNAMES}`}
-                color="primary"
-                variant="light"
+              <span
+                className="mt-4 cursor-pointer text-shopstr-purple hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light"
                 onClick={toggleCheckout}
               >
                 Return to Cart
-              </Button>
+              </span>
             </div>
           </div>
         </div>
