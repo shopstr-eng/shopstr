@@ -28,7 +28,7 @@ export default function ProductCard({
   if (!productData) return null;
 
   const cardHoverStyle =
-    "hover:shadow-xl dark:hover:shadow-yellow-500/30 hover:scale-[1.01]";
+    "hover:shadow-purple-500/30 dark:hover:shadow-yellow-500/30 hover:scale-[1.01]";
 
   if (isReview)
     return (
