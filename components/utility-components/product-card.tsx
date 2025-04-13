@@ -26,16 +26,20 @@ export default function ProductCard({
   const router = useRouter();
   const { pubkey: userPubkey } = useContext(SignerContext);
   if (!productData) return null;
+
+  const cardHoverStyle =
+    "hover:shadow-xl dark:hover:shadow-yellow-500/30 hover:scale-[1.01]";
+
   if (isReview)
     return (
-      <Card className={"mx-[2.5px] my-3 w-[100%] rounded-lg"}>
+      <Card className="mx-2 my-3 w-full rounded-2xl bg-white shadow-lg dark:bg-neutral-900">
         <CardBody
-          className={"cursor-pointer"}
+          className="cursor-pointer p-6"
           onClick={() => {
             onProductClick && onProductClick(productData);
           }}
         >
-          <div className="z-10 flex w-full justify-between pb-3">
+          <div className="flex w-full justify-between pb-4">
             <ProfileWithDropdown
               pubkey={productData.pubkey}
               dropDownKeys={
@@ -44,20 +48,19 @@ export default function ProductCard({
                   : ["shop", "inquiry", "copy_npub"]
               }
             />
-            <div className="flex flex-col justify-center">
-              <CompactCategories categories={productData.categories} />
-            </div>
+            <CompactCategories categories={productData.categories} />
           </div>
-          <div className="mb-5">
+          <div className="mb-4">
             <ImageCarousel
               images={productData.images}
-              classname="w-full h-[300px]"
+              classname="w-full h-[300px] rounded-xl"
               showThumbs={false}
             />
-            <div className="mt-3 flex flex-row justify-between">
+            <div className="mt-4 flex items-center justify-between">
               <Chip
                 key={productData.location}
                 startContent={locationAvatar(productData.location)}
+                className="text-sm"
               >
                 {productData.location}
               </Chip>
@@ -65,20 +68,24 @@ export default function ProductCard({
             </div>
           </div>
           <Divider />
-          <div className="mt-5 flex w-full flex-col items-center ">
+          <div className="mt-5 text-center">
             <h2 className="mb-4 text-2xl font-bold">{productData.title}</h2>
           </div>
           <Divider />
-          <span className="mt-4 text-xl font-semibold">Summary: </span>
-          <span className="whitespace-break-spaces break-all">
-            {productData.summary}
-          </span>
+          <div className="mt-4">
+            <span className="text-xl font-semibold">Summary:</span>
+            <p className="mt-2 whitespace-break-spaces break-words text-base">
+              {productData.summary}
+            </p>
+          </div>
           <Divider className="mt-4" />
-          <span className="mt-4 text-xl font-semibold">Cost Breakdown: </span>
-          <DisplayCostBreakdown monetaryInfo={productData} />
-          <div className="mx-4 mt-2 flex items-center justify-center text-center">
-            <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-            <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+          <div className="mt-4">
+            <span className="text-xl font-semibold">Cost Breakdown:</span>
+            <DisplayCostBreakdown monetaryInfo={productData} />
+          </div>
+          <div className="mx-4 mt-4 flex items-center text-sm text-neutral-500 dark:text-neutral-300">
+            <InformationCircleIcon className="mr-2 h-5 w-5" />
+            <p>
               Once purchased, the seller will receive a DM with your order
               details.
             </p>
@@ -88,49 +95,43 @@ export default function ProductCard({
       </Card>
     );
 
-  const cardHoverStyle =
-    "hover:shadow-lg hover:shadow-shopstr-purple dark:hover:shadow-shopstr-yellow";
-
   return (
     <div
-      className={`${cardHoverStyle} mx-2 my-4 rounded-lg duration-300 transition-shadow`}
+      className={`${cardHoverStyle} mx-2 my-4 rounded-2xl bg-white shadow-md duration-300 transition-all dark:bg-neutral-900`}
     >
-      <div className="w-80 overflow-hidden rounded-lg">
+      <div className="w-80 overflow-hidden rounded-2xl">
         <div
           className="cursor-pointer"
           onClick={() => {
             onProductClick && onProductClick(productData);
           }}
         >
-          <div className="mb-2">
+          <div>
             <ImageCarousel
               images={productData.images}
-              classname="w-full h-[300px]"
+              classname="w-full h-[300px] rounded-t-2xl"
               showThumbs={false}
             />
           </div>
-          <div className="justify-left flex flex-col p-4">
+          <div className="flex flex-col p-4">
             {router.pathname !== "/" && (
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className="max-w-[70%] truncate text-xl font-semibold text-light-text dark:text-dark-text">
                   {productData.title}
                 </h2>
-                <div>
-                  {productData.status === "active" && (
-                    <span className="mr-2 rounded-full bg-green-500 px-2 py-1 text-xs font-semibold text-white">
-                      Active
-                    </span>
-                  )}
-                  {productData.status === "sold" && (
-                    <span className="mr-2 rounded-full bg-red-500 px-2 py-1 text-xs font-semibold text-white">
-                      Sold
-                    </span>
-                  )}
-                </div>
+                {productData.status === "active" && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900 dark:text-green-300">
+                    🟢 Active
+                  </span>
+                )}
+                {productData.status === "sold" && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900 dark:text-red-300">
+                    🔴 Sold
+                  </span>
+                )}
               </div>
             )}
-
-            <div className="z-10 mb-2 flex w-full justify-between">
+            <div className="mb-3">
               <ProfileWithDropdown
                 pubkey={productData.pubkey}
                 dropDownKeys={
@@ -141,7 +142,14 @@ export default function ProductCard({
               />
             </div>
             {router.pathname !== "/" && (
-              <div className="justify-left flex">
+              <div className="mt-1 flex items-center justify-between">
+                <Chip
+                  key={productData.location}
+                  startContent={locationAvatar(productData.location)}
+                  className="text-xs"
+                >
+                  {productData.location}
+                </Chip>
                 <CompactPriceDisplay monetaryInfo={productData} />
               </div>
             )}

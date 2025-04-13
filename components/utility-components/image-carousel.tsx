@@ -1,112 +1,120 @@
 import React from "react";
 import { Carousel } from "react-responsive-carousel";
-import "react-responsive-carousel/lib/styles/carousel.min.css"; // requires a loader
+import "react-responsive-carousel/lib/styles/carousel.min.css";
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import { Image } from "@nextui-org/react";
 import { buildSrcSet } from "@/utils/images";
 import { useRouter } from "next/router";
-import { PREVNEXTBUTTONSTYLES } from "@/utils/STATIC-VARIABLES";
 
 interface ImageCarouselProps {
   images: string[];
   classname?: string;
   showThumbs?: boolean;
+  fixedHeight?: boolean;
 }
+
 export default function ImageCarousel({
   images,
-  classname,
-  showThumbs,
+  classname = "",
+  showThumbs = false,
+  fixedHeight = true,
 }: ImageCarouselProps) {
   const router = useRouter();
 
+  const PREVNEXTBUTTONSTYLES =
+    "absolute z-10 top-1/2 transform -translate-y-1/2 p-2 bg-white dark:bg-neutral-800 bg-opacity-60 rounded-full shadow-md hover:bg-opacity-90 transition duration-200";
+
+  const containerClass = `flex items-center justify-center ${classname}`;
+
+  const imageClass = fixedHeight
+    ? "h-full w-full object-cover rounded-xl transition-transform duration-300 ease-in-out hover:scale-105"
+    : "w-full object-cover rounded-xl";
+
   const displayImages = () => {
-    const className = "flex items-center justify-center " + classname + "";
-    if (!images || images.length == 0)
+    if (!images || images.length === 0) {
       return [
-        <div className={className} key={"image" + 0}>
+        <div className={containerClass} key="no-image">
           <Image
             src="/no-image-placeholder.png"
-            className="h-full w-full object-contain"
+            className={imageClass}
             alt="No image placeholder"
           />
         </div>,
       ];
-    return images.map((image, index) => {
-      return (
-        <div className={className} key={"image" + index}>
-          <Image
-            src={image}
-            srcSet={buildSrcSet(image)}
-            className="h-full w-full object-contain"
-            alt="Product image"
-          />
-        </div>
-      );
-    });
+    }
+
+    return images.map((image, index) => (
+      <div className={containerClass} key={`image-${index}`}>
+        <Image
+          src={image}
+          srcSet={buildSrcSet(image)}
+          className={imageClass}
+          alt={image || `Product image ${index + 1}`}
+          radius="none"
+          style={{
+            width: "100%",
+            height: "100%",
+          }}
+          disableSkeleton={true}
+        />
+      </div>
+    ));
   };
+
   return (
     <Carousel
       showArrows={images && images.length > 1}
       showStatus={false}
-      showIndicators={router.pathname !== "/" && images && images.length > 1}
+      showIndicators={router.pathname !== "/" && images.length > 1}
       showThumbs={showThumbs}
+      infiniteLoop
+      preventMovementUntilSwipeScrollTolerance
+      swipeScrollTolerance={50}
       renderArrowPrev={(onClickHandler, hasPrev, label) =>
         hasPrev && (
           <button
-            className={"left-0 justify-start " + PREVNEXTBUTTONSTYLES}
+            className={`left-4 ${PREVNEXTBUTTONSTYLES}`}
             onClick={(e) => {
               onClickHandler();
               e.stopPropagation();
             }}
             title={label}
           >
-            <ChevronLeftIcon className="h-7 w-7" />
+            <ChevronLeftIcon className="h-6 w-6 text-black dark:text-white" />
           </button>
         )
       }
       renderArrowNext={(onClickHandler, hasNext, label) =>
         hasNext && (
           <button
-            className={"right-0 justify-end " + PREVNEXTBUTTONSTYLES}
+            className={`right-4 ${PREVNEXTBUTTONSTYLES}`}
             onClick={(e) => {
               onClickHandler();
               e.stopPropagation();
             }}
             title={label}
           >
-            <ChevronRightIcon className="h-7 w-7" />
+            <ChevronRightIcon className="h-6 w-6 text-black dark:text-white" />
           </button>
         )
       }
       renderIndicator={(onClickHandler, isSelected, index, label) => {
-        const indicatorStyles =
-          "inline-block w-3.5 h-3.5 rounded-full mr-3 z-10 cursor-pointer";
-        if (isSelected) {
-          return (
-            <li
-              className={"bg-cyan-500 " + indicatorStyles}
-              aria-label={`Selected: ${label} ${index + 1}`}
-              title={`Selected: ${label} ${index + 1}`}
-              onClick={(e) => {
-                e.stopPropagation();
-              }}
-            />
-          );
-        }
+        const base = "inline-block w-3 h-3 rounded-full mx-1 cursor-pointer";
         return (
           <li
-            className={indicatorStyles + " bg-gray-300 hover:bg-gray-500"}
+            key={index}
+            className={
+              isSelected
+                ? `${base} bg-blue-500`
+                : `${base} bg-gray-300 hover:bg-gray-500`
+            }
             onClick={(e) => {
               onClickHandler(e);
               e.stopPropagation();
             }}
-            onKeyDown={onClickHandler}
-            value={index}
-            key={index}
+            title={`${label} ${index + 1}`}
             role="button"
             tabIndex={0}
-            title={`${label} ${index + 1}`}
-            aria-label={`${label} ${index + 1}`}
           />
         );
       }}
