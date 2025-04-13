@@ -5,6 +5,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import { Image } from "@nextui-org/react";
 import { buildSrcSet } from "@/utils/images";
 import { useRouter } from "next/router";
+import { PREVNEXTBUTTONSTYLES } from "@/utils/STATIC-VARIABLES";
 
 interface ImageCarouselProps {
   images: string[];
@@ -20,9 +21,6 @@ export default function ImageCarousel({
   fixedHeight = true,
 }: ImageCarouselProps) {
   const router = useRouter();
-
-  const PREVNEXTBUTTONSTYLES =
-    "absolute z-10 top-1/2 transform -translate-y-1/2 p-2 bg-white dark:bg-neutral-800 bg-opacity-60 rounded-full shadow-md hover:bg-opacity-90 transition duration-200";
 
   const containerClass = `flex items-center justify-center ${classname}`;
 

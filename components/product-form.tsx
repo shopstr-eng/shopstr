@@ -262,7 +262,14 @@ export default function ProductForm({
         <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
           Add New Product Listing
         </ModalHeader>
-        <form onSubmit={handleSubmit(onSubmit as any)}>
+        <form
+          onSubmit={(e) => {
+            if (e.target !== e.currentTarget) {
+              e.preventDefault();
+            }
+            return handleSubmit(onSubmit as any)(e);
+          }}
+        >
           <ModalBody>
             <Controller
               name="Product Name"
@@ -298,67 +305,67 @@ export default function ProductForm({
               showStatus={false}
               showIndicators={images.length > 1}
               showThumbs={images.length > 1}
+              infiniteLoop
+              preventMovementUntilSwipeScrollTolerance
+              swipeScrollTolerance={50}
               selectedItem={currentSlide}
               onChange={(index) => setCurrentSlide(index)}
+              onClickItem={(index) => {
+                setCurrentSlide(index);
+                return false;
+              }}
               renderArrowPrev={(onClickHandler, hasPrev, label) =>
                 hasPrev && (
                   <button
-                    className={"left-0 justify-start " + PREVNEXTBUTTONSTYLES}
+                    type="button"
+                    className={`left-4 ${PREVNEXTBUTTONSTYLES}`}
                     onClick={(e) => {
-                      onClickHandler();
+                      e.preventDefault();
                       e.stopPropagation();
+                      onClickHandler();
                     }}
                     title={label}
                   >
-                    <ChevronLeftIcon className="h-7 w-7" />
+                    <ChevronLeftIcon className="h-6 w-6 text-black dark:text-white" />
                   </button>
                 )
               }
               renderArrowNext={(onClickHandler, hasNext, label) =>
                 hasNext && (
                   <button
-                    className={"right-0 justify-end " + PREVNEXTBUTTONSTYLES}
+                    type="button"
+                    className={`right-4 ${PREVNEXTBUTTONSTYLES}`}
                     onClick={(e) => {
-                      onClickHandler();
+                      e.preventDefault();
                       e.stopPropagation();
+                      onClickHandler();
                     }}
                     title={label}
                   >
-                    <ChevronRightIcon className="h-7 w-7" />
+                    <ChevronRightIcon className="h-6 w-6 text-black dark:text-white" />
                   </button>
                 )
               }
               renderIndicator={(onClickHandler, isSelected, index, label) => {
-                const indicatorStyles =
-                  "inline-block w-3.5 h-3.5 rounded-full mr-3 z-10 cursor-pointer";
-                if (isSelected) {
-                  return (
-                    <li
-                      className={"bg-cyan-500 " + indicatorStyles}
-                      aria-label={`Selected: ${label} ${index + 1}`}
-                      title={`Selected: ${label} ${index + 1}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                      }}
-                    />
-                  );
-                }
+                const base =
+                  "inline-block w-3 h-3 rounded-full mx-1 cursor-pointer";
                 return (
                   <li
+                    key={index}
                     className={
-                      indicatorStyles + " bg-gray-300 hover:bg-gray-500"
+                      isSelected
+                        ? `${base} bg-blue-500`
+                        : `${base} bg-gray-300 hover:bg-gray-500`
                     }
                     onClick={(e) => {
-                      onClickHandler(e);
+                      e.preventDefault();
                       e.stopPropagation();
+                      onClickHandler(e);
                     }}
-                    onKeyDown={onClickHandler}
-                    value={index}
-                    key={index}
+                    title={`${label} ${index + 1}`}
                     role="button"
                     tabIndex={0}
-                    title={`${label} ${index + 1}`}
-                    aria-label={`${label} ${index + 1}`}
+                    style={{ marginBottom: "10px" }}
                   />
                 );
               }}
@@ -367,21 +374,26 @@ export default function ProductForm({
                 ? images.map((image, index) => (
                     <div
                       key={index}
-                      className="relative flex h-full w-full items-center justify-center"
+                      className="relative flex h-full w-full items-center justify-center p-4"
+                      onClick={(e) => e.preventDefault()}
                     >
-                      <div className="absolute right-2 top-2 z-20">
+                      <div className="absolute right-4 top-4 z-20">
+                        {" "}
+                        {/* Increased spacing */}
                         <ConfirmActionDropdown
                           helpText="Are you sure you want to delete this image?"
                           buttonLabel="Delete Image"
                           onConfirm={deleteImage(index)}
                         >
                           <Button
+                            type="button"
                             isIconOnly
                             color="danger"
                             aria-label="Trash"
                             radius="full"
                             className="bg-gradient-to-tr from-blue-950 to-red-950 text-white"
                             variant="bordered"
+                            onClick={(e) => e.stopPropagation()}
                           >
                             <TrashIcon style={{ padding: 4 }} />
                           </Button>
@@ -393,19 +405,22 @@ export default function ProductForm({
                         width={350}
                         src={image}
                         srcSet={buildSrcSet(image)}
+                        onClick={(e) => e.preventDefault()} // Prevent form submission
                       />
                     </div>
                   ))
                 : [
                     <div
                       key="placeholder"
-                      className="flex h-full w-full items-center justify-center"
+                      className="flex h-full w-full items-center justify-center p-4"
+                      onClick={(e) => e.preventDefault()}
                     >
                       <Image
                         alt="Product Image"
                         className="object-cover"
                         src="/no-image-placeholder.png"
                         width={350}
+                        onClick={(e) => e.preventDefault()}
                       />
                     </div>,
                   ]}
