@@ -1,7 +1,6 @@
 import { Button, Image } from "@nextui-org/react";
 import {
   ArrowUpRightIcon,
-  ShoppingCartIcon,
   ShieldCheckIcon,
   BoltIcon,
   UserCircleIcon,
