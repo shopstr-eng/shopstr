@@ -125,7 +125,7 @@ const ChatMessage = ({
   return (
     <div
       key={index}
-      className={`my-3 flex ${
+      className={`my-2 flex ${
         isUserMessage
           ? "justify-end"
           : messageEvent.pubkey === currentChatPubkey
@@ -134,17 +134,17 @@ const ChatMessage = ({
       }`}
     >
       <div
-        className={`flex max-w-[85%] flex-col ${
+        className={`flex max-w-[90%] flex-col rounded-t-large p-3 ${
           isUserMessage
-            ? "rounded-tl-xl rounded-tr-xl rounded-bl-xl bg-gradient-to-br from-shopstr-purple to-shopstr-purple-light text-white shadow-md dark:from-shopstr-yellow-dark dark:to-shopstr-yellow-light dark:text-dark-bg"
-            : "rounded-tl-xl rounded-tr-xl rounded-br-xl bg-gray-100 text-light-text shadow-md dark:bg-gray-700 dark:text-dark-text"
-        } p-4`}
+            ? "rounded-bl-lg bg-gradient-to-br from-shopstr-purple to-shopstr-purple-light text-white dark:from-shopstr-yellow-dark dark:to-shopstr-yellow-light dark:text-dark-bg"
+            : "rounded-br-lg bg-gray-300 text-light-text dark:bg-gray-700 dark:text-dark-text"
+        }`}
       >
-        <p className="inline-block flex-wrap overflow-x-hidden break-all text-sm">
+        <p className="inline-block flex-wrap overflow-x-hidden break-all">
           {cashuPrefix && canDecodeToken && tokenAfterCashuVersion ? (
             <>
               {renderMessageContent(contentBeforeCashu!)}
-              <div className="mt-2 flex items-center rounded-lg bg-white/20 p-2 dark:bg-black/20">
+              <div className="flex items-center">
                 <ClaimButton token={cashuPrefix + tokenAfterCashuVersion} />
                 {copiedToClipboard ? (
                   <CheckIcon className="ml-2 h-5 w-5 text-green-400" />
@@ -162,9 +162,9 @@ const ChatMessage = ({
             renderMessageContent(messageEvent.content)
           )}
         </p>
-        <div className="h-1"></div>
+        <div className="m-1"></div>
         <span
-          className={`mt-1 text-xs opacity-60 ${
+          className={`text-xs opacity-50 ${
             isUserMessage ? "text-right" : "text-left"
           }`}
         >

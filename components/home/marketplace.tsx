@@ -457,8 +457,15 @@ function MarketplacePage({
                 </div>
               </div>
             ) : (
-              <div className="break-words text-center text-xl text-light-text dark:text-dark-text">
-                No reviews . . . yet!
+              <div className="flex-grow flex items-center justify-center py-10 mt-10">
+                <div className="max-w-xl w-full p-10 rounded-lg shadow-lg bg-light-fg dark:bg-dark-fg text-center">
+                  <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
+                    No reviews . . . yet!
+                  </p>
+                  <p className="mt-4 text-lg text-light-text dark:text-dark-text">
+                    Seems there aren&apos;t any reviews for this shop yet.
+                  </p>
+                </div> 
               </div>
             )}
             <p className="text-base">{renderProductScores()}</p>
