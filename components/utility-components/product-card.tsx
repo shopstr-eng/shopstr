@@ -121,12 +121,12 @@ export default function ProductCard({
                 </h2>
                 {productData.status === "active" && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900 dark:text-green-300">
-                    🟢 Active
+                    Active
                   </span>
                 )}
                 {productData.status === "sold" && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900 dark:text-red-300">
-                    🔴 Sold
+                    Sold
                   </span>
                 )}
               </div>

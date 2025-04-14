@@ -157,7 +157,7 @@ const DisplayProducts = ({
   const productSatisfiesSearchFilter = (productData: ProductData) => {
     if (!selectedSearch) return true; // nothing in search bar
     if (!productData.title) return false; // we don't want to display it if product has no title
-    
+
     // Handle naddr search
     if (selectedSearch.includes("naddr")) {
       try {
@@ -172,8 +172,8 @@ const DisplayProducts = ({
       } catch (_) {
         return false;
       }
-    } 
-    
+    }
+
     // Handle npub search
     if (selectedSearch.includes("npub")) {
       try {
@@ -186,27 +186,27 @@ const DisplayProducts = ({
         return false;
       }
     }
-    
+
     // Handle regular text search - search in both title and summary
     try {
       const re = new RegExp(selectedSearch, "gi");
-      
+
       // Check title match
       const titleMatch = productData.title.match(re);
       if (titleMatch && titleMatch.length > 0) return true;
-      
+
       // Check summary match if summary exists
       if (productData.summary) {
         const summaryMatch = productData.summary.match(re);
         if (summaryMatch && summaryMatch.length > 0) return true;
       }
-      
+
       // Check price match - if search term is numeric, check if it matches the price
       const numericSearch = parseFloat(selectedSearch);
       if (!isNaN(numericSearch) && productData.price === numericSearch) {
         return true;
       }
-      
+
       return false;
     } catch (_) {
       return false;
