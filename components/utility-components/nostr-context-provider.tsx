@@ -11,10 +11,7 @@ import {
   NostrSigner,
 } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
-import {
-  getLocalStorageData,
-  setLocalStorageDataOnSignIn,
-} from "@/utils/nostr/nostr-helper-functions";
+import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
 import PassphraseChallengeModal from "@/components/utility-components/request-passphrase-modal";
 import AuthUrlChallengeModal from "@/components/utility-components/auth-challenge-modal";
 import { NostrNIP07Signer } from "@/utils/nostr/signers/nostr-nip07-signer";
