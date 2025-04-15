@@ -31,6 +31,7 @@ export async function migrateToNip49(passphrase: string): Promise<boolean> {
         
         setLocalStorageDataOnSignIn({
           encryptedPrivateKey: encryptedPrivKey,
+          migrationComplete: true,
           relays: storedData.relays,
           readRelays: storedData.readRelays,
           writeRelays: storedData.writeRelays,
@@ -58,6 +59,18 @@ export async function migrateToNip49(passphrase: string): Promise<boolean> {
 
 export function needsMigration(): boolean {
   const storedData = getLocalStorageData();
+  
+  console.log("Migration check - migrationComplete flag:", storedData.migrationComplete);
+  console.log("Migration check - encryptedPrivateKey exists:", !!storedData.encryptedPrivateKey);
+  
+  if (storedData.encryptedPrivateKey) {
+    console.log("Migration check - key type:", typeof storedData.encryptedPrivateKey);
+    console.log("Migration check - key starts with ncryptsec:", storedData.encryptedPrivateKey.startsWith('ncryptsec'));
+  }
+  
+  if (storedData.migrationComplete === true) {
+    return false;
+  }
   
   return !!(
     storedData.encryptedPrivateKey && 

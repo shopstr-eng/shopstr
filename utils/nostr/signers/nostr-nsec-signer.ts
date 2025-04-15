@@ -77,7 +77,12 @@ export class NostrNSecSigner implements NostrSigner {
     this.challengeHandler = challengeHandler;
     this.pubkey = pubkey;
     this.passphrase = passphrase;
-    this.isNip49Format = encryptedPrivKey.startsWith("ncryptsec");
+    
+    // Add debugging
+    console.log("NSEC Signer - key begins with:", encryptedPrivKey.substring(0, 10));
+    console.log("NSEC Signer - detecting NIP-49 format:", encryptedPrivKey.startsWith('ncryptsec'));
+    
+    this.isNip49Format = encryptedPrivKey.startsWith('ncryptsec');
   }
 
   static fromJSON(
