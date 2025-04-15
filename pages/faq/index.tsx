@@ -102,12 +102,10 @@ export default function Faq() {
           Frequently Asked Questions
         </h1>
 
-        {/* Section description */}
         <p className="text-center mb-10 text-light-text/80 dark:text-dark-text/80 max-w-3xl mx-auto">
           Get quick answers to common questions about using Shopstr, the permissionless marketplace built on Nostr.
         </p>
         
-        {/* FAQ sections */}
         {faqSections.map((section, sectionIndex) => (
           <div key={sectionIndex} className="mb-8">
             <h2 className="mb-4 text-xl font-semibold text-light-text dark:text-dark-text border-b pb-2 border-gray-200 dark:border-gray-700">
