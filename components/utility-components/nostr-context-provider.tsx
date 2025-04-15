@@ -172,20 +172,30 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
       challengeHandler
     );
     if (!signerObject) return;
-    setLocalStorageDataOnSignIn({
-      signer: signerObject,
-    });
+    
     setSigner(signerObject);
     loadKeys(signerObject);
+
+    const isAlreadyLoaded = localStorage.getItem('signer');
+    if (!isAlreadyLoaded || JSON.stringify(existingSigner) !== isAlreadyLoaded) {
+      localStorage.setItem('signer', JSON.stringify(existingSigner));
+      
+      const shouldReloadSigner = false;
+      window.dispatchEvent(new CustomEvent('storage', { detail: { shouldReloadSigner } }));
+    }
   }, []);
 
   useEffect(() => {
+    const handleStorage = (event: Event & { detail?: { shouldReloadSigner?: boolean } }) => {
+      if (event.detail?.shouldReloadSigner === false) return;
+      loadSigner();
+    };
+
+    window.addEventListener("storage", handleStorage);
     loadSigner();
 
-    window.addEventListener("storage", loadSigner);
-
     return () => {
-      window.removeEventListener("storage", loadSigner);
+      window.removeEventListener("storage", handleStorage);
     };
   }, [loadSigner]);
 
