@@ -14,6 +14,7 @@ import {
   validateNSecKey,
   parseBunkerToken,
 } from "@/utils/nostr/nostr-helper-functions";
+import { migrateToNip49, needsMigration } from "@/utils/nostr/encryption-migration";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 import { RelaysContext } from "../../utils/context/context";
 import { useRouter } from "next/router";
@@ -44,6 +45,8 @@ export default function SignInModal({
 
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
+
+  const [migrationNeeded, setMigrationNeeded] = useState<boolean>(false);
 
   const relaysContext = useContext(RelaysContext);
 
@@ -111,6 +114,13 @@ export default function SignInModal({
     }
   }, [bunkerToken]);
 
+  useEffect(() => {
+    // Check if we need to migrate an existing key when modal opens
+    if (isOpen) {
+      setMigrationNeeded(needsMigration());
+    }
+  }, [isOpen]);
+
   const handleGenerateKeys = () => {
     router.push("/keys");
     onClose();
@@ -122,22 +132,38 @@ export default function SignInModal({
         setFailureText("No passphrase provided!");
         setShowFailureModal(true);
       } else {
-        const { encryptedPrivKey, pubkey } = NostrNSecSigner.getEncryptedNSEC(
-          privateKey,
-          passphrase
-        );
+        try {
+          // If migration is needed, attempt to migrate the existing key
+          if (migrationNeeded) {
+            const migrationSuccess = await migrateToNip49(passphrase);
+            if (!migrationSuccess) {
+              setFailureText("Key migration failed. Please try again.");
+              setShowFailureModal(true);
+              return;
+            }
+          }
+          
+          const { encryptedPrivKey, pubkey } = NostrNSecSigner.getEncryptedNSEC(
+            privateKey,
+            passphrase
+          );
 
-        setTimeout(() => {
-          onClose(); // avoids tree walker issue by closing modal
-        }, 500);
+          setTimeout(() => {
+            onClose(); // avoids tree walker issue by closing modal
+          }, 500);
 
-        const signer = newSigner!("nsec", {
-          encryptedPrivKey: encryptedPrivKey,
-          pubkey,
-        });
-        await signer.getPubKey();
-        saveSigner(signer);
-        onClose();
+          const signer = newSigner!("nsec", {
+            encryptedPrivKey: encryptedPrivKey,
+            pubkey,
+          });
+          await signer.getPubKey();
+          saveSigner(signer);
+          onClose();
+        } catch (error) {
+          console.error("Sign-in error:", error);
+          setFailureText("Failed to sign in. Please check your private key and passphrase.");
+          setShowFailureModal(true);
+        }
       }
     } else {
       setFailureText(
@@ -169,6 +195,7 @@ export default function SignInModal({
           setShowNsecSignIn(false);
           setPrivateKey("");
           setPassphrase("");
+          setMigrationNeeded(false);
           onClose();
         }}
         // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
