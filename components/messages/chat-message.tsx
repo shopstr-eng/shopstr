@@ -35,8 +35,8 @@ const ChatMessage = ({
   setOrderId: (orderId: string) => void;
 }) => {
   const router = useRouter();
-
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
+  const { pubkey: userPubkey } = useContext(SignerContext);
 
   useEffect(() => {
     if (messageEvent?.content && messageEvent.content.includes("npub")) {
@@ -88,8 +88,6 @@ const ChatMessage = ({
     ? messageEvent.content.split(cashuPrefix)[0]
     : messageEvent.content;
 
-  const { pubkey: userPubkey } = useContext(SignerContext);
-
   const handleCopyToken = (token: string) => {
     navigator.clipboard.writeText(token);
     setCopiedToClipboard(true);
@@ -106,7 +104,7 @@ const ChatMessage = ({
         return (
           <span
             key={index}
-            className="cursor-pointer text-shopstr-purple-light hover:underline dark:text-shopstr-yellow-light"
+            className="cursor-pointer text-shopstr-purple hover:underline dark:text-shopstr-yellow"
             onClick={() => {
               router.replace({
                 pathname: "/orders",
@@ -122,11 +120,13 @@ const ChatMessage = ({
     });
   };
 
+  const isUserMessage = messageEvent.pubkey === userPubkey;
+
   return (
     <div
       key={index}
       className={`my-2 flex ${
-        messageEvent.pubkey === userPubkey
+        isUserMessage
           ? "justify-end"
           : messageEvent.pubkey === currentChatPubkey
             ? "justify-start"
@@ -134,31 +134,28 @@ const ChatMessage = ({
       }`}
     >
       <div
-        className={`flex max-w-[90%] flex-col rounded-t-large p-3  ${
-          messageEvent.pubkey === userPubkey
-            ? "rounded-bl-lg bg-shopstr-purple-light text-light-bg dark:bg-shopstr-yellow-light dark:text-dark-bg"
-            : "rounded-br-lg bg-gray-200 text-light-text dark:bg-gray-300 "
+        className={`flex max-w-[90%] flex-col rounded-t-large p-3 ${
+          isUserMessage
+            ? "rounded-bl-lg bg-gradient-to-br from-shopstr-purple to-shopstr-purple-light text-white dark:from-shopstr-yellow-dark dark:to-shopstr-yellow-light dark:text-dark-bg"
+            : "rounded-br-lg bg-gray-300 text-light-text dark:bg-gray-700 dark:text-dark-text"
         }`}
       >
-        <p className={`inline-block flex-wrap overflow-x-hidden break-all`}>
+        <p className="inline-block flex-wrap overflow-x-hidden break-all">
           {cashuPrefix && canDecodeToken && tokenAfterCashuVersion ? (
             <>
               {renderMessageContent(contentBeforeCashu!)}
               <div className="flex items-center">
                 <ClaimButton token={cashuPrefix + tokenAfterCashuVersion} />
-                <ClipboardIcon
-                  onClick={() =>
-                    handleCopyToken(cashuPrefix + tokenAfterCashuVersion)
-                  }
-                  className={`ml-2 mt-1 h-5 w-5 cursor-pointer text-light-text ${
-                    copiedToClipboard ? "hidden" : ""
-                  }`}
-                />
-                <CheckIcon
-                  className={`ml-2 mt-1 h-5 w-5 cursor-pointer text-light-text ${
-                    copiedToClipboard ? "" : "hidden"
-                  }`}
-                />
+                {copiedToClipboard ? (
+                  <CheckIcon className="ml-2 h-5 w-5 text-green-400" />
+                ) : (
+                  <ClipboardIcon
+                    onClick={() =>
+                      handleCopyToken(cashuPrefix + tokenAfterCashuVersion)
+                    }
+                    className="ml-2 h-5 w-5 cursor-pointer transition-all hover:scale-110"
+                  />
+                )}
               </div>
             </>
           ) : (
@@ -168,7 +165,7 @@ const ChatMessage = ({
         <div className="m-1"></div>
         <span
           className={`text-xs opacity-50 ${
-            messageEvent.pubkey === userPubkey ? "text-right" : "text-left"
+            isUserMessage ? "text-right" : "text-left"
           }`}
         >
           {timeSinceMessageDisplayText(messageEvent.created_at).dateTime}

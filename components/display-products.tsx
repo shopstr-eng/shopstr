@@ -9,6 +9,8 @@ import {
 } from "../utils/context/context";
 import ProductCard from "./utility-components/product-card";
 import DisplayProductModal from "./display-product-modal";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { Button } from "@nextui-org/react";
 import ShopstrSpinner from "./utility-components/shopstr-spinner";
 import { useRouter } from "next/router";
 import parseTags, {
@@ -260,11 +262,22 @@ const DisplayProducts = ({
         {isMyListings &&
           !isProductsLoading &&
           !productEvents.some((product) => product.pubkey === userPubkey) && (
-            <p className="mt-4 break-words text-center text-2xl text-light-text dark:text-dark-text">
-              No products found...
-              <br></br>
-              <br></br>Try adding a new listing!
-            </p>
+            <div className="flex-grow flex items-center justify-center py-10 mt-20">
+              <div className="max-w-lg w-full p-8 rounded-lg shadow-lg bg-light-fg dark:bg-dark-fg text-center">
+                <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
+                  No products found...
+                </p>
+                <p className="mt-4 text-lg text-light-text dark:text-dark-text">
+                  Try adding a new listing!
+                </p>
+                <Button
+                  className={`${SHOPSTRBUTTONCLASSNAMES} mt-6`}
+                  onClick={() => router.push("?addNewListing")}
+                >
+                  Add Listing
+                  </Button>
+              </div>
+            </div>
           )}
         {!isMyListings &&
         (profileMapContext.isLoading ||
