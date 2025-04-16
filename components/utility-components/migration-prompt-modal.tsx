@@ -27,13 +27,16 @@ export default function MigrationPromptModal({
     try {
       const success = await migrateToNip49(passphrase);
       if (success) {
+        console.log("✅ Migration completed successfully - reloading signer");
         onSuccess();
         onClose();
       } else {
+        console.error("❌ Migration failed");
         setError("Migration failed. Please try again with the correct passphrase.");
       }
       return success;
     } catch (err) {
+      console.error("❌ Migration error:", err);
       setError("Failed to decrypt with the provided passphrase. Please try again.");
       return false;
     } finally {
