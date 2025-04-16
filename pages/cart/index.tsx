@@ -350,7 +350,7 @@ export default function Component() {
                           className="mr-4 h-24 w-24 rounded-md object-cover"
                         />
                         <div className="flex-1">
-                          <div className="flex flex-col md:flex-row md:items-start md:justify-between">
+                          <div className="flex flex-col md:flex-row md:items-start md:justify-between md:gap-5">
                             <h2 className="mb-2 text-lg font-semibold md:mb-0">
                               {product.title}
                             </h2>
