@@ -604,9 +604,9 @@ export default function CheckoutCard({
                   </div>
                 ) : (
                   <div className="flex justify-center">
-                    <div className="max-w-xl w-full p-10 rounded-lg shadow-lg bg-light-fg dark:bg-dark-fg text-center">
+                    <div className="w-full max-w-xl rounded-lg bg-light-fg p-10 text-center shadow-lg dark:bg-dark-fg">
                       <FaceFrownIcon className="mx-auto mb-5 h-20 w-20 text-light-text dark:text-dark-text" />
-                      <span className="text-5xl text-light-text dark:text-dark-text block">
+                      <span className="block text-5xl text-light-text dark:text-dark-text">
                         No reviews . . . yet!
                       </span>
                       <div className="flex flex-col items-center justify-center gap-3 pt-5 opacity-80">

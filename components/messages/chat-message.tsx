@@ -136,7 +136,7 @@ const ChatMessage = ({
       <div
         className={`flex max-w-[90%] flex-col rounded-t-large p-3 ${
           isUserMessage
-            ? "rounded-bl-lg bg-gradient-to-br from-shopstr-purple to-shopstr-purple-light text-white dark:from-shopstr-yellow-dark dark:to-shopstr-yellow-light dark:text-dark-bg"
+            ? "dark:from-shopstr-yellow-dark rounded-bl-lg bg-gradient-to-br from-shopstr-purple to-shopstr-purple-light text-white dark:to-shopstr-yellow-light dark:text-dark-bg"
             : "rounded-br-lg bg-gray-300 text-light-text dark:bg-gray-700 dark:text-dark-text"
         }`}
       >
