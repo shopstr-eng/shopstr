@@ -262,8 +262,8 @@ const DisplayProducts = ({
         {isMyListings &&
           !isProductsLoading &&
           !productEvents.some((product) => product.pubkey === userPubkey) && (
-            <div className="flex-grow flex items-center justify-center py-10 mt-20">
-              <div className="max-w-lg w-full p-8 rounded-lg shadow-lg bg-light-fg dark:bg-dark-fg text-center">
+            <div className="mt-20 flex flex-grow items-center justify-center py-10">
+              <div className="w-full max-w-lg rounded-lg bg-light-fg p-8 text-center shadow-lg dark:bg-dark-fg">
                 <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
                   No products found...
                 </p>
@@ -275,7 +275,7 @@ const DisplayProducts = ({
                   onClick={() => router.push("?addNewListing")}
                 >
                   Add Listing
-                  </Button>
+                </Button>
               </div>
             </div>
           )}

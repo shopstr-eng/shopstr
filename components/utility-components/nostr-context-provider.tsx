@@ -169,21 +169,28 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
       challengeHandler
     );
     if (!signerObject) return;
-    
+
     setSigner(signerObject);
     loadKeys(signerObject);
 
-    const isAlreadyLoaded = localStorage.getItem('signer');
-    if (!isAlreadyLoaded || JSON.stringify(existingSigner) !== isAlreadyLoaded) {
-      localStorage.setItem('signer', JSON.stringify(existingSigner));
-      
+    const isAlreadyLoaded = localStorage.getItem("signer");
+    if (
+      !isAlreadyLoaded ||
+      JSON.stringify(existingSigner) !== isAlreadyLoaded
+    ) {
+      localStorage.setItem("signer", JSON.stringify(existingSigner));
+
       const shouldReloadSigner = false;
-      window.dispatchEvent(new CustomEvent('storage', { detail: { shouldReloadSigner } }));
+      window.dispatchEvent(
+        new CustomEvent("storage", { detail: { shouldReloadSigner } })
+      );
     }
   }, []);
 
   useEffect(() => {
-    const handleStorage = (event: Event & { detail?: { shouldReloadSigner?: boolean } }) => {
+    const handleStorage = (
+      event: Event & { detail?: { shouldReloadSigner?: boolean } }
+    ) => {
       if (event.detail?.shouldReloadSigner === false) return;
       loadSigner();
     };
