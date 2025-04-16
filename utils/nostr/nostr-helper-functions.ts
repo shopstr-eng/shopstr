@@ -1033,7 +1033,6 @@ export const getLocalStorageData = (): LocalStorageInterface => {
           break;
       }
     }
-
     migrationComplete = localStorage.getItem("migrationComplete") === "true";
   }
   return {

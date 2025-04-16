@@ -13,6 +13,7 @@ import {
   NostrSigner,
 } from "@/utils/nostr/signers/nostr-signer";
 import * as nip49 from "nostr-tools/nip49";
+
 export type PassphraseResponse = {
   passphrase: string;
   remember: boolean;
@@ -77,11 +78,6 @@ export class NostrNSecSigner implements NostrSigner {
     this.challengeHandler = challengeHandler;
     this.pubkey = pubkey;
     this.passphrase = passphrase;
-    
-    // Add debugging
-    console.log("NSEC Signer - key begins with:", encryptedPrivKey.substring(0, 10));
-    console.log("NSEC Signer - detecting NIP-49 format:", encryptedPrivKey.startsWith('ncryptsec'));
-    
     this.isNip49Format = encryptedPrivKey.startsWith('ncryptsec');
   }
 

@@ -119,7 +119,7 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
   const loadSigner = useCallback(() => {
     let existingSigner;
     const { signer, signInMethod } = getLocalStorageData();
-    
+
     if (signer) {
       existingSigner = signer;
     } else if (signInMethod) {
