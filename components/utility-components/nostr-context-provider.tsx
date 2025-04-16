@@ -226,6 +226,7 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
     } else {
       console.log("Not logged in yet, skipping migration check");
     }
+    return undefined;
   }, [isLoggedIn]);
 
   const newSigner = useCallback((type: string, args: any) => {
