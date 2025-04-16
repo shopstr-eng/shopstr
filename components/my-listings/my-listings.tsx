@@ -243,12 +243,21 @@ const MyListingsPage = () => {
             </div>
           )}
           {selectedSection === "About" && !shopAbout && (
-            <div className="flex w-full flex-col justify-start bg-transparent px-4 py-8 text-light-text dark:text-dark-text">
-              <p className="text-base">
-                Nothing here . . . yet!<br></br>
-                <br></br>
-                Set up your shop in settings!
-              </p>
+            <div className="mt-20 flex flex-grow items-center justify-center py-10">
+              <div className="w-full max-w-lg rounded-lg bg-light-fg p-8 text-center shadow-lg dark:bg-dark-fg">
+                <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
+                  Nothing here . . . yet!
+                </p>
+                <p className="mt-4 text-lg text-light-text dark:text-dark-text">
+                  Set up your shop in settings!
+                </p>
+                <Button
+                  className={`${SHOPSTRBUTTONCLASSNAMES} mt-6`}
+                  onClick={() => router.push("settings/shop-settings")}
+                >
+                  Go to Settings
+                </Button>
+              </div>
             </div>
           )}
         </div>

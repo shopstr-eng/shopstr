@@ -249,16 +249,18 @@ const ChatPanel = ({
   if (!currentChatPubkey)
     return (
       <div className="absolute z-20 hidden h-[85vh] w-full flex-col overflow-clip px-2 dark:bg-dark-bg md:relative md:flex">
-        <div className="flex h-full flex-col items-center justify-center">
-          <ChatBubbleLeftIcon className="mb-5 mt-[-70px] h-20 w-20 text-light-text dark:text-dark-text" />
-          <span className="text-5xl text-light-text dark:text-dark-text">
-            No chat selected . . .
-          </span>
-          <div className="flex items-center justify-center gap-3 pt-5 opacity-10">
-            <span className="text-2xl text-light-text dark:text-dark-text">
-              Use your up and down arrow keys to select chats!
+        <div className="mt-10 flex flex-grow items-center justify-center py-10">
+          <div className="w-full max-w-xl rounded-lg bg-light-fg p-10 text-center shadow-lg dark:bg-dark-fg">
+            <ChatBubbleLeftIcon className="mx-auto mb-5 h-20 w-20 text-light-text dark:text-dark-text" />
+            <span className="block text-5xl text-light-text dark:text-dark-text">
+              No chat selected . . .
             </span>
-            <ArrowsUpDownIcon className="h-10 w-10 text-light-text dark:text-dark-text" />
+            <div className="opacity-4 flex flex-col items-center justify-center gap-3 pt-5">
+              <span className="text-2xl text-light-text dark:text-dark-text">
+                Use your up and down arrow keys to select chats!
+              </span>
+              <ArrowsUpDownIcon className="h-10 w-10 text-light-text dark:text-dark-text" />
+            </div>
           </div>
         </div>
       </div>

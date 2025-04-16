@@ -9,6 +9,8 @@ import {
 } from "../utils/context/context";
 import ProductCard from "./utility-components/product-card";
 import DisplayProductModal from "./display-product-modal";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { Button } from "@nextui-org/react";
 import ShopstrSpinner from "./utility-components/shopstr-spinner";
 import { useRouter } from "next/router";
 import parseTags, {
@@ -157,6 +159,8 @@ const DisplayProducts = ({
   const productSatisfiesSearchFilter = (productData: ProductData) => {
     if (!selectedSearch) return true; // nothing in search bar
     if (!productData.title) return false; // we don't want to display it if product has no title
+
+    // Handle naddr search
     if (selectedSearch.includes("naddr")) {
       try {
         const parsedNaddr = nip19.decode(selectedSearch);
@@ -170,25 +174,45 @@ const DisplayProducts = ({
       } catch (_) {
         return false;
       }
-    } else if (selectedSearch.includes("npub")) {
+    }
+
+    // Handle npub search
+    if (selectedSearch.includes("npub")) {
       try {
         const parsedNpub = nip19.decode(selectedSearch);
         if (parsedNpub.type === "npub") {
           return parsedNpub.data === productData.pubkey;
         }
-      } catch (_) {
-        return false;
-      }
-    } else {
-      try {
-        const re = new RegExp(selectedSearch, "gi");
-        const match = productData.title.match(re);
-        return match && match.length > 0;
+        return false; // Return false if npub parsing succeeded but type isn't "npub"
       } catch (_) {
         return false;
       }
     }
-    return;
+
+    // Handle regular text search - search in both title and summary
+    try {
+      const re = new RegExp(selectedSearch, "gi");
+
+      // Check title match
+      const titleMatch = productData.title.match(re);
+      if (titleMatch && titleMatch.length > 0) return true;
+
+      // Check summary match if summary exists
+      if (productData.summary) {
+        const summaryMatch = productData.summary.match(re);
+        if (summaryMatch && summaryMatch.length > 0) return true;
+      }
+
+      // Check price match - if search term is numeric, check if it matches the price
+      const numericSearch = parseFloat(selectedSearch);
+      if (!isNaN(numericSearch) && productData.price === numericSearch) {
+        return true;
+      }
+
+      return false;
+    } catch (_) {
+      return false;
+    }
   };
 
   const productSatisfiesAllFilters = (productData: ProductData) => {
@@ -238,11 +262,22 @@ const DisplayProducts = ({
         {isMyListings &&
           !isProductsLoading &&
           !productEvents.some((product) => product.pubkey === userPubkey) && (
-            <p className="mt-4 break-words text-center text-2xl text-light-text dark:text-dark-text">
-              No products found...
-              <br></br>
-              <br></br>Try adding a new listing!
-            </p>
+            <div className="mt-20 flex flex-grow items-center justify-center py-10">
+              <div className="w-full max-w-lg rounded-lg bg-light-fg p-8 text-center shadow-lg dark:bg-dark-fg">
+                <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
+                  No products found...
+                </p>
+                <p className="mt-4 text-lg text-light-text dark:text-dark-text">
+                  Try adding a new listing!
+                </p>
+                <Button
+                  className={`${SHOPSTRBUTTONCLASSNAMES} mt-6`}
+                  onClick={() => router.push("?addNewListing")}
+                >
+                  Add Listing
+                </Button>
+              </div>
+            </div>
           )}
         {!isMyListings &&
         (profileMapContext.isLoading ||

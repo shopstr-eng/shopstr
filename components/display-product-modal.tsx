@@ -121,12 +121,12 @@ export default function DisplayProductModal({
               </h2>
               <div>
                 {productData.status === "active" && (
-                  <span className="mr-2 rounded-full bg-green-500 px-2 py-1 text-xs font-semibold text-white">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900 dark:text-green-300">
                     Active
                   </span>
                 )}
                 {productData.status === "sold" && (
-                  <span className="mr-2 rounded-full bg-red-500 px-2 py-1 text-xs font-semibold text-white">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900 dark:text-red-300">
                     Sold
                   </span>
                 )}
