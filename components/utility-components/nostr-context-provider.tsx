@@ -11,10 +11,7 @@ import {
   NostrSigner,
 } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
-import {
-  getLocalStorageData,
-  setLocalStorageDataOnSignIn,
-} from "@/utils/nostr/nostr-helper-functions";
+import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
 import PassphraseChallengeModal from "@/components/utility-components/request-passphrase-modal";
 import AuthUrlChallengeModal from "@/components/utility-components/auth-challenge-modal";
 import { NostrNIP07Signer } from "@/utils/nostr/signers/nostr-nip07-signer";
@@ -172,20 +169,30 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
       challengeHandler
     );
     if (!signerObject) return;
-    setLocalStorageDataOnSignIn({
-      signer: signerObject,
-    });
+    
     setSigner(signerObject);
     loadKeys(signerObject);
+
+    const isAlreadyLoaded = localStorage.getItem('signer');
+    if (!isAlreadyLoaded || JSON.stringify(existingSigner) !== isAlreadyLoaded) {
+      localStorage.setItem('signer', JSON.stringify(existingSigner));
+      
+      const shouldReloadSigner = false;
+      window.dispatchEvent(new CustomEvent('storage', { detail: { shouldReloadSigner } }));
+    }
   }, []);
 
   useEffect(() => {
+    const handleStorage = (event: Event & { detail?: { shouldReloadSigner?: boolean } }) => {
+      if (event.detail?.shouldReloadSigner === false) return;
+      loadSigner();
+    };
+
+    window.addEventListener("storage", handleStorage);
     loadSigner();
 
-    window.addEventListener("storage", loadSigner);
-
     return () => {
-      window.removeEventListener("storage", loadSigner);
+      window.removeEventListener("storage", handleStorage);
     };
   }, [loadSigner]);
 
