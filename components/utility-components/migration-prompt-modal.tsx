@@ -72,7 +72,7 @@ export default function MigrationPromptModal({
           <div className="mb-4 text-center">
             <h3 className="text-lg font-semibold">Encryption Upgrade</h3>
             <p className="mt-2 text-sm">
-              We've improved our security! Please enter your passphrase to upgrade 
+              We've upgraded our encryption to the NIP-49 standard for better security! Please enter your passphrase to upgrade 
               your key encryption to the latest standard.
             </p>
           </div>
