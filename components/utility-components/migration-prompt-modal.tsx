@@ -33,7 +33,6 @@ export default function MigrationPromptModal({
     try {
       const success = await migrateToNip49(passphrase);
       if (success) {
-        console.log("✅ Migration completed successfully - reloading signer");
         onSuccess();
         onClose();
       } else {

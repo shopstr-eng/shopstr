@@ -212,19 +212,13 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (isLoggedIn) {
-      console.log("Checking for migration needs...");
       const needsKeyMigration = needsMigration();
-      console.log("Migration needed:", needsKeyMigration);
       if (needsKeyMigration) {
-        console.log("Setting timer to show migration modal");
         const timer = setTimeout(() => {
-          console.log("Showing migration modal now");
           setShowMigrationModal(true);
         }, 1000);
         return () => clearTimeout(timer);
       }
-    } else {
-      console.log("Not logged in yet, skipping migration check");
     }
     return undefined;
   }, [isLoggedIn]);
