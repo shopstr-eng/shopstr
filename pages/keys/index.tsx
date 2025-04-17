@@ -36,19 +36,14 @@ const Keys = () => {
       relaysContext.readRelayList &&
       relaysContext.writeRelayList
     ) {
-      const generalRelays = relaysContext.relayList;
-      const readRelays = relaysContext.readRelayList;
-      const writeRelays = relaysContext.writeRelayList;
       setLocalStorageDataOnSignIn({
         signer,
-        relays: generalRelays,
-        readRelays: readRelays,
-        writeRelays: writeRelays,
+        relays: relaysContext.relayList,
+        readRelays: relaysContext.readRelayList,
+        writeRelays: relaysContext.writeRelayList,
       });
     } else {
-      setLocalStorageDataOnSignIn({
-        signer,
-      });
+      setLocalStorageDataOnSignIn({ signer });
     }
   };
 
@@ -94,8 +89,8 @@ const Keys = () => {
 
   return (
     <>
-      <div className="f3 books about my learnings along the way. Tweets about the career path of entrepreneurship & the buslex h-[100vh] flex-col bg-light-bg pt-24 dark:bg-dark-bg">
-        <div className="p-4">
+      <div className="h-[100vh] flex flex-col bg-light-bg pt-24 dark:bg-dark-bg">
+        <div className="px-4 py-6 max-w-2xl mx-auto w-full">
           <Card>
             <CardBody>
               <div className="mb-4 flex flex-row items-center justify-center">
@@ -115,34 +110,37 @@ const Keys = () => {
                 format! You can always view them again under your profile
                 settings.
               </div>
-              <div className="mb-4 flex flex-col">
+
+              {/* Public Key Section */}
+              <div className="mb-4 flex flex-col space-y-2">
                 <label className="text-xl">Public Key:</label>
                 {npub && (
                   <div
-                    className="border-color-yellow-500 break-all rounded-md border-b-2 border-l-2 border-shopstr-purple bg-light-bg px-1 text-xl dark:border-shopstr-yellow dark:bg-dark-bg"
+                    className="border-shopstr-purple break-all rounded-md border p-2 text-lg bg-light-bg dark:border-shopstr-yellow dark:bg-dark-bg cursor-pointer"
                     onClick={handleCopyPubkey}
                   >
                     {npub}
                   </div>
                 )}
               </div>
-              <div className="mb-4 flex flex-col">
+
+              <div className="mb-4 flex flex-col space-y-2">
                 <label className="text-xl">Private Key:</label>
                 {privateKey && (
-                  <div className="flex items-center justify-between rounded-md border-b-2 border-l-2 border-shopstr-purple bg-light-bg text-xl dark:border-shopstr-yellow dark:bg-dark-bg">
-                    <div className="break-all px-1" onClick={handleCopyPrivkey}>
+                  <div className="relative flex items-center rounded-md border border-shopstr-purple bg-light-bg dark:border-shopstr-yellow dark:bg-dark-bg">
+                    <div className="break-all px-2 py-1 w-full cursor-pointer" onClick={handleCopyPrivkey}>
                       {viewState === "shown" ? privateKey : "* * * * *"}
                     </div>
                     {viewState === "shown" ? (
                       <EyeSlashIcon
-                        className="h-6 w-6 flex-shrink-0 px-1 hover:text-purple-700 dark:hover:text-yellow-700"
+                        className="absolute right-2 h-5 w-5 cursor-pointer"
                         onClick={() => {
                           setViewState("hidden");
                         }}
                       />
                     ) : (
                       <EyeIcon
-                        className="h-6 w-6 flex-shrink-0 px-1 hover:text-purple-700 dark:hover:text-yellow-700"
+                        className="absolute right-2 h-5 w-5 cursor-pointer"
                         onClick={() => {
                           setViewState("shown");
                         }}
@@ -151,13 +149,14 @@ const Keys = () => {
                   </div>
                 )}
               </div>
-              <div className="mb-4 flex flex-col">
+
+              <div className="mb-4 flex flex-col space-y-2">
                 <label className="text-xl">
                   Encryption Passphrase:<span className="text-red-500">*</span>
                 </label>
                 <Input
                   type="password"
-                  width="100%"
+                  fullWidth
                   size="lg"
                   value={passphrase}
                   placeholder="Enter a passphrase of your choice..."
@@ -171,9 +170,10 @@ const Keys = () => {
                   }}
                 />
               </div>
+
               <div className="flex justify-center">
                 <Button
-                  className={SHOPSTRBUTTONCLASSNAMES}
+                  className={`${SHOPSTRBUTTONCLASSNAMES} w-32`}
                   onClick={handleSignIn}
                 >
                   Sign In

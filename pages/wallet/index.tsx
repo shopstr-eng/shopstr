@@ -40,9 +40,8 @@ const Wallet = () => {
 
   const filteredProofs = useMemo(() => {
     if (mints && tokens && mintKeySetIds) {
-      return tokens.filter(
-        (p: Proof) =>
-          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
+      return tokens.filter((p: Proof) =>
+        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
     }
     return [];
@@ -102,30 +101,37 @@ const Wallet = () => {
 
   return (
     <>
-      <div className="flex min-h-screen flex-col bg-light-bg pt-[8rem] dark:bg-dark-bg">
-        <center>
-          <p className="mb-2 break-words text-center text-6xl text-light-text dark:text-dark-text">
-            {totalBalance} sats
-          </p>
-        </center>
-        <center>
-          <p
-            className="mb-2 break-words text-center text-sm italic text-gray-500 hover:underline"
-            onClick={handleMintClick}
-          >
-            {mint}: {walletBalance} sats
-          </p>
-        </center>
-        <div className="flex justify-center">
-          <ReceiveButton />
-          <SendButton />
-        </div>
-        <div className="flex justify-center">
-          <MintButton />
-          <PayButton />
-        </div>
-        <div className="flex justify-center">
-          <Transactions />
+      <div className="flex min-h-screen flex-col bg-light-bg dark:bg-dark-bg pt-[8rem] px-4">
+        <div className="mx-auto w-full max-w-3xl">
+          <div className="mb-8 rounded-lg bg-white p-6 shadow-md dark:bg-gray-800">
+            <h1 className="mb-2 text-center text-6xl font-bold text-light-text dark:text-dark-text">
+              {totalBalance} sats
+            </h1>
+            <p
+              className="mb-4 cursor-pointer break-words text-center text-sm italic text-gray-500 transition-colors hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300"
+              onClick={handleMintClick}
+            >
+              {mint}: {walletBalance} sats
+            </p>
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              <div className="flex items-center justify-center">
+                <ReceiveButton />
+              </div>
+              <div className="flex items-center justify-center">
+                <SendButton />
+              </div>
+              <div className="flex items-center justify-center">
+                <MintButton />
+              </div>
+              <div className="flex items-center justify-center">
+                <PayButton />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-center">
+            <Transactions />
+          </div>
         </div>
       </div>
     </>

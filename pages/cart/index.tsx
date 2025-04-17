@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { Button, Input } from "@nextui-org/react";
+import { Button, Input as _Input } from "@nextui-org/react";
 import {
   PlusIcon,
   MinusIcon,
@@ -18,6 +18,55 @@ import { DisplayCostBreakdown } from "../../components/utility-components/displa
 import CartInvoiceCard from "../../components/cart-invoice-card";
 import { fiat } from "@getalby/lightning-tools";
 import currencySelection from "../../public/currencySelection.json";
+
+interface QuantitySelectorProps {
+  value: number;
+  onDecrease: () => void;
+  onIncrease: () => void;
+  onChange: (newValue: number) => void;
+  min: number;
+  max: number;
+}
+
+function QuantitySelector({
+  value,
+  onDecrease,
+  onIncrease,
+  onChange,
+  min,
+  max,
+}: QuantitySelectorProps) {
+  return (
+    <div className="mt-2 flex items-center space-x-2 rounded-full px-2 py-1">
+      <button
+        onClick={onDecrease}
+        disabled={value <= min}
+        className="flex h-8 w-8 items-center justify-center rounded-full text-black disabled:opacity-50 dark:text-white"
+      >
+        <MinusIcon className="h-4 w-4" />
+      </button>
+      <input
+        type="number"
+        value={value}
+        onChange={(e) => {
+          const newVal = parseInt(e.target.value) || min;
+          onChange(Math.min(Math.max(newVal, min), max));
+        }}
+        min={min}
+        max={max}
+        className="w-12 rounded-md bg-white text-center text-gray-900 outline-none dark:bg-gray-800 dark:text-gray-100
+          [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      />
+      <button
+        onClick={onIncrease}
+        disabled={value >= max}
+        className="flex h-8 w-8 items-center justify-center rounded-full text-black disabled:opacity-50 dark:text-white"
+      >
+        <PlusIcon className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
 
 export default function Component() {
   const [products, setProducts] = useState<ProductData[]>([]);
@@ -36,16 +85,16 @@ export default function Component() {
   const [shippingTypes, setShippingTypes] = useState<{
     [key: string]: ShippingOptionsType;
   }>({});
-
+  
   // Initialize quantities state
   const initializeQuantities = (products: ProductData[]) => {
     const initialQuantities: { [key: string]: number } = {};
     products.forEach((product) => {
-      initialQuantities[product.id] = 1; // Default quantity is 1
+      initialQuantities[product.id] = 1; 
     });
     return initialQuantities;
   };
-
+  
   // Use the initialized quantities
   const [quantities, setQuantities] = useState<{ [key: string]: number }>(() =>
     initializeQuantities(products)
@@ -66,10 +115,10 @@ export default function Component() {
         setProducts(cartList);
         for (const item of cartList as ProductData[]) {
           if (item.selectedQuantity) {
-            setQuantities({
-              ...quantities,
-              [item.id]: item.selectedQuantity,
-            });
+            setQuantities((prev) => ({
+              ...prev,
+              [item.id]: item.selectedQuantity || 1,
+            }));
           }
         }
       }
@@ -87,9 +136,9 @@ export default function Component() {
 
       for (const product of products) {
         try {
-          let subtotal = 0;
-          let shippingCost = 0;
-          let totalCost = 0;
+          let productSubtotal = 0;
+          let productShipping = 0;
+          let productTotal = 0;
           const subtotalSatPrice = await convertPriceToSats(product);
           prices[product.id] = subtotalSatPrice;
           const shippingSatPrice = await convertShippingToSats(product);
@@ -99,23 +148,23 @@ export default function Component() {
 
           if (subtotalSatPrice !== null || shippingSatPrice !== null) {
             if (quantities[product.id]) {
-              subtotalAmount += subtotalSatPrice * quantities[product.id]!;
-              subtotal = subtotalSatPrice * quantities[product.id]!;
-              shippingCostAmount += shippingSatPrice * quantities[product.id]!;
-              shippingCost = shippingSatPrice * quantities[product.id]!;
-              totalCostAmount += totalSatPrice * quantities[product.id]!;
-              totalCost = totalSatPrice * quantities[product.id]!;
+              productSubtotal = subtotalSatPrice * quantities[product.id]!;
+              productShipping = shippingSatPrice * quantities[product.id]!;
+              productTotal = totalSatPrice * quantities[product.id]!;
+              subtotalAmount += productSubtotal;
+              shippingCostAmount += productShipping;
+              totalCostAmount += productTotal;
             } else {
               subtotalAmount += subtotalSatPrice;
-              subtotal = subtotalSatPrice;
               shippingCostAmount += shippingSatPrice;
-              shippingCost = shippingSatPrice;
               totalCostAmount += totalSatPrice;
-              totalCost = totalSatPrice;
+              productSubtotal = subtotalSatPrice;
+              productShipping = shippingSatPrice;
+              productTotal = totalSatPrice;
             }
-            prices[product.id] = subtotal;
-            shipping[product.id] = shippingCost;
-            totals[product.pubkey] = totalCost;
+            prices[product.id] = productSubtotal;
+            shipping[product.id] = productShipping;
+            totals[product.pubkey] = productTotal;
           }
         } catch (error) {
           console.error(
@@ -140,18 +189,33 @@ export default function Component() {
 
   useEffect(() => {
     const shippingTypeMap: { [key: string]: ShippingOptionsType } = {};
-
     products.forEach((product) => {
       if (product.shippingType !== undefined) {
         shippingTypeMap[product.id] = product.shippingType;
       }
     });
-
     setShippingTypes(shippingTypeMap);
   }, [products]);
 
   const toggleCheckout = () => {
     setIsBeingPaid(!isBeingPaid);
+  };
+
+  const handleQuantityChange = (id: string, newQuantity: number) => {
+    setQuantities((prev) => {
+      const product = products.find((p) => p.id === id);
+      if (!product || !product.quantity) return prev;
+      const maxQuantity = parseInt(String(product.quantity));
+      const finalQuantity = Math.min(Math.max(newQuantity, 1), maxQuantity);
+      setHasReachedMax((prevState) => ({
+        ...prevState,
+        [id]: finalQuantity === maxQuantity && maxQuantity !== 1,
+      }));
+      return {
+        ...prev,
+        [id]: finalQuantity,
+      };
+    });
   };
 
   const handleRemoveFromCart = (productId: string) => {
@@ -165,29 +229,6 @@ export default function Component() {
       setProducts(updatedCart);
       localStorage.setItem("cart", JSON.stringify(updatedCart));
     }
-  };
-
-  const handleQuantityChange = (id: string, change: number) => {
-    setQuantities((prev) => {
-      const product = products.find((p) => p.id === id);
-      if (!product || !product.quantity) return prev;
-
-      const availableQuantity = parseInt(String(product.quantity));
-      const newQuantity = Math.max(
-        1,
-        Math.min(availableQuantity, prev[id]! + change)
-      );
-
-      setHasReachedMax((prevState) => ({
-        ...prevState,
-        [id]: newQuantity === availableQuantity && newQuantity !== 1,
-      }));
-
-      return {
-        ...prev,
-        [id]: newQuantity,
-      };
-    });
   };
 
   const convertPriceToSats = async (product: ProductData): Promise<number> => {
@@ -302,16 +343,16 @@ export default function Component() {
                   {products.map((product) => (
                     <div
                       key={product.id}
-                      className="relative flex flex-col rounded-lg border border-gray-300 p-4 shadow-sm dark:border-gray-700 md:flex-row"
+                      className="flex flex-col rounded-lg border border-gray-300 p-4 shadow-sm dark:border-gray-700 md:flex-row md:items-start md:justify-between"
                     >
-                      <div className="flex w-full items-start">
+                      <div className="flex w-full md:w-auto">
                         <img
                           src={product.images[0]}
                           alt={product.title}
                           className="mr-4 h-24 w-24 rounded-md object-cover"
                         />
                         <div className="flex-1">
-                          <div className="flex flex-col md:flex-row md:items-start md:justify-between">
+                          <div className="flex flex-col md:flex-row md:items-start md:justify-between md:gap-5">
                             <h2 className="mb-2 text-lg font-semibold md:mb-0">
                               {product.title}
                             </h2>
@@ -328,63 +369,26 @@ export default function Component() {
                               <p className="mb-2 text-sm text-green-600">
                                 {product.quantity} in stock
                               </p>
-                              <div className="flex items-center">
-                                <Button
-                                  isIconOnly
-                                  size="sm"
-                                  variant="light"
-                                  disabled={quantities[product.id]! <= 1}
-                                  onClick={() =>
-                                    handleQuantityChange(product.id, -1)
-                                  }
-                                >
-                                  <MinusIcon className="h-4 w-4" />
-                                </Button>
-                                <Input
-                                  type="number"
-                                  value={(
-                                    quantities[product.id] || 1
-                                  ).toString()}
-                                  min="1"
-                                  max={String(product.quantity)}
-                                  className="mx-2 w-16 text-center"
-                                  onChange={(e) => {
-                                    const newQuantity =
-                                      parseInt(e.target.value) || 1;
-                                    const maxQuantity = parseInt(
-                                      String(product.quantity) || "1"
-                                    );
-                                    const finalQuantity = Math.min(
-                                      newQuantity,
-                                      maxQuantity
-                                    );
-                                    setQuantities((prev) => ({
-                                      ...prev,
-                                      [product.id]: finalQuantity,
-                                    }));
-                                    setHasReachedMax((prevState) => ({
-                                      ...prevState,
-                                      [product.id]:
-                                        finalQuantity === maxQuantity &&
-                                        maxQuantity !== 1,
-                                    }));
-                                  }}
-                                />
-                                <Button
-                                  isIconOnly
-                                  size="sm"
-                                  variant="light"
-                                  disabled={
-                                    quantities[product.id]! >=
-                                    parseInt(String(product.quantity || "1"))
-                                  }
-                                  onClick={() =>
-                                    handleQuantityChange(product.id, 1)
-                                  }
-                                >
-                                  <PlusIcon className="h-4 w-4" />
-                                </Button>
-                              </div>
+                              <QuantitySelector
+                                value={quantities[product.id] || 1}
+                                onDecrease={() =>
+                                  handleQuantityChange(
+                                    product.id,
+                                    (quantities[product.id] || 1) - 1
+                                  )
+                                }
+                                onIncrease={() =>
+                                  handleQuantityChange(
+                                    product.id,
+                                    (quantities[product.id] || 1) + 1
+                                  )
+                                }
+                                onChange={(newVal) =>
+                                  handleQuantityChange(product.id, newVal)
+                                }
+                                min={1}
+                                max={parseInt(String(product.quantity))}
+                              />
                               {hasReachedMax[product.id] && (
                                 <p className="mt-1 text-xs text-red-500">
                                   Maximum quantity reached
@@ -394,7 +398,7 @@ export default function Component() {
                           )}
                         </div>
                       </div>
-                      <div className="mt-4 flex md:absolute md:bottom-4 md:right-4 md:mt-0">
+                      <div className="mt-4 flex md:mt-0 md:items-center">
                         <Button
                           size="sm"
                           color="danger"
@@ -427,7 +431,6 @@ export default function Component() {
                 <div className="mb-8 flex items-center justify-center rounded-full border border-gray-300 bg-gray-100 p-6 dark:border-gray-600 dark:bg-gray-700">
                   <ShoppingBagIcon className="h-16 w-16 text-gray-800 dark:text-gray-200" />
                 </div>
-
                 <h2 className="mb-2 text-center text-3xl font-bold text-light-text dark:text-dark-text">
                   Your cart is empty . . .
                 </h2>
@@ -496,8 +499,7 @@ export default function Component() {
                 <div className="mb-6 flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 p-4 text-center dark:border-gray-700 dark:bg-gray-800">
                   <InformationCircleIcon className="mr-2 h-5 w-5 flex-shrink-0 text-gray-600 dark:text-gray-400" />
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Once purchased, each seller will receive a DM with your
-                    order details.
+                    Once purchased, each seller will receive a DM with your order details.
                   </p>
                 </div>
               </>
