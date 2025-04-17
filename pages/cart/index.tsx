@@ -37,11 +37,11 @@ function QuantitySelector({
   max,
 }: QuantitySelectorProps) {
   return (
-    <div className="mt-2 flex items-center space-x-2 rounded-full bg-gray-100 px-2 py-1 shadow-inner dark:bg-gray-700">
+    <div className="mt-2 flex items-center space-x-2 rounded-full px-2 py-1">
       <button
         onClick={onDecrease}
         disabled={value <= min}
-        className="flex h-8 w-8 items-center justify-center rounded-full text-gray-700 disabled:opacity-50 dark:text-gray-200"
+        className="flex h-8 w-8 items-center justify-center rounded-full text-black disabled:opacity-50 dark:text-white"
       >
         <MinusIcon className="h-4 w-4" />
       </button>
@@ -60,7 +60,7 @@ function QuantitySelector({
       <button
         onClick={onIncrease}
         disabled={value >= max}
-        className="flex h-8 w-8 items-center justify-center rounded-full text-gray-700 disabled:opacity-50 dark:text-gray-200"
+        className="flex h-8 w-8 items-center justify-center rounded-full text-black disabled:opacity-50 dark:text-white"
       >
         <PlusIcon className="h-4 w-4" />
       </button>
@@ -85,7 +85,8 @@ export default function Component() {
   const [shippingTypes, setShippingTypes] = useState<{
     [key: string]: ShippingOptionsType;
   }>({});
-
+  
+  // Initialize quantities state
   const initializeQuantities = (products: ProductData[]) => {
     const initialQuantities: { [key: string]: number } = {};
     products.forEach((product) => {
@@ -93,7 +94,8 @@ export default function Component() {
     });
     return initialQuantities;
   };
-
+  
+  // Use the initialized quantities
   const [quantities, setQuantities] = useState<{ [key: string]: number }>(() =>
     initializeQuantities(products)
   );
