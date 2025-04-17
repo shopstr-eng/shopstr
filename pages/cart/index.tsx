@@ -117,7 +117,7 @@ export default function Component() {
           if (item.selectedQuantity) {
             setQuantities((prev) => ({
               ...prev,
-              [item.id]: item.selectedQuantity,
+              [item.id]: item.selectedQuantity || 1,
             }));
           }
         }
