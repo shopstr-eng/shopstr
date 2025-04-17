@@ -5,10 +5,7 @@ import {
   EventTemplate as NToolEvenTemplate,
   verifyEvent,
 } from "nostr-tools";
-import {
-  SubscribeManyParams,
-  SubCloser,
-} from "nostr-tools/abstract-pool";
+import { SubscribeManyParams, SubCloser } from "nostr-tools/abstract-pool";
 
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
 import {

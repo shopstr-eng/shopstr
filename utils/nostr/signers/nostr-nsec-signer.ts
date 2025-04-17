@@ -48,13 +48,10 @@ export class NostrNSecSigner implements NostrSigner {
     } else {
       secretKey = privKey;
     }
-    
+
     const pubkey = getPublicKey(secretKey);
-    const encryptedKey = nip49.encrypt(
-      secretKey,
-      passphrase
-    );
-    
+    const encryptedKey = nip49.encrypt(secretKey, passphrase);
+
     return {
       encryptedPrivKey: encryptedKey,
       passphrase,
@@ -78,7 +75,7 @@ export class NostrNSecSigner implements NostrSigner {
     this.challengeHandler = challengeHandler;
     this.pubkey = pubkey;
     this.passphrase = passphrase;
-    this.isNip49Format = encryptedPrivKey.startsWith('ncryptsec');
+    this.isNip49Format = encryptedPrivKey.startsWith("ncryptsec");
   }
 
   static fromJSON(
@@ -154,15 +151,12 @@ export class NostrNSecSigner implements NostrSigner {
         let privKeyBytes: Uint8Array;
 
         if (this.isNip49Format) {
-          privKeyBytes = await nip49.decrypt(
-            this.encryptedPrivKey,
-            passphrase
-          );
+          privKeyBytes = await nip49.decrypt(this.encryptedPrivKey, passphrase);
         } else {
           const privkey = CryptoJS.AES.decrypt(
             this.encryptedPrivKey,
             passphrase
-          ).toString(CryptoJS.enc.Utf8); 
+          ).toString(CryptoJS.enc.Utf8);
           if (!privkey) throw new Error("Invalid passphrase");
 
           privKeyBytes = privkey.startsWith("nsec")

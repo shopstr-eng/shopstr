@@ -40,8 +40,9 @@ const Wallet = () => {
 
   const filteredProofs = useMemo(() => {
     if (mints && tokens && mintKeySetIds) {
-      return tokens.filter((p: Proof) =>
-        mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
+      return tokens.filter(
+        (p: Proof) =>
+          mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
     }
     return [];
@@ -101,7 +102,7 @@ const Wallet = () => {
 
   return (
     <>
-      <div className="flex min-h-screen flex-col bg-light-bg dark:bg-dark-bg pt-[8rem] px-4">
+      <div className="flex min-h-screen flex-col bg-light-bg px-4 pt-[8rem] dark:bg-dark-bg">
         <div className="mx-auto w-full max-w-3xl">
           <div className="mb-8 rounded-lg bg-white p-6 shadow-md dark:bg-gray-800">
             <h1 className="mb-2 text-center text-6xl font-bold text-light-text dark:text-dark-text">

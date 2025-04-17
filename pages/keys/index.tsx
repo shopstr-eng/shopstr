@@ -89,8 +89,8 @@ const Keys = () => {
 
   return (
     <>
-      <div className="h-[100vh] flex flex-col bg-light-bg pt-24 dark:bg-dark-bg">
-        <div className="px-4 py-6 max-w-2xl mx-auto w-full">
+      <div className="flex h-[100vh] flex-col bg-light-bg pt-24 dark:bg-dark-bg">
+        <div className="mx-auto w-full max-w-2xl px-4 py-6">
           <Card>
             <CardBody>
               <div className="mb-4 flex flex-row items-center justify-center">
@@ -116,7 +116,7 @@ const Keys = () => {
                 <label className="text-xl">Public Key:</label>
                 {npub && (
                   <div
-                    className="border-shopstr-purple break-all rounded-md border p-2 text-lg bg-light-bg dark:border-shopstr-yellow dark:bg-dark-bg cursor-pointer"
+                    className="cursor-pointer break-all rounded-md border border-shopstr-purple bg-light-bg p-2 text-lg dark:border-shopstr-yellow dark:bg-dark-bg"
                     onClick={handleCopyPubkey}
                   >
                     {npub}
@@ -128,7 +128,10 @@ const Keys = () => {
                 <label className="text-xl">Private Key:</label>
                 {privateKey && (
                   <div className="relative flex items-center rounded-md border border-shopstr-purple bg-light-bg dark:border-shopstr-yellow dark:bg-dark-bg">
-                    <div className="break-all px-2 py-1 w-full cursor-pointer" onClick={handleCopyPrivkey}>
+                    <div
+                      className="w-full cursor-pointer break-all px-2 py-1"
+                      onClick={handleCopyPrivkey}
+                    >
                       {viewState === "shown" ? privateKey : "* * * * *"}
                     </div>
                     {viewState === "shown" ? (

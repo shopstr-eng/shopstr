@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { Button, Input as _Input } from "@nextui-org/react";
+import { Button } from "@nextui-org/react";
 import {
   PlusIcon,
   MinusIcon,
@@ -85,16 +85,16 @@ export default function Component() {
   const [shippingTypes, setShippingTypes] = useState<{
     [key: string]: ShippingOptionsType;
   }>({});
-  
+
   // Initialize quantities state
   const initializeQuantities = (products: ProductData[]) => {
     const initialQuantities: { [key: string]: number } = {};
     products.forEach((product) => {
-      initialQuantities[product.id] = 1; 
+      initialQuantities[product.id] = 1;
     });
     return initialQuantities;
   };
-  
+
   // Use the initialized quantities
   const [quantities, setQuantities] = useState<{ [key: string]: number }>(() =>
     initializeQuantities(products)
@@ -499,7 +499,8 @@ export default function Component() {
                 <div className="mb-6 flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 p-4 text-center dark:border-gray-700 dark:bg-gray-800">
                   <InformationCircleIcon className="mr-2 h-5 w-5 flex-shrink-0 text-gray-600 dark:text-gray-400" />
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Once purchased, each seller will receive a DM with your order details.
+                    Once purchased, each seller will receive a DM with your
+                    order details.
                   </p>
                 </div>
               </>

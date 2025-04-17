@@ -1,5 +1,11 @@
 import React, { useState } from "react";
-import { Modal, ModalContent, ModalBody, Button, Input } from "@nextui-org/react";
+import {
+  Modal,
+  ModalContent,
+  ModalBody,
+  Button,
+  Input,
+} from "@nextui-org/react";
 import { migrateToNip49 } from "@/utils/nostr/encryption-migration";
 
 interface MigrationPromptModalProps {
@@ -32,12 +38,16 @@ export default function MigrationPromptModal({
         onClose();
       } else {
         console.error("❌ Migration failed");
-        setError("Migration failed. Please try again with the correct passphrase.");
+        setError(
+          "Migration failed. Please try again with the correct passphrase."
+        );
       }
       return success;
     } catch (err) {
       console.error("❌ Migration error:", err);
-      setError("Failed to decrypt with the provided passphrase. Please try again.");
+      setError(
+        "Failed to decrypt with the provided passphrase. Please try again."
+      );
       return false;
     } finally {
       setIsLoading(false);
@@ -75,7 +85,10 @@ export default function MigrationPromptModal({
           <div className="mb-4 text-center">
             <h3 className="text-lg font-semibold">Encryption Upgrade</h3>
             <p className="mt-2 text-sm">
-              We&apos;ve upgraded our encryption to the NIP-49 standard for better security! Please enter your existing passphrase so we can safely decrypt your current key and re-encrypt it with the new standard.
+              We&apos;ve upgraded our encryption to the NIP-49 standard for
+              better security! Please enter your existing passphrase so we can
+              safely decrypt your current key and re-encrypt it with the new
+              standard.
             </p>
           </div>
 
@@ -119,4 +132,4 @@ export default function MigrationPromptModal({
       </ModalContent>
     </Modal>
   );
-} 
+}

@@ -16,7 +16,7 @@ export default function Faq() {
           content:
             "Nostr is a protocol that allows you to take control of your digital identity and data. No one can stop you from posting what you want, and you can use your Nostr keys to sign into any other compatible Nostr applications, taking your content with you.",
         },
-      ]
+      ],
     },
     {
       title: "Payments",
@@ -31,7 +31,7 @@ export default function Faq() {
           content:
             "You can instantly claim a received Cashu token to the Lightning address set on your Nostr profile by clicking the claim button then the redeem button when on the orders page. You can also receive the token directly into the integrated Cashu wallet and pay out to an external Lightning wallet at any time, or copy and paste the token into an external Cashu wallet (like Minibits, Coinos, cashu.me, etc.). Setting your profile payment preference to Lightning also automatically handles the claiming of tokens for you.",
         },
-      ]
+      ],
     },
     {
       title: "Selling",
@@ -51,7 +51,7 @@ export default function Faq() {
           content:
             "Sellers can offer different shipping options including free shipping, local pickup, or an added shipping cost. The shipping method and any restrictions should be clearly specified in each listing and fulfillment will be handled by the merchant themselves.",
         },
-      ]
+      ],
     },
     {
       title: "Account & Privacy",
@@ -71,7 +71,7 @@ export default function Faq() {
           content:
             "If you are unable to view order or inquiry messages, this is most likely due to not having NIP-44 encryption/decryption permissions set within your extension or bunker application. Make sure to go into your settings to see if NIP-44 encryption is supported and approve those permissions. If the issue persists, you are also able to view messages via apps like 0xchat, Amethyst, and other Nostr clients as long as they support NIP-17 DMs.",
         },
-      ]
+      ],
     },
     {
       title: "Customer Experience",
@@ -91,30 +91,31 @@ export default function Faq() {
           content:
             "You can contact sellers directly in order to request a refund and initiate a return.",
         },
-      ]
+      ],
     },
   ];
 
   return (
     <div className="flex min-h-screen flex-col bg-light-bg pt-24 dark:bg-dark-bg md:pb-20">
-      <div className="container mx-auto px-4 max-w-6xl">
+      <div className="container mx-auto max-w-6xl px-4">
         <h1 className="mb-8 text-center text-3xl font-bold text-light-text dark:text-dark-text">
           Frequently Asked Questions
         </h1>
 
-        <p className="text-center mb-10 text-light-text/80 dark:text-dark-text/80 max-w-3xl mx-auto">
-          Get quick answers to common questions about using Shopstr, the permissionless marketplace built on Nostr.
+        <p className="mx-auto mb-10 max-w-3xl text-center text-light-text/80 dark:text-dark-text/80">
+          Get quick answers to common questions about using Shopstr, the
+          permissionless marketplace built on Nostr.
         </p>
-        
+
         {faqSections.map((section, sectionIndex) => (
           <div key={sectionIndex} className="mb-8">
-            <h2 className="mb-4 text-xl font-semibold text-light-text dark:text-dark-text border-b pb-2 border-gray-200 dark:border-gray-700">
+            <h2 className="mb-4 border-b border-gray-200 pb-2 text-xl font-semibold text-light-text dark:border-gray-700 dark:text-dark-text">
               {section.title}
             </h2>
-            
-            <Accordion 
-              selectionMode="multiple" 
-              className="px-0 mb-6"
+
+            <Accordion
+              selectionMode="multiple"
+              className="mb-6 px-0"
               variant="bordered"
             >
               {section.items.map((item, itemIndex) => (
@@ -128,11 +129,13 @@ export default function Faq() {
                   classNames={{
                     base: "group",
                     title: "text-md",
-                    trigger: "py-5 px-3 data-[hover=true]:bg-gray-50 dark:data-[hover=true]:bg-gray-900/50 transition-all rounded-lg",
-                    content: "py-2 px-3 text-light-text/90 dark:text-dark-text/90"
+                    trigger:
+                      "py-5 px-3 data-[hover=true]:bg-gray-50 dark:data-[hover=true]:bg-gray-900/50 transition-all rounded-lg",
+                    content:
+                      "py-2 px-3 text-light-text/90 dark:text-dark-text/90",
                   }}
                 >
-                  <p className="text-light-text dark:text-dark-text leading-relaxed">
+                  <p className="leading-relaxed text-light-text dark:text-dark-text">
                     {item.content}
                   </p>
                 </AccordionItem>
@@ -140,7 +143,6 @@ export default function Faq() {
             </Accordion>
           </div>
         ))}
-
       </div>
     </div>
   );
