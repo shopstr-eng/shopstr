@@ -799,6 +799,7 @@ export const setLocalStorageDataOnSignIn = ({
   bunkerRelays,
   bunkerSecret,
   signer,
+  migrationComplete,
 }: {
   encryptedPrivateKey?: string;
   relays?: string[];
@@ -812,6 +813,7 @@ export const setLocalStorageDataOnSignIn = ({
   bunkerRelays?: string[];
   bunkerSecret?: string;
   signer?: NostrSigner;
+  migrationComplete?: boolean;
 }) => {
   if (encryptedPrivateKey) {
     localStorage.setItem(
@@ -864,6 +866,10 @@ export const setLocalStorageDataOnSignIn = ({
     localStorage.setItem(LOCALSTORAGECONSTANTS.signer, JSON.stringify(signer));
   }
 
+  if (migrationComplete) {
+    localStorage.setItem("migrationComplete", migrationComplete.toString());
+  }
+
   window.dispatchEvent(new Event("storage"));
 };
 
@@ -885,6 +891,7 @@ export interface LocalStorageInterface {
   bunkerRelays?: string[];
   bunkerSecret?: string;
   signer?: { [key: string]: string };
+  migrationComplete?: boolean;
 }
 
 export const getLocalStorageData = (): LocalStorageInterface => {
@@ -902,6 +909,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
   let bunkerRelays;
   let bunkerSecret;
   let signer;
+  let migrationComplete;
 
   if (typeof window !== "undefined") {
     encryptedPrivateKey = localStorage.getItem(
@@ -1025,6 +1033,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
           break;
       }
     }
+    migrationComplete = localStorage.getItem("migrationComplete") === "true";
   }
   return {
     signInMethod: signInMethod as string,
@@ -1041,6 +1050,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     bunkerRelays: bunkerRelays || [],
     bunkerSecret: bunkerSecret?.toString(),
     signer,
+    migrationComplete: migrationComplete || false,
   };
 };
 

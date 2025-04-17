@@ -8,7 +8,7 @@ import {
 import {
   SubscribeManyParams,
   SubCloser,
-} from "nostr-tools/lib/types/abstract-pool";
+} from "nostr-tools/abstract-pool";
 
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
 import {

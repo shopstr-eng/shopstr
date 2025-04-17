@@ -17,6 +17,8 @@ import AuthUrlChallengeModal from "@/components/utility-components/auth-challeng
 import { NostrNIP07Signer } from "@/utils/nostr/signers/nostr-nip07-signer";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
+import { needsMigration } from "@/utils/nostr/encryption-migration";
+import MigrationPromptModal from "./migration-prompt-modal";
 
 interface SignerContextInterface {
   signer?: NostrSigner;
@@ -58,6 +60,7 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
   const [pubkey, setPubKey] = useState<string | undefined>(undefined);
   const [npub, setNPub] = useState<string | undefined>(undefined);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [showMigrationModal, setShowMigrationModal] = useState(false);
 
   const challengeHandler: ChallengeHandler = (
     type,
@@ -207,6 +210,25 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
     setIsLoggedIn(!!(signer && pubkey));
   }, [signer, pubkey]);
 
+  useEffect(() => {
+    if (isLoggedIn) {
+      console.log("Checking for migration needs...");
+      const needsKeyMigration = needsMigration();
+      console.log("Migration needed:", needsKeyMigration);
+      if (needsKeyMigration) {
+        console.log("Setting timer to show migration modal");
+        const timer = setTimeout(() => {
+          console.log("Showing migration modal now");
+          setShowMigrationModal(true);
+        }, 1000);
+        return () => clearTimeout(timer);
+      }
+    } else {
+      console.log("Not logged in yet, skipping migration check");
+    }
+    return undefined;
+  }, [isLoggedIn]);
+
   const newSigner = useCallback((type: string, args: any) => {
     switch (type.toLowerCase()) {
       case "nip46": {
@@ -261,6 +283,13 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
           }}
           error={error}
           challenge={authUrl}
+        />
+        <MigrationPromptModal
+          isOpen={showMigrationModal}
+          onClose={() => setShowMigrationModal(false)}
+          onSuccess={() => {
+            loadSigner();
+          }}
         />
         {children}
       </SignerContext.Provider>
