@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { Button, Input } from "@nextui-org/react";
+import { Button, Input as _Input } from "@nextui-org/react";
 import {
   PlusIcon,
   MinusIcon,
