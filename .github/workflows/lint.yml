@@ -5,9 +5,8 @@ on:
     branches: [ main ]
 
 permissions:
-  contents: read        
-  issues: write         
-  pull-requests: write  
+  contents: read
+  pull-requests: write
 
 jobs:
   lint:
@@ -48,11 +47,8 @@ jobs:
       - name: Comment on PR with lint results
         if: steps.eslint.outputs.eslint_errors != '0' || steps.prettier.outputs.prettier_ok == 'false'
         uses: actions/github-script@v6
-        env:
-          ESLINT_ERRORS: ${{ steps.eslint.outputs.eslint_errors }}
-          PRETTIER_OK:   ${{ steps.prettier.outputs.prettier_ok }}
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ github.token }}
           script: |
             const fs = require('fs');
             const errs = parseInt(process.env.ESLINT_ERRORS, 10);
@@ -60,15 +56,35 @@ jobs:
 
             if (errs > 0) {
               body += `**ESLint** found **${errs}** issue(s). Run \`npx eslint --fix\` locally.\n\n`;
-              const report = JSON.parse(fs.readFileSync('eslint-report.json', 'utf8'));
-              // show up to 3 errors
-              report.slice(0,3).forEach(r => {
-                r.messages.forEach(m => {
-                  const file = r.filePath.replace(process.cwd() + '/', '');
-                  body += `- [${file}:${m.line}:${m.column}] ${m.message} (**${m.ruleId}**)\n`;
+              
+              try {
+                const report = JSON.parse(fs.readFileSync('eslint-report.json', 'utf8'));
+                const errors = [];
+                
+                // Collect all errors from all files
+                report.forEach(r => {
+                  r.messages.forEach(m => {
+                    const file = r.filePath.replace(process.cwd() + '/', '');
+                    errors.push({
+                      file: file,
+                      line: m.line,
+                      column: m.column,
+                      message: m.message,
+                      ruleId: m.ruleId
+                    });
+                  });
                 });
-              });
-              if (errs > 3) body += `\n…and ${errs - 3} more.\n\n`;
+                
+                // Show up to 3 errors
+                errors.slice(0, 3).forEach(e => {
+                  body += `- [${e.file}:${e.line}:${e.column}] ${e.message} (**${e.ruleId}**)\n`;
+                });
+                
+                if (errs > 3) body += `\n…and ${errs - 3} more.\n\n`;
+              } catch (error) {
+                console.error('Error parsing ESLint report:', error);
+                body += `Error parsing ESLint report: ${error.message}\n\n`;
+              }
             }
 
             if (process.env.PRETTIER_OK === 'false') {
@@ -81,3 +97,6 @@ jobs:
               issue_number: context.issue.number,
               body: body + '🔍 Please fix these before merging.'
             });
+        env:
+          ESLINT_ERRORS: ${{ steps.eslint.outputs.eslint_errors }}
+          PRETTIER_OK: ${{ steps.prettier.outputs.prettier_ok }}
