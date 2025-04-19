@@ -749,6 +749,7 @@ export default function CartInvoiceCard({
         paymentPreference === "lightning" &&
         lnurl &&
         lnurl !== "" &&
+        !lnurl.contains("@zeuspay.com") &&
         sellerProofs
       ) {
         const newAmount = Math.floor(sellerAmount * 0.98 - 2);
