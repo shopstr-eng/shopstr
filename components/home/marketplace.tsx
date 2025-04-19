@@ -27,7 +27,6 @@ import SignInModal from "../sign-in/SignInModal";
 import ShopstrSwitch from "../utility-components/shopstr-switch";
 import { ShopSettings } from "../../utils/types/types";
 import SideShopNav from "./side-shop-nav";
-import FailureModal from "../utility-components/failure-modal";
 
 function MarketplacePage({
   focusedPubkey,
@@ -46,7 +45,7 @@ function MarketplacePage({
   );
   const [selectedLocation, setSelectedLocation] = useState("");
   const [selectedSearch, setSelectedSearch] = useState("");
-  const { isOpen, onClose } = useDisclosure();
+  const { isOpen, onOpen, onClose } = useDisclosure();
 
   const [wotFilter, setWotFilter] = useState(false);
 
@@ -65,8 +64,6 @@ function MarketplacePage({
   const [isFetchingFollows, setIsFetchingFollows] = useState(false);
 
   const [categories, setCategories] = useState([""]);
-
-  const [showFailureModal, setShowFailureModal] = useState(false);
 
   const reviewsContext = useContext(ReviewsContext);
   const shopMapContext = useContext(ShopMapContext);
@@ -154,14 +151,14 @@ function MarketplacePage({
   };
 
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
-    if (!loggedIn) {
-      setShowFailureModal(true);
-      return;
+    if (loggedIn) {
+      router.push({
+        pathname: "/orders",
+        query: { pk: nip19.npubEncode(pubkeyToOpenChatWith), isInquiry: true },
+      });
+    } else {
+      onOpen();
     }
-    router.push({
-      pathname: "/orders",
-      query: { pk: nip19.npubEncode(pubkeyToOpenChatWith), isInquiry: true },
-    });
   };
 
   const handleTitleClick = (productId: string, productPubkey: string) => {
@@ -473,11 +470,6 @@ function MarketplacePage({
         )}
       </div>
       <SignInModal isOpen={isOpen} onClose={onClose} />
-      <FailureModal
-        bodyText="You must be signed in to send a message!"
-        isOpen={showFailureModal}
-        onClose={() => setShowFailureModal(false)}
-      />
     </div>
   );
 }

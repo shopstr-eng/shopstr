@@ -12,7 +12,6 @@ import { useRouter } from "next/router";
 import SignInModal from "../sign-in/SignInModal";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { ShopSettings } from "../../utils/types/types";
-import FailureModal from "../utility-components/failure-modal";
 
 const SideShopNav = ({
   focusedPubkey,
@@ -40,7 +39,6 @@ const SideShopNav = ({
 
   const [usersPubkey, setUsersPubkey] = useState<string | null>(null);
 
-  const [showFailureModal, setShowFailureModal] = useState(false);
   const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
 
   useEffect(() => {
@@ -68,14 +66,14 @@ const SideShopNav = ({
   }, [userPubkey]);
 
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
-    if (!isLoggedIn) {
-      setShowFailureModal(true);
-      return;
+    if (isLoggedIn) {
+      router.push({
+        pathname: "/orders",
+        query: { pk: nip19.npubEncode(pubkeyToOpenChatWith), isInquiry: true },
+      });
+    } else {
+      onOpen();
     }
-    router.push({
-      pathname: "/orders",
-      query: { pk: nip19.npubEncode(pubkeyToOpenChatWith), isInquiry: true },
-    });
   };
 
   const tallyCategories = (categories: string[]): Record<string, number> => {
@@ -198,11 +196,6 @@ const SideShopNav = ({
         )}
       </div>
       <SignInModal isOpen={isOpen} onClose={onClose} />
-      <FailureModal
-        bodyText="You must be signed in to send a message!"
-        isOpen={showFailureModal}
-        onClose={() => setShowFailureModal(false)}
-      />
     </>
   );
 };

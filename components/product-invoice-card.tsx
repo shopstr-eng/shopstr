@@ -1259,6 +1259,10 @@ export default function ProductInvoiceCard({
             type="submit"
             className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
             onClick={() => {
+              if (!isLoggedIn) {
+                onOpen();
+                return;
+              }
               if (randomNsecForReceiver !== "" && randomNpubForSender !== "") {
                 if (
                   productData.shippingType === "Free" ||

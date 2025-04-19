@@ -72,6 +72,22 @@ const MyListingsPage = () => {
     }
   };
 
+  const handleEditShop = () => {
+    if (usersPubkey) {
+      router.push("settings/shop-settings");
+    } else {
+      onOpen();
+    }
+  };
+
+  const handleViewOrders = () => {
+    if (usersPubkey) {
+      router.push("/orders");
+    } else {
+      onOpen();
+    }
+  };
+
   const MobileMenu = () => (
     <div className="absolute left-0 top-full z-10 mt-2 w-48 rounded-md bg-light-fg shadow-lg dark:bg-dark-fg md:hidden">
       <div className="py-1">
@@ -96,11 +112,11 @@ const MyListingsPage = () => {
         <Button
           className="w-full bg-transparent px-4 py-2 text-left text-sm text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
           onClick={() => {
-            router.push("/orders");
+            handleViewOrders();
             setIsMobileMenuOpen(false);
           }}
         >
-          Messages
+          Orders
         </Button>
       </div>
     </div>
@@ -144,9 +160,9 @@ const MyListingsPage = () => {
                   </Button>
                   <Button
                     className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                    onClick={() => router.push("/orders")}
+                    onClick={() => handleViewOrders()}
                   >
-                    Messages
+                    Orders
                   </Button>
                 </div>
               </div>
@@ -159,7 +175,7 @@ const MyListingsPage = () => {
                 </Button>
                 <Button
                   className={`${SHOPSTRBUTTONCLASSNAMES}`}
-                  onClick={() => router.push("settings/shop-settings")}
+                  onClick={() => handleEditShop()}
                 >
                   Edit Shop
                 </Button>
@@ -194,9 +210,9 @@ const MyListingsPage = () => {
                   </Button>
                   <Button
                     className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                    onClick={() => router.push("/orders")}
+                    onClick={() => handleViewOrders()}
                   >
-                    Messages
+                    Orders
                   </Button>
                 </div>
               </div>
@@ -209,7 +225,7 @@ const MyListingsPage = () => {
                 </Button>
                 <Button
                   className={`${SHOPSTRBUTTONCLASSNAMES}`}
-                  onClick={() => router.push("settings/shop-settings")}
+                  onClick={() => handleEditShop()}
                 >
                   Edit Shop
                 </Button>
@@ -253,7 +269,7 @@ const MyListingsPage = () => {
                 </p>
                 <Button
                   className={`${SHOPSTRBUTTONCLASSNAMES} mt-6`}
-                  onClick={() => router.push("settings/shop-settings")}
+                  onClick={() => handleEditShop()}
                 >
                   Go to Settings
                 </Button>

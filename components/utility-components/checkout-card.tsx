@@ -11,7 +11,7 @@ import {
 import ProductInvoiceCard from "../product-invoice-card";
 import { useRouter } from "next/router";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import { Button, Chip } from "@nextui-org/react";
+import { Button, Chip, useDisclosure } from "@nextui-org/react";
 import { locationAvatar } from "./dropdowns/location-dropdown";
 import {
   FaceFrownIcon,
@@ -23,6 +23,7 @@ import { ShopSettings } from "../../utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import FailureModal from "../utility-components/failure-modal";
 import SuccessModal from "../utility-components/success-modal";
+import SignInModal from "../sign-in/SignInModal";
 import currencySelection from "../../public/currencySelection.json";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 
@@ -44,6 +45,7 @@ export default function CheckoutCard({
   uniqueKey?: string;
 }) {
   const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
+  const { isOpen, onOpen, onClose } = useDisclosure();
 
   const router = useRouter();
 
@@ -212,29 +214,37 @@ export default function CheckoutCard({
   }, [reviewsContext, merchantReview, productData.pubkey]);
 
   const toggleBuyNow = () => {
-    setIsBeingPaid(!isBeingPaid);
+    if (isLoggedIn) {
+      setIsBeingPaid(!isBeingPaid);
+    } else {
+      onOpen();
+    }
   };
 
   const handleAddToCart = () => {
-    if (
-      !currencySelection.hasOwnProperty(productData.currency.toUpperCase()) ||
-      productData.totalCost < 1
-    ) {
-      setFailureText(
-        "The price and/or currency set for this listing was invalid."
-      );
-      setShowFailureModal(true);
-      return;
-    }
-    let updatedCart = [];
-    if (selectedSize) {
-      const productWithSize = { ...productData, selectedSize: selectedSize };
-      updatedCart = [...cart, productWithSize];
+    if (isLoggedIn) {
+      if (
+        !currencySelection.hasOwnProperty(productData.currency.toUpperCase()) ||
+        productData.totalCost < 1
+      ) {
+        setFailureText(
+          "The price and/or currency set for this listing was invalid."
+        );
+        setShowFailureModal(true);
+        return;
+      }
+      let updatedCart = [];
+      if (selectedSize) {
+        const productWithSize = { ...productData, selectedSize: selectedSize };
+        updatedCart = [...cart, productWithSize];
+      } else {
+        updatedCart = [...cart, productData];
+      }
+      setCart(updatedCart);
+      localStorage.setItem("cart", JSON.stringify(updatedCart));
     } else {
-      updatedCart = [...cart, productData];
+      onOpen();
     }
-    setCart(updatedCart);
-    localStorage.setItem("cart", JSON.stringify(updatedCart));
   };
 
   const handleShare = async () => {
@@ -262,15 +272,14 @@ export default function CheckoutCard({
   };
 
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
-    if (!isLoggedIn) {
-      setFailureText("You must be signed in to send an inquiry!");
-      setShowFailureModal(true);
-      return;
+    if (isLoggedIn) {
+      router.push({
+        pathname: "/orders",
+        query: { pk: nip19.npubEncode(pubkeyToOpenChatWith), isInquiry: true },
+      });
+    } else {
+      onOpen();
     }
-    router.push({
-      pathname: "/orders",
-      query: { pk: nip19.npubEncode(pubkeyToOpenChatWith), isInquiry: true },
-    });
   };
 
   const renderSizeGrid = () => {
@@ -650,6 +659,7 @@ export default function CheckoutCard({
           </div>
         </>
       )}
+      <SignInModal isOpen={isOpen} onClose={onClose} />
       <FailureModal
         bodyText={failureText}
         isOpen={showFailureModal}

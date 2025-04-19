@@ -7,6 +7,7 @@ import {
   DropdownMenu,
   DropdownTrigger,
   User,
+  useDisclosure,
 } from "@nextui-org/react";
 import { nip19 } from "nostr-tools";
 import { useContext, useEffect, useState } from "react";
@@ -20,8 +21,8 @@ import {
   UserIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
-import FailureModal from "../failure-modal";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import SignInModal from "../../sign-in/SignInModal";
 
 type DropDownKeys =
   | "shop"
@@ -45,13 +46,13 @@ export const ProfileWithDropdown = ({
 }) => {
   const [pfp, setPfp] = useState("");
   const [displayName, setDisplayName] = useState("");
-  const [showFailureModal, setShowFailureModal] = useState(false);
   const [isNPubCopied, setIsNPubCopied] = useState(false);
   const [isNip05Verified, setIsNip05Verified] = useState(false);
   const profileContext = useContext(ProfileMapContext);
   const npub = pubkey ? nip19.npubEncode(pubkey) : "";
   const router = useRouter();
   const { isLoggedIn } = useContext(SignerContext);
+  const { isOpen, onOpen, onClose } = useDisclosure();
   useEffect(() => {
     const profileMap = profileContext.profileData;
     const profile = profileMap.has(pubkey) ? profileMap.get(pubkey) : undefined;
@@ -101,14 +102,14 @@ export const ProfileWithDropdown = ({
       className: "text-light-text dark:text-dark-text",
       startContent: <ChatBubbleBottomCenterIcon className={"h-5 w-5"} />,
       onClick: () => {
-        if (!isLoggedIn) {
-          setShowFailureModal(true);
-          return;
+        if (isLoggedIn) {
+          router.push({
+            pathname: "/orders",
+            query: { pk: npub, isInquiry: true },
+          });
+        } else {
+          onOpen();
         }
-        router.push({
-          pathname: "/orders",
-          query: { pk: npub, isInquiry: true },
-        });
       },
       label: "Send Inquiry",
     },
@@ -210,11 +211,7 @@ export const ProfileWithDropdown = ({
           }}
         </DropdownMenu>
       </Dropdown>
-      <FailureModal
-        bodyText="You must be signed in to send a message!"
-        isOpen={showFailureModal}
-        onClose={() => setShowFailureModal(false)}
-      />
+      <SignInModal isOpen={isOpen} onClose={onClose} />
     </>
   );
 };

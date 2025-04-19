@@ -1419,6 +1419,10 @@ export default function CartInvoiceCard({
             type="submit"
             className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
             onClick={() => {
+              if (!userLoggedIn) {
+                onOpen();
+                return;
+              }
               if (
                 uniqueShippingTypes.length === 1 &&
                 uniqueShippingTypes.includes("Free/Pickup")

@@ -1,6 +1,7 @@
 import { useState, useEffect, useContext } from "react";
 import { nip19 } from "nostr-tools";
 import { useRouter } from "next/router";
+import { Button, useDisclosure } from "@nextui-org/react";
 import {
   constructGiftWrappedEvent,
   constructMessageSeal,
@@ -21,9 +22,12 @@ import {
 import { useKeyPress } from "@/utils/keypress-handler";
 import FailureModal from "../utility-components/failure-modal";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import SignInModal from "../sign-in/SignInModal";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
 const Messages = ({ isPayment }: { isPayment: boolean }) => {
   const router = useRouter();
+  const { isOpen, onOpen, onClose } = useDisclosure();
   const chatsContext = useContext(ChatsContext);
   const arrowUpPressed = useKeyPress("ArrowUp");
   const arrowDownPressed = useKeyPress("ArrowDown");
@@ -319,12 +323,12 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
                         </p>
                       </div>
                       <div className="pt-4">
-                        <button
+                        <Button
                           onClick={handleReload}
-                          className="rounded-full bg-purple-600 px-8 py-2 text-white shadow-md duration-200 transition-colors hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 dark:bg-yellow-300 dark:text-gray-800 dark:hover:bg-yellow-200 dark:focus:ring-yellow-400"
+                          className={`${SHOPSTRBUTTONCLASSNAMES} mt-6`}
                         >
                           Reload
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   ) : (
@@ -333,9 +337,12 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
                         You must be signed in to see your chats!
                       </h2>
                       <div className="pt-4">
-                        <button className="rounded-full bg-purple-600 px-6 py-2 text-white shadow-md duration-200 transition-colors hover:bg-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2">
+                        <Button
+                          onClick={onOpen}
+                          className={`${SHOPSTRBUTTONCLASSNAMES} mt-6`}
+                        >
                           Sign In
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   )}
@@ -371,6 +378,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
           </div>
         )}
       </div>
+      <SignInModal isOpen={isOpen} onClose={onClose} />
       <FailureModal
         bodyText={failureText}
         isOpen={showFailureModal}
