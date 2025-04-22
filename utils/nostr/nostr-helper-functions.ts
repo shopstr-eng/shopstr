@@ -754,6 +754,72 @@ export async function nostrBuildUploadImages(
   return response.data;
 }
 
+export type BlossomUploadResponse = {
+  url: string;
+  sha256: string;
+  size: number;
+  type?: string;
+};
+
+export async function blossomUploadImages(
+  image: File,
+  signer: NostrSigner,
+  servers: Request["url"][]
+) {
+  if (!image.type.includes("image"))
+    throw new Error("Only images are supported");
+
+  const arrayBuffer = await image.arrayBuffer();
+  const wordArray = CryptoJS.lib.WordArray.create(arrayBuffer);
+  const hash = CryptoJS.SHA256(wordArray).toString(CryptoJS.enc.Hex);
+
+  const event = {
+    kind: 24242,
+    content: `Upload ${image.name}`,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [
+      ["t", "upload"],
+      ["x", hash],
+      ["size", image.size.toString()],
+      ["expiration", Math.floor(60000 / 1000).toString()],
+    ],
+  };
+
+  const signedEvent = await signer!.sign(event);
+
+  const authorization = `Nostr ${CryptoJS.enc.Base64.stringify(
+    CryptoJS.enc.Utf8.parse(JSON.stringify(signedEvent))
+  )}`;
+
+  return Promise.all(
+    servers.map(async (server) => {
+      const url = new URL("/upload", server);
+
+      const response = await fetch(url, {
+        method: "PUT",
+        body: image,
+        headers: {
+          authorization,
+          "content-type": image.type,
+        },
+      }).then((res) => res.json() as Promise<BlossomUploadResponse>);
+
+      const tags = [
+        ["url", response.url],
+        ["x", response.sha256],
+        ["ox", response.sha256],
+        ["size", response.size.toString()],
+      ];
+
+      if (response.type) {
+        tags.push(["m", response.type]);
+      }
+
+      return tags;
+    })
+  );
+}
+
 /***** HELPER FUNCTIONS *****/
 
 // function to validate public and private keys
@@ -775,6 +841,7 @@ const LOCALSTORAGECONSTANTS = {
   readRelays: "readRelays",
   writeRelays: "writeRelays",
   mints: "mints",
+  blossomServers: "blossomServers",
   tokens: "tokens",
   history: "history",
   wot: "wot",
@@ -792,6 +859,7 @@ export const setLocalStorageDataOnSignIn = ({
   readRelays,
   writeRelays,
   mints,
+  blossomServers,
   wot,
   clientPubkey,
   clientPrivkey,
@@ -806,6 +874,7 @@ export const setLocalStorageDataOnSignIn = ({
   readRelays?: string[];
   writeRelays?: string[];
   mints?: string[];
+  blossomServers?: string[];
   wot?: number;
   clientPubkey?: string;
   clientPrivkey?: string;
@@ -840,6 +909,13 @@ export const setLocalStorageDataOnSignIn = ({
   localStorage.setItem(
     LOCALSTORAGECONSTANTS.mints,
     JSON.stringify(mints ? mints : [getDefaultMint()])
+  );
+
+  localStorage.setItem(
+    LOCALSTORAGECONSTANTS.blossomServers,
+    JSON.stringify(
+      blossomServers ? blossomServers : [getDefaultBlossomServer()]
+    )
   );
 
   localStorage.setItem(LOCALSTORAGECONSTANTS.wot, String(wot ? wot : 3));
@@ -882,6 +958,7 @@ export interface LocalStorageInterface {
   readRelays: string[];
   writeRelays: string[];
   mints: string[];
+  blossomServers: string[];
   tokens: [];
   history: [];
   wot: number;
@@ -901,6 +978,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
   let readRelays;
   let writeRelays;
   let mints;
+  let blossomServers;
   let tokens;
   let history;
   let wot;
@@ -968,6 +1046,18 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     if (mints === null) {
       mints = [getDefaultMint()];
       localStorage.setItem(LOCALSTORAGECONSTANTS.mints, JSON.stringify(mints));
+    }
+
+    blossomServers = localStorage.getItem(LOCALSTORAGECONSTANTS.blossomServers)
+      ? JSON.parse(localStorage.getItem("blossomServers") as string)
+      : null;
+
+    if (blossomServers === null) {
+      blossomServers = [getDefaultBlossomServer()];
+      localStorage.setItem(
+        LOCALSTORAGECONSTANTS.blossomServers,
+        JSON.stringify(blossomServers)
+      );
     }
 
     tokens = localStorage.getItem(LOCALSTORAGECONSTANTS.tokens)
@@ -1042,6 +1132,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     readRelays: readRelays || [],
     writeRelays: writeRelays || [],
     mints,
+    blossomServers: blossomServers || [],
     tokens: tokens || [],
     history: history || [],
     wot: wot || 3,
@@ -1100,6 +1191,10 @@ export function withBlastr(relays: string[]): string[] {
 
 export function getDefaultMint(): string {
   return "https://mint.minibits.cash/Bitcoin";
+}
+
+export function getDefaultBlossomServer(): string {
+  return "https://cdn.nostrcheck.me";
 }
 
 export async function verifyNip05Identifier(
