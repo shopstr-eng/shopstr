@@ -96,13 +96,13 @@ export const fetchAllPosts = async (
         }
       }
 
+      editProductContext(productArrayFromRelay, false);
+      removeProductFromCache(Array.from(deletedProductsInCacheSet));
+
       resolve({
         productEvents: productArrayFromRelay,
         profileSetFromProducts,
       });
-
-      editProductContext(productArrayFromRelay, false);
-      removeProductFromCache(Array.from(deletedProductsInCacheSet));
     } catch (error) {
       reject(error);
     }
@@ -184,11 +184,10 @@ export const fetchCart = async (
         }
       }
       const updatedCartList = Array.from(uniqueProducts.values());
+      editCartContext(cartAddressesArray, false);
       resolve({
         cartList: updatedCartList,
       });
-
-      editCartContext(cartAddressesArray, false);
     } catch (error) {
       reject(error);
     }
@@ -326,8 +325,8 @@ export const fetchProfile = async (
           }
         }
       }
-      resolve({ profileMap });
       await addProfilesToCache(profileMap);
+      resolve({ profileMap });
     } catch (error) {
       reject(error);
     }
@@ -348,7 +347,7 @@ export const fetchGiftWrappedChatsAndMessages = async (
     if (!userPubkey) {
       editChatContext(new Map(), false);
       resolve({ profileSetFromChats: new Set() });
-      // FIXME return to stop execution (?)
+      return;
     } else {
       const chatMessagesFromCache: Map<string, NostrMessageEvent> =
         await fetchChatMessagesFromCache();
@@ -454,8 +453,8 @@ export const fetchGiftWrappedChatsAndMessages = async (
               a.created_at - b.created_at
           );
         });
-        resolve({ profileSetFromChats: new Set(chatsMap.keys()) });
         editChatContext(chatsMap, false);
+        resolve({ profileSetFromChats: new Set(chatsMap.keys()) });
       } catch (error) {
         reject(error);
       }
@@ -749,12 +748,65 @@ export const fetchAllRelays = async (
             .filter((tag) => tag !== undefined)
         );
       }
+      editRelaysContext(relayList, readRelayList, writeRelayList, false);
       resolve({
         relayList: relayList,
         readRelayList: readRelayList,
         writeRelayList: writeRelayList,
       });
-      editRelaysContext(relayList, readRelayList, writeRelayList, false);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+export const fetchAllBlossomServers = async (
+  nostr: NostrManager,
+  signer: NostrSigner | undefined,
+  relays: string[],
+  editBlossomContext: (blossomServers: string[], isLoading: boolean) => void
+): Promise<{
+  blossomServers: string[];
+}> => {
+  return new Promise(async function (resolve, reject) {
+    try {
+      const blossomServers: string[] = [];
+      const blossomSet: Set<string> = new Set();
+
+      const userPubkey = await signer?.getPubKey?.();
+      if (!userPubkey) {
+        resolve({
+          blossomServers: [],
+        });
+        return;
+      }
+
+      const blossomServerfilter: Filter = {
+        kinds: [10063],
+        authors: [userPubkey],
+      };
+
+      const fetchedEvents = await nostr.fetch(
+        [blossomServerfilter],
+        {},
+        relays
+      );
+      for (const event of fetchedEvents) {
+        const validBlossomServers = event.tags.filter(
+          (tag) => tag[0] === "server"
+        );
+
+        validBlossomServers.forEach((tag) => blossomSet.add(tag[1]!));
+        blossomServers.push(
+          ...validBlossomServers
+            .map((tag) => tag[1]!)
+            .filter((tag) => tag !== undefined)
+        );
+      }
+      editBlossomContext(blossomServers, false);
+      resolve({
+        blossomServers: blossomServers,
+      });
     } catch (error) {
       reject(error);
     }
@@ -997,13 +1049,13 @@ export const fetchCashuWallet = async (
         }
       }
 
+      editCashuWalletContext(proofEvents, cashuMints, cashuProofs, false);
+
       resolve({
         proofEvents: proofEvents,
         cashuMints: cashuMints,
         cashuProofs: cashuProofs,
       });
-
-      editCashuWalletContext(proofEvents, cashuMints, cashuProofs, false);
     } catch (error) {
       reject(error);
     }

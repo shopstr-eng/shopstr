@@ -19,6 +19,8 @@ import {
   FollowsContext,
   RelaysContextInterface,
   RelaysContext,
+  BlossomContextInterface,
+  BlossomContext,
   CashuWalletContext,
   CashuWalletContextInterface,
 } from "../utils/context/context";
@@ -36,6 +38,7 @@ import {
   fetchProfile,
   fetchAllFollows,
   fetchAllRelays,
+  fetchAllBlossomServers,
   fetchCashuWallet,
   fetchGiftWrappedChatsAndMessages,
 } from "@/utils/nostr/fetch-service";
@@ -228,6 +231,13 @@ function Shopstr({ props }: { props: AppProps }) {
     isLoading: true,
   });
 
+  const [blossomContext, setBlossomContext] = useState<BlossomContextInterface>(
+    {
+      blossomServers: [],
+      isLoading: true,
+    }
+  );
+
   const [cashuWalletContext, setCashuWalletContext] =
     useState<CashuWalletContextInterface>({
       proofEvents: [],
@@ -323,6 +333,13 @@ function Shopstr({ props }: { props: AppProps }) {
     });
   };
 
+  const editBlossomContext = (blossomServers: string[], isLoading: boolean) => {
+    setBlossomContext({
+      blossomServers,
+      isLoading,
+    });
+  };
+
   const editCashuWalletContext = (
     proofEvents: any[],
     cashuMints: string[],
@@ -381,6 +398,20 @@ function Shopstr({ props }: { props: AppProps }) {
           localStorage.setItem("readRelays", JSON.stringify(readRelayList));
           localStorage.setItem("writeRelays", JSON.stringify(writeRelayList));
           allRelays = [...relayList, ...readRelayList];
+        }
+
+        const { blossomServers } = await fetchAllBlossomServers(
+          nostr!,
+          signer!,
+          allRelays,
+          editBlossomContext
+        );
+
+        if (blossomServers.length != 0) {
+          localStorage.setItem(
+            "blossomServers",
+            JSON.stringify(blossomServers)
+          );
         }
 
         // Fetch products and collect profile pubkeys
@@ -497,46 +528,48 @@ function Shopstr({ props }: { props: AppProps }) {
         shopEvents={shopContext.shopData}
       />
       <RelaysContext.Provider value={relaysContext}>
-        <CashuWalletContext.Provider value={cashuWalletContext}>
-          <FollowsContext.Provider value={followsContext}>
-            <ProductContext.Provider value={productContext}>
-              <ReviewsContext.Provider value={reviewsContext}>
-                <ProfileMapContext.Provider value={profileContext}>
-                  <ShopMapContext.Provider value={shopContext}>
-                    <ChatsContext.Provider
-                      value={
-                        {
-                          chatsMap: chatsMap,
-                          isLoading: isChatLoading,
-                          addNewlyCreatedMessageEvent:
-                            addNewlyCreatedMessageEvent,
-                        } as ChatsContextInterface
-                      }
-                    >
-                      {router.pathname !== "/" && (
-                        <TopNav
-                          setFocusedPubkey={setFocusedPubkey}
-                          setSelectedSection={setSelectedSection}
-                        />
-                      )}
-                      <div className="flex">
-                        <main className="flex-1">
-                          <Component
-                            {...pageProps}
-                            focusedPubkey={focusedPubkey}
+        <BlossomContext.Provider value={blossomContext}>
+          <CashuWalletContext.Provider value={cashuWalletContext}>
+            <FollowsContext.Provider value={followsContext}>
+              <ProductContext.Provider value={productContext}>
+                <ReviewsContext.Provider value={reviewsContext}>
+                  <ProfileMapContext.Provider value={profileContext}>
+                    <ShopMapContext.Provider value={shopContext}>
+                      <ChatsContext.Provider
+                        value={
+                          {
+                            chatsMap: chatsMap,
+                            isLoading: isChatLoading,
+                            addNewlyCreatedMessageEvent:
+                              addNewlyCreatedMessageEvent,
+                          } as ChatsContextInterface
+                        }
+                      >
+                        {router.pathname !== "/" && (
+                          <TopNav
                             setFocusedPubkey={setFocusedPubkey}
-                            selectedSection={selectedSection}
                             setSelectedSection={setSelectedSection}
                           />
-                        </main>
-                      </div>
-                    </ChatsContext.Provider>
-                  </ShopMapContext.Provider>
-                </ProfileMapContext.Provider>
-              </ReviewsContext.Provider>
-            </ProductContext.Provider>
-          </FollowsContext.Provider>
-        </CashuWalletContext.Provider>
+                        )}
+                        <div className="flex">
+                          <main className="flex-1">
+                            <Component
+                              {...pageProps}
+                              focusedPubkey={focusedPubkey}
+                              setFocusedPubkey={setFocusedPubkey}
+                              selectedSection={selectedSection}
+                              setSelectedSection={setSelectedSection}
+                            />
+                          </main>
+                        </div>
+                      </ChatsContext.Provider>
+                    </ShopMapContext.Provider>
+                  </ProfileMapContext.Provider>
+                </ReviewsContext.Provider>
+              </ProductContext.Provider>
+            </FollowsContext.Provider>
+          </CashuWalletContext.Provider>
+        </BlossomContext.Provider>
       </RelaysContext.Provider>
     </>
   );

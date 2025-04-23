@@ -501,9 +501,36 @@ export async function createNostrRelayEvent(
     sig: "",
   } as NostrEvent;
 
-  relayEvent.created_at = Math.floor(new Date().getTime() / 1000);
   await finalizeAndSendNostrEvent(signer, nostr, relayEvent);
   return relayEvent;
+}
+
+export async function createBlossomServerEvent(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  pubkey: string
+) {
+  if (!signer || !nostr) throw new Error("Login required");
+  const blossomServers = getLocalStorageData().blossomServers;
+  const serverTags = [];
+  if (blossomServers.length != 0) {
+    for (const server of blossomServers) {
+      const serverTag = ["server", server];
+      serverTags.push(serverTag);
+    }
+  }
+  const blossomServerEvent = {
+    kind: 10063,
+    content: "",
+    tags: serverTags,
+    created_at: Math.floor(Date.now() / 1000),
+    pubkey: pubkey,
+    id: "",
+    sig: "",
+  } as NostrEvent;
+
+  await finalizeAndSendNostrEvent(signer, nostr, blossomServerEvent);
+  return blossomServerEvent;
 }
 
 export async function publishSavedForLaterEvent(
