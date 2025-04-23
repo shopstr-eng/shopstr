@@ -19,6 +19,7 @@ import {
 import { Relay } from "nostr-tools";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
+  createBlossomServerEvent,
   createNostrRelayEvent,
   getLocalStorageData,
   publishWalletEvent,
@@ -217,7 +218,7 @@ const PreferencesPage = () => {
   const addBlossomServer = async (newServer: string) => {
     try {
       setBlossomServers([...blossomServers, newServer]);
-      setRelaysAreChanged(true);
+      setBlossomServersAreChanged(true);
     } catch {
       setFailureText(`${newServer} was unable to connect!`);
       setShowFailureModal(true);
@@ -229,6 +230,11 @@ const PreferencesPage = () => {
       blossomServers.filter((server) => server !== serverToDelete)
     );
     setBlossomServersAreChanged(true);
+  };
+
+  const publishBlossomServers = () => {
+    createBlossomServerEvent(nostr!, signer!, pubkey!);
+    setBlossomServersAreChanged(false);
   };
 
   return (
@@ -815,7 +821,7 @@ const PreferencesPage = () => {
               <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
                 <Button
                   className={SHOPSTRBUTTONCLASSNAMES}
-                  onClick={() => publishRelays()}
+                  onClick={() => publishBlossomServers()}
                 >
                   Save
                 </Button>
