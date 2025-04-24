@@ -48,9 +48,8 @@ const DisplayProducts = ({
   const [focusedProduct, setFocusedProduct] = useState<ProductData>(); 
   const [showModal, setShowModal] = useState(false);
   
-
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 40; // Exactly 40 products per page  but cn be adjusted accordning
+  const itemsPerPage = 40; // Exactly 40 products per page but can be adjusted according
   const [filteredProducts, setFilteredProducts] = useState<ProductData[]>([]);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -110,10 +109,15 @@ const DisplayProducts = ({
       if (!product.currency) return false;
       if (product.images.length === 0) return false;
       if (product.contentWarning) return false;
+      // Additional check from main branch
+      if (
+        product.pubkey === "3da2082b7aa5b76a8f0c134deab3f7848c3b5e3a3079c65947d88422b69c1755" &&
+        userPubkey !== product.pubkey
+      ) {
+        return false; // temp fix, add adult categories or separate from global later
+      }
       return true;
     });
-    
-    
     
     setFilteredProducts(filtered);
     setTotalPages(Math.max(1, Math.ceil(filtered.length / itemsPerPage)));
@@ -247,12 +251,10 @@ const DisplayProducts = ({
     );
   };
 
-  // Get current page products - exactly 20 per page
+  // Get current page products
   const getCurrentPageProducts = () => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
-    
-    
     
     return filteredProducts.slice(startIndex, endIndex);
   };
@@ -260,7 +262,6 @@ const DisplayProducts = ({
   // Handle page change
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
-
     
     // Scroll to top when changing pages
     window.scrollTo(0, 0);
