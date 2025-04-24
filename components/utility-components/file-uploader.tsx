@@ -49,7 +49,7 @@ export const FileUploaderButton = ({
               signer!,
               blossomServers && blossomServers.length > 1
                 ? blossomServers
-                : ["https://cdn.nostrcheck.me"]
+                : ["https://blossom.band"]
             );
           })
         );

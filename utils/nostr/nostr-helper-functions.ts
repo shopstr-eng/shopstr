@@ -1240,7 +1240,7 @@ export function getDefaultMint(): string {
 }
 
 export function getDefaultBlossomServer(): string {
-  return "https://cdn.nostrcheck.me";
+  return "https://blossom.band";
 }
 
 export async function verifyNip05Identifier(
