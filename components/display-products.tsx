@@ -230,6 +230,14 @@ const DisplayProducts = ({
     if (productData.images.length === 0) return;
     if (productData.contentWarning) return;
 
+    if (
+      productData.pubkey ===
+        "3da2082b7aa5b76a8f0c134deab3f7848c3b5e3a3079c65947d88422b69c1755" &&
+      userPubkey !== productData.pubkey
+    ) {
+      return; // temp fix, add adult categories or separate from global later
+    }
+
     return (
       <ProductCard
         key={productData.id + "-" + index}
