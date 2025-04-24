@@ -19,13 +19,60 @@ import Link from "next/link";
 import { nip19 } from "nostr-tools";
 import { NostrEvent } from "@/utils/types/types";
 
+// --- DARK MODE TOGGLE COMPONENT ---
+function ThemeToggle() {
+  const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    // On mount, check localStorage or system preference
+    const stored = typeof window !== "undefined" ? localStorage.getItem("theme") : null;
+    if (stored) {
+      setIsDark(stored === "dark");
+      document.documentElement.classList.toggle("dark", stored === "dark");
+    } else if (typeof window !== "undefined") {
+      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      setIsDark(prefersDark);
+      document.documentElement.classList.toggle("dark", prefersDark);
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const nextTheme = isDark ? "light" : "dark";
+    setIsDark(!isDark);
+    document.documentElement.classList.toggle("dark", !isDark);
+    localStorage.setItem("theme", nextTheme);
+  };
+
+  return (
+    <button
+      onClick={toggleTheme}
+      className="fixed top-6 right-6 z-[10000] rounded-full bg-light-fg dark:bg-dark-fg text-light-text dark:text-dark-text border border-gray-300 dark:border-gray-700 shadow-lg p-2 transition-colors hover:scale-105"
+      aria-label="Toggle dark mode"
+      type="button"
+    >
+      {isDark ? (
+        // Moon icon for dark mode
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+        </svg>
+      ) : (
+        // Sun icon for light mode
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <circle cx="12" cy="12" r="5" stroke="currentColor" strokeWidth="2" fill="none"/>
+          <path stroke="currentColor" strokeWidth="2" d="M12 1v2m0 18v2m11-11h-2M3 12H1m16.95 7.07l-1.41-1.41M6.34 6.34L4.93 4.93m12.02 0l-1.41 1.41M6.34 17.66l-1.41 1.41"/>
+        </svg>
+      )}
+    </button>
+  );
+}
+
 export default function Landing() {
   const router = useRouter();
   const productEventContext = useContext(ProductContext);
 
   const [parsedProducts, setParsedProducts] = useState<ProductData[]>([]);
-
   const signerContext = useContext(SignerContext);
+
   useEffect(() => {
     if (router.pathname === "/" && signerContext.isLoggedIn) {
       router.push("/marketplace");
@@ -50,6 +97,9 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen w-full bg-light-bg bg-gradient-to-b from-light-bg to-light-fg dark:bg-dark-bg dark:from-dark-bg dark:to-dark-fg">
+      {/* Dark Mode Toggle Button in Top Right */}
+      <ThemeToggle />
+
       {/* Hero Section */}
       <div className="bg-pattern-grid absolute inset-0 opacity-5"></div>
       <section className="container mx-auto flex flex-col items-center justify-center px-4 pb-24 pt-28 text-center">
@@ -230,6 +280,7 @@ export default function Landing() {
             </span>
           </h2>
           <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4 lg:gap-8">
+            {/* Step 1 */}
             <div className="group text-center">
               <div className="flex flex-col items-center">
                 <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-shopstr-purple/10 text-2xl font-bold text-shopstr-purple duration-300 transition-transform group-hover:scale-110 dark:bg-shopstr-yellow/10 dark:text-shopstr-yellow md:text-3xl">
@@ -257,6 +308,7 @@ export default function Landing() {
                 </div>
               </div>
             </div>
+            {/* Step 2 */}
             <div className="group text-center">
               <div className="flex flex-col items-center">
                 <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-shopstr-purple/10 text-2xl font-bold text-shopstr-purple duration-300 transition-transform group-hover:scale-110 dark:bg-shopstr-yellow/10 dark:text-shopstr-yellow md:text-3xl">
@@ -284,6 +336,7 @@ export default function Landing() {
                 </div>
               </div>
             </div>
+            {/* Step 3 */}
             <div className="group text-center">
               <div className="flex flex-col items-center">
                 <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-shopstr-purple/10 text-2xl font-bold text-shopstr-purple duration-300 transition-transform group-hover:scale-110 dark:bg-shopstr-yellow/10 dark:text-shopstr-yellow md:text-3xl">
@@ -311,6 +364,7 @@ export default function Landing() {
                 </div>
               </div>
             </div>
+            {/* Step 4 */}
             <div className="group text-center">
               <div className="flex flex-col items-center">
                 <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-shopstr-purple/10 text-2xl font-bold text-shopstr-purple duration-300 transition-transform group-hover:scale-110 dark:bg-shopstr-yellow/10 dark:text-shopstr-yellow md:text-3xl">
