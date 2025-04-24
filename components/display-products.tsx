@@ -259,12 +259,14 @@ const DisplayProducts = ({
     return filteredProducts.slice(startIndex, endIndex);
   };
 
+
   // Handle page change
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
     
     // Scroll to top when changing pages
     window.scrollTo(0, 0);
+
   };
 
   return (
