@@ -178,7 +178,7 @@ export default function Landing() {
               Shop Freely.
             </Typography>
             <Typography variant="h5" sx={{ mb: 4, color: 'text.primary' }}>
-              Decentralized Marketplace Powered by Nostr & Bitcoin
+              A permissionless marketplace powered by Nostr and Bitcoin.
             </Typography>
             <motion.div whileHover={{ scale: 1.05 }}>
               <Button
@@ -193,7 +193,7 @@ export default function Landing() {
                   '&:hover': { bgcolor: 'primary.dark' }
                 }}
               >
-                Explore Marketplace
+                Start Shopping
               </Button>
             </motion.div>
           </motion.div>
@@ -220,7 +220,7 @@ export default function Landing() {
                 mt: 2
               }
             }}>
-              Featured Products
+              Latest Products
             </Typography>
 
             <Box sx={{
@@ -401,7 +401,7 @@ export default function Landing() {
                   textShadow: darkMode ? '0 0 20px rgba(156, 39, 176, 0.3)' : 'none'
                 }}
               >
-                Why Shopstr?
+                Why Choose Shopstr?
               </Typography>
               <Typography
                 variant="h6"
@@ -423,33 +423,33 @@ export default function Landing() {
             <Grid container spacing={4}>
               {[
                 {
-                  title: 'True Decentralization',
-                  content: 'No central authority controls your data or listings. Shopstr leverages Nostr, a decentralized protocol that ensures your store remains accessible even if individual relays go offline.',
-                  icon: <CloudOff fontSize="large" />,
-                  color: '#8e24aa',
-                  features: ['Censorship-resistant', 'Self-sovereign identity', 'No single point of failure']
+                  title: 'Permissionless Commerce',
+                  content: 'Built on Nostr to buy and sell without restrictions or central authority. Your keys, your shop.',
+                  icon: <Public fontSize="large" />,
+                  color: '#0288d1',
+                  features: ['Cross-border commerce', 'Language independent', 'Accessible worldwide']
                 },
                 {
                   title: 'Bitcoin Native',
-                  content: 'Instant, low-fee payments with Lightning Network and private transactions through Cashu. Your money stays yours, with no payment processors taking a cut of your sales.',
+                  content: 'Secure transactions using Lightning and Cashu. Fast, low-fee payments.',
                   icon: <CurrencyBitcoin fontSize="large" />,
                   color: '#fbc02d',
                   features: ['Lightning Network fast', 'Minimal fees', 'Self-custodial']
                 },
                 {
                   title: 'Privacy First',
-                  content: 'End-to-end encrypted communications protect your business conversations. Neither Shopstr nor any third party can access your private messages or transaction details.',
+                  content: 'No purchases or sales are viewable by any third party. Your data is encrypted and stored on your selected relays.',
                   icon: <Lock fontSize="large" />,
                   color: '#43a047',
                   features: ['E2E encrypted messages', 'No KYC required', 'Privacy by design']
                 },
                 {
-                  title: 'Global & Borderless',
-                  content: 'Shopstr works anywhere in the world with an internet connection. No geographical restrictions, banking limitations, or currency conversion headaches.',
-                  icon: <Public fontSize="large" />,
-                  color: '#0288d1',
-                  features: ['Cross-border commerce', 'Language independent', 'Accessible worldwide']
-                }
+                  title: 'True Decentralization',
+                  content: 'No central authority controls your data or listings. Shopstr leverages Nostr, a decentralized protocol that ensures your store remains accessible even if individual relays go offline.',
+                  icon: <CloudOff fontSize="large" />,
+                  color: '#8e24aa',
+                  features: ['Censorship-resistant', 'Self-sovereign identity', 'No single point of failure']
+                },
               ].map((feature, index) => (
                 <Grid item xs={12} md={6} component="div" key={feature.title}>
                   <motion.div
@@ -807,7 +807,7 @@ export default function Landing() {
                       WebkitTextFillColor: 'transparent',
                     }}
                   >
-                    Ready to Join the Free Market Revolution?
+                    Ready to be a part of the free market?
                   </Typography>
 
                   <Typography
@@ -820,32 +820,8 @@ export default function Landing() {
                       fontSize: { xs: '1rem', md: '1.15rem' },
                     }}
                   >
-                    Trade with anyone, anywhere in the world without gatekeepers, censorship, or middlemen.
-                    Shopstr gives you the power to buy and sell on your own terms.
+                    Shop from anywhere in the world on a permissionless marketplace built on Nostr and Bitcoin. No fees, no restrictions, just pure freedom to buy and sell.
                   </Typography>
-
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 4 }}>
-                    {[
-                      { text: "No Platform Fees", icon: <LocalOffer fontSize="small" /> },
-                      { text: "Own Your Identity", icon: <AccountCircle fontSize="small" /> },
-                      { text: "Censorship Resistant", icon: <Security fontSize="small" /> },
-                      { text: "Global Reach", icon: <Public fontSize="small" /> },
-                    ].map((item, index) => (
-                      <Chip
-                        key={index}
-                        icon={item.icon}
-                        label={item.text}
-                        sx={{
-                          bgcolor: 'rgba(255,255,255,0.2)',
-                          color: 'white',
-                          fontWeight: 600,
-                          borderRadius: '4px',
-                          px: 2,
-                          py: 1,
-                        }}
-                      />
-                    ))}
-                  </Box>
 
                   <motion.div whileHover={{ scale: 1.05 }}>
                     <Button
