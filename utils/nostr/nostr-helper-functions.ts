@@ -819,27 +819,46 @@ export async function blossomUploadImages(
   )}`;
 
   return Promise.all(
-    servers.map(async (server) => {
-      const url = new URL("/upload", server);
+    servers.map(async (server, i) => {
+      let tags: string[][] = [];
+      let responseUrl: string = "";
+      if (i == 0) {
+        const url = new URL("/upload", server);
 
-      const response = await fetch(url, {
-        method: "PUT",
-        body: image,
-        headers: {
-          authorization,
-          "content-type": image.type,
-        },
-      }).then((res) => res.json() as Promise<BlossomUploadResponse>);
+        const response = await fetch(url, {
+          method: "PUT",
+          body: image,
+          headers: {
+            authorization,
+            "content-type": image.type,
+          },
+        }).then((res) => res.json() as Promise<BlossomUploadResponse>);
 
-      const tags = [
-        ["url", response.url],
-        ["x", response.sha256],
-        ["ox", response.sha256],
-        ["size", response.size.toString()],
-      ];
+        responseUrl = response.url;
 
-      if (response.type) {
-        tags.push(["m", response.type]);
+        tags = [
+          ["url", responseUrl],
+          ["x", response.sha256],
+          ["ox", response.sha256],
+          ["size", response.size.toString()],
+        ];
+
+        if (response.type) {
+          tags.push(["m", response.type]);
+        }
+      } else {
+        const url = new URL("/mirror", server);
+
+        await fetch(url, {
+          method: "PUT",
+          body: JSON.stringify({
+            url: responseUrl,
+          }),
+          headers: {
+            authorization,
+            "content-type": image.type,
+          },
+        });
       }
 
       return tags;

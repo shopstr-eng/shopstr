@@ -217,10 +217,25 @@ const PreferencesPage = () => {
 
   const addBlossomServer = async (newServer: string) => {
     try {
-      setBlossomServers([...blossomServers, newServer]);
+      const url = new URL("/upload", newServer);
+      const checkResponse = await fetch(url, {
+        method: "HEAD",
+      });
+      if (!checkResponse.ok) {
+        throw new Error(`${newServer} was unable to connect!`);
+      }
+
+      if (!blossomServers.includes(newServer)) {
+        setBlossomServers([newServer, ...blossomServers]);
+      } else {
+        setBlossomServers([
+          newServer,
+          ...blossomServers.filter((server) => server !== newServer),
+        ]);
+      }
       setBlossomServersAreChanged(true);
-    } catch {
-      setFailureText(`${newServer} was unable to connect!`);
+    } catch (error) {
+      setFailureText(error as string);
       setShowFailureModal(true);
     }
   };
@@ -793,13 +808,22 @@ const PreferencesPage = () => {
             </div>
           )}
           <div className="mt-4 max-h-96 overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
-            {blossomServers.map((server) => (
+            {blossomServers.map((server, index) => (
               <div
                 key={server}
-                className="mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg"
+                className={`mb-2 flex items-center justify-between rounded-md border-2 ${
+                  index === 0
+                    ? "relative border-purple-500 dark:border-yellow-500"
+                    : "border-light-fg dark:border-dark-fg"
+                } px-3 py-2`}
               >
                 <div className="max-w-xsm break-all text-light-text dark:text-dark-text ">
                   {server}
+                  {index === 0 && (
+                    <span className="bg-light-bg px-3 text-xs text-gray-500 dark:bg-dark-bg">
+                      Primary Media Server
+                    </span>
+                  )}
                 </div>
                 {blossomServers.length > 1 && (
                   <MinusCircleIcon
