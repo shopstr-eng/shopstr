@@ -10,7 +10,7 @@ import {
 import ProductCard from "./utility-components/product-card";
 import DisplayProductModal from "./display-product-modal";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import { Button } from "@nextui-org/react";
+import { Button, Pagination } from "@nextui-org/react";
 import ShopstrSpinner from "./utility-components/shopstr-spinner";
 import { useRouter } from "next/router";
 import parseTags, {
@@ -45,8 +45,14 @@ const DisplayProducts = ({
   const productEventContext = useContext(ProductContext);
   const profileMapContext = useContext(ProfileMapContext);
   const followsContext = useContext(FollowsContext);
-  const [focusedProduct, setFocusedProduct] = useState<ProductData>(); // product being viewed in modal
+  const [focusedProduct, setFocusedProduct] = useState<ProductData>(); 
   const [showModal, setShowModal] = useState(false);
+  
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 40; // Exactly 40 products per page  but cn be adjusted accordning
+  const [filteredProducts, setFilteredProducts] = useState<ProductData[]>([]);
+  const [totalPages, setTotalPages] = useState(1);
 
   const router = useRouter();
 
@@ -61,7 +67,7 @@ const DisplayProducts = ({
         ...productEventContext.productEvents.sort(
           (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
         ),
-      ]; // sorts most recently created to least recently created
+      ]; 
       const parsedProductData: ProductData[] = [];
       sortedProductEvents.forEach((event) => {
         if (wotFilter) {
@@ -97,8 +103,26 @@ const DisplayProducts = ({
   useEffect(() => {
     if (!productEvents) return;
 
-    const filteredProducts = productEvents.filter(productSatisfiesAllFilters);
-    onFilteredProductsChange?.(filteredProducts);
+    // Apply all filters including image validation
+    const filtered = productEvents.filter((product) => {
+      if (focusedPubkey && product.pubkey !== focusedPubkey) return false;
+      if (!productSatisfiesAllFilters(product)) return false;
+      if (!product.currency) return false;
+      if (product.images.length === 0) return false;
+      if (product.contentWarning) return false;
+      return true;
+    });
+    
+    
+    
+    setFilteredProducts(filtered);
+    setTotalPages(Math.max(1, Math.ceil(filtered.length / itemsPerPage)));
+    
+    // Reset to page 1 when filters change
+    setCurrentPage(1);
+    
+    // Call the callback if provided
+    onFilteredProductsChange?.(filtered);
   }, [
     productEvents,
     selectedSearch,
@@ -157,8 +181,8 @@ const DisplayProducts = ({
   };
 
   const productSatisfiesSearchFilter = (productData: ProductData) => {
-    if (!selectedSearch) return true; // nothing in search bar
-    if (!productData.title) return false; // we don't want to display it if product has no title
+    if (!selectedSearch) return true; 
+    if (!productData.title) return false; 
 
     // Handle naddr search
     if (selectedSearch.includes("naddr")) {
@@ -223,32 +247,61 @@ const DisplayProducts = ({
     );
   };
 
-  const displayProductCard = (productData: ProductData, index: number) => {
-    if (focusedPubkey && productData.pubkey !== focusedPubkey) return;
-    if (!productSatisfiesAllFilters(productData)) return;
-    if (!productData.currency) return;
-    if (productData.images.length === 0) return;
-    if (productData.contentWarning) return;
+  // Get current page products - exactly 20 per page
+  const getCurrentPageProducts = () => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    
+    
+    
+    return filteredProducts.slice(startIndex, endIndex);
+  };
 
-    return (
-      <ProductCard
-        key={productData.id + "-" + index}
-        productData={productData}
-        onProductClick={onProductClick}
-      />
-    );
+  // Handle page change
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+
+    
+    // Scroll to top when changing pages
+    window.scrollTo(0, 0);
   };
 
   return (
     <>
       <div className="w-full md:pl-4">
         {/* DISPLAYS PRODUCT LISTINGS HERE */}
-        {productEvents.length != 0 ? (
-          <div className="grid max-w-full grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-x-hidden">
-            {productEvents.map((productData: ProductData, index) => {
-              return displayProductCard(productData, index);
-            })}
-          </div>
+        {filteredProducts.length > 0 ? (
+          <>
+            <div className="grid max-w-full grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-x-hidden">
+              {getCurrentPageProducts().map((productData: ProductData, index) => (
+                <ProductCard
+                  key={productData.id + "-" + index}
+                  productData={productData}
+                  onProductClick={onProductClick}
+                />
+              ))}
+            </div>
+            
+            {/* Pagination controls */}
+            {totalPages > 1 && (
+              <div className="mt-8 flex justify-center">
+                <Pagination
+                  total={totalPages}
+                  page={currentPage}
+                  onChange={handlePageChange}
+                  showControls
+                  classNames={{
+                    cursor: "bg-purple-500",
+                  }}
+                />
+              </div>
+            )}
+            
+            {/* Page information */}
+            <div className="mt-4 text-center text-sm text-light-text dark:text-dark-text">
+              Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(filteredProducts.length, currentPage * itemsPerPage)} of {filteredProducts.length} products
+            </div>
+          </>
         ) : (
           wotFilter &&
           !isProductsLoading && (
