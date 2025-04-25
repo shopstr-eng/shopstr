@@ -28,8 +28,8 @@ A global, permissionless Nostr marketplace for Bitcoin commerce.
 - [x] NIP-65: Relay List Metadata
 - [x] NIP-85: Reviews
 - [x] NIP-89: Recommended Application Handlers
-- [x] NIP-98: HTTP Auth
 - [x] NIP-99: Classified Listings
+- [x] NIP-B7: Blossom Media
 
 # Authors
 

@@ -128,6 +128,16 @@ export const RelaysContext = createContext({
   isLoading: true,
 } as RelaysContextInterface);
 
+export interface BlossomContextInterface {
+  blossomServers: string[];
+  isLoading: boolean;
+}
+
+export const BlossomContext = createContext({
+  blossomServers: [],
+  isLoading: true,
+} as BlossomContextInterface);
+
 export interface CashuWalletContextInterface {
   proofEvents: any[];
   cashuMints: string[];

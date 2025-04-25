@@ -4,7 +4,6 @@ import {
   getPublicKey,
   nip19,
   nip44,
-  nip98,
   SimplePool,
 } from "nostr-tools";
 import CryptoJS from "crypto-js";
@@ -501,9 +500,36 @@ export async function createNostrRelayEvent(
     sig: "",
   } as NostrEvent;
 
-  relayEvent.created_at = Math.floor(new Date().getTime() / 1000);
   await finalizeAndSendNostrEvent(signer, nostr, relayEvent);
   return relayEvent;
+}
+
+export async function createBlossomServerEvent(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  pubkey: string
+) {
+  if (!signer || !nostr) throw new Error("Login required");
+  const blossomServers = getLocalStorageData().blossomServers;
+  const serverTags = [];
+  if (blossomServers.length != 0) {
+    for (const server of blossomServers) {
+      const serverTag = ["server", server];
+      serverTags.push(serverTag);
+    }
+  }
+  const blossomServerEvent = {
+    kind: 10063,
+    content: "",
+    tags: serverTags,
+    created_at: Math.floor(Date.now() / 1000),
+    pubkey: pubkey,
+    id: "",
+    sig: "",
+  } as NostrEvent;
+
+  await finalizeAndSendNostrEvent(signer, nostr, blossomServerEvent);
+  return blossomServerEvent;
 }
 
 export async function publishSavedForLaterEvent(
@@ -695,63 +721,87 @@ export async function finalizeAndSendNostrEvent(
   }
 }
 
-export type NostrBuildResponse = {
-  status: "success" | "error";
-  message: string;
-  data: {
-    input_name: "APIv2";
-    name: string;
-    url: string;
-    thumbnail: string;
-    responsive: {
-      "240p": string;
-      "360p": string;
-      "480p": string;
-      "720p": string;
-      "1080p": string;
-    };
-    blurhash: string;
-    sha256: string;
-    type: "picture" | "video";
-    mime: string;
-    size: number;
-    metadata: Record<string, string>;
-    dimensions: {
-      width: number;
-      height: number;
-    };
-  }[];
+export type BlossomUploadResponse = {
+  url: string;
+  sha256: string;
+  size: number;
+  type?: string;
 };
 
-export type DraftNostrEvent = Omit<NostrEvent, "pubkey" | "id" | "sig">;
-
-export async function nostrBuildUploadImages(
-  images: File[],
-  sign?: (draft: DraftNostrEvent) => Promise<NostrEvent>
+export async function blossomUploadImages(
+  image: File,
+  signer: NostrSigner,
+  servers: Request["url"][]
 ) {
-  if (images.some((img) => !img.type.includes("image")))
+  if (!image.type.includes("image"))
     throw new Error("Only images are supported");
 
-  const url = "https://nostr.build/api/v2/upload/files";
+  const arrayBuffer = await image.arrayBuffer();
+  const wordArray = CryptoJS.lib.WordArray.create(arrayBuffer);
+  const hash = CryptoJS.SHA256(wordArray).toString(CryptoJS.enc.Hex);
 
-  const payload = new FormData();
-  images.forEach((image) => {
-    payload.append("file[]", image);
-  });
+  const event = {
+    kind: 24242,
+    content: `Upload ${image.name}`,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [
+      ["t", "upload"],
+      ["x", hash],
+      ["size", image.size.toString()],
+      ["expiration", Math.floor(60000 / 1000).toString()],
+    ],
+  };
 
-  const headers: HeadersInit = {};
-  if (sign) {
-    const token = await nip98.getToken(url, "POST", sign, true);
-    headers.Authorization = token;
+  const signedEvent = await signer!.sign(event);
+
+  const authorization = `Nostr ${CryptoJS.enc.Base64.stringify(
+    CryptoJS.enc.Utf8.parse(JSON.stringify(signedEvent))
+  )}`;
+
+  let tags: string[][] = [];
+  let responseUrl: string = "";
+  for (let i = 0; i < servers.length; i++) {
+    const server = servers[i];
+    if (i == 0) {
+      const url = new URL("/upload", server);
+
+      const response = await fetch(url, {
+        method: "PUT",
+        body: image,
+        headers: {
+          authorization,
+          "content-type": image.type,
+        },
+      }).then((res) => res.json());
+
+      responseUrl = response.url;
+
+      tags = [
+        ["url", responseUrl],
+        ["x", response.sha256],
+        ["ox", response.sha256],
+        ["size", response.size.toString()],
+      ];
+
+      if (response.type) {
+        tags.push(["m", response.type]);
+      }
+    } else {
+      const url = new URL("/mirror", server);
+
+      await fetch(url, {
+        method: "PUT",
+        body: JSON.stringify({
+          url: responseUrl,
+        }),
+        headers: {
+          authorization,
+          "content-type": image.type,
+        },
+      });
+    }
   }
-
-  const response = await fetch(url, {
-    body: payload,
-    method: "POST",
-    headers,
-  }).then((res) => res.json() as Promise<NostrBuildResponse>);
-
-  return response.data;
+  return tags;
 }
 
 /***** HELPER FUNCTIONS *****/
@@ -775,6 +825,7 @@ const LOCALSTORAGECONSTANTS = {
   readRelays: "readRelays",
   writeRelays: "writeRelays",
   mints: "mints",
+  blossomServers: "blossomServers",
   tokens: "tokens",
   history: "history",
   wot: "wot",
@@ -792,6 +843,7 @@ export const setLocalStorageDataOnSignIn = ({
   readRelays,
   writeRelays,
   mints,
+  blossomServers,
   wot,
   clientPubkey,
   clientPrivkey,
@@ -806,6 +858,7 @@ export const setLocalStorageDataOnSignIn = ({
   readRelays?: string[];
   writeRelays?: string[];
   mints?: string[];
+  blossomServers?: string[];
   wot?: number;
   clientPubkey?: string;
   clientPrivkey?: string;
@@ -840,6 +893,13 @@ export const setLocalStorageDataOnSignIn = ({
   localStorage.setItem(
     LOCALSTORAGECONSTANTS.mints,
     JSON.stringify(mints ? mints : [getDefaultMint()])
+  );
+
+  localStorage.setItem(
+    LOCALSTORAGECONSTANTS.blossomServers,
+    JSON.stringify(
+      blossomServers ? blossomServers : [getDefaultBlossomServer()]
+    )
   );
 
   localStorage.setItem(LOCALSTORAGECONSTANTS.wot, String(wot ? wot : 3));
@@ -882,6 +942,7 @@ export interface LocalStorageInterface {
   readRelays: string[];
   writeRelays: string[];
   mints: string[];
+  blossomServers: string[];
   tokens: [];
   history: [];
   wot: number;
@@ -901,6 +962,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
   let readRelays;
   let writeRelays;
   let mints;
+  let blossomServers;
   let tokens;
   let history;
   let wot;
@@ -968,6 +1030,18 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     if (mints === null) {
       mints = [getDefaultMint()];
       localStorage.setItem(LOCALSTORAGECONSTANTS.mints, JSON.stringify(mints));
+    }
+
+    blossomServers = localStorage.getItem(LOCALSTORAGECONSTANTS.blossomServers)
+      ? JSON.parse(localStorage.getItem("blossomServers") as string)
+      : null;
+
+    if (blossomServers === null) {
+      blossomServers = [getDefaultBlossomServer()];
+      localStorage.setItem(
+        LOCALSTORAGECONSTANTS.blossomServers,
+        JSON.stringify(blossomServers)
+      );
     }
 
     tokens = localStorage.getItem(LOCALSTORAGECONSTANTS.tokens)
@@ -1042,6 +1116,7 @@ export const getLocalStorageData = (): LocalStorageInterface => {
     readRelays: readRelays || [],
     writeRelays: writeRelays || [],
     mints,
+    blossomServers: blossomServers || [],
     tokens: tokens || [],
     history: history || [],
     wot: wot || 3,
@@ -1100,6 +1175,10 @@ export function withBlastr(relays: string[]): string[] {
 
 export function getDefaultMint(): string {
   return "https://mint.minibits.cash/Bitcoin";
+}
+
+export function getDefaultBlossomServer(): string {
+  return "https://cdn.nostrcheck.me";
 }
 
 export async function verifyNip05Identifier(
