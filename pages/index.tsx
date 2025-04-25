@@ -365,15 +365,26 @@ export default function Landing() {
       <footer className="w-full bg-light-fg px-4 py-8 dark:bg-dark-fg">
         <div className="container mx-auto">
           <div className="mb-6 flex flex-col items-center justify-between md:flex-row">
-            <p className="mb-4 text-light-text dark:text-dark-text md:mb-0">
-              © 2023-2025, Shopstr Market Inc. or its affiliates
-            </p>
-            <div className="flex items-center gap-8">
+            <div className="flex items-center gap-8 mb-4 md:mb-0">
               <button
                 onClick={() => router.push("/faq")}
                 className="flex items-center gap-1 text-light-text transition-colors hover:text-shopstr-purple dark:text-dark-text dark:hover:text-shopstr-yellow"
               >
                 FAQ
+                <ArrowUpRightIcon className="h-3 w-3" />
+              </button>
+              <button
+                onClick={() => router.push("/terms")}
+                className="flex items-center gap-1 text-light-text transition-colors hover:text-shopstr-purple dark:text-dark-text dark:hover:text-shopstr-yellow"
+              >
+                Terms
+                <ArrowUpRightIcon className="h-3 w-3" />
+              </button>
+              <button
+                onClick={() => router.push("/privacy")}
+                className="flex items-center gap-1 text-light-text transition-colors hover:text-shopstr-purple dark:text-dark-text dark:hover:text-shopstr-yellow"
+              >
+                Privacy
                 <ArrowUpRightIcon className="h-3 w-3" />
               </button>
               <div className="flex h-auto items-center gap-6">
@@ -442,6 +453,9 @@ export default function Landing() {
                 </a>
               </div>
             </div>
+            <p className="text-light-text dark:text-dark-text">
+              © 2025 Shopstr Market Inc.
+            </p>
           </div>
         </div>
       </footer>

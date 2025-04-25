@@ -103,8 +103,7 @@ export default function Faq() {
         </h1>
 
         <p className="mx-auto mb-10 max-w-3xl text-center text-light-text/80 dark:text-dark-text/80">
-          Get quick answers to common questions about using Shopstr, the
-          permissionless marketplace built on Nostr.
+          Answers to common questions about using Shopstr
         </p>
 
         {faqSections.map((section, sectionIndex) => (
