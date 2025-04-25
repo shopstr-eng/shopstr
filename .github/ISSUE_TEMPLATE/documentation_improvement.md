@@ -1,5 +1,6 @@
 ---
 name: Documentation Improvement
+about: Suggest an improvement to our documentation
 title: "[DOCS] "
 labels: documentation
 assignees: ""
