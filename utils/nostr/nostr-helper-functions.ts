@@ -722,65 +722,6 @@ export async function finalizeAndSendNostrEvent(
   }
 }
 
-export type NostrBuildResponse = {
-  status: "success" | "error";
-  message: string;
-  data: {
-    input_name: "APIv2";
-    name: string;
-    url: string;
-    thumbnail: string;
-    responsive: {
-      "240p": string;
-      "360p": string;
-      "480p": string;
-      "720p": string;
-      "1080p": string;
-    };
-    blurhash: string;
-    sha256: string;
-    type: "picture" | "video";
-    mime: string;
-    size: number;
-    metadata: Record<string, string>;
-    dimensions: {
-      width: number;
-      height: number;
-    };
-  }[];
-};
-
-export type DraftNostrEvent = Omit<NostrEvent, "pubkey" | "id" | "sig">;
-
-export async function nostrBuildUploadImages(
-  images: File[],
-  sign?: (draft: DraftNostrEvent) => Promise<NostrEvent>
-) {
-  if (images.some((img) => !img.type.includes("image")))
-    throw new Error("Only images are supported");
-
-  const url = "https://nostr.build/api/v2/upload/files";
-
-  const payload = new FormData();
-  images.forEach((image) => {
-    payload.append("file[]", image);
-  });
-
-  const headers: HeadersInit = {};
-  if (sign) {
-    const token = await nip98.getToken(url, "POST", sign, true);
-    headers.Authorization = token;
-  }
-
-  const response = await fetch(url, {
-    body: payload,
-    method: "POST",
-    headers,
-  }).then((res) => res.json() as Promise<NostrBuildResponse>);
-
-  return response.data;
-}
-
 export type BlossomUploadResponse = {
   url: string;
   sha256: string;
