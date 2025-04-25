@@ -30,6 +30,7 @@ const DisplayProducts = ({
   isMyListings,
   setCategories,
   onFilteredProductsChange,
+  searchBarRef,
 }: {
   focusedPubkey?: string;
   selectedCategories: Set<string>;
@@ -39,17 +40,18 @@ const DisplayProducts = ({
   isMyListings?: boolean;
   setCategories?: (categories: string[]) => void;
   onFilteredProductsChange?: (products: ProductData[]) => void;
+  searchBarRef?: React.RefObject<HTMLDivElement>;
 }) => {
   const [productEvents, setProductEvents] = useState<ProductData[]>([]);
   const [isProductsLoading, setIsProductLoading] = useState(true);
   const productEventContext = useContext(ProductContext);
   const profileMapContext = useContext(ProfileMapContext);
   const followsContext = useContext(FollowsContext);
-  const [focusedProduct, setFocusedProduct] = useState<ProductData>(); 
+  const [focusedProduct, setFocusedProduct] = useState<ProductData>();
   const [showModal, setShowModal] = useState(false);
-  
+
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 40; // Exactly 40 products per page but can be adjusted according
+  const itemsPerPage = 40;
   const [filteredProducts, setFilteredProducts] = useState<ProductData[]>([]);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -66,7 +68,7 @@ const DisplayProducts = ({
         ...productEventContext.productEvents.sort(
           (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
         ),
-      ]; 
+      ];
       const parsedProductData: ProductData[] = [];
       sortedProductEvents.forEach((event) => {
         if (wotFilter) {
@@ -102,30 +104,26 @@ const DisplayProducts = ({
   useEffect(() => {
     if (!productEvents) return;
 
-    // Apply all filters including image validation
     const filtered = productEvents.filter((product) => {
       if (focusedPubkey && product.pubkey !== focusedPubkey) return false;
       if (!productSatisfiesAllFilters(product)) return false;
       if (!product.currency) return false;
       if (product.images.length === 0) return false;
       if (product.contentWarning) return false;
-      // Additional check from main branch
       if (
         product.pubkey === "3da2082b7aa5b76a8f0c134deab3f7848c3b5e3a3079c65947d88422b69c1755" &&
         userPubkey !== product.pubkey
       ) {
-        return false; // temp fix, add adult categories or separate from global later
+        return false;
       }
       return true;
     });
-    
+
     setFilteredProducts(filtered);
     setTotalPages(Math.max(1, Math.ceil(filtered.length / itemsPerPage)));
-    
-    // Reset to page 1 when filters change
+
     setCurrentPage(1);
-    
-    // Call the callback if provided
+
     onFilteredProductsChange?.(filtered);
   }, [
     productEvents,
@@ -134,6 +132,29 @@ const DisplayProducts = ({
     selectedCategories,
     focusedPubkey,
   ]);
+
+  // Scroll effect only on page change
+  useEffect(() => {
+    // Skip initial render (currentPage === 1)
+    if (currentPage === 1) return;
+
+    const timer = requestAnimationFrame(() => {
+      if (searchBarRef?.current) {
+        searchBarRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+        window.scrollBy(0, -80); // Adjust for fixed header
+      } else {
+        window.scrollTo({
+          top: 0,
+          behavior: "smooth",
+        });
+      }
+    });
+
+    return () => cancelAnimationFrame(timer);
+  }, [currentPage, searchBarRef]);
 
   const handleDelete = async (productId: string) => {
     try {
@@ -185,10 +206,9 @@ const DisplayProducts = ({
   };
 
   const productSatisfiesSearchFilter = (productData: ProductData) => {
-    if (!selectedSearch) return true; 
-    if (!productData.title) return false; 
+    if (!selectedSearch) return true;
+    if (!productData.title) return false;
 
-    // Handle naddr search
     if (selectedSearch.includes("naddr")) {
       try {
         const parsedNaddr = nip19.decode(selectedSearch);
@@ -204,34 +224,29 @@ const DisplayProducts = ({
       }
     }
 
-    // Handle npub search
     if (selectedSearch.includes("npub")) {
       try {
         const parsedNpub = nip19.decode(selectedSearch);
         if (parsedNpub.type === "npub") {
           return parsedNpub.data === productData.pubkey;
         }
-        return false; // Return false if npub parsing succeeded but type isn't "npub"
+        return false;
       } catch (_) {
         return false;
       }
     }
 
-    // Handle regular text search - search in both title and summary
     try {
       const re = new RegExp(selectedSearch, "gi");
 
-      // Check title match
       const titleMatch = productData.title.match(re);
       if (titleMatch && titleMatch.length > 0) return true;
 
-      // Check summary match if summary exists
       if (productData.summary) {
         const summaryMatch = productData.summary.match(re);
         if (summaryMatch && summaryMatch.length > 0) return true;
       }
 
-      // Check price match - if search term is numeric, check if it matches the price
       const numericSearch = parseFloat(selectedSearch);
       if (!isNaN(numericSearch) && productData.price === numericSearch) {
         return true;
@@ -251,26 +266,20 @@ const DisplayProducts = ({
     );
   };
 
-  // Get current page products
   const getCurrentPageProducts = () => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
-    
+
     return filteredProducts.slice(startIndex, endIndex);
   };
 
-  // Handle page change
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
-    
-    // Scroll to top when changing pages
-    window.scrollTo(0, 0);
   };
 
   return (
     <>
       <div className="w-full md:pl-4">
-        {/* DISPLAYS PRODUCT LISTINGS HERE */}
         {filteredProducts.length > 0 ? (
           <>
             <div className="grid max-w-full grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-x-hidden">
@@ -282,8 +291,7 @@ const DisplayProducts = ({
                 />
               ))}
             </div>
-            
-            {/* Pagination controls */}
+
             {totalPages > 1 && (
               <div className="mt-8 flex justify-center">
                 <Pagination
@@ -297,10 +305,14 @@ const DisplayProducts = ({
                 />
               </div>
             )}
-            
-            {/* Page information */}
+
             <div className="mt-4 text-center text-sm text-light-text dark:text-dark-text">
-              Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(filteredProducts.length, currentPage * itemsPerPage)} of {filteredProducts.length} products
+              Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
+              {Math.min(
+                filteredProducts.length,
+                currentPage * itemsPerPage
+              )}{" "}
+              of {filteredProducts.length} products
             </div>
           </>
         ) : (
@@ -308,8 +320,9 @@ const DisplayProducts = ({
           !isProductsLoading && (
             <p className="mt-4 break-words text-center text-2xl text-light-text dark:text-dark-text">
               No products found...
-              <br></br>
-              <br></br>Try turning of the trust filter!
+              <br />
+              <br />
+              Try turning off the trust filter!
             </p>
           )
         )}
@@ -355,3 +368,4 @@ const DisplayProducts = ({
 };
 
 export default DisplayProducts;
+
