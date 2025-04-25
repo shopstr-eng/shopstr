@@ -4,7 +4,6 @@ import {
   getPublicKey,
   nip19,
   nip44,
-  nip98,
   SimplePool,
 } from "nostr-tools";
 import CryptoJS from "crypto-js";
