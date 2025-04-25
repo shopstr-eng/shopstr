@@ -818,52 +818,50 @@ export async function blossomUploadImages(
     CryptoJS.enc.Utf8.parse(JSON.stringify(signedEvent))
   )}`;
 
-  return Promise.all(
-    servers.map(async (server, i) => {
-      let tags: string[][] = [];
-      let responseUrl: string = "";
-      if (i == 0) {
-        const url = new URL("/upload", server);
+  let tags: string[][] = [];
+  let responseUrl: string = "";
+  for (let i = 0; i < servers.length; i++) {
+    const server = servers[i];
+    if (i == 0) {
+      const url = new URL("/upload", server);
 
-        const response = await fetch(url, {
-          method: "PUT",
-          body: image,
-          headers: {
-            authorization,
-            "content-type": image.type,
-          },
-        }).then((res) => res.json() as Promise<BlossomUploadResponse>);
+      const response = await fetch(url, {
+        method: "PUT",
+        body: image,
+        headers: {
+          authorization,
+          "content-type": image.type,
+        },
+      }).then((res) => res.json());
 
-        responseUrl = response.url;
+      responseUrl = response.url;
 
-        tags = [
-          ["url", responseUrl],
-          ["x", response.sha256],
-          ["ox", response.sha256],
-          ["size", response.size.toString()],
-        ];
+      tags = [
+        ["url", responseUrl],
+        ["x", response.sha256],
+        ["ox", response.sha256],
+        ["size", response.size.toString()],
+      ];
 
-        if (response.type) {
-          tags.push(["m", response.type]);
-        }
-      } else {
-        const url = new URL("/mirror", server);
-
-        await fetch(url, {
-          method: "PUT",
-          body: JSON.stringify({
-            url: responseUrl,
-          }),
-          headers: {
-            authorization,
-            "content-type": image.type,
-          },
-        });
+      if (response.type) {
+        tags.push(["m", response.type]);
       }
+    } else {
+      const url = new URL("/mirror", server);
 
-      return tags;
-    })
-  );
+      await fetch(url, {
+        method: "PUT",
+        body: JSON.stringify({
+          url: responseUrl,
+        }),
+        headers: {
+          authorization,
+          "content-type": image.type,
+        },
+      });
+    }
+  }
+  return tags;
 }
 
 /***** HELPER FUNCTIONS *****/
@@ -1240,7 +1238,7 @@ export function getDefaultMint(): string {
 }
 
 export function getDefaultBlossomServer(): string {
-  return "https://blossom.band";
+  return "https://cdn.nostrcheck.me";
 }
 
 export async function verifyNip05Identifier(

@@ -36,7 +36,7 @@ export const FileUploaderButton = ({
       const imageFiles = Array.from(files);
 
       if (imageFiles.some((imgFile) => !imgFile.type.includes("image"))) {
-        throw new Error("Only images are supported");
+        throw new Error("Only images are supported!");
       }
 
       let responses: any[] = [];
@@ -49,7 +49,7 @@ export const FileUploaderButton = ({
               signer!,
               blossomServers && blossomServers.length > 1
                 ? blossomServers
-                : ["https://blossom.band"]
+                : ["https://cdn.nostrcheck.me"]
             );
           })
         );
@@ -57,9 +57,9 @@ export const FileUploaderButton = ({
 
       const imageUrls = responses
         .filter((response) => response && Array.isArray(response))
-        .map((response: string[][]) => {
+        .map((response: string[]) => {
           if (Array.isArray(response)) {
-            const urlTag = response[0]!.find(
+            const urlTag = response!.find(
               (tag) => Array.isArray(tag) && tag[0] === "url"
             );
             if (urlTag && urlTag.length > 1) {
@@ -73,13 +73,17 @@ export const FileUploaderButton = ({
       if (imageUrls && imageUrls.length > 0) {
         return imageUrls;
       } else {
-        setFailureText("Image upload failed to yield img URL!");
+        setFailureText(
+          "Image upload failed to yield a URL! Change your Blossom media server in settings or try again."
+        );
         setShowFailureModal(true);
         return [];
       }
     } catch (e) {
       if (e instanceof Error) {
-        setFailureText("Failed to upload image! " + e.message);
+        setFailureText(
+          "Failed to upload image! Change your Blossom media server in settings."
+        );
         setShowFailureModal(true);
       }
       return [];

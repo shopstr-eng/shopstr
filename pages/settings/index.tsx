@@ -55,7 +55,7 @@ const SettingsPage = () => {
             </ListboxItem>
             <ListboxItem
               key="preferences"
-              description="Change your relays, mints, and theme"
+              description="Change your mints, relays, media servers, and more"
               classNames={listBoxClassnames}
               startContent={<Cog6ToothIcon className={startIconClassnames} />}
               onClick={() => {

@@ -64,6 +64,7 @@ const PreferencesPage = () => {
       setRelays(getLocalStorageData().relays);
       setReadRelays(getLocalStorageData().readRelays);
       setWriteRelays(getLocalStorageData().writeRelays);
+      setBlossomServers(getLocalStorageData().blossomServers);
     }
     setIsLoaded(true);
   }, [signer]);
@@ -170,12 +171,14 @@ const PreferencesPage = () => {
   ) => {
     try {
       const relayTest = await Relay.connect(newRelay);
-      if (type === "read") {
-        setReadRelays([...readRelays, newRelay]);
-      } else if (type === "write") {
-        setWriteRelays([...writeRelays, newRelay]);
-      } else if (type === "all") {
-        setRelays([...relays, newRelay]);
+      if (!relays.includes(newRelay)) {
+        if (type === "read") {
+          setReadRelays([...readRelays, newRelay]);
+        } else if (type === "write") {
+          setWriteRelays([...writeRelays, newRelay]);
+        } else if (type === "all") {
+          setRelays([...relays, newRelay]);
+        }
       }
       relayTest.close();
       handleToggleRelayModal(type);
@@ -218,11 +221,11 @@ const PreferencesPage = () => {
   const addBlossomServer = async (newServer: string) => {
     try {
       const url = new URL("/upload", newServer);
-      const checkResponse = await fetch(url, {
-        method: "HEAD",
-      });
-      if (!checkResponse.ok) {
-        throw new Error(`${newServer} was unable to connect!`);
+      const checkResponse = await fetch(url);
+      if (checkResponse.status === 404) {
+        throw new Error(
+          `Failed to add Blossom server! ${newServer} was unable to connect.`
+        );
       }
 
       if (!blossomServers.includes(newServer)) {
@@ -233,9 +236,12 @@ const PreferencesPage = () => {
           ...blossomServers.filter((server) => server !== newServer),
         ]);
       }
+      handleToggleBlossomServerModal();
       setBlossomServersAreChanged(true);
     } catch (error) {
-      setFailureText(error as string);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      setFailureText(errorMessage);
       setShowFailureModal(true);
     }
   };
@@ -821,7 +827,7 @@ const PreferencesPage = () => {
                   {server}
                   {index === 0 && (
                     <span className="bg-light-bg px-3 text-xs text-gray-500 dark:bg-dark-bg">
-                      Primary Media Server
+                      Primary Server
                     </span>
                   )}
                 </div>
@@ -883,8 +889,8 @@ const PreferencesPage = () => {
                         message: "This input exceed maxLength of 500.",
                       },
                       validate: (value) =>
-                        /^(wss:\/\/|ws:\/\/)/.test(value) ||
-                        "Invalid relay URL, must start with https:// or http://.",
+                        /^(https:\/\/|http:\/\/)/.test(value) ||
+                        "Invalid Blossom server URL, must start with https:// or http://.",
                     }}
                     render={({
                       field: { onChange, onBlur, value },
