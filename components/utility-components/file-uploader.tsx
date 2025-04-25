@@ -31,6 +31,56 @@ export const FileUploaderButton = ({
   const { signer, isLoggedIn } = useContext(SignerContext);
   const { blossomServers } = getLocalStorageData();
 
+  // Function to strip metadata from an image file
+  const stripImageMetadata = async (imageFile: File): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(imageFile);
+
+      img.onload = () => {
+        // Create a canvas element
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+
+        // Draw the image without metadata
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          URL.revokeObjectURL(url);
+          reject(new Error("Failed to get canvas context"));
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0);
+
+        // Convert canvas to blob with original file type
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            URL.revokeObjectURL(url);
+            reject(new Error("Failed to create blob"));
+            return;
+          }
+
+          // Create a new File object from the blob
+          const strippedFile = new File([blob], imageFile.name, {
+            type: imageFile.type,
+            lastModified: new Date().getTime(),
+          });
+
+          URL.revokeObjectURL(url);
+          resolve(strippedFile);
+        }, imageFile.type);
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("Failed to load image"));
+      };
+
+      img.src = url;
+    });
+  };
+
   const uploadImages = async (files: FileList) => {
     try {
       const imageFiles = Array.from(files);
@@ -39,11 +89,22 @@ export const FileUploaderButton = ({
         throw new Error("Only images are supported!");
       }
 
+      // Strip metadata from all images
+      const strippedImageFiles = await Promise.all(
+        imageFiles.map(async (imageFile) => {
+          try {
+            return await stripImageMetadata(imageFile);
+          } catch (error) {
+            return imageFile; // Fallback to original file if stripping fails
+          }
+        })
+      );
+
       let responses: any[] = [];
 
       if (isLoggedIn) {
         responses = await Promise.all(
-          imageFiles.map(async (imageFile) => {
+          strippedImageFiles.map(async (imageFile) => {
             return await blossomUploadImages(
               imageFile,
               signer!,
