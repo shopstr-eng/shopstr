@@ -11,9 +11,9 @@ on:
       - main
 
 permissions:
-   contents: read         
-   pull-requests: write   
-   issues: write
+  contents: read
+  pull-requests: write
+  issues: write
 
 jobs:
   run-linters:
