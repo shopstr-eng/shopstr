@@ -56,7 +56,7 @@ const HomeFeed = ({
         </div>
       )}
       <div className="flex flex-1 flex-col">
-        <div className="flex h-screen flex-1">
+        <div className="flex max-h-screen flex-1">
           <MarketplacePage
             focusedPubkey={focusedPubkey}
             setFocusedPubkey={setFocusedPubkey}

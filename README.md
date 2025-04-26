@@ -4,7 +4,7 @@ A global, permissionless Nostr marketplace for Bitcoin commerce.
 
 # Supported NIPs
 
-- [ ] NIP-02: Follow List
+- [x] NIP-02: Follow List
 - [x] NIP-05: Mapping Nostr keys to DNS-based internet identifiers
 - [x] NIP-07: window.nostr capability for web browsers
 - [x] NIP-09: Event Deletion

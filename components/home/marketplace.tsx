@@ -254,7 +254,7 @@ function MarketplacePage({
                                 key={index}
                                 className="italic text-light-text dark:text-dark-text"
                               >
-                                “{value}”
+                                &ldquo;{value}&rdquo;
                               </p>
                             );
                           }
