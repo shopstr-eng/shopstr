@@ -4,8 +4,8 @@ A global, permissionless Nostr marketplace for Bitcoin commerce.
 
 # Supported NIPs
 
-- [ ] NIP-02: Follow List
-- [ ] NIP-05: Mapping Nostr keys to DNS-based internet identifiers
+- [x] NIP-02: Follow List
+- [x] NIP-05: Mapping Nostr keys to DNS-based internet identifiers
 - [x] NIP-07: window.nostr capability for web browsers
 - [x] NIP-09: Event Deletion
 - [ ] NIP-15: Nostr Marketplace (for resilient marketplaces)
@@ -17,7 +17,7 @@ A global, permissionless Nostr marketplace for Bitcoin commerce.
 - [ ] NIP-42: Authentication of clients to relays
 - [x] NIP-46: Nostr Remote Signing
 - [ ] NIP-47: Wallet Connect
-- [ ] NIP-49: Private Key Encryption
+- [x] NIP-49: Private Key Encryption
 - [ ] NIP-50: Search Capability
 - [x] NIP-51: Lists
 - [ ] NIP-56: Reporting
@@ -28,8 +28,8 @@ A global, permissionless Nostr marketplace for Bitcoin commerce.
 - [x] NIP-65: Relay List Metadata
 - [x] NIP-85: Reviews
 - [x] NIP-89: Recommended Application Handlers
-- [x] NIP-98: HTTP Auth
 - [x] NIP-99: Classified Listings
+- [x] NIP-B7: Blossom Media
 
 # Authors
 

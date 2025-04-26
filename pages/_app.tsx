@@ -19,6 +19,8 @@ import {
   FollowsContext,
   RelaysContextInterface,
   RelaysContext,
+  BlossomContextInterface,
+  BlossomContext,
   CashuWalletContext,
   CashuWalletContextInterface,
 } from "../utils/context/context";
@@ -26,7 +28,7 @@ import {
   getLocalStorageData,
   getDefaultRelays,
   LogOut,
-} from "../components/utility/nostr-helper-functions";
+} from "@/utils/nostr/nostr-helper-functions";
 import { NextUIProvider } from "@nextui-org/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import {
@@ -36,9 +38,10 @@ import {
   fetchProfile,
   fetchAllFollows,
   fetchAllRelays,
+  fetchAllBlossomServers,
   fetchCashuWallet,
   fetchGiftWrappedChatsAndMessages,
-} from "./api/nostr/fetch-service";
+} from "@/utils/nostr/fetch-service";
 import {
   NostrEvent,
   ProfileData,
@@ -53,19 +56,20 @@ import {
   SignerContextProvider,
   NostrContext,
   SignerContext,
-} from "@/utils/context/nostr-context";
+} from "@/components/utility-components/nostr-context-provider";
 
 function Shopstr({ props }: { props: AppProps }) {
   const { Component, pageProps } = props;
   const { nostr } = useContext(NostrContext);
   const { signer, isLoggedIn } = useContext(SignerContext);
+
   const [productContext, setProductContext] = useState<ProductContextInterface>(
     {
       productEvents: [],
       isLoading: true,
       addNewlyCreatedProductEvent: (productEvent: any) => {
         setProductContext((productContext) => {
-          let productEvents = [...productContext.productEvents, productEvent];
+          const productEvents = [...productContext.productEvents, productEvent];
           return {
             productEvents: productEvents,
             isLoading: false,
@@ -77,8 +81,8 @@ function Shopstr({ props }: { props: AppProps }) {
       },
       removeDeletedProductEvent: (productId: string) => {
         setProductContext((productContext) => {
-          let productEvents = [...productContext.productEvents].filter(
-            (event) => event.id !== productId,
+          const productEvents = [...productContext.productEvents].filter(
+            (event) => event.id !== productId
           );
           return {
             productEvents: productEvents,
@@ -89,8 +93,9 @@ function Shopstr({ props }: { props: AppProps }) {
           };
         });
       },
-    },
+    }
   );
+
   const [reviewsContext, setReviewsContext] = useState<ReviewsContextInterface>(
     {
       merchantReviewsData: new Map(),
@@ -98,11 +103,11 @@ function Shopstr({ props }: { props: AppProps }) {
       isLoading: true,
       updateMerchantReviewsData: (
         merchantPubkey: string,
-        merchantReviewsData: number[],
+        merchantReviewsData: number[]
       ) => {
         setReviewsContext((reviewsContext) => {
-          let merchantReviewsDataMap = new Map(
-            reviewsContext.merchantReviewsData,
+          const merchantReviewsDataMap = new Map(
+            reviewsContext.merchantReviewsData
           );
           merchantReviewsDataMap.set(merchantPubkey, merchantReviewsData);
           return {
@@ -117,18 +122,18 @@ function Shopstr({ props }: { props: AppProps }) {
       updateProductReviewsData: (
         merchantPubkey: string,
         productDTag: string,
-        productReviewsData: Map<string, string[][]>,
+        productReviewsData: Map<string, string[][]>
       ) => {
         setReviewsContext((reviewsContext) => {
-          let productReviewsDataMap = new Map(
-            reviewsContext.productReviewsData,
+          const productReviewsDataMap = new Map(
+            reviewsContext.productReviewsData
           );
-          let productScoreMap = new Map(
-            reviewsContext.productReviewsData.get(merchantPubkey),
+          const productScoreMap = new Map(
+            reviewsContext.productReviewsData.get(merchantPubkey)
           );
           productReviewsDataMap.set(
             merchantPubkey,
-            productScoreMap.set(productDTag, productReviewsData),
+            productScoreMap.set(productDTag, productReviewsData)
           );
           return {
             merchantReviewsData: reviewsContext.merchantReviewsData,
@@ -139,14 +144,15 @@ function Shopstr({ props }: { props: AppProps }) {
           };
         });
       },
-    },
+    }
   );
+
   const [shopContext, setShopContext] = useState<ShopContextInterface>({
     shopData: new Map(),
     isLoading: true,
     updateShopData: (shopData: ShopSettings) => {
       setShopContext((shopContext) => {
-        let shopDataMap = new Map(shopContext.shopData);
+        const shopDataMap = new Map(shopContext.shopData);
         shopDataMap.set(shopData.pubkey, shopData);
         return {
           shopData: shopDataMap,
@@ -156,13 +162,14 @@ function Shopstr({ props }: { props: AppProps }) {
       });
     },
   });
+
   const [profileContext, setProfileContext] = useState<ProfileContextInterface>(
     {
       profileData: new Map(),
       isLoading: true,
       updateProfileData: (profileData: ProfileData) => {
         setProfileContext((profileContext) => {
-          let newProfileData = new Map(profileContext.profileData);
+          const newProfileData = new Map(profileContext.profileData);
           newProfileData.set(profileData.pubkey, profileData);
           return {
             profileData: newProfileData,
@@ -171,7 +178,7 @@ function Shopstr({ props }: { props: AppProps }) {
           };
         });
       },
-    },
+    }
   );
 
   const [chatsMap, setChatMap] = useState(new Map());
@@ -182,8 +189,8 @@ function Shopstr({ props }: { props: AppProps }) {
       const newChatsMap = new Map(chatsMap);
       let chatArray;
       if (messageEvent.pubkey === pubkey) {
-        let recipientPubkey = messageEvent.tags.find(
-          (tag) => tag[0] === "p",
+        const recipientPubkey = messageEvent.tags.find(
+          (tag) => tag[0] === "p"
         )?.[1];
         if (recipientPubkey) {
           chatArray = newChatsMap.get(recipientPubkey) || [];
@@ -206,7 +213,7 @@ function Shopstr({ props }: { props: AppProps }) {
       setChatMap(newChatsMap);
       setIsChatLoading(false);
     },
-    [chatsMap, signer],
+    [chatsMap, signer]
   );
 
   const [followsContext, setFollowsContext] = useState<FollowsContextInterface>(
@@ -214,14 +221,23 @@ function Shopstr({ props }: { props: AppProps }) {
       followList: [],
       firstDegreeFollowsLength: 0,
       isLoading: true,
-    },
+    }
   );
+
   const [relaysContext, setRelaysContext] = useState<RelaysContextInterface>({
     relayList: [],
     readRelayList: [],
     writeRelayList: [],
     isLoading: true,
   });
+
+  const [blossomContext, setBlossomContext] = useState<BlossomContextInterface>(
+    {
+      blossomServers: [],
+      isLoading: true,
+    }
+  );
+
   const [cashuWalletContext, setCashuWalletContext] =
     useState<CashuWalletContextInterface>({
       proofEvents: [],
@@ -232,7 +248,7 @@ function Shopstr({ props }: { props: AppProps }) {
 
   const editProductContext = (
     productEvents: NostrEvent[],
-    isLoading: boolean,
+    isLoading: boolean
   ) => {
     setProductContext((productContext) => {
       return {
@@ -247,7 +263,7 @@ function Shopstr({ props }: { props: AppProps }) {
   const editReviewsContext = (
     merchantReviewsData: Map<string, number[]>,
     productReviewsData: Map<string, Map<string, Map<string, string[][]>>>,
-    isLoading: boolean,
+    isLoading: boolean
   ) => {
     setReviewsContext((reviewsContext) => {
       return {
@@ -262,7 +278,7 @@ function Shopstr({ props }: { props: AppProps }) {
 
   const editShopContext = (
     shopData: Map<string, ShopSettings>,
-    isLoading: boolean,
+    isLoading: boolean
   ) => {
     setShopContext((shopContext) => {
       return {
@@ -275,7 +291,7 @@ function Shopstr({ props }: { props: AppProps }) {
 
   const editProfileContext = (
     profileData: Map<string, any>,
-    isLoading: boolean,
+    isLoading: boolean
   ) => {
     setProfileContext((profileContext) => {
       return {
@@ -294,7 +310,7 @@ function Shopstr({ props }: { props: AppProps }) {
   const editFollowsContext = (
     followList: string[],
     firstDegreeFollowsLength: number,
-    isLoading: boolean,
+    isLoading: boolean
   ) => {
     setFollowsContext({
       followList,
@@ -307,7 +323,7 @@ function Shopstr({ props }: { props: AppProps }) {
     relayList: string[],
     readRelayList: string[],
     writeRelayList: string[],
-    isLoading: boolean,
+    isLoading: boolean
   ) => {
     setRelaysContext({
       relayList,
@@ -317,11 +333,18 @@ function Shopstr({ props }: { props: AppProps }) {
     });
   };
 
+  const editBlossomContext = (blossomServers: string[], isLoading: boolean) => {
+    setBlossomContext({
+      blossomServers,
+      isLoading,
+    });
+  };
+
   const editCashuWalletContext = (
     proofEvents: any[],
     cashuMints: string[],
     cashuProofs: Proof[],
-    isLoading: boolean,
+    isLoading: boolean
   ) => {
     setCashuWalletContext({
       proofEvents,
@@ -339,59 +362,85 @@ function Shopstr({ props }: { props: AppProps }) {
   /** FETCH initial FOLLOWS, RELAYS, PRODUCTS, and PROFILES **/
   useEffect(() => {
     async function fetchData() {
-      if (getLocalStorageData().signInMethod === "amber") {
-        LogOut();
-      }
-      if (
-        getLocalStorageData().signInMethod === "extension" ||
-        getLocalStorageData().signer?.type === "nip07"
-      ) {
-        if (!window.nostr.nip44) {
-          LogOut();
-        }
-      }
-      const relays = getLocalStorageData().relays;
-      const readRelays = getLocalStorageData().readRelays;
-      let allRelays = [...relays, ...readRelays];
-      if (allRelays.length === 0) {
-        allRelays = getDefaultRelays();
-        localStorage.setItem("relays", JSON.stringify(allRelays));
-      }
       try {
-        let { relayList, readRelayList, writeRelayList } = await fetchAllRelays(
-          nostr!,
-          signer!,
-          allRelays,
-          editRelaysContext,
-        );
-        if (relayList.length != 0) {
+        // Check login status
+        if (getLocalStorageData().signInMethod === "amber") {
+          LogOut();
+          return;
+        }
+
+        if (
+          getLocalStorageData().signInMethod === "extension" ||
+          getLocalStorageData().signer?.type === "nip07"
+        ) {
+          if (!window.nostr?.nip44) {
+            LogOut();
+            return;
+          }
+        }
+
+        // Initialize relays
+        const relays = getLocalStorageData().relays || [];
+        const readRelays = getLocalStorageData().readRelays || [];
+        let allRelays = [...relays, ...readRelays];
+
+        if (allRelays.length === 0) {
+          allRelays = getDefaultRelays();
+          localStorage.setItem("relays", JSON.stringify(allRelays));
+        }
+
+        // Sequential fetch for critical data
+        const { relayList, readRelayList, writeRelayList } =
+          await fetchAllRelays(nostr!, signer!, allRelays, editRelaysContext);
+
+        if (relayList.length !== 0) {
           localStorage.setItem("relays", JSON.stringify(relayList));
           localStorage.setItem("readRelays", JSON.stringify(readRelayList));
           localStorage.setItem("writeRelays", JSON.stringify(writeRelayList));
           allRelays = [...relayList, ...readRelayList];
         }
-        let pubkeysToFetchProfilesFor: string[] = [];
-        let { productEvents, profileSetFromProducts } = await fetchAllPosts(
+
+        const { blossomServers } = await fetchAllBlossomServers(
+          nostr!,
+          signer!,
+          allRelays,
+          editBlossomContext
+        );
+
+        if (blossomServers.length != 0) {
+          localStorage.setItem(
+            "blossomServers",
+            JSON.stringify(blossomServers)
+          );
+        }
+
+        // Fetch products and collect profile pubkeys
+        const { productEvents, profileSetFromProducts } = await fetchAllPosts(
           nostr!,
           allRelays,
-          editProductContext,
+          editProductContext
         );
-        pubkeysToFetchProfilesFor = [...profileSetFromProducts];
+
+        // Handle profile fetching
+        let pubkeysToFetchProfilesFor = [...profileSetFromProducts];
         const userPubkey = (await signer?.getPubKey()) || undefined;
-        let profileSetFromChats = new Set<string>();
+        const profileSetFromChats = new Set<string>();
+
         if (isLoggedIn) {
-          let { profileSetFromChats: newProfileSetFromChats } =
+          const { profileSetFromChats: newProfileSetFromChats } =
             await fetchGiftWrappedChatsAndMessages(
               nostr!,
               signer!,
               allRelays,
               editChatContext,
-              userPubkey,
+              userPubkey
             );
+
           newProfileSetFromChats.forEach((profile) =>
-            profileSetFromChats.add(profile),
+            profileSetFromChats.add(profile)
           );
         }
+
         if (userPubkey && profileSetFromChats.size != 0) {
           pubkeysToFetchProfilesFor = [
             userPubkey as string,
@@ -404,47 +453,54 @@ function Shopstr({ props }: { props: AppProps }) {
             ...pubkeysToFetchProfilesFor,
           ];
         }
-        await fetchShopSettings(
-          nostr!,
-          allRelays,
-          pubkeysToFetchProfilesFor,
-          editShopContext,
-        );
+
         await fetchProfile(
           nostr!,
           allRelays,
           pubkeysToFetchProfilesFor,
-          editProfileContext,
+          editProfileContext
         );
+
+        await fetchShopSettings(
+          nostr!,
+          allRelays,
+          pubkeysToFetchProfilesFor,
+          editShopContext
+        );
+
         await fetchReviews(
           nostr!,
           allRelays,
           productEvents,
-          editReviewsContext,
+          editReviewsContext
         );
+
+        // Fetch wallet if logged in
         if (isLoggedIn) {
-          let { cashuMints, cashuProofs } = await fetchCashuWallet(
+          const { cashuMints, cashuProofs } = await fetchCashuWallet(
             nostr!,
             signer!,
             allRelays,
-            editCashuWalletContext,
+            editCashuWalletContext
           );
 
-          if (cashuMints.length != 0 && cashuProofs) {
+          if (cashuMints.length !== 0 && cashuProofs) {
             localStorage.setItem("mints", JSON.stringify(cashuMints));
             localStorage.setItem("tokens", JSON.stringify(cashuProofs));
           }
         }
+
         await fetchAllFollows(
           nostr!,
           allRelays,
           editFollowsContext,
-          userPubkey,
+          userPubkey
         );
       } catch (error) {
         console.error("Error fetching data:", error);
       }
     }
+
     fetchData();
     window.addEventListener("storage", fetchData);
     return () => window.removeEventListener("storage", fetchData);
@@ -455,13 +511,10 @@ function Shopstr({ props }: { props: AppProps }) {
       window.addEventListener("load", () => {
         navigator.serviceWorker
           .register("/service-worker.js")
-          .then((registration) => {
-            console.log("Service Worker registered: ", registration);
-          })
           .catch((registrationError) => {
-            console.log(
+            console.error(
               "Service Worker registration failed: ",
-              registrationError,
+              registrationError
             );
           });
       });
@@ -475,46 +528,48 @@ function Shopstr({ props }: { props: AppProps }) {
         shopEvents={shopContext.shopData}
       />
       <RelaysContext.Provider value={relaysContext}>
-        <CashuWalletContext.Provider value={cashuWalletContext}>
-          <FollowsContext.Provider value={followsContext}>
-            <ProductContext.Provider value={productContext}>
-              <ReviewsContext.Provider value={reviewsContext}>
-                <ProfileMapContext.Provider value={profileContext}>
-                  <ShopMapContext.Provider value={shopContext}>
-                    <ChatsContext.Provider
-                      value={
-                        {
-                          chatsMap: chatsMap,
-                          isLoading: isChatLoading,
-                          addNewlyCreatedMessageEvent:
-                            addNewlyCreatedMessageEvent,
-                        } as ChatsContextInterface
-                      }
-                    >
-                      {router.pathname !== "/" && (
-                        <TopNav
-                          setFocusedPubkey={setFocusedPubkey}
-                          setSelectedSection={setSelectedSection}
-                        />
-                      )}
-                      <div className="flex">
-                        <main className="flex-1">
-                          <Component
-                            {...pageProps}
-                            focusedPubkey={focusedPubkey}
+        <BlossomContext.Provider value={blossomContext}>
+          <CashuWalletContext.Provider value={cashuWalletContext}>
+            <FollowsContext.Provider value={followsContext}>
+              <ProductContext.Provider value={productContext}>
+                <ReviewsContext.Provider value={reviewsContext}>
+                  <ProfileMapContext.Provider value={profileContext}>
+                    <ShopMapContext.Provider value={shopContext}>
+                      <ChatsContext.Provider
+                        value={
+                          {
+                            chatsMap: chatsMap,
+                            isLoading: isChatLoading,
+                            addNewlyCreatedMessageEvent:
+                              addNewlyCreatedMessageEvent,
+                          } as ChatsContextInterface
+                        }
+                      >
+                        {router.pathname !== "/" && (
+                          <TopNav
                             setFocusedPubkey={setFocusedPubkey}
-                            selectedSection={selectedSection}
                             setSelectedSection={setSelectedSection}
                           />
-                        </main>
-                      </div>
-                    </ChatsContext.Provider>
-                  </ShopMapContext.Provider>
-                </ProfileMapContext.Provider>
-              </ReviewsContext.Provider>
-            </ProductContext.Provider>
-          </FollowsContext.Provider>
-        </CashuWalletContext.Provider>
+                        )}
+                        <div className="flex">
+                          <main className="flex-1">
+                            <Component
+                              {...pageProps}
+                              focusedPubkey={focusedPubkey}
+                              setFocusedPubkey={setFocusedPubkey}
+                              selectedSection={selectedSection}
+                              setSelectedSection={setSelectedSection}
+                            />
+                          </main>
+                        </div>
+                      </ChatsContext.Provider>
+                    </ShopMapContext.Provider>
+                  </ProfileMapContext.Provider>
+                </ReviewsContext.Provider>
+              </ProductContext.Provider>
+            </FollowsContext.Provider>
+          </CashuWalletContext.Provider>
+        </BlossomContext.Provider>
       </RelaysContext.Provider>
     </>
   );

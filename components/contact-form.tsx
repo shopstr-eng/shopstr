@@ -14,7 +14,7 @@ import {
   UseFormHandleSubmit,
   FieldValues,
 } from "react-hook-form";
-import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
 export default function ContactForm({
   showContactModal,
@@ -63,8 +63,10 @@ export default function ContactForm({
                 field: { onChange, onBlur, value },
                 fieldState: { error },
               }) => {
-                let isErrored = error !== undefined;
-                let errorMessage: string = error?.message ? error.message : "";
+                const isErrored = error !== undefined;
+                const errorMessage: string = error?.message
+                  ? error.message
+                  : "";
                 return (
                   <Input
                     className="text-light-text dark:text-dark-text"
@@ -95,8 +97,10 @@ export default function ContactForm({
                 field: { onChange, onBlur, value },
                 fieldState: { error },
               }) => {
-                let isErrored = error !== undefined;
-                let errorMessage: string = error?.message ? error.message : "";
+                const isErrored = error !== undefined;
+                const errorMessage: string = error?.message
+                  ? error.message
+                  : "";
                 return (
                   <Input
                     className="text-light-text dark:text-dark-text"
@@ -127,8 +131,10 @@ export default function ContactForm({
                 field: { onChange, onBlur, value },
                 fieldState: { error },
               }) => {
-                let isErrored = error !== undefined;
-                let errorMessage: string = error?.message ? error.message : "";
+                const isErrored = error !== undefined;
+                const errorMessage: string = error?.message
+                  ? error.message
+                  : "";
                 return (
                   <Textarea
                     className="text-light-text dark:text-dark-text"
@@ -159,8 +165,8 @@ export default function ContactForm({
                   field: { onChange, onBlur, value },
                   fieldState: { error },
                 }) => {
-                  let isErrored = error !== undefined;
-                  let errorMessage: string = error?.message
+                  const isErrored = error !== undefined;
+                  const errorMessage: string = error?.message
                     ? error.message
                     : "";
                   return (

@@ -18,12 +18,13 @@ import { ChatsMap } from "@/utils/context/context";
 import {
   getLocalStorageData,
   deleteEvent,
-} from "@/components/utility/nostr-helper-functions";
+  verifyNip05Identifier,
+} from "@/utils/nostr/nostr-helper-functions";
 import {
   ProductData,
   parseTags,
-} from "@/components/utility/product-parser-functions";
-import { calculateWeightedScore } from "@/components/utility/review-parser-functions";
+} from "@/utils/parsers/product-parser-functions";
+import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
 import { hashToCurve } from "@cashu/crypto/modules/common";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
@@ -47,35 +48,34 @@ function isHexString(value: string): boolean {
 export const fetchAllPosts = async (
   nostr: NostrManager,
   relays: string[],
-  editProductContext: (productEvents: NostrEvent[], isLoading: boolean) => void,
+  editProductContext: (productEvents: NostrEvent[], isLoading: boolean) => void
 ): Promise<{
   productEvents: NostrEvent[];
   profileSetFromProducts: Set<string>;
 }> => {
-  // TODO refactor this to not use new Promise
   return new Promise(async function (resolve, reject) {
     try {
       let deletedProductsInCacheSet: Set<any> = new Set(); // used to remove deleted items from cache
       try {
-        let productArrayFromCache = await fetchAllProductsFromCache();
+        const productArrayFromCache = await fetchAllProductsFromCache();
         deletedProductsInCacheSet = new Set(
-          productArrayFromCache.map((product: NostrEvent) => product.id),
+          productArrayFromCache.map((product: NostrEvent) => product.id)
         );
         editProductContext(productArrayFromCache, false);
       } catch (error) {
-        console.log("Failed to fetch all listings from cache: ", error);
+        console.error("Failed to fetch all listings from cache: ", error);
       }
 
       const filter: Filter = {
         kinds: [30402],
       };
 
-      let productArrayFromRelay: NostrEvent[] = [];
-      let profileSetFromProducts: Set<string> = new Set();
+      const productArrayFromRelay: NostrEvent[] = [];
+      const profileSetFromProducts: Set<string> = new Set();
 
       const fetchedEvents = await nostr.fetch([filter], {}, relays);
       if (!fetchedEvents.length) {
-        console.log("No product events found with filter: ", filter);
+        console.error("No products found with filter: ", filter);
       }
 
       for (const event of fetchedEvents) {
@@ -96,15 +96,14 @@ export const fetchAllPosts = async (
         }
       }
 
+      editProductContext(productArrayFromRelay, false);
+      removeProductFromCache(Array.from(deletedProductsInCacheSet));
+
       resolve({
         productEvents: productArrayFromRelay,
         profileSetFromProducts,
       });
-
-      editProductContext(productArrayFromRelay, false);
-      removeProductFromCache(Array.from(deletedProductsInCacheSet));
     } catch (error) {
-      console.log("Failed to fetch all listings from relays: ", error);
       reject(error);
     }
   });
@@ -115,11 +114,10 @@ export const fetchCart = async (
   signer: NostrSigner | undefined,
   relays: string[],
   editCartContext: (cartAddresses: string[][], isLoading: boolean) => void,
-  products: NostrEvent[],
+  products: NostrEvent[]
 ): Promise<{
   cartList: ProductData[];
 }> => {
-  // TODO refactor this to not use new Promise
   return new Promise(async function (resolve, reject) {
     try {
       if (!signer) {
@@ -135,27 +133,27 @@ export const fetchCart = async (
         authors: [userPubkey],
       };
 
-      let cartArrayFromRelay: ProductData[] = [];
+      const cartArrayFromRelay: ProductData[] = [];
       let cartAddressesArray: string[][] = [];
 
       const fetchedEvents: Array<NostrEvent> = await nostr.fetch(
         [filter],
         {},
-        relays,
+        relays
       );
 
       for (const event of fetchedEvents) {
         try {
-          let eventContent = await signer.decrypt(userPubkey, event.content);
+          const eventContent = await signer.decrypt(userPubkey, event.content);
           if (eventContent) {
-            let addressArray = JSON.parse(eventContent);
+            const addressArray = JSON.parse(eventContent);
             cartAddressesArray = addressArray;
             for (const addressElement of addressArray) {
-              let address = addressElement[1];
+              const address = addressElement[1];
               const [kind, _, dTag] = address;
               if (kind === "30402") {
                 const foundEvent = products.find((event) =>
-                  event.tags.some((tag) => tag[0] === "d" && tag[1] === dTag),
+                  event.tags.some((tag) => tag[0] === "d" && tag[1] === dTag)
                 );
                 if (foundEvent) {
                   cartArrayFromRelay.push(parseTags(foundEvent) as ProductData);
@@ -185,14 +183,12 @@ export const fetchCart = async (
           });
         }
       }
-      let updatedCartList = Array.from(uniqueProducts.values());
+      const updatedCartList = Array.from(uniqueProducts.values());
+      editCartContext(cartAddressesArray, false);
       resolve({
         cartList: updatedCartList,
       });
-
-      editCartContext(cartAddressesArray, false);
     } catch (error) {
-      console.log("Failed to fetch cart: ", error);
       reject(error);
     }
   });
@@ -204,18 +200,17 @@ export const fetchShopSettings = async (
   pubkeyShopSettingsToFetch: string[],
   editShopContext: (
     shopEvents: Map<string, ShopSettings>,
-    isLoading: boolean,
-  ) => void,
+    isLoading: boolean
+  ) => void
 ): Promise<{
   shopSettingsMap: Map<string, ShopSettings>;
 }> => {
-  // TODO refactor this to not use new Promise
   return new Promise(async function (resolve, reject) {
     try {
-      let shopEvents: NostrEvent[] = [];
+      const shopEvents: NostrEvent[] = [];
 
-      let shopSettings: Map<string, ShopSettings | any> = new Map(
-        pubkeyShopSettingsToFetch.map((pubkey) => [pubkey, null]),
+      const shopSettings: Map<string, ShopSettings | any> = new Map(
+        pubkeyShopSettingsToFetch.map((pubkey) => [pubkey, null])
       );
 
       if (pubkeyShopSettingsToFetch.length === 0) {
@@ -224,7 +219,7 @@ export const fetchShopSettings = async (
         return;
       }
 
-      let shopFilter: Filter = {
+      const shopFilter: Filter = {
         kinds: [30019],
         authors: pubkeyShopSettingsToFetch,
       };
@@ -252,7 +247,7 @@ export const fetchShopSettings = async (
           } catch (error) {
             console.error(
               `Failed to parse shop setting for pubkey: ${pubkey}`,
-              error,
+              error
             );
           }
         });
@@ -272,14 +267,10 @@ export const fetchProfile = async (
   nostr: NostrManager,
   relays: string[],
   pubkeyProfilesToFetch: string[],
-  editProfileContext: (
-    productEvents: Map<any, any>,
-    isLoading: boolean,
-  ) => void,
+  editProfileContext: (productEvents: Map<any, any>, isLoading: boolean) => void
 ): Promise<{
   profileMap: Map<string, any>;
 }> => {
-  // TODO: refactor this to not use new Promise
   return new Promise(async function (resolve, reject) {
     try {
       if (!pubkeyProfilesToFetch.length) {
@@ -289,17 +280,17 @@ export const fetchProfile = async (
       }
 
       try {
-        let profileData = await fetchProfileDataFromCache();
+        const profileData = await fetchProfileDataFromCache();
         editProfileContext(profileData, false);
       } catch (error) {
-        console.log("Failed to fetch profiles: ", error);
+        console.error("Failed to fetch profiles from cache: ", error);
       }
-      let subParams: { kinds: number[]; authors?: string[] } = {
+      const subParams: { kinds: number[]; authors?: string[] } = {
         kinds: [0],
         authors: Array.from(pubkeyProfilesToFetch),
       };
-      let profileMap: Map<string, any> = new Map(
-        Array.from(pubkeyProfilesToFetch).map((pubkey) => [pubkey, null]),
+      const profileMap: Map<string, any> = new Map(
+        Array.from(pubkeyProfilesToFetch).map((pubkey) => [pubkey, null])
       );
 
       const fetchedEvents = await nostr.fetch([subParams], {}, relays);
@@ -312,21 +303,30 @@ export const fetchProfile = async (
           // update only if the profile is not already set or the new event is newer
           try {
             const content = JSON.parse(event.content);
-            profileMap.set(event.pubkey, {
+            const profile = {
               pubkey: event.pubkey,
               created_at: event.created_at,
               content: content,
-            });
+              nip05Verified: false,
+            };
+            if (content.nip05) {
+              profile.nip05Verified = await verifyNip05Identifier(
+                content.nip05,
+                event.pubkey
+              );
+            }
+
+            profileMap.set(event.pubkey, profile);
           } catch (error) {
             console.error(
               `Failed parse profile for pubkey: ${event.pubkey}, ${event.content}`,
-              error,
+              error
             );
           }
         }
       }
-      resolve({ profileMap });
       await addProfilesToCache(profileMap);
+      resolve({ profileMap });
     } catch (error) {
       reject(error);
     }
@@ -338,27 +338,25 @@ export const fetchGiftWrappedChatsAndMessages = async (
   signer: NostrSigner | undefined,
   relays: string[],
   editChatContext: (chatsMap: ChatsMap, isLoading: boolean) => void,
-  userPubkey?: string,
+  userPubkey?: string
 ): Promise<{
   profileSetFromChats: Set<string>;
 }> => {
-  // TODO refactor this to not use new Promise
-  // TODO pull pubkey from signer?
   return new Promise(async function (resolve, reject) {
     // if no userPubkey, user is not signed in
     if (!userPubkey) {
       editChatContext(new Map(), false);
       resolve({ profileSetFromChats: new Set() });
-      // FIXME return to stop execution (?)
+      return;
     } else {
-      let chatMessagesFromCache: Map<string, NostrMessageEvent> =
+      const chatMessagesFromCache: Map<string, NostrMessageEvent> =
         await fetchChatMessagesFromCache();
       try {
-        let chatsMap = new Map();
+        const chatsMap = new Map();
 
         const addToChatsMap = (
           pubkeyOfChat: string,
-          event: NostrMessageEvent,
+          event: NostrMessageEvent
         ) => {
           // pubkeyOfChat is the person you are chatting with if incoming, or the person you are sending to if outgoing
           if (!chatsMap.has(pubkeyOfChat)) {
@@ -376,22 +374,22 @@ export const fetchGiftWrappedChatsAndMessages = async (
             },
           ],
           {},
-          relays,
+          relays
         );
 
         for (const event of fetchedEvents) {
           let messageEvent;
 
-          let sealEventString = await signer!.decrypt(
+          const sealEventString = await signer!.decrypt(
             event.pubkey,
-            event.content,
+            event.content
           );
           if (sealEventString) {
             const sealEvent = JSON.parse(sealEventString);
             if (sealEvent?.kind === 13) {
               const messageEventString = await signer!.decrypt(
                 sealEvent.pubkey,
-                sealEvent.content,
+                sealEvent.content
               );
               if (messageEventString) {
                 const messageEventCheck = JSON.parse(messageEventString);
@@ -405,12 +403,14 @@ export const fetchGiftWrappedChatsAndMessages = async (
           } else {
             continue;
           }
-          let senderPubkey = messageEvent.pubkey;
+          const senderPubkey = messageEvent.pubkey;
 
-          let tagsMap: Map<string, string> = new Map(
-            messageEvent.tags.map(([k, v]: [string, string]) => [k, v]),
+          const tagsMap: Map<string, string> = new Map(
+            messageEvent.tags.map(([k, v]: [string, string]) => [k, v])
           );
-          let subject = tagsMap.has("subject") ? tagsMap.get("subject") : null;
+          const subject = tagsMap.has("subject")
+            ? tagsMap.get("subject")
+            : null;
           if (
             subject !== "listing-inquiry" &&
             subject !== "order-payment" &&
@@ -421,15 +421,15 @@ export const fetchGiftWrappedChatsAndMessages = async (
           ) {
             continue;
           }
-          let recipientPubkey = tagsMap.get("p") ? tagsMap.get("p") : null; // pubkey you sent the message to
+          const recipientPubkey = tagsMap.get("p") ? tagsMap.get("p") : null; // pubkey you sent the message to
           if (typeof recipientPubkey !== "string") {
             console.error(
               `fetchAllOutgoingChats: Failed to get recipientPubkey from tagsMap",
                 ${tagsMap},
-                ${event}`,
+                ${event}`
             );
             alert(
-              `fetchAllOutgoingChats: Failed to get recipientPubkey from tagsMap`,
+              `fetchAllOutgoingChats: Failed to get recipientPubkey from tagsMap`
             );
             return;
           }
@@ -450,13 +450,12 @@ export const fetchGiftWrappedChatsAndMessages = async (
         chatsMap.forEach((value) => {
           value.sort(
             (a: NostrMessageEvent, b: NostrMessageEvent) =>
-              a.created_at - b.created_at,
+              a.created_at - b.created_at
           );
         });
-        resolve({ profileSetFromChats: new Set(chatsMap.keys()) });
         editChatContext(chatsMap, false);
+        resolve({ profileSetFromChats: new Set(chatsMap.keys()) });
       } catch (error) {
-        console.log("Failed to fetch chats and messages: ", error);
         reject(error);
       }
     }
@@ -470,19 +469,18 @@ export const fetchReviews = async (
   editReviewsContext: (
     merchantReviewsMap: Map<string, number[]>,
     productReviewsMap: Map<string, Map<string, Map<string, string[][]>>>,
-    isLoading: boolean,
-  ) => void,
+    isLoading: boolean
+  ) => void
 ): Promise<{
   merchantScoresMap: Map<string, number[]>;
   productReviewsMap: Map<string, Map<string, Map<string, string[][]>>>;
 }> => {
-  // TODO refactor this to not use new Promise
   return new Promise(async function (resolve, reject) {
     try {
       const addresses = products
         .map((product) => {
           const dTag = product.tags.find(
-            (tag: string[]) => tag[0] === "d",
+            (tag: string[]) => tag[0] === "d"
           )?.[1];
           if (!dTag) return null;
           return `a:${product.kind}:${product.pubkey}:${dTag}`;
@@ -563,7 +561,7 @@ export const fetchReviews = async (
           productReviews.forEach((review, reviewerPubkey) => {
             // Filter out the created_at entries
             const cleanedReview = review.filter(
-              (item) => item[0] !== "created_at",
+              (item) => item[0] !== "created_at"
             );
             if (cleanedReview.length > 0) {
               productReviews.set(reviewerPubkey, cleanedReview);
@@ -575,7 +573,6 @@ export const fetchReviews = async (
       editReviewsContext(merchantScoresMap, productReviewsMap, false);
       resolve({ merchantScoresMap, productReviewsMap });
     } catch (error) {
-      console.log("failed to fetch reviews: ", error);
       reject(error);
     }
   });
@@ -587,9 +584,9 @@ export const fetchAllFollows = async (
   editFollowsContext: (
     followList: string[],
     firstDegreeFollowsLength: number,
-    isLoading: boolean,
+    isLoading: boolean
   ) => void,
-  userPubkey?: string,
+  userPubkey?: string
 ): Promise<{
   followList: string[];
 }> => {
@@ -612,15 +609,15 @@ export const fetchAllFollows = async (
         },
       ],
       {},
-      relays,
+      relays
     );
     const authors: string[] = [];
     for (const event of fetchedEvents) {
       const validTags = event.tags
         .map((tag) => tag[1])
-        .filter((pubkey) => isHexString(pubkey) && !followsSet.has(pubkey));
-      validTags.forEach((pubkey) => followsSet.add(pubkey));
-      followsArrayFromRelay.push(...validTags);
+        .filter((pubkey) => isHexString(pubkey!) && !followsSet.has(pubkey!));
+      validTags.forEach((pubkey) => followsSet.add(pubkey!));
+      followsArrayFromRelay.push(...(validTags as string[]));
       firstDegreeFollowsLength = followsArrayFromRelay.length;
       authors.push(...followsArrayFromRelay);
     }
@@ -634,14 +631,14 @@ export const fetchAllFollows = async (
         },
       ],
       {},
-      relays,
+      relays
     );
 
     for (const followEvent of fetchedEvents) {
       const validFollowTags = followEvent.tags
         .map((tag) => tag[1])
-        .filter((pubkey) => isHexString(pubkey) && !followsSet.has(pubkey));
-      secondDegreeFollowsArrayFromRelay.push(...validFollowTags);
+        .filter((pubkey) => isHexString(pubkey!) && !followsSet.has(pubkey!));
+      secondDegreeFollowsArrayFromRelay.push(...(validFollowTags as string[]));
     }
 
     const pubkeyCount: Map<string, number> = new Map();
@@ -650,11 +647,11 @@ export const fetchAllFollows = async (
     });
     secondDegreeFollowsArrayFromRelay =
       secondDegreeFollowsArrayFromRelay.filter(
-        (pubkey) => (pubkeyCount.get(pubkey) || 0) >= wot,
+        (pubkey) => (pubkeyCount.get(pubkey) || 0) >= wot
       );
     // Concatenate arrays ensuring uniqueness
     followsArrayFromRelay = Array.from(
-      new Set(followsArrayFromRelay.concat(secondDegreeFollowsArrayFromRelay)),
+      new Set(followsArrayFromRelay.concat(secondDegreeFollowsArrayFromRelay))
     );
     return {
       followsArrayFromRelay,
@@ -663,7 +660,7 @@ export const fetchAllFollows = async (
   };
 
   let { followsArrayFromRelay, firstDegreeFollowsLength } = await fetchFollows(
-    userPubkey || defaultAuthor,
+    userPubkey || defaultAuthor
   );
 
   if (!followsArrayFromRelay?.length) {
@@ -685,21 +682,20 @@ export const fetchAllRelays = async (
     relayList: string[],
     readRelayList: string[],
     writeRelayList: string[],
-    isLoading: boolean,
-  ) => void,
+    isLoading: boolean
+  ) => void
 ): Promise<{
   relayList: string[];
   readRelayList: string[];
   writeRelayList: string[];
 }> => {
-  // TODO refactor this to not use new Promise
   return new Promise(async function (resolve, reject) {
     try {
-      let relayList: string[] = [];
+      const relayList: string[] = [];
       const relaySet: Set<string> = new Set();
-      let readRelayList: string[] = [];
+      const readRelayList: string[] = [];
       const readRelaySet: Set<string> = new Set();
-      let writeRelayList: string[] = [];
+      const writeRelayList: string[] = [];
       const writeRelaySet: Set<string> = new Set();
 
       const userPubkey = await signer?.getPubKey?.();
@@ -720,34 +716,98 @@ export const fetchAllRelays = async (
       const fetchedEvents = await nostr.fetch([relayfilter], {}, relays);
       for (const event of fetchedEvents) {
         const validRelays = event.tags.filter(
-          (tag) => tag[0] === "r" && !tag[2],
+          (tag) => tag[0] === "r" && !tag[2]
         );
 
         const validReadRelays = event.tags.filter(
-          (tag) => tag[0] === "r" && tag[2] === "read",
+          (tag) => tag[0] === "r" && tag[2] === "read"
         );
 
         const validWriteRelays = event.tags.filter(
-          (tag) => tag[0] === "r" && tag[2] === "write",
+          (tag) => tag[0] === "r" && tag[2] === "write"
         );
 
-        validRelays.forEach((tag) => relaySet.add(tag[1]));
-        relayList.push(...validRelays.map((tag) => tag[1]));
+        validRelays.forEach((tag) => relaySet.add(tag[1]!));
+        relayList.push(
+          ...validRelays
+            .map((tag) => tag[1]!)
+            .filter((tag) => tag !== undefined)
+        );
 
-        validReadRelays.forEach((tag) => readRelaySet.add(tag[1]));
-        readRelayList.push(...validReadRelays.map((tag) => tag[1]));
+        validReadRelays.forEach((tag) => readRelaySet.add(tag[1]!));
+        readRelayList.push(
+          ...validReadRelays
+            .map((tag) => tag[1]!)
+            .filter((tag) => tag !== undefined)
+        );
 
-        validWriteRelays.forEach((tag) => writeRelaySet.add(tag[1]));
-        writeRelayList.push(...validWriteRelays.map((tag) => tag[1]));
+        validWriteRelays.forEach((tag) => writeRelaySet.add(tag[1]!));
+        writeRelayList.push(
+          ...validWriteRelays
+            .map((tag) => tag[1]!)
+            .filter((tag) => tag !== undefined)
+        );
       }
+      editRelaysContext(relayList, readRelayList, writeRelayList, false);
       resolve({
         relayList: relayList,
         readRelayList: readRelayList,
         writeRelayList: writeRelayList,
       });
-      editRelaysContext(relayList, readRelayList, writeRelayList, false);
     } catch (error) {
-      console.log("failed to fetch follow list: ", error);
+      reject(error);
+    }
+  });
+};
+
+export const fetchAllBlossomServers = async (
+  nostr: NostrManager,
+  signer: NostrSigner | undefined,
+  relays: string[],
+  editBlossomContext: (blossomServers: string[], isLoading: boolean) => void
+): Promise<{
+  blossomServers: string[];
+}> => {
+  return new Promise(async function (resolve, reject) {
+    try {
+      const blossomServers: string[] = [];
+      const blossomSet: Set<string> = new Set();
+
+      const userPubkey = await signer?.getPubKey?.();
+      if (!userPubkey) {
+        resolve({
+          blossomServers: [],
+        });
+        return;
+      }
+
+      const blossomServerfilter: Filter = {
+        kinds: [10063],
+        authors: [userPubkey],
+      };
+
+      const fetchedEvents = await nostr.fetch(
+        [blossomServerfilter],
+        {},
+        relays
+      );
+      for (const event of fetchedEvents) {
+        const validBlossomServers = event.tags.filter(
+          (tag) => tag[0] === "server"
+        );
+
+        validBlossomServers.forEach((tag) => blossomSet.add(tag[1]!));
+        blossomServers.push(
+          ...validBlossomServers
+            .map((tag) => tag[1]!)
+            .filter((tag) => tag !== undefined)
+        );
+      }
+      editBlossomContext(blossomServers, false);
+      resolve({
+        blossomServers: blossomServers,
+      });
+    } catch (error) {
       reject(error);
     }
   });
@@ -761,14 +821,13 @@ export const fetchCashuWallet = async (
     proofEvents: any[],
     cashuMints: string[],
     cashuProofs: Proof[],
-    isLoading: boolean,
-  ) => void,
+    isLoading: boolean
+  ) => void
 ): Promise<{
   proofEvents: any[];
   cashuMints: string[];
   cashuProofs: Proof[];
 }> => {
-  // TODO: refactor this to not use new Promise
   return new Promise(async function (resolve, reject) {
     const { tokens } = getLocalStorageData();
     const userPubkey = await signer?.getPubKey?.();
@@ -783,16 +842,16 @@ export const fetchCashuWallet = async (
     const enc = new TextEncoder();
     try {
       let mostRecentWalletEvent: NostrEvent[] = [];
-      let proofEvents: any[] = [];
+      const proofEvents: any[] = [];
 
-      let cashuRelays: string[] = [];
+      const cashuRelays: string[] = [];
       const cashuRelaySet: Set<string> = new Set();
 
-      let cashuMints: string[] = [];
-      let cashuMintSet: Set<string> = new Set();
+      const cashuMints: string[] = [];
+      const cashuMintSet: Set<string> = new Set();
 
       let cashuProofs: Proof[] = [];
-      let incomingSpendingHistory: [][] = [];
+      const incomingSpendingHistory: [][] = [];
       const cashuWalletFilter: Filter = {
         kinds: [17375, 37375],
         authors: [userPubkey],
@@ -801,7 +860,7 @@ export const fetchCashuWallet = async (
       const hEvents: NostrEvent[] = await nostr.fetch(
         [cashuWalletFilter],
         {},
-        relays,
+        relays
       );
 
       // find most recent wallet event
@@ -809,32 +868,32 @@ export const fetchCashuWallet = async (
         if (event.kind === 17375) {
           const mints = event.tags.filter((tag: string[]) => tag[0] === "mint");
           mints.forEach((tag) => {
-            if (!cashuMintSet.has(tag[1])) {
-              cashuMintSet.add(tag[1]);
-              cashuMints.push(tag[1]);
+            if (!cashuMintSet.has(tag[1]!)) {
+              cashuMintSet.add(tag[1]!);
+              cashuMints.push(tag[1]!);
             }
           });
         } else if (
           (event.kind === 37375 && mostRecentWalletEvent.length === 0) ||
-          event.created_at > mostRecentWalletEvent[0].created_at
+          event.created_at > mostRecentWalletEvent[0]!.created_at
         ) {
           mostRecentWalletEvent = [event];
         }
       }
       if (mostRecentWalletEvent.length > 0) {
         // extract cashu data
-        const relayList = mostRecentWalletEvent[0].tags.filter(
-          (tag: string[]) => tag[0] === "relay",
+        const relayList = mostRecentWalletEvent[0]!.tags.filter(
+          (tag: string[]) => tag[0] === "relay"
         );
-        relayList.forEach((tag) => cashuRelaySet.add(tag[1]));
-        cashuRelays.push(...relayList.map((tag: string[]) => tag[1]));
-        const mints = mostRecentWalletEvent[0].tags.filter(
-          (tag: string[]) => tag[0] === "mint",
+        relayList.forEach((tag) => cashuRelaySet.add(tag[1]!));
+        cashuRelays.push(...relayList.map((tag: string[]) => tag[1]!));
+        const mints = mostRecentWalletEvent[0]!.tags.filter(
+          (tag: string[]) => tag[0] === "mint"
         );
         mints.forEach((tag) => {
-          if (!cashuMintSet.has(tag[1])) {
-            cashuMintSet.add(tag[1]);
-            cashuMints.push(tag[1]);
+          if (!cashuMintSet.has(tag[1]!)) {
+            cashuMintSet.add(tag[1]!);
+            cashuMints.push(tag[1]!);
           }
         });
       }
@@ -846,12 +905,12 @@ export const fetchCashuWallet = async (
       const wEvent: NostrEvent[] = await nostr.fetch(
         [cashuProofFilter],
         {},
-        cashuRelays.length !== 0 ? cashuRelays : relays,
+        cashuRelays.length !== 0 ? cashuRelays : relays
       );
 
       for (const event of wEvent) {
         try {
-          let eventContent = await signer!.decrypt(userPubkey, event.content);
+          const eventContent = await signer!.decrypt(userPubkey, event.content);
           const cashuWalletEventContent = eventContent
             ? JSON.parse(eventContent)
             : null;
@@ -865,19 +924,19 @@ export const fetchCashuWallet = async (
               id: event.id,
               proofs: cashuWalletEventContent.proofs,
             });
-            let wallet = new CashuWallet(
-              new CashuMint(cashuWalletEventContent?.mint),
+            const wallet = new CashuWallet(
+              new CashuMint(cashuWalletEventContent?.mint)
             );
             const Ys = cashuWalletEventContent?.proofs.map((p: Proof) =>
-              hashToCurve(enc.encode(p.secret)).toHex(true),
+              hashToCurve(enc.encode(p.secret)).toHex(true)
             );
-            let proofsStates = await wallet?.checkProofsStates(
-              cashuWalletEventContent?.proofs,
+            const proofsStates = await wallet?.checkProofsStates(
+              cashuWalletEventContent?.proofs
             );
             const spentYs = new Set(
               proofsStates
                 .filter((state) => state.state === "SPENT")
-                .map((state) => state.Y),
+                .map((state) => state.Y)
             );
             const allYsMatch =
               Ys.length === spentYs.size &&
@@ -885,7 +944,7 @@ export const fetchCashuWallet = async (
             if (proofsStates && proofsStates.length > 0 && allYsMatch) {
               await deleteEvent(nostr, signer!, [event.id]);
             } else if (cashuWalletEventContent.proofs) {
-              let allProofs = [
+              const allProofs = [
                 ...tokens,
                 ...cashuWalletEventContent?.proofs,
                 ...cashuProofs,
@@ -896,78 +955,78 @@ export const fetchCashuWallet = async (
             incomingSpendingHistory.push(cashuWalletEventContent);
           }
         } catch (error) {
-          console.log("Error fetching cashu wallet: ", error);
+          console.error("Failed to fetch legacy Cashu wallet event: ", error);
         }
       }
 
       for (const mint of cashuMints) {
         try {
-          let wallet = new CashuWallet(new CashuMint(mint));
+          const wallet = new CashuWallet(new CashuMint(mint));
           if (cashuProofs.length > 0) {
             const Ys = cashuProofs.map((p: Proof) =>
-              hashToCurve(enc.encode(p.secret)).toHex(true),
+              hashToCurve(enc.encode(p.secret)).toHex(true)
             );
-            let proofsStates = await wallet?.checkProofsStates(cashuProofs);
+            const proofsStates = await wallet?.checkProofsStates(cashuProofs);
             const spentYs = new Set(
               proofsStates
                 .filter((state) => state.state === "SPENT")
-                .map((state) => state.Y),
+                .map((state) => state.Y)
             );
             if (spentYs.size > 0) {
               cashuProofs = cashuProofs.filter(
-                (_, index) => !spentYs.has(Ys[index]),
+                (_, index) => !spentYs.has(Ys[index]!)
               );
             }
           }
 
-          let outProofIds = incomingSpendingHistory
+          const outProofIds = incomingSpendingHistory
             .filter((eventTags) =>
               eventTags.some(
-                (tag) => tag[0] === "direction" && tag[1] === "out",
-              ),
+                (tag) => tag[0] === "direction" && tag[1] === "out"
+              )
             )
             .map((eventTags) => {
               const destroyedTag = eventTags.find(
-                (tag) => tag[0] === "e" && tag[3] === "destroyed",
+                (tag) => tag[0] === "e" && tag[3] === "destroyed"
               );
               return destroyedTag ? destroyedTag[1] : "";
             })
             .filter((eventId) => eventId !== "");
 
-          let destroyedProofsArray = proofEvents
+          const destroyedProofsArray = proofEvents
             .filter((event) => outProofIds.includes(event.id))
             .map((event) => event.proofs);
 
           cashuProofs = cashuProofs.filter(
-            (cashuProof) => !destroyedProofsArray.includes(cashuProof),
+            (cashuProof) => !destroyedProofsArray.includes(cashuProof)
           );
 
-          let inProofIds = incomingSpendingHistory
+          const inProofIds = incomingSpendingHistory
             .filter((eventTags) =>
               eventTags.some(
                 (tag) =>
                   tag[0] === "direction" &&
-                  (tag[1] === "out" || tag[1] === "in"),
-              ),
+                  (tag[1] === "out" || tag[1] === "in")
+              )
             )
             .map((eventTags) => {
               const createdTag = eventTags.find(
-                (tag) => tag[0] === "e" && tag[3] === "created",
+                (tag) => tag[0] === "e" && tag[3] === "created"
               );
               return createdTag ? createdTag[1] : "";
             })
             .filter((eventId) => eventId !== "");
 
-          let proofIdsToAddBack = inProofIds.filter(
-            (id) => !outProofIds.includes(id),
+          const proofIdsToAddBack = inProofIds.filter(
+            (id) => !outProofIds.includes(id)
           );
-          let arrayOfProofsToAddBack = proofEvents
+          const arrayOfProofsToAddBack = proofEvents
             .filter((event) => proofIdsToAddBack.includes(event.id))
             .map((event) => event.proofs);
 
           const proofExists = (
             proofToAdd: Proof,
-            existingProofArray: Proof[],
+            existingProofArray: Proof[]
           ): boolean => {
             return existingProofArray.includes(proofToAdd);
           };
@@ -986,19 +1045,18 @@ export const fetchCashuWallet = async (
             await deleteEvent(nostr, signer!, outProofIds);
           }
         } catch (error) {
-          console.log("Error checking spent proofs: ", error);
+          console.error("Failed to check spent proofs: ", error);
         }
       }
+
+      editCashuWalletContext(proofEvents, cashuMints, cashuProofs, false);
 
       resolve({
         proofEvents: proofEvents,
         cashuMints: cashuMints,
         cashuProofs: cashuProofs,
       });
-
-      editCashuWalletContext(proofEvents, cashuMints, cashuProofs, false);
     } catch (error) {
-      console.log("failed to fetch Cashu wallet: ", error);
       reject(error);
     }
   });

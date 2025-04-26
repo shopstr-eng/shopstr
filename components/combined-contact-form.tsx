@@ -15,7 +15,7 @@ import {
   UseFormHandleSubmit,
   FieldValues,
 } from "react-hook-form";
-import { SHOPSTRBUTTONCLASSNAMES } from "./utility/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import CountryDropdown from "./utility-components/dropdowns/country-dropdown";
 
 export default function CombinedContactForm({
@@ -65,8 +65,10 @@ export default function CombinedContactForm({
                 field: { onChange, onBlur, value },
                 fieldState: { error },
               }) => {
-                let isErrored = error !== undefined;
-                let errorMessage: string = error?.message ? error.message : "";
+                const isErrored = error !== undefined;
+                const errorMessage: string = error?.message
+                  ? error.message
+                  : "";
                 return (
                   <Input
                     className="text-light-text dark:text-dark-text"
@@ -97,8 +99,10 @@ export default function CombinedContactForm({
                 field: { onChange, onBlur, value },
                 fieldState: { error },
               }) => {
-                let isErrored = error !== undefined;
-                let errorMessage: string = error?.message ? error.message : "";
+                const isErrored = error !== undefined;
+                const errorMessage: string = error?.message
+                  ? error.message
+                  : "";
                 return (
                   <Input
                     className="text-light-text dark:text-dark-text"
@@ -129,8 +133,10 @@ export default function CombinedContactForm({
                 field: { onChange, onBlur, value },
                 fieldState: { error },
               }) => {
-                let isErrored = error !== undefined;
-                let errorMessage: string = error?.message ? error.message : "";
+                const isErrored = error !== undefined;
+                const errorMessage: string = error?.message
+                  ? error.message
+                  : "";
                 return (
                   <Textarea
                     className="text-light-text dark:text-dark-text"
@@ -172,8 +178,10 @@ export default function CombinedContactForm({
                 field: { onChange, onBlur, value },
                 fieldState: { error },
               }) => {
-                let isErrored = error !== undefined;
-                let errorMessage: string = error?.message ? error.message : "";
+                const isErrored = error !== undefined;
+                const errorMessage: string = error?.message
+                  ? error.message
+                  : "";
                 return (
                   <Input
                     className="text-light-text dark:text-dark-text"
@@ -207,8 +215,10 @@ export default function CombinedContactForm({
                 field: { onChange, onBlur, value },
                 fieldState: { error },
               }) => {
-                let isErrored = error !== undefined;
-                let errorMessage: string = error?.message ? error.message : "";
+                const isErrored = error !== undefined;
+                const errorMessage: string = error?.message
+                  ? error.message
+                  : "";
                 return (
                   <Input
                     className="text-light-text dark:text-dark-text"
@@ -241,8 +251,10 @@ export default function CombinedContactForm({
                 field: { onChange, onBlur, value },
                 fieldState: { error },
               }) => {
-                let isErrored = error !== undefined;
-                let errorMessage: string = error?.message ? error.message : "";
+                const isErrored = error !== undefined;
+                const errorMessage: string = error?.message
+                  ? error.message
+                  : "";
                 return (
                   <Input
                     className="text-light-text dark:text-dark-text"
@@ -276,8 +288,10 @@ export default function CombinedContactForm({
                 field: { onChange, onBlur, value },
                 fieldState: { error },
               }) => {
-                let isErrored = error !== undefined;
-                let errorMessage: string = error?.message ? error.message : "";
+                const isErrored = error !== undefined;
+                const errorMessage: string = error?.message
+                  ? error.message
+                  : "";
                 return (
                   <Input
                     className="text-light-text dark:text-dark-text"
@@ -307,8 +321,10 @@ export default function CombinedContactForm({
                 field: { onChange, onBlur, value },
                 fieldState: { error },
               }) => {
-                let isErrored = error !== undefined;
-                let errorMessage: string = error?.message ? error.message : "";
+                const isErrored = error !== undefined;
+                const errorMessage: string = error?.message
+                  ? error.message
+                  : "";
                 return (
                   <Input
                     className="text-light-text dark:text-dark-text"
@@ -342,8 +358,10 @@ export default function CombinedContactForm({
                 field: { onChange, onBlur, value },
                 fieldState: { error },
               }) => {
-                let isErrored = error !== undefined;
-                let errorMessage: string = error?.message ? error.message : "";
+                const isErrored = error !== undefined;
+                const errorMessage: string = error?.message
+                  ? error.message
+                  : "";
                 return (
                   <Input
                     className="text-light-text dark:text-dark-text"
@@ -373,8 +391,10 @@ export default function CombinedContactForm({
                 field: { onChange, onBlur, value },
                 fieldState: { error },
               }) => {
-                let isErrored = error !== undefined;
-                let errorMessage: string = error?.message ? error.message : "";
+                const isErrored = error !== undefined;
+                const errorMessage: string = error?.message
+                  ? error.message
+                  : "";
                 return (
                   <CountryDropdown
                     autoFocus
@@ -404,8 +424,8 @@ export default function CombinedContactForm({
                   field: { onChange, onBlur, value },
                   fieldState: { error },
                 }) => {
-                  let isErrored = error !== undefined;
-                  let errorMessage: string = error?.message
+                  const isErrored = error !== undefined;
+                  const errorMessage: string = error?.message
                     ? error.message
                     : "";
                   return (

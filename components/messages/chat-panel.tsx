@@ -10,7 +10,7 @@ import {
   ModalHeader,
   ModalBody,
 } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   ArrowUturnLeftIcon,
   ArrowsUpDownIcon,
@@ -19,7 +19,7 @@ import {
   HandThumbUpIcon,
 } from "@heroicons/react/24/outline";
 import { ChatObject, NostrMessageEvent } from "../../utils/types/types";
-import { ChatMessage } from "./chat-message";
+import ChatMessage from "./chat-message";
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
 import {
   constructGiftWrappedEvent,
@@ -28,12 +28,15 @@ import {
   sendGiftWrappedMessageEvent,
   publishReviewEvent,
   generateKeys,
-} from "../utility/nostr-helper-functions";
-import { calculateWeightedScore } from "../utility/review-parser-functions";
+} from "@/utils/nostr/nostr-helper-functions";
+import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
 import { ReviewsContext } from "../../utils/context/context";
-import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
+import {
+  NostrContext,
+  SignerContext,
+} from "@/components/utility-components/nostr-context-provider";
 
-export const ChatPanel = ({
+const ChatPanel = ({
   handleGoBack,
   handleSendMessage,
   currentChatPubkey,
@@ -65,7 +68,7 @@ export const ChatPanel = ({
   const [canReview, setCanReview] = useState(false);
 
   const [selectedThumb, setSelectedThumb] = useState<"up" | "down" | null>(
-    null,
+    null
   );
   const [reviewOptions, setReviewOptions] = useState<Map<string, number>>(
     new Map([
@@ -73,7 +76,7 @@ export const ChatPanel = ({
       ["quality", 0],
       ["delivery", 0],
       ["communication", 0],
-    ]),
+    ])
   );
   const [productAddress, setProductAddress] = useState("");
   const [orderId, setOrderId] = useState("");
@@ -133,21 +136,25 @@ export const ChatPanel = ({
     setShowReviewModal(!showReviewModal);
   };
 
-  const onShippingSubmit = async (data: { [x: string]: any }) => {
+  const onShippingSubmit = async (data: { [x: string]: string }) => {
     try {
-      let decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
-      let decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
-      let decodedRandomPubkeyForReceiver = nip19.decode(randomNpubForReceiver);
-      let decodedRandomPrivkeyForReceiver = nip19.decode(randomNsecForReceiver);
+      const decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
+      const decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
+      const decodedRandomPubkeyForReceiver = nip19.decode(
+        randomNpubForReceiver
+      );
+      const decodedRandomPrivkeyForReceiver = nip19.decode(
+        randomNsecForReceiver
+      );
 
       // Convert delivery days to future unix timestamp
-      const daysToAdd = parseInt(data["Delivery Time"]);
+      const daysToAdd = parseInt(data["Delivery Time"]!);
       const currentTimestamp = Math.floor(Date.now() / 1000); // Current unix timestamp in seconds
       const futureTimestamp = currentTimestamp + daysToAdd * 24 * 60 * 60; // Add days in seconds
 
       // Create a human-readable date format
       const humanReadableDate = new Date(
-        futureTimestamp * 1000,
+        futureTimestamp * 1000
       ).toLocaleDateString("en-US", {
         weekday: "long",
         year: "numeric",
@@ -155,9 +162,9 @@ export const ChatPanel = ({
         day: "numeric",
       });
 
-      let shippingCarrier = data["Shipping Carrier"];
-      let trackingNumber = data["Tracking Number"];
-      let message =
+      const shippingCarrier = data["Shipping Carrier"];
+      const trackingNumber = data["Tracking Number"];
+      const message =
         "Your order from " +
         userNPub +
         " is expected to arrive on " +
@@ -166,7 +173,7 @@ export const ChatPanel = ({
         shippingCarrier +
         " tracking number is: " +
         trackingNumber;
-      let giftWrappedMessageEvent = await constructGiftWrappedEvent(
+      const giftWrappedMessageEvent = await constructGiftWrappedEvent(
         decodedRandomPubkeyForSender.data as string,
         buyerPubkey,
         message,
@@ -180,20 +187,20 @@ export const ChatPanel = ({
           tracking: trackingNumber,
           carrier: shippingCarrier,
           eta: futureTimestamp, // Using the calculated future timestamp
-        },
+        }
       );
-      let sealedEvent = await constructMessageSeal(
+      const sealedEvent = await constructMessageSeal(
         signer!,
         giftWrappedMessageEvent,
         decodedRandomPubkeyForSender.data as string,
         buyerPubkey,
-        decodedRandomPrivkeyForSender.data as Uint8Array,
+        decodedRandomPrivkeyForSender.data as Uint8Array
       );
-      let giftWrappedEvent = await constructMessageGiftWrap(
+      const giftWrappedEvent = await constructMessageGiftWrap(
         sealedEvent,
         decodedRandomPubkeyForReceiver.data as string,
         decodedRandomPrivkeyForReceiver.data as Uint8Array,
-        buyerPubkey,
+        buyerPubkey
       );
       await sendGiftWrappedMessageEvent(giftWrappedEvent);
       handleToggleShippingModal();
@@ -202,7 +209,7 @@ export const ChatPanel = ({
     }
   };
 
-  const onReviewSubmit = async (data: { [x: string]: any }) => {
+  const onReviewSubmit = async (data: { [x: string]: string }) => {
     try {
       const [_, _kind, merchantPubkey, dTag] = productAddress.split(":");
       const eventTags = [
@@ -214,24 +221,24 @@ export const ChatPanel = ({
       });
       const productReviewsData = new Map<string, string[][]>();
       productReviewsData.set(userPubkey!, eventTags);
-      await publishReviewEvent(nostr!, signer!, data.comment, eventTags);
+      await publishReviewEvent(nostr!, signer!, data.comment!, eventTags);
       reviewsContext.updateProductReviewsData(
-        merchantPubkey,
-        dTag,
-        productReviewsData,
+        merchantPubkey!,
+        dTag!,
+        productReviewsData
       );
       const merchantScoresMap = reviewsContext.merchantReviewsData;
-      if (!merchantScoresMap.has(merchantPubkey)) {
-        merchantScoresMap.set(merchantPubkey, []);
+      if (!merchantScoresMap.has(merchantPubkey!)) {
+        merchantScoresMap.set(merchantPubkey!, []);
       }
       merchantScoresMap
-        .get(merchantPubkey)!
+        .get(merchantPubkey!)!
         .push(calculateWeightedScore(eventTags));
       reviewsContext.updateMerchantReviewsData(
-        merchantPubkey,
-        merchantScoresMap.get(merchantPubkey) || [
+        merchantPubkey!,
+        merchantScoresMap.get(merchantPubkey!) || [
           calculateWeightedScore(eventTags),
-        ],
+        ]
       );
       handleToggleReviewModal();
     } catch (error) {
@@ -242,16 +249,18 @@ export const ChatPanel = ({
   if (!currentChatPubkey)
     return (
       <div className="absolute z-20 hidden h-[85vh] w-full flex-col overflow-clip px-2 dark:bg-dark-bg md:relative md:flex">
-        <div className="flex h-full flex-col items-center justify-center">
-          <ChatBubbleLeftIcon className="mb-5 mt-[-70px] h-20 w-20 text-light-text dark:text-dark-text" />
-          <span className="text-5xl text-light-text dark:text-dark-text">
-            No chat selected . . .
-          </span>
-          <div className="flex items-center justify-center gap-3 pt-5 opacity-10">
-            <span className="text-2xl text-light-text dark:text-dark-text">
-              Use your up and down arrow keys to select chats!
+        <div className="mt-10 flex flex-grow items-center justify-center py-10">
+          <div className="w-full max-w-xl rounded-lg bg-light-fg p-10 text-center shadow-lg dark:bg-dark-fg">
+            <ChatBubbleLeftIcon className="mx-auto mb-5 h-20 w-20 text-light-text dark:text-dark-text" />
+            <span className="block text-5xl text-light-text dark:text-dark-text">
+              No chat selected . . .
             </span>
-            <ArrowsUpDownIcon className="h-10 w-10 text-light-text dark:text-dark-text" />
+            <div className="opacity-4 flex flex-col items-center justify-center gap-3 pt-5">
+              <span className="text-2xl text-light-text dark:text-dark-text">
+                Use your up and down arrow keys to select chats!
+              </span>
+              <ArrowsUpDownIcon className="h-10 w-10 text-light-text dark:text-dark-text" />
+            </div>
           </div>
         </div>
       </div>
@@ -279,7 +288,7 @@ export const ChatPanel = ({
         {messages
           .filter(
             (message, index, self) =>
-              index === self.findIndex((m) => m.id === message.id),
+              index === self.findIndex((m) => m.id === message.id)
           )
           .map((messageEvent: NostrMessageEvent, index) => {
             return (
@@ -361,14 +370,13 @@ export const ChatPanel = ({
                     control={shippingControl}
                     rules={{
                       required: "Expected delivery time is required.",
-                      min: 1,
                     }}
                     render={({
                       field: { onChange, onBlur, value },
                       fieldState: { error },
                     }) => {
-                      let isErrored = error !== undefined;
-                      let errorMessage: string = error?.message
+                      const isErrored = error !== undefined;
+                      const errorMessage: string = error?.message
                         ? error.message
                         : "";
                       return (
@@ -398,8 +406,8 @@ export const ChatPanel = ({
                       field: { onChange, onBlur, value },
                       fieldState: { error },
                     }) => {
-                      let isErrored = error !== undefined;
-                      let errorMessage: string = error?.message
+                      const isErrored = error !== undefined;
+                      const errorMessage: string = error?.message
                         ? error.message
                         : "";
                       return (
@@ -422,13 +430,18 @@ export const ChatPanel = ({
                     control={shippingControl}
                     rules={{
                       required: "A tracking number is required.",
+                      minLength: {
+                        value: 5,
+                        message:
+                          "Tracking number must be at least 5 characters.",
+                      },
                     }}
                     render={({
                       field: { onChange, onBlur, value },
                       fieldState: { error },
                     }) => {
-                      let isErrored = error !== undefined;
-                      let errorMessage: string = error?.message
+                      const isErrored = error !== undefined;
+                      const errorMessage: string = error?.message
                         ? error.message
                         : "";
                       return (
@@ -581,7 +594,7 @@ export const ChatPanel = ({
                               const newMap = new Map(prev);
                               newMap.set(
                                 "communication",
-                                e.target.checked ? 1 : 0,
+                                e.target.checked ? 1 : 0
                               );
                               return newMap;
                             })
@@ -596,13 +609,19 @@ export const ChatPanel = ({
                     <Controller
                       name="comment"
                       control={reviewControl}
-                      render={({ field }) => (
-                        <textarea
-                          {...field}
-                          className="w-full rounded-md border-2 border-light-fg bg-light-bg p-2 text-light-text dark:border-dark-fg dark:bg-dark-bg dark:text-dark-text"
-                          rows={4}
-                          placeholder="Write your review comment here..."
-                        />
+                      rules={{ required: "A comment is required." }}
+                      render={({ field, fieldState: { error } }) => (
+                        <div>
+                          <textarea
+                            {...field}
+                            className="w-full rounded-md border-2 border-light-fg bg-light-bg p-2 text-light-text dark:border-dark-fg dark:bg-dark-bg dark:text-dark-text"
+                            rows={4}
+                            placeholder="Write your review comment here..."
+                          />
+                          {error && (
+                            <p className="text-red-500">{error.message}</p>
+                          )}
+                        </div>
                       )}
                     />
                   </ModalBody>

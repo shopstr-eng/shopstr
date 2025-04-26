@@ -1,6 +1,6 @@
 import { useState, useEffect, useContext } from "react";
 import { nip19 } from "nostr-tools";
-import { deleteEvent } from "./utility/nostr-helper-functions";
+import { deleteEvent } from "@/utils/nostr/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
 import {
   ProductContext,
@@ -9,10 +9,17 @@ import {
 } from "../utils/context/context";
 import ProductCard from "./utility-components/product-card";
 import DisplayProductModal from "./display-product-modal";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { Button, Pagination } from "@nextui-org/react";
 import ShopstrSpinner from "./utility-components/shopstr-spinner";
 import { useRouter } from "next/router";
-import parseTags, { ProductData } from "./utility/product-parser-functions";
-import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
+import parseTags, {
+  ProductData,
+} from "@/utils/parsers/product-parser-functions";
+import {
+  NostrContext,
+  SignerContext,
+} from "@/components/utility-components/nostr-context-provider";
 
 const DisplayProducts = ({
   focusedPubkey,
@@ -23,6 +30,7 @@ const DisplayProducts = ({
   isMyListings,
   setCategories,
   onFilteredProductsChange,
+  searchBarRef,
 }: {
   focusedPubkey?: string;
   selectedCategories: Set<string>;
@@ -32,14 +40,20 @@ const DisplayProducts = ({
   isMyListings?: boolean;
   setCategories?: (categories: string[]) => void;
   onFilteredProductsChange?: (products: ProductData[]) => void;
+  searchBarRef?: React.RefObject<HTMLDivElement>;
 }) => {
   const [productEvents, setProductEvents] = useState<ProductData[]>([]);
   const [isProductsLoading, setIsProductLoading] = useState(true);
   const productEventContext = useContext(ProductContext);
   const profileMapContext = useContext(ProfileMapContext);
   const followsContext = useContext(FollowsContext);
-  const [focusedProduct, setFocusedProduct] = useState(""); // product being viewed in modal
+  const [focusedProduct, setFocusedProduct] = useState<ProductData>();
   const [showModal, setShowModal] = useState(false);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 42;
+  const [filteredProducts, setFilteredProducts] = useState<ProductData[]>([]);
+  const [totalPages, setTotalPages] = useState(1);
 
   const router = useRouter();
 
@@ -50,23 +64,23 @@ const DisplayProducts = ({
     if (!productEventContext) return;
     if (!productEventContext.isLoading && productEventContext.productEvents) {
       setIsProductLoading(true);
-      let sortedProductEvents = [
+      const sortedProductEvents = [
         ...productEventContext.productEvents.sort(
-          (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at,
+          (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
         ),
-      ]; // sorts most recently created to least recently created
-      let parsedProductData: ProductData[] = [];
+      ];
+      const parsedProductData: ProductData[] = [];
       sortedProductEvents.forEach((event) => {
         if (wotFilter) {
           if (!followsContext.isLoading && followsContext.followList) {
             const followList = followsContext.followList;
             if (followList.length > 0 && followList.includes(event.pubkey)) {
-              let parsedData = parseTags(event);
+              const parsedData = parseTags(event);
               if (parsedData) parsedProductData.push(parsedData);
             }
           }
         } else {
-          let parsedData = parseTags(event);
+          const parsedData = parseTags(event);
           if (parsedData) parsedProductData.push(parsedData);
         }
       });
@@ -77,7 +91,7 @@ const DisplayProducts = ({
 
   useEffect(() => {
     if (focusedPubkey && setCategories) {
-      let productCategories: string[] = [];
+      const productCategories: string[] = [];
       productEvents.forEach((event) => {
         if (event.pubkey === focusedPubkey) {
           productCategories.push(...event.categories);
@@ -90,8 +104,28 @@ const DisplayProducts = ({
   useEffect(() => {
     if (!productEvents) return;
 
-    const filteredProducts = productEvents.filter(productSatisfiesAllFilters);
-    onFilteredProductsChange?.(filteredProducts);
+    const filtered = productEvents.filter((product) => {
+      if (focusedPubkey && product.pubkey !== focusedPubkey) return false;
+      if (!productSatisfiesAllFilters(product)) return false;
+      if (!product.currency) return false;
+      if (product.images.length === 0) return false;
+      if (product.contentWarning) return false;
+      if (
+        product.pubkey ===
+          "3da2082b7aa5b76a8f0c134deab3f7848c3b5e3a3079c65947d88422b69c1755" &&
+        userPubkey !== product.pubkey
+      ) {
+        return false;
+      }
+      return true;
+    });
+
+    setFilteredProducts(filtered);
+    setTotalPages(Math.max(1, Math.ceil(filtered.length / itemsPerPage)));
+
+    setCurrentPage(1);
+
+    onFilteredProductsChange?.(filtered);
   }, [
     productEvents,
     selectedSearch,
@@ -100,14 +134,28 @@ const DisplayProducts = ({
     focusedPubkey,
   ]);
 
-  const isThereAFilter = () => {
-    return (
-      selectedCategories.size > 0 ||
-      selectedLocation ||
-      selectedSearch.length > 0 ||
-      focusedPubkey
-    );
-  };
+  // Scroll effect only on page change
+  useEffect(() => {
+    // Skip initial render (currentPage === 1)
+    if (currentPage === 1) return;
+
+    const timer = requestAnimationFrame(() => {
+      if (searchBarRef?.current) {
+        searchBarRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+        window.scrollBy(0, -80); // Adjust for fixed header
+      } else {
+        window.scrollTo({
+          top: 0,
+          behavior: "smooth",
+        });
+      }
+    });
+
+    return () => cancelAnimationFrame(timer);
+  }, [currentPage, searchBarRef]);
 
   const handleDelete = async (productId: string) => {
     try {
@@ -122,7 +170,7 @@ const DisplayProducts = ({
     setShowModal(!showModal);
   };
 
-  const onProductClick = (product: any) => {
+  const onProductClick = (product: ProductData) => {
     setFocusedProduct(product);
     if (product.pubkey === userPubkey) {
       setShowModal(true);
@@ -159,8 +207,9 @@ const DisplayProducts = ({
   };
 
   const productSatisfiesSearchFilter = (productData: ProductData) => {
-    if (!selectedSearch) return true; // nothing in search bar
-    if (!productData.title) return false; // we don't want to display it if product has no title
+    if (!selectedSearch) return true;
+    if (!productData.title) return false;
+
     if (selectedSearch.includes("naddr")) {
       try {
         const parsedNaddr = nip19.decode(selectedSearch);
@@ -174,23 +223,39 @@ const DisplayProducts = ({
       } catch (_) {
         return false;
       }
-    } else if (selectedSearch.includes("npub")) {
+    }
+
+    if (selectedSearch.includes("npub")) {
       try {
         const parsedNpub = nip19.decode(selectedSearch);
         if (parsedNpub.type === "npub") {
           return parsedNpub.data === productData.pubkey;
         }
+        return false;
       } catch (_) {
         return false;
       }
-    } else {
-      try {
-        const re = new RegExp(selectedSearch, "gi");
-        const match = productData.title.match(re);
-        return match && match.length > 0;
-      } catch (_) {
-        return false;
+    }
+
+    try {
+      const re = new RegExp(selectedSearch, "gi");
+
+      const titleMatch = productData.title.match(re);
+      if (titleMatch && titleMatch.length > 0) return true;
+
+      if (productData.summary) {
+        const summaryMatch = productData.summary.match(re);
+        if (summaryMatch && summaryMatch.length > 0) return true;
       }
+
+      const numericSearch = parseFloat(selectedSearch);
+      if (!isNaN(numericSearch) && productData.price === numericSearch) {
+        return true;
+      }
+
+      return false;
+    } catch (_) {
+      return false;
     }
   };
 
@@ -202,76 +267,106 @@ const DisplayProducts = ({
     );
   };
 
-  const displayProductCard = (productData: ProductData, index: number) => {
-    if (focusedPubkey && productData.pubkey !== focusedPubkey) return;
-    if (!productSatisfiesAllFilters(productData)) return;
-    if (!productData.currency) return;
-    if (productData.images.length === 0) return;
-    if (productData.contentWarning) return;
+  const getCurrentPageProducts = () => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
 
-    return (
-      <ProductCard
-        key={productData.id + "-" + index}
-        productData={productData}
-        onProductClick={onProductClick}
-      />
-    );
+    return filteredProducts.slice(startIndex, endIndex);
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
   };
 
   return (
     <>
       <div className="w-full md:pl-4">
-        {/* DISPLAYS PRODUCT LISTINGS HERE */}
-        {productEvents.length != 0 ? (
-          <div className="grid max-w-full grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-x-hidden">
-            {productEvents.map((productData: ProductData, index) => {
-              return displayProductCard(productData, index);
-            })}
-          </div>
-        ) : (
-          wotFilter &&
-          !isProductsLoading && (
-            <p className="mt-4 break-words text-center text-2xl text-light-text dark:text-dark-text">
-              No products found...
-              <br></br>
-              <br></br>Try turning of the trust filter!
-            </p>
-          )
-        )}
-        {isThereAFilter() &&
-          !isProductsLoading &&
-          !productEvents.some((product) =>
-            productSatisfiesAllFilters(product),
-          ) && (
-            <p className="mt-4 break-words text-center text-2xl text-light-text dark:text-dark-text">
-              No products found...
-              <br></br>
-              <br></br>Try loading more!
-            </p>
-          )}
-        {isMyListings &&
-          !isProductsLoading &&
-          !productEvents.some((product) => product.pubkey === userPubkey) && (
-            <p className="mt-4 break-words text-center text-2xl text-light-text dark:text-dark-text">
-              No products found...
-              <br></br>
-              <br></br>Try adding a new listing!
-            </p>
-          )}
-        {profileMapContext.isLoading ||
-        productEventContext.isLoading ||
-        isProductsLoading ? (
+        {!isMyListings &&
+        (profileMapContext.isLoading ||
+          productEventContext.isLoading ||
+          isProductsLoading) ? (
           <div className="mb-6 mt-6 flex items-center justify-center">
             <ShopstrSpinner />
           </div>
         ) : null}
+        {filteredProducts.length > 0 ? (
+          <>
+            <div className="grid max-w-full grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-x-hidden">
+              {getCurrentPageProducts().map(
+                (productData: ProductData, index) => (
+                  <ProductCard
+                    key={productData.id + "-" + index}
+                    productData={productData}
+                    onProductClick={onProductClick}
+                  />
+                )
+              )}
+            </div>
+
+            {totalPages > 1 && (
+              <div className="mt-4 flex justify-center">
+                <Pagination
+                  total={totalPages}
+                  page={currentPage}
+                  onChange={handlePageChange}
+                  showControls
+                  classNames={{
+                    cursor: "bg-purple-500",
+                  }}
+                />
+              </div>
+            )}
+
+            <div className="mb-6 mt-2 text-center text-xs text-light-text dark:text-dark-text">
+              Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
+              {Math.min(filteredProducts.length, currentPage * itemsPerPage)} of{" "}
+              {filteredProducts.length} products
+            </div>
+          </>
+        ) : (
+          wotFilter &&
+          !isProductsLoading && (
+            <div className="mt-20 flex flex-grow items-center justify-center py-10">
+              <div className="w-full max-w-lg rounded-lg bg-light-fg p-8 text-center shadow-lg dark:bg-dark-fg">
+                <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
+                  No products found...
+                </p>
+                <p className="mt-4 text-lg text-light-text dark:text-dark-text">
+                  Try turning off the trust filter!
+                </p>
+              </div>
+            </div>
+          )
+        )}
+        {isMyListings &&
+          !isProductsLoading &&
+          !productEvents.some((product) => product.pubkey === userPubkey) && (
+            <div className="mt-20 flex flex-grow items-center justify-center py-10">
+              <div className="w-full max-w-lg rounded-lg bg-light-fg p-8 text-center shadow-lg dark:bg-dark-fg">
+                <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
+                  No products found...
+                </p>
+                <p className="mt-4 text-lg text-light-text dark:text-dark-text">
+                  Try adding a new listing!
+                </p>
+                <Button
+                  className={`${SHOPSTRBUTTONCLASSNAMES} mt-6`}
+                  onClick={() => router.push("?addNewListing")}
+                >
+                  Add Listing
+                </Button>
+              </div>
+            </div>
+          )}
       </div>
-      <DisplayProductModal
-        productData={focusedProduct}
-        showModal={showModal}
-        handleModalToggle={handleToggleModal}
-        handleDelete={handleDelete}
-      />
+      {focusedProduct && (
+        <DisplayProductModal
+          productData={focusedProduct}
+          showModal={showModal}
+          handleModalToggle={handleToggleModal}
+          handleDelete={handleDelete}
+        />
+      )}
     </>
   );
 };

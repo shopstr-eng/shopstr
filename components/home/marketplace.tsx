@@ -11,7 +11,7 @@ import {
 import { FaceFrownIcon, FaceSmileIcon } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import { nip19 } from "nostr-tools";
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useState, useRef } from "react";
 import {
   ReviewsContext,
   ShopMapContext,
@@ -20,16 +20,15 @@ import {
 import DisplayProducts from "../display-products";
 import LocationDropdown from "../utility-components/dropdowns/location-dropdown";
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
-import { CATEGORIES } from "../utility/STATIC-VARIABLES";
-import { SignerContext } from "@/utils/context/nostr-context";
-import { ProductData } from "../utility/product-parser-functions";
+import { CATEGORIES } from "@/utils/STATIC-VARIABLES";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import { ProductData } from "@/utils/parsers/product-parser-functions";
 import SignInModal from "../sign-in/SignInModal";
 import ShopstrSwitch from "../utility-components/shopstr-switch";
 import { ShopSettings } from "../../utils/types/types";
 import SideShopNav from "./side-shop-nav";
-import FailureModal from "../utility-components/failure-modal";
 
-export function MarketplacePage({
+function MarketplacePage({
   focusedPubkey,
   setFocusedPubkey,
   selectedSection,
@@ -42,11 +41,11 @@ export function MarketplacePage({
 }) {
   const router = useRouter();
   const [selectedCategories, setSelectedCategories] = useState(
-    new Set<string>([]),
+    new Set<string>([])
   );
   const [selectedLocation, setSelectedLocation] = useState("");
   const [selectedSearch, setSelectedSearch] = useState("");
-  const { isOpen, onClose } = useDisclosure();
+  const { isOpen, onOpen, onClose } = useDisclosure();
 
   const [wotFilter, setWotFilter] = useState(false);
 
@@ -54,7 +53,7 @@ export function MarketplacePage({
   const [merchantQuality, setMerchantQuality] = useState("");
   const [filteredProducts, setFilteredProducts] = useState<ProductData[]>([]);
   const [productReviewMap, setProductReviewMap] = useState(
-    new Map<string, Map<string, string[][]>>(),
+    new Map<string, Map<string, string[][]>>()
   );
   const [isFetchingReviews, setIsFetchingReviews] = useState(false);
 
@@ -66,8 +65,6 @@ export function MarketplacePage({
 
   const [categories, setCategories] = useState([""]);
 
-  const [showFailureModal, setShowFailureModal] = useState(false);
-
   const reviewsContext = useContext(ReviewsContext);
   const shopMapContext = useContext(ShopMapContext);
   const followsContext = useContext(FollowsContext);
@@ -75,28 +72,16 @@ export function MarketplacePage({
   const { pubkey: userPubkey, isLoggedIn: loggedIn } =
     useContext(SignerContext);
 
+  const searchBarRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    let npub = router.query.npub;
+    const npub = router.query.npub;
     if (npub && typeof npub[0] === "string") {
       const { data } = nip19.decode(npub[0]);
       setFocusedPubkey(data as string);
       setSelectedSection("shop");
     }
   }, [router.query.npub]);
-
-  useEffect(() => {
-    if (loggedIn) {
-      fetch("/api/metrics/post-shopper", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: userPubkey,
-        }),
-      });
-    }
-  }, [userPubkey, loggedIn]);
 
   useEffect(() => {
     setIsFetchingReviews(true);
@@ -168,14 +153,14 @@ export function MarketplacePage({
   };
 
   const handleSendMessage = (pubkeyToOpenChatWith: string) => {
-    if (!loggedIn) {
-      setShowFailureModal(true);
-      return;
+    if (loggedIn) {
+      router.push({
+        pathname: "/orders",
+        query: { pk: nip19.npubEncode(pubkeyToOpenChatWith), isInquiry: true },
+      });
+    } else {
+      onOpen();
     }
-    router.push({
-      pathname: "/orders",
-      query: { pk: nip19.npubEncode(pubkeyToOpenChatWith), isInquiry: true },
-    });
   };
 
   const handleTitleClick = (productId: string, productPubkey: string) => {
@@ -230,7 +215,6 @@ export function MarketplacePage({
                         <div className="mb-1 flex flex-wrap gap-2">
                           {reviewData.map(([_, value, category], index) => {
                             if (category === undefined) {
-                              // Don't render the comment here; we'll show it later.
                               return null;
                             } else if (category === "thumb") {
                               return (
@@ -246,7 +230,6 @@ export function MarketplacePage({
                                 </Chip>
                               );
                             } else {
-                              // Render chips for other categories
                               return (
                                 <Chip
                                   key={index}
@@ -279,7 +262,7 @@ export function MarketplacePage({
                         })}
                       </div>
                     </div>
-                  ),
+                  )
                 )}
               </div>
             </div>
@@ -294,8 +277,7 @@ export function MarketplacePage({
       <div className="flex max-w-[100%] flex-col bg-light-bg px-3 pb-2 dark:bg-dark-bg">
         {shopBannerURL != "" && focusedPubkey != "" && !isFetchingShop ? (
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            {/* Search input - appears on top for small screens */}
-            <div className="w-full sm:order-2 sm:w-auto">
+            <div ref={searchBarRef} className="w-full sm:order-2 sm:w-auto">
               <Input
                 className="text-light-text dark:text-dark-text"
                 placeholder="Listing title, naddr1..., npub..."
@@ -309,7 +291,6 @@ export function MarketplacePage({
               />
             </div>
 
-            {/* Navigation buttons */}
             <div className="flex gap-1 sm:order-1">
               <Button
                 className="bg-transparent text-lg text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text sm:text-xl"
@@ -348,7 +329,7 @@ export function MarketplacePage({
           </div>
         ) : (
           <div className="flex flex-col gap-2 pb-3 sm:flex-row">
-            <div className="w-full">
+            <div ref={searchBarRef} className="w-full">
               <Input
                 className="mt-2 text-light-text dark:text-dark-text"
                 isClearable
@@ -373,7 +354,7 @@ export function MarketplacePage({
                     setSelectedCategories(new Set([]));
                   } else {
                     setSelectedCategories(
-                      new Set(event.target.value.split(",")),
+                      new Set(event.target.value.split(","))
                     );
                   }
                 }}
@@ -424,6 +405,7 @@ export function MarketplacePage({
             wotFilter={wotFilter}
             setCategories={setCategories}
             onFilteredProductsChange={handleFilteredProductsChange}
+            searchBarRef={searchBarRef}
           />
         )}
         {selectedSection === "about" && shopAbout && (
@@ -471,8 +453,15 @@ export function MarketplacePage({
                 </div>
               </div>
             ) : (
-              <div className="break-words text-center text-xl text-light-text dark:text-dark-text">
-                No reviews . . . yet!
+              <div className="mt-10 flex flex-grow items-center justify-center py-10">
+                <div className="w-full max-w-xl rounded-lg bg-light-fg p-10 text-center shadow-lg dark:bg-dark-fg">
+                  <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
+                    No reviews . . . yet!
+                  </p>
+                  <p className="mt-4 text-lg text-light-text dark:text-dark-text">
+                    Seems there aren&apos;t any reviews for this shop yet.
+                  </p>
+                </div>
               </div>
             )}
             <p className="text-base">{renderProductScores()}</p>
@@ -480,11 +469,6 @@ export function MarketplacePage({
         )}
       </div>
       <SignInModal isOpen={isOpen} onClose={onClose} />
-      <FailureModal
-        bodyText="You must be signed in to send a message!"
-        isOpen={showFailureModal}
-        onClose={() => setShowFailureModal(false)}
-      />
     </div>
   );
 }

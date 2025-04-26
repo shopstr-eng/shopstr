@@ -11,15 +11,14 @@ import {
   NostrSigner,
 } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
-import {
-  getLocalStorageData,
-  setLocalStorageDataOnSignIn,
-} from "@/components/utility/nostr-helper-functions";
+import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
 import PassphraseChallengeModal from "@/components/utility-components/request-passphrase-modal";
 import AuthUrlChallengeModal from "@/components/utility-components/auth-challenge-modal";
 import { NostrNIP07Signer } from "@/utils/nostr/signers/nostr-nip07-signer";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
+import { needsMigration } from "@/utils/nostr/encryption-migration";
+import MigrationPromptModal from "./migration-prompt-modal";
 
 interface SignerContextInterface {
   signer?: NostrSigner;
@@ -61,13 +60,14 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
   const [pubkey, setPubKey] = useState<string | undefined>(undefined);
   const [npub, setNPub] = useState<string | undefined>(undefined);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [showMigrationModal, setShowMigrationModal] = useState(false);
 
   const challengeHandler: ChallengeHandler = (
     type,
     challenge,
     abort,
     abortSignal,
-    error,
+    error
   ) => {
     return new Promise((resolve, _reject) => {
       setError(error);
@@ -130,11 +130,11 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
             getLocalStorageData().bunkerRemotePubkey +
             "?secret=" +
             getLocalStorageData().bunkerSecret;
-          let bunkerRelays = getLocalStorageData().bunkerRelays;
+          const bunkerRelays = getLocalStorageData().bunkerRelays;
           for (const relay of bunkerRelays!) {
             bunker += "&relay=" + relay;
           }
-          let appPrivKey = getLocalStorageData().clientPrivkey;
+          const appPrivKey = getLocalStorageData().clientPrivkey;
           existingSigner = {
             type: "nip46",
             bunker,
@@ -149,7 +149,7 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
           break;
         }
         case "nsec": {
-          let encryptedPrivateKey = getLocalStorageData().encryptedPrivateKey;
+          const encryptedPrivateKey = getLocalStorageData().encryptedPrivateKey;
           existingSigner = {
             type: "nsec",
             encryptedPrivKey: encryptedPrivateKey!,
@@ -169,29 +169,59 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
 
     const signerObject: NostrSigner = NostrManager.signerFrom(
       existingSigner!,
-      challengeHandler,
+      challengeHandler
     );
     if (!signerObject) return;
-    setLocalStorageDataOnSignIn({
-      signer: signerObject,
-    });
+
     setSigner(signerObject);
     loadKeys(signerObject);
+
+    const isAlreadyLoaded = localStorage.getItem("signer");
+    if (
+      !isAlreadyLoaded ||
+      JSON.stringify(existingSigner) !== isAlreadyLoaded
+    ) {
+      localStorage.setItem("signer", JSON.stringify(existingSigner));
+
+      const shouldReloadSigner = false;
+      window.dispatchEvent(
+        new CustomEvent("storage", { detail: { shouldReloadSigner } })
+      );
+    }
   }, []);
 
   useEffect(() => {
+    const handleStorage = (
+      event: Event & { detail?: { shouldReloadSigner?: boolean } }
+    ) => {
+      if (event.detail?.shouldReloadSigner === false) return;
+      loadSigner();
+    };
+
+    window.addEventListener("storage", handleStorage);
     loadSigner();
 
-    window.addEventListener("storage", loadSigner);
-
     return () => {
-      window.removeEventListener("storage", loadSigner);
+      window.removeEventListener("storage", handleStorage);
     };
   }, [loadSigner]);
 
   useEffect(() => {
     setIsLoggedIn(!!(signer && pubkey));
   }, [signer, pubkey]);
+
+  useEffect(() => {
+    if (isLoggedIn) {
+      const needsKeyMigration = needsMigration();
+      if (needsKeyMigration) {
+        const timer = setTimeout(() => {
+          setShowMigrationModal(true);
+        }, 1000);
+        return () => clearTimeout(timer);
+      }
+    }
+    return undefined;
+  }, [isLoggedIn]);
 
   const newSigner = useCallback((type: string, args: any) => {
     switch (type.toLowerCase()) {
@@ -247,6 +277,13 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
           }}
           error={error}
           challenge={authUrl}
+        />
+        <MigrationPromptModal
+          isOpen={showMigrationModal}
+          onClose={() => setShowMigrationModal(false)}
+          onSuccess={() => {
+            loadSigner();
+          }}
         />
         {children}
       </SignerContext.Provider>

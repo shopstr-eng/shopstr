@@ -6,7 +6,7 @@ import {
   UserIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
-import { LogOut } from "@/components/utility/nostr-helper-functions";
+import { LogOut } from "@/utils/nostr/nostr-helper-functions";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 
 const SettingsPage = () => {
@@ -21,7 +21,7 @@ const SettingsPage = () => {
   const startIconClassnames = "h-6 w-6 text-light-text dark:text-dark-text";
   return (
     <div className="flex h-full flex-col bg-light-bg pt-24 dark:bg-dark-bg">
-      <div className="bg h-screen w-full lg:w-1/2 lg:pl-4">
+      <div className="bg mx-auto h-screen w-full lg:w-1/2 lg:pl-4">
         <SettingsBreadCrumbs />
         <Listbox variant="flat" aria-label="Listbox menu with sections">
           <ListboxSection
@@ -55,7 +55,7 @@ const SettingsPage = () => {
             </ListboxItem>
             <ListboxItem
               key="preferences"
-              description="Change your relays, mints, and theme"
+              description="Change your mints, relays, media servers, and more"
               classNames={listBoxClassnames}
               startContent={<Cog6ToothIcon className={startIconClassnames} />}
               onClick={() => {

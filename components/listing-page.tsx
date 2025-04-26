@@ -1,5 +1,5 @@
 import React from "react";
-import { ProductData } from "./utility/product-parser-functions";
+import { ProductData } from "@/utils/parsers/product-parser-functions";
 import CheckoutCard from "./utility-components/checkout-card";
 
 export default function ListingPage({

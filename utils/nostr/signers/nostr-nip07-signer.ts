@@ -1,4 +1,4 @@
-import { nip19, NostrEvent } from "nostr-tools";
+import { NostrEvent } from "nostr-tools";
 import { NostrEventTemplate } from "@/utils/nostr/nostr-manager";
 import {
   NostrSigner,
@@ -20,14 +20,14 @@ export class NostrNIP07Signer implements NostrSigner {
     if (!window?.nostr) throw new Error("Nostr extension not found");
     if (!window?.nostr?.nip44) {
       throw new Error(
-        "Please use a NIP-44 compatible extension like Alby or nos2x",
+        "Please use a NIP-44 compatible extension like Alby or nos2x"
       );
     }
   }
 
   public static fromJSON(
     json: { [key: string]: any },
-    challengeHandler: ChallengeHandler,
+    _challengeHandler: ChallengeHandler
   ): NostrNIP07Signer | undefined {
     if (json.type !== "nip07") return undefined;
     return new NostrNIP07Signer({});
@@ -55,6 +55,6 @@ export class NostrNIP07Signer implements NostrSigner {
   }
 
   public async close(): Promise<void> {
-    // noop
+    return;
   }
 }

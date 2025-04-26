@@ -1,4 +1,4 @@
-import { LogOut } from "@/components/utility/nostr-helper-functions";
+import { LogOut } from "@/utils/nostr/nostr-helper-functions";
 import { ProfileMapContext } from "@/utils/context/context";
 import {
   Dropdown,
@@ -7,6 +7,7 @@ import {
   DropdownMenu,
   DropdownTrigger,
   User,
+  useDisclosure,
 } from "@nextui-org/react";
 import { nip19 } from "nostr-tools";
 import { useContext, useEffect, useState } from "react";
@@ -20,8 +21,8 @@ import {
   UserIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
-import FailureModal from "../failure-modal";
-import { SignerContext } from "@/utils/context/nostr-context";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import SignInModal from "../../sign-in/SignInModal";
 
 type DropDownKeys =
   | "shop"
@@ -45,30 +46,31 @@ export const ProfileWithDropdown = ({
 }) => {
   const [pfp, setPfp] = useState("");
   const [displayName, setDisplayName] = useState("");
-  const [showFailureModal, setShowFailureModal] = useState(false);
   const [isNPubCopied, setIsNPubCopied] = useState(false);
+  const [isNip05Verified, setIsNip05Verified] = useState(false);
   const profileContext = useContext(ProfileMapContext);
   const npub = pubkey ? nip19.npubEncode(pubkey) : "";
   const router = useRouter();
   const { isLoggedIn } = useContext(SignerContext);
+  const { isOpen, onOpen, onClose } = useDisclosure();
   useEffect(() => {
     const profileMap = profileContext.profileData;
     const profile = profileMap.has(pubkey) ? profileMap.get(pubkey) : undefined;
     setDisplayName(() => {
-      let displayName =
-        profile && profile.content.name ? profile.content.name : npub;
-      displayName =
-        displayName.length > 15
-          ? displayName.slice(0, 15) + "..."
-          : displayName;
-      return displayName;
+      let name = profile && profile.content.name ? profile.content.name : npub;
+      if (profile?.content?.nip05 && profile.nip05Verified) {
+        name = profile.content.nip05;
+      }
+      name = name.length > 15 ? name.slice(0, 15) + "..." : name;
+      return name;
     });
     setPfp(
       profile && profile.content && profile.content.picture
         ? profile.content.picture
-        : `https://robohash.idena.io/${pubkey}`,
+        : `https://robohash.org/${pubkey}`
     );
-  }, [profileContext, pubkey]);
+    setIsNip05Verified(profile?.nip05Verified || false);
+  }, [profileContext, pubkey, npub]);
 
   const DropDownItems: {
     [key in DropDownKeys]: DropdownItemProps & { label: string };
@@ -79,7 +81,7 @@ export const ProfileWithDropdown = ({
       className: "text-light-text dark:text-dark-text",
       startContent: <BuildingStorefrontIcon className={"h-5 w-5"} />,
       onClick: () => {
-        let npub = nip19.npubEncode(pubkey);
+        const npub = nip19.npubEncode(pubkey);
         router.push(`/marketplace/${npub}`);
       },
       label: "Visit Seller",
@@ -100,14 +102,14 @@ export const ProfileWithDropdown = ({
       className: "text-light-text dark:text-dark-text",
       startContent: <ChatBubbleBottomCenterIcon className={"h-5 w-5"} />,
       onClick: () => {
-        if (!isLoggedIn) {
-          setShowFailureModal(true);
-          return;
+        if (isLoggedIn) {
+          router.push({
+            pathname: "/orders",
+            query: { pk: npub, isInquiry: true },
+          });
+        } else {
+          onOpen();
         }
-        router.push({
-          pathname: "/orders",
-          query: { pk: npub, isInquiry: true },
-        });
       },
       label: "Send Inquiry",
     },
@@ -157,7 +159,7 @@ export const ProfileWithDropdown = ({
         <ClipboardIcon className="h-5 w-5" />
       ),
       onClick: () => {
-        let npub = nip19.npubEncode(pubkey);
+        const npub = nip19.npubEncode(pubkey);
         navigator.clipboard.writeText(npub);
         setIsNPubCopied(true);
         setTimeout(() => {
@@ -179,7 +181,11 @@ export const ProfileWithDropdown = ({
             }}
             className={"transition-transform"}
             classNames={{
-              name: `overflow-hidden text-ellipsis whitespace-nowrap text-light-text dark:text-dark-text hidden ${nameClassname}`,
+              name: `overflow-hidden text-ellipsis whitespace-nowrap text-light-text dark:text-dark-text hidden ${nameClassname} ${
+                isNip05Verified
+                  ? "text-shopstr-purple dark:text-shopstr-yellow"
+                  : ""
+              }`,
               base: `${baseClassname}`,
             }}
             name={displayName}
@@ -205,11 +211,7 @@ export const ProfileWithDropdown = ({
           }}
         </DropdownMenu>
       </Dropdown>
-      <FailureModal
-        bodyText="You must be signed in to send a message!"
-        isOpen={showFailureModal}
-        onClose={() => setShowFailureModal(false)}
-      />
+      <SignInModal isOpen={isOpen} onClose={onClose} />
     </>
   );
 };

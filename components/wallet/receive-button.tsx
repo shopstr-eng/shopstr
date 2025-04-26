@@ -15,18 +15,21 @@ import {
   Button,
   Textarea,
 } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   getLocalStorageData,
   publishProofEvent,
-} from "../utility/nostr-helper-functions";
+} from "@/utils/nostr/nostr-helper-functions";
 import {
   CashuMint,
   CashuWallet,
   getDecodedToken,
   Proof,
 } from "@cashu/cashu-ts";
-import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
+import {
+  NostrContext,
+  SignerContext,
+} from "@/components/utility-components/nostr-context-provider";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
 
 const ReceiveButton = () => {
@@ -51,9 +54,9 @@ const ReceiveButton = () => {
     setShowReceiveModal(!showReceiveModal);
   };
 
-  const onReceiveSubmit = async (data: { [x: string]: any }) => {
-    let tokenString = data["token"];
-    await handleReceive(tokenString);
+  const onReceiveSubmit = async (data: { [x: string]: string }) => {
+    const tokenString = data["token"];
+    await handleReceive(tokenString!);
   };
 
   const handleReceive = async (tokenString: string) => {
@@ -66,15 +69,15 @@ const ReceiveButton = () => {
       const tokenMint = token.mint;
       const tokenProofs = token.proofs;
       const wallet = new CashuWallet(new CashuMint(tokenMint));
-      let proofsStates = await wallet.checkProofsStates(tokenProofs);
+      const proofsStates = await wallet.checkProofsStates(tokenProofs);
       const spentYs = new Set(
         proofsStates
           .filter((state) => state.state === "SPENT")
-          .map((state) => state.Y),
+          .map((state) => state.Y)
       );
       if (spentYs.size === 0) {
         const uniqueProofs = tokenProofs.filter(
-          (proof: Proof) => !tokens.some((token: Proof) => token.C === proof.C),
+          (proof: Proof) => !tokens.some((token: Proof) => token.C === proof.C)
         );
         if (JSON.stringify(uniqueProofs) != JSON.stringify(tokenProofs)) {
           setIsDuplicateToken(true);
@@ -90,7 +93,7 @@ const ReceiveButton = () => {
         handleToggleReceiveModal();
         const transactionAmount = tokenProofs.reduce(
           (acc, token: Proof) => acc + token.amount,
-          0,
+          0
         );
         localStorage.setItem(
           "history",
@@ -101,7 +104,7 @@ const ReceiveButton = () => {
               date: Math.floor(Date.now() / 1000),
             },
             ...history,
-          ]),
+          ])
         );
         await publishProofEvent(
           nostr!,
@@ -109,7 +112,7 @@ const ReceiveButton = () => {
           tokenMint,
           uniqueProofs,
           "in",
-          transactionAmount.toString(),
+          transactionAmount.toString()
         );
       } else {
         setIsSpent(true);
@@ -159,7 +162,7 @@ const ReceiveButton = () => {
                     required: "A Cashu token string is required.",
                     validate: (value) =>
                       /^(web\+cashu:\/\/|cashu:\/\/|cashu:|cashu[a-zA-Z])/.test(
-                        value,
+                        value
                       ) ||
                       "The token must start with 'web+cashu://', 'cashu://', 'cashu:', or 'cashu' followed by a versioning letter.",
                   }}
@@ -167,8 +170,8 @@ const ReceiveButton = () => {
                     field: { onChange, onBlur, value },
                     fieldState: { error },
                   }) => {
-                    let isErrored = error !== undefined;
-                    let errorMessage: string = error?.message
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
                       ? error.message
                       : "";
                     return (

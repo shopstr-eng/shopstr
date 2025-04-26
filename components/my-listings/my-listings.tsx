@@ -1,17 +1,19 @@
+/* eslint-disable @next/next/no-img-element */
+
 import router from "next/router";
 import React, { useContext, useState, useEffect, useRef } from "react";
 import DisplayProducts from "../display-products";
-import { SignerContext } from "@/utils/context/nostr-context";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { Button, useDisclosure } from "@nextui-org/react";
 import { Bars3Icon } from "@heroicons/react/24/outline";
-import { SHOPSTRBUTTONCLASSNAMES } from "../utility/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import SignInModal from "../sign-in/SignInModal";
 import { ShopMapContext } from "@/utils/context/context";
 import { ShopSettings } from "../../utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import SideShopNav from "../home/side-shop-nav";
 
-export const MyListingsPage = () => {
+const MyListingsPage = () => {
   const { pubkey: usersPubkey } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
 
@@ -22,7 +24,7 @@ export const MyListingsPage = () => {
   const [selectedSection, setSelectedSection] = useState("Listings");
 
   const [selectedCategories, setSelectedCategories] = useState(
-    new Set<string>([]),
+    new Set<string>([])
   );
   const [categories, setCategories] = useState([""]);
 
@@ -70,6 +72,22 @@ export const MyListingsPage = () => {
     }
   };
 
+  const handleEditShop = () => {
+    if (usersPubkey) {
+      router.push("settings/shop-settings");
+    } else {
+      onOpen();
+    }
+  };
+
+  const handleViewOrders = () => {
+    if (usersPubkey) {
+      router.push("/orders");
+    } else {
+      onOpen();
+    }
+  };
+
   const MobileMenu = () => (
     <div className="absolute left-0 top-full z-10 mt-2 w-48 rounded-md bg-light-fg shadow-lg dark:bg-dark-fg md:hidden">
       <div className="py-1">
@@ -94,11 +112,11 @@ export const MyListingsPage = () => {
         <Button
           className="w-full bg-transparent px-4 py-2 text-left text-sm text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
           onClick={() => {
-            router.push("/orders");
+            handleViewOrders();
             setIsMobileMenuOpen(false);
           }}
         >
-          Messages
+          Orders
         </Button>
       </div>
     </div>
@@ -142,9 +160,9 @@ export const MyListingsPage = () => {
                   </Button>
                   <Button
                     className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                    onClick={() => router.push("/orders")}
+                    onClick={() => handleViewOrders()}
                   >
-                    Messages
+                    Orders
                   </Button>
                 </div>
               </div>
@@ -157,7 +175,7 @@ export const MyListingsPage = () => {
                 </Button>
                 <Button
                   className={`${SHOPSTRBUTTONCLASSNAMES}`}
-                  onClick={() => router.push("settings/shop-settings")}
+                  onClick={() => handleEditShop()}
                 >
                   Edit Shop
                 </Button>
@@ -192,9 +210,9 @@ export const MyListingsPage = () => {
                   </Button>
                   <Button
                     className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                    onClick={() => router.push("/orders")}
+                    onClick={() => handleViewOrders()}
                   >
-                    Messages
+                    Orders
                   </Button>
                 </div>
               </div>
@@ -207,7 +225,7 @@ export const MyListingsPage = () => {
                 </Button>
                 <Button
                   className={`${SHOPSTRBUTTONCLASSNAMES}`}
-                  onClick={() => router.push("settings/shop-settings")}
+                  onClick={() => handleEditShop()}
                 >
                   Edit Shop
                 </Button>
@@ -241,12 +259,21 @@ export const MyListingsPage = () => {
             </div>
           )}
           {selectedSection === "About" && !shopAbout && (
-            <div className="flex w-full flex-col justify-start bg-transparent px-4 py-8 text-light-text dark:text-dark-text">
-              <p className="text-base">
-                Nothing here . . . yet!<br></br>
-                <br></br>
-                Set up your shop in settings!
-              </p>
+            <div className="mt-20 flex flex-grow items-center justify-center py-10">
+              <div className="w-full max-w-lg rounded-lg bg-light-fg p-8 text-center shadow-lg dark:bg-dark-fg">
+                <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
+                  Nothing here . . . yet!
+                </p>
+                <p className="mt-4 text-lg text-light-text dark:text-dark-text">
+                  Set up your shop in settings!
+                </p>
+                <Button
+                  className={`${SHOPSTRBUTTONCLASSNAMES} mt-6`}
+                  onClick={() => handleEditShop()}
+                >
+                  Go to Settings
+                </Button>
+              </div>
             </div>
           )}
         </div>

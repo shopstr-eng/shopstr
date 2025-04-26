@@ -1,5 +1,5 @@
 import React from "react";
-import { ShippingOptionsType } from "../utility/STATIC-VARIABLES";
+import { ShippingOptionsType } from "@/utils/STATIC-VARIABLES";
 
 type ProductMonetaryInfo = {
   shippingType?: ShippingOptionsType;
@@ -104,6 +104,7 @@ export function DisplayCostBreakdown({
       </div>
     );
   }
+  return;
 }
 
 export function DisplayCheckoutCost({
@@ -130,7 +131,7 @@ export function DisplayCheckoutCost({
 }
 
 export const calculateTotalCost = (
-  productMonetaryInfo: ProductMonetaryInfo,
+  productMonetaryInfo: ProductMonetaryInfo
 ) => {
   const { price, shippingCost } = productMonetaryInfo;
   let total = price;
@@ -145,7 +146,7 @@ export function formatWithCommas(amount: number, currency: string) {
   }
   const [integerPart, fractionalPart] = amount.toString().split(".");
   // Add commas to the integer part
-  const integerWithCommas = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const integerWithCommas = integerPart!.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   // Concatenate the fractional part if it exists
   const formattedAmount = fractionalPart
     ? `${integerWithCommas}.${fractionalPart}`

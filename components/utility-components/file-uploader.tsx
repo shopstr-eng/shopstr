@@ -1,9 +1,12 @@
 import { useContext } from "react";
 import { Button, Input } from "@nextui-org/react";
 import { useRef, useState } from "react";
-import { nostrBuildUploadImages } from "../utility/nostr-helper-functions";
+import {
+  blossomUploadImages,
+  getLocalStorageData,
+} from "@/utils/nostr/nostr-helper-functions";
 import FailureModal from "./failure-modal";
-import { SignerContext } from "@/utils/context/nostr-context";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 
 export const FileUploaderButton = ({
   disabled,
@@ -26,34 +29,122 @@ export const FileUploaderButton = ({
   // Create a reference to the hidden file input element
   const hiddenFileInput = useRef<HTMLInputElement>(null);
   const { signer, isLoggedIn } = useContext(SignerContext);
+  const { blossomServers } = getLocalStorageData();
+
+  // Function to strip metadata from an image file
+  const stripImageMetadata = async (imageFile: File): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(imageFile);
+
+      img.onload = () => {
+        // Create a canvas element
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+
+        // Draw the image without metadata
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          URL.revokeObjectURL(url);
+          reject(new Error("Failed to get canvas context"));
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0);
+
+        // Convert canvas to blob with original file type
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            URL.revokeObjectURL(url);
+            reject(new Error("Failed to create blob"));
+            return;
+          }
+
+          // Create a new File object from the blob
+          const strippedFile = new File([blob], imageFile.name, {
+            type: imageFile.type,
+            lastModified: new Date().getTime(),
+          });
+
+          URL.revokeObjectURL(url);
+          resolve(strippedFile);
+        }, imageFile.type);
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("Failed to load image"));
+      };
+
+      img.src = url;
+    });
+  };
 
   const uploadImages = async (files: FileList) => {
     try {
       const imageFiles = Array.from(files);
 
       if (imageFiles.some((imgFile) => !imgFile.type.includes("image"))) {
-        throw new Error("Only images are supported");
+        throw new Error("Only images are supported!");
       }
-      let response;
+
+      // Strip metadata from all images
+      const strippedImageFiles = await Promise.all(
+        imageFiles.map(async (imageFile) => {
+          try {
+            return await stripImageMetadata(imageFile);
+          } catch (error) {
+            return imageFile; // Fallback to original file if stripping fails
+          }
+        })
+      );
+
+      let responses: any[] = [];
 
       if (isLoggedIn) {
-        response = await nostrBuildUploadImages(
-          imageFiles,
-          async (e) => await signer!.sign(e),
+        responses = await Promise.all(
+          strippedImageFiles.map(async (imageFile) => {
+            return await blossomUploadImages(
+              imageFile,
+              signer!,
+              blossomServers && blossomServers.length > 1
+                ? blossomServers
+                : ["https://cdn.nostrcheck.me"]
+            );
+          })
         );
       }
 
-      const imageUrls = response?.map((i) => i.url);
+      const imageUrls = responses
+        .filter((response) => response && Array.isArray(response))
+        .map((response: string[]) => {
+          if (Array.isArray(response)) {
+            const urlTag = response!.find(
+              (tag) => Array.isArray(tag) && tag[0] === "url"
+            );
+            if (urlTag && urlTag.length > 1) {
+              return urlTag[1];
+            }
+          }
+          return null;
+        })
+        .filter((url) => url !== null);
+
       if (imageUrls && imageUrls.length > 0) {
         return imageUrls;
       } else {
-        setFailureText("Image upload failed to yield img URL!");
+        setFailureText(
+          "Image upload failed to yield a URL! Change your Blossom media server in settings or try again."
+        );
         setShowFailureModal(true);
         return [];
       }
     } catch (e) {
       if (e instanceof Error) {
-        setFailureText("Failed to upload image! " + e.message);
+        setFailureText(
+          "Failed to upload image! Change your Blossom media server in settings."
+        );
         setShowFailureModal(true);
       }
       return [];
@@ -77,7 +168,9 @@ export const FileUploaderButton = ({
     if (files) {
       const uploadedImages = await uploadImages(files);
       // Send all images in order to callback
-      uploadedImages.forEach((imgUrl) => imgCallbackOnUpload(imgUrl));
+      uploadedImages
+        .filter((imgUrl): imgUrl is string => imgUrl !== null)
+        .forEach((imgUrl) => imgCallbackOnUpload(imgUrl));
     }
     setLoading(false);
     if (hiddenFileInput.current) {

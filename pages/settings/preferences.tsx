@@ -17,17 +17,21 @@ import {
   RadioGroup,
 } from "@nextui-org/react";
 import { Relay } from "nostr-tools";
-import { SHOPSTRBUTTONCLASSNAMES } from "../../components/utility/STATIC-VARIABLES";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
+  createBlossomServerEvent,
   createNostrRelayEvent,
   getLocalStorageData,
   publishWalletEvent,
-} from "../../components/utility/nostr-helper-functions";
+} from "@/utils/nostr/nostr-helper-functions";
 import { useTheme } from "next-themes";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import ShopstrSlider from "../../components/utility-components/shopstr-slider";
 import FailureModal from "../../components/utility-components/failure-modal";
-import { NostrContext, SignerContext } from "@/utils/context/nostr-context";
+import {
+  NostrContext,
+  SignerContext,
+} from "@/components/utility-components/nostr-context-provider";
 
 const PreferencesPage = () => {
   const { nostr } = useContext(NostrContext);
@@ -39,6 +43,11 @@ const PreferencesPage = () => {
   const [currentRelayType, setCurrentRelayType] = useState<
     "all" | "read" | "write" | ""
   >("");
+
+  const [blossomServers, setBlossomServers] = useState(Array<string>(0));
+  const [blossomServersAreChanged, setBlossomServersAreChanged] =
+    useState(false);
+  const [showBlossomServerModal, setShowBlossomServerModal] = useState(false);
 
   const [mints, setMints] = useState(Array<string>(0));
   const [showMintModal, setShowMintModal] = useState(false);
@@ -55,6 +64,7 @@ const PreferencesPage = () => {
       setRelays(getLocalStorageData().relays);
       setReadRelays(getLocalStorageData().readRelays);
       setWriteRelays(getLocalStorageData().writeRelays);
+      setBlossomServers(getLocalStorageData().blossomServers);
     }
     setIsLoaded(true);
   }, [signer]);
@@ -65,6 +75,12 @@ const PreferencesPage = () => {
     }
   }, [mints]);
 
+  useEffect(() => {
+    if (blossomServers.length != 0) {
+      localStorage.setItem("blossomServers", JSON.stringify(blossomServers));
+    }
+  }, [blossomServers]);
+
   const { theme, setTheme } = useTheme();
 
   const {
@@ -73,9 +89,9 @@ const PreferencesPage = () => {
     reset: mintReset,
   } = useForm();
 
-  const onMintSubmit = async (data: { [x: string]: any }) => {
-    let mint = data["mint"];
-    await replaceMint(mint);
+  const onMintSubmit = async (data: { [x: string]: string }) => {
+    const mint = data["mint"];
+    await replaceMint(mint!);
   };
 
   const handleToggleMintModal = () => {
@@ -97,13 +113,13 @@ const PreferencesPage = () => {
         handleToggleMintModal();
       } else {
         setFailureText(
-          `Failed to add mint! Could not fetch keys from ${newMint}/keys.`,
+          `Failed to add mint! Could not fetch keys from ${newMint}/keys.`
         );
         setShowFailureModal(true);
       }
     } catch {
       setFailureText(
-        `Failed to add mint! Could not fetch keys from ${newMint}/keys.`,
+        `Failed to add mint! Could not fetch keys from ${newMint}/keys.`
       );
       setShowFailureModal(true);
     }
@@ -132,9 +148,15 @@ const PreferencesPage = () => {
     reset: relayReset,
   } = useForm();
 
-  const onRelaySubmit = async (data: { [x: string]: any }) => {
-    let relay = data["relay"];
-    await addRelay(relay, currentRelayType);
+  const {
+    handleSubmit: handleBlossomSubmit,
+    control: blossomControl,
+    reset: blossomReset,
+  } = useForm();
+
+  const onRelaySubmit = async (data: { [x: string]: string }) => {
+    const relay = data["relay"];
+    await addRelay(relay!, currentRelayType);
   };
 
   const handleToggleRelayModal = (type: "all" | "read" | "write" | "") => {
@@ -145,29 +167,31 @@ const PreferencesPage = () => {
 
   const addRelay = async (
     newRelay: string,
-    type: "all" | "read" | "write" | "",
+    type: "all" | "read" | "write" | ""
   ) => {
     try {
       const relayTest = await Relay.connect(newRelay);
-      if (type === "read") {
-        setReadRelays([...readRelays, newRelay]);
-      } else if (type === "write") {
-        setWriteRelays([...writeRelays, newRelay]);
-      } else if (type === "all") {
-        setRelays([...relays, newRelay]);
+      if (!relays.includes(newRelay)) {
+        if (type === "read") {
+          setReadRelays([...readRelays, newRelay]);
+        } else if (type === "write") {
+          setWriteRelays([...writeRelays, newRelay]);
+        } else if (type === "all") {
+          setRelays([...relays, newRelay]);
+        }
       }
       relayTest.close();
       handleToggleRelayModal(type);
       setRelaysAreChanged(true);
     } catch {
-      setFailureText(`Relay ${newRelay} was unable to connect!`);
+      setFailureText(`${newRelay} was unable to connect!`);
       setShowFailureModal(true);
     }
   };
 
   const deleteRelay = (
     relayToDelete: string,
-    type: "all" | "read" | "write" | "",
+    type: "all" | "read" | "write" | ""
   ) => {
     if (type === "read") {
       setReadRelays(readRelays.filter((relay) => relay !== relayToDelete));
@@ -184,10 +208,60 @@ const PreferencesPage = () => {
     setRelaysAreChanged(false);
   };
 
+  const handleToggleBlossomServerModal = () => {
+    blossomReset();
+    setShowBlossomServerModal(!showBlossomServerModal);
+  };
+
+  const onBlossomSubmit = async (data: { [x: string]: string }) => {
+    const server = data["server"];
+    await addBlossomServer(server!);
+  };
+
+  const addBlossomServer = async (newServer: string) => {
+    try {
+      const url = new URL("/upload", newServer);
+      const checkResponse = await fetch(url);
+      if (checkResponse.status === 404) {
+        throw new Error(
+          `Failed to add Blossom server! ${newServer} was unable to connect.`
+        );
+      }
+
+      if (!blossomServers.includes(newServer)) {
+        setBlossomServers([newServer, ...blossomServers]);
+      } else {
+        setBlossomServers([
+          newServer,
+          ...blossomServers.filter((server) => server !== newServer),
+        ]);
+      }
+      handleToggleBlossomServerModal();
+      setBlossomServersAreChanged(true);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      setFailureText(errorMessage);
+      setShowFailureModal(true);
+    }
+  };
+
+  const deleteBlossomServer = (serverToDelete: string) => {
+    setBlossomServers(
+      blossomServers.filter((server) => server !== serverToDelete)
+    );
+    setBlossomServersAreChanged(true);
+  };
+
+  const publishBlossomServers = () => {
+    createBlossomServerEvent(nostr!, signer!, pubkey!);
+    setBlossomServersAreChanged(false);
+  };
+
   return (
     <>
       <div className="flex min-h-screen flex-col bg-light-bg pb-6 pt-24 dark:bg-dark-bg">
-        <div className="px-4">
+        <div className="mx-auto px-4">
           <SettingsBreadCrumbs />
           <span className="my-4 flex  text-2xl font-bold text-light-text dark:text-dark-text">
             Mint
@@ -294,8 +368,8 @@ const PreferencesPage = () => {
                         field: { onChange, onBlur, value },
                         fieldState: { error },
                       }) => {
-                        let isErrored = error !== undefined;
-                        let errorMessage: string = error?.message
+                        const isErrored = error !== undefined;
+                        const errorMessage: string = error?.message
                           ? error.message
                           : "";
                         return (
@@ -423,8 +497,8 @@ const PreferencesPage = () => {
                       field: { onChange, onBlur, value },
                       fieldState: { error },
                     }) => {
-                      let isErrored = error !== undefined;
-                      let errorMessage: string = error?.message
+                      const isErrored = error !== undefined;
+                      const errorMessage: string = error?.message
                         ? error.message
                         : "";
                       return (
@@ -553,8 +627,8 @@ const PreferencesPage = () => {
                       field: { onChange, onBlur, value },
                       fieldState: { error },
                     }) => {
-                      let isErrored = error !== undefined;
-                      let errorMessage: string = error?.message
+                      const isErrored = error !== undefined;
+                      const errorMessage: string = error?.message
                         ? error.message
                         : "";
                       return (
@@ -683,8 +757,8 @@ const PreferencesPage = () => {
                       field: { onChange, onBlur, value },
                       fieldState: { error },
                     }) => {
-                      let isErrored = error !== undefined;
-                      let errorMessage: string = error?.message
+                      const isErrored = error !== undefined;
+                      const errorMessage: string = error?.message
                         ? error.message
                         : "";
                       return (
@@ -722,6 +796,145 @@ const PreferencesPage = () => {
 
                   <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
                     Add Relay
+                  </Button>
+                </ModalFooter>
+              </form>
+            </ModalContent>
+          </Modal>
+
+          <span className="mt-4 flex text-2xl font-bold text-light-text dark:text-dark-text">
+            Blossom Media Servers
+          </span>
+
+          {blossomServers.length === 0 && (
+            <div className="mt-4 flex items-center justify-center">
+              <p className="break-words text-center text-xl dark:text-dark-text">
+                No servers added . . .
+              </p>
+            </div>
+          )}
+          <div className="mt-4 max-h-96 overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
+            {blossomServers.map((server, index) => (
+              <div
+                key={server}
+                className={`mb-2 flex items-center justify-between rounded-md border-2 ${
+                  index === 0
+                    ? "relative border-purple-500 dark:border-yellow-500"
+                    : "border-light-fg dark:border-dark-fg"
+                } px-3 py-2`}
+              >
+                <div className="max-w-xsm break-all text-light-text dark:text-dark-text ">
+                  {server}
+                  {index === 0 && (
+                    <span className="bg-light-bg px-3 text-xs text-gray-500 dark:bg-dark-bg">
+                      Primary Server
+                    </span>
+                  )}
+                </div>
+                {blossomServers.length > 1 && (
+                  <MinusCircleIcon
+                    onClick={() => deleteBlossomServer(server)}
+                    className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+            <Button
+              className={SHOPSTRBUTTONCLASSNAMES}
+              onClick={() => handleToggleBlossomServerModal()}
+            >
+              Add Server
+            </Button>
+            {blossomServersAreChanged && (
+              <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+                <Button
+                  className={SHOPSTRBUTTONCLASSNAMES}
+                  onClick={() => publishBlossomServers()}
+                >
+                  Save
+                </Button>
+              </div>
+            )}
+          </div>
+          <Modal
+            backdrop="blur"
+            isOpen={showBlossomServerModal}
+            onClose={() => handleToggleBlossomServerModal()}
+            classNames={{
+              body: "py-6",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
+            }}
+            scrollBehavior={"outside"}
+            size="2xl"
+          >
+            <ModalContent>
+              <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+                Add Server
+              </ModalHeader>
+              <form onSubmit={handleBlossomSubmit(onBlossomSubmit)}>
+                <ModalBody>
+                  <Controller
+                    name="server"
+                    control={blossomControl}
+                    rules={{
+                      required: "A Blossom server URL is required.",
+                      maxLength: {
+                        value: 500,
+                        message: "This input exceed maxLength of 500.",
+                      },
+                      validate: (value) =>
+                        /^(https:\/\/|http:\/\/)/.test(value) ||
+                        "Invalid Blossom server URL, must start with https:// or http://.",
+                    }}
+                    render={({
+                      field: { onChange, onBlur, value },
+                      fieldState: { error },
+                    }) => {
+                      const isErrored = error !== undefined;
+                      const errorMessage: string = error?.message
+                        ? error.message
+                        : "";
+                      return (
+                        <Textarea
+                          className="text-light-text dark:text-dark-text"
+                          variant="bordered"
+                          fullWidth={true}
+                          placeholder="https://..."
+                          isInvalid={isErrored}
+                          errorMessage={errorMessage}
+                          // controller props
+                          onChange={onChange} // send value to hook form
+                          onBlur={onBlur} // notify when input is touched/blur
+                          value={value}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleBlossomSubmit(onBlossomSubmit)();
+                            }
+                          }}
+                        />
+                      );
+                    }}
+                  />
+                </ModalBody>
+
+                <ModalFooter>
+                  <Button
+                    color="danger"
+                    variant="light"
+                    onClick={() => handleToggleBlossomServerModal()}
+                  >
+                    Cancel
+                  </Button>
+
+                  <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                    Add Server
                   </Button>
                 </ModalFooter>
               </form>

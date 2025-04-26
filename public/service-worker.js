@@ -1,134 +1,120 @@
 const CACHE_NAME = "shopstr-cache-v1";
 
-// Resources to pre-cache
-const PRECACHE_RESOURCES = [
+const STATIC_ASSETS = [
   "/",
+  "/shopstr.ico",
   "/manifest.json",
   "/shopstr-144x144.png",
   "/shopstr-512x512.png",
   "/shopstr-2000x2000.png",
 ];
 
+// Install event - cache static assets
 self.addEventListener("install", (event) => {
-  console.log("Service Worker: Installing");
   event.waitUntil(
     caches
       .open(CACHE_NAME)
       .then((cache) => {
-        console.log("Service Worker: Caching Files");
-        return cache.addAll(PRECACHE_RESOURCES);
+        return cache.addAll(STATIC_ASSETS);
       })
-      .then(() => self.skipWaiting()),
+      .then(() => self.skipWaiting())
   );
 });
 
+// Activate event - clean up old caches
 self.addEventListener("activate", (event) => {
-  console.log("Service Worker: Activated");
-  // Clean up old caches
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cache) => {
           if (cache !== CACHE_NAME) {
-            console.log("Service Worker: Clearing Old Cache");
             return caches.delete(cache);
           }
-        }),
+        })
       );
-    }),
+    })
   );
+  return self.clients.claim();
 });
 
-// Enhanced fetch handler with offline support
+// Intercept fetch requests
 self.addEventListener("fetch", (event) => {
+  // Skip _next resources to avoid caching development resources
+  if (event.request.url.includes("/_next/")) {
+    return;
+  }
+
+  // Cache strategy - network first, fallback to cache
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      // Return cached response if found
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-
-      // Otherwise, fetch from network
-      return fetch(event.request)
-        .then((response) => {
-          // Check if we received a valid response
-          if (
-            !response ||
-            response.status !== 200 ||
-            response.type !== "basic"
-          ) {
-            return response;
-          }
-
-          // Clone the response as it can only be consumed once
-          const responseToCache = response.clone();
-
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
-
+    fetch(event.request)
+      .then((response) => {
+        // Check if we received a valid response
+        if (!response || response.status !== 200 || response.type !== "basic") {
           return response;
-        })
-        .catch(() => {
-          // Return fallback for HTML pages
-          if (event.request.mode === "navigate") {
-            return caches.match("/");
-          }
+        }
+
+        // Clone the response
+        const responseToCache = response.clone();
+
+        // Open cache and store response
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, responseToCache);
         });
-    }),
+
+        return response;
+      })
+      .catch(() => {
+        // If network fails, try to serve from cache
+        return caches.match(event.request);
+      })
   );
 });
 
 // Push notification handler
-self.addEventListener("push", (event) => {
+self.addEventListener("push", function (event) {
   if (!event.data) return;
 
   try {
     const data = JSON.parse(event.data.text());
     event.waitUntil(
-      self.registration.showNotification(data.title || "Shopstr Notification", {
+      self.registration.showNotification(data.title, {
         body: data.message,
         icon: "/shopstr-144x144.png",
-        badge: "/shopstr-144x144.png",
-        vibrate: [100, 50, 100],
         data: {
-          url: data.url || "/",
+          url: data.url ?? "/",
         },
-      }),
+      })
     );
   } catch (error) {
-    console.error("Error showing notification:", error);
+    console.error("Error processing push notification:", error);
   }
 });
 
 // Notification click handler
-self.addEventListener("notificationclick", (event) => {
+self.addEventListener("notificationclick", function (event) {
   event.notification.close();
 
   event.waitUntil(
     clients
-      .matchAll({
-        type: "window",
-        includeUncontrolled: true,
-      })
-      .then((clientList) => {
-        // If a window exists, focus it; otherwise open new window
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then(function (clientList) {
         if (clientList.length > 0) {
-          const client = clientList[0];
-          const url = event.notification.data?.url || "/";
-          return client.navigate(url).then((client) => client.focus());
+          let client = clientList[0];
+          for (let i = 0; i < clientList.length; i++) {
+            if (clientList[i].focused) {
+              client = clientList[i];
+            }
+          }
+          if (event.notification.data?.url) {
+            return client.navigate(event.notification.data.url);
+          }
+          return client.focus();
         }
-        return clients.openWindow(event.notification.data?.url || "/");
-      }),
-  );
-});
 
-// Periodic sync for background updates
-self.addEventListener("periodicsync", (event) => {
-  if (event.tag === "update-content") {
-    event.waitUntil(
-      // Implement your background sync logic here
-      Promise.resolve(),
-    );
-  }
+        if (event.notification.data?.url) {
+          return clients.openWindow(event.notification.data.url);
+        }
+        return clients.openWindow("/");
+      })
+  );
 });

@@ -12,6 +12,7 @@ import {
   ChallengeHandler,
   NostrSigner,
 } from "@/utils/nostr/signers/nostr-signer";
+import * as nip49 from "nostr-tools/nip49";
 
 export type PassphraseResponse = {
   passphrase: string;
@@ -27,26 +28,32 @@ export class NostrNSecSigner implements NostrSigner {
   private rememberedPassphrase?: string;
   private inputPassphrase?: string;
   private inputPassphraseClearer?: any;
+  private isNip49Format: boolean = false;
 
   public static getEncryptedNSEC(
     privKey: Uint8Array | string,
-    passphrase: string,
+    passphrase: string
   ): {
     encryptedPrivKey: string;
     passphrase: string;
     pubkey: string;
   } {
-    if (typeof privKey !== "string" || !privKey.startsWith("nsec")) {
-      if (typeof privKey === "string") privKey = hexToBytes(privKey);
-      privKey = nip19.nsecEncode(privKey);
+    let secretKey: Uint8Array;
+    if (typeof privKey === "string") {
+      if (privKey.startsWith("nsec")) {
+        secretKey = nip19.decode(privKey).data as Uint8Array;
+      } else {
+        secretKey = hexToBytes(privKey);
+      }
+    } else {
+      secretKey = privKey;
     }
-    const pubkey = getPublicKey(
-      nip19.decode(privKey as string).data as Uint8Array,
-    );
 
-    privKey = CryptoJS.AES.encrypt(privKey as string, passphrase).toString();
+    const pubkey = getPublicKey(secretKey);
+    const encryptedKey = nip49.encrypt(secretKey, passphrase);
+
     return {
-      encryptedPrivKey: privKey as string,
+      encryptedPrivKey: encryptedKey,
       passphrase,
       pubkey,
     };
@@ -62,19 +69,20 @@ export class NostrNSecSigner implements NostrSigner {
       passphrase?: string;
       pubkey?: string;
     },
-    challengeHandler: ChallengeHandler,
+    challengeHandler: ChallengeHandler
   ) {
     this.encryptedPrivKey = encryptedPrivKey;
     this.challengeHandler = challengeHandler;
     this.pubkey = pubkey;
     this.passphrase = passphrase;
+    this.isNip49Format = encryptedPrivKey.startsWith("ncryptsec");
   }
 
   static fromJSON(
     json: {
       [key: string]: any;
     },
-    challengeHandler: ChallengeHandler,
+    challengeHandler: ChallengeHandler
   ): NostrNSecSigner | undefined {
     if (json.type !== "nsec" || !json.encryptedPrivKey) return undefined;
     return new NostrNSecSigner(
@@ -83,7 +91,7 @@ export class NostrNSecSigner implements NostrSigner {
         passphrase: json.passphrase,
         pubkey: json.pubkey,
       },
-      challengeHandler,
+      challengeHandler
     );
   }
 
@@ -100,8 +108,8 @@ export class NostrNSecSigner implements NostrSigner {
   }
 
   private async getPassphrase(
-    abort: () => {},
-    error?: Error,
+    abort: () => void,
+    error?: Error
   ): Promise<[string, boolean]> {
     let passphrase: string | undefined = this.passphrase;
     let remind: boolean = false;
@@ -121,7 +129,7 @@ export class NostrNSecSigner implements NostrSigner {
           return abort();
         },
         abortController.signal,
-        error,
+        error
       );
       ({ res: passphrase, remind } = res);
     }
@@ -137,18 +145,24 @@ export class NostrNSecSigner implements NostrSigner {
       try {
         const [passphrase, remember] = await this.getPassphrase(
           () => (aborted = true),
-          error,
+          error
         );
 
-        const privkey = CryptoJS.AES.decrypt(
-          this.encryptedPrivKey,
-          passphrase,
-        ).toString(CryptoJS.enc.Utf8);
-        if (!privkey) throw new Error("Invalid passphrase");
+        let privKeyBytes: Uint8Array;
 
-        const privKeyBytes: Uint8Array = privkey.startsWith("nsec")
-          ? (nip19.decode(privkey).data as Uint8Array)
-          : hexToBytes(privkey);
+        if (this.isNip49Format) {
+          privKeyBytes = await nip49.decrypt(this.encryptedPrivKey, passphrase);
+        } else {
+          const privkey = CryptoJS.AES.decrypt(
+            this.encryptedPrivKey,
+            passphrase
+          ).toString(CryptoJS.enc.Utf8);
+          if (!privkey) throw new Error("Invalid passphrase");
+
+          privKeyBytes = privkey.startsWith("nsec")
+            ? (nip19.decode(privkey).data as Uint8Array)
+            : hexToBytes(privkey);
+        }
 
         if (remember) {
           this.rememberedPassphrase = passphrase;
@@ -191,7 +205,7 @@ export class NostrNSecSigner implements NostrSigner {
   public async encrypt(pubkey: string, plainText: string): Promise<string> {
     const conversationKey = nip44.getConversationKey(
       await this._getPrivKey(),
-      pubkey,
+      pubkey
     );
     return nip44.encrypt(plainText, conversationKey);
   }
@@ -199,7 +213,7 @@ export class NostrNSecSigner implements NostrSigner {
   public async decrypt(pubkey: string, cipherText: string): Promise<string> {
     const conversationKey = nip44.getConversationKey(
       await this._getPrivKey(),
-      pubkey,
+      pubkey
     );
     const decrypted = nip44.decrypt(cipherText, conversationKey);
     return decrypted;
