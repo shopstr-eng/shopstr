@@ -1,0 +1,81 @@
+name: ESLint & Prettier Check
+
+on:
+  pull_request_target:
+    branches: [ main ]  
+
+permissions:
+  contents: read         
+  pull-requests: write   
+  issues: write         
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Use Node.js 20 & cache deps
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        id: eslint
+        run: |
+          npx eslint "pages/**/*.{js,ts,tsx}" "components/**/*.{js,ts,tsx}" --format json > eslint-report.json || true
+          count=$(jq '[.[].messages[]] | length' eslint-report.json)
+          echo "eslint_errors=$count" >> $GITHUB_OUTPUT
+
+      - name: Run Prettier
+        id: prettier
+        run: |
+          if npx prettier --check .; then
+            echo "prettier_ok=true" >> $GITHUB_OUTPUT
+          else
+            echo "prettier_ok=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Comment on PR with lint results
+        if: steps.eslint.outputs.eslint_errors != '0' || steps.prettier.outputs.prettier_ok == 'false'
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const errs = parseInt(process.env.ESLINT_ERRORS, 10);
+            let body = '## 🚨 Linting & Formatting Report\n\n';
+            if (errs > 0) {
+              body += `**ESLint** found **${errs}** issue(s). Run \`npx eslint --fix\` locally.\n\n`;
+              const report = JSON.parse(fs.readFileSync('eslint-report.json', 'utf8'));
+              const errors = [];
+              report.forEach(r => r.messages.forEach(m => {
+                const file = r.filePath.replace(process.cwd() + '/', '');
+                errors.push({ file, line: m.line, column: m.column, message: m.message, ruleId: m.ruleId });
+              }));
+              errors.slice(0, 3).forEach(e => {
+                body += `- [${e.file}:${e.line}:${e.column}] ${e.message} (**${e.ruleId}**)\n`;
+              });
+              if (errs > 3) body += `\n…and ${errs - 3} more.\n\n`;
+            }
+            if (process.env.PRETTIER_OK === 'false') {
+              body += '**Prettier** found formatting issues. Run `npx prettier --write .` locally.\n\n';
+            }
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body + '🔍 Please fix these before merging.'
+            });
+        env:
+          ESLINT_ERRORS: ${{ steps.eslint.outputs.eslint_errors }}
+          PRETTIER_OK: ${{ steps.prettier.outputs.prettier_ok }}
