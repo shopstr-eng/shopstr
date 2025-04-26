@@ -11,7 +11,7 @@ import {
 import { FaceFrownIcon, FaceSmileIcon } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import { nip19 } from "nostr-tools";
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useState, useRef } from "react";
 import {
   ReviewsContext,
   ShopMapContext,
@@ -71,6 +71,8 @@ function MarketplacePage({
 
   const { pubkey: userPubkey, isLoggedIn: loggedIn } =
     useContext(SignerContext);
+
+  const searchBarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const npub = router.query.npub;
@@ -213,7 +215,6 @@ function MarketplacePage({
                         <div className="mb-1 flex flex-wrap gap-2">
                           {reviewData.map(([_, value, category], index) => {
                             if (category === undefined) {
-                              // Don't render the comment here; we'll show it later.
                               return null;
                             } else if (category === "thumb") {
                               return (
@@ -229,7 +230,6 @@ function MarketplacePage({
                                 </Chip>
                               );
                             } else {
-                              // Render chips for other categories
                               return (
                                 <Chip
                                   key={index}
@@ -254,7 +254,7 @@ function MarketplacePage({
                                 key={index}
                                 className="italic text-light-text dark:text-dark-text"
                               >
-                                &ldquo;{value}&rdquo;
+                                “{value}”
                               </p>
                             );
                           }
@@ -277,8 +277,7 @@ function MarketplacePage({
       <div className="flex max-w-[100%] flex-col bg-light-bg px-3 pb-2 dark:bg-dark-bg">
         {shopBannerURL != "" && focusedPubkey != "" && !isFetchingShop ? (
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            {/* Search input - appears on top for small screens */}
-            <div className="w-full sm:order-2 sm:w-auto">
+            <div ref={searchBarRef} className="w-full sm:order-2 sm:w-auto">
               <Input
                 className="text-light-text dark:text-dark-text"
                 placeholder="Listing title, naddr1..., npub..."
@@ -292,7 +291,6 @@ function MarketplacePage({
               />
             </div>
 
-            {/* Navigation buttons */}
             <div className="flex gap-1 sm:order-1">
               <Button
                 className="bg-transparent text-lg text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text sm:text-xl"
@@ -331,7 +329,7 @@ function MarketplacePage({
           </div>
         ) : (
           <div className="flex flex-col gap-2 pb-3 sm:flex-row">
-            <div className="w-full">
+            <div ref={searchBarRef} className="w-full">
               <Input
                 className="mt-2 text-light-text dark:text-dark-text"
                 isClearable
@@ -407,6 +405,7 @@ function MarketplacePage({
             wotFilter={wotFilter}
             setCategories={setCategories}
             onFilteredProductsChange={handleFilteredProductsChange}
+            searchBarRef={searchBarRef}
           />
         )}
         {selectedSection === "about" && shopAbout && (
@@ -460,7 +459,7 @@ function MarketplacePage({
                     No reviews . . . yet!
                   </p>
                   <p className="mt-4 text-lg text-light-text dark:text-dark-text">
-                    Seems there aren&apos;t any reviews for this shop yet.
+                  Seems there aren&apos;t any reviews for this shop yet.
                   </p>
                 </div>
               </div>

@@ -10,7 +10,7 @@ import {
 import ProductCard from "./utility-components/product-card";
 import DisplayProductModal from "./display-product-modal";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import { Button } from "@nextui-org/react";
+import { Button, Pagination } from "@nextui-org/react";
 import ShopstrSpinner from "./utility-components/shopstr-spinner";
 import { useRouter } from "next/router";
 import parseTags, {
@@ -30,6 +30,7 @@ const DisplayProducts = ({
   isMyListings,
   setCategories,
   onFilteredProductsChange,
+  searchBarRef,
 }: {
   focusedPubkey?: string;
   selectedCategories: Set<string>;
@@ -39,14 +40,20 @@ const DisplayProducts = ({
   isMyListings?: boolean;
   setCategories?: (categories: string[]) => void;
   onFilteredProductsChange?: (products: ProductData[]) => void;
+  searchBarRef?: React.RefObject<HTMLDivElement>;
 }) => {
   const [productEvents, setProductEvents] = useState<ProductData[]>([]);
   const [isProductsLoading, setIsProductLoading] = useState(true);
   const productEventContext = useContext(ProductContext);
   const profileMapContext = useContext(ProfileMapContext);
   const followsContext = useContext(FollowsContext);
-  const [focusedProduct, setFocusedProduct] = useState<ProductData>(); // product being viewed in modal
+  const [focusedProduct, setFocusedProduct] = useState<ProductData>();
   const [showModal, setShowModal] = useState(false);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 40;
+  const [filteredProducts, setFilteredProducts] = useState<ProductData[]>([]);
+  const [totalPages, setTotalPages] = useState(1);
 
   const router = useRouter();
 
@@ -61,7 +68,7 @@ const DisplayProducts = ({
         ...productEventContext.productEvents.sort(
           (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
         ),
-      ]; // sorts most recently created to least recently created
+      ];
       const parsedProductData: ProductData[] = [];
       sortedProductEvents.forEach((event) => {
         if (wotFilter) {
@@ -97,8 +104,27 @@ const DisplayProducts = ({
   useEffect(() => {
     if (!productEvents) return;
 
-    const filteredProducts = productEvents.filter(productSatisfiesAllFilters);
-    onFilteredProductsChange?.(filteredProducts);
+    const filtered = productEvents.filter((product) => {
+      if (focusedPubkey && product.pubkey !== focusedPubkey) return false;
+      if (!productSatisfiesAllFilters(product)) return false;
+      if (!product.currency) return false;
+      if (product.images.length === 0) return false;
+      if (product.contentWarning) return false;
+      if (
+        product.pubkey === "3da2082b7aa5b76a8f0c134deab3f7848c3b5e3a3079c65947d88422b69c1755" &&
+        userPubkey !== product.pubkey
+      ) {
+        return false;
+      }
+      return true;
+    });
+
+    setFilteredProducts(filtered);
+    setTotalPages(Math.max(1, Math.ceil(filtered.length / itemsPerPage)));
+
+    setCurrentPage(1);
+
+    onFilteredProductsChange?.(filtered);
   }, [
     productEvents,
     selectedSearch,
@@ -106,6 +132,29 @@ const DisplayProducts = ({
     selectedCategories,
     focusedPubkey,
   ]);
+
+  // Scroll effect only on page change
+  useEffect(() => {
+    // Skip initial render (currentPage === 1)
+    if (currentPage === 1) return;
+
+    const timer = requestAnimationFrame(() => {
+      if (searchBarRef?.current) {
+        searchBarRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+        window.scrollBy(0, -80); // Adjust for fixed header
+      } else {
+        window.scrollTo({
+          top: 0,
+          behavior: "smooth",
+        });
+      }
+    });
+
+    return () => cancelAnimationFrame(timer);
+  }, [currentPage, searchBarRef]);
 
   const handleDelete = async (productId: string) => {
     try {
@@ -157,10 +206,9 @@ const DisplayProducts = ({
   };
 
   const productSatisfiesSearchFilter = (productData: ProductData) => {
-    if (!selectedSearch) return true; // nothing in search bar
-    if (!productData.title) return false; // we don't want to display it if product has no title
+    if (!selectedSearch) return true;
+    if (!productData.title) return false;
 
-    // Handle naddr search
     if (selectedSearch.includes("naddr")) {
       try {
         const parsedNaddr = nip19.decode(selectedSearch);
@@ -176,34 +224,29 @@ const DisplayProducts = ({
       }
     }
 
-    // Handle npub search
     if (selectedSearch.includes("npub")) {
       try {
         const parsedNpub = nip19.decode(selectedSearch);
         if (parsedNpub.type === "npub") {
           return parsedNpub.data === productData.pubkey;
         }
-        return false; // Return false if npub parsing succeeded but type isn't "npub"
+        return false;
       } catch (_) {
         return false;
       }
     }
 
-    // Handle regular text search - search in both title and summary
     try {
       const re = new RegExp(selectedSearch, "gi");
 
-      // Check title match
       const titleMatch = productData.title.match(re);
       if (titleMatch && titleMatch.length > 0) return true;
 
-      // Check summary match if summary exists
       if (productData.summary) {
         const summaryMatch = productData.summary.match(re);
         if (summaryMatch && summaryMatch.length > 0) return true;
       }
 
-      // Check price match - if search term is numeric, check if it matches the price
       const numericSearch = parseFloat(selectedSearch);
       if (!isNaN(numericSearch) && productData.price === numericSearch) {
         return true;
@@ -223,47 +266,63 @@ const DisplayProducts = ({
     );
   };
 
-  const displayProductCard = (productData: ProductData, index: number) => {
-    if (focusedPubkey && productData.pubkey !== focusedPubkey) return;
-    if (!productSatisfiesAllFilters(productData)) return;
-    if (!productData.currency) return;
-    if (productData.images.length === 0) return;
-    if (productData.contentWarning) return;
+  const getCurrentPageProducts = () => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
 
-    if (
-      productData.pubkey ===
-        "3da2082b7aa5b76a8f0c134deab3f7848c3b5e3a3079c65947d88422b69c1755" &&
-      userPubkey !== productData.pubkey
-    ) {
-      return; // temp fix, add adult categories or separate from global later
-    }
+    return filteredProducts.slice(startIndex, endIndex);
+  };
 
-    return (
-      <ProductCard
-        key={productData.id + "-" + index}
-        productData={productData}
-        onProductClick={onProductClick}
-      />
-    );
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
   };
 
   return (
     <>
       <div className="w-full md:pl-4">
-        {/* DISPLAYS PRODUCT LISTINGS HERE */}
-        {productEvents.length != 0 ? (
-          <div className="grid max-w-full grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-x-hidden">
-            {productEvents.map((productData: ProductData, index) => {
-              return displayProductCard(productData, index);
-            })}
-          </div>
+        {filteredProducts.length > 0 ? (
+          <>
+            <div className="grid max-w-full grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-x-hidden">
+              {getCurrentPageProducts().map((productData: ProductData, index) => (
+                <ProductCard
+                  key={productData.id + "-" + index}
+                  productData={productData}
+                  onProductClick={onProductClick}
+                />
+              ))}
+            </div>
+
+            {totalPages > 1 && (
+              <div className="mt-8 flex justify-center">
+                <Pagination
+                  total={totalPages}
+                  page={currentPage}
+                  onChange={handlePageChange}
+                  showControls
+                  classNames={{
+                    cursor: "bg-purple-500",
+                  }}
+                />
+              </div>
+            )}
+
+            <div className="mt-4 text-center text-sm text-light-text dark:text-dark-text">
+              Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
+              {Math.min(
+                filteredProducts.length,
+                currentPage * itemsPerPage
+              )}{" "}
+              of {filteredProducts.length} products
+            </div>
+          </>
         ) : (
           wotFilter &&
           !isProductsLoading && (
             <p className="mt-4 break-words text-center text-2xl text-light-text dark:text-dark-text">
               No products found...
-              <br></br>
-              <br></br>Try turning of the trust filter!
+              <br />
+              <br />
+              Try turning off the trust filter!
             </p>
           )
         )}
@@ -309,3 +368,4 @@ const DisplayProducts = ({
 };
 
 export default DisplayProducts;
+
