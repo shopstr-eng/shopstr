@@ -459,7 +459,7 @@ function MarketplacePage({
                     No reviews . . . yet!
                   </p>
                   <p className="mt-4 text-lg text-light-text dark:text-dark-text">
-                  Seems there aren&apos;t any reviews for this shop yet.
+                    Seems there aren&apos;t any reviews for this shop yet.
                   </p>
                 </div>
               </div>

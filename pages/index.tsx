@@ -365,7 +365,7 @@ export default function Landing() {
       <footer className="w-full bg-light-fg px-4 py-8 dark:bg-dark-fg">
         <div className="container mx-auto">
           <div className="mb-6 flex flex-col items-center justify-between md:flex-row">
-            <div className="flex items-center gap-8 mb-4 md:mb-0">
+            <div className="mb-4 flex items-center gap-8 md:mb-0">
               <button
                 onClick={() => router.push("/faq")}
                 className="flex items-center gap-1 text-light-text transition-colors hover:text-shopstr-purple dark:text-dark-text dark:hover:text-shopstr-yellow"

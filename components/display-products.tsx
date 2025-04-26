@@ -111,7 +111,8 @@ const DisplayProducts = ({
       if (product.images.length === 0) return false;
       if (product.contentWarning) return false;
       if (
-        product.pubkey === "3da2082b7aa5b76a8f0c134deab3f7848c3b5e3a3079c65947d88422b69c1755" &&
+        product.pubkey ===
+          "3da2082b7aa5b76a8f0c134deab3f7848c3b5e3a3079c65947d88422b69c1755" &&
         userPubkey !== product.pubkey
       ) {
         return false;
@@ -283,17 +284,19 @@ const DisplayProducts = ({
         {filteredProducts.length > 0 ? (
           <>
             <div className="grid max-w-full grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-x-hidden">
-              {getCurrentPageProducts().map((productData: ProductData, index) => (
-                <ProductCard
-                  key={productData.id + "-" + index}
-                  productData={productData}
-                  onProductClick={onProductClick}
-                />
-              ))}
+              {getCurrentPageProducts().map(
+                (productData: ProductData, index) => (
+                  <ProductCard
+                    key={productData.id + "-" + index}
+                    productData={productData}
+                    onProductClick={onProductClick}
+                  />
+                )
+              )}
             </div>
 
             {totalPages > 1 && (
-              <div className="mt-8 flex justify-center">
+              <div className="mt-4 flex justify-center">
                 <Pagination
                   total={totalPages}
                   page={currentPage}
@@ -306,13 +309,10 @@ const DisplayProducts = ({
               </div>
             )}
 
-            <div className="mt-4 text-center text-sm text-light-text dark:text-dark-text">
+            <div className="mt-2 text-center text-xs text-light-text dark:text-dark-text">
               Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
-              {Math.min(
-                filteredProducts.length,
-                currentPage * itemsPerPage
-              )}{" "}
-              of {filteredProducts.length} products
+              {Math.min(filteredProducts.length, currentPage * itemsPerPage)} of{" "}
+              {filteredProducts.length} products
             </div>
           </>
         ) : (
@@ -368,4 +368,3 @@ const DisplayProducts = ({
 };
 
 export default DisplayProducts;
-
