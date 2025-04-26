@@ -1,93 +1,25 @@
 import { useState, useContext, useEffect } from 'react';
 import {
-  AppBar,
-  Toolbar,
+  Navbar,
+  NavbarBrand,
+  NavbarContent,
   Button,
-  Grid,
   Card,
-  CardMedia,
-  CardContent,
-  Typography,
-  IconButton,
-  Link,
-  Container,
-  Box,
-  useTheme,
-  useMediaQuery,
-  Divider,
-  Chip,
-  Paper
-} from '@mui/material';
-import {
-  DarkMode,
-  LightMode,
-  GitHub,
-  Twitter,
-  ArrowForward,
-  Security,
-  CurrencyBitcoin,
-  Lock,
-  ShoppingCart,
-  AccountCircle,
-  Storefront,
-  Payment,
-  Forum,
-  Speed,
-  Public,
-  CloudOff,
-  PeopleAlt,
-  Devices,
-  Explore,
-  LocalOffer,
-  ArrowRightAlt
-} from '@mui/icons-material';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
+  CardBody,
+  Image as NextImage
+} from '@nextui-org/react';
 import { useRouter } from 'next/router';
-import Image from 'next/image';
-import { motion, useScroll, useTransform } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { ProductContext } from '../utils/context/context';
-import ProductCard from '@/components/utility-components/product-card';
-import parseTags, { ProductData } from '@/components/utility/product-parser-functions';
 import { SignerContext } from '@/utils/context/nostr-context';
 import { nip19 } from 'nostr-tools';
+import parseTags from '@/components/utility/product-parser-functions';
 
-const getDesignTokens = (mode: 'dark' | 'light') => ({
-  palette: {
-    mode,
-    primary: {
-      main: '#9c27b0',
-    },
-    secondary: {
-      main: '#ffeb3b',
-    },
-    background: {
-      default: mode === 'dark' ? '#000000' : '#ffffff',
-      paper: mode === 'dark' ? '#121212' : '#f5f5f5',
-    },
-    text: {
-      primary: mode === 'dark' ? '#ffffff' : '#000000',
-      secondary: mode === 'dark' ? '#b3b3b3' : '#616161',
-    },
-  },
-  typography: {
-    fontFamily: 'Inter, sans-serif',
-    allVariants: {
-      color: mode === 'dark' ? '#ffffff' : '#000000',
-    },
-  },
-});
-
-export default function Landing() {
+const Landing = () => {
   const router = useRouter();
   const productEventContext = useContext(ProductContext);
   const signerContext = useContext(SignerContext);
-  const [darkMode, setDarkMode] = useState(true);
-  const [parsedProducts, setParsedProducts] = useState<ProductData[]>([]);
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-
-  // Dark Mode Toggle
-  const shopstrTheme = createTheme(getDesignTokens(darkMode ? 'dark' : 'light'));
+  const [parsedProducts, setParsedProducts] = useState([]);
 
   useEffect(() => {
     if (router.pathname === "/" && signerContext.isLoggedIn) {
@@ -96,772 +28,279 @@ export default function Landing() {
   }, [router.pathname, signerContext]);
 
   useEffect(() => {
-    const parsedProductsArray: ProductData[] = [];
-    productEventContext.productEvents.forEach((product: any) => {
-      const parsedProduct = parseTags(product) as ProductData;
-      if (parsedProduct.images?.length > 0 && parsedProduct.currency && !parsedProduct.contentWarning) {
+    const parsedProductsArray = [];
+    productEventContext.productEvents.forEach((product) => {
+      const parsedProduct = parseTags(product);
+      if (parsedProduct.images?.length > 0 && parsedProduct.currency) {
         parsedProductsArray.push(parsedProduct);
       }
     });
     setParsedProducts(parsedProductsArray);
   }, [productEventContext.productEvents]);
 
-  // External resource links
-  const externalResources = [
-    {
-      name: "Nostr",
-      description: "A decentralized social protocol",
-      icon: <Public />,
-      link: "https://njump.me/",
-      color: "#8e24aa"
-    },
-    {
-      name: "Lightning",
-      description: "Fast Bitcoin payments",
-      icon: <CurrencyBitcoin />,
-      link: "https://lightning.network/",
-      color: "#fbc02d"
-    },
-    {
-      name: "Cashu",
-      description: "Private ecash for Bitcoin",
-      icon: <Payment />,
-      link: "https://cashu.space/",
-      color: "#43a047"
-    },
-    {
-      name: "Relays",
-      description: "Infrastructure for Nostr",
-      icon: <CloudOff />,
-      link: "https://nostr.how/en/relays",
-      color: "#0288d1"
-    }
-  ];
-
   return (
-    <ThemeProvider theme={shopstrTheme}>
-      <Box sx={{ bgcolor: 'background.default', minHeight: '100vh' }}>
-        {/* Header - Made sticky and responsive */}
-        <AppBar position="sticky" color="transparent" elevation={0}>
-          <Toolbar sx={{ justifyContent: 'space-between', px: { xs: 2, md: 6 } }}>
-            <motion.div whileHover={{ scale: 1.05 }}>
-              <Image
-                src="/shopstr-2000x2000.png"
-                alt="Shopstr"
-                width={100}
-                height={100}
-                style={{ borderRadius: '8px' }}
-              />
-            </motion.div>
-            <IconButton
-              onClick={() => setDarkMode(!darkMode)}
-              sx={{ color: 'text.primary' }}
-            >
-              {darkMode ? <LightMode /> : <DarkMode />}
-            </IconButton>
-          </Toolbar>
-        </AppBar>
-
-        {/* Hero Section - Fully responsive */}
-        <Container maxWidth="lg" sx={{ py: 8, textAlign: 'center' }}>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-          >
-            <Typography variant="h1" sx={{
-              mb: 2,
-              color: 'primary.main',
-              fontSize: { xs: '3rem', sm: '4rem', md: '5rem' },
-              fontWeight: 900
-            }}>
-              Shop Freely.
-            </Typography>
-            <Typography variant="h5" sx={{ mb: 4, color: 'text.primary' }}>
-              A permissionless marketplace powered by Nostr and Bitcoin.
-            </Typography>
-            <motion.div whileHover={{ scale: 1.05 }}>
-              <Button
-                variant="contained"
-                size="large"
-                endIcon={<ShoppingCart />}
-                onClick={() => router.push('/marketplace')}
-                sx={{
-                  px: 6,
-                  py: 2,
-                  bgcolor: 'primary.main',
-                  '&:hover': { bgcolor: 'primary.dark' }
-                }}
-              >
-                Start Shopping
-              </Button>
-            </motion.div>
+    <div className="min-h-screen bg-gray-50">
+      {/* Navigation */}
+      <Navbar maxWidth="xl" className="bg-white shadow-sm">
+        <NavbarBrand>
+          <motion.div whileHover={{ scale: 1.05 }}>
+            <NextImage
+              src="/shopstr-2000x2000.png"
+              alt="Shopstr"
+              width={80}
+              height={80}
+              className="rounded-lg"
+            />
           </motion.div>
-        </Container>
+        </NavbarBrand>
 
-        {/* Product Showcase */}
-        <Container maxWidth="xl" sx={{ py: 8 }}>
-          <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            transition={{ duration: 0.8 }}
+        <NavbarContent justify="end">
+          <Button
+            auto
+            color="primary"
+            onClick={() => router.push('/marketplace')}
+            className="font-semibold"
           >
-            <Typography variant="h3" align="center" gutterBottom sx={{
-              color: 'text.primary',
-              mb: 6,
-              position: 'relative',
-              '&:after': {
-                content: '""',
-                display: 'block',
-                width: '60px',
-                height: '4px',
-                bgcolor: 'primary.main',
-                mx: 'auto',
-                mt: 2
-              }
-            }}>
-              Latest Products
-            </Typography>
+            Get Started
+          </Button>
+        </NavbarContent>
+      </Navbar>
 
-            <Box sx={{
-              position: 'relative',
-              overflow: 'hidden',
-              width: '100%',
-              height: { xs: '350px', md: '400px' },
-              '&::before, &::after': {
-                content: '""',
-                position: 'absolute',
-                top: 0,
-                width: '80px',
-                height: '100%',
-                zIndex: 2,
-                pointerEvents: 'none',
-              },
-              '&::before': {
-                left: 0,
-                background: 'linear-gradient(90deg, rgba(18,18,18,1) 0%, rgba(18,18,18,0) 100%)',
-                display: darkMode ? 'block' : 'none',
-              },
-              '&::after': {
-                right: 0,
-                background: 'linear-gradient(270deg, rgba(18,18,18,1) 0%, rgba(18,18,18,0) 100%)',
-                display: darkMode ? 'block' : 'none',
-              },
-            }}>
+      {/* Hero Section */}
+      <section className="max-w-7xl mx-auto px-4 py-16 text-center">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+        >
+          <h1 className="text-5xl font-bold text-purple-600 mb-6">
+            Decentralized Marketplace
+          </h1>
+          <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
+            Trade freely using Bitcoin and Nostr. No intermediaries, no censorship.
+          </p>
+          <motion.div whileHover={{ scale: 1.05 }}>
+            <Button
+              color="primary"
+              size="lg"
+              onClick={() => router.push('/marketplace')}
+              className="px-12 py-6 font-semibold"
+            >
+              Start Shopping
+            </Button>
+          </motion.div>
+        </motion.div>
+      </section>
+
+      {/* Product Carousel */}
+      <section className="bg-white py-16">
+        <div className="max-w-7xl mx-auto px-4">
+          <h2 className="text-3xl font-bold text-center mb-12">
+            Latest Listings
+          </h2>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+            {parsedProducts.slice(0, 8).map((product, index) => (
               <motion.div
-                style={{
-                  display: 'flex',
-                  gap: theme.spacing(3),
-                }}
-                animate={{
-                  x: [`0px`, `-${Math.min(parsedProducts.length * 320, 2000)}px`], // Ensure both are strings
-                }}
-                transition={{
-                  duration: 30,
-                  repeat: Infinity,
-                  repeatType: 'reverse',
-                  ease: 'linear',
-                }}
+                key={index}
+                whileHover={{ y: -8 }}
+                className="h-full"
               >
-
-                {parsedProducts.slice(0, 10).map((product, index) => (
-                  <Box
-                    key={`${product.id}-${index}`}
-                    sx={{
-                      minWidth: { xs: '280px', md: '320px' },
-                      height: { xs: '320px', md: '380px' }
-                    }}
-                  >
-                    <motion.div
-                      whileHover={{
-                        y: -8,
-                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
-                      }}
-                      transition={{ type: 'spring', stiffness: 300 }}
-                    >
-                      <Card
-                        sx={{
-                          height: '100%',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          borderRadius: 2,
-                          cursor: 'pointer',
-                          overflow: 'hidden',
-                          bgcolor: 'background.paper',
-                          transition: '0.3s'
-                        }}
+                <Card isHoverable className="h-full p-4 border border-gray-200">
+                  <NextImage
+                    src={product.images?.[0] || '/placeholder-product.jpg'}
+                    alt={product.title}
+                    width={300}
+                    height={200}
+                    className="w-full h-48 object-cover rounded-lg"
+                  />
+                  <CardBody className="p-4">
+                    <h3 className="font-bold truncate mb-2">
+                      {product.title || 'Untitled Product'}
+                    </h3>
+                    <div className="flex justify-between items-center mt-4">
+                      <span className="text-purple-600 font-bold">
+                        {product.price} {product.currency}
+                      </span>
+                      <Button
+                        auto
+                        color="primary"
+                        size="sm"
                         onClick={() =>
                           router.push(
                             `/listing/${nip19.naddrEncode({
-                              identifier: product.d as string,
+                              identifier: product.d,
                               pubkey: product.pubkey,
                               kind: 30402,
                             })}`
                           )
                         }
                       >
-                        <CardMedia
-                          component="img"
-                          height="180"
-                          image={product.images?.[0] || '/placeholder-product.jpg'}
-                          alt={product.title || 'Product'}
-                          sx={{ objectFit: 'cover' }}
-                        />
-                        <CardContent sx={{ flexGrow: 1, p: 2 }}>
-                          <Typography gutterBottom variant="h6" component="div" noWrap sx={{ fontWeight: 600 }}>
-                            {product.title || 'Untitled Product'}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary" sx={{
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
-                            mb: 2
-                          }}>
-                            {/* {product.description || 'No description available'} */}
-                          </Typography>
-                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Typography variant="h6" color="primary" sx={{ fontWeight: 700 }}>
-                              {product.price} {product.currency}
-                            </Typography>
-                            <IconButton
-                              size="small"
-                              sx={{
-                                color: 'primary.main',
-                                bgcolor: 'primary.main',
-                                // color: 'white',
-                                '&:hover': { bgcolor: 'primary.dark' }
-                              }}
-                            >
-                              <ArrowForward fontSize="small" />
-                            </IconButton>
-                          </Box>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  </Box>
-                ))}
+                        View
+                      </Button>
+                    </div>
+                  </CardBody>
+                </Card>
               </motion.div>
-            </Box>
+            ))}
+          </div>
+        </div>
+      </section>
 
-            <Box sx={{ textAlign: 'center', mt: 4 }}>
-              <motion.div whileHover={{ scale: 1.05 }}>
-                <Button
-                  variant="outlined"
-                  size="large"
-                  endIcon={<ArrowForward />}
-                  onClick={() => router.push('/marketplace')}
-                  sx={{
-                    px: 4,
-                    py: 1.5,
-                    borderColor: 'primary.main',
-                    color: 'primary.main',
-                    '&:hover': { borderColor: 'primary.dark', color: 'primary.dark' }
-                  }}
-                >
-                  View All Products
-                </Button>
+      {/* How It Works Section */}
+      <section className="py-16 bg-white">
+        <div className="max-w-7xl mx-auto px-4">
+          <h2 className="text-4xl font-bold text-center mb-12 text-purple-600">
+            How It Works
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8">
+            {[
+              {
+                icon: '🔑',
+                title: 'Create Profile',
+                description: 'Generate your Nostr keys or use existing ones'
+              },
+              {
+                icon: '🛍️',
+                title: 'List Products',
+                description: 'Add items with photos and descriptions'
+              },
+              {
+                icon: '⚡',
+                title: 'Accept Payments',
+                description: 'Receive Bitcoin via Lightning Network'
+              },
+              {
+                icon: '📦',
+                title: 'Manage Orders',
+                description: 'Handle shipping and communication'
+              }
+            ].map((step, index) => (
+              <motion.div 
+                key={index}
+                whileHover={{ scale: 1.05 }}
+                className="text-center p-6 bg-white rounded-xl shadow-lg hover:shadow-xl transition-all"
+              >
+                <div className="text-5xl mb-4">{step.icon}</div>
+                <h3 className="text-xl font-bold mb-2 text-gray-800">{step.title}</h3>
+                <p className="text-gray-600">{step.description}</p>
               </motion.div>
-            </Box>
-          </motion.div>
-        </Container>
+            ))}
+          </div>
+        </div>
+      </section>
 
-        {/* ENHANCED: Why Shopstr? Section */}
-        <Box sx={{
-          py: 10,
-          background: darkMode
-            ? 'radial-gradient(circle at 50% 50%, #240046 0%, #121212 100%)'
-            : 'radial-gradient(circle at 50% 50%, #f3e5f5 0%, #fff 100%)',
-          borderTop: '1px solid',
-          borderBottom: '1px solid',
-          borderColor: darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
-          position: 'relative',
-          overflow: 'hidden'
-        }}>
-          <Container maxWidth="lg">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-            >
-              <Typography
-                variant="h2"
-                align="center"
-                gutterBottom
-                sx={{
-                  color: 'text.primary',
-                  mb: 3,
-                  fontWeight: 800,
-                  background: darkMode
-                    ? 'linear-gradient(90deg, #9c27b0 0%, #5e35b1 100%)'
-                    : 'linear-gradient(90deg, #9c27b0 0%, #673ab7 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  textShadow: darkMode ? '0 0 20px rgba(156, 39, 176, 0.3)' : 'none'
-                }}
+      {/* Features Section */}
+      <section className="py-16 bg-purple-50">
+        <div className="max-w-7xl mx-auto px-4">
+          <h2 className="text-4xl font-bold text-center mb-16">
+            Why Choose Shopstr?
+          </h2>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+            {[
+              {
+                title: 'Bitcoin Payments',
+                content: 'Secure transactions using Lightning Network',
+                icon: '₿',
+              },
+              {
+                title: 'No Middlemen',
+                content: 'Direct peer-to-peer trading',
+                icon: '🤝',
+              },
+              {
+                title: 'Global Access',
+                content: 'Available anywhere in the world',
+                icon: '🌍',
+              },
+              {
+                title: 'Private',
+                content: 'No personal data required',
+                icon: '🔒',
+              },
+            ].map((feature, index) => (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                className="h-full"
               >
-                Why Choose Shopstr?
-              </Typography>
-              <Typography
-                variant="h6"
-                align="center"
-                paragraph
-                sx={{
-                  maxWidth: '800px',
-                  mx: 'auto',
-                  mb: 8,
-                  color: darkMode ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.7)',
-                  px: { xs: 2, md: 0 }
-                }}
-              >
-                Shopstr combines the best of decentralized technologies to create a censorship-resistant,
-                private, and fee-minimal marketplace where anyone can transact freely without intermediaries.
-              </Typography>
-            </motion.div>
+                <Card className="p-6 h-full bg-white shadow-sm">
+                  <div className="text-4xl mb-4">{feature.icon}</div>
+                  <h3 className="text-xl font-bold mb-2">{feature.title}</h3>
+                  <p className="text-gray-600">{feature.content}</p>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-            <Grid container spacing={4}>
-              {[
-                {
-                  title: 'Permissionless Commerce',
-                  content: 'Built on Nostr to buy and sell without restrictions or central authority. Your keys, your shop.',
-                  icon: <Public fontSize="large" />,
-                  color: '#0288d1',
-                  features: ['Cross-border commerce', 'Language independent', 'Accessible worldwide']
-                },
-                {
-                  title: 'Bitcoin Native',
-                  content: 'Secure transactions using Lightning and Cashu. Fast, low-fee payments.',
-                  icon: <CurrencyBitcoin fontSize="large" />,
-                  color: '#fbc02d',
-                  features: ['Lightning Network fast', 'Minimal fees', 'Self-custodial']
-                },
-                {
-                  title: 'Privacy First',
-                  content: 'No purchases or sales are viewable by any third party. Your data is encrypted and stored on your selected relays.',
-                  icon: <Lock fontSize="large" />,
-                  color: '#43a047',
-                  features: ['E2E encrypted messages', 'No KYC required', 'Privacy by design']
-                },
-                {
-                  title: 'True Decentralization',
-                  content: 'No central authority controls your data or listings. Shopstr leverages Nostr, a decentralized protocol that ensures your store remains accessible even if individual relays go offline.',
-                  icon: <CloudOff fontSize="large" />,
-                  color: '#8e24aa',
-                  features: ['Censorship-resistant', 'Self-sovereign identity', 'No single point of failure']
-                },
-              ].map((feature, index) => (
-                <Grid item xs={12} md={6} component="div" key={feature.title}>
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: index * 0.1 }}
-                    whileHover={{ y: -5 }}
-                  >
-                    <Paper
-                      elevation={6}
-                      sx={{
-                        p: 4,
-                        height: '100%',
-                        borderRadius: 4,
-                        background: darkMode
-                          ? 'rgba(18, 18, 18, 0.7)'
-                          : 'rgba(255, 255, 255, 0.9)',
-                        backdropFilter: 'blur(10px)',
-                        border: '1px solid',
-                        borderColor: darkMode
-                          ? 'rgba(255, 255, 255, 0.1)'
-                          : 'rgba(0, 0, 0, 0.05)',
-                        transition: 'all 0.3s ease',
-                        position: 'relative',
-                        overflow: 'hidden',
-                        '&::before': {
-                          content: '""',
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          width: '6px',
-                          height: '100%',
-                          backgroundColor: feature.color,
-                        }
-                      }}
-                    >
-                      <Box sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        mb: 2,
-                        gap: 2
-                      }}>
-                        <Box sx={{
-                          p: 1.5,
-                          borderRadius: '12px',
-                          bgcolor: `${feature.color}20`,
-                          color: feature.color,
-                          display: 'flex'
-                        }}>
-                          {feature.icon}
-                        </Box>
-                        <Typography
-                          variant="h5"
-                          gutterBottom
-                          sx={{
-                            fontWeight: 700,
-                            color: 'text.primary',
-                            mb: 0
-                          }}
-                        >
-                          {feature.title}
-                        </Typography>
-                      </Box>
-                      <Typography
-                        variant="body1"
-                        paragraph
-                        sx={{
-                          color: 'text.secondary',
-                          mb: 3
-                        }}
-                      >
-                        {feature.content}
-                      </Typography>
-                      <Box sx={{
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        gap: 1,
-                        mb: 3
-                      }}>
-                        {feature.features.map(tag => (
-                          <Chip
-                            key={tag}
-                            label={tag}
-                            size="small"
-                            sx={{
-                              bgcolor: `${feature.color}15`,
-                              color: feature.color,
-                              borderRadius: '4px',
-                              fontWeight: 500
-                            }}
-                          />
-                        ))}
-                      </Box>
-                    </Paper>
-                  </motion.div>
-                </Grid>
-              ))}
-            </Grid>
+      {/* CTA Section */}
+      <section className="bg-purple-600 text-white py-20">
+        <div className="max-w-7xl mx-auto px-4 text-center">
+          <h2 className="text-4xl font-bold mb-6">Start Trading Today</h2>
+          <p className="text-xl mb-8 opacity-90">
+            Join the decentralized marketplace revolution
+          </p>
+          <Button
+            color="primary"
+            size="lg"
+            className="bg-white text-purple-600 font-bold px-12 py-6"
+            onClick={() => router.push('/marketplace')}
+          >
+            Get Started
+          </Button>
+        </div>
+      </section>
 
-            {/* Technology Resources */}
-            <Box sx={{ mt: 8, textAlign: 'center' }}>
-              <Typography
-                variant="h4"
-                gutterBottom
-                sx={{
-                  fontWeight: 700,
-                  mb: 4,
-                  color: 'text.primary'
-                }}
-              >
-                Powered By Open Technologies
-              </Typography>
-
-              <Box sx={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                justifyContent: 'center',
-                gap: 2,
-                mx: 'auto',
-                maxWidth: '900px'
-              }}>
-                {externalResources.map((resource) => (
-                  <motion.div
-                    key={resource.name}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <Button
-                      variant="contained"
-                      startIcon={resource.icon}
-                      endIcon={<ArrowRightAlt />}
-                      onClick={() => window.open(resource.link, '_blank')}
-                      sx={{
-                        px: 3,
-                        py: 1.5,
-                        bgcolor: resource.color,
-                        color: '#fff',
-                        fontWeight: 600,
-                        borderRadius: '10px',
-                        textTransform: 'none',
-                        '&:hover': {
-                          bgcolor: resource.color,
-                          filter: 'brightness(110%)',
-                          boxShadow: `0 8px 16px -2px ${resource.color}50`
-                        }
-                      }}
-                    >
-                      {resource.name}
-                      <Typography
-                        component="span"
-                        sx={{
-                          ml: 1,
-                          opacity: 0.8,
-                          fontSize: '0.75rem',
-                          display: { xs: 'none', sm: 'inline' }
-                        }}
-                      >
-                        {resource.description}
-                      </Typography>
-                    </Button>
-                  </motion.div>
-                ))}
-              </Box>
-            </Box>
-          </Container>
-
-          {/* Decorative Elements */}
-          {darkMode && (
-            <>
-              <Box sx={{
-                position: 'absolute',
-                width: '300px',
-                height: '300px',
-                borderRadius: '50%',
-                background: 'radial-gradient(circle, rgba(156,39,176,0.15) 0%, rgba(0,0,0,0) 70%)',
-                top: '5%',
-                left: '10%',
-                zIndex: 0
-              }} />
-              <Box sx={{
-                position: 'absolute',
-                width: '400px',
-                height: '400px',
-                borderRadius: '50%',
-                background: 'radial-gradient(circle, rgba(66,165,245,0.1) 0%, rgba(0,0,0,0) 70%)',
-                bottom: '5%',
-                right: '10%',
-                zIndex: 0
-              }} />
-            </>
-          )}
-        </Box>
-
-        {/* How It Works */}
-        <Box sx={{
-          py: 10,
-          bgcolor: darkMode ? '#121212' : '#f5f5f5',
-          borderTop: '1px solid',
-          borderBottom: '1px solid',
-          borderColor: darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
-        }}>
-          <Container maxWidth="lg">
-            <Typography
-              variant="h3"
-              align="center"
-              sx={{
-                color: 'text.primary',
-                mb: 6,
-                fontWeight: 600
-              }}
-            >
-              How It Works
-            </Typography>
-
-            <Grid container spacing={6} justifyContent="center">
-              {[
-                {
-                  step: "1",
-                  title: "Generate new Nostr keys or sign in with an existing pair",
-                  imageSrc: "/sign-in-step-dark.png"
-                },
-                {
-                  step: "2",
-                  title: "Set up your profile",
-                  imageSrc: "/profile-step-dark.png"
-                },
-                {
-                  step: "3",
-                  title: "List your products",
-                  imageSrc: "/listing-step-dark.png"
-                },
-                {
-                  step: "4",
-                  title: "Start buying and selling",
-                  imageSrc: "/payment-step-dark.png"
-                }
-              ].map((item) => (
-                <Grid item xs={12} sm={6} md={3} key={item.step}>
-                  <Box sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    textAlign: 'center',
-                  }}>
-                    <Typography
-                      variant="h2"
-                      sx={{
-                        mb: 2,
-                        fontWeight: 'bold',
-                        color: 'primary.main',
-                        fontSize: { xs: '3rem', md: '3.5rem' }
-                      }}
-                    >
-                      {item.step}
-                    </Typography>
-
-                    <Typography
-                      variant="body1"
-                      sx={{
-                        mb: 4,
-                        px: 2,
-                        color: 'text.primary',
-                        fontSize: { xs: '0.9rem', md: '1rem' },
-                        height: { xs: 'auto', sm: '60px' },
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
-                    >
-                      {item.title}
-                    </Typography>
-
-                    <Box
-                      sx={{
-                        border: '1px solid',
-                        borderColor: 'rgba(255,255,255,0.1)',
-                        borderRadius: 2,
-                        overflow: 'hidden',
-                        width: '100%',
-                        maxWidth: '280px',
-                        height: '230px',
-                        position: 'relative',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-                        '& img': {
-                          borderRadius: '8px'
-                        }
-                      }}
-                    >
-                      <Image
-                        src={item.imageSrc}
-                        alt={`Step ${item.step}`}
-                        layout="fill"
-                        objectFit="cover"
-                      />
-                    </Box>
-                  </Box>
-                </Grid>
-              ))}
-            </Grid>
-          </Container>
-        </Box>
-
-        {/* ENHANCED: CTA Section */}
-        <Box sx={{
-          position: 'relative',
-          py: { xs: 10, md: 14 },
-          overflow: 'hidden',
-          background: darkMode
-            ? 'linear-gradient(135deg, #6a1b9a 0%, #4a148c 100%)'
-            : 'linear-gradient(135deg, #9c27b0 0%, #6a1b9a 100%)',
-          color: 'white',
-        }}>
-          
-          {/* Animated shape */}
-          <Box sx={{
-            position: 'absolute',
-            width: '400px',
-            height: '400px',
-            borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%)',
-            top: '-10%',
-            right: '-5%',
-            zIndex: 1
-          }} />
-
-          {/* Another animated shape */}
-          <Box sx={{
-            position: 'absolute',
-            width: '300px',
-            height: '300px',
-            borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%)',
-            bottom: '-10%',
-            left: '-5%',
-            zIndex: 1
-          }} />
-
-          <Container maxWidth="lg" sx={{ position: 'relative', zIndex: 2 }}>
-            <Grid container spacing={4} alignItems="center">
-              <Grid item xs={12} md={7}>
-                <motion.div
-                  initial={{ opacity: 0, x: -20 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.6 }}
-                >
-                  <Typography
-                    variant="h2"
-                    gutterBottom
-                    sx={{
-                      fontWeight: 900,
-                      fontSize: { xs: '2.5rem', sm: '3rem', md: '3.5rem' },
-                      textShadow: '0 2px 10px rgba(0,0,0,0.2)',
-                      background: 'linear-gradient(90deg, #ffffff 0%, #e1bee7 100%)',
-                      WebkitBackgroundClip: 'text',
-                      WebkitTextFillColor: 'transparent',
-                    }}
-                  >
-                    Ready to be a part of the free market?
-                  </Typography>
-
-                  <Typography
-                    variant="h6"
-                    sx={{
-                      mb: 4,
-                      opacity: 0.9,
-                      maxWidth: '600px',
-                      lineHeight: 1.6,
-                      fontSize: { xs: '1rem', md: '1.15rem' },
-                    }}
-                  >
-                    Shop from anywhere in the world on a permissionless marketplace built on Nostr and Bitcoin. No fees, no restrictions, just pure freedom to buy and sell.
-                  </Typography>
-
-                  <motion.div whileHover={{ scale: 1.05 }}>
-                    <Button
-                      variant="contained"
-                      size="large"
-                      endIcon={<ArrowForward />}
-                      onClick={() => router.push('/marketplace')}
-                      sx={{
-                        px: 6,
-                        py: 2,
-                        bgcolor: 'white',
-                        color: 'primary.main',
-                        fontWeight: 700,
-                        '&:hover': { bgcolor: '#f3e5f5' },
-                      }}
-                    >
-                      Join Now
-                    </Button>
-                  </motion.div>
-                </motion.div>
-              </Grid>
-            </Grid>
-          </Container>
-        </Box>
-
-        {/* Footer */}
-        <Box
-          sx={{
-            py: 4,
-            bgcolor: darkMode ? '#121212' : '#f5f5f5',
-            textAlign: 'center',
-            borderTop: '1px solid',
-            borderColor: darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
-          }}
-        >
-          <Typography variant="body2" color="text.secondary">
-            © {new Date().getFullYear()} Shopstr. All rights reserved.
-          </Typography>
-        </Box>
-      </Box>
-    </ThemeProvider>
+      {/* Footer */}
+      <footer className="bg-gray-900 text-gray-300 py-12">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+            <div>
+              <div className="flex items-center mb-4">
+                <NextImage
+                  src="/shopstr-2000x2000.png"
+                  alt="Shopstr"
+                  width={48}
+                  height={48}
+                  className="rounded-lg"
+                />
+                <span className="ml-3 text-xl font-bold text-white">Shopstr</span>
+              </div>
+              <p className="text-sm">
+                Decentralized marketplace powered by Nostr & Bitcoin
+              </p>
+            </div>
+            
+            <div className="space-y-2">
+              <h4 className="text-white font-semibold mb-4">Resources</h4>
+              <a href="#" className="block text-sm hover:text-purple-400">Documentation</a>
+              <a href="#" className="block text-sm hover:text-purple-400">Blog</a>
+              <a href="#" className="block text-sm hover:text-purple-400">GitHub</a>
+            </div>
+            
+            <div className="space-y-2">
+              <h4 className="text-white font-semibold mb-4">Legal</h4>
+              <a href="#" className="block text-sm hover:text-purple-400">Privacy Policy</a>
+              <a href="#" className="block text-sm hover:text-purple-400">Terms of Service</a>
+            </div>
+          </div>
+                    
+          <div className="text-center text-sm text-gray-500">
+            <p>
+              © {new Date().getFullYear()} Shopstr. Open source under MIT License
+            </p>
+            <p className="mt-2">
+              Built with ⚡ by the decentralized community
+            </p>
+          </div>
+        </div>
+      </footer>
+    </div>
   );
-}
+};
+
+export default Landing;
