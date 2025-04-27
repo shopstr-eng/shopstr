@@ -65,8 +65,17 @@ const MessageFeed = ({ isInquiry = false }) => {
         </div>
       </div>
 
-      <div className="flex h-[90vh] w-full flex-col bg-light-bg pt-4 dark:bg-dark-bg">
-        {showSpinner ? null : framer.selectedTab!.children}
+      <div className="flex h-[90vh] w-full flex-col bg-light-bg pt-4">
+        {showSpinner ? (
+          <div className="flex flex-1 items-center justify-center bg-blue-100 rounded-2xl min-h-[300px]">
+            <svg className="animate-spin h-8 w-8 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+            </svg>
+          </div>
+        ) : (
+          framer.selectedTab!.children
+        )}
       </div>
     </div>
   );
