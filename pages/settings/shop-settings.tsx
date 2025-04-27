@@ -241,7 +241,6 @@ const ShopSettingsPage = () => {
                     isDisabled={isUploadingShopSettings}
                     isLoading={isUploadingShopSettings}
                     size="lg"
-                    shadow="sm"
                     radius="md"
                   >
                     {isUploadingShopSettings ? "Saving..." : "Save Shop Settings"}
