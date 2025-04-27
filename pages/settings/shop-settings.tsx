@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useContext, useMemo } from "react";
 import { useForm, Controller } from "react-hook-form";
-import { Button, Textarea, Input, Image } from "@nextui-org/react";
+import { Button, Textarea, Input, Image, Card, Tooltip } from "@nextui-org/react";
 import { ArrowUpOnSquareIcon } from "@heroicons/react/24/outline";
 
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
@@ -82,7 +82,7 @@ const ShopSettingsPage = () => {
   };
 
   const buttonClassName = useMemo(() => {
-    return `w-full mb-10 ${SHOPSTRBUTTONCLASSNAMES}`;
+    return `w-full ${SHOPSTRBUTTONCLASSNAMES} hover:opacity-90 transition-opacity duration-200`;
   }, []);
 
   return (
@@ -91,49 +91,57 @@ const ShopSettingsPage = () => {
         <div className="mx-auto h-full w-full px-4 lg:w-1/2">
           <SettingsBreadCrumbs />
           {isFetchingShop ? (
-            <ShopstrSpinner />
+            <div className="flex h-64 items-center justify-center">
+              <ShopstrSpinner />
+            </div>
           ) : (
-            <>
-              <div className="mb-20 h-40 rounded-lg bg-light-fg dark:bg-dark-fg">
-                <div className="relative flex h-40 items-center justify-center rounded-lg bg-shopstr-purple-light dark:bg-dark-fg">
+            <Card className="p-6 shadow-md bg-light-fg dark:bg-dark-fg rounded-xl transition-all duration-300">
+              <h1 className="text-2xl font-bold mb-6 text-center text-light-text dark:text-dark-text">Shop Settings</h1>
+              
+              <div className="mb-10 overflow-hidden rounded-lg bg-gradient-to-r from-shopstr-purple-light to-shopstr-purple dark:from-shopstr-yellow-light dark:to-shopstr-yellow">
+                <div className="relative flex h-48 items-center justify-center rounded-lg bg-light-fg bg-opacity-10 dark:bg-dark-fg dark:bg-opacity-10">
                   {watchBanner && (
                     <Image
                       alt={"Shop banner image"}
                       src={watchBanner}
-                      className="h-40 w-full rounded-lg object-cover object-fill"
+                      className="h-48 w-full rounded-lg object-cover object-center transition-transform duration-500 hover:scale-105"
                     />
                   )}
-                  <FileUploaderButton
-                    isIconOnly={false}
-                    className={`absolute bottom-5 right-5 z-20 border-2 border-white bg-shopstr-purple shadow-md ${SHOPSTRBUTTONCLASSNAMES}`}
-                    imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
-                  >
-                    Upload Banner
-                  </FileUploaderButton>
+                  <Tooltip content="Upload a banner image for your shop" placement="bottom">
+                    <FileUploaderButton
+                      isIconOnly={false}
+                      className={`absolute bottom-5 right-5 z-20 border-2 border-white bg-shopstr-purple shadow-md hover:shadow-lg transition-all duration-200 ${SHOPSTRBUTTONCLASSNAMES}`}
+                      imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
+                    >
+                      Upload Banner
+                    </FileUploaderButton>
+                  </Tooltip>
                 </div>
                 <div className="flex items-center justify-center">
-                  <div className="relative z-50 mt-[-3rem] h-24 w-24">
+                  <div className="relative z-50 mt-[-3rem] h-24 w-24 rounded-full border-4 border-light-fg dark:border-dark-fg shadow-lg transition-transform duration-300 hover:scale-105">
                     <div className="">
-                      <FileUploaderButton
-                        isIconOnly
-                        className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
-                        imgCallbackOnUpload={(imgUrl) =>
-                          setValue("picture", imgUrl)
-                        }
-                      >
-                        <ArrowUpOnSquareIcon className="h-6 w-6" />
-                      </FileUploaderButton>
+                      <Tooltip content="Upload a profile picture for your shop" placement="bottom">
+                        <FileUploaderButton
+                          isIconOnly
+                          className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 hover:shadow-lg transition-all duration-200 ${SHOPSTRBUTTONCLASSNAMES}`}
+                          imgCallbackOnUpload={(imgUrl) =>
+                            setValue("picture", imgUrl)
+                          }
+                        >
+                          <ArrowUpOnSquareIcon className="h-6 w-6" />
+                        </FileUploaderButton>
+                      </Tooltip>
                       {watchPicture ? (
                         <Image
                           src={watchPicture}
                           alt="shop logo"
-                          className="rounded-full"
+                          className="rounded-full h-24 w-24 object-cover"
                         />
                       ) : (
                         <Image
                           src={defaultImage}
                           alt="shop logo"
-                          className="rounded-full"
+                          className="rounded-full h-24 w-24 object-cover"
                         />
                       )}
                     </div>
@@ -141,7 +149,7 @@ const ShopSettingsPage = () => {
                 </div>
               </div>
 
-              <form onSubmit={handleSubmit(onSubmit as any)}>
+              <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-6">
                 <Controller
                   name="name"
                   control={control}
@@ -220,22 +228,27 @@ const ShopSettingsPage = () => {
                   }}
                 />
 
-                <Button
-                  className={buttonClassName}
-                  type="submit"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault(); // Prevent default to avoid submitting the form again
-                      handleSubmit(onSubmit as any)(); // Programmatic submit
-                    }
-                  }}
-                  isDisabled={isUploadingShopSettings}
-                  isLoading={isUploadingShopSettings}
-                >
-                  Save Shop
-                </Button>
+                <div className="pt-4">
+                  <Button
+                    className={buttonClassName}
+                    type="submit"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault(); // Prevent default to avoid submitting the form again
+                        handleSubmit(onSubmit as any)(); // Programmatic submit
+                      }
+                    }}
+                    isDisabled={isUploadingShopSettings}
+                    isLoading={isUploadingShopSettings}
+                    size="lg"
+                    shadow="sm"
+                    radius="md"
+                  >
+                    {isUploadingShopSettings ? "Saving..." : "Save Shop Settings"}
+                  </Button>
+                </div>
               </form>
-            </>
+            </Card>
           )}
         </div>
       </div>
