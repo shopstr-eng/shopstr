@@ -205,7 +205,7 @@ const DisplayProducts = ({
       setCurrentPage(1);
       onFilteredProductsChange?.(filtered);
     },
-    [onFilteredProductsChange]
+    [onFilteredProductsChange, itemsPerPage]
   );
 
   useEffect(() => {
