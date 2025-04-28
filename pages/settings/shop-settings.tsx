@@ -52,7 +52,7 @@ const ShopSettingsPage = () => {
       reset(mappedContent);
     }
     setIsFetchingShop(false);
-  }, [shopContext, userPubkey, userPubkey]);
+  }, [shopContext, userPubkey, reset]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
     setIsUploadingShopSettings(true);
@@ -241,7 +241,6 @@ const ShopSettingsPage = () => {
                     isDisabled={isUploadingShopSettings}
                     isLoading={isUploadingShopSettings}
                     size="lg"
-                    shadow="sm"
                     radius="md"
                   >
                     {isUploadingShopSettings ? "Saving..." : "Save Shop Settings"}
