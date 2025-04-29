@@ -95,35 +95,35 @@ const ShopSettingsPage = () => {
               <ShopstrSpinner />
             </div>
           ) : (
-            <Card className="p-6 shadow-md bg-light-fg dark:bg-dark-fg rounded-xl transition-all duration-300">
-              <h1 className="text-2xl font-bold mb-6 text-center text-light-text dark:text-dark-text">Shop Settings</h1>
-              
-              <div className="mb-10 overflow-hidden rounded-lg bg-gradient-to-r from-shopstr-purple-light to-shopstr-purple dark:from-shopstr-yellow-light dark:to-shopstr-yellow">
-                <div className="relative flex h-48 items-center justify-center rounded-lg bg-light-fg bg-opacity-10 dark:bg-dark-fg dark:bg-opacity-10">
-                  {watchBanner && (
+            <div className="space-y-6">
+              <Card className="mb-10 overflow-hidden bg-light-fg dark:bg-dark-fg">
+                <div className="relative flex h-48 items-center justify-center">
+                  {watchBanner ? (
                     <Image
                       alt={"Shop banner image"}
                       src={watchBanner}
-                      className="h-48 w-full rounded-lg object-cover object-center transition-transform duration-500 hover:scale-105"
+                      className="h-48 w-full object-cover object-center transition-transform duration-500 hover:scale-105"
                     />
+                  ) : (
+                    <div className="h-48 w-full bg-gradient-to-r from-gray-400/50 to-gray-500/50 dark:from-gray-700/50 dark:to-gray-800/50" />
                   )}
                   <Tooltip content="Upload a banner image for your shop" placement="bottom">
                     <FileUploaderButton
                       isIconOnly={false}
-                      className={`absolute bottom-5 right-5 z-20 border-2 border-white bg-shopstr-purple shadow-md hover:shadow-lg transition-all duration-200 ${SHOPSTRBUTTONCLASSNAMES}`}
+                      className={`absolute bottom-5 right-5 z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
                       imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
                     >
                       Upload Banner
                     </FileUploaderButton>
                   </Tooltip>
                 </div>
-                <div className="flex items-center justify-center">
+                <div className="flex items-center justify-center pb-6">
                   <div className="relative z-50 mt-[-3rem] h-24 w-24 rounded-full border-4 border-light-fg dark:border-dark-fg shadow-lg transition-transform duration-300 hover:scale-105">
                     <div className="">
                       <Tooltip content="Upload a profile picture for your shop" placement="bottom">
                         <FileUploaderButton
                           isIconOnly
-                          className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 hover:shadow-lg transition-all duration-200 ${SHOPSTRBUTTONCLASSNAMES}`}
+                          className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
                           imgCallbackOnUpload={(imgUrl) =>
                             setValue("picture", imgUrl)
                           }
@@ -147,9 +147,9 @@ const ShopSettingsPage = () => {
                     </div>
                   </div>
                 </div>
-              </div>
+              </Card>
 
-              <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-6">
+              <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-6 rounded-xl bg-light-fg p-6 dark:bg-dark-fg">
                 <Controller
                   name="name"
                   control={control}
@@ -169,9 +169,11 @@ const ShopSettingsPage = () => {
                       : "";
                     return (
                       <Input
-                        className="pb-4 text-light-text dark:text-dark-text"
+                        className="bg-light-fg dark:bg-dark-fg"
                         classNames={{
                           label: "text-light-text dark:text-dark-text text-lg",
+                          input: "text-light-text dark:text-dark-text",
+                          base: "border-light-text/20 dark:border-dark-text/20 hover:border-shopstr-purple dark:hover:border-shopstr-yellow"
                         }}
                         variant="bordered"
                         fullWidth={true}
@@ -180,9 +182,8 @@ const ShopSettingsPage = () => {
                         isInvalid={isErrored}
                         errorMessage={errorMessage}
                         placeholder="Add your shop's name . . ."
-                        // controller props
-                        onChange={onChange} // send value to hook form
-                        onBlur={onBlur} // notify when input is touched/blur
+                        onChange={onChange}
+                        onBlur={onBlur}
                         value={value}
                       />
                     );
@@ -208,46 +209,37 @@ const ShopSettingsPage = () => {
                       : "";
                     return (
                       <Textarea
-                        className="pb-4 text-light-text dark:text-dark-text"
+                        className="bg-light-fg dark:bg-dark-fg"
                         classNames={{
                           label: "text-light-text dark:text-dark-text text-lg",
+                          input: "text-light-text dark:text-dark-text",
+                          base: "border-light-text/20 dark:border-dark-text/20 hover:border-shopstr-purple dark:hover:border-shopstr-yellow"
                         }}
                         variant="bordered"
                         fullWidth={true}
-                        placeholder="Add something about your shop . . ."
+                        label="About Your Shop"
+                        labelPlacement="outside"
                         isInvalid={isErrored}
                         errorMessage={errorMessage}
-                        label="About"
-                        labelPlacement="outside"
-                        // controller props
-                        onChange={onChange} // send value to hook form
-                        onBlur={onBlur} // notify when input is touched/blur
+                        placeholder="Tell us about your shop . . ."
+                        onChange={onChange}
+                        onBlur={onBlur}
                         value={value}
+                        minRows={4}
                       />
                     );
                   }}
                 />
 
-                <div className="pt-4">
-                  <Button
-                    className={buttonClassName}
-                    type="submit"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault(); // Prevent default to avoid submitting the form again
-                        handleSubmit(onSubmit as any)(); // Programmatic submit
-                      }
-                    }}
-                    isDisabled={isUploadingShopSettings}
-                    isLoading={isUploadingShopSettings}
-                    size="lg"
-                    radius="md"
-                  >
-                    {isUploadingShopSettings ? "Saving..." : "Save Shop Settings"}
-                  </Button>
-                </div>
+                <Button
+                  type="submit"
+                  className={buttonClassName}
+                  isLoading={isUploadingShopSettings}
+                >
+                  Save Changes
+                </Button>
               </form>
-            </Card>
+            </div>
           )}
         </div>
       </div>
