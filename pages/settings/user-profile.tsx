@@ -9,6 +9,8 @@ import {
   Image,
   Select,
   SelectItem,
+  Card,
+  Tooltip,
 } from "@nextui-org/react";
 import {
   ArrowUpOnSquareIcon,
@@ -124,53 +126,55 @@ const UserProfilePage = () => {
           {isFetchingProfile ? (
             <ShopstrSpinner />
           ) : (
-            <>
-              <div className="mb-20 h-40 rounded-lg bg-light-fg dark:bg-dark-fg">
-                <div className="relative flex h-40 items-center justify-center rounded-lg bg-shopstr-purple-light dark:bg-dark-fg">
-                  {watchBanner && (
+            <div className="space-y-6">
+              <Card className="mb-10 overflow-hidden bg-light-fg dark:bg-dark-fg">
+                <div className="relative flex h-48 items-center justify-center">
+                  {watchBanner ? (
                     <Image
-                      alt={"User banner image"}
+                      alt="User banner image"
                       src={watchBanner}
-                      className="h-40 w-full rounded-lg object-cover object-fill"
+                      className="h-48 w-full object-cover object-center transition-transform duration-500 hover:scale-105"
                     />
+                  ) : (
+                    <div className="h-48 w-full bg-gradient-to-r from-gray-400/50 to-gray-500/50 dark:from-gray-700/50 dark:to-gray-800/50" />
                   )}
-                  <FileUploaderButton
-                    isIconOnly={false}
-                    className={`absolute bottom-5 right-5 z-20 border-2 border-white bg-shopstr-purple shadow-md ${SHOPSTRBUTTONCLASSNAMES}`}
-                    imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
-                  >
-                    Upload Banner
-                  </FileUploaderButton>
+                  <Tooltip content="Upload a banner image for your profile" placement="bottom">
+                    <FileUploaderButton
+                      isIconOnly={false}
+                      className={`absolute bottom-5 right-5 z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
+                      imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
+                    >
+                      Upload Banner
+                    </FileUploaderButton>
+                  </Tooltip>
                 </div>
-                <div className="flex items-center justify-center">
-                  <div className="relative z-20 mt-[-3rem] h-24 w-24">
-                    <div className="">
+                <div className="flex items-center justify-center pb-6">
+                  <div className="relative z-50 mt-[-3rem] h-24 w-24 rounded-full border-4 border-light-fg dark:border-dark-fg shadow-lg transition-transform duration-300 hover:scale-105">
+                    <Tooltip content="Upload a profile picture" placement="bottom">
                       <FileUploaderButton
                         isIconOnly
                         className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
-                        imgCallbackOnUpload={(imgUrl) =>
-                          setValue("picture", imgUrl)
-                        }
+                        imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
                       >
                         <ArrowUpOnSquareIcon className="h-6 w-6" />
                       </FileUploaderButton>
-                      {watchPicture ? (
-                        <Image
-                          src={watchPicture}
-                          alt="user profile picture"
-                          className="rounded-full"
-                        />
-                      ) : (
-                        <Image
-                          src={defaultImage}
-                          alt="user profile picture"
-                          className="rounded-full"
-                        />
-                      )}
-                    </div>
+                    </Tooltip>
+                    {watchPicture ? (
+                      <Image
+                        src={watchPicture}
+                        alt="user profile picture"
+                        className="rounded-full h-24 w-24 object-cover"
+                      />
+                    ) : (
+                      <Image
+                        src={defaultImage}
+                        alt="user profile picture"
+                        className="rounded-full h-24 w-24 object-cover"
+                      />
+                    )}
                   </div>
                 </div>
-              </div>
+              </Card>
 
               <div
                 className="mx-auto mb-2 flex w-full max-w-2xl cursor-pointer flex-row items-center justify-center rounded-lg border-2 border-light-fg p-2 hover:opacity-60 dark:border-dark-fg"
@@ -253,7 +257,7 @@ const UserProfilePage = () => {
                 <div className="mb-12" />
               )}
 
-              <form onSubmit={handleSubmit(onSubmit as any)}>
+              <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-6 rounded-xl bg-light-fg p-6 dark:bg-dark-fg">
                 <Controller
                   name="display_name"
                   control={control}
@@ -531,7 +535,7 @@ const UserProfilePage = () => {
                   Save Profile
                 </Button>
               </form>
-            </>
+            </div>
           )}
         </div>
       </div>
