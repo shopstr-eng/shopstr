@@ -521,7 +521,7 @@ const UserProfilePage = () => {
                 />
 
                 <Button
-                  className={buttonClassName}
+                  className={buttonClassName + " !bg-[#EADE81] !text-black hover:opacity-90"}
                   type="submit"
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !isButtonDisabled) {
