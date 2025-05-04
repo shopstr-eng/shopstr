@@ -354,7 +354,7 @@ export const FileUploaderButton = ({
               aria-label="Upload progress"
               size="md"
               value={progress}
-              color="pink"
+              color="primary"
               classNames={{
                 track: "h-3",
                 indicator: "bg-gradient-to-r from-pink-400 to-pink-600"
