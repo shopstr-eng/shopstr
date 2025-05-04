@@ -31,6 +31,7 @@ export const FileUploaderButton = ({
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
   const [previews, setPreviews] = useState<{ src: string; name: string; size: number }[]>([]);
+  const [uploadedImageUrls, setUploadedImageUrls] = useState<string[]>([]);
   const [isDragging, setIsDragging] = useState(false);
 
   const hiddenFileInput = useRef<HTMLInputElement>(null);
@@ -171,6 +172,8 @@ export const FileUploaderButton = ({
         })
         .filter((url) => url !== null);
 
+      setUploadedImageUrls(imageUrls as string[]); // Track uploaded image URLs
+
       setTimeout(() => {
         setProgress(null); // Reset progress after a short delay for better UX
       }, 500);
@@ -250,8 +253,25 @@ export const FileUploaderButton = ({
     }
   };
 
+  // Remove preview and delete uploaded image
   const removePreview = (index: number) => {
     setPreviews((prev) => prev.filter((_, idx) => idx !== index));
+    setUploadedImageUrls((prev) => {
+      const newArr = [...prev];
+      const [removed] = newArr.splice(index, 1);
+      // Optionally: trigger deletion from server here if needed
+      // Remove from parent as well:
+      if (removed) imgCallbackOnUpload(""); // Notify parent of removal
+      return newArr;
+    });
+  };
+
+  // Clear all previews and uploaded images
+  const clearAll = () => {
+    setPreviews([]);
+    setUploadedImageUrls([]);
+    // Notify parent to remove all uploaded images
+    imgCallbackOnUpload(""); // You may want to pass an array or handle in parent
   };
 
   return (
@@ -342,18 +362,17 @@ export const FileUploaderButton = ({
                 {progress}%
               </span>
             </div>
-            
+            {/* Change Progress color to pink or green */}
             <Progress 
               aria-label="Upload progress"
               size="md"
               value={progress}
-              color="primary"
+              color="pink" // Change to "success" for green
               classNames={{
                 track: "h-3",
-                indicator: "bg-gradient-to-r from-primary-400 to-primary-600"
+                indicator: "bg-gradient-to-r from-pink-400 to-pink-600" // or from-green-400 to-green-600
               }}
             />
-            
             <div className="flex justify-between text-xs text-default-500">
               <span>Preprocessing{progress >= 30 ? ' ✓' : ''}</span>
               <span>Uploading{progress >= 100 ? ' ✓' : ''}</span>
@@ -382,13 +401,12 @@ export const FileUploaderButton = ({
                 <Button
                   size="sm"
                   variant="light"
-                  onClick={() => setPreviews([])}
+                  onClick={clearAll}
                   className="text-danger-500"
                 >
                   Clear All
                 </Button>
               </div>
-              
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                 {previews.map((preview, idx) => (
                   <motion.div
