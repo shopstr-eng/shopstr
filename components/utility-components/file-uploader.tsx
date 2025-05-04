@@ -31,7 +31,6 @@ export const FileUploaderButton = ({
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
   const [previews, setPreviews] = useState<{ src: string; name: string; size: number }[]>([]);
-  const [uploadedImageUrls, setUploadedImageUrls] = useState<string[]>([]);
   const [isDragging, setIsDragging] = useState(false);
 
   const hiddenFileInput = useRef<HTMLInputElement>(null);
@@ -172,8 +171,6 @@ export const FileUploaderButton = ({
         })
         .filter((url) => url !== null);
 
-      setUploadedImageUrls(imageUrls as string[]); // Track uploaded image URLs
-
       setTimeout(() => {
         setProgress(null); // Reset progress after a short delay for better UX
       }, 500);
@@ -253,25 +250,16 @@ export const FileUploaderButton = ({
     }
   };
 
-  // Remove preview and delete uploaded image
+  // Remove preview and clear uploaded image from parent
   const removePreview = (index: number) => {
     setPreviews((prev) => prev.filter((_, idx) => idx !== index));
-    setUploadedImageUrls((prev) => {
-      const newArr = [...prev];
-      const [removed] = newArr.splice(index, 1);
-      // Optionally: trigger deletion from server here if needed
-      // Remove from parent as well:
-      if (removed) imgCallbackOnUpload(""); // Notify parent of removal
-      return newArr;
-    });
+    imgCallbackOnUpload(""); // Notify parent of removal (adjust as needed)
   };
 
   // Clear all previews and uploaded images
   const clearAll = () => {
     setPreviews([]);
-    setUploadedImageUrls([]);
-    // Notify parent to remove all uploaded images
-    imgCallbackOnUpload(""); // You may want to pass an array or handle in parent
+    imgCallbackOnUpload(""); // Notify parent to remove all uploaded images
   };
 
   return (
@@ -358,19 +346,18 @@ export const FileUploaderButton = ({
               <span className="text-sm font-medium text-default-700">
                 Uploading {previews.length} image{previews.length > 1 ? 's' : ''}
               </span>
-              <span className="text-sm font-medium text-primary-600">
+              <span className="text-sm font-medium text-purple-600 dark:text-yellow-400">
                 {progress}%
               </span>
             </div>
-            {/* Change Progress color to pink or green */}
             <Progress 
               aria-label="Upload progress"
               size="md"
               value={progress}
-              color="pink" // Change to "success" for green
+              color="pink"
               classNames={{
                 track: "h-3",
-                indicator: "bg-gradient-to-r from-pink-400 to-pink-600" // or from-green-400 to-green-600
+                indicator: "bg-gradient-to-r from-pink-400 to-pink-600"
               }}
             />
             <div className="flex justify-between text-xs text-default-500">
@@ -394,7 +381,7 @@ export const FileUploaderButton = ({
             <Card className="w-full p-4 bg-content1 shadow-lg">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold flex items-center gap-2">
-                  <PhotoIcon className="w-5 h-5 text-primary-500" />
+                  <PhotoIcon className="w-5 h-5 text-purple-500 dark:text-yellow-400" />
                   Selected Images
                   <span className="text-default-500 ml-1">({previews.length})</span>
                 </h3>
