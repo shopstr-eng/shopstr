@@ -7,7 +7,11 @@ import {
 import FailureModal from "./failure-modal";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { AnimatePresence, motion } from "framer-motion";
-import { XCircleIcon, PhotoIcon, ArrowUpTrayIcon } from "@heroicons/react/24/outline";
+import {
+  XCircleIcon,
+  PhotoIcon,
+  ArrowUpTrayIcon,
+} from "@heroicons/react/24/outline";
 
 // Maximum file size in bytes (5MB)
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
@@ -30,7 +34,9 @@ export const FileUploaderButton = ({
   const [progress, setProgress] = useState<number | null>(null);
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
-  const [previews, setPreviews] = useState<{ src: string; name: string; size: number }[]>([]);
+  const [previews, setPreviews] = useState<
+    { src: string; name: string; size: number }[]
+  >([]);
   const [isDragging, setIsDragging] = useState(false);
 
   const hiddenFileInput = useRef<HTMLInputElement>(null);
@@ -108,9 +114,7 @@ export const FileUploaderButton = ({
             !ALLOWED_TYPES.includes(imgFile.type)
         )
       ) {
-        throw new Error(
-          "Only JPEG, PNG, or WebP images are supported!"
-        );
+        throw new Error("Only JPEG, PNG, or WebP images are supported!");
       }
 
       // File size check
@@ -152,7 +156,9 @@ export const FileUploaderButton = ({
                 ? blossomServers
                 : ["https://cdn.nostrcheck.me"]
             );
-            setProgress(30 + Math.round(((idx + 1) / strippedImageFiles.length) * 70));
+            setProgress(
+              30 + Math.round(((idx + 1) / strippedImageFiles.length) * 70)
+            );
             return tags;
           })
         );
@@ -263,7 +269,7 @@ export const FileUploaderButton = ({
   };
 
   return (
-    <div className="w-full flex flex-col gap-4">
+    <div className="flex w-full flex-col gap-4">
       {/* Drag and Drop Zone */}
       <div
         ref={dropZoneRef}
@@ -271,16 +277,16 @@ export const FileUploaderButton = ({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`w-full relative transition-all duration-300 ${
-          isDragging 
-            ? "border-2 border-dashed border-primary-500 bg-primary-50/50 rounded-xl p-6" 
+        className={`relative w-full duration-300 transition-all ${
+          isDragging
+            ? "rounded-xl border-2 border-dashed border-primary-500 bg-primary-50/50 p-6"
             : "border-2 border-dashed border-transparent"
         }`}
       >
         {/* Drag overlay */}
         {isDragging && (
-          <motion.div 
-            className="absolute inset-0 flex flex-col items-center justify-center bg-primary-50/95 rounded-xl z-10 backdrop-blur-sm"
+          <motion.div
+            className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-xl bg-primary-50/95 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -289,20 +295,24 @@ export const FileUploaderButton = ({
               animate={{ scale: [1, 1.1, 1] }}
               transition={{ duration: 0.8, repeat: Infinity }}
             >
-              <PhotoIcon className="w-16 h-16 text-primary-500 mb-4" />
+              <PhotoIcon className="mb-4 h-16 w-16 text-primary-500" />
             </motion.div>
-            <p className="text-primary-700 font-semibold text-xl">Drop to upload</p>
-            <p className="text-primary-500 text-sm mt-1">Supports JPEG, PNG, WebP</p>
+            <p className="text-xl font-semibold text-primary-700">
+              Drop to upload
+            </p>
+            <p className="mt-1 text-sm text-primary-500">
+              Supports JPEG, PNG, WebP
+            </p>
           </motion.div>
         )}
-        
+
         {/* Full-width upload button */}
         <Button
           isLoading={loading}
           onClick={handleClick}
           isIconOnly={isIconOnly}
           disabled={disabled || loading}
-          className={`w-full h-16 ${className} transition-all`}
+          className={`h-16 w-full ${className} transition-all`}
           size="lg"
           color="primary"
           variant="flat"
@@ -313,16 +323,17 @@ export const FileUploaderButton = ({
                 animate={loading ? {} : { scale: [1, 1.05, 1] }}
                 transition={{ duration: 2, repeat: Infinity }}
               >
-                <ArrowUpTrayIcon className="w-6 h-6 mr-2" />
+                <ArrowUpTrayIcon className="mr-2 h-6 w-6" />
               </motion.div>
             )
           }
         >
-          {children || (isIconOnly ? null : (
-            <span className="text-lg font-medium">Upload Images</span>
-          ))}
+          {children ||
+            (isIconOnly ? null : (
+              <span className="text-lg font-medium">Upload Images</span>
+            ))}
         </Button>
-        
+
         <Input
           type="file"
           accept={ALLOWED_TYPES.join(",")}
@@ -336,33 +347,34 @@ export const FileUploaderButton = ({
       {/* Progress Bar */}
       <AnimatePresence>
         {progress !== null && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             className="w-full space-y-4"
           >
-            <div className="flex justify-between items-center">
+            <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-default-700">
-                Uploading {previews.length} image{previews.length > 1 ? 's' : ''}
+                Uploading {previews.length} image
+                {previews.length > 1 ? "s" : ""}
               </span>
               <span className="text-sm font-medium text-purple-600 dark:text-yellow-400">
                 {progress}%
               </span>
             </div>
-            <Progress 
+            <Progress
               aria-label="Upload progress"
               size="md"
               value={progress}
               color="primary"
               classNames={{
                 track: "h-3",
-                indicator: "bg-gradient-to-r from-pink-400 to-pink-600"
+                indicator: "bg-gradient-to-r from-pink-400 to-pink-600",
               }}
             />
             <div className="flex justify-between text-xs text-default-500">
-              <span>Preprocessing{progress >= 30 ? ' ✓' : ''}</span>
-              <span>Uploading{progress >= 100 ? ' ✓' : ''}</span>
+              <span>Preprocessing{progress >= 30 ? " ✓" : ""}</span>
+              <span>Uploading{progress >= 100 ? " ✓" : ""}</span>
               <span>Processing</span>
             </div>
           </motion.div>
@@ -372,18 +384,20 @@ export const FileUploaderButton = ({
       {/* Image Previews */}
       <AnimatePresence>
         {previews.length > 0 && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="w-full mt-4"
+            className="mt-4 w-full"
           >
-            <Card className="w-full p-4 bg-content1 shadow-lg">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold flex items-center gap-2">
-                  <PhotoIcon className="w-5 h-5 text-purple-500 dark:text-yellow-400" />
+            <Card className="w-full bg-content1 p-4 shadow-lg">
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="flex items-center gap-2 text-lg font-semibold">
+                  <PhotoIcon className="h-5 w-5 text-purple-500 dark:text-yellow-400" />
                   Selected Images
-                  <span className="text-default-500 ml-1">({previews.length})</span>
+                  <span className="ml-1 text-default-500">
+                    ({previews.length})
+                  </span>
                 </h3>
                 <Button
                   size="sm"
@@ -394,7 +408,7 @@ export const FileUploaderButton = ({
                   Clear All
                 </Button>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
                 {previews.map((preview, idx) => (
                   <motion.div
                     key={idx}
@@ -402,16 +416,16 @@ export const FileUploaderButton = ({
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.9 }}
                     whileHover={{ scale: 1.02 }}
-                    className="relative group"
+                    className="group relative"
                   >
-                    <Card className="overflow-hidden shadow-md hover:shadow-lg transition-shadow">
+                    <Card className="overflow-hidden shadow-md transition-shadow hover:shadow-lg">
                       <div className="relative pb-[100%]">
                         <img
                           src={preview.src}
                           alt={`preview-${idx}`}
-                          className="absolute inset-0 w-full h-full object-cover"
+                          className="absolute inset-0 h-full w-full object-cover"
                         />
-                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
                           <Tooltip content="Remove image">
                             <Button
                               isIconOnly
@@ -420,13 +434,16 @@ export const FileUploaderButton = ({
                               className="bg-white/90 hover:bg-white"
                               onClick={() => removePreview(idx)}
                             >
-                              <XCircleIcon className="w-5 h-5" />
+                              <XCircleIcon className="h-5 w-5" />
                             </Button>
                           </Tooltip>
                         </div>
                       </div>
-                      <div className="p-2 bg-content2">
-                        <p className="text-xs font-medium truncate" title={preview.name}>
+                      <div className="bg-content2 p-2">
+                        <p
+                          className="truncate text-xs font-medium"
+                          title={preview.name}
+                        >
                           {preview.name}
                         </p>
                         <p className="text-xs text-default-500">
@@ -441,7 +458,7 @@ export const FileUploaderButton = ({
           </motion.div>
         )}
       </AnimatePresence>
-      
+
       <FailureModal
         bodyText={failureText}
         isOpen={showFailureModal}
