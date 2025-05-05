@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext, useCallback } from "react";
+import { useState, useEffect, useContext } from "react";
 import { nip19 } from "nostr-tools";
 import { deleteEvent } from "@/utils/nostr/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
@@ -87,7 +87,7 @@ const DisplayProducts = ({
       setProductEvents(parsedProductData);
       setIsProductLoading(false);
     }
-  }, [productEventContext, wotFilter, followsContext.isLoading, followsContext.followList]);
+  }, [productEventContext, wotFilter]);
 
   useEffect(() => {
     if (focusedPubkey && setCategories) {
@@ -99,7 +99,7 @@ const DisplayProducts = ({
       });
       setCategories(productCategories);
     }
-  }, [productEvents, focusedPubkey, setCategories]);
+  }, [productEvents, focusedPubkey]);
 
   useEffect(() => {
     if (!productEvents) return;
@@ -191,7 +191,7 @@ const DisplayProducts = ({
     }
   };
 
-  const productSatisfiesCategoryFilter = useCallback((productData: ProductData) => {
+  const productSatisfiesCategoryFilter = (productData: ProductData) => {
     if (selectedCategories.size === 0) return true;
     return Array.from(selectedCategories).some((selectedCategory) => {
       const re = new RegExp(selectedCategory, "gi");
@@ -200,13 +200,13 @@ const DisplayProducts = ({
         return match && match.length > 0;
       });
     });
-  }, [selectedCategories]);
+  };
 
-  const productSatisfieslocationFilter = useCallback((productData: ProductData) => {
+  const productSatisfieslocationFilter = (productData: ProductData) => {
     return !selectedLocation || productData.location === selectedLocation;
-  }, [selectedLocation]);
+  };
 
-  const productSatisfiesSearchFilter = useCallback((productData: ProductData) => {
+  const productSatisfiesSearchFilter = (productData: ProductData) => {
     if (!selectedSearch) return true;
     if (!productData.title) return false;
 
@@ -257,16 +257,15 @@ const DisplayProducts = ({
     } catch (_) {
       return false;
     }
-  }, [selectedSearch]);
+  };
 
-  const productSatisfiesAllFilters = useCallback((productData: ProductData) => {
+  const productSatisfiesAllFilters = (productData: ProductData) => {
     return (
       productSatisfiesCategoryFilter(productData) &&
       productSatisfieslocationFilter(productData) &&
       productSatisfiesSearchFilter(productData)
     );
-  }, [productSatisfiesCategoryFilter, productSatisfieslocationFilter, productSatisfiesSearchFilter]);
-
+  };
 
   const getCurrentPageProducts = () => {
     const startIndex = (currentPage - 1) * itemsPerPage;

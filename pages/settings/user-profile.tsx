@@ -126,7 +126,7 @@ const UserProfilePage = () => {
           {isFetchingProfile ? (
             <ShopstrSpinner />
           ) : (
-            <Card className="overflow-hidden bg-light-fg dark:bg-dark-fg w-full p-0">
+            <Card className="w-full overflow-hidden bg-light-fg p-0 dark:bg-dark-fg">
               {/* Banner and Profile Icon */}
               <div className="relative h-48 w-full">
                 {watchBanner ? (
@@ -138,7 +138,10 @@ const UserProfilePage = () => {
                 ) : (
                   <div className="h-48 w-full bg-gradient-to-r from-gray-400/50 to-gray-500/50 dark:from-gray-700/50 dark:to-gray-800/50" />
                 )}
-                <Tooltip content="Upload a banner image for your profile" placement="bottom">
+                <Tooltip
+                  content="Upload a banner image for your profile"
+                  placement="bottom"
+                >
                   <FileUploaderButton
                     isIconOnly={false}
                     className={`absolute bottom-5 right-5 z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
@@ -148,13 +151,18 @@ const UserProfilePage = () => {
                   </FileUploaderButton>
                 </Tooltip>
                 {/* Profile Icon */}
-                <div className="absolute left-1/2 bottom-[-3rem] z-30 -translate-x-1/2">
-                  <div className="relative h-24 w-24 rounded-full border-4 border-light-fg dark:border-dark-fg shadow-lg">
-                    <Tooltip content="Upload a profile picture" placement="bottom">
+                <div className="absolute bottom-[-3rem] left-1/2 z-30 -translate-x-1/2">
+                  <div className="relative h-24 w-24 rounded-full border-4 border-light-fg shadow-lg dark:border-dark-fg">
+                    <Tooltip
+                      content="Upload a profile picture"
+                      placement="bottom"
+                    >
                       <FileUploaderButton
                         isIconOnly
                         className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
-                        imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
+                        imgCallbackOnUpload={(imgUrl) =>
+                          setValue("picture", imgUrl)
+                        }
                       >
                         <ArrowUpOnSquareIcon className="h-6 w-6" />
                       </FileUploaderButton>
@@ -162,13 +170,13 @@ const UserProfilePage = () => {
                     <Image
                       src={watchPicture || defaultImage}
                       alt="user profile picture"
-                      className="rounded-full h-24 w-24 object-cover"
+                      className="h-24 w-24 rounded-full object-cover"
                     />
                   </div>
                 </div>
               </div>
               {/* NPUB/NSec and Form */}
-              <div className="pt-16 px-6 pb-6">
+              <div className="px-6 pb-6 pt-16">
                 <Card className="mb-2 overflow-hidden bg-light-fg dark:bg-dark-fg">
                   <div
                     className="mx-auto flex w-full max-w-2xl cursor-pointer flex-row items-center justify-center p-2 hover:opacity-60"
@@ -254,7 +262,10 @@ const UserProfilePage = () => {
                   <div className="mb-12" />
                 )}
 
-                <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-6">
+                <form
+                  onSubmit={handleSubmit(onSubmit as any)}
+                  className="space-y-6"
+                >
                   <Controller
                     name="display_name"
                     control={control}
@@ -271,7 +282,8 @@ const UserProfilePage = () => {
                           <Input
                             className="pb-4 text-light-text dark:text-dark-text"
                             classNames={{
-                              label: "text-light-text dark:text-dark-text text-lg",
+                              label:
+                                "text-light-text dark:text-dark-text text-lg",
                             }}
                             variant="bordered"
                             fullWidth={true}
@@ -305,7 +317,8 @@ const UserProfilePage = () => {
                           <Input
                             className="pb-4 text-light-text dark:text-dark-text"
                             classNames={{
-                              label: "text-light-text dark:text-dark-text text-lg",
+                              label:
+                                "text-light-text dark:text-dark-text text-lg",
                             }}
                             variant="bordered"
                             fullWidth={true}
@@ -339,7 +352,8 @@ const UserProfilePage = () => {
                           <Textarea
                             className="pb-4 text-light-text dark:text-dark-text"
                             classNames={{
-                              label: "text-light-text dark:text-dark-text text-lg",
+                              label:
+                                "text-light-text dark:text-dark-text text-lg",
                             }}
                             variant="bordered"
                             fullWidth={true}
@@ -373,7 +387,8 @@ const UserProfilePage = () => {
                           <Input
                             className="pb-4 text-light-text dark:text-dark-text"
                             classNames={{
-                              label: "text-light-text dark:text-dark-text text-lg",
+                              label:
+                                "text-light-text dark:text-dark-text text-lg",
                             }}
                             variant="bordered"
                             fullWidth={true}
@@ -406,7 +421,8 @@ const UserProfilePage = () => {
                           <Input
                             className="pb-4 text-light-text dark:text-dark-text"
                             classNames={{
-                              label: "text-light-text dark:text-dark-text text-lg",
+                              label:
+                                "text-light-text dark:text-dark-text text-lg",
                             }}
                             variant="bordered"
                             fullWidth={true}
@@ -440,7 +456,8 @@ const UserProfilePage = () => {
                           <Input
                             className="pb-4 text-light-text dark:text-dark-text"
                             classNames={{
-                              label: "text-light-text dark:text-dark-text text-lg",
+                              label:
+                                "text-light-text dark:text-dark-text text-lg",
                             }}
                             variant="bordered"
                             fullWidth={true}
@@ -466,7 +483,8 @@ const UserProfilePage = () => {
                           <Select
                             className="pb-4 text-light-text dark:text-dark-text"
                             classNames={{
-                              label: "text-light-text dark:text-dark-text text-lg",
+                              label:
+                                "text-light-text dark:text-dark-text text-lg",
                             }}
                             variant="bordered"
                             fullWidth={true}
@@ -516,7 +534,8 @@ const UserProfilePage = () => {
                             step={0.1}
                             className="pb-4 text-light-text dark:text-dark-text"
                             classNames={{
-                              label: "text-light-text dark:text-dark-text text-lg",
+                              label:
+                                "text-light-text dark:text-dark-text text-lg",
                             }}
                             variant="bordered"
                             fullWidth
@@ -532,7 +551,10 @@ const UserProfilePage = () => {
                   />
 
                   <Button
-                    className={buttonClassName + " !bg-[#EADE81] !text-black hover:opacity-90"}
+                    className={
+                      buttonClassName +
+                      " !bg-[#EADE81] !text-black hover:opacity-90"
+                    }
                     type="submit"
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !isButtonDisabled) {

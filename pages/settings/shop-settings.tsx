@@ -1,6 +1,13 @@
 import React, { useEffect, useState, useContext, useMemo } from "react";
 import { useForm, Controller } from "react-hook-form";
-import { Button, Textarea, Input, Image, Card, Tooltip } from "@nextui-org/react";
+import {
+  Button,
+  Textarea,
+  Input,
+  Image,
+  Card,
+  Tooltip,
+} from "@nextui-org/react";
 import { ArrowUpOnSquareIcon } from "@heroicons/react/24/outline";
 
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
@@ -95,7 +102,7 @@ const ShopSettingsPage = () => {
               <ShopstrSpinner />
             </div>
           ) : (
-            <Card className="overflow-hidden bg-light-fg dark:bg-dark-fg w-full p-0">
+            <Card className="w-full overflow-hidden bg-light-fg p-0 dark:bg-dark-fg">
               {/* Banner and Profile Icon */}
               <div className="relative h-48 w-full">
                 {watchBanner ? (
@@ -107,7 +114,10 @@ const ShopSettingsPage = () => {
                 ) : (
                   <div className="h-48 w-full bg-gradient-to-r from-gray-400/50 to-gray-500/50 dark:from-gray-700/50 dark:to-gray-800/50" />
                 )}
-                <Tooltip content="Upload a banner image for your shop" placement="bottom">
+                <Tooltip
+                  content="Upload a banner image for your shop"
+                  placement="bottom"
+                >
                   <FileUploaderButton
                     isIconOnly={false}
                     className={`absolute bottom-5 right-5 z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
@@ -117,13 +127,18 @@ const ShopSettingsPage = () => {
                   </FileUploaderButton>
                 </Tooltip>
                 {/* Profile Icon */}
-                <div className="absolute left-1/2 bottom-[-3rem] z-30 -translate-x-1/2">
-                  <div className="relative h-24 w-24 rounded-full border-4 border-light-fg dark:border-dark-fg shadow-lg">
-                    <Tooltip content="Upload a profile picture for your shop" placement="bottom">
+                <div className="absolute bottom-[-3rem] left-1/2 z-30 -translate-x-1/2">
+                  <div className="relative h-24 w-24 rounded-full border-4 border-light-fg shadow-lg dark:border-dark-fg">
+                    <Tooltip
+                      content="Upload a profile picture for your shop"
+                      placement="bottom"
+                    >
                       <FileUploaderButton
                         isIconOnly
                         className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
-                        imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
+                        imgCallbackOnUpload={(imgUrl) =>
+                          setValue("picture", imgUrl)
+                        }
                       >
                         <ArrowUpOnSquareIcon className="h-6 w-6" />
                       </FileUploaderButton>
@@ -131,14 +146,17 @@ const ShopSettingsPage = () => {
                     <Image
                       src={watchPicture || defaultImage}
                       alt="shop logo"
-                      className="rounded-full h-24 w-24 object-cover"
+                      className="h-24 w-24 rounded-full object-cover"
                     />
                   </div>
                 </div>
               </div>
               {/* Form */}
-              <div className="pt-16 px-6 pb-6">
-                <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-6">
+              <div className="px-6 pb-6 pt-16">
+                <form
+                  onSubmit={handleSubmit(onSubmit as any)}
+                  className="space-y-6"
+                >
                   <Controller
                     name="name"
                     control={control}
@@ -160,9 +178,10 @@ const ShopSettingsPage = () => {
                         <Input
                           className="bg-light-fg dark:bg-dark-fg"
                           classNames={{
-                            label: "text-light-text dark:text-dark-text text-lg",
+                            label:
+                              "text-light-text dark:text-dark-text text-lg",
                             input: "text-light-text dark:text-dark-text",
-                            base: "border-light-text/20 dark:border-dark-text/20 hover:border-shopstr-purple dark:hover:border-shopstr-yellow"
+                            base: "border-light-text/20 dark:border-dark-text/20 hover:border-shopstr-purple dark:hover:border-shopstr-yellow",
                           }}
                           variant="bordered"
                           fullWidth={true}
@@ -200,9 +219,10 @@ const ShopSettingsPage = () => {
                         <Textarea
                           className="bg-light-fg dark:bg-dark-fg"
                           classNames={{
-                            label: "text-light-text dark:text-dark-text text-lg",
+                            label:
+                              "text-light-text dark:text-dark-text text-lg",
                             input: "text-light-text dark:text-dark-text",
-                            base: "border-light-text/20 dark:border-dark-text/20 hover:border-shopstr-purple dark:hover:border-shopstr-yellow"
+                            base: "border-light-text/20 dark:border-dark-text/20 hover:border-shopstr-purple dark:hover:border-shopstr-yellow",
                           }}
                           variant="bordered"
                           fullWidth={true}

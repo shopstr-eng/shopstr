@@ -56,9 +56,7 @@ const ReceiveButton = () => {
 
   const onReceiveSubmit = async (data: { [x: string]: string }) => {
     const tokenString = data["token"];
-    if (tokenString) {
-      await handleReceive(tokenString);
-    }
+    await handleReceive(tokenString!);
   };
 
   const handleReceive = async (tokenString: string) => {
