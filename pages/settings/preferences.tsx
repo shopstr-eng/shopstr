@@ -373,25 +373,24 @@ const PreferencesPage = () => {
                           ? error.message
                           : "";
                         return (
-                          <div className="shopstr-card">
-                            <Textarea
-                              className="text-light-text dark:text-dark-text"
-                              variant="bordered"
-                              fullWidth={true}
-                              placeholder="https://..."
-                              isInvalid={isErrored}
-                              errorMessage={errorMessage}
-                              onChange={onChange}
-                              onBlur={onBlur}
-                              value={value}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") {
-                                  e.preventDefault();
-                                  handleMintSubmit(onMintSubmit)();
-                                }
-                              }}
-                            />
-                          </div>
+                          <Textarea
+                            className="text-light-text dark:text-dark-text"
+                            variant="bordered"
+                            fullWidth={true}
+                            placeholder="https://..."
+                            isInvalid={isErrored}
+                            errorMessage={errorMessage}
+                            // controller props
+                            onChange={onChange} // send value to hook form
+                            onBlur={onBlur} // notify when input is touched/blur
+                            value={value}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleMintSubmit(onMintSubmit)();
+                              }
+                            }}
+                          />
                         );
                       }}
                     />
@@ -503,25 +502,24 @@ const PreferencesPage = () => {
                         ? error.message
                         : "";
                       return (
-                        <div className="shopstr-card">
-                          <Textarea
-                            className="text-light-text dark:text-dark-text"
-                            variant="bordered"
-                            fullWidth={true}
-                            placeholder="wss://..."
-                            isInvalid={isErrored}
-                            errorMessage={errorMessage}
-                            onChange={onChange}
-                            onBlur={onBlur}
-                            value={value}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                handleRelaySubmit(onRelaySubmit)();
-                              }
-                            }}
-                          />
-                        </div>
+                        <Textarea
+                          className="text-light-text dark:text-dark-text"
+                          variant="bordered"
+                          fullWidth={true}
+                          placeholder="wss://..."
+                          isInvalid={isErrored}
+                          errorMessage={errorMessage}
+                          // controller props
+                          onChange={onChange} // send value to hook form
+                          onBlur={onBlur} // notify when input is touched/blur
+                          value={value}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleRelaySubmit(onRelaySubmit)();
+                            }
+                          }}
+                        />
                       );
                     }}
                   />
@@ -634,25 +632,24 @@ const PreferencesPage = () => {
                         ? error.message
                         : "";
                       return (
-                        <div className="shopstr-card">
-                          <Textarea
-                            className="text-light-text dark:text-dark-text"
-                            variant="bordered"
-                            fullWidth={true}
-                            placeholder="wss://..."
-                            isInvalid={isErrored}
-                            errorMessage={errorMessage}
-                            onChange={onChange}
-                            onBlur={onBlur}
-                            value={value}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                handleRelaySubmit(onRelaySubmit)();
-                              }
-                            }}
-                          />
-                        </div>
+                        <Textarea
+                          className="text-light-text dark:text-dark-text"
+                          variant="bordered"
+                          fullWidth={true}
+                          placeholder="wss://..."
+                          isInvalid={isErrored}
+                          errorMessage={errorMessage}
+                          // controller props
+                          onChange={onChange} // send value to hook form
+                          onBlur={onBlur} // notify when input is touched/blur
+                          value={value}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleRelaySubmit(onRelaySubmit)();
+                            }
+                          }}
+                        />
                       );
                     }}
                   />
@@ -765,25 +762,24 @@ const PreferencesPage = () => {
                         ? error.message
                         : "";
                       return (
-                        <div className="shopstr-card">
-                          <Textarea
-                            className="text-light-text dark:text-dark-text"
-                            variant="bordered"
-                            fullWidth={true}
-                            placeholder="wss://..."
-                            isInvalid={isErrored}
-                            errorMessage={errorMessage}
-                            onChange={onChange}
-                            onBlur={onBlur}
-                            value={value}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                handleRelaySubmit(onRelaySubmit)();
-                              }
-                            }}
-                          />
-                        </div>
+                        <Textarea
+                          className="text-light-text dark:text-dark-text"
+                          variant="bordered"
+                          fullWidth={true}
+                          placeholder="wss://..."
+                          isInvalid={isErrored}
+                          errorMessage={errorMessage}
+                          // controller props
+                          onChange={onChange} // send value to hook form
+                          onBlur={onBlur} // notify when input is touched/blur
+                          value={value}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleRelaySubmit(onRelaySubmit)();
+                            }
+                          }}
+                        />
                       );
                     }}
                   />
@@ -905,25 +901,24 @@ const PreferencesPage = () => {
                         ? error.message
                         : "";
                       return (
-                        <div className="shopstr-card">
-                          <Textarea
-                            className="text-light-text dark:text-dark-text"
-                            variant="bordered"
-                            fullWidth={true}
-                            placeholder="https://..."
-                            isInvalid={isErrored}
-                            errorMessage={errorMessage}
-                            onChange={onChange}
-                            onBlur={onBlur}
-                            value={value}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                handleBlossomSubmit(onBlossomSubmit)();
-                              }
-                            }}
-                          />
-                        </div>
+                        <Textarea
+                          className="text-light-text dark:text-dark-text"
+                          variant="bordered"
+                          fullWidth={true}
+                          placeholder="https://..."
+                          isInvalid={isErrored}
+                          errorMessage={errorMessage}
+                          // controller props
+                          onChange={onChange} // send value to hook form
+                          onBlur={onBlur} // notify when input is touched/blur
+                          value={value}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleBlossomSubmit(onBlossomSubmit)();
+                            }
+                          }}
+                        />
                       );
                     }}
                   />

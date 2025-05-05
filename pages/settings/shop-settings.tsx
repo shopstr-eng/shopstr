@@ -1,13 +1,6 @@
 import React, { useEffect, useState, useContext, useMemo } from "react";
 import { useForm, Controller } from "react-hook-form";
-import {
-  Button,
-  Textarea,
-  Input,
-  Image,
-  Card,
-  Tooltip,
-} from "@nextui-org/react";
+import { Button, Textarea, Input, Image } from "@nextui-org/react";
 import { ArrowUpOnSquareIcon } from "@heroicons/react/24/outline";
 
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
@@ -59,7 +52,7 @@ const ShopSettingsPage = () => {
       reset(mappedContent);
     }
     setIsFetchingShop(false);
-  }, [shopContext, userPubkey, reset]);
+  }, [shopContext, userPubkey, userPubkey]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
     setIsUploadingShopSettings(true);
@@ -89,7 +82,7 @@ const ShopSettingsPage = () => {
   };
 
   const buttonClassName = useMemo(() => {
-    return `w-full ${SHOPSTRBUTTONCLASSNAMES} hover:opacity-90 transition-opacity duration-200`;
+    return `w-full mb-10 ${SHOPSTRBUTTONCLASSNAMES}`;
   }, []);
 
   return (
@@ -98,41 +91,29 @@ const ShopSettingsPage = () => {
         <div className="mx-auto h-full w-full px-4 lg:w-1/2">
           <SettingsBreadCrumbs />
           {isFetchingShop ? (
-            <div className="flex h-64 items-center justify-center">
-              <ShopstrSpinner />
-            </div>
+            <ShopstrSpinner />
           ) : (
-            <Card className="w-full overflow-hidden bg-light-fg p-0 dark:bg-dark-fg">
-              {/* Banner and Profile Icon */}
-              <div className="relative h-48 w-full">
-                {watchBanner ? (
-                  <Image
-                    alt="Shop banner image"
-                    src={watchBanner}
-                    className="h-48 w-full object-cover object-center"
-                  />
-                ) : (
-                  <div className="h-48 w-full bg-gradient-to-r from-gray-400/50 to-gray-500/50 dark:from-gray-700/50 dark:to-gray-800/50" />
-                )}
-                <Tooltip
-                  content="Upload a banner image for your shop"
-                  placement="bottom"
-                >
+            <>
+              <div className="mb-20 h-40 rounded-lg bg-light-fg dark:bg-dark-fg">
+                <div className="relative flex h-40 items-center justify-center rounded-lg bg-shopstr-purple-light dark:bg-dark-fg">
+                  {watchBanner && (
+                    <Image
+                      alt={"Shop banner image"}
+                      src={watchBanner}
+                      className="h-40 w-full rounded-lg object-cover object-fill"
+                    />
+                  )}
                   <FileUploaderButton
                     isIconOnly={false}
-                    className={`absolute bottom-5 right-5 z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
+                    className={`absolute bottom-5 right-5 z-20 border-2 border-white bg-shopstr-purple shadow-md ${SHOPSTRBUTTONCLASSNAMES}`}
                     imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
                   >
                     Upload Banner
                   </FileUploaderButton>
-                </Tooltip>
-                {/* Profile Icon */}
-                <div className="absolute bottom-[-3rem] left-1/2 z-30 -translate-x-1/2">
-                  <div className="relative h-24 w-24 rounded-full border-4 border-light-fg shadow-lg dark:border-dark-fg">
-                    <Tooltip
-                      content="Upload a profile picture for your shop"
-                      placement="bottom"
-                    >
+                </div>
+                <div className="flex items-center justify-center">
+                  <div className="relative z-50 mt-[-3rem] h-24 w-24">
+                    <div className="">
                       <FileUploaderButton
                         isIconOnly
                         className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
@@ -142,114 +123,119 @@ const ShopSettingsPage = () => {
                       >
                         <ArrowUpOnSquareIcon className="h-6 w-6" />
                       </FileUploaderButton>
-                    </Tooltip>
-                    <Image
-                      src={watchPicture || defaultImage}
-                      alt="shop logo"
-                      className="h-24 w-24 rounded-full object-cover"
-                    />
+                      {watchPicture ? (
+                        <Image
+                          src={watchPicture}
+                          alt="shop logo"
+                          className="rounded-full"
+                        />
+                      ) : (
+                        <Image
+                          src={defaultImage}
+                          alt="shop logo"
+                          className="rounded-full"
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
-              {/* Form */}
-              <div className="px-6 pb-6 pt-16">
-                <form
-                  onSubmit={handleSubmit(onSubmit as any)}
-                  className="space-y-6"
+
+              <form onSubmit={handleSubmit(onSubmit as any)}>
+                <Controller
+                  name="name"
+                  control={control}
+                  rules={{
+                    maxLength: {
+                      value: 50,
+                      message: "This input exceed maxLength of 50.",
+                    },
+                  }}
+                  render={({
+                    field: { onChange, onBlur, value },
+                    fieldState: { error },
+                  }) => {
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
+                      ? error.message
+                      : "";
+                    return (
+                      <Input
+                        className="pb-4 text-light-text dark:text-dark-text"
+                        classNames={{
+                          label: "text-light-text dark:text-dark-text text-lg",
+                        }}
+                        variant="bordered"
+                        fullWidth={true}
+                        label="Shop Name"
+                        labelPlacement="outside"
+                        isInvalid={isErrored}
+                        errorMessage={errorMessage}
+                        placeholder="Add your shop's name . . ."
+                        // controller props
+                        onChange={onChange} // send value to hook form
+                        onBlur={onBlur} // notify when input is touched/blur
+                        value={value}
+                      />
+                    );
+                  }}
+                />
+
+                <Controller
+                  name="about"
+                  control={control}
+                  rules={{
+                    maxLength: {
+                      value: 500,
+                      message: "This input exceed maxLength of 500.",
+                    },
+                  }}
+                  render={({
+                    field: { onChange, onBlur, value },
+                    fieldState: { error },
+                  }) => {
+                    const isErrored = error !== undefined;
+                    const errorMessage: string = error?.message
+                      ? error.message
+                      : "";
+                    return (
+                      <Textarea
+                        className="pb-4 text-light-text dark:text-dark-text"
+                        classNames={{
+                          label: "text-light-text dark:text-dark-text text-lg",
+                        }}
+                        variant="bordered"
+                        fullWidth={true}
+                        placeholder="Add something about your shop . . ."
+                        isInvalid={isErrored}
+                        errorMessage={errorMessage}
+                        label="About"
+                        labelPlacement="outside"
+                        // controller props
+                        onChange={onChange} // send value to hook form
+                        onBlur={onBlur} // notify when input is touched/blur
+                        value={value}
+                      />
+                    );
+                  }}
+                />
+
+                <Button
+                  className={buttonClassName}
+                  type="submit"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault(); // Prevent default to avoid submitting the form again
+                      handleSubmit(onSubmit as any)(); // Programmatic submit
+                    }
+                  }}
+                  isDisabled={isUploadingShopSettings}
+                  isLoading={isUploadingShopSettings}
                 >
-                  <Controller
-                    name="name"
-                    control={control}
-                    rules={{
-                      maxLength: {
-                        value: 50,
-                        message: "This input exceed maxLength of 50.",
-                      },
-                    }}
-                    render={({
-                      field: { onChange, onBlur, value },
-                      fieldState: { error },
-                    }) => {
-                      const isErrored = error !== undefined;
-                      const errorMessage: string = error?.message
-                        ? error.message
-                        : "";
-                      return (
-                        <Input
-                          className="bg-light-fg dark:bg-dark-fg"
-                          classNames={{
-                            label:
-                              "text-light-text dark:text-dark-text text-lg",
-                            input: "text-light-text dark:text-dark-text",
-                            base: "border-light-text/20 dark:border-dark-text/20 hover:border-shopstr-purple dark:hover:border-shopstr-yellow",
-                          }}
-                          variant="bordered"
-                          fullWidth={true}
-                          label="Shop Name"
-                          labelPlacement="outside"
-                          isInvalid={isErrored}
-                          errorMessage={errorMessage}
-                          placeholder="Add your shop's name . . ."
-                          onChange={onChange}
-                          onBlur={onBlur}
-                          value={value}
-                        />
-                      );
-                    }}
-                  />
-
-                  <Controller
-                    name="about"
-                    control={control}
-                    rules={{
-                      maxLength: {
-                        value: 500,
-                        message: "This input exceed maxLength of 500.",
-                      },
-                    }}
-                    render={({
-                      field: { onChange, onBlur, value },
-                      fieldState: { error },
-                    }) => {
-                      const isErrored = error !== undefined;
-                      const errorMessage: string = error?.message
-                        ? error.message
-                        : "";
-                      return (
-                        <Textarea
-                          className="bg-light-fg dark:bg-dark-fg"
-                          classNames={{
-                            label:
-                              "text-light-text dark:text-dark-text text-lg",
-                            input: "text-light-text dark:text-dark-text",
-                            base: "border-light-text/20 dark:border-dark-text/20 hover:border-shopstr-purple dark:hover:border-shopstr-yellow",
-                          }}
-                          variant="bordered"
-                          fullWidth={true}
-                          label="About Your Shop"
-                          labelPlacement="outside"
-                          isInvalid={isErrored}
-                          errorMessage={errorMessage}
-                          placeholder="Tell us about your shop . . ."
-                          onChange={onChange}
-                          onBlur={onBlur}
-                          value={value}
-                          minRows={4}
-                        />
-                      );
-                    }}
-                  />
-
-                  <Button
-                    type="submit"
-                    className={buttonClassName}
-                    isLoading={isUploadingShopSettings}
-                  >
-                    Save Changes
-                  </Button>
-                </form>
-              </div>
-            </Card>
+                  Save Shop
+                </Button>
+              </form>
+            </>
           )}
         </div>
       </div>
