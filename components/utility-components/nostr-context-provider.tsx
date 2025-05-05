@@ -25,7 +25,7 @@ interface SignerContextInterface {
   isLoggedIn?: boolean;
   pubkey?: string;
   npub?: string;
-  newSigner?: (type: string, args: any) => NostrSigner;
+  newSigner?: (type: string, args: Record<string, unknown>) => NostrSigner;
 }
 
 export const SignerContext = createContext({
@@ -51,7 +51,7 @@ export function SignerContextProvider({ children }: { children: ReactNode }) {
   const [authUrl, setAuthUrl] = useState("");
 
   const [challengeResolver, setChallengeResolver] = useState<
-    ((res: any) => void) | undefined
+    ((res: string | Record<string, unknown>) => void) | undefined
   >(undefined);
 
   const [signer, setSigner] = useState<NostrSigner | undefined>(undefined);
