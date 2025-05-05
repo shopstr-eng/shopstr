@@ -169,7 +169,7 @@ const UserProfilePage = () => {
               </div>
               {/* NPUB/NSec and Form */}
               <div className="pt-16 px-6 pb-6">
-                <Card className="mb-2 overflow-hidden bg-light-fg dark:bg-dark-fg">
+                <div className="shopstr-card mb-2 rounded-lg border border-shopstr-purple/80 dark:border-shopstr-yellow/80">
                   <div
                     className="mx-auto flex w-full max-w-2xl cursor-pointer flex-row items-center justify-center p-2 hover:opacity-60"
                     onClick={() => {
@@ -200,10 +200,10 @@ const UserProfilePage = () => {
                       />
                     )}
                   </div>
-                </Card>
+                </div>
 
                 {userNSec ? (
-                  <Card className="mb-12 overflow-hidden bg-light-fg dark:bg-dark-fg">
+                  <div className="shopstr-card mb-12 rounded-lg border border-shopstr-purple/80 dark:border-shopstr-yellow/80">
                     <div className="mx-auto flex w-full max-w-2xl cursor-pointer flex-row items-center justify-center p-2">
                       <span
                         className="lg:text-md break-all pr-2 text-[0.50rem] font-bold text-light-text dark:text-dark-text sm:text-xs md:text-sm"
@@ -249,7 +249,7 @@ const UserProfilePage = () => {
                         />
                       )}
                     </div>
-                  </Card>
+                  </div>
                 ) : (
                   <div className="mb-12" />
                 )}
@@ -269,9 +269,12 @@ const UserProfilePage = () => {
                       return (
                         <div className="shopstr-card">
                           <Input
-                            className="pb-4 text-light-text dark:text-dark-text"
+                            className="pb-4 text-light-text dark:text-dark-text settings-input"
                             classNames={{
                               label: "text-light-text dark:text-dark-text text-lg",
+                              base: "border-light-text/60 dark:border-dark-text/60",
+                              inputWrapper: "group-data-[focus=true]:border-shopstr-purple dark:group-data-[focus=true]:border-shopstr-yellow",
+                              innerWrapper: "group-data-[focus=true]:border-shopstr-purple dark:group-data-[focus=true]:border-shopstr-yellow"
                             }}
                             variant="bordered"
                             fullWidth={true}
@@ -303,9 +306,12 @@ const UserProfilePage = () => {
                       return (
                         <div className="shopstr-card">
                           <Input
-                            className="pb-4 text-light-text dark:text-dark-text"
+                            className="pb-4 text-light-text dark:text-dark-text settings-input"
                             classNames={{
                               label: "text-light-text dark:text-dark-text text-lg",
+                              base: "border-light-text/60 dark:border-dark-text/60",
+                              inputWrapper: "group-data-[focus=true]:border-shopstr-purple dark:group-data-[focus=true]:border-shopstr-yellow",
+                              innerWrapper: "group-data-[focus=true]:border-shopstr-purple dark:group-data-[focus=true]:border-shopstr-yellow"
                             }}
                             variant="bordered"
                             fullWidth={true}
@@ -337,9 +343,12 @@ const UserProfilePage = () => {
                       return (
                         <div className="shopstr-card">
                           <Textarea
-                            className="pb-4 text-light-text dark:text-dark-text"
+                            className="pb-4 text-light-text dark:text-dark-text settings-textarea"
                             classNames={{
                               label: "text-light-text dark:text-dark-text text-lg",
+                              base: "border-light-text/60 dark:border-dark-text/60",
+                              inputWrapper: "group-data-[focus=true]:border-shopstr-purple dark:group-data-[focus=true]:border-shopstr-yellow",
+                              innerWrapper: "group-data-[focus=true]:border-shopstr-purple dark:group-data-[focus=true]:border-shopstr-yellow"
                             }}
                             variant="bordered"
                             fullWidth={true}
@@ -371,9 +380,12 @@ const UserProfilePage = () => {
                       return (
                         <div className="shopstr-card">
                           <Input
-                            className="pb-4 text-light-text dark:text-dark-text"
+                            className="pb-4 text-light-text dark:text-dark-text settings-input"
                             classNames={{
                               label: "text-light-text dark:text-dark-text text-lg",
+                              base: "border-light-text/60 dark:border-dark-text/60",
+                              inputWrapper: "group-data-[focus=true]:border-shopstr-purple dark:group-data-[focus=true]:border-shopstr-yellow",
+                              innerWrapper: "group-data-[focus=true]:border-shopstr-purple dark:group-data-[focus=true]:border-shopstr-yellow"
                             }}
                             variant="bordered"
                             fullWidth={true}
@@ -404,9 +416,12 @@ const UserProfilePage = () => {
                       return (
                         <div className="shopstr-card">
                           <Input
-                            className="pb-4 text-light-text dark:text-dark-text"
+                            className="pb-4 text-light-text dark:text-dark-text settings-input"
                             classNames={{
                               label: "text-light-text dark:text-dark-text text-lg",
+                              base: "border-light-text/60 dark:border-dark-text/60",
+                              inputWrapper: "group-data-[focus=true]:border-shopstr-purple dark:group-data-[focus=true]:border-shopstr-yellow",
+                              innerWrapper: "group-data-[focus=true]:border-shopstr-purple dark:group-data-[focus=true]:border-shopstr-yellow"
                             }}
                             variant="bordered"
                             fullWidth={true}
@@ -438,9 +453,12 @@ const UserProfilePage = () => {
                       return (
                         <div className="shopstr-card">
                           <Input
-                            className="pb-4 text-light-text dark:text-dark-text"
+                            className="pb-4 text-light-text dark:text-dark-text settings-input"
                             classNames={{
                               label: "text-light-text dark:text-dark-text text-lg",
+                              base: "border-light-text/60 dark:border-dark-text/60",
+                              inputWrapper: "group-data-[focus=true]:border-shopstr-purple dark:group-data-[focus=true]:border-shopstr-yellow",
+                              innerWrapper: "group-data-[focus=true]:border-shopstr-purple dark:group-data-[focus=true]:border-shopstr-yellow"
                             }}
                             variant="bordered"
                             fullWidth={true}

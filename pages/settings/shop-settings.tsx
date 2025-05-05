@@ -158,11 +158,13 @@ const ShopSettingsPage = () => {
                         : "";
                       return (
                         <Input
-                          className="bg-light-fg dark:bg-dark-fg"
+                          className="bg-light-fg dark:bg-dark-fg settings-input"
                           classNames={{
                             label: "text-light-text dark:text-dark-text text-lg",
                             input: "text-light-text dark:text-dark-text",
-                            base: "border-light-text/20 dark:border-dark-text/20 hover:border-shopstr-purple dark:hover:border-shopstr-yellow"
+                            base: "border-light-text/60 dark:border-dark-text/60",
+                            inputWrapper: "group-data-[focus=true]:border-shopstr-purple dark:group-data-[focus=true]:border-shopstr-yellow",
+                            innerWrapper: "group-data-[focus=true]:border-shopstr-purple dark:group-data-[focus=true]:border-shopstr-yellow"
                           }}
                           variant="bordered"
                           fullWidth={true}
@@ -198,11 +200,13 @@ const ShopSettingsPage = () => {
                         : "";
                       return (
                         <Textarea
-                          className="bg-light-fg dark:bg-dark-fg"
+                          className="bg-light-fg dark:bg-dark-fg settings-textarea"
                           classNames={{
                             label: "text-light-text dark:text-dark-text text-lg",
                             input: "text-light-text dark:text-dark-text",
-                            base: "border-light-text/20 dark:border-dark-text/20 hover:border-shopstr-purple dark:hover:border-shopstr-yellow"
+                            base: "border-light-text/60 dark:border-dark-text/60",
+                            inputWrapper: "group-data-[focus=true]:border-shopstr-purple dark:group-data-[focus=true]:border-shopstr-yellow",
+                            innerWrapper: "group-data-[focus=true]:border-shopstr-purple dark:group-data-[focus=true]:border-shopstr-yellow"
                           }}
                           variant="bordered"
                           fullWidth={true}
