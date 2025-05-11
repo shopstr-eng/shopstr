@@ -25,7 +25,7 @@ export const FileUploaderButton = ({
   disabled?: boolean;
   isIconOnly?: boolean;
   className?: string;
-  children: React.ReactNode;
+  children?: React.ReactNode;
   imgCallbackOnUpload: (imgUrl: string) => void;
   isPlaceholder?: boolean;
   isProductUpload?: boolean;

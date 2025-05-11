@@ -103,7 +103,6 @@ const ShopSettingsPage = () => {
                     />
                   )}
                   <FileUploaderButton
-                    isIconOnly={false}
                     className={`absolute bottom-5 right-5 z-20 border-2 border-white bg-shopstr-purple shadow-md ${SHOPSTRBUTTONCLASSNAMES}`}
                     imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
                   >
@@ -114,7 +113,7 @@ const ShopSettingsPage = () => {
                   <div className="relative z-50 mt-[-3rem] h-24 w-24">
                     <div className="">
                       <FileUploaderButton
-                        isIconOnly
+                        isIconOnly={true}
                         className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
                         imgCallbackOnUpload={(imgUrl) =>
                           setValue("picture", imgUrl)
