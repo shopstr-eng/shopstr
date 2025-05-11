@@ -1,9 +1,11 @@
 import { Button, Image } from "@nextui-org/react";
 import {
   ArrowUpRightIcon,
+  UserGroupIcon,
   ShieldCheckIcon,
   BoltIcon,
   UserCircleIcon,
+  ShoppingCartIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
@@ -64,14 +66,15 @@ export default function Landing() {
           <div className="absolute -inset-4 -z-10 rounded-full bg-gradient-to-r from-shopstr-purple/20 to-shopstr-yellow/20 opacity-70 blur-xl dark:from-shopstr-yellow/20 dark:to-shopstr-purple/20"></div>
         </div>
         <h1 className="mb-4 bg-gradient-to-r from-shopstr-purple to-shopstr-purple/80 bg-clip-text text-5xl font-bold text-shopstr-purple text-transparent dark:from-shopstr-yellow dark:to-shopstr-yellow/80 dark:text-shopstr-yellow md:text-6xl lg:text-7xl">
-          Shop freely.
+          Shopstr
         </h1>
         <p className="mb-10 max-w-2xl text-xl font-light leading-relaxed text-light-text dark:text-dark-text">
-          A permissionless marketplace, powered by Nostr and Bitcoin
+          Buy and sell anything, anywhere, anytime
         </p>
         <Button
           className={`${SHOPSTRBUTTONCLASSNAMES} flex items-center gap-2 px-10 py-7 text-lg shadow-lg duration-300 transition-all hover:shadow-xl md:px-12 md:text-xl`}
           onClick={() => router.push("/marketplace")}
+          startContent={<ShoppingCartIcon className="mr-2 h-6 w-6" />}
         >
           Start Shopping
         </Button>
@@ -355,6 +358,7 @@ export default function Landing() {
           <Button
             className={`${SHOPSTRBUTTONCLASSNAMES} px-10 py-7 text-lg shadow-lg duration-300 transition-all hover:shadow-xl md:px-12 md:text-xl`}
             onClick={() => router.push("/marketplace")}
+            startContent={<UserGroupIcon className="mr-2 h-6 w-6" />}
           >
             Join Now
           </Button>

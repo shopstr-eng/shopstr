@@ -1,5 +1,5 @@
 import { useContext, useRef, useState } from "react";
-import { Button, Input, Card, Tooltip, Progress } from "@nextui-org/react";
+import { Button, Input, Progress } from "@nextui-org/react";
 import {
   blossomUploadImages,
   getLocalStorageData,
@@ -7,28 +7,24 @@ import {
 import FailureModal from "./failure-modal";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { AnimatePresence, motion } from "framer-motion";
-import {
-  XCircleIcon,
-  PhotoIcon,
-  ArrowUpTrayIcon,
-} from "@heroicons/react/24/outline";
+import { PhotoIcon, ArrowUpTrayIcon } from "@heroicons/react/24/outline";
 
-// Maximum file size in bytes (5MB)
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
+// Maximum file size in bytes (100MB)
+const MAX_FILE_SIZE = 100 * 1024 * 1024;
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 export const FileUploaderButton = ({
   disabled,
-  isIconOnly = false,
-  className = "",
+  className,
   children,
   imgCallbackOnUpload,
+  isPlaceholder = false,
 }: {
   disabled?: boolean;
-  isIconOnly?: boolean;
   className?: string;
   children: React.ReactNode;
   imgCallbackOnUpload: (imgUrl: string) => void;
+  isPlaceholder?: boolean;
 }) => {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
@@ -52,13 +48,6 @@ export const FileUploaderButton = ({
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
-
-  // Format file size
-  const formatFileSize = (bytes: number): string => {
-    if (bytes < 1024) return bytes + " B";
-    else if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
-    else return (bytes / (1024 * 1024)).toFixed(1) + " MB";
-  };
 
   // Strip metadata from image
   const stripImageMetadata = async (imageFile: File): Promise<File> => {
@@ -256,18 +245,6 @@ export const FileUploaderButton = ({
     }
   };
 
-  // Remove preview and clear uploaded image from parent
-  const removePreview = (index: number) => {
-    setPreviews((prev) => prev.filter((_, idx) => idx !== index));
-    imgCallbackOnUpload(""); // Notify parent of removal (adjust as needed)
-  };
-
-  // Clear all previews and uploaded images
-  const clearAll = () => {
-    setPreviews([]);
-    imgCallbackOnUpload(""); // Notify parent to remove all uploaded images
-  };
-
   return (
     <div className="flex w-full flex-col gap-4">
       {/* Drag and Drop Zone */}
@@ -278,16 +255,20 @@ export const FileUploaderButton = ({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={`relative w-full duration-300 transition-all ${
-          isDragging
-            ? "rounded-xl border-2 border-dashed border-primary-500 bg-primary-50/50 p-6"
-            : "border-2 border-dashed border-transparent"
+          isPlaceholder
+            ? "flex h-full min-h-[250px] items-center justify-center rounded-xl border-2 border-dashed border-shopstr-purple p-6 dark:border-shopstr-yellow"
+            : isDragging
+              ? ""
+              : "border-2 border-dashed border-transparent"
         }`}
       >
-        {/* Drag overlay */}
-        {isDragging && (
+        {/* Drag overlay or placeholder state */}
+        {(isDragging || isPlaceholder) && (
           <motion.div
-            className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-xl bg-primary-50/95 backdrop-blur-sm"
-            initial={{ opacity: 0 }}
+            className={`${
+              !isPlaceholder && "absolute inset-0"
+            } z-10 flex flex-col items-center justify-center rounded-xl`}
+            initial={{ opacity: isPlaceholder ? 1 : 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
@@ -295,44 +276,40 @@ export const FileUploaderButton = ({
               animate={{ scale: [1, 1.1, 1] }}
               transition={{ duration: 0.8, repeat: Infinity }}
             >
-              <PhotoIcon className="mb-4 h-16 w-16 text-primary-500" />
+              <PhotoIcon className="mb-4 h-16 w-16 text-shopstr-purple dark:text-shopstr-yellow" />
             </motion.div>
-            <p className="text-xl font-semibold text-primary-700">
-              Drop to upload
+            <p className="text-xl font-semibold text-light-text dark:text-dark-text">
+              {isDragging ? "Drop to upload" : "Drag & Drop Images Here"}
             </p>
-            <p className="mt-1 text-sm text-primary-500">
-              Supports JPEG, PNG, WebP
+            <p className="mt-1 text-center text-sm text-light-text dark:text-dark-text">
+              {isPlaceholder && !isDragging
+                ? "Or click below to select files"
+                : "Supports JPEG, PNG, WebP"}
             </p>
           </motion.div>
         )}
 
-        {/* Full-width upload button */}
-        <Button
-          isLoading={loading}
-          onClick={handleClick}
-          isIconOnly={isIconOnly}
-          disabled={disabled || loading}
-          className={`h-16 w-full ${className} transition-all`}
-          size="lg"
-          color="primary"
-          variant="flat"
-          radius="lg"
-          startContent={
-            !isIconOnly && (
+        {!isPlaceholder && (
+          /* Full-width upload button - only show when not in placeholder mode */
+          <Button
+            isLoading={loading}
+            onClick={handleClick}
+            disabled={disabled || loading}
+            className={`w-full ${className} transition-all`}
+            startContent={
               <motion.div
                 animate={loading ? {} : { scale: [1, 1.05, 1] }}
                 transition={{ duration: 2, repeat: Infinity }}
               >
                 <ArrowUpTrayIcon className="mr-2 h-6 w-6" />
               </motion.div>
-            )
-          }
-        >
-          {children ||
-            (isIconOnly ? null : (
+            }
+          >
+            {children || (
               <span className="text-lg font-medium">Upload Images</span>
-            ))}
-        </Button>
+            )}
+          </Button>
+        )}
 
         <Input
           type="file"
@@ -342,6 +319,14 @@ export const FileUploaderButton = ({
           onInput={handleChange}
           className="hidden"
         />
+
+        {isPlaceholder && (
+          <div
+            className="absolute inset-0 cursor-pointer"
+            onClick={handleClick}
+            aria-label="Click to upload images"
+          />
+        )}
       </div>
 
       {/* Progress Bar */}
@@ -358,7 +343,7 @@ export const FileUploaderButton = ({
                 Uploading {previews.length} image
                 {previews.length > 1 ? "s" : ""}
               </span>
-              <span className="text-sm font-medium text-purple-600 dark:text-yellow-400">
+              <span className="text-sm font-medium text-shopstr-purple dark:text-shopstr-yellow">
                 {progress}%
               </span>
             </div>
@@ -377,84 +362,6 @@ export const FileUploaderButton = ({
               <span>Uploading{progress >= 100 ? " ✓" : ""}</span>
               <span>Processing</span>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Image Previews */}
-      <AnimatePresence>
-        {previews.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="mt-4 w-full"
-          >
-            <Card className="w-full bg-content1 p-4 shadow-lg">
-              <div className="mb-4 flex items-center justify-between">
-                <h3 className="flex items-center gap-2 text-lg font-semibold">
-                  <PhotoIcon className="h-5 w-5 text-purple-500 dark:text-yellow-400" />
-                  Selected Images
-                  <span className="ml-1 text-default-500">
-                    ({previews.length})
-                  </span>
-                </h3>
-                <Button
-                  size="sm"
-                  variant="light"
-                  onClick={clearAll}
-                  className="text-danger-500"
-                >
-                  Clear All
-                </Button>
-              </div>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-                {previews.map((preview, idx) => (
-                  <motion.div
-                    key={idx}
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    whileHover={{ scale: 1.02 }}
-                    className="group relative"
-                  >
-                    <Card className="overflow-hidden shadow-md transition-shadow hover:shadow-lg">
-                      <div className="relative pb-[100%]">
-                        <img
-                          src={preview.src}
-                          alt={`preview-${idx}`}
-                          className="absolute inset-0 h-full w-full object-cover"
-                        />
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
-                          <Tooltip content="Remove image">
-                            <Button
-                              isIconOnly
-                              size="sm"
-                              color="danger"
-                              className="bg-white/90 hover:bg-white"
-                              onClick={() => removePreview(idx)}
-                            >
-                              <XCircleIcon className="h-5 w-5" />
-                            </Button>
-                          </Tooltip>
-                        </div>
-                      </div>
-                      <div className="bg-content2 p-2">
-                        <p
-                          className="truncate text-xs font-medium"
-                          title={preview.name}
-                        >
-                          {preview.name}
-                        </p>
-                        <p className="text-xs text-default-500">
-                          {formatFileSize(preview.size)}
-                        </p>
-                      </div>
-                    </Card>
-                  </motion.div>
-                ))}
-              </div>
-            </Card>
           </motion.div>
         )}
       </AnimatePresence>
