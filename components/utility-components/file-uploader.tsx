@@ -15,16 +15,20 @@ const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 export const FileUploaderButton = ({
   disabled,
+  isIconOnly,
   className,
   children,
   imgCallbackOnUpload,
-  isPlaceholder = false,
+  isPlaceholder,
+  isProductUpload,
 }: {
   disabled?: boolean;
+  isIconOnly?: boolean;
   className?: string;
   children: React.ReactNode;
   imgCallbackOnUpload: (imgUrl: string) => void;
   isPlaceholder?: boolean;
+  isProductUpload?: boolean;
 }) => {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
@@ -257,9 +261,7 @@ export const FileUploaderButton = ({
         className={`relative w-full duration-300 transition-all ${
           isPlaceholder
             ? "flex h-full min-h-[250px] items-center justify-center rounded-xl border-2 border-dashed border-shopstr-purple p-6 dark:border-shopstr-yellow"
-            : isDragging
-              ? ""
-              : "border-2 border-dashed border-transparent"
+            : !isDragging && "border-2 border-dashed border-transparent"
         }`}
       >
         {/* Drag overlay or placeholder state */}
@@ -294,20 +296,26 @@ export const FileUploaderButton = ({
           <Button
             isLoading={loading}
             onClick={handleClick}
+            isIconOnly={isIconOnly}
             disabled={disabled || loading}
-            className={`w-full ${className} transition-all`}
+            className={`${
+              isProductUpload && "w-full"
+            } ${className} transition-all`}
             startContent={
               <motion.div
                 animate={loading ? {} : { scale: [1, 1.05, 1] }}
                 transition={{ duration: 2, repeat: Infinity }}
               >
-                <ArrowUpTrayIcon className="mr-2 h-6 w-6" />
+                <ArrowUpTrayIcon className="h-6 w-6" />
               </motion.div>
             }
           >
-            {children || (
-              <span className="text-lg font-medium">Upload Images</span>
-            )}
+            {children ||
+              (isIconOnly ? null : isProductUpload ? (
+                <span className="text-lg font-medium">Upload Images</span>
+              ) : (
+                <span className="text-lg font-medium">Upload Banner</span>
+              ))}
           </Button>
         )}
 

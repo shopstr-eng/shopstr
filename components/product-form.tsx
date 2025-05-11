@@ -416,7 +416,9 @@ export default function ProductForm({
                       onClick={(e) => e.preventDefault()}
                     >
                       <FileUploaderButton
+                        isIconOnly={false}
                         isPlaceholder={true}
+                        isProductUpload={true}
                         imgCallbackOnUpload={(imgUrl) => {
                           if (imgUrl && imgUrl.length > 0) {
                             setImageError(null);
@@ -431,6 +433,8 @@ export default function ProductForm({
             </Carousel>
             {imageError && <div className="text-red-600">{imageError}</div>}
             <FileUploaderButton
+              isIconOnly={false}
+              isProductUpload={true}
               className={SHOPSTRBUTTONCLASSNAMES}
               imgCallbackOnUpload={(imgUrl) => {
                 if (imgUrl && imgUrl.length > 0) {

@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useContext, useMemo } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { Button, Textarea, Input, Image } from "@nextui-org/react";
-import { ArrowUpOnSquareIcon } from "@heroicons/react/24/outline";
 
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { ShopMapContext } from "@/utils/context/context";
@@ -104,6 +103,7 @@ const ShopSettingsPage = () => {
                     />
                   )}
                   <FileUploaderButton
+                    isIconOnly={false}
                     className={`absolute bottom-5 right-5 z-20 border-2 border-white bg-shopstr-purple shadow-md ${SHOPSTRBUTTONCLASSNAMES}`}
                     imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
                   >
@@ -119,9 +119,7 @@ const ShopSettingsPage = () => {
                         imgCallbackOnUpload={(imgUrl) =>
                           setValue("picture", imgUrl)
                         }
-                      >
-                        <ArrowUpOnSquareIcon className="h-6 w-6" />
-                      </FileUploaderButton>
+                      />
                       {watchPicture ? (
                         <Image
                           src={watchPicture}
