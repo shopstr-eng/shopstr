@@ -16,6 +16,7 @@ const Listing = () => {
   );
   const [productIdString, setProductIdString] = useState("");
 
+  const [fiatOrderIsPlaced, setFiatOrderIsPlaced] = useState(false);
   const [invoiceIsPaid, setInvoiceIsPaid] = useState(false);
   const [invoiceGenerationFailed, setInvoiceGenerationFailed] = useState(false);
   const [cashuPaymentSent, setCashuPaymentSent] = useState(false);
@@ -70,6 +71,7 @@ const Listing = () => {
         {productData && (
           <ListingPage
             productData={productData}
+            setFiatOrderIsPlaced={setFiatOrderIsPlaced}
             setInvoiceIsPaid={setInvoiceIsPaid}
             setInvoiceGenerationFailed={setInvoiceGenerationFailed}
             setCashuPaymentSent={setCashuPaymentSent}
@@ -80,8 +82,9 @@ const Listing = () => {
           <>
             <Modal
               backdrop="blur"
-              isOpen={invoiceIsPaid || cashuPaymentSent}
+              isOpen={fiatOrderIsPlaced || invoiceIsPaid || cashuPaymentSent}
               onClose={() => {
+                setFiatOrderIsPlaced(false);
                 setInvoiceIsPaid(false);
                 setCashuPaymentSent(false);
                 router.push("/marketplace");
@@ -102,7 +105,7 @@ const Listing = () => {
               <ModalContent>
                 <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
                   <CheckCircleIcon className="h-6 w-6 text-green-500" />
-                  <div className="ml-2">Purchase successful!</div>
+                  <div className="ml-2">Order successful!</div>
                 </ModalHeader>
                 <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                   <div className="flex items-center justify-center">

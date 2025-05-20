@@ -8,7 +8,11 @@ import {
   Input,
   useDisclosure,
 } from "@nextui-org/react";
-import { FaceFrownIcon, FaceSmileIcon } from "@heroicons/react/24/outline";
+import {
+  FaceFrownIcon,
+  FaceSmileIcon,
+  PlusIcon,
+} from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import { nip19 } from "nostr-tools";
 import React, { useContext, useEffect, useState, useRef } from "react";
@@ -20,7 +24,7 @@ import {
 import DisplayProducts from "../display-products";
 import LocationDropdown from "../utility-components/dropdowns/location-dropdown";
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
-import { CATEGORIES } from "@/utils/STATIC-VARIABLES";
+import { CATEGORIES, SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import SignInModal from "../sign-in/SignInModal";
@@ -158,6 +162,14 @@ function MarketplacePage({
         pathname: "/orders",
         query: { pk: nip19.npubEncode(pubkeyToOpenChatWith), isInquiry: true },
       });
+    } else {
+      onOpen();
+    }
+  };
+
+  const handleAddNewListing = () => {
+    if (loggedIn) {
+      router.push("/my-listings?addNewListing");
     } else {
       onOpen();
     }
@@ -468,6 +480,16 @@ function MarketplacePage({
           </div>
         )}
       </div>
+      {router.pathname.includes("marketplace") &&
+        !router.asPath.includes("npub") && (
+          <Button
+            radius="full"
+            className={`${SHOPSTRBUTTONCLASSNAMES} fixed bottom-24 right-8 z-50 h-16 w-16`}
+            onClick={() => handleAddNewListing()}
+          >
+            <PlusIcon />
+          </Button>
+        )}
       <SignInModal isOpen={isOpen} onClose={onClose} />
     </div>
   );

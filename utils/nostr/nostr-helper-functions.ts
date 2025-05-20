@@ -279,8 +279,8 @@ export async function constructGiftWrappedEvent(
     orderId?: string;
     type?: number;
     paymentType?: string;
+    paymentReference?: string;
     paymentProof?: string;
-    paymentMint?: string;
     orderAmount?: number;
     status?: string;
     productData?: ProductData;
@@ -298,8 +298,8 @@ export async function constructGiftWrappedEvent(
     orderId,
     type,
     paymentType,
+    paymentReference,
     paymentProof,
-    paymentMint,
     orderAmount,
     status,
     productData,
@@ -322,8 +322,8 @@ export async function constructGiftWrappedEvent(
 
     if (type) tags.push(["type", type.toString()]);
     if (orderAmount) tags.push(["amount", orderAmount.toString()]);
-    if (paymentType && paymentProof && paymentMint)
-      tags.push(["payment", paymentType, paymentProof, paymentMint]);
+    if (paymentType && paymentReference && paymentProof)
+      tags.push(["payment", paymentType, paymentReference, paymentProof]);
     if (status) tags.push(["status", status]);
     if (tracking) tags.push(["tracking", tracking]);
     if (carrier) tags.push(["carrier", carrier]);

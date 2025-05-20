@@ -27,6 +27,7 @@ import {
   BoltIcon,
   CheckIcon,
   ClipboardIcon,
+  CurrencyDollarIcon,
   EnvelopeIcon,
 } from "@heroicons/react/24/outline";
 import { fiat } from "@getalby/lightning-tools";
@@ -77,6 +78,7 @@ export default function ProductInvoiceCard({
   selectedSize,
 }: {
   productData: ProductData;
+  setFiatOrderIsPlaced?: (fiatOrderIsPlaced: boolean) => void;
   setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
   setInvoiceGenerationFailed?: (invoiceGenerationFailed: boolean) => void;
   setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
@@ -103,6 +105,8 @@ export default function ProductInvoiceCard({
   const [invoice, setInvoice] = useState("");
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
 
+  const [orderConfirmed, setOrderConfirmed] = useState(false);
+
   const walletContext = useContext(CashuWalletContext);
 
   const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
@@ -118,6 +122,7 @@ export default function ProductInvoiceCard({
   const [showContactModal, setShowContactModal] = useState(false);
   const [showShippingOption, setShowShippingOption] = useState(false);
   const [isCashuPayment, setIsCashuPayment] = useState(false);
+  const [isFiatPayment, setIsFiatPayment] = useState(false);
 
   const [showPurchaseTypeOption, setShowPurchaseTypeOption] = useState(false);
   const [needsShippingInfo, setNeedsShippingInfo] = useState(false);
@@ -158,8 +163,8 @@ export default function ProductInvoiceCard({
     isDonation?: boolean,
     orderId?: string,
     paymentType?: string,
+    paymentReference?: string,
     paymentProof?: string,
-    paymentMint?: string,
     messageAmount?: number
   ) => {
     const decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
@@ -178,8 +183,8 @@ export default function ProductInvoiceCard({
         orderId,
         productData,
         paymentType,
+        paymentReference,
         paymentProof,
-        paymentMint,
       };
     } else if (isReceipt) {
       messageSubject = "order-info";
@@ -320,7 +325,22 @@ export default function ProductInvoiceCard({
       const shippingCountry = data["Country"];
       const additionalInfo = data["Required"];
       setShowShippingModal(false);
-      if (isCashuPayment) {
+      if (isFiatPayment) {
+        await handleFiatPayment(
+          price,
+          shippingName,
+          shippingAddress,
+          shippingUnitNo,
+          shippingCity,
+          shippingPostalCode,
+          shippingState,
+          shippingCountry,
+          undefined,
+          undefined,
+          undefined,
+          additionalInfo
+        );
+      } else if (isCashuPayment) {
         await handleCashuPayment(
           price,
           shippingName,
@@ -330,6 +350,9 @@ export default function ProductInvoiceCard({
           shippingPostalCode,
           shippingState,
           shippingCountry,
+          undefined,
+          undefined,
+          undefined,
           additionalInfo
         );
       } else {
@@ -342,6 +365,9 @@ export default function ProductInvoiceCard({
           shippingPostalCode,
           shippingState,
           shippingCountry,
+          undefined,
+          undefined,
+          undefined,
           additionalInfo
         );
       }
@@ -388,7 +414,22 @@ export default function ProductInvoiceCard({
       const contactInstructions = data["Instructions"];
       const additionalInfo = data["Required"];
       setShowContactModal(false);
-      if (isCashuPayment) {
+      if (isFiatPayment) {
+        await handleFiatPayment(
+          price,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          contact,
+          contactType,
+          contactInstructions,
+          additionalInfo
+        );
+      } else if (isCashuPayment) {
         await handleCashuPayment(
           price,
           undefined,
@@ -435,6 +476,322 @@ export default function ProductInvoiceCard({
   const handleToggleContactModal = () => {
     contactReset();
     setShowContactModal(!showContactModal);
+  };
+
+  const handleFiatPayment = async (
+    convertedPrice: number,
+    shippingName?: string,
+    shippingAddress?: string,
+    shippingUnitNo?: string,
+    shippingCity?: string,
+    shippingPostalCode?: string,
+    shippingState?: string,
+    shippingCountry?: string,
+    contact?: string,
+    contactType?: string,
+    contactInstructions?: string,
+    additionalInfo?: string
+  ) => {
+    if (
+      shippingName ||
+      shippingAddress ||
+      shippingCity ||
+      shippingPostalCode ||
+      shippingState ||
+      shippingCountry
+    ) {
+      validatePaymentData(convertedPrice, {
+        Name: shippingName || "",
+        Address: shippingAddress || "",
+        Unit: shippingUnitNo || "",
+        City: shippingCity || "",
+        "Postal Code": shippingPostalCode || "",
+        "State/Province": shippingState || "",
+        Country: shippingCountry || "",
+        Required: additionalInfo || "",
+      });
+    } else if (contact || contactType || contactInstructions) {
+      validatePaymentData(convertedPrice, {
+        Contact: contact || "",
+        "Contact Type": contactType || "",
+        Instructions: contactInstructions || "",
+        Required: additionalInfo || "",
+      });
+    } else {
+      validatePaymentData(convertedPrice);
+    }
+    const userPubkey = await signer?.getPubKey?.();
+    const userNPub = userPubkey ? nip19.npubEncode(userPubkey) : undefined;
+    const title = productData.title;
+    const pubkey = productData.pubkey;
+    const required = productData.required;
+    const orderId = uuidv4();
+
+    let paymentMessage = "";
+    if (userNPub) {
+      paymentMessage =
+        "You have received an order from " +
+        userNPub +
+        " for your " +
+        title +
+        " listing on Shopstr! Message them with your payment details to finalize.";
+    } else {
+      paymentMessage =
+        "You have received an order for your " +
+        title +
+        " listing on Shopstr! Message them with your payment details to finalize.";
+    }
+    await sendPaymentAndContactMessage(
+      pubkey,
+      paymentMessage,
+      true,
+      false,
+      false,
+      orderId,
+      "fiat",
+      "",
+      ""
+    );
+
+    if (required && required !== "") {
+      if (additionalInfo) {
+        const additionalMessage =
+          "Additional customer information: " + additionalInfo;
+        await sendPaymentAndContactMessage(
+          pubkey,
+          additionalMessage,
+          false,
+          false,
+          false,
+          orderId
+        );
+      }
+    }
+
+    if (
+      !(
+        shippingName === undefined &&
+        shippingAddress === undefined &&
+        shippingUnitNo === undefined &&
+        shippingCity === undefined &&
+        shippingPostalCode === undefined &&
+        shippingState === undefined &&
+        shippingCountry === undefined &&
+        contact === undefined &&
+        contactType === undefined &&
+        contactInstructions === undefined
+      )
+    ) {
+      if (
+        productData.shippingType === "Added Cost" ||
+        productData.shippingType === "Free" ||
+        (productData.shippingType === "Free/Pickup" &&
+          needsShippingInfo === true)
+      ) {
+        let contactMessage = "";
+        if (!shippingUnitNo && !productData.selectedSize) {
+          contactMessage =
+            "Please ship the product to " +
+            shippingName +
+            " at " +
+            shippingAddress +
+            ", " +
+            shippingCity +
+            ", " +
+            shippingPostalCode +
+            ", " +
+            shippingState +
+            ", " +
+            shippingCountry +
+            ".";
+        } else if (!shippingUnitNo && productData.selectedSize) {
+          contactMessage =
+            "Please ship the product in a size " +
+            productData.selectedSize +
+            " to " +
+            shippingName +
+            " at " +
+            shippingAddress +
+            ", " +
+            shippingCity +
+            ", " +
+            shippingPostalCode +
+            ", " +
+            shippingState +
+            ", " +
+            shippingCountry +
+            ".";
+        } else if (shippingUnitNo && !productData.selectedSize) {
+          contactMessage =
+            "Please ship the product to " +
+            shippingName +
+            " at " +
+            shippingAddress +
+            " " +
+            shippingUnitNo +
+            ", " +
+            shippingCity +
+            ", " +
+            shippingPostalCode +
+            ", " +
+            shippingState +
+            ", " +
+            shippingCountry +
+            ".";
+        } else if (shippingUnitNo && productData.selectedSize) {
+          contactMessage =
+            "Please ship the product in a size " +
+            productData.selectedSize +
+            " to " +
+            shippingName +
+            " at " +
+            shippingAddress +
+            " " +
+            shippingUnitNo +
+            ", " +
+            shippingCity +
+            ", " +
+            shippingPostalCode +
+            ", " +
+            shippingState +
+            ", " +
+            shippingCountry +
+            ".";
+        }
+        await sendPaymentAndContactMessage(
+          pubkey,
+          contactMessage,
+          false,
+          false,
+          false,
+          orderId
+        );
+        if (userPubkey) {
+          const receiptMessage =
+            "Your order for " +
+            productData.title +
+            " was processed successfully. You should be receiving tracking information from " +
+            nip19.npubEncode(productData.pubkey) +
+            " as soon as they confirm payment.";
+          await sendPaymentAndContactMessage(
+            userPubkey,
+            receiptMessage,
+            false,
+            true,
+            false,
+            orderId
+          );
+        }
+      } else if (
+        productData.shippingType === "N/A" ||
+        productData.shippingType === "Pickup" ||
+        (productData.shippingType === "Free/Pickup" &&
+          needsShippingInfo === false)
+      ) {
+        let contactMessage;
+        let receiptMessage;
+        if (productData.selectedSize) {
+          contactMessage =
+            "To finalize the sale of your " +
+            title +
+            " listing in a size " +
+            productData.selectedSize +
+            " on Shopstr, please contact " +
+            contact +
+            " over " +
+            contactType +
+            " using the following instructions: " +
+            contactInstructions;
+          receiptMessage =
+            "Your order for " +
+            productData.title +
+            "in a size " +
+            productData.selectedSize +
+            " was processed successfully. You should be receiving delivery information from " +
+            nip19.npubEncode(productData.pubkey) +
+            " as soon as they confirm payment.";
+        } else {
+          contactMessage =
+            "To finalize the sale of your " +
+            title +
+            " listing on Shopstr, please contact " +
+            contact +
+            " over " +
+            contactType +
+            " using the following instructions: " +
+            contactInstructions;
+          receiptMessage =
+            "Your order for " +
+            productData.title +
+            " was processed successfully. You should be receiving delivery information from " +
+            nip19.npubEncode(productData.pubkey) +
+            " as soon as they confirm payment.";
+        }
+        await sendPaymentAndContactMessage(
+          pubkey,
+          contactMessage,
+          false,
+          false,
+          false,
+          orderId
+        );
+        if (userPubkey) {
+          await sendPaymentAndContactMessage(
+            userPubkey,
+            receiptMessage,
+            false,
+            true,
+            false,
+            orderId
+          );
+        }
+      }
+    } else if (productData.selectedSize) {
+      const contactMessage =
+        "This purchase was for a size " + productData.selectedSize + ".";
+      await sendPaymentAndContactMessage(
+        pubkey,
+        contactMessage,
+        false,
+        false,
+        false,
+        orderId
+      );
+      if (userPubkey) {
+        const receiptMessage =
+          "Thank you for your purchase of " +
+          title +
+          " in a size " +
+          productData.selectedSize +
+          " from " +
+          nip19.npubEncode(productData.pubkey) +
+          ".";
+        await sendPaymentAndContactMessage(
+          userPubkey,
+          receiptMessage,
+          false,
+          true,
+          false,
+          orderId
+        );
+      }
+    } else if (userPubkey) {
+      const receiptMessage =
+        "Thank you for your purchase of " +
+        title +
+        " from " +
+        nip19.npubEncode(productData.pubkey) +
+        ".";
+      await sendPaymentAndContactMessage(
+        userPubkey,
+        receiptMessage,
+        false,
+        true,
+        false,
+        orderId
+      );
+    }
+    setOrderConfirmed(true);
   };
 
   const handleLightningPayment = async (
@@ -735,8 +1092,8 @@ export default function ProductInvoiceCard({
               false,
               orderId,
               "ecash",
-              JSON.stringify(changeProofs),
               mints[0],
+              JSON.stringify(changeProofs),
               changeAmount
             );
           }
@@ -778,8 +1135,8 @@ export default function ProductInvoiceCard({
               false,
               orderId,
               "ecash",
-              JSON.stringify(unusedProofs),
               mints[0],
+              JSON.stringify(unusedProofs),
               unusedAmount
             );
           }
@@ -811,8 +1168,8 @@ export default function ProductInvoiceCard({
           false,
           orderId,
           "ecash",
-          JSON.stringify(sellerProofs),
           mints[0],
+          JSON.stringify(sellerProofs),
           sellerAmount
         );
       }
@@ -1268,6 +1625,45 @@ export default function ProductInvoiceCard({
                   productData.shippingType === "Free" ||
                   productData.shippingType === "Added Cost"
                 ) {
+                  setIsFiatPayment(true);
+                  setNeedsShippingInfo(true);
+                  setShowPurchaseTypeOption(true);
+                } else if (
+                  productData.shippingType === "N/A" ||
+                  productData.shippingType === "Pickup"
+                ) {
+                  setIsFiatPayment(true);
+                  setNeedsShippingInfo(false);
+                  setShowPurchaseTypeOption(true);
+                } else if (productData.shippingType === "Free/Pickup") {
+                  setIsFiatPayment(true);
+                  setShowShippingOption(true);
+                } else {
+                  setIsFiatPayment(true);
+                  setNeedsShippingInfo(false);
+                  setShowPurchaseTypeOption(true);
+                }
+              }
+            }}
+            startContent={
+              <CurrencyDollarIcon className="h-6 w-6 hover:text-yellow-500" />
+            }
+          >
+            Pay with Fiat
+          </Button>
+          <Button
+            type="submit"
+            className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
+            onClick={() => {
+              if (!isLoggedIn) {
+                onOpen();
+                return;
+              }
+              if (randomNsecForReceiver !== "" && randomNpubForSender !== "") {
+                if (
+                  productData.shippingType === "Free" ||
+                  productData.shippingType === "Added Cost"
+                ) {
                   setIsCashuPayment(false);
                   setNeedsShippingInfo(true);
                   setShowPurchaseTypeOption(true);
@@ -1401,6 +1797,19 @@ export default function ProductInvoiceCard({
             )}
           </CardFooter>
         </Card>
+      )}
+      {orderConfirmed && (
+        <div className="flex flex-col items-center justify-center">
+          <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
+            Order confirmed!
+          </h3>
+          <Image
+            alt="Payment Confirmed"
+            className="object-cover"
+            src="../payment-confirmed.gif"
+            width={350}
+          />
+        </div>
       )}
       <Modal
         backdrop="blur"

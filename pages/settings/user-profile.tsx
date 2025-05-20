@@ -4,6 +4,7 @@ import { ProfileMapContext } from "@/utils/context/context";
 import { useForm, Controller } from "react-hook-form";
 import {
   Button,
+  Chip,
   Textarea,
   Input,
   Image,
@@ -52,6 +53,7 @@ const UserProfilePage = () => {
       website: "",
       lud16: "", // Lightning address
       payment_preference: "ecash",
+      fiat_options: [],
       shopstr_donation: 2.1,
     },
   });
@@ -457,7 +459,7 @@ const UserProfilePage = () => {
                       }}
                       variant="bordered"
                       fullWidth={true}
-                      label="Payment preference"
+                      label="Bitcoin payment preference"
                       labelPlacement="outside"
                       selectedKeys={value ? [value] : []}
                       onChange={(e) => onChange(e.target.value)}
@@ -486,6 +488,100 @@ const UserProfilePage = () => {
                       </SelectItem>
                     </Select>
                   )}
+                />
+
+                <Controller
+                  name="fiat_options"
+                  control={control}
+                  render={({ field: { onChange, onBlur, value } }) => {
+                    const selectedOptions = Array.isArray(value)
+                      ? value
+                      : value
+                        ? [value]
+                        : [];
+                    return (
+                      <Select
+                        className="pb-4 text-light-text dark:text-dark-text"
+                        classNames={{
+                          label: "text-light-text dark:text-dark-text text-lg",
+                        }}
+                        variant="bordered"
+                        fullWidth={true}
+                        label="Alternative payment options"
+                        labelPlacement="outside"
+                        selectionMode="multiple"
+                        selectedKeys={new Set(selectedOptions)}
+                        onChange={(e) => {
+                          const selectedValues = Array.from(
+                            new Set(e.target.value.split(","))
+                          );
+                          onChange(selectedValues);
+                        }}
+                        onBlur={onBlur}
+                        renderValue={(items) => (
+                          <div className="flex flex-wrap gap-2">
+                            {items.map((item) => (
+                              <Chip key={item.key}>
+                                {item.key
+                                  ? (item.key as string)
+                                  : "unkown option"}
+                              </Chip>
+                            ))}
+                          </div>
+                        )}
+                      >
+                        <SelectItem
+                          key="cash"
+                          value="cash"
+                          className="text-light-text dark:text-dark-text"
+                        >
+                          Cash
+                        </SelectItem>
+                        <SelectItem
+                          key="venmo"
+                          value="venmo"
+                          className="text-light-text dark:text-dark-text"
+                        >
+                          Venmo
+                        </SelectItem>
+                        <SelectItem
+                          key="zelle"
+                          value="zelle"
+                          className="text-light-text dark:text-dark-text"
+                        >
+                          Zelle
+                        </SelectItem>
+                        <SelectItem
+                          key="cashapp"
+                          value="cashapp"
+                          className="text-light-text dark:text-dark-text"
+                        >
+                          Cash App
+                        </SelectItem>
+                        <SelectItem
+                          key="applepay"
+                          value="applepay"
+                          className="text-light-text dark:text-dark-text"
+                        >
+                          Apple Pay
+                        </SelectItem>
+                        <SelectItem
+                          key="googlepay"
+                          value="googlepay"
+                          className="text-light-text dark:text-dark-text"
+                        >
+                          Google Pay
+                        </SelectItem>
+                        <SelectItem
+                          key="paypal"
+                          value="paypal"
+                          className="text-light-text dark:text-dark-text"
+                        >
+                          PayPal
+                        </SelectItem>
+                      </Select>
+                    );
+                  }}
                 />
 
                 <Controller

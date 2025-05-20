@@ -4,12 +4,14 @@ import CheckoutCard from "./utility-components/checkout-card";
 
 export default function ListingPage({
   productData,
+  setFiatOrderIsPlaced,
   setInvoiceIsPaid,
   setInvoiceGenerationFailed,
   setCashuPaymentSent,
   setCashuPaymentFailed,
 }: {
   productData: ProductData;
+  setFiatOrderIsPlaced?: (fiatOrderIsPlaced: boolean) => void;
   setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
   setInvoiceGenerationFailed?: (invoiceGenerationFailed: boolean) => void;
   setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
@@ -22,6 +24,7 @@ export default function ListingPage({
       <div className="flex flex-col">
         <CheckoutCard
           productData={productData}
+          setFiatOrderIsPlaced={setFiatOrderIsPlaced}
           setInvoiceIsPaid={setInvoiceIsPaid}
           setInvoiceGenerationFailed={setInvoiceGenerationFailed}
           setCashuPaymentSent={setCashuPaymentSent}
