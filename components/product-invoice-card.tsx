@@ -127,6 +127,10 @@ export default function ProductInvoiceCard({
   const [showPurchaseTypeOption, setShowPurchaseTypeOption] = useState(false);
   const [needsShippingInfo, setNeedsShippingInfo] = useState(false);
 
+  const [fiatPaymentOptions, setFiatPaymentOptions] = useState([]);
+  const [showFiatTypeOption, setShowFiatTypeOption] = useState(false);
+  const [selectedFiatOption, setSelectedFiatOption] = useState("");
+
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
 
@@ -141,6 +145,7 @@ export default function ProductInvoiceCard({
     control: contactControl,
     reset: contactReset,
   } = useForm();
+
   useEffect(() => {
     const fetchKeys = async () => {
       const { nsec: nsecForSender, npub: npubForSender } = await generateKeys();
@@ -154,6 +159,12 @@ export default function ProductInvoiceCard({
 
     fetchKeys();
   }, []);
+
+  useEffect(() => {
+    const sellerProfile = profileContext.profileData.get(productData.pubkey);
+    const fiatOptions = sellerProfile?.content?.fiat_options || [];
+    setFiatPaymentOptions(fiatOptions);
+  }, [productData.pubkey, profileContext.profileData]);
 
   const sendPaymentAndContactMessage = async (
     pubkeyToReceiveMessage: string,
@@ -534,12 +545,16 @@ export default function ProductInvoiceCard({
         userNPub +
         " for your " +
         title +
-        " listing on Shopstr! Message them with your payment details to finalize.";
+        " listing on Shopstr! Message them with your " +
+        selectedFiatOption +
+        "payment details to finalize.";
     } else {
       paymentMessage =
         "You have received an order for your " +
         title +
-        " listing on Shopstr! Message them with your payment details to finalize.";
+        " listing on Shopstr! Message them with your " +
+        selectedFiatOption +
+        "payment details to finalize.";
     }
     await sendPaymentAndContactMessage(
       pubkey,
@@ -670,9 +685,9 @@ export default function ProductInvoiceCard({
           const receiptMessage =
             "Your order for " +
             productData.title +
-            " was processed successfully. You should be receiving tracking information from " +
+            " was processed successfully! You should be receiving payment information from " +
             nip19.npubEncode(productData.pubkey) +
-            " as soon as they confirm payment.";
+            " as soon as they review your oder.";
           await sendPaymentAndContactMessage(
             userPubkey,
             receiptMessage,
@@ -707,9 +722,9 @@ export default function ProductInvoiceCard({
             productData.title +
             "in a size " +
             productData.selectedSize +
-            " was processed successfully. You should be receiving delivery information from " +
+            " was processed successfully! You should be receiving payment information from " +
             nip19.npubEncode(productData.pubkey) +
-            " as soon as they confirm payment.";
+            " as soon as they review your order.";
         } else {
           contactMessage =
             "To finalize the sale of your " +
@@ -723,9 +738,9 @@ export default function ProductInvoiceCard({
           receiptMessage =
             "Your order for " +
             productData.title +
-            " was processed successfully. You should be receiving delivery information from " +
+            " was processed successfully! You should be receiving payment information from " +
             nip19.npubEncode(productData.pubkey) +
-            " as soon as they confirm payment.";
+            " as soon as they review your order.";
         }
         await sendPaymentAndContactMessage(
           pubkey,
@@ -1612,45 +1627,50 @@ export default function ProductInvoiceCard({
           >
             Message
           </Button>
-          <Button
-            type="submit"
-            className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
-            onClick={() => {
-              if (!isLoggedIn) {
-                onOpen();
-                return;
-              }
-              if (randomNsecForReceiver !== "" && randomNpubForSender !== "") {
-                if (
-                  productData.shippingType === "Free" ||
-                  productData.shippingType === "Added Cost"
-                ) {
-                  setIsFiatPayment(true);
-                  setNeedsShippingInfo(true);
-                  setShowPurchaseTypeOption(true);
-                } else if (
-                  productData.shippingType === "N/A" ||
-                  productData.shippingType === "Pickup"
-                ) {
-                  setIsFiatPayment(true);
-                  setNeedsShippingInfo(false);
-                  setShowPurchaseTypeOption(true);
-                } else if (productData.shippingType === "Free/Pickup") {
-                  setIsFiatPayment(true);
-                  setShowShippingOption(true);
-                } else {
-                  setIsFiatPayment(true);
-                  setNeedsShippingInfo(false);
-                  setShowPurchaseTypeOption(true);
+          {fiatPaymentOptions.length > 0 && (
+            <Button
+              type="submit"
+              className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
+              onClick={() => {
+                if (!isLoggedIn) {
+                  onOpen();
+                  return;
                 }
+                if (
+                  randomNsecForReceiver !== "" &&
+                  randomNpubForSender !== ""
+                ) {
+                  if (
+                    productData.shippingType === "Free" ||
+                    productData.shippingType === "Added Cost"
+                  ) {
+                    setIsFiatPayment(true);
+                    setNeedsShippingInfo(true);
+                    setShowFiatTypeOption(true);
+                  } else if (
+                    productData.shippingType === "N/A" ||
+                    productData.shippingType === "Pickup"
+                  ) {
+                    setIsFiatPayment(true);
+                    setNeedsShippingInfo(false);
+                    setShowFiatTypeOption(true);
+                  } else if (productData.shippingType === "Free/Pickup") {
+                    setIsFiatPayment(true);
+                    setShowFiatTypeOption(true);
+                  } else {
+                    setIsFiatPayment(true);
+                    setNeedsShippingInfo(false);
+                    setShowFiatTypeOption(true);
+                  }
+                }
+              }}
+              startContent={
+                <CurrencyDollarIcon className="h-6 w-6 hover:text-yellow-500" />
               }
-            }}
-            startContent={
-              <CurrencyDollarIcon className="h-6 w-6 hover:text-yellow-500" />
-            }
-          >
-            Pay with Fiat
-          </Button>
+            >
+              Pay with Fiat
+            </Button>
+          )}
           <Button
             type="submit"
             className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
@@ -1798,6 +1818,7 @@ export default function ProductInvoiceCard({
           </CardFooter>
         </Card>
       )}
+
       {orderConfirmed && (
         <div className="flex flex-col items-center justify-center">
           <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
@@ -1811,6 +1832,60 @@ export default function ProductInvoiceCard({
           />
         </div>
       )}
+
+      <Modal
+        backdrop="blur"
+        isOpen={showFiatTypeOption}
+        onClose={() => {
+          setShowFiatTypeOption(false);
+        }}
+        classNames={{
+          body: "py-6 ",
+          backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+          header: "border-b-[1px] border-[#292f46]",
+          footer: "border-t-[1px] border-[#292f46]",
+          closeButton: "hover:bg-black/5 active:bg-white/10",
+        }}
+        isDismissable={true}
+        scrollBehavior={"normal"}
+        placement={"center"}
+        size="2xl"
+      >
+        <ModalContent>
+          <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+            Select your fiat payment preference:
+          </ModalHeader>
+          <ModalBody className="flex flex-col overflow-hidden">
+            <div className="flex items-center justify-center">
+              <Select
+                label="Fiat Payment Options"
+                className="max-w-xs"
+                onChange={(e) => {
+                  setSelectedFiatOption(e.target.value);
+                  if (productData.shippingType === "Free/Pickup") {
+                    setShowShippingOption(true);
+                  } else {
+                    setShowPurchaseTypeOption(true);
+                  }
+                  setShowFiatTypeOption(false);
+                }}
+              >
+                {fiatPaymentOptions &&
+                  fiatPaymentOptions.map((option) => (
+                    <SelectItem
+                      key={option}
+                      value={option}
+                      className="text-light-text dark:text-dark-text"
+                    >
+                      {option}
+                    </SelectItem>
+                  ))}
+              </Select>
+            </div>
+          </ModalBody>
+        </ModalContent>
+      </Modal>
+
       <Modal
         backdrop="blur"
         isOpen={showShippingOption}
@@ -1871,7 +1946,9 @@ export default function ProductInvoiceCard({
                     } else if (productData.currency.toLowerCase() === "btc") {
                       price = price * 100000000;
                     }
-                    if (isCashuPayment) {
+                    if (isFiatPayment) {
+                      await handleFiatPayment(price);
+                    } else if (isCashuPayment) {
                       await handleCashuPayment(price);
                     } else {
                       await handleLightningPayment(price);
@@ -1966,7 +2043,9 @@ export default function ProductInvoiceCard({
                     } else if (productData.currency.toLowerCase() === "btc") {
                       price = price * 100000000;
                     }
-                    if (isCashuPayment) {
+                    if (isFiatPayment) {
+                      await handleFiatPayment(price);
+                    } else if (isCashuPayment) {
                       await handleCashuPayment(price);
                     } else {
                       await handleLightningPayment(price);

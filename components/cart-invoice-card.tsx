@@ -127,6 +127,10 @@ export default function CartInvoiceCard({
   const [needsShippingInfo, setNeedsShippingInfo] = useState(false);
   const [needsCombinedInfo, setNeedsCombinedInfo] = useState(false);
 
+  const [fiatPaymentOptions, setFiatPaymentOptions] = useState([]);
+  const [showFiatTypeOption, setShowFiatTypeOption] = useState(false);
+  const [selectedFiatOption, setSelectedFiatOption] = useState("");
+
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
   const [requiredInfo, setRequiredInfo] = useState("");
@@ -162,6 +166,35 @@ export default function CartInvoiceCard({
     control: combinedControl,
     reset: combinedReset,
   } = useForm();
+
+  useEffect(() => {
+    if (!products || products.length === 0) {
+      setFiatPaymentOptions([]);
+      return;
+    } else {
+      const firstProduct = products[0]!;
+      const firstSellerProfile = profileContext.profileData.get(
+        firstProduct.pubkey
+      );
+      let commonFiatOptions = firstSellerProfile?.content?.fiat_options || [];
+
+      for (let i = 1; i < products.length; i++) {
+        const productData = products[i]!;
+        const sellerProfile = profileContext.profileData.get(
+          productData.pubkey
+        );
+        const currentFiatOptions = sellerProfile?.content?.fiat_options || [];
+
+        commonFiatOptions = commonFiatOptions.filter((option: string) =>
+          currentFiatOptions.includes(option)
+        );
+
+        if (commonFiatOptions.length === 0) break;
+      }
+
+      setFiatPaymentOptions(commonFiatOptions);
+    }
+  }, [products, profileContext.profileData]);
 
   const generateNewKeys = async () => {
     try {
@@ -622,14 +655,18 @@ export default function CartInvoiceCard({
             quantities[product.id] +
             " of your " +
             title +
-            " listing on Shopstr! Message them with your payment details to finalze.";
+            " listing on Shopstr! Message them with your " +
+            selectedFiatOption +
+            "payment details to finalize.";
         } else {
           paymentMessage =
             "You have received an order for your" +
             quantities[product.id] +
             " of your " +
             title +
-            " listing on Shopstr! Message them with your payment details to finalize.";
+            " listing on Shopstr! Message them with your " +
+            selectedFiatOption +
+            "payment details to finalize.";
         }
       } else {
         if (userNPub) {
@@ -638,12 +675,16 @@ export default function CartInvoiceCard({
             userNPub +
             " for your " +
             title +
-            " listing on Shopstr! Message them with your payment details to finalize.";
+            " listing on Shopstr! Message them with your " +
+            selectedFiatOption +
+            "payment details to finalize.";
         } else {
           paymentMessage =
             "You have received an order for your " +
             title +
-            " listing on Shopstr! Message them with your payment details to finalize.";
+            " listing on Shopstr! Message them with your " +
+            selectedFiatOption +
+            "payment details to finalize.";
         }
       }
       await sendPaymentAndContactMessage(
@@ -781,9 +822,9 @@ export default function CartInvoiceCard({
             const receiptMessage =
               "Your order for " +
               product.title +
-              " was processed successfully. You should be receiving tracking information from " +
+              " was processed successfully.  You should be receiving payment information from " +
               nip19.npubEncode(product.pubkey) +
-              " as soon as they confirm payment.";
+              " as soon as they review your oder.";
             await sendPaymentAndContactMessage(
               userPubkey,
               receiptMessage,
@@ -819,9 +860,9 @@ export default function CartInvoiceCard({
               product.title +
               "in a size " +
               product.selectedSize +
-              " was processed successfully. You should be receiving delivery information from " +
+              " was processed successfully.  You should be receiving payment information from " +
               nip19.npubEncode(product.pubkey) +
-              " as soon as they confirm payment.";
+              " as soon as they review your oder.";
           } else {
             contactMessage =
               "To finalize the sale of your " +
@@ -835,9 +876,9 @@ export default function CartInvoiceCard({
             receiptMessage =
               "Your order for " +
               product.title +
-              " was processed successfully. You should be receiving delivery information from " +
+              " was processed successfully.  You should be receiving payment information from " +
               nip19.npubEncode(product.pubkey) +
-              " as soon as they confirm payment.";
+              " as soon as they review your oder.";
           }
           await sendPaymentAndContactMessage(
             pubkey,
@@ -1822,60 +1863,63 @@ export default function CartInvoiceCard({
     <>
       {!showInvoiceCard && (
         <>
-          <Button
-            type="submit"
-            className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
-            onClick={() => {
-              if (!userLoggedIn) {
-                onOpen();
-                return;
+          {fiatPaymentOptions.length > 0 && (
+            <Button
+              type="submit"
+              className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
+              onClick={() => {
+                if (!userLoggedIn) {
+                  onOpen();
+                  return;
+                }
+                if (
+                  uniqueShippingTypes.length === 1 &&
+                  uniqueShippingTypes.includes("Free/Pickup")
+                ) {
+                  setIsFiatPayment(true);
+                  // setShowShippingOption(true); only diference
+                  setShowFiatTypeOption(true);
+                } else if (
+                  !uniqueShippingTypes.includes("N/A") &&
+                  !uniqueShippingTypes.includes("Pickup")
+                ) {
+                  setIsFiatPayment(true);
+                  setNeedsShippingInfo(true);
+                  setNeedsCombinedInfo(false);
+                  setShowFiatTypeOption(true);
+                } else if (
+                  !uniqueShippingTypes.includes("Free") &&
+                  !uniqueShippingTypes.includes("Added Cost")
+                ) {
+                  setIsFiatPayment(true);
+                  setNeedsShippingInfo(false);
+                  setNeedsCombinedInfo(false);
+                  setShowFiatTypeOption(true);
+                } else if (
+                  !uniqueShippingTypes.includes("Free") &&
+                  !uniqueShippingTypes.includes("Added Cost") &&
+                  !uniqueShippingTypes.includes("N/A") &&
+                  !uniqueShippingTypes.includes("Pickup") &&
+                  !uniqueShippingTypes.includes("Free/Pickup")
+                ) {
+                  setIsFiatPayment(true);
+                  setNeedsShippingInfo(false);
+                  setNeedsCombinedInfo(false);
+                  setShowFiatTypeOption(true);
+                } else {
+                  setIsFiatPayment(true);
+                  setNeedsShippingInfo(false);
+                  setNeedsCombinedInfo(true);
+                  setShowFiatTypeOption(true);
+                }
+              }}
+              startContent={
+                <CurrencyDollarIcon className="h-6 w-6 hover:text-yellow-500" />
               }
-              if (
-                uniqueShippingTypes.length === 1 &&
-                uniqueShippingTypes.includes("Free/Pickup")
-              ) {
-                setIsFiatPayment(true);
-                setShowShippingOption(true);
-              } else if (
-                !uniqueShippingTypes.includes("N/A") &&
-                !uniqueShippingTypes.includes("Pickup")
-              ) {
-                setIsFiatPayment(true);
-                setNeedsShippingInfo(true);
-                setNeedsCombinedInfo(false);
-                setShowPurchaseTypeOption(true);
-              } else if (
-                !uniqueShippingTypes.includes("Free") &&
-                !uniqueShippingTypes.includes("Added Cost")
-              ) {
-                setIsFiatPayment(true);
-                setNeedsShippingInfo(false);
-                setNeedsCombinedInfo(false);
-                setShowPurchaseTypeOption(true);
-              } else if (
-                !uniqueShippingTypes.includes("Free") &&
-                !uniqueShippingTypes.includes("Added Cost") &&
-                !uniqueShippingTypes.includes("N/A") &&
-                !uniqueShippingTypes.includes("Pickup") &&
-                !uniqueShippingTypes.includes("Free/Pickup")
-              ) {
-                setIsFiatPayment(true);
-                setNeedsShippingInfo(false);
-                setNeedsCombinedInfo(false);
-                setShowPurchaseTypeOption(true);
-              } else {
-                setIsFiatPayment(true);
-                setNeedsShippingInfo(false);
-                setNeedsCombinedInfo(true);
-                setShowPurchaseTypeOption(true);
-              }
-            }}
-            startContent={
-              <CurrencyDollarIcon className="h-6 w-6 hover:text-yellow-500" />
-            }
-          >
-            Pay with Fiat
-          </Button>
+            >
+              Pay with Fiat
+            </Button>
+          )}
           <Button
             type="submit"
             className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
@@ -2069,6 +2113,59 @@ export default function CartInvoiceCard({
 
       <Modal
         backdrop="blur"
+        isOpen={showFiatTypeOption}
+        onClose={() => {
+          setShowFiatTypeOption(false);
+        }}
+        classNames={{
+          body: "py-6 ",
+          backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+          header: "border-b-[1px] border-[#292f46]",
+          footer: "border-t-[1px] border-[#292f46]",
+          closeButton: "hover:bg-black/5 active:bg-white/10",
+        }}
+        isDismissable={true}
+        scrollBehavior={"normal"}
+        placement={"center"}
+        size="2xl"
+      >
+        <ModalContent>
+          <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+            Select your fiat payment preference:
+          </ModalHeader>
+          <ModalBody className="flex flex-col overflow-hidden">
+            <div className="flex items-center justify-center">
+              <Select
+                label="Fiat Payment Options"
+                className="max-w-xs"
+                onChange={(e) => {
+                  setSelectedFiatOption(e.target.value);
+                  if (uniqueShippingTypes.includes("Free/Pickup")) {
+                    setShowShippingOption(true);
+                  } else {
+                    setShowPurchaseTypeOption(true);
+                  }
+                  setShowFiatTypeOption(false);
+                }}
+              >
+                {fiatPaymentOptions &&
+                  fiatPaymentOptions.map((option) => (
+                    <SelectItem
+                      key={option}
+                      value={option}
+                      className="text-light-text dark:text-dark-text"
+                    >
+                      {option}
+                    </SelectItem>
+                  ))}
+              </Select>
+            </div>
+          </ModalBody>
+        </ModalContent>
+      </Modal>
+
+      <Modal
+        backdrop="blur"
         isOpen={showShippingOption}
         onClose={() => {
           setShowShippingOption(false);
@@ -2097,7 +2194,9 @@ export default function CartInvoiceCard({
                   className="text-light-text dark:text-dark-text"
                   onClick={async () => {
                     setShowShippingOption(false);
-                    if (isCashuPayment) {
+                    if (isFiatPayment) {
+                      await handleFiatPayment(totalCost);
+                    } else if (isCashuPayment) {
                       await handleCashuPayment(totalCost);
                     } else {
                       await handleLightningPayment(totalCost);
@@ -2162,7 +2261,9 @@ export default function CartInvoiceCard({
                   className="text-light-text dark:text-dark-text"
                   onClick={async () => {
                     setShowPurchaseTypeOption(false);
-                    if (isCashuPayment) {
+                    if (isFiatPayment) {
+                      await handleFiatPayment(totalCost);
+                    } else if (isCashuPayment) {
                       await handleCashuPayment(totalCost);
                     } else {
                       await handleLightningPayment(totalCost);
