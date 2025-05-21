@@ -31,6 +31,7 @@ const SUMMARY_CHARACTER_LIMIT = 100;
 
 export default function CheckoutCard({
   productData,
+  setFiatOrderIsPlaced,
   setInvoiceIsPaid,
   setInvoiceGenerationFailed,
   setCashuPaymentSent,
@@ -38,6 +39,7 @@ export default function CheckoutCard({
   uniqueKey,
 }: {
   productData: ProductData;
+  setFiatOrderIsPlaced?: (fiatOrderIsPlaced: boolean) => void;
   setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
   setInvoiceGenerationFailed?: (invoiceGenerationFailed: boolean) => void;
   setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
@@ -650,6 +652,7 @@ export default function CheckoutCard({
           <div className="flex flex-col items-center">
             <ProductInvoiceCard
               productData={productData}
+              setFiatOrderIsPlaced={setFiatOrderIsPlaced}
               setInvoiceIsPaid={setInvoiceIsPaid}
               setInvoiceGenerationFailed={setInvoiceGenerationFailed}
               setCashuPaymentSent={setCashuPaymentSent}
