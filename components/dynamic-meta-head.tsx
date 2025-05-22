@@ -19,9 +19,9 @@ const getMetaTags = (
   productEvents: NostrEvent[],
   shopEvents: Map<string, ShopSettings>
 ): MetaTagsType => {
-  const defaultTags = {
-    title: "Shopstr",
-    description: "Shop freely.",
+    const defaultTags = {
+      title: "Fundstr",
+      description: "Shop freely.",
     image: "/shopstr-2000x2000.png",
     url: `${windowOrigin}`,
   };
@@ -44,17 +44,17 @@ const getMetaTags = (
       const productData = parseTags(product);
       if (productData) {
         return {
-          title: productData.title || "Shopstr Listing",
+          title: productData.title || "Fundstr Listing",
           description:
-            productData.summary || "Check out this product on Shopstr!",
+            productData.summary || "Check out this product on Fundstr!",
           image: productData.images?.[0] || "/shopstr-2000x2000.png",
           url: `${windowOrigin}/listing/${naddr}`,
         };
       }
       return {
         ...defaultTags,
-        title: "Shopstr Listing",
-        description: "Check out this listing on Shopstr!",
+        title: "Fundstr Listing",
+        description: "Check out this listing on Fundstr!",
         url: `${windowOrigin}/listing/${naddr}`,
       };
     }
@@ -68,17 +68,17 @@ const getMetaTags = (
 
     if (shopInfo) {
       return {
-        title: `${shopInfo.content.name} Shop` || "Shopstr Shop",
+          title: `${shopInfo.content.name} Shop` || "Fundstr Shop",
         description:
-          shopInfo.content.about || "Check out this shop on Shopstr!",
+          shopInfo.content.about || "Check out this shop on Fundstr!",
         image: shopInfo.content.ui.picture || "/shopstr-2000x2000.png",
         url: `${windowOrigin}/marketplace/${npub}`,
       };
     }
     return {
       ...defaultTags,
-      title: "Shopstr Shop",
-      description: "Check out this shop on Shopstr!",
+      title: "Fundstr Shop",
+      description: "Check out this shop on Fundstr!",
       url: `${windowOrigin}/marketplace/${npub}`,
     };
   }
@@ -101,7 +101,7 @@ const DynamicHead = ({
   }, []);
 
   const metaTags = getMetaTags(
-    origin ? origin : "https://shopstr.store",
+    origin ? origin : "https://fundstr.com",
     router.pathname,
     router.query,
     productEvents,
