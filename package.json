@@ -1,5 +1,6 @@
 {
-  "name": "shopstr",
+  "name": "Fundstr",
+  "description": "Nostr Patreon-like platform where creators publish support tiers and supporters pledge directly. Tier and pledge information is published as Nostr events for open discovery and censorship resistance.",
   "version": "0.4.2",
   "type": "module",
   "private": true,
