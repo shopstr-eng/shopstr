@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useContext, useMemo } from "react";
 import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
@@ -30,12 +29,9 @@ const UserProfileForm = ({ isOnboarding = false }: UserProfileFormProps) => {
   const { nostr } = useContext(NostrContext);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
   const [isFetchingProfile, setIsFetchingProfile] = useState(false);
-  
-  const {
-    signer,
-    pubkey: userPubkey,
-  } = useContext(SignerContext);
-  
+
+  const { signer, pubkey: userPubkey } = useContext(SignerContext);
+
   const profileContext = useContext(ProfileMapContext);
   const { handleSubmit, control, reset, watch, setValue } = useForm({
     defaultValues: {
@@ -87,7 +83,7 @@ const UserProfileForm = ({ isOnboarding = false }: UserProfileFormProps) => {
       created_at: 0,
     });
     setIsUploadingProfile(false);
-    
+
     if (isOnboarding) {
       router.push("/onboarding/shop-settings");
     }
@@ -132,9 +128,7 @@ const UserProfileForm = ({ isOnboarding = false }: UserProfileFormProps) => {
               <FileUploaderButton
                 isIconOnly
                 className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
-                imgCallbackOnUpload={(imgUrl) =>
-                  setValue("picture", imgUrl)
-                }
+                imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
               />
               {watchPicture ? (
                 <Image
@@ -163,9 +157,7 @@ const UserProfileForm = ({ isOnboarding = false }: UserProfileFormProps) => {
             fieldState: { error },
           }) => {
             const isErrored = error !== undefined;
-            const errorMessage: string = error?.message
-              ? error.message
-              : "";
+            const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
                 className="pb-4 text-light-text dark:text-dark-text"
@@ -195,9 +187,7 @@ const UserProfileForm = ({ isOnboarding = false }: UserProfileFormProps) => {
             fieldState: { error },
           }) => {
             const isErrored = error !== undefined;
-            const errorMessage: string = error?.message
-              ? error.message
-              : "";
+            const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
                 className="pb-4 text-light-text dark:text-dark-text"
@@ -227,9 +217,7 @@ const UserProfileForm = ({ isOnboarding = false }: UserProfileFormProps) => {
             fieldState: { error },
           }) => {
             const isErrored = error !== undefined;
-            const errorMessage: string = error?.message
-              ? error.message
-              : "";
+            const errorMessage: string = error?.message ? error.message : "";
             return (
               <Textarea
                 className="pb-4 text-light-text dark:text-dark-text"

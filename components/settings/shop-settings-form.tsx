@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useContext, useMemo } from "react";
 import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
@@ -84,7 +83,7 @@ const ShopSettingsForm = ({ isOnboarding = false }: ShopSettingsFormProps) => {
       created_at: 0,
     });
     setIsUploadingShopSettings(false);
-    
+
     if (isOnboarding) {
       router.push("/marketplace");
     }
@@ -122,9 +121,7 @@ const ShopSettingsForm = ({ isOnboarding = false }: ShopSettingsFormProps) => {
               <FileUploaderButton
                 isIconOnly={true}
                 className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
-                imgCallbackOnUpload={(imgUrl) =>
-                  setValue("picture", imgUrl)
-                }
+                imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
               />
               {watchPicture ? (
                 <Image
@@ -159,9 +156,7 @@ const ShopSettingsForm = ({ isOnboarding = false }: ShopSettingsFormProps) => {
             fieldState: { error },
           }) => {
             const isErrored = error !== undefined;
-            const errorMessage: string = error?.message
-              ? error.message
-              : "";
+            const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
                 className="pb-4 text-light-text dark:text-dark-text"
@@ -197,9 +192,7 @@ const ShopSettingsForm = ({ isOnboarding = false }: ShopSettingsFormProps) => {
             fieldState: { error },
           }) => {
             const isErrored = error !== undefined;
-            const errorMessage: string = error?.message
-              ? error.message
-              : "";
+            const errorMessage: string = error?.message ? error.message : "";
             return (
               <Textarea
                 className="pb-4 text-light-text dark:text-dark-text"

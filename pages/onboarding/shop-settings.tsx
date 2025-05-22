@@ -1,4 +1,3 @@
-
 import React from "react";
 import { useRouter } from "next/router";
 import { Card, CardBody, Button, Image } from "@nextui-org/react";
@@ -7,7 +6,7 @@ import ShopSettingsForm from "@/components/settings/shop-settings-form";
 
 const OnboardingShopSettings = () => {
   const router = useRouter();
-  
+
   const handleFinish = () => {
     router.push("/marketplace");
   };
@@ -37,9 +36,9 @@ const OnboardingShopSettings = () => {
                 Set up your shop details or skip this step to finish onboarding.
               </p>
             </div>
-            
+
             <ShopSettingsForm isOnboarding={true} />
-            
+
             <div className="mt-4 flex justify-center">
               <Button
                 className={`${SHOPSTRBUTTONCLASSNAMES} w-32`}

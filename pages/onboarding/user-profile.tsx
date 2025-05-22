@@ -1,4 +1,3 @@
-
 import React from "react";
 import { useRouter } from "next/router";
 import { Card, CardBody, Button, Image } from "@nextui-org/react";
@@ -7,7 +6,7 @@ import UserProfileForm from "@/components/settings/user-profile-form";
 
 const OnboardingUserProfile = () => {
   const router = useRouter();
-  
+
   const handleSkip = () => {
     router.push("/onboarding/shop-settings");
   };
@@ -37,9 +36,9 @@ const OnboardingUserProfile = () => {
                 Set up your user profile or skip this step to continue.
               </p>
             </div>
-            
+
             <UserProfileForm isOnboarding={true} />
-            
+
             <div className="mt-4 flex justify-center">
               <Button
                 className={`${SHOPSTRBUTTONCLASSNAMES} w-32`}
