@@ -57,7 +57,7 @@ export default function Landing() {
       <section className="container mx-auto flex flex-col items-center justify-center px-4 pb-24 pt-28 text-center">
         <div className="relative mb-8">
           <Image
-            alt="Shopstr logo"
+            alt="Fundstr logo"
             height={120}
             width={120}
             src="/shopstr-2000x2000.png"
@@ -66,7 +66,7 @@ export default function Landing() {
           <div className="absolute -inset-4 -z-10 rounded-full bg-gradient-to-r from-shopstr-purple/20 to-shopstr-yellow/20 opacity-70 blur-xl dark:from-shopstr-yellow/20 dark:to-shopstr-purple/20"></div>
         </div>
         <h1 className="mb-4 bg-gradient-to-r from-shopstr-purple to-shopstr-purple/80 bg-clip-text text-5xl font-bold text-shopstr-purple text-transparent dark:from-shopstr-yellow dark:to-shopstr-yellow/80 dark:text-shopstr-yellow md:text-6xl lg:text-7xl">
-          Shopstr
+          Fundstr
         </h1>
         <p className="mb-10 max-w-2xl text-xl font-light leading-relaxed text-light-text dark:text-dark-text">
           Buy and sell anything, anywhere, anytime
@@ -129,7 +129,7 @@ export default function Landing() {
         <h2 className="mb-16 text-center text-3xl font-bold text-light-text dark:text-dark-text md:text-4xl">
           Why Choose{" "}
           <span className="text-shopstr-purple dark:text-shopstr-yellow">
-            Shopstr
+            Fundstr
           </span>
           ?
         </h2>
@@ -458,7 +458,7 @@ export default function Landing() {
               </div>
             </div>
             <p className="text-light-text dark:text-dark-text">
-              © 2025 Shopstr Market Inc.
+              © 2025 Fundstr Market Inc.
             </p>
           </div>
         </div>

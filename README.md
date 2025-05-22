@@ -1,4 +1,4 @@
-# Shopstr
+# Fundstr
 
 A global, permissionless Nostr marketplace for Bitcoin commerce.
 
@@ -40,4 +40,4 @@ A global, permissionless Nostr marketplace for Bitcoin commerce.
 - [ericspaghetti](nostr:npub1qxda7stfxfauufa4mkgqj2lur0jdpxlpnqhqdctwl2t6akuruw3qjdkkn0)
   - npub1qxda7stfxfauufa4mkgqj2lur0jdpxlpnqhqdctwl2t6akuruw3qjdkkn0
 
-[![Run on Repl.it](https://replit.com/badge/github/calvadev/shopstr)](https://replit.com/new/github/calvadev/shopstr)
+[![Run on Repl.it](https://replit.com/badge/github/calvadev/fundstr)](https://replit.com/new/github/calvadev/fundstr)

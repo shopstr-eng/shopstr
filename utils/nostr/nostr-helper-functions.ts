@@ -196,7 +196,7 @@ export async function PostListing(
   const origin =
     window && typeof window !== undefined
       ? window.location.origin
-      : "https://shopstr.store";
+      : "https://fundstr.com";
 
   const handlerEvent = {
     kind: 31990,
