@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext, useMemo } from "react";
+import React, { useEffect, useState, useContext } from "react";
 import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
 import { Button, Textarea, Input, Image } from "@nextui-org/react";
@@ -88,10 +88,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       router.push("/marketplace");
     }
   };
-
-  const buttonClassName = useMemo(() => {
-    return `w-full mb-10 ${SHOPSTRBUTTONCLASSNAMES}`;
-  }, []);
 
   if (isFetchingShop) {
     return <ShopstrSpinner />;
@@ -215,7 +211,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         />
 
         <Button
-          className={buttonClassName}
+          className={`mb-10 w-full ${SHOPSTRBUTTONCLASSNAMES}`}
           type="submit"
           onKeyDown={(e) => {
             if (e.key === "Enter") {

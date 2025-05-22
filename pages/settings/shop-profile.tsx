@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext, useMemo } from "react";
+import React, { useEffect, useState, useContext } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { Button, Textarea, Input, Image } from "@nextui-org/react";
 
@@ -79,10 +79,6 @@ const ShopProfilePage = () => {
     });
     setIsUploadingShopProfile(false);
   };
-
-  const buttonClassName = useMemo(() => {
-    return `w-full mb-10 ${SHOPSTRBUTTONCLASSNAMES}`;
-  }, []);
 
   return (
     <>
@@ -217,7 +213,7 @@ const ShopProfilePage = () => {
                 />
 
                 <Button
-                  className={buttonClassName}
+                  className={`mb-10 w-full ${SHOPSTRBUTTONCLASSNAMES}`}
                   type="submit"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {

@@ -1,8 +1,15 @@
-
 import React, { useEffect, useState, useContext, useMemo } from "react";
 import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
-import { Button, Chip, Textarea, Input, Image, Select, SelectItem } from "@nextui-org/react";
+import {
+  Button,
+  Chip,
+  Textarea,
+  Input,
+  Image,
+  Select,
+  SelectItem,
+} from "@nextui-org/react";
 import { ProfileMapContext } from "@/utils/context/context";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
@@ -81,17 +88,6 @@ const UserProfileForm = ({ isOnboarding = false }: UserProfileFormProps) => {
       router.push("/onboarding/shop-profile");
     }
   };
-
-  const isButtonDisabled = useMemo(() => {
-    return !!(signer && userPubkey);
-  }, [signer, userPubkey]);
-
-  const buttonClassName = useMemo(() => {
-    const disabledStyle = "from-gray-300 to-gray-400 cursor-not-allowed";
-    const enabledStyle = SHOPSTRBUTTONCLASSNAMES;
-    const className = isButtonDisabled ? disabledStyle : enabledStyle;
-    return `w-full mb-10 ${className}`;
-  }, [isButtonDisabled]);
 
   if (isFetchingProfile) {
     return <ShopstrSpinner />;
@@ -389,9 +385,7 @@ const UserProfileForm = ({ isOnboarding = false }: UserProfileFormProps) => {
                   <div className="flex flex-wrap gap-2">
                     {items.map((item) => (
                       <Chip key={item.key}>
-                        {item.key
-                          ? (item.key as string)
-                          : "unknown option"}
+                        {item.key ? (item.key as string) : "unknown option"}
                       </Chip>
                     ))}
                   </div>
@@ -476,10 +470,10 @@ const UserProfileForm = ({ isOnboarding = false }: UserProfileFormProps) => {
         />
 
         <Button
-          className={buttonClassName}
+          className={SHOPSTRBUTTONCLASSNAMES}
           type="submit"
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !isButtonDisabled) {
+            if (e.key === "Enter") {
               e.preventDefault();
               handleSubmit(onSubmit as any)();
             }
