@@ -299,8 +299,8 @@ export async function createFundstrPledgeEvent(
 ) {
   const tags: string[][] = [
     ["d", pledgeData.d || uuidv4()],
-    ["address", pledgeData.address],
-    ["creator", pledgeData.creator],
+    ["a", pledgeData.address],
+    ["p", pledgeData.creator],
     ["amount", pledgeData.amount.toString()],
     ["currency", pledgeData.currency],
     ["recurrence", pledgeData.recurrence],

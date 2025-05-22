@@ -25,10 +25,10 @@ export const parsePledgeEvent = (event: NostrEvent): FundstrPledgeData => {
       case "d":
         parsed.d = values[0];
         break;
-      case "address":
+      case "a":
         parsed.address = values[0] || "";
         break;
-      case "creator":
+      case "p":
         parsed.creator = values[0] || "";
         break;
       case "amount":
