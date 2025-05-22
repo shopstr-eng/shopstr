@@ -8,12 +8,18 @@ import {
 } from "nostr-tools";
 import CryptoJS from "crypto-js";
 import { v4 as uuidv4 } from "uuid";
-import { NostrEvent, ProductFormValues } from "@/utils/types/types";
+import {
+  NostrEvent,
+  ProductFormValues,
+  FundstrTierData,
+} from "@/utils/types/types";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { Proof } from "@cashu/cashu-ts";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { removeProductFromCache } from "@/utils/nostr/cache-service";
+
+export const KIND_FUNDSTR_TIER = 30078;
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
@@ -244,6 +250,37 @@ export async function createNostrShopEvent(
     tags: [],
     created_at: Math.floor(Date.now() / 1000),
     pubkey: pubkey,
+    id: "",
+    sig: "",
+  } as NostrEvent;
+
+  await finalizeAndSendNostrEvent(signer, nostr, msg);
+  return msg;
+}
+
+export async function createFundstrTierEvent(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  pubkey: string,
+  tierData: FundstrTierData
+) {
+  const tags: string[][] = [
+    ["d", tierData.d || uuidv4()],
+    ["title", tierData.title],
+    ["description", tierData.description],
+    ["amount", tierData.amount.toString()],
+    ["currency", tierData.currency],
+    ["recurrence", tierData.recurrence],
+    ["active", tierData.active ? "true" : "false"],
+  ];
+  if (tierData.image) tags.push(["image", tierData.image]);
+
+  const msg = {
+    kind: KIND_FUNDSTR_TIER,
+    content: "",
+    tags,
+    created_at: Math.floor(Date.now() / 1000),
+    pubkey,
     id: "",
     sig: "",
   } as NostrEvent;
