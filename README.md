@@ -36,6 +36,27 @@ A global, permissionless Nostr marketplace for Bitcoin commerce.
 - `30078` - Support tier events
 - `30079` - Pledge events
 
+### Handling pledge events
+
+Pledge information is published as a Nostr event with kind `30079`. The constant
+`KIND_FUNDSTR_PLEDGE` exported from
+`utils/nostr/nostr-helper-functions.ts` should be used when creating pledge
+events. Incoming pledge events can be converted into a `FundstrPledgeData` object
+via the `parsePledgeEvent` helper found in
+`utils/parsers/pledge-parser-functions.ts`.
+
+The application exposes pledge data through `PledgesContext`. Components can
+access the parsed pledges by using the context:
+
+```tsx
+import { useContext } from "react";
+import { PledgesContext } from "@/utils/context/context";
+
+const { pledges } = useContext(PledgesContext);
+
+// pledges is a map keyed by creator with arrays of FundstrPledgeData
+```
+
 # Authors
 
 - [calvadev](nostr:npub16dhgpql60vmd4mnydjut87vla23a38j689jssaqlqqlzrtqtd0kqex0nkq)
