@@ -1,6 +1,6 @@
-# Shopstr
+# Fundstr
 
-A global, permissionless Nostr marketplace for Bitcoin commerce.
+Fundstr is a global, permissionless Nostr platform for creators to receive support from their audience.
 
 # Supported NIPs
 

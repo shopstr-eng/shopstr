@@ -8,7 +8,14 @@ import {
 } from "nostr-tools";
 import CryptoJS from "crypto-js";
 import { v4 as uuidv4 } from "uuid";
-import { NostrEvent, ProductFormValues } from "@/utils/types/types";
+import {
+  NostrEvent,
+  ProductFormValues,
+  FundstrTierData,
+  KIND_FUNDSTR_TIER,
+  FundstrPledgeData,
+  KIND_FUNDSTR_PLEDGE,
+} from "@/utils/types/types";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { Proof } from "@cashu/cashu-ts";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
@@ -1179,6 +1186,82 @@ export function getDefaultMint(): string {
 
 export function getDefaultBlossomServer(): string {
   return "https://cdn.nostrcheck.me";
+}
+
+export async function createFundstrTierEvent(
+  signer: NostrSigner,
+  tierData: Omit<FundstrTierData, "id" | "pubkey" | "createdAt">,
+  existingEventId?: string, // Not directly used in tags for NIP-33, but useful for context
+  existingTierD?: string // Used to ensure the 'd' tag remains consistent for updates
+): Promise<NostrEvent> {
+  const pubkey = await signer.getPubKey();
+
+  const tags: string[][] = [
+    ["d", existingTierD || tierData.d], // Use existing 'd' for updates, else new 'd'
+    ["title", tierData.title],
+    ["description", tierData.description],
+    ["amount", tierData.amount],
+    ["currency", tierData.currency],
+    ["recurrence", tierData.recurrence],
+    ["active", tierData.active],
+  ];
+
+  if (tierData.image) {
+    tags.push(["image", tierData.image]);
+  }
+
+  const event = {
+    kind: KIND_FUNDSTR_TIER,
+    pubkey,
+    created_at: Math.floor(Date.now() / 1000),
+    tags,
+    content: tierData.title || tierData.description || "", // Or an empty string
+  };
+
+  // The signer.sign method will set the id, pubkey (again, but that's fine), and sig
+  return signer.sign(event);
+}
+
+export async function createFundstrPledgeEvent(
+  signer: NostrSigner,
+  pledgeInputData: Omit<FundstrPledgeData, "id" | "pubkey" | "createdAt" | "encrypted_note">,
+  note?: string
+): Promise<NostrEvent> {
+  const pubkey = await signer.getPubKey(); // Supporter's pubkey
+
+  const tags: string[][] = [
+    ["d", pledgeInputData.d],
+    ["a", pledgeInputData.a], // Should be in the format: KIND_FUNDSTR_TIER:creator_pubkey:tier_d_tag
+    ["p", pledgeInputData.p],
+    ["amount", pledgeInputData.amount],
+    ["currency", pledgeInputData.currency],
+    ["recurrence", pledgeInputData.recurrence],
+    ["status", pledgeInputData.status],
+  ];
+
+  if (pledgeInputData.start_date) {
+    tags.push(["start_date", pledgeInputData.start_date.toString()]);
+  }
+  if (pledgeInputData.payment_method) {
+    tags.push(["payment_method", pledgeInputData.payment_method]);
+  }
+  if (pledgeInputData.last_payment_date) {
+    tags.push(["last_payment_date", pledgeInputData.last_payment_date.toString()]);
+  }
+  if (pledgeInputData.next_payment_date) {
+    tags.push(["next_payment_date", pledgeInputData.next_payment_date.toString()]);
+  }
+
+  const event = {
+    kind: KIND_FUNDSTR_PLEDGE,
+    pubkey,
+    created_at: Math.floor(Date.now() / 1000),
+    tags,
+    content: note || "", // Storing note as plain text for now
+  };
+
+  // The signer.sign method will set the id, pubkey (again, but that's fine), and sig
+  return signer.sign(event);
 }
 
 export async function verifyNip05Identifier(

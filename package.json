@@ -1,8 +1,9 @@
 {
-  "name": "shopstr",
+  "name": "fundstr",
   "version": "0.4.2",
   "type": "module",
   "private": true,
+  "description": "A decentralized creator support platform.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
