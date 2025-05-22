@@ -11,7 +11,7 @@ import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { useRouter } from "next/router";
 import SignInModal from "../sign-in/SignInModal";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
-import { ShopSettings } from "../../utils/types/types";
+import { ShopProfile } from "../../utils/types/types";
 
 const SideShopNav = ({
   focusedPubkey,
@@ -47,10 +47,10 @@ const SideShopNav = ({
       shopMapContext.shopData.has(focusedPubkey) &&
       typeof shopMapContext.shopData.get(focusedPubkey) != "undefined"
     ) {
-      const shopSettings: ShopSettings | undefined =
+      const shopProfile: ShopProfile | undefined =
         shopMapContext.shopData.get(focusedPubkey);
-      if (shopSettings) {
-        setShopAbout(shopSettings.content.about);
+      if (shopProfile) {
+        setShopAbout(shopProfile.content.about);
       }
     }
   }, [shopMapContext, focusedPubkey]);
@@ -182,7 +182,7 @@ const SideShopNav = ({
             </Button>
             <Button
               className={`${SHOPSTRBUTTONCLASSNAMES} mt-2 w-full`}
-              onClick={() => router.push("settings/shop-settings")}
+              onClick={() => router.push("settings/shop-profile")}
             >
               Edit Shop
             </Button>

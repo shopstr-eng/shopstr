@@ -2,9 +2,9 @@ import React from "react";
 import { useRouter } from "next/router";
 import { Card, CardBody, Button, Image } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import ShopSettingsForm from "@/components/settings/shop-settings-form";
+import ShopProfileForm from "@/components/settings/shop-profile-form";
 
-const OnboardingShopSettings = () => {
+const OnboardingShopProfile = () => {
   const router = useRouter();
 
   const handleFinish = () => {
@@ -37,14 +37,14 @@ const OnboardingShopSettings = () => {
               </p>
             </div>
 
-            <ShopSettingsForm isOnboarding={true} />
+            <ShopProfileForm isOnboarding={true} />
 
             <div className="mt-4 flex justify-center">
               <Button
                 className={`${SHOPSTRBUTTONCLASSNAMES} w-32`}
                 onClick={handleFinish}
               >
-                Skip
+                Finish
               </Button>
             </div>
           </CardBody>
@@ -54,4 +54,4 @@ const OnboardingShopSettings = () => {
   );
 };
 
-export default OnboardingShopSettings;
+export default OnboardingShopProfile;

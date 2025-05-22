@@ -1,5 +1,5 @@
 import { createContext } from "react";
-import { NostrMessageEvent, ProfileData, ShopSettings } from "../types/types";
+import { NostrMessageEvent, ProfileData, ShopProfile } from "../types/types";
 import { Proof } from "@cashu/cashu-ts";
 
 export interface ProfileContextInterface {
@@ -14,9 +14,9 @@ export const ProfileMapContext = createContext({
 } as ProfileContextInterface);
 
 export interface ShopContextInterface {
-  shopData: Map<string, ShopSettings>;
+  shopData: Map<string, ShopProfile>;
   isLoading: boolean;
-  updateShopData: (shopData: ShopSettings) => void;
+  updateShopData: (shopData: ShopProfile) => void;
 }
 
 export const ShopMapContext = createContext({

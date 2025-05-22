@@ -11,7 +11,7 @@ import {
 import {
   NostrEvent,
   NostrMessageEvent,
-  ShopSettings,
+  ShopProfile,
 } from "@/utils/types/types";
 import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
 import { ChatsMap } from "@/utils/context/context";
@@ -194,34 +194,34 @@ export const fetchCart = async (
   });
 };
 
-export const fetchShopSettings = async (
+export const fetchShopProfile = async (
   nostr: NostrManager,
   relays: string[],
-  pubkeyShopSettingsToFetch: string[],
+  pubkeyShopProfileToFetch: string[],
   editShopContext: (
-    shopEvents: Map<string, ShopSettings>,
+    shopEvents: Map<string, ShopProfile>,
     isLoading: boolean
   ) => void
 ): Promise<{
-  shopSettingsMap: Map<string, ShopSettings>;
+  shopProfileMap: Map<string, ShopProfile>;
 }> => {
   return new Promise(async function (resolve, reject) {
     try {
       const shopEvents: NostrEvent[] = [];
 
-      const shopSettings: Map<string, ShopSettings | any> = new Map(
-        pubkeyShopSettingsToFetch.map((pubkey) => [pubkey, null])
+      const shopProfile: Map<string, ShopProfile | any> = new Map(
+        pubkeyShopProfileToFetch.map((pubkey) => [pubkey, null])
       );
 
-      if (pubkeyShopSettingsToFetch.length === 0) {
+      if (pubkeyShopProfileToFetch.length === 0) {
         editShopContext(new Map(), false);
-        resolve({ shopSettingsMap: new Map() });
+        resolve({ shopProfileMap: new Map() });
         return;
       }
 
       const shopFilter: Filter = {
         kinds: [30019],
-        authors: pubkeyShopSettingsToFetch,
+        authors: pubkeyShopProfileToFetch,
       };
 
       shopEvents.push(...(await nostr.fetch([shopFilter], {}, relays)));
@@ -238,22 +238,22 @@ export const fetchShopSettings = async (
 
         latestEventsMap.forEach((event, pubkey) => {
           try {
-            const shopSetting = {
+            const shopProfileSetting = {
               pubkey: event.pubkey,
               content: JSON.parse(event.content),
               created_at: event.created_at,
             };
-            shopSettings.set(pubkey, shopSetting);
+            shopProfile.set(pubkey, shopProfileSetting);
           } catch (error) {
             console.error(
-              `Failed to parse shop setting for pubkey: ${pubkey}`,
+              `Failed to parse shop profile for pubkey: ${pubkey}`,
               error
             );
           }
         });
 
-        editShopContext(shopSettings, false);
-        resolve({ shopSettingsMap: shopSettings });
+        editShopContext(shopProfile, false);
+        resolve({ shopProfileMap: shopProfile });
       } else {
         reject();
       }

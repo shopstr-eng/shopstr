@@ -19,7 +19,7 @@ import {
   InformationCircleIcon,
 } from "@heroicons/react/24/outline";
 import { ShopMapContext, ReviewsContext } from "@/utils/context/context";
-import { ShopSettings } from "../../utils/types/types";
+import { ShopProfile } from "../../utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import FailureModal from "../utility-components/failure-modal";
 import SuccessModal from "../utility-components/success-modal";
@@ -127,10 +127,11 @@ export default function CheckoutCard({
       shopMapContext.shopData.has(productData.pubkey) &&
       typeof shopMapContext.shopData.get(productData.pubkey) != "undefined"
     ) {
-      const shopSettings: ShopSettings | undefined =
-        shopMapContext.shopData.get(productData.pubkey);
-      if (shopSettings) {
-        setShopBannerURL(shopSettings.content.ui.banner);
+      const shopProfile: ShopProfile | undefined = shopMapContext.shopData.get(
+        productData.pubkey
+      );
+      if (shopProfile) {
+        setShopBannerURL(shopProfile.content.ui.banner);
       }
     }
     setIsFetchingShop(false);
@@ -378,7 +379,7 @@ export default function CheckoutCard({
                       pubkey={productData.pubkey}
                       dropDownKeys={
                         productData.pubkey === userPubkey
-                          ? ["shop_settings"]
+                          ? ["shop_profile"]
                           : ["shop", "inquiry", "copy_npub"]
                       }
                     />
@@ -549,7 +550,7 @@ export default function CheckoutCard({
                               pubkey={reviewerPubkey}
                               dropDownKeys={
                                 reviewerPubkey === userPubkey
-                                  ? ["shop_settings"]
+                                  ? ["shop_profile"]
                                   : ["shop", "inquiry", "copy_npub"]
                               }
                             />

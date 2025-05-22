@@ -8,7 +8,7 @@ const OnboardingUserProfile = () => {
   const router = useRouter();
 
   const handleSkip = () => {
-    router.push("/onboarding/shop-settings");
+    router.push("/onboarding/shop-profile");
   };
 
   return (
@@ -44,7 +44,7 @@ const OnboardingUserProfile = () => {
                 className={`${SHOPSTRBUTTONCLASSNAMES} w-32`}
                 onClick={handleSkip}
               >
-                Skip
+                Next
               </Button>
             </div>
           </CardBody>

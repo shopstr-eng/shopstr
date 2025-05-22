@@ -29,7 +29,7 @@ import { SignerContext } from "@/components/utility-components/nostr-context-pro
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import SignInModal from "../sign-in/SignInModal";
 import ShopstrSwitch from "../utility-components/shopstr-switch";
-import { ShopSettings } from "../../utils/types/types";
+import { ShopProfile } from "../../utils/types/types";
 import SideShopNav from "./side-shop-nav";
 
 function MarketplacePage({
@@ -135,11 +135,11 @@ function MarketplacePage({
       shopMapContext.shopData.has(focusedPubkey) &&
       typeof shopMapContext.shopData.get(focusedPubkey) != "undefined"
     ) {
-      const shopSettings: ShopSettings | undefined =
+      const shopProfile: ShopProfile | undefined =
         shopMapContext.shopData.get(focusedPubkey);
-      if (shopSettings) {
-        setShopBannerURL(shopSettings.content.ui.banner);
-        setShopAbout(shopSettings.content.about);
+      if (shopProfile) {
+        setShopBannerURL(shopProfile.content.ui.banner);
+        setShopAbout(shopProfile.content.about);
       }
     }
     setIsFetchingShop(false);
@@ -218,7 +218,7 @@ function MarketplacePage({
                           pubkey={reviewerPubkey}
                           dropDownKeys={
                             reviewerPubkey === userPubkey
-                              ? ["shop_settings"]
+                              ? ["shop_profile"]
                               : ["shop", "inquiry", "copy_npub"]
                           }
                         />

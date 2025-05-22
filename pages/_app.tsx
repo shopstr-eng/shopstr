@@ -34,7 +34,7 @@ import { ThemeProvider as NextThemesProvider } from "next-themes";
 import {
   fetchAllPosts,
   fetchReviews,
-  fetchShopSettings,
+  fetchShopProfile,
   fetchProfile,
   fetchAllFollows,
   fetchAllRelays,
@@ -46,7 +46,7 @@ import {
   NostrEvent,
   ProfileData,
   NostrMessageEvent,
-  ShopSettings,
+  ShopProfile,
 } from "../utils/types/types";
 import { Proof } from "@cashu/cashu-ts";
 import TopNav from "@/components/nav-top";
@@ -150,7 +150,7 @@ function Shopstr({ props }: { props: AppProps }) {
   const [shopContext, setShopContext] = useState<ShopContextInterface>({
     shopData: new Map(),
     isLoading: true,
-    updateShopData: (shopData: ShopSettings) => {
+    updateShopData: (shopData: ShopProfile) => {
       setShopContext((shopContext) => {
         const shopDataMap = new Map(shopContext.shopData);
         shopDataMap.set(shopData.pubkey, shopData);
@@ -277,7 +277,7 @@ function Shopstr({ props }: { props: AppProps }) {
   };
 
   const editShopContext = (
-    shopData: Map<string, ShopSettings>,
+    shopData: Map<string, ShopProfile>,
     isLoading: boolean
   ) => {
     setShopContext((shopContext) => {
@@ -461,7 +461,7 @@ function Shopstr({ props }: { props: AppProps }) {
           editProfileContext
         );
 
-        await fetchShopSettings(
+        await fetchShopProfile(
           nostr!,
           allRelays,
           pubkeysToFetchProfilesFor,

@@ -105,10 +105,15 @@ const Keys = () => {
                   Shopstr
                 </h1>
               </div>
-              <div className="mb-4 flex flex-col text-center">
-                Make sure to save your public and private keys in a secure
-                format! You can always view them again under your profile
-                settings.
+              <div className="mb-4 text-center">
+                <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
+                  Step 1: Secure Your Keys
+                </h2>
+                <p className="text-light-text dark:text-dark-text">
+                  Make sure to save your public and private keys in a secure
+                  format! You can always view them again under your profile
+                  settings.
+                </p>
               </div>
 
               {/* Public Key Section */}

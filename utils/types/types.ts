@@ -16,7 +16,7 @@ export interface ChatObject {
   decryptedChat: NostrMessageEvent[];
 }
 
-export interface ShopSettings {
+export interface ShopProfile {
   pubkey: string;
   content: {
     name: string;

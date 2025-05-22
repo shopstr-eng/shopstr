@@ -13,14 +13,14 @@ import { createNostrShopEvent } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 
-interface ShopSettingsFormProps {
+interface ShopProfileFormProps {
   isOnboarding?: boolean;
 }
 
-const ShopSettingsForm = ({ isOnboarding = false }: ShopSettingsFormProps) => {
+const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   const router = useRouter();
   const { nostr } = useContext(NostrContext);
-  const [isUploadingShopSettings, setIsUploadingShopSettings] = useState(false);
+  const [isUploadingShopProfile, setIsUploadingShopProfile] = useState(false);
   const [isFetchingShop, setIsFetchingShop] = useState(false);
 
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
@@ -59,7 +59,7 @@ const ShopSettingsForm = ({ isOnboarding = false }: ShopSettingsFormProps) => {
   }, [shopContext, userPubkey, reset]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
-    setIsUploadingShopSettings(true);
+    setIsUploadingShopProfile(true);
     const transformedData = {
       name: data.name || "",
       about: data.about || "",
@@ -82,7 +82,7 @@ const ShopSettingsForm = ({ isOnboarding = false }: ShopSettingsFormProps) => {
       content: transformedData,
       created_at: 0,
     });
-    setIsUploadingShopSettings(false);
+    setIsUploadingShopProfile(false);
 
     if (isOnboarding) {
       router.push("/marketplace");
@@ -223,8 +223,8 @@ const ShopSettingsForm = ({ isOnboarding = false }: ShopSettingsFormProps) => {
               handleSubmit(onSubmit as any)();
             }
           }}
-          isDisabled={isUploadingShopSettings}
-          isLoading={isUploadingShopSettings}
+          isDisabled={isUploadingShopProfile}
+          isLoading={isUploadingShopProfile}
         >
           Save Shop
         </Button>
@@ -233,4 +233,4 @@ const ShopSettingsForm = ({ isOnboarding = false }: ShopSettingsFormProps) => {
   );
 };
 
-export default ShopSettingsForm;
+export default ShopProfileForm;

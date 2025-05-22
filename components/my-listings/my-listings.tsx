@@ -9,7 +9,7 @@ import { Bars3Icon } from "@heroicons/react/24/outline";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import SignInModal from "../sign-in/SignInModal";
 import { ShopMapContext } from "@/utils/context/context";
-import { ShopSettings } from "../../utils/types/types";
+import { ShopProfile } from "../../utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import SideShopNav from "../home/side-shop-nav";
 
@@ -54,11 +54,11 @@ const MyListingsPage = () => {
       shopMapContext.shopData.has(usersPubkey) &&
       typeof shopMapContext.shopData.get(usersPubkey) != "undefined"
     ) {
-      const shopSettings: ShopSettings | undefined =
+      const shopProfile: ShopProfile | undefined =
         shopMapContext.shopData.get(usersPubkey);
-      if (shopSettings) {
-        setShopBannerURL(shopSettings.content.ui.banner);
-        setShopAbout(shopSettings.content.about);
+      if (shopProfile) {
+        setShopBannerURL(shopProfile.content.ui.banner);
+        setShopAbout(shopProfile.content.about);
       }
     }
     setIsFetchingShop(false);
@@ -74,7 +74,7 @@ const MyListingsPage = () => {
 
   const handleEditShop = () => {
     if (usersPubkey) {
-      router.push("settings/shop-settings");
+      router.push("settings/shop-profile");
     } else {
       onOpen();
     }

@@ -1,7 +1,7 @@
 import Head from "next/head";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { NostrEvent, ShopSettings } from "@/utils/types/types";
+import { NostrEvent, ShopProfile } from "@/utils/types/types";
 import parseTags from "@/utils/parsers/product-parser-functions";
 import { nip19 } from "nostr-tools";
 
@@ -17,7 +17,7 @@ const getMetaTags = (
   pathname: string,
   query: { productId?: string[]; npub?: string[] },
   productEvents: NostrEvent[],
-  shopEvents: Map<string, ShopSettings>
+  shopEvents: Map<string, ShopProfile>
 ): MetaTagsType => {
   const defaultTags = {
     title: "Shopstr",
@@ -91,7 +91,7 @@ const DynamicHead = ({
   shopEvents,
 }: {
   productEvents: NostrEvent[];
-  shopEvents: Map<string, ShopSettings>;
+  shopEvents: Map<string, ShopProfile>;
 }) => {
   const router = useRouter();
   const [origin, setOrigin] = useState("");

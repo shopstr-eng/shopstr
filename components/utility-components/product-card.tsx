@@ -44,7 +44,7 @@ export default function ProductCard({
               pubkey={productData.pubkey}
               dropDownKeys={
                 productData.pubkey === userPubkey
-                  ? ["shop_settings"]
+                  ? ["shop_profile"]
                   : ["shop", "inquiry", "copy_npub"]
               }
             />
@@ -136,7 +136,7 @@ export default function ProductCard({
                 pubkey={productData.pubkey}
                 dropDownKeys={
                   productData.pubkey === userPubkey
-                    ? ["shop_settings"]
+                    ? ["shop_profile"]
                     : ["shop", "inquiry", "copy_npub"]
                 }
               />

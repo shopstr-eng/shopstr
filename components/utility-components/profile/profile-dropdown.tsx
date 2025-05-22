@@ -26,7 +26,7 @@ import SignInModal from "../../sign-in/SignInModal";
 
 type DropDownKeys =
   | "shop"
-  | "shop_settings"
+  | "shop_profile"
   | "inquiry"
   | "settings"
   | "user_profile"
@@ -86,15 +86,15 @@ export const ProfileWithDropdown = ({
       },
       label: "Visit Seller",
     },
-    shop_settings: {
-      key: "shop_settings",
+    shop_profile: {
+      key: "shop_profile",
       color: "default",
       className: "text-light-text dark:text-dark-text",
       startContent: <BuildingStorefrontIcon className={"h-5 w-5"} />,
       onClick: () => {
-        router.push("/settings/shop-settings");
+        router.push("/settings/shop-profile");
       },
-      label: "Shop Settings",
+      label: "Shop Profile",
     },
     inquiry: {
       key: "inquiry",

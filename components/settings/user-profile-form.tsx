@@ -1,7 +1,8 @@
+
 import React, { useEffect, useState, useContext, useMemo } from "react";
 import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
-import { Button, Textarea, Input, Image } from "@nextui-org/react";
+import { Button, Chip, Textarea, Input, Image, Select, SelectItem } from "@nextui-org/react";
 import { ProfileMapContext } from "@/utils/context/context";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
@@ -77,7 +78,7 @@ const UserProfileForm = ({ isOnboarding = false }: UserProfileFormProps) => {
     setIsUploadingProfile(false);
 
     if (isOnboarding) {
-      router.push("/onboarding/shop-settings");
+      router.push("/onboarding/shop-profile");
     }
   };
 
@@ -229,6 +230,249 @@ const UserProfileForm = ({ isOnboarding = false }: UserProfileFormProps) => {
               />
             );
           }}
+        />
+
+        <Controller
+          name="website"
+          control={control}
+          render={({
+            field: { onChange, onBlur, value },
+            fieldState: { error },
+          }) => {
+            const isErrored = error !== undefined;
+            const errorMessage: string = error?.message ? error.message : "";
+            return (
+              <Input
+                className="pb-4 text-light-text dark:text-dark-text"
+                classNames={{
+                  label: "text-light-text dark:text-dark-text text-lg",
+                }}
+                variant="bordered"
+                fullWidth={true}
+                label="Website"
+                labelPlacement="outside"
+                isInvalid={isErrored}
+                errorMessage={errorMessage}
+                placeholder="Add your website URL . . ."
+                onChange={onChange}
+                onBlur={onBlur}
+                value={value}
+              />
+            );
+          }}
+        />
+
+        <Controller
+          name="nip05"
+          control={control}
+          render={({
+            field: { onChange, onBlur, value },
+            fieldState: { error },
+          }) => {
+            const isErrored = error !== undefined;
+            const errorMessage: string = error?.message ? error.message : "";
+            return (
+              <Input
+                className="pb-4 text-light-text dark:text-dark-text"
+                classNames={{
+                  label: "text-light-text dark:text-dark-text text-lg",
+                }}
+                variant="bordered"
+                fullWidth={true}
+                label="Nostr address"
+                labelPlacement="outside"
+                isInvalid={isErrored}
+                errorMessage={errorMessage}
+                placeholder="Add your NIP-05 address . . ."
+                onChange={onChange}
+                onBlur={onBlur}
+                value={value}
+              />
+            );
+          }}
+        />
+
+        <Controller
+          name="lud16"
+          control={control}
+          render={({
+            field: { onChange, onBlur, value },
+            fieldState: { error },
+          }) => {
+            const isErrored = error !== undefined;
+            const errorMessage: string = error?.message ? error.message : "";
+            return (
+              <Input
+                className="pb-4 text-light-text dark:text-dark-text"
+                classNames={{
+                  label: "text-light-text dark:text-dark-text text-lg",
+                }}
+                variant="bordered"
+                fullWidth={true}
+                label="Lightning address"
+                labelPlacement="outside"
+                isInvalid={isErrored}
+                errorMessage={errorMessage}
+                placeholder="Add your Lightning address . . ."
+                onChange={onChange}
+                onBlur={onBlur}
+                value={value}
+              />
+            );
+          }}
+        />
+
+        <Controller
+          name="payment_preference"
+          control={control}
+          render={({ field: { onChange, onBlur, value } }) => (
+            <Select
+              className="pb-4 text-light-text dark:text-dark-text"
+              classNames={{
+                label: "text-light-text dark:text-dark-text text-lg",
+              }}
+              variant="bordered"
+              fullWidth={true}
+              label="Bitcoin payment preference"
+              labelPlacement="outside"
+              selectedKeys={value ? [value] : []}
+              onChange={(e) => onChange(e.target.value)}
+              onBlur={onBlur}
+            >
+              <SelectItem
+                key="ecash"
+                value="ecash"
+                className="text-light-text dark:text-dark-text"
+              >
+                Cashu
+              </SelectItem>
+              <SelectItem
+                key="lightning"
+                value="lightning"
+                className="text-light-text dark:text-dark-text"
+              >
+                Lightning
+              </SelectItem>
+            </Select>
+          )}
+        />
+
+        <Controller
+          name="fiat_options"
+          control={control}
+          render={({ field: { onChange, onBlur, value } }) => {
+            const selectedOptions = Array.isArray(value)
+              ? value
+              : value
+                ? [value]
+                : [];
+            return (
+              <Select
+                className="pb-4 text-light-text dark:text-dark-text"
+                classNames={{
+                  label: "text-light-text dark:text-dark-text text-lg",
+                }}
+                variant="bordered"
+                fullWidth={true}
+                label="Alternative payment options"
+                labelPlacement="outside"
+                selectionMode="multiple"
+                selectedKeys={new Set(selectedOptions)}
+                onChange={(e) => {
+                  const selectedValues = Array.from(
+                    new Set(e.target.value.split(","))
+                  );
+                  onChange(selectedValues);
+                }}
+                onBlur={onBlur}
+                renderValue={(items) => (
+                  <div className="flex flex-wrap gap-2">
+                    {items.map((item) => (
+                      <Chip key={item.key}>
+                        {item.key
+                          ? (item.key as string)
+                          : "unknown option"}
+                      </Chip>
+                    ))}
+                  </div>
+                )}
+              >
+                <SelectItem
+                  key="cash"
+                  value="cash"
+                  className="text-light-text dark:text-dark-text"
+                >
+                  Cash
+                </SelectItem>
+                <SelectItem
+                  key="venmo"
+                  value="venmo"
+                  className="text-light-text dark:text-dark-text"
+                >
+                  Venmo
+                </SelectItem>
+                <SelectItem
+                  key="zelle"
+                  value="zelle"
+                  className="text-light-text dark:text-dark-text"
+                >
+                  Zelle
+                </SelectItem>
+                <SelectItem
+                  key="cashapp"
+                  value="cashapp"
+                  className="text-light-text dark:text-dark-text"
+                >
+                  Cash App
+                </SelectItem>
+                <SelectItem
+                  key="applepay"
+                  value="applepay"
+                  className="text-light-text dark:text-dark-text"
+                >
+                  Apple Pay
+                </SelectItem>
+                <SelectItem
+                  key="googlepay"
+                  value="googlepay"
+                  className="text-light-text dark:text-dark-text"
+                >
+                  Google Pay
+                </SelectItem>
+                <SelectItem
+                  key="paypal"
+                  value="paypal"
+                  className="text-light-text dark:text-dark-text"
+                >
+                  PayPal
+                </SelectItem>
+              </Select>
+            );
+          }}
+        />
+
+        <Controller
+          name="shopstr_donation"
+          control={control}
+          render={({ field: { onChange, onBlur, value } }) => (
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              step={0.1}
+              className="pb-4 text-light-text dark:text-dark-text"
+              classNames={{
+                label: "text-light-text dark:text-dark-text text-lg",
+              }}
+              variant="bordered"
+              fullWidth
+              label="Shopstr donation (%)"
+              labelPlacement="outside"
+              onChange={onChange}
+              onBlur={onBlur}
+              value={value.toString()}
+            />
+          )}
         />
 
         <Button

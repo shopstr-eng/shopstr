@@ -73,10 +73,10 @@
       "icons": [{ "src": "/shopstr-144x144.png", "sizes": "144x144" }]
     },
     {
-      "name": "Shop Settings",
+      "name": "Shop Profile",
       "short_name": "Shop",
-      "description": "Manage your shop settings",
-      "url": "/settings/shop-settings",
+      "description": "Manage your shop profile",
+      "url": "/settings/shop-profile",
       "icons": [{ "src": "/shopstr-144x144.png", "sizes": "144x144" }]
     },
     {
