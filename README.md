@@ -31,6 +31,11 @@ A global, permissionless Nostr marketplace for Bitcoin commerce.
 - [x] NIP-99: Classified Listings
 - [x] NIP-B7: Blossom Media
 
+## Fundstr Event Kinds
+
+- `30078` - Support tier events
+- `30079` - Pledge events
+
 # Authors
 
 - [calvadev](nostr:npub16dhgpql60vmd4mnydjut87vla23a38j689jssaqlqqlzrtqtd0kqex0nkq)

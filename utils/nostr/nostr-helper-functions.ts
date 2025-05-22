@@ -12,6 +12,7 @@ import {
   NostrEvent,
   ProductFormValues,
   FundstrTierData,
+  FundstrPledgeData,
 } from "@/utils/types/types";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { Proof } from "@cashu/cashu-ts";
@@ -20,6 +21,7 @@ import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { removeProductFromCache } from "@/utils/nostr/cache-service";
 
 export const KIND_FUNDSTR_TIER = 30078;
+export const KIND_FUNDSTR_PLEDGE = 30079;
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
@@ -277,6 +279,43 @@ export async function createFundstrTierEvent(
 
   const msg = {
     kind: KIND_FUNDSTR_TIER,
+    content: "",
+    tags,
+    created_at: Math.floor(Date.now() / 1000),
+    pubkey,
+    id: "",
+    sig: "",
+  } as NostrEvent;
+
+  await finalizeAndSendNostrEvent(signer, nostr, msg);
+  return msg;
+}
+
+export async function createFundstrPledgeEvent(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  pubkey: string,
+  pledgeData: FundstrPledgeData
+) {
+  const tags: string[][] = [
+    ["d", pledgeData.d || uuidv4()],
+    ["address", pledgeData.address],
+    ["creator", pledgeData.creator],
+    ["amount", pledgeData.amount.toString()],
+    ["currency", pledgeData.currency],
+    ["recurrence", pledgeData.recurrence],
+    ["status", pledgeData.status],
+  ];
+  if (pledgeData.startDate) tags.push(["start_date", pledgeData.startDate]);
+  if (pledgeData.paymentMethod)
+    tags.push(["payment_method", pledgeData.paymentMethod]);
+  if (pledgeData.lastPaymentDate)
+    tags.push(["last_payment_date", pledgeData.lastPaymentDate]);
+  if (pledgeData.nextPaymentDate)
+    tags.push(["next_payment_date", pledgeData.nextPaymentDate]);
+
+  const msg = {
+    kind: KIND_FUNDSTR_PLEDGE,
     content: "",
     tags,
     created_at: Math.floor(Date.now() / 1000),

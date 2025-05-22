@@ -100,6 +100,23 @@ export interface FundstrTierData {
   active: boolean;
 }
 
+export interface FundstrPledgeData {
+  id: string;
+  pubkey: string;
+  createdAt: number;
+  d?: string;
+  address: string;
+  creator: string;
+  amount: number;
+  currency: string;
+  recurrence: string;
+  startDate?: string;
+  status: string;
+  paymentMethod?: string;
+  lastPaymentDate?: string;
+  nextPaymentDate?: string;
+}
+
 declare global {
   interface Window {
     webln: any;
