@@ -86,6 +86,20 @@ export interface CombinedFormData {
   Required?: string;
 }
 
+export interface FundstrTierData {
+  id: string;
+  pubkey: string;
+  createdAt: number;
+  d?: string;
+  title: string;
+  description: string;
+  amount: number;
+  currency: string;
+  recurrence: string;
+  image?: string;
+  active: boolean;
+}
+
 declare global {
   interface Window {
     webln: any;
