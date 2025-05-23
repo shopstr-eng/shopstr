@@ -7,7 +7,7 @@ import UserProfileForm from "@/components/settings/user-profile-form";
 const OnboardingUserProfile = () => {
   const router = useRouter();
 
-  const handleSkip = () => {
+  const handleNext = () => {
     router.push("/onboarding/shop-profile");
   };
 
@@ -42,7 +42,7 @@ const OnboardingUserProfile = () => {
             <div className="flex justify-center">
               <Button
                 className={`${SHOPSTRBUTTONCLASSNAMES} w-32`}
-                onClick={handleSkip}
+                onClick={handleNext}
               >
                 Next
               </Button>

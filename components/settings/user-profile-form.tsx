@@ -24,7 +24,7 @@ interface UserProfileFormProps {
   isOnboarding?: boolean;
 }
 
-const UserProfileForm = ({ isOnboarding = false }: UserProfileFormProps) => {
+const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   const router = useRouter();
   const { nostr } = useContext(NostrContext);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
