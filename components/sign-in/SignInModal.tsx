@@ -114,7 +114,7 @@ export default function SignInModal({
   }, [bunkerToken]);
 
   const handleGenerateKeys = () => {
-    router.push("/onboarding");
+    router.push("/onboarding/keys");
     onClose();
   };
 

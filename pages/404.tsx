@@ -1,5 +1,6 @@
 import React from "react";
 import { Button } from "@nextui-org/react";
+import { ArrowLongLeftIcon } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import Link from "next/link";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
@@ -23,9 +24,9 @@ export default function Custom404() {
           <Button
             className={SHOPSTRBUTTONCLASSNAMES}
             onClick={() => router.back()}
-            startContent={<span className="mr-1">←</span>}
+            startContent={<ArrowLongLeftIcon className="h-5 w-5" />}
           >
-            Go Back
+            Go back
           </Button>
           <Link href="/" passHref>
             <Button className={SHOPSTRBUTTONCLASSNAMES}>

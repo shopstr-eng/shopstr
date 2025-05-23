@@ -1,6 +1,7 @@
 import React from "react";
 import { useRouter } from "next/router";
 import { Card, CardBody, Button, Image } from "@nextui-org/react";
+import { ArrowLeftEndOnRectangleIcon } from "@heroicons/react/24/outline";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import ShopProfileForm from "@/components/settings/shop-profile-form";
 
@@ -41,10 +42,10 @@ const OnboardingShopProfile = () => {
 
             <div className="flex justify-center">
               <Button
-                className={`${SHOPSTRBUTTONCLASSNAMES} w-32`}
+                className={SHOPSTRBUTTONCLASSNAMES}
                 onClick={handleFinish}
               >
-                Finish
+                Finish <ArrowLeftEndOnRectangleIcon className="h-5 w-5" />
               </Button>
             </div>
           </CardBody>

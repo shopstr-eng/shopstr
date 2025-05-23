@@ -470,7 +470,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
         />
 
         <Button
-          className={SHOPSTRBUTTONCLASSNAMES}
+          className={`mb-10 w-full ${SHOPSTRBUTTONCLASSNAMES}`}
           type="submit"
           onKeyDown={(e) => {
             if (e.key === "Enter") {

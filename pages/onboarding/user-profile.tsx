@@ -1,6 +1,7 @@
 import React from "react";
 import { useRouter } from "next/router";
 import { Card, CardBody, Button, Image } from "@nextui-org/react";
+import { ArrowLongRightIcon } from "@heroicons/react/24/outline";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import UserProfileForm from "@/components/settings/user-profile-form";
 
@@ -40,11 +41,8 @@ const OnboardingUserProfile = () => {
             <UserProfileForm isOnboarding={true} />
 
             <div className="flex justify-center">
-              <Button
-                className={`${SHOPSTRBUTTONCLASSNAMES} w-32`}
-                onClick={handleNext}
-              >
-                Next
+              <Button className={SHOPSTRBUTTONCLASSNAMES} onClick={handleNext}>
+                Next <ArrowLongRightIcon className="h-5 w-5" />
               </Button>
             </div>
           </CardBody>
