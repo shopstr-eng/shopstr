@@ -81,6 +81,7 @@ export default function SignInModal({
       await signer.getPubKey();
       saveSigner(signer);
       onClose();
+      router.push("/onboarding/user-profile");
     } catch (error) {
       setFailureText("Extension sign-in failed! " + error);
       setShowFailureModal(true);
@@ -96,6 +97,7 @@ export default function SignInModal({
       setIsBunkerConnecting(false);
       await signer.getPubKey();
       onClose();
+      router.push("/onboarding/user-profile");
     } catch (error) {
       setFailureText("Bunker sign-in failed!");
       setShowFailureModal(true);
@@ -112,7 +114,7 @@ export default function SignInModal({
   }, [bunkerToken]);
 
   const handleGenerateKeys = () => {
-    router.push("/keys");
+    router.push("/onboarding");
     onClose();
   };
 
@@ -138,6 +140,8 @@ export default function SignInModal({
         await signer.getPubKey();
         saveSigner(signer);
         onClose();
+
+        router.push("/onboarding/user-profile");
       }
     } else {
       setFailureText(

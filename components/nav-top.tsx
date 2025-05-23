@@ -10,7 +10,7 @@ import { SignerContext } from "@/components/utility-components/nostr-context-pro
 import { useRouter } from "next/router";
 import SignInModal from "./sign-in/SignInModal";
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
-import { ShopSettings } from "../utils/types/types";
+import { ShopProfile } from "../utils/types/types";
 
 const TopNav = ({
   setFocusedPubkey,
@@ -80,11 +80,11 @@ const TopNav = ({
       shopMapContext.shopData.has(npub) &&
       typeof shopMapContext.shopData.get(npub) != "undefined"
     ) {
-      const shopSettings: ShopSettings | undefined =
+      const shopProfile: ShopProfile | undefined =
         shopMapContext.shopData.get(npub);
-      if (shopSettings) {
-        setShopLogoURL(shopSettings.content.ui.picture);
-        setShopName(shopSettings.content.name);
+      if (shopProfile) {
+        setShopLogoURL(shopProfile.content.ui.picture);
+        setShopName(shopProfile.content.name);
       }
     } else if (
       router.pathname.includes("my-listings") &&
@@ -92,11 +92,11 @@ const TopNav = ({
       shopMapContext.shopData.has(userPubkey) &&
       typeof shopMapContext.shopData.get(userPubkey) != "undefined"
     ) {
-      const shopSettings: ShopSettings | undefined =
+      const shopProfile: ShopProfile | undefined =
         shopMapContext.shopData.get(userPubkey);
-      if (shopSettings) {
-        setShopLogoURL(shopSettings.content.ui.picture);
-        setShopName(shopSettings.content.name);
+      if (shopProfile) {
+        setShopLogoURL(shopProfile.content.ui.picture);
+        setShopName(shopProfile.content.name);
       }
     } else {
       setShopLogoURL("");
@@ -191,7 +191,7 @@ const TopNav = ({
               pubkey={userPubkey!}
               baseClassname="w-full dark:hover:shopstr-yellow-light rounded-3xl hover:scale-105 hover:bg-light-bg hover:shadow-lg dark:hover:bg-dark-bg"
               dropDownKeys={[
-                "shop_settings",
+                "shop_profile",
                 "user_profile",
                 "settings",
                 "logout",
@@ -249,7 +249,7 @@ const TopNav = ({
                 pubkey={userPubkey!}
                 baseClassname="justify-start dark:hover:shopstr-yellow-light pl-4 rounded-3xl py-2 hover:scale-105 hover:bg-light-bg hover:shadow-lg dark:hover:bg-dark-bg"
                 dropDownKeys={[
-                  "shop_settings",
+                  "shop_profile",
                   "user_profile",
                   "settings",
                   "logout",

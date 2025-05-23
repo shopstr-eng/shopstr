@@ -4,7 +4,7 @@
 
 import React, { useContext, useEffect, useState } from "react";
 import { ShopMapContext } from "@/utils/context/context";
-import { ShopSettings } from "../../utils/types/types";
+import { ShopProfile } from "../../utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import { useRouter } from "next/router";
 
@@ -35,10 +35,10 @@ const HomeFeed = ({
       shopMapContext.shopData.has(focusedPubkey) &&
       typeof shopMapContext.shopData.get(focusedPubkey) != "undefined"
     ) {
-      const shopSettings: ShopSettings | undefined =
+      const shopProfile: ShopProfile | undefined =
         shopMapContext.shopData.get(focusedPubkey);
-      if (shopSettings) {
-        setShopBannerURL(shopSettings.content.ui.banner);
+      if (shopProfile) {
+        setShopBannerURL(shopProfile.content.ui.banner);
       }
     }
     setIsFetchingShop(false);

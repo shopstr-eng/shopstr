@@ -30,8 +30,8 @@ const SettingsPage = () => {
             classNames={listBoxSectionClassnames}
           >
             <ListboxItem
-              key="shop-settings"
-              description="Edit your shop settings"
+              key="shop-profile"
+              description="Edit your shop profile"
               classNames={listBoxClassnames}
               startContent={
                 <BuildingStorefrontIcon className={startIconClassnames} />
@@ -40,18 +40,18 @@ const SettingsPage = () => {
                 router.push("/settings/shop-settings");
               }}
             >
-              Shop Settings
+              Shop Profile
             </ListboxItem>
             <ListboxItem
               key="user-profile"
-              description="Edit your Nostr profile"
+              description="Edit your user profile"
               classNames={listBoxClassnames}
               startContent={<UserIcon className={startIconClassnames} />}
               onClick={() => {
                 router.push("/settings/user-profile");
               }}
             >
-              Nostr Profile
+              User Profile
             </ListboxItem>
             <ListboxItem
               key="preferences"

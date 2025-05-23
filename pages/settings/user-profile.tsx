@@ -106,17 +106,6 @@ const UserProfilePage = () => {
     setIsUploadingProfile(false);
   };
 
-  const isButtonDisabled = useMemo(() => {
-    return !!(signer && userPubkey);
-  }, [signer, userPubkey]);
-
-  const buttonClassName = useMemo(() => {
-    const disabledStyle = "from-gray-300 to-gray-400 cursor-not-allowed";
-    const enabledStyle = SHOPSTRBUTTONCLASSNAMES;
-    const className = isButtonDisabled ? disabledStyle : enabledStyle;
-    return `w-full mb-10 ${className}`;
-  }, [isButtonDisabled]);
-
   return (
     <>
       <div className="flex min-h-screen flex-col bg-light-bg pt-24 dark:bg-dark-bg md:pb-20">
@@ -609,10 +598,10 @@ const UserProfilePage = () => {
                 />
 
                 <Button
-                  className={buttonClassName}
+                  className={`mb-10 w-full ${SHOPSTRBUTTONCLASSNAMES}`}
                   type="submit"
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && !isButtonDisabled) {
+                    if (e.key === "Enter") {
                       e.preventDefault(); // Prevent default to avoid submitting the form again
                       handleSubmit(onSubmit as any)(); // Programmatic submit
                     }

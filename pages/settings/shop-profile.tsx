@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext, useMemo } from "react";
+import React, { useEffect, useState, useContext } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { Button, Textarea, Input, Image } from "@nextui-org/react";
 
@@ -13,9 +13,9 @@ import { createNostrShopEvent } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 
-const ShopSettingsPage = () => {
+const ShopProfilePage = () => {
   const { nostr } = useContext(NostrContext);
-  const [isUploadingShopSettings, setIsUploadingShopSettings] = useState(false);
+  const [isUploadingShopProfile, setIsUploadingShopProfile] = useState(false);
   const [isFetchingShop, setIsFetchingShop] = useState(false);
 
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
@@ -54,7 +54,7 @@ const ShopSettingsPage = () => {
   }, [shopContext, userPubkey, userPubkey]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
-    setIsUploadingShopSettings(true);
+    setIsUploadingShopProfile(true);
     const transformedData = {
       name: data.name || "",
       about: data.about || "",
@@ -77,12 +77,8 @@ const ShopSettingsPage = () => {
       content: transformedData,
       created_at: 0,
     });
-    setIsUploadingShopSettings(false);
+    setIsUploadingShopProfile(false);
   };
-
-  const buttonClassName = useMemo(() => {
-    return `w-full mb-10 ${SHOPSTRBUTTONCLASSNAMES}`;
-  }, []);
 
   return (
     <>
@@ -217,7 +213,7 @@ const ShopSettingsPage = () => {
                 />
 
                 <Button
-                  className={buttonClassName}
+                  className={`mb-10 w-full ${SHOPSTRBUTTONCLASSNAMES}`}
                   type="submit"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
@@ -225,8 +221,8 @@ const ShopSettingsPage = () => {
                       handleSubmit(onSubmit as any)(); // Programmatic submit
                     }
                   }}
-                  isDisabled={isUploadingShopSettings}
-                  isLoading={isUploadingShopSettings}
+                  isDisabled={isUploadingShopProfile}
+                  isLoading={isUploadingShopProfile}
                 >
                   Save Shop
                 </Button>
@@ -239,4 +235,4 @@ const ShopSettingsPage = () => {
   );
 };
 
-export default ShopSettingsPage;
+export default ShopProfilePage;
