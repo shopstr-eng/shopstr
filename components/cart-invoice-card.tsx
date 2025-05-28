@@ -1160,7 +1160,7 @@ export default function CartInvoiceCard({
         const mint = new CashuMint(mints[0]!);
         const info = await mint.getInfo();
         // NUT-11 support is advertised in `methods["11"].supported`
-        if (!info.methods?.["11"]?.supported) {
+        if (!info.nuts?.some(nut => nut.nut === 11)) {
           throw new Error("Mint does not support P2PK (NUT-11)");
         }
         const { keep, send } = await wallet.send(
