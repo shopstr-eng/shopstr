@@ -72,6 +72,7 @@ import {
   ShippingFormData,
   ContactFormData,
   CombinedFormData,
+  GetInfoResponse,
 } from "@/utils/types/types";
 
 export default function CartInvoiceCard({
@@ -1158,9 +1159,9 @@ export default function CartInvoiceCard({
 
       if (sellerAmount > 0) {
         const mint = new CashuMint(mints[0]!);
-        const info = await mint.getInfo();
+        const info = (await mint.getInfo()) as GetInfoResponse;
         // NUT-11 support is advertised in `methods["11"].supported`
-        if (!info.nuts?.some(nut => nut.nut === 11)) {
+        if (!info.methods?.["11"]?.supported) {
           throw new Error("Mint does not support P2PK (NUT-11)");
         }
         const { keep, send } = await wallet.send(

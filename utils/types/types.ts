@@ -98,3 +98,11 @@ declare global {
     nostr: any;
   }
 }
+
+export interface GetInfoResponse {
+  version: string;
+  network: string;
+  methods?: {
+    [nutId: string]: { supported: boolean };
+  };
+}
