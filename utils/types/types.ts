@@ -32,6 +32,7 @@ export interface ShopProfile {
       pubkey: string;
       locktime: number;
       refund?: string[];
+      tags?: [string, string][];
     }
     merchants: string[];
   };

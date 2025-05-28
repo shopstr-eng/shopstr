@@ -336,7 +336,7 @@ export default function ClaimButton({ token }: { token: string }) {
   if (!wallet || !p2pkInfo?.refundKeys) return;
   setIsRedeeming(true);
   try {
-    const { send } = await wallet.send(
+    await wallet.send(
       tokenAmount,
       proofs,
       {

@@ -99,7 +99,7 @@ const ShopProfilePage = () => {
         p2pkEnabled: false,
         p2pkPubkey: "",
         locktime: "",
-        refund_pubkeys: (shop.content.p2pk?.refund_pubkeys || []).join(","),
+        refund_pubkeys: (shop.content.p2pk?.refund || []).join(","),
         p2pkSigflag: "SIG_INPUTS",
         p2pkNsigs: 1,
         p2pkPubkeys: "",
@@ -172,7 +172,7 @@ const ShopProfilePage = () => {
         .filter(Boolean)
         .map(convertToHex)
         .filter((h: string | null): h is string => !!h)
-        .forEach((hx) => {
+        .forEach((hx: string) => {
           tags.push(["refund", hx]);
         });
 
@@ -180,12 +180,12 @@ const ShopProfilePage = () => {
         enabled: true,
         pubkey: mainHex,
         locktime: lockUnix,
-        refund_pubkeys: data.refund_pubkeys
+        refund: data.refund_pubkeys
           .split(",")
           .map((s: string) => s.trim())
           .filter(Boolean)
           .map(convertToHex)
-          .filter((h): h is string => !!h),
+          .filter((h: string | null): h is string => !!h),
         tags,
       };
     }
@@ -310,9 +310,11 @@ const ShopProfilePage = () => {
                 control={control}
                 render={({ field }) => (
                   <Switch
-                    {...field}
                     isSelected={field.value}
                     onChange={(val) => field.onChange(val)}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    ref={field.ref}
                     className="mb-4"
                   >
                     Enable Time-Locked Payments
@@ -438,11 +440,15 @@ const ShopProfilePage = () => {
                     }}
                     render={({ field, fieldState: { error } }) => (
                       <Input
-                        {...field}
                         type="number"
                         fullWidth
                         variant="bordered"
                         label="Required Signatures"
+                        value={field.value?.toString() || ""}
+                        onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 0)}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
                         isInvalid={!!error}
                         errorMessage={error?.message}
                         className="mb-4"
