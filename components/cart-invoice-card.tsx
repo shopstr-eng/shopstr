@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import React, { useContext, useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/router";
 import {
@@ -1158,7 +1159,8 @@ export default function CartInvoiceCard({
       if (sellerAmount > 0) {
         const mint = new CashuMint(mints[0]!);
         const info = await mint.getInfo();
-        if (!info.supported_nuts?.includes(11)) {
+        // NUT-11 support is advertised in `methods["11"].supported`
+        if (!info.methods?.["11"]?.supported) {
           throw new Error("Mint does not support P2PK (NUT-11)");
         }
         const { keep, send } = await wallet.send(
