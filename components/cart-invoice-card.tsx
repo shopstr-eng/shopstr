@@ -176,6 +176,7 @@ export default function CartInvoiceCard({
       const firstSellerProfile = profileContext.profileData.get(
         firstProduct.pubkey
       );
+      const p2pk = firstSellerProfile?.content?.p2pk;
       let commonFiatOptions = firstSellerProfile?.content?.fiat_options || [];
 
       for (let i = 1; i < products.length; i++) {
@@ -1156,6 +1157,11 @@ export default function CartInvoiceCard({
       let sellerProofs: Proof[] = [];
 
       if (sellerAmount > 0) {
+        const mint = new CashuMint(mints[0]!);
+        const info = await mint.getInfo();
+        if (!info.supported_nuts?.includes(11)) {
+          throw new Error("Mint does not support P2PK (NUT-11)");
+        }
         const { keep, send } = await wallet.send(
           sellerAmount,
           remainingProofs,
@@ -1767,9 +1773,23 @@ export default function CartInvoiceCard({
         (p: Proof) =>
           mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
+      const tags = shopProfile.content.p2pk.tags || []; 
+      const p2pkOptions = p2pk?.enabled
+        ? {
+            pubkey:     p2pk.pubkey,
+            locktime:   Math.floor(Date.now()/1000) + p2pk.locktime_days*86400,
+            refundKeys: p2pk.refund_pubkeys,
+            sigflag:    tags.find(t=>t[0]==="sigflag")?.[1],
+            nSigs:      Number(tags.find(t=>t[0]==="n_sigs")?.[1]),
+            pubkeys:    tags.filter(t=>t[0]==="pubkeys").map(t=>t[1]),
+          }
+        : undefined;
+      
       const { keep, send } = await wallet.send(price, filteredProofs, {
         includeFees: true,
+        ...(p2pkOptions ? { p2pk: p2pkOptions } : {}),
       });
+
       const deletedEventIds = [
         ...new Set([
           ...walletContext.proofEvents

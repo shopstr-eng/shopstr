@@ -47,6 +47,8 @@ export default function CheckoutCard({
   uniqueKey?: string;
 }) {
   const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
+  const { shopData } = useContext(ShopMapContext);
+  const ShopProfile: ShopProfile | undefined = shopData.get(productData.pubkey);
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   const router = useRouter();
@@ -79,7 +81,6 @@ export default function CheckoutCard({
   const [cart, setCart] = useState<ProductData[]>([]);
 
   const reviewsContext = useContext(ReviewsContext);
-  const shopMapContext = useContext(ShopMapContext);
 
   const toggleExpand = () => {
     setIsExpanded(!isExpanded);
@@ -122,20 +123,11 @@ export default function CheckoutCard({
 
   useEffect(() => {
     setIsFetchingShop(true);
-    if (
-      productData.pubkey &&
-      shopMapContext.shopData.has(productData.pubkey) &&
-      typeof shopMapContext.shopData.get(productData.pubkey) != "undefined"
-    ) {
-      const shopProfile: ShopProfile | undefined = shopMapContext.shopData.get(
-        productData.pubkey
-      );
-      if (shopProfile) {
-        setShopBannerURL(shopProfile.content.ui.banner);
-      }
+    if (shopProfile) {
+      setShopBannerURL(shopProfile.content.ui.banner);
     }
     setIsFetchingShop(false);
-  }, [productData.pubkey, shopMapContext, shopBannerURL]);
+  }, [shopProfile]);
 
   useEffect(() => {
     setIsFetchingReviews(true);
@@ -379,7 +371,7 @@ export default function CheckoutCard({
                       pubkey={productData.pubkey}
                       dropDownKeys={
                         productData.pubkey === userPubkey
-                          ? ["shop_profile"]
+                          ? ["shop_settings"]
                           : ["shop", "inquiry", "copy_npub"]
                       }
                     />
@@ -650,6 +642,18 @@ export default function CheckoutCard({
               </p>
             </div>
           </div>
+          
+          {/* ── P2PK Lock Notice ── */}
+          {shopProfile?.content.p2pk?.enabled && (() => {
+            const now = Math.floor(Date.now() / 1000);
+            const days = Math.max(0, Math.ceil((shopProfile.content.p2pk.locktime - now) / 86400));
+            return (
+              <div className="…">
+                🔒 Funds locked to <code>{shopProfile.content.p2pk.pubkey.slice(0,8)}…</code> for {days} day{days !== 1 ? "s" : ""}
+              </div>
+            );
+          })()}
+          
           <div className="flex flex-col items-center">
             <ProductInvoiceCard
               productData={productData}

@@ -41,6 +41,20 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 
+function parseP2PK(proof: Proof) {
+  try {
+    const [kind, { data: pubkey, tags = [] }] = JSON.parse((proof as any).secret);
+    if (kind !== "P2PK") return null;
+    const locktime = Number(tags.find((t: any[]) => t[0] === "locktime")?.[1] || 0);
+    const refundKeys = tags
+      .filter((t) => t[0] === "refund")
+      .map((t) => t[1]);
+    return { pubkey, locktime, refundKeys };
+  } catch {
+    return null;
+  }
+}
+
 export default function ClaimButton({ token }: { token: string }) {
   const [lnurl, setLnurl] = useState("");
   const profileContext = useContext(ProfileMapContext);
@@ -58,6 +72,13 @@ export default function ClaimButton({ token }: { token: string }) {
   const [tokenMint, setTokenMint] = useState("");
   const [tokenAmount, setTokenAmount] = useState(0);
   const [formattedTokenAmount, setFormattedTokenAmount] = useState("");
+  const [p2pkInfo, setP2pkInfo] = useState<{ pubkey: string; locktime: number; refundKeys: string[] } | null>(null);
+  useEffect(() => {
+    if (proofs.length > 0) {
+      const info = parseP2PK(proofs[0]);
+      setP2pkInfo(info);
+    }
+  }, [proofs]);
 
   const [isInvalidSuccess, setIsInvalidSuccess] = useState(false);
   const [isReceived, setIsReceived] = useState(false);
@@ -311,6 +332,31 @@ export default function ClaimButton({ token }: { token: string }) {
     }
   };
 
+  async function handleRefund() {
+  if (!wallet || !p2pkInfo?.refundKeys) return;
+  setIsRedeeming(true);
+  try {
+    const { send } = await wallet.send(
+      tokenAmount,
+      proofs,
+      {
+        includeFees: true,
+        p2pk: {
+          pubkey:   p2pkInfo.pubkey,
+          locktime: 0,
+          refundKeys: p2pkInfo.refundKeys,
+        },
+      }
+    );
+    const refundToken = getEncodedToken({ mint: tokenMint, proofs: send });
+    setIsRedeemed(true);
+  } catch (err) {
+    console.error("Refund failed", err);
+  } finally {
+    setIsRedeeming(false);
+  }
+}
+
   const buttonClassName = useMemo(() => {
     const disabledStyle =
       "min-w-fit from-gray-300 to-gray-400 cursor-not-allowed";
@@ -340,6 +386,19 @@ export default function ClaimButton({ token }: { token: string }) {
           <>Claim: {formattedTokenAmount}</>
         )}
       </Button>
+
+      {p2pkInfo &&
+      Date.now() / 1000 > p2pkInfo.locktime &&
+      !isRedeemed && (
+        <Button
+          className={SHOPSTRBUTTONCLASSNAMES + " ml-2"}
+          onClick={handleRefund}
+          isLoading={isRedeeming}
+        >
+          Claim Refund
+        </Button>
+      )}
+
       <Modal
         backdrop="blur"
         isOpen={openClaimTypeModal}

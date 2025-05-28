@@ -11,6 +11,8 @@ import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { useRouter } from "next/router";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import { ShopMapContext } from "@/utils/context/context";
+import { ShopProfile } from "../../utils/types/types";
 
 export default function ProductCard({
   productData,
@@ -25,19 +27,21 @@ export default function ProductCard({
 }) {
   const router = useRouter();
   const { pubkey: userPubkey } = useContext(SignerContext);
+  const shopMap = useContext(ShopMapContext).shopData;
+  const shopProfile: ShopProfile | undefined = shopMap.get(productData.pubkey);
+  const p2pk = shopProfile?.content.p2pk;
+
   if (!productData) return null;
 
   const cardHoverStyle =
     "hover:shadow-purple-500/30 dark:hover:shadow-yellow-500/30 hover:scale-[1.01]";
 
-  if (isReview)
+  if (isReview) {
     return (
       <Card className="mx-2 my-3 w-full rounded-2xl bg-white shadow-lg dark:bg-neutral-900">
         <CardBody
           className="cursor-pointer p-6"
-          onClick={() => {
-            onProductClick && onProductClick(productData);
-          }}
+          onClick={() => onProductClick?.(productData)}
         >
           <div className="flex w-full justify-between pb-4">
             <ProfileWithDropdown
@@ -86,14 +90,14 @@ export default function ProductCard({
           <div className="mx-4 mt-4 flex items-center text-sm text-neutral-500 dark:text-neutral-300">
             <InformationCircleIcon className="mr-2 h-5 w-5" />
             <p>
-              Once purchased, the seller will receive a DM with your order
-              details.
+              Once purchased, the seller will receive a DM with your order details.
             </p>
           </div>
         </CardBody>
         {footerContent && <CardFooter>{footerContent}</CardFooter>}
       </Card>
     );
+  }
 
   return (
     <div
@@ -102,17 +106,13 @@ export default function ProductCard({
       <div className="w-80 overflow-hidden rounded-2xl">
         <div
           className="cursor-pointer"
-          onClick={() => {
-            onProductClick && onProductClick(productData);
-          }}
+          onClick={() => onProductClick?.(productData)}
         >
-          <div>
-            <ImageCarousel
-              images={productData.images}
-              classname="w-full h-[300px] rounded-t-2xl"
-              showThumbs={false}
-            />
-          </div>
+          <ImageCarousel
+            images={productData.images}
+            classname="w-full h-[300px] rounded-t-2xl"
+            showThumbs={false}
+          />
           <div className="flex flex-col p-4">
             {router.pathname !== "/" && (
               <div className="mb-2 flex items-center justify-between">
@@ -153,6 +153,16 @@ export default function ProductCard({
                 <CompactPriceDisplay monetaryInfo={productData} />
               </div>
             )}
+            {/* ── P2PK indicator ── */}
+            {p2pk?.enabled && (() => {
+              const now = Math.floor(Date.now() / 1000);
+              const days = Math.max(0, Math.ceil((p2pk.locktime - now) / 86400));
+              return (
+                <div className="mt-2 text-xs italic text-gray-600 dark:text-gray-400">
+                  🔒 Locked for {days} day{days !== 1 ? "s" : ""}
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>

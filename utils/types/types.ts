@@ -27,6 +27,12 @@ export interface ShopProfile {
       theme: string;
       darkMode: boolean;
     };
+    p2pk?: {
+      enabled: boolean;
+      pubkey: string;
+      locktime: number;
+      refund?: string[];
+    }
     merchants: string[];
   };
   created_at: number;
