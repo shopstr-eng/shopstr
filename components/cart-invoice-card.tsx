@@ -1739,6 +1739,10 @@ export default function CartInvoiceCard({
         throw new Error("Wallet context not available");
       }
 
+      if (!products || products.length === 0) {
+        throw new Error("No products available");
+      }
+
       if (
         shippingName ||
         shippingAddress ||
@@ -1775,15 +1779,20 @@ export default function CartInvoiceCard({
         (p: Proof) =>
           mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
-      const tags = shopProfile.content.p2pk.tags || []; 
+
+      const pubkey = products[0]!.pubkey;
+      const shopProfile = profileContext.profileData.get(pubkey);
+      const p2pk = shopProfile?.content?.p2pk;
+
+      const tags = p2pk?.tags || [];
       const p2pkOptions = p2pk?.enabled
         ? {
             pubkey:     p2pk.pubkey,
-            locktime:   Math.floor(Date.now()/1000) + p2pk.locktime_days*86400,
+            locktime:   Math.floor(Date.now() / 1000) + (p2pk?.locktime_days || 0) * 86400,
             refundKeys: p2pk.refund_pubkeys,
-            sigflag:    tags.find(t=>t[0]==="sigflag")?.[1],
-            nSigs:      Number(tags.find(t=>t[0]==="n_sigs")?.[1]),
-            pubkeys:    tags.filter(t=>t[0]==="pubkeys").map(t=>t[1]),
+            sigflag:    tags.find((t: any) => t[0] === "sigflag")?.[1],
+            nSigs:      Number(tags.find((t: any) => t[0] === "n_sigs")?.[1]),
+            pubkeys:    tags.filter((t: any) => t[0] === "pubkeys").map((t: any) => t[1]),
           }
         : undefined;
       

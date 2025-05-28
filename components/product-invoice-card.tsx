@@ -162,7 +162,6 @@ export default function ProductInvoiceCard({
 
   useEffect(() => {
     const sellerProfile = profileContext.profileData.get(productData.pubkey);
-    const _p2pk = sellerProfile?.content?.p2pk;
     const fiatOptions = sellerProfile?.content?.fiat_options || [];
     setFiatPaymentOptions(fiatOptions);
   }, [productData.pubkey, profileContext.profileData]);
@@ -1005,7 +1004,7 @@ export default function ProductInvoiceCard({
     if (sellerAmount > 0) {
       const mint = new CashuMint(mints[0]!);
       const info = await mint.getInfo();
-      if (!info.supported_nuts?.includes(11)) {
+      if (!info.nuts?.[11]) {
         throw new Error("Mint does not support P2PK (NUT-11)");
       }
       const { keep, send } = await wallet.send(sellerAmount, remainingProofs, {
@@ -1525,15 +1524,21 @@ export default function ProductInvoiceCard({
         (p: Proof) =>
           mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
+
+      const pubkey = productData.pubkey;
+      const shopProfile = profileContext.profileData.get(pubkey);
+      const p2pk = shopProfile?.content?.p2pk;
+
+      const tags = p2pk?.tags || [];
       // build p2pk options only if enabled
       const p2pkOptions = p2pk?.enabled
         ? {
             pubkey:       p2pk.pubkey,
             locktime:     Math.floor(Date.now()/1000) + p2pk.locktime_days * 86400,
             refundKeys:   p2pk.refund_pubkeys,
-            sigflag:    tags.find(t=>t[0]==="sigflag")?.[1],
-            nSigs:      Number(tags.find(t=>t[0]==="n_sigs")?.[1]),
-            pubkeys:    tags.filter(t=>t[0]==="pubkeys").map(t=>t[1]),
+            sigflag:    tags.find((t: any) => t[0] === "sigflag")?.[1],
+            nSigs:      Number(tags.find((t: any) => t[0] === "n_sigs")?.[1]),
+            pubkeys:    tags.filter((t: any) => t[0] === "pubkeys").map((t: any) => t[1]),
           }
         : undefined;
       

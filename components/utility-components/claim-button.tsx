@@ -47,8 +47,8 @@ function parseP2PK(proof: Proof) {
     if (kind !== "P2PK") return null;
     const locktime = Number(tags.find((t: any[]) => t[0] === "locktime")?.[1] || 0);
     const refundKeys = tags
-      .filter((t) => t[0] === "refund")
-      .map((t) => t[1]);
+      .filter((t: any[]) => t[0] === "refund")
+      .map((t: any[]) => t[1]);
     return { pubkey, locktime, refundKeys };
   } catch {
     return null;
@@ -75,7 +75,7 @@ export default function ClaimButton({ token }: { token: string }) {
   const [p2pkInfo, setP2pkInfo] = useState<{ pubkey: string; locktime: number; refundKeys: string[] } | null>(null);
   useEffect(() => {
     if (proofs.length > 0) {
-      const info = parseP2PK(proofs[0]);
+      const info = parseP2PK(proofs[0]!);
       setP2pkInfo(info);
     }
   }, [proofs]);
@@ -346,9 +346,8 @@ export default function ClaimButton({ token }: { token: string }) {
           locktime: 0,
           refundKeys: p2pkInfo.refundKeys,
         },
-      }
+      } as any
     );
-    const _refundToken = getEncodedToken({ mint: tokenMint, proofs: send });
     setIsRedeemed(true);
   } catch (err) {
     console.error("Refund failed", err);
