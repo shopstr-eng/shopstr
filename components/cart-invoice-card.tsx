@@ -176,7 +176,6 @@ export default function CartInvoiceCard({
       const firstSellerProfile = profileContext.profileData.get(
         firstProduct.pubkey
       );
-      const _p2pk = firstSellerProfile?.content?.p2pk;
       let commonFiatOptions = firstSellerProfile?.content?.fiat_options || [];
 
       for (let i = 1; i < products.length; i++) {
