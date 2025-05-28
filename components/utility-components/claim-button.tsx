@@ -348,7 +348,7 @@ export default function ClaimButton({ token }: { token: string }) {
         },
       }
     );
-    const refundToken = getEncodedToken({ mint: tokenMint, proofs: send });
+    const _refundToken = getEncodedToken({ mint: tokenMint, proofs: send });
     setIsRedeemed(true);
   } catch (err) {
     console.error("Refund failed", err);

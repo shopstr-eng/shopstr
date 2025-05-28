@@ -48,7 +48,7 @@ export default function CheckoutCard({
 }) {
   const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
   const { shopData } = useContext(ShopMapContext);
-  const ShopProfile: ShopProfile | undefined = shopData.get(productData.pubkey);
+  const shopProfile: ShopProfile | undefined = shopData.get(productData.pubkey);
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   const router = useRouter();

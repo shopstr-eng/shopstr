@@ -162,7 +162,7 @@ export default function ProductInvoiceCard({
 
   useEffect(() => {
     const sellerProfile = profileContext.profileData.get(productData.pubkey);
-    const p2pk = sellerProfile?.content?.p2pk;
+    const _p2pk = sellerProfile?.content?.p2pk;
     const fiatOptions = sellerProfile?.content?.fiat_options || [];
     setFiatPaymentOptions(fiatOptions);
   }, [productData.pubkey, profileContext.profileData]);
