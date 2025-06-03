@@ -311,15 +311,6 @@ export default function CheckoutCard({
     <>
       {!isBeingPaid ? (
         <>
-          {shopBannerURL && !isFetchingShop && (
-            <div className="flex h-auto w-full items-center justify-center bg-light-bg bg-cover bg-center dark:bg-dark-bg">
-              <img
-                src={sanitizeUrl(shopBannerURL)}
-                alt="Shop Banner"
-                className="max-h-[210px] w-full items-center justify-center object-cover"
-              />
-            </div>
-          )}
           <div className="max-w-screen pt-4">
             <div
               className="max-w-screen mx-3 my-3 flex flex-row whitespace-normal break-words"
@@ -342,7 +333,7 @@ export default function CheckoutCard({
                             key={index}
                             src={image}
                             alt={`Product image ${index + 1}`}
-                            className={`w-full cursor-pointer object-cover ${
+                            className={`w-full cursor-pointer object-cover rounded-xl ${
                               image === selectedImage
                                 ? "border-2 border-shopstr-purple dark:border-shopstr-yellow"
                                 : ""
@@ -366,7 +357,7 @@ export default function CheckoutCard({
                     <img
                       src={selectedImage}
                       alt="Selected product image"
-                      className="w-full object-cover"
+                      className="w-full object-cover rounded-xl"
                       style={{ aspectRatio: "1 / 1" }}
                     />
                   </div>
@@ -462,7 +453,7 @@ export default function CheckoutCard({
                     {productData.status !== "sold" ? (
                       <>
                         <Button
-                          className={`${SHOPSTRBUTTONCLASSNAMES} ${
+                          className={`"text-dark-text dark:text-light-text shadow-lg bg-gradient-to-tr from-purple-700 via-purple-500 to-purple-700 min-w-fit dark:from-yellow-700 dark:via-yellow-500 dark:to-yellow-700 ${
                             hasSizes && !selectedSize
                               ? "cursor-not-allowed opacity-50"
                               : ""
