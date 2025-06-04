@@ -18,9 +18,7 @@ import {
   FaceSmileIcon,
   InformationCircleIcon,
 } from "@heroicons/react/24/outline";
-import { ShopMapContext, ReviewsContext } from "@/utils/context/context";
-import { ShopProfile } from "../../utils/types/types";
-import { sanitizeUrl } from "@braintree/sanitize-url";
+import { ReviewsContext } from "@/utils/context/context";
 import FailureModal from "../utility-components/failure-modal";
 import SuccessModal from "../utility-components/success-modal";
 import SignInModal from "../sign-in/SignInModal";
@@ -62,9 +60,6 @@ export default function CheckoutCard({
   const [hasSizes, setHasSizes] = useState(false);
   const [isAdded, setIsAdded] = useState(false);
 
-  const [shopBannerURL, setShopBannerURL] = useState("");
-  const [isFetchingShop, setIsFetchingShop] = useState(false);
-
   const [merchantReview, setMerchantReview] = useState(0);
   const [productReviews, setProductReviews] =
     useState<Map<string, string[][]>>();
@@ -79,7 +74,6 @@ export default function CheckoutCard({
   const [cart, setCart] = useState<ProductData[]>([]);
 
   const reviewsContext = useContext(ReviewsContext);
-  const shopMapContext = useContext(ShopMapContext);
 
   const toggleExpand = () => {
     setIsExpanded(!isExpanded);
@@ -119,23 +113,6 @@ export default function CheckoutCard({
       setIsAdded(true);
     }
   }, [cart, productData.id]);
-
-  useEffect(() => {
-    setIsFetchingShop(true);
-    if (
-      productData.pubkey &&
-      shopMapContext.shopData.has(productData.pubkey) &&
-      typeof shopMapContext.shopData.get(productData.pubkey) != "undefined"
-    ) {
-      const shopProfile: ShopProfile | undefined = shopMapContext.shopData.get(
-        productData.pubkey
-      );
-      if (shopProfile) {
-        setShopBannerURL(shopProfile.content.ui.banner);
-      }
-    }
-    setIsFetchingShop(false);
-  }, [productData.pubkey, shopMapContext, shopBannerURL]);
 
   useEffect(() => {
     setIsFetchingReviews(true);
@@ -333,7 +310,7 @@ export default function CheckoutCard({
                             key={index}
                             src={image}
                             alt={`Product image ${index + 1}`}
-                            className={`w-full cursor-pointer object-cover rounded-xl ${
+                            className={`w-full cursor-pointer rounded-xl object-cover ${
                               image === selectedImage
                                 ? "border-2 border-shopstr-purple dark:border-shopstr-yellow"
                                 : ""
@@ -357,7 +334,7 @@ export default function CheckoutCard({
                     <img
                       src={selectedImage}
                       alt="Selected product image"
-                      className="w-full object-cover rounded-xl"
+                      className="w-full rounded-xl object-cover"
                       style={{ aspectRatio: "1 / 1" }}
                     />
                   </div>
@@ -453,7 +430,7 @@ export default function CheckoutCard({
                     {productData.status !== "sold" ? (
                       <>
                         <Button
-                          className={`"text-dark-text dark:text-light-text shadow-lg bg-gradient-to-tr from-purple-700 via-purple-500 to-purple-700 min-w-fit dark:from-yellow-700 dark:via-yellow-500 dark:to-yellow-700 ${
+                          className={`"text-dark-text min-w-fit bg-gradient-to-tr from-purple-700 via-purple-500 to-purple-700 shadow-lg dark:from-yellow-700 dark:via-yellow-500 dark:to-yellow-700 dark:text-light-text ${
                             hasSizes && !selectedSize
                               ? "cursor-not-allowed opacity-50"
                               : ""
