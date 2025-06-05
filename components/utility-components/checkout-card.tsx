@@ -430,7 +430,7 @@ export default function CheckoutCard({
                     {productData.status !== "sold" ? (
                       <>
                         <Button
-                          className={`text-dark-text dark:text-light-text min-w-fit bg-gradient-to-tr from-purple-700 via-purple-500 to-purple-700 shadow-lg dark:from-yellow-700 dark:via-yellow-500 dark:to-yellow-700 dark:text-light-text ${
+                          className={`min-w-fit bg-gradient-to-tr from-purple-700 via-purple-500 to-purple-700 text-dark-text shadow-lg dark:from-yellow-700 dark:via-yellow-500 dark:to-yellow-700 dark:text-light-text ${
                             hasSizes && !selectedSize
                               ? "cursor-not-allowed opacity-50"
                               : ""
