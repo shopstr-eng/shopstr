@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import React, { useContext, useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/router";
 import {
@@ -72,7 +71,6 @@ import {
   ShippingFormData,
   ContactFormData,
   CombinedFormData,
-  GetInfoResponse,
 } from "@/utils/types/types";
 
 export default function CartInvoiceCard({
@@ -1159,7 +1157,7 @@ export default function CartInvoiceCard({
 
       if (sellerAmount > 0) {
         const mint = new CashuMint(mints[0]!);
-        const info = (await mint.getInfo()) as unknown as GetInfoResponse;
+        const info = (await mint.getInfo()) as any;
         // NUT-11 support is advertised in `methods["11"].supported`
         if (!info.methods?.["11"]?.supported) {
           throw new Error("Mint does not support P2PK (NUT-11)");
@@ -1781,15 +1779,15 @@ export default function CartInvoiceCard({
       );
 
       const pubkey = products[0]!.pubkey;
-      const shopProfile = profileContext.profileData.get(pubkey);
-      const p2pk = shopProfile?.content?.p2pk;
+      const sellerProfile = profileContext.profileData.get(pubkey);
+      const p2pk = sellerProfile?.content?.p2pk;
 
       const tags = p2pk?.tags || [];
       const p2pkOptions = p2pk?.enabled
         ? {
             pubkey:     p2pk.pubkey,
-            locktime:   Math.floor(Date.now() / 1000) + (p2pk?.locktime_days || 0) * 86400,
-            refundKeys: p2pk.refund_pubkeys,
+            locktime:   p2pk.locktime,
+            refundKeys: p2pk.refund || [],
             sigflag:    tags.find((t: any) => t[0] === "sigflag")?.[1],
             nSigs:      Number(tags.find((t: any) => t[0] === "n_sigs")?.[1]),
             pubkeys:    tags.filter((t: any) => t[0] === "pubkeys").map((t: any) => t[1]),

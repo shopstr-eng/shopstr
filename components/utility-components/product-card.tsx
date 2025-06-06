@@ -11,8 +11,8 @@ import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { useRouter } from "next/router";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
-import { ShopMapContext } from "@/utils/context/context";
-import { ShopProfile } from "../../utils/types/types";
+import { ProfileMapContext } from "@/utils/context/context";
+import { ProfileData } from "@/utils/types/types";
 
 export default function ProductCard({
   productData,
@@ -27,9 +27,12 @@ export default function ProductCard({
 }) {
   const router = useRouter();
   const { pubkey: userPubkey } = useContext(SignerContext);
-  const shopMap = useContext(ShopMapContext).shopData;
-  const shopProfile: ShopProfile | undefined = shopMap.get(productData.pubkey);
-  const p2pk = shopProfile?.content.p2pk;
+
+  const profileMap = useContext(ProfileMapContext).profileData;
+  const sellerProfile: ProfileData | undefined = profileMap.get(
+    productData.pubkey
+  );
+  const p2pk = sellerProfile?.content.p2pk;
 
   if (!productData) return null;
 
@@ -90,7 +93,8 @@ export default function ProductCard({
           <div className="mx-4 mt-4 flex items-center text-sm text-neutral-500 dark:text-neutral-300">
             <InformationCircleIcon className="mr-2 h-5 w-5" />
             <p>
-              Once purchased, the seller will receive a DM with your order details.
+              Once purchased, the seller will receive a DM with your order
+              details.
             </p>
           </div>
         </CardBody>
@@ -153,6 +157,7 @@ export default function ProductCard({
                 <CompactPriceDisplay monetaryInfo={productData} />
               </div>
             )}
+
             {/* ── P2PK indicator ── */}
             {p2pk?.enabled && (() => {
               const now = Math.floor(Date.now() / 1000);

@@ -18,12 +18,13 @@ import {
   FaceSmileIcon,
   InformationCircleIcon,
 } from "@heroicons/react/24/outline";
-import { ReviewsContext } from "@/utils/context/context";
+import { ReviewsContext, ProfileMapContext } from "@/utils/context/context";
 import FailureModal from "../utility-components/failure-modal";
 import SuccessModal from "../utility-components/success-modal";
 import SignInModal from "../sign-in/SignInModal";
 import currencySelection from "../../public/currencySelection.json";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import { ProfileData } from "@/utils/types/types";
 
 const SUMMARY_CHARACTER_LIMIT = 100;
 
@@ -45,8 +46,8 @@ export default function CheckoutCard({
   uniqueKey?: string;
 }) {
   const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
-  const { shopData } = useContext(ShopMapContext);
-  const shopProfile: ShopProfile | undefined = shopData.get(productData.pubkey);
+  const profileMap = useContext(ProfileMapContext).profileData;
+  const sellerProfile: ProfileData | undefined = profileMap.get(productData.pubkey);
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   const router = useRouter();
@@ -621,13 +622,12 @@ export default function CheckoutCard({
             </div>
           </div>
           
-          {/* ── P2PK Lock Notice ── */}
-          {shopProfile?.content.p2pk?.enabled && (() => {
+          {sellerProfile?.content.p2pk?.enabled && (() => {
             const now = Math.floor(Date.now() / 1000);
-            const days = Math.max(0, Math.ceil((shopProfile.content.p2pk.locktime - now) / 86400));
+            const days = Math.max(0, Math.ceil((sellerProfile.content.p2pk!.locktime - now) / 86400));
             return (
               <div className="…">
-                🔒 Funds locked to <code>{shopProfile.content.p2pk.pubkey.slice(0,8)}…</code> for {days} day{days !== 1 ? "s" : ""}
+                🔒 Funds locked to <code>{sellerProfile.content.p2pk!.pubkey.slice(0,8)}…</code> for {days} day{days !== 1 ? "s" : ""}
               </div>
             );
           })()}

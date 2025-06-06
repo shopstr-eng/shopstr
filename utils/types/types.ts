@@ -27,13 +27,6 @@ export interface ShopProfile {
       theme: string;
       darkMode: boolean;
     };
-    p2pk?: {
-      enabled: boolean;
-      pubkey: string;
-      locktime: number;
-      refund?: string[];
-      tags?: [string, string][];
-    }
     merchants: string[];
   };
   created_at: number;
@@ -51,6 +44,15 @@ export interface ProfileData {
     payment_preference?: string;
     fiat_options?: string[];
     shopstr_donation?: number;
+    display_name?: string;
+    website?: string;
+    p2pk?: {
+      enabled: boolean;
+      pubkey: string;
+      locktime: number;
+      refund?: string[];
+      tags?: [string, string][];
+    };
   };
   created_at: number;
 }
