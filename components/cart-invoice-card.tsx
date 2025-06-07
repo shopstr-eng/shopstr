@@ -134,7 +134,9 @@ export default function CartInvoiceCard({
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
   const [requiredInfo, setRequiredInfo] = useState("");
-
+  
+  const { pubkey: buyerPubkey } = useContext(SignerContext);
+  
   useEffect(() => {
     if (products && products.length > 0) {
       const requiredFields = products
@@ -1777,7 +1779,7 @@ export default function CartInvoiceCard({
         (p: Proof) =>
           mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
-
+       
       const pubkey = products[0]!.pubkey;
       const sellerProfile = profileContext.profileData.get(pubkey);
       const p2pk = sellerProfile?.content?.p2pk;
@@ -1787,7 +1789,10 @@ export default function CartInvoiceCard({
         ? {
             pubkey:     p2pk.pubkey,
             locktime:   p2pk.locktime,
-            refundKeys: p2pk.refund || [],
+            refundKeys: [
+              ...(p2pk.refund || []),
+              buyerPubkey!
+            ],
             sigflag:    tags.find((t: any) => t[0] === "sigflag")?.[1],
             nSigs:      Number(tags.find((t: any) => t[0] === "n_sigs")?.[1]),
             pubkeys:    tags.filter((t: any) => t[0] === "pubkeys").map((t: any) => t[1]),

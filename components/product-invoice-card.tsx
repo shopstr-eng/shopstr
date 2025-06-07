@@ -146,6 +146,8 @@ export default function ProductInvoiceCard({
     reset: contactReset,
   } = useForm();
 
+  const { pubkey: buyerPubkey } = useContext(SignerContext);
+
   useEffect(() => {
     const fetchKeys = async () => {
       const { nsec: nsecForSender, npub: npubForSender } = await generateKeys();
@@ -1524,7 +1526,7 @@ export default function ProductInvoiceCard({
         (p: Proof) =>
           mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
-
+      
       const pubkey = productData.pubkey;
       const sellerProfile = profileContext.profileData.get(pubkey);
       const p2pk = sellerProfile?.content?.p2pk;
@@ -1535,7 +1537,10 @@ export default function ProductInvoiceCard({
         ? {
             pubkey:     p2pk.pubkey,
             locktime:   p2pk.locktime,
-            refundKeys: p2pk.refund || [],
+            refundKeys: [
+              ...(p2pk.refund || []),
+              buyerPubkey! 
+            ],
             sigflag:    tags.find((t: any) => t[0] === "sigflag")?.[1],
             nSigs:      Number(tags.find((t: any) => t[0] === "n_sigs")?.[1]),
             pubkeys:    tags.filter((t: any) => t[0] === "pubkeys").map((t: any) => t[1]),
