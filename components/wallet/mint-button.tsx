@@ -113,38 +113,90 @@ const MintButton = () => {
     numSats: number,
     hash: string
   ) {
-    while (true) {
-      try {
-        const proofs = await wallet.mintProofs(numSats, hash);
+    let retryCount = 0;
+    const maxRetries = 30; // Maximum 30 retries (about 1 minute)
 
-        if (proofs) {
-          const proofArray = [...tokens, ...proofs];
-          localStorage.setItem("tokens", JSON.stringify(proofArray));
-          localStorage.setItem(
-            "history",
-            JSON.stringify([
-              { type: 3, amount: numSats, date: Math.floor(Date.now() / 1000) },
-              ...history,
-            ])
-          );
-          await publishProofEvent(
-            nostr!,
-            signer!,
-            mints[0]!,
-            proofs,
-            "in",
-            numSats.toString()
-          );
-          // potentially capture a metric for the mint invoice
+    while (retryCount < maxRetries) {
+      try {
+        // First check if the quote has been paid
+        const quoteState = await wallet.checkMintQuote(hash);
+
+        if (quoteState.state === "PAID") {
+          // Quote is paid, try to mint proofs
+          try {
+            const proofs = await wallet.mintProofs(numSats, hash);
+            if (proofs && proofs.length > 0) {
+              const proofArray = [...tokens, ...proofs];
+              localStorage.setItem("tokens", JSON.stringify(proofArray));
+              localStorage.setItem(
+                "history",
+                JSON.stringify([
+                  {
+                    type: 3,
+                    amount: numSats,
+                    date: Math.floor(Date.now() / 1000),
+                  },
+                  ...history,
+                ])
+              );
+              await publishProofEvent(
+                nostr!,
+                signer!,
+                mints[0]!,
+                proofs,
+                "in",
+                numSats.toString()
+              );
+              // potentially capture a metric for the mint invoice
+              setPaymentConfirmed(true);
+              setQrCodeUrl(null);
+              setTimeout(() => {
+                handleToggleMintModal(); // takes you back to the page after payment has been confirmed by cashu mint api
+              }, 1900); // 1.9 seconds is the amount of time for the checkmark animation to play
+              break;
+            }
+          } catch (mintError) {
+            // If minting fails but quote is paid, it might be already issued
+            if (
+              mintError instanceof Error &&
+              mintError.message.includes("issued")
+            ) {
+              // Quote was already processed, consider it successful
+              setPaymentConfirmed(true);
+              setQrCodeUrl(null);
+              setFailureText(
+                "Payment was received but your connection dropped! Please check your wallet balance."
+              );
+              setShowFailureModal(true);
+              setTimeout(() => {
+                handleToggleMintModal();
+              }, 1900);
+              break;
+            }
+            throw mintError;
+          }
+        } else if (quoteState.state === "UNPAID") {
+          // Quote not paid yet, continue waiting
+          retryCount++;
+          await new Promise((resolve) => setTimeout(resolve, 2100));
+          continue;
+        } else if (quoteState.state === "ISSUED") {
+          // Quote was already processed successfully
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
+          setFailureText(
+            "Payment was received but your connection dropped! Please check your wallet balance."
+          );
+          setShowFailureModal(true);
           setTimeout(() => {
-            handleToggleMintModal(); // takes you back to the page after payment has been confirmed by cashu mint api
-          }, 1900); // 1.9 seconds is the amount of time for the checkmark animation to play
+            handleToggleMintModal();
+          }, 1900);
           break;
         }
       } catch (error) {
-        console.error(error);
+        console.error("Invoice check error:", error);
+        retryCount++;
+
         if (error instanceof TypeError) {
           setShowInvoiceCard(false);
           setInvoice("");
@@ -155,6 +207,19 @@ const MintButton = () => {
           setShowFailureModal(true);
           break;
         }
+
+        // If we've exceeded max retries, show error
+        if (retryCount >= maxRetries) {
+          setShowInvoiceCard(false);
+          setInvoice("");
+          setQrCodeUrl(null);
+          setFailureText(
+            "Payment timed out! Please check your wallet balance or try again."
+          );
+          setShowFailureModal(true);
+          break;
+        }
+
         await new Promise((resolve) => setTimeout(resolve, 2100));
       }
     }

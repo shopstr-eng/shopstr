@@ -1076,36 +1076,86 @@ export default function CartInvoiceCard({
     contactInstructions?: string,
     additionalInfo?: string
   ) {
-    while (true) {
-      try {
-        const proofs = await wallet.mintProofs(convertedPrice, hash);
+    let retryCount = 0;
+    const maxRetries = 30; // Maximum 30 retries (about 1 minute)
 
-        if (proofs) {
-          await sendTokens(
-            wallet,
-            proofs,
-            shippingName ? shippingName : undefined,
-            shippingAddress ? shippingAddress : undefined,
-            shippingUnitNo ? shippingUnitNo : undefined,
-            shippingCity ? shippingCity : undefined,
-            shippingPostalCode ? shippingPostalCode : undefined,
-            shippingState ? shippingState : undefined,
-            shippingCountry ? shippingCountry : undefined,
-            contact ? contact : undefined,
-            contactType ? contactType : undefined,
-            contactInstructions ? contactInstructions : undefined,
-            additionalInfo ? additionalInfo : undefined
-          );
+    while (retryCount < maxRetries) {
+      try {
+        // First check if the quote has been paid
+        const quoteState = await wallet.checkMintQuote(hash);
+
+        if (quoteState.state === "PAID") {
+          // Quote is paid, try to mint proofs
+          try {
+            const proofs = await wallet.mintProofs(convertedPrice, hash);
+            if (proofs && proofs.length > 0) {
+              await sendTokens(
+                wallet,
+                proofs,
+                shippingName ? shippingName : undefined,
+                shippingAddress ? shippingAddress : undefined,
+                shippingUnitNo ? shippingUnitNo : undefined,
+                shippingCity ? shippingCity : undefined,
+                shippingPostalCode ? shippingPostalCode : undefined,
+                shippingState ? shippingState : undefined,
+                shippingCountry ? shippingCountry : undefined,
+                contact ? contact : undefined,
+                contactType ? contactType : undefined,
+                contactInstructions ? contactInstructions : undefined,
+                additionalInfo ? additionalInfo : undefined
+              );
+              localStorage.setItem("cart", JSON.stringify([]));
+              setPaymentConfirmed(true);
+              setQrCodeUrl(null);
+              if (setInvoiceIsPaid) {
+                setInvoiceIsPaid(true);
+              }
+              break;
+            }
+          } catch (mintError) {
+            // If minting fails but quote is paid, it might be already issued
+            if (
+              mintError instanceof Error &&
+              mintError.message.includes("issued")
+            ) {
+              // Quote was already processed, consider it successful
+              localStorage.setItem("cart", JSON.stringify([]));
+              setPaymentConfirmed(true);
+              setQrCodeUrl(null);
+              if (setInvoiceIsPaid) {
+                setInvoiceIsPaid(true);
+              }
+              setFailureText(
+                "Payment was received but your connection dropped! Please check your wallet balance."
+              );
+              setShowFailureModal(true);
+              break;
+            }
+            throw mintError;
+          }
+        } else if (quoteState.state === "UNPAID") {
+          // Quote not paid yet, continue waiting
+          retryCount++;
+          await new Promise((resolve) => setTimeout(resolve, 2100));
+          continue;
+        } else if (quoteState.state === "ISSUED") {
+          // Quote was already processed successfully
           localStorage.setItem("cart", JSON.stringify([]));
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           if (setInvoiceIsPaid) {
             setInvoiceIsPaid(true);
           }
+          setFailureText(
+            "Payment was received but your connection dropped! Please check your wallet balance."
+          );
+          setShowFailureModal(true);
           break;
         }
       } catch (error) {
-        console.error(error);
+        console.error("Invoice check error:", error);
+        retryCount++;
+
         if (error instanceof TypeError) {
           setShowInvoiceCard(false);
           setInvoice("");
@@ -1116,6 +1166,19 @@ export default function CartInvoiceCard({
           setShowFailureModal(true);
           break;
         }
+
+        // If we've exceeded max retries, show error
+        if (retryCount >= maxRetries) {
+          setShowInvoiceCard(false);
+          setInvoice("");
+          setQrCodeUrl(null);
+          setFailureText(
+            "Payment timed out! Please check your wallet balance or try again."
+          );
+          setShowFailureModal(true);
+          break;
+        }
+
         await new Promise((resolve) => setTimeout(resolve, 2100));
       }
     }
