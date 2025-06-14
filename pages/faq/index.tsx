@@ -51,6 +51,11 @@ export default function Faq() {
           content:
             "Sellers can offer different shipping options including free shipping, local pickup, or an added shipping cost. The shipping method and any restrictions should be clearly specified in each listing and fulfillment will be handled by the merchant themselves.",
         },
+        {
+          title: "What is P2PK Time-Lock, and how do I enable it on my merchant profile?",
+          content:
+            "P2PK (Pay‐to‐Pubkey Key) Time‐Lock allows merchants to lock the Cashu tokens they receive until a specified future timestamp. By enabling P2PK in your profile, your shop’s payments are held in escrow until the lock expires. This protects both buyers and sellers: buyers know the funds are locked until goods are delivered, and sellers can still refund automatically via the configured “refund pubkeys” if a buyer never claims before the lock expires. To enable it, go to your Profile Settings, check “Enable Time‐Locked Payment (P2PK)”, pick a expire date/time, and optionally set refund pubkeys. Once active, any incoming Cashu payments for your listings will display a 🔒 “Locked for X day(s)” notice until they become redeemable after the lock time.",
+        },
       ],
     },
     {
