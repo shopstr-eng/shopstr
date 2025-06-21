@@ -73,6 +73,8 @@ import {
   CombinedFormData,
 } from "@/utils/types/types";
 
+import { sendPaymentConfirmationMessage } from "@/utils/nostr/nostr-helper-functions";
+
 export default function CartInvoiceCard({
   products,
   quantities,
@@ -97,6 +99,8 @@ export default function CartInvoiceCard({
   const profileContext = useContext(ProfileMapContext);
   const { nostr } = useContext(NostrContext);
   const { signer, isLoggedIn: userLoggedIn } = useContext(SignerContext);
+  const [merchantPubkey, setMerchantPubkey] = useState<string>();
+  const [orderId] = useState(() => uuidv4());
 
   const [showInvoiceCard, setShowInvoiceCard] = useState(false);
 
@@ -134,6 +138,12 @@ export default function CartInvoiceCard({
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
   const [requiredInfo, setRequiredInfo] = useState("");
+
+  useEffect(() => {
+    if (signer) {
+      signer.getPubKey().then(pk => setMerchantPubkey(pk));
+    }
+  }, [signer]);
 
   useEffect(() => {
     if (products && products.length > 0) {
@@ -1109,6 +1119,15 @@ export default function CartInvoiceCard({
               setQrCodeUrl(null);
               if (setInvoiceIsPaid) {
                 setInvoiceIsPaid(true);
+                for (const product of products) {
+                  await sendPaymentConfirmationMessage(
+                    signer!,
+                    merchantPubkey!,
+                    product.pubkey,
+                    orderId,
+                    totalCostsInSats[product.pubkey]!
+                  );
+                }
               }
               break;
             }
@@ -1913,6 +1932,15 @@ export default function CartInvoiceCard({
       if (setCashuPaymentSent) {
         setCashuPaymentSent(true);
         localStorage.setItem("cart", JSON.stringify([]));
+        for (const product of products) {
+          await sendPaymentConfirmationMessage(
+            signer!,
+            merchantPubkey!,
+            product.pubkey,
+            orderId,
+            totalCostsInSats[product.pubkey]!
+          );
+        }
       }
     } catch (error) {
       console.error(error);
