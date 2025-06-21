@@ -37,7 +37,7 @@ const SettingsPage = () => {
                 <BuildingStorefrontIcon className={startIconClassnames} />
               }
               onClick={() => {
-                router.push("/settings/shop-settings");
+                router.push("/settings/shop-profile");
               }}
             >
               Shop Profile
