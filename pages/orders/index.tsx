@@ -7,7 +7,7 @@ export default function MessageView() {
   const { isInquiry } = router.query;
 
   return (
-    <div className="flex min-h-screen flex-col bg-light-bg pt-16 dark:bg-dark-bg">
+    <div className="flex min-h-screen flex-col bg-light-bg pt-16">
       <MessageFeed
         {...(isInquiry !== undefined
           ? { isInquiry: isInquiry === "true" }

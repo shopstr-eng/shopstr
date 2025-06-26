@@ -14,7 +14,7 @@ import {
   UseFormHandleSubmit,
   FieldValues,
 } from "react-hook-form";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { BLACKBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
 export default function ContactForm({
   showContactModal,
@@ -39,7 +39,6 @@ export default function ContactForm({
       classNames={{
         body: "py-6",
         backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-        // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
         header: "border-b-[1px] border-[#292f46]",
         footer: "border-t-[1px] border-[#292f46]",
         closeButton: "hover:bg-black/5 active:bg-white/10",
@@ -48,7 +47,7 @@ export default function ContactForm({
       size="2xl"
     >
       <ModalContent>
-        <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+        <ModalHeader className="flex flex-col gap-1 text-dark-text">
           Enter Contact Info
         </ModalHeader>
         <form onSubmit={handleContactSubmit(onContactSubmit)}>
@@ -69,7 +68,7 @@ export default function ContactForm({
                   : "";
                 return (
                   <Input
-                    className="text-light-text dark:text-dark-text"
+                    className="text-dark-text"
                     autoFocus
                     variant="bordered"
                     fullWidth={true}
@@ -103,7 +102,7 @@ export default function ContactForm({
                   : "";
                 return (
                   <Input
-                    className="text-light-text dark:text-dark-text"
+                    className="text-dark-text"
                     autoFocus
                     variant="bordered"
                     fullWidth={true}
@@ -137,7 +136,7 @@ export default function ContactForm({
                   : "";
                 return (
                   <Textarea
-                    className="text-light-text dark:text-dark-text"
+                    className="text-dark-text"
                     variant="bordered"
                     fullWidth={true}
                     label="Delivery instructions"
@@ -171,7 +170,7 @@ export default function ContactForm({
                     : "";
                   return (
                     <Input
-                      className="text-light-text dark:text-dark-text"
+                      className="text-dark-text"
                       autoFocus
                       variant="bordered"
                       fullWidth={true}
@@ -199,7 +198,7 @@ export default function ContactForm({
               Cancel
             </Button>
 
-            <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+            <Button className={BLACKBUTTONCLASSNAMES} type="submit">
               Submit
             </Button>
           </ModalFooter>

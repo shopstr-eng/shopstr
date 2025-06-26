@@ -21,7 +21,7 @@ import {
   Button,
   Input,
 } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { WHITEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   getLocalStorageData,
   publishProofEvent,
@@ -173,10 +173,10 @@ const SendButton = () => {
   return (
     <div>
       <Button
-        className={SHOPSTRBUTTONCLASSNAMES + " m-2"}
+        className={WHITEBUTTONCLASSNAMES + " m-2"}
         onClick={() => setShowSendModal(!showSendModal)}
         startContent={
-          <ArrowUpTrayIcon className="h-6 w-6 hover:text-yellow-500 dark:hover:text-purple-500" />
+          <ArrowUpTrayIcon className="h-6 w-6 hover:text-gray-300" />
         }
       >
         Send
@@ -188,7 +188,6 @@ const SendButton = () => {
         classNames={{
           body: "py-6",
           backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-          // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
           header: "border-b-[1px] border-[#292f46]",
           footer: "border-t-[1px] border-[#292f46]",
           closeButton: "hover:bg-black/5 active:bg-white/10",
@@ -197,7 +196,7 @@ const SendButton = () => {
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+          <ModalHeader className="flex flex-col gap-1 text-dark-text">
             Send Tokens
           </ModalHeader>
           <form onSubmit={handleSendSubmit(onSendSubmit)}>
@@ -224,7 +223,7 @@ const SendButton = () => {
                     : "";
                   return (
                     <Input
-                      className="text-light-text dark:text-dark-text"
+                      className="text-dark-text"
                       autoFocus
                       variant="bordered"
                       fullWidth={true}
@@ -242,8 +241,8 @@ const SendButton = () => {
               />
               {signer instanceof NostrNIP46Signer && (
                 <div className="mx-4 my-2 flex items-center justify-center text-center">
-                  <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-                  <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+                  <InformationCircleIcon className="h-6 w-6 text-dark-text" />
+                  <p className="ml-2 text-xs text-dark-text">
                     If the token is taking a while to be generated, make sure to
                     check your bunker application to approve the transaction
                     events.
@@ -289,12 +288,12 @@ const SendButton = () => {
                         </p>
                         <ClipboardIcon
                           onClick={handleCopyTokenString}
-                          className={`ml-2 h-6 w-6 cursor-pointer text-light-text dark:text-dark-text ${
+                          className={`ml-2 h-6 w-6 cursor-pointer text-dark-text ${
                             copiedToClipboard ? "hidden" : ""
                           }`}
                         />
                         <CheckIcon
-                          className={`ml-2 h-6 w-6 cursor-pointer text-light-text dark:text-dark-text ${
+                          className={`ml-2 h-6 w-6 cursor-pointer text-dark-text ${
                             copiedToClipboard ? "" : "hidden"
                           }`}
                         />
@@ -322,7 +321,7 @@ const SendButton = () => {
                     Cancel
                   </Button>
 
-                  <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                  <Button className={WHITEBUTTONCLASSNAMES} type="submit">
                     Send
                   </Button>
                 </ModalFooter>

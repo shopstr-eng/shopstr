@@ -4,14 +4,17 @@ import { useForm, Controller } from "react-hook-form";
 import { Button, Textarea, Input, Image } from "@nextui-org/react";
 
 import { ShopMapContext } from "@/utils/context/context";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import {
+  BLACKBUTTONCLASSNAMES,
+  WHITEBUTTONCLASSNAMES,
+} from "@/utils/STATIC-VARIABLES";
 import {
   SignerContext,
   NostrContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { createNostrShopEvent } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
-import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
+import MilkMarketSpinner from "@/components/utility-components/mm-spinner";
 
 interface ShopProfileFormProps {
   isOnboarding?: boolean;
@@ -37,7 +40,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
 
   const watchBanner = watch("banner");
   const watchPicture = watch("picture");
-  const defaultImage = "/shopstr-2000x2000.png";
+  const defaultImage = "/milk-market.png";
 
   useEffect(() => {
     setIsFetchingShop(true);
@@ -90,13 +93,13 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   };
 
   if (isFetchingShop) {
-    return <ShopstrSpinner />;
+    return <MilkMarketSpinner />;
   }
 
   return (
     <>
-      <div className="mb-20 h-40 rounded-lg bg-light-fg dark:bg-dark-fg">
-        <div className="relative flex h-40 items-center justify-center rounded-lg bg-shopstr-purple-light dark:bg-dark-fg">
+      <div className="mb-20 h-40 rounded-lg bg-dark-fg">
+        <div className="relative flex h-40 items-center justify-center rounded-lg bg-light-bg">
           {watchBanner && (
             <Image
               alt={"Shop banner image"}
@@ -105,7 +108,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
             />
           )}
           <FileUploaderButton
-            className={`absolute bottom-5 right-5 z-20 border-2 border-white bg-shopstr-purple shadow-md ${SHOPSTRBUTTONCLASSNAMES}`}
+            className={`absolute bottom-5 right-5 z-20 border-2 border-white shadow-md ${BLACKBUTTONCLASSNAMES}`}
             imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
           >
             Upload Banner
@@ -116,7 +119,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
             <div className="">
               <FileUploaderButton
                 isIconOnly={true}
-                className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
+                className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${BLACKBUTTONCLASSNAMES}`}
                 imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
               />
               {watchPicture ? (
@@ -155,9 +158,9 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
-                className="pb-4 text-light-text dark:text-dark-text"
+                className="pb-4 text-dark-text"
                 classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
+                  label: "text-dark-text text-lg",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -191,9 +194,9 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Textarea
-                className="pb-4 text-light-text dark:text-dark-text"
+                className="pb-4 text-dark-text"
                 classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
+                  label: "text-dark-text text-lg",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -211,7 +214,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         />
 
         <Button
-          className={`mb-10 w-full ${SHOPSTRBUTTONCLASSNAMES}`}
+          className={`mb-10 w-full ${WHITEBUTTONCLASSNAMES}`}
           type="submit"
           onKeyDown={(e) => {
             if (e.key === "Enter") {

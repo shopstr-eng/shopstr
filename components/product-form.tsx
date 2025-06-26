@@ -27,9 +27,9 @@ import { Carousel } from "react-responsive-carousel";
 import "react-responsive-carousel/lib/styles/carousel.min.css";
 import {
   PREVNEXTBUTTONSTYLES,
-  SHOPSTRBUTTONCLASSNAMES,
   CATEGORIES,
   SHIPPING_OPTIONS,
+  WHITEBUTTONCLASSNAMES,
 } from "@/utils/STATIC-VARIABLES";
 import {
   PostListing,
@@ -144,7 +144,7 @@ export default function ProductForm({
       ["alt", ("Product listing: " + data["Product Name"]) as string],
       [
         "client",
-        "Shopstr",
+        "Milk Market",
         "31990:" + pubkey + ":" + (oldValues?.d || hashHex),
         relayHint,
       ],
@@ -168,6 +168,8 @@ export default function ProductForm({
       tags.push(["t", category]);
     });
     tags.push(["t", "shopstr"]);
+    tags.push(["t", "MilkMarket"]);
+    tags.push(["t", "FREEMILK"]);
 
     if (data["Quantity"]) {
       tags.push(["quantity", data["Quantity"].toString()]);
@@ -251,7 +253,6 @@ export default function ProductForm({
       classNames={{
         body: "py-6",
         backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-        // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
         header: "border-b-[1px] border-[#292f46]",
         footer: "border-t-[1px] border-[#292f46]",
         closeButton: "hover:bg-black/5 active:bg-white/10",
@@ -260,7 +261,7 @@ export default function ProductForm({
       size="2xl"
     >
       <ModalContent>
-        <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+        <ModalHeader className="flex flex-col gap-1 text-dark-text">
           Add New Product Listing
         </ModalHeader>
         <form
@@ -285,7 +286,7 @@ export default function ProductForm({
                   : "";
                 return (
                   <Input
-                    className="text-light-text dark:text-dark-text"
+                    className="text-dark-text"
                     autoFocus
                     variant="bordered"
                     fullWidth={true}
@@ -327,7 +328,7 @@ export default function ProductForm({
                     }}
                     title={label}
                   >
-                    <ChevronLeftIcon className="h-6 w-6 text-black dark:text-white" />
+                    <ChevronLeftIcon className="h-6 w-6 text-dark-text" />
                   </button>
                 )
               }
@@ -343,7 +344,7 @@ export default function ProductForm({
                     }}
                     title={label}
                   >
-                    <ChevronRightIcon className="h-6 w-6 text-black dark:text-white" />
+                    <ChevronRightIcon className="h-6 w-6 text-dark-text" />
                   </button>
                 )
               }
@@ -434,7 +435,7 @@ export default function ProductForm({
             {imageError && <div className="text-red-600">{imageError}</div>}
             <FileUploaderButton
               isProductUpload={true}
-              className={SHOPSTRBUTTONCLASSNAMES}
+              className={WHITEBUTTONCLASSNAMES}
               imgCallbackOnUpload={(imgUrl) => {
                 if (imgUrl && imgUrl.length > 0) {
                   setImageError(null);
@@ -460,7 +461,7 @@ export default function ProductForm({
                   : "";
                 return (
                   <Textarea
-                    className="text-light-text dark:text-dark-text"
+                    className="text-dark-text"
                     variant="bordered"
                     fullWidth={true}
                     label="Description"
@@ -493,7 +494,7 @@ export default function ProductForm({
                   : "";
                 return (
                   <Input
-                    className="text-light-text dark:text-dark-text"
+                    className="text-dark-text"
                     type="number"
                     autoFocus
                     variant="flat"
@@ -544,14 +545,14 @@ export default function ProductForm({
             />
 
             <div className="mx-4 my-2 flex items-center justify-center text-center">
-              <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-              <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+              <InformationCircleIcon className="h-6 w-6 text-dark-text" />
+              <p className="ml-2 text-xs text-dark-text">
                 Your donation rate on sales is set to{" "}
                 {profileContext.profileData.get(pubkey)?.content
                   ?.shopstr_donation || 2.1}
                 %. You can modify this in your{" "}
                 <span
-                  className="cursor-pointer underline hover:text-purple-500 dark:hover:text-yellow-500"
+                  className="cursor-pointer underline hover:text-yellow-600"
                   onClick={() => router.push("/settings/user-profile")}
                 >
                   profile settings
@@ -608,7 +609,7 @@ export default function ProductForm({
                   : "";
                 return (
                   <Select
-                    className="text-light-text dark:text-dark-text"
+                    className="text-dark-text"
                     autoFocus
                     variant="bordered"
                     aria-label="Shipping Option"
@@ -622,7 +623,7 @@ export default function ProductForm({
                     onBlur={onBlur} // notify when input is touched/blur
                     selectedKeys={[value as string]}
                   >
-                    <SelectSection className="text-light-text dark:text-dark-text">
+                    <SelectSection className="text-dark-text">
                       {SHIPPING_OPTIONS.map((option) => (
                         <SelectItem key={option}>{option}</SelectItem>
                       ))}
@@ -737,7 +738,7 @@ export default function ProductForm({
                       );
                     }}
                   >
-                    <SelectSection className="text-light-text dark:text-dark-text">
+                    <SelectSection className="text-dark-text">
                       {CATEGORIES.map((category) => (
                         <SelectItem key={category} value={category}>
                           {category}
@@ -750,7 +751,7 @@ export default function ProductForm({
             />
             <div className="w-full max-w-xs">
               <Button
-                className="mb-2 mt-4 w-full justify-start rounded-md pl-2 text-shopstr-purple-light dark:text-shopstr-yellow-light"
+                className="mb-2 mt-4 w-full justify-start rounded-md pl-2 text-dark-text"
                 variant="light"
                 onClick={() => setShowOptionalTags(!showOptionalTags)}
               >
@@ -841,7 +842,7 @@ export default function ProductForm({
                           trigger: "min-h-unit-12 py-2",
                         }}
                       >
-                        <SelectSection className="text-light-text dark:text-dark-text">
+                        <SelectSection className="text-dark-text">
                           <SelectItem key="XS" value="XS">
                             XS
                           </SelectItem>
@@ -890,9 +891,7 @@ export default function ProductForm({
                       <div className="mt-4 flex flex-wrap gap-4">
                         {sizeArray.map((size: string) => (
                           <div key={size} className="flex items-center">
-                            <span className="mr-2 text-light-text dark:text-dark-text">
-                              {size}:
-                            </span>
+                            <span className="mr-2 text-dark-text">{size}:</span>
                             <Input
                               type="number"
                               min="0"
@@ -925,7 +924,7 @@ export default function ProductForm({
                       : "";
                     return (
                       <Select
-                        className="text-light-text dark:text-dark-text"
+                        className="text-dark-text"
                         autoFocus
                         variant="bordered"
                         aria-label="Condition"
@@ -939,7 +938,7 @@ export default function ProductForm({
                         onBlur={onBlur} // notify when input is touched/blur
                         selectedKeys={[value as string]}
                       >
-                        <SelectSection className="text-light-text dark:text-dark-text">
+                        <SelectSection className="text-dark-text">
                           <SelectItem key="New" value="New">
                             New
                           </SelectItem>
@@ -986,7 +985,7 @@ export default function ProductForm({
                       : "";
                     return (
                       <Select
-                        className="text-light-text dark:text-dark-text"
+                        className="text-dark-text"
                         autoFocus
                         variant="bordered"
                         aria-label="Status"
@@ -1000,7 +999,7 @@ export default function ProductForm({
                         onBlur={onBlur} // notify when input is touched/blur
                         selectedKeys={[value as string]}
                       >
-                        <SelectSection className="text-light-text dark:text-dark-text">
+                        <SelectSection className="text-dark-text">
                           <SelectItem key="active" value="active">
                             Active
                           </SelectItem>
@@ -1026,7 +1025,7 @@ export default function ProductForm({
                       : "";
                     return (
                       <Input
-                        className="text-light-text dark:text-dark-text"
+                        className="text-dark-text"
                         autoFocus
                         variant="bordered"
                         placeholder="Email, phone number, etc."
@@ -1057,7 +1056,7 @@ export default function ProductForm({
                       : "";
                     return (
                       <Input
-                        className="text-light-text dark:text-dark-text"
+                        className="text-dark-text"
                         autoFocus
                         variant="bordered"
                         placeholder="US shipping only, signature required, no P.O. box delivery, etc."
@@ -1078,8 +1077,8 @@ export default function ProductForm({
             )}
 
             <div className="mx-4 my-2 flex items-center justify-center text-center">
-              <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-              <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+              <InformationCircleIcon className="h-6 w-6 text-dark-text" />
+              <p className="ml-2 text-xs text-dark-text">
                 Your payment preference is set to{" "}
                 {profileContext.profileData.get(pubkey)?.content
                   ?.payment_preference === "lightning"
@@ -1087,7 +1086,7 @@ export default function ProductForm({
                   : "Cashu"}
                 . You can modify this in your{" "}
                 <span
-                  className="cursor-pointer underline hover:text-purple-500 dark:hover:text-yellow-500"
+                  className="cursor-pointer underline hover:text-yellow-600"
                   onClick={() => router.push("/settings/user-profile")}
                 >
                   profile settings
@@ -1111,7 +1110,7 @@ export default function ProductForm({
             </ConfirmActionDropdown>
 
             <Button
-              className={SHOPSTRBUTTONCLASSNAMES}
+              className={WHITEBUTTONCLASSNAMES}
               type="submit"
               onClick={(e) => {
                 if (signer && isLoggedIn) {

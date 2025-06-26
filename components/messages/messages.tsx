@@ -11,7 +11,7 @@ import {
   generateKeys,
 } from "@/utils/nostr/nostr-helper-functions";
 import { ChatsContext } from "../../utils/context/context";
-import ShopstrSpinner from "../utility-components/shopstr-spinner";
+import MilkMarketSpinner from "../utility-components/mm-spinner";
 import ChatPanel from "./chat-panel";
 import ChatButton from "./chat-button";
 import { NostrMessageEvent, ChatObject } from "../../utils/types/types";
@@ -23,7 +23,7 @@ import { useKeyPress } from "@/utils/keypress-handler";
 import FailureModal from "../utility-components/failure-modal";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import SignInModal from "../sign-in/SignInModal";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { WHITEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
 const Messages = ({ isPayment }: { isPayment: boolean }) => {
   const router = useRouter();
@@ -300,23 +300,23 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
   };
 
   return (
-    <div className="min-h-screen bg-light-bg text-gray-800 dark:bg-dark-bg dark:text-gray-200">
+    <div className="min-h-screen bg-light-bg text-gray-800">
       <div className="container mx-auto px-4 py-10">
         {chatsMap.size === 0 ? (
           <div className="flex h-[66vh] items-center justify-center">
             {isChatsLoading ? (
               <div className="flex items-center justify-center">
-                <ShopstrSpinner />
+                <MilkMarketSpinner />
               </div>
             ) : (
-              <div className="mx-auto w-full max-w-lg rounded-xl bg-white p-10 shadow-xl transition-all dark:bg-gray-800">
+              <div className="mx-auto w-full max-w-lg rounded-xl bg-dark-fg p-10 shadow-xl transition-all">
                 <div className="text-center">
                   {isClient && userPubkey ? (
                     <div className="space-y-6">
-                      <h2 className="text-3xl font-semibold text-gray-700 dark:text-gray-100">
+                      <h2 className="text-3xl font-semibold text-dark-text">
                         No messages... yet!
                       </h2>
-                      <div className="mt-2 text-base text-gray-600 dark:text-gray-300">
+                      <div className="mt-2 text-base text-dark-text">
                         <p>Just logged in?</p>
                         <p className="mt-1 font-medium">
                           Try reloading the page.
@@ -325,7 +325,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
                       <div className="pt-4">
                         <Button
                           onClick={handleReload}
-                          className={`${SHOPSTRBUTTONCLASSNAMES} mt-6`}
+                          className={`${WHITEBUTTONCLASSNAMES} mt-6`}
                         >
                           Reload
                         </Button>
@@ -333,13 +333,13 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      <h2 className="text-2xl font-bold text-gray-700 dark:text-gray-100">
+                      <h2 className="text-2xl font-bold text-dark-text">
                         You must be signed in to see your chats!
                       </h2>
                       <div className="pt-4">
                         <Button
                           onClick={onOpen}
-                          className={`${SHOPSTRBUTTONCLASSNAMES} mt-6`}
+                          className={`${WHITEBUTTONCLASSNAMES} mt-6`}
                         >
                           Sign In
                         </Button>
@@ -352,7 +352,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
           </div>
         ) : (
           <div className="flex flex-row">
-            <div className="h-[85vh] w-full overflow-y-auto rounded-md pb-12 dark:bg-dark-bg md:w-[450px] md:max-w-[33%] md:flex-shrink-0 md:pb-0 lg:pb-0">
+            <div className="h-[85vh] w-full overflow-y-auto rounded-md bg-light-bg pb-12 md:w-[450px] md:max-w-[33%] md:flex-shrink-0 md:pb-0 lg:pb-0">
               {sortedChatsByLastMessage.map(
                 ([pubkeyOfChat, chatObject]: [string, ChatObject]) => {
                   return (

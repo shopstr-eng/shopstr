@@ -24,11 +24,11 @@ import {
 import DisplayProducts from "../display-products";
 import LocationDropdown from "../utility-components/dropdowns/location-dropdown";
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
-import { CATEGORIES, SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { CATEGORIES, BLACKBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import SignInModal from "../sign-in/SignInModal";
-import ShopstrSwitch from "../utility-components/shopstr-switch";
+import MilkMarketSwitch from "../utility-components/mm-switch";
 import { ShopProfile } from "../../utils/types/types";
 import SideShopNav from "./side-shop-nav";
 
@@ -196,7 +196,7 @@ function MarketplacePage({
 
           return (
             <div key={product.id} className="mt-4 p-4 pt-4">
-              <h3 className="mb-3 text-lg font-semibold text-light-text dark:text-dark-text">
+              <h3 className="mb-3 text-lg font-semibold text-light-text">
                 <div
                   onClick={() =>
                     handleTitleClick(product.d as string, product.pubkey)
@@ -211,7 +211,7 @@ function MarketplacePage({
                   ([reviewerPubkey, reviewData]) => (
                     <div
                       key={reviewerPubkey}
-                      className="rounded-lg border-2 border-black p-3 dark:border-white"
+                      className="rounded-lg border-2 border-black p-3"
                     >
                       <div className="mb-2 flex items-center gap-2">
                         <ProfileWithDropdown
@@ -221,6 +221,7 @@ function MarketplacePage({
                               ? ["shop_profile"]
                               : ["shop", "inquiry", "copy_npub"]
                           }
+                          bg="light"
                         />
                       </div>
                       <div className="flex flex-col">
@@ -232,7 +233,7 @@ function MarketplacePage({
                               return (
                                 <Chip
                                   key={index}
-                                  className={`text-light-text dark:text-dark-text ${
+                                  className={`text-light-text ${
                                     value === "1"
                                       ? "bg-green-500"
                                       : "bg-red-500"
@@ -245,7 +246,7 @@ function MarketplacePage({
                               return (
                                 <Chip
                                   key={index}
-                                  className={`text-light-text dark:text-dark-text ${
+                                  className={`text-light-text ${
                                     value === "1"
                                       ? "bg-green-500"
                                       : "bg-red-500"
@@ -262,10 +263,7 @@ function MarketplacePage({
                         {reviewData.map(([category, value], index) => {
                           if (category === "comment" && value !== "") {
                             return (
-                              <p
-                                key={index}
-                                className="italic text-light-text dark:text-dark-text"
-                              >
+                              <p key={index} className="italic text-light-text">
                                 &ldquo;{value}&rdquo;
                               </p>
                             );
@@ -286,12 +284,12 @@ function MarketplacePage({
 
   return (
     <div className="mx-auto w-full">
-      <div className="flex max-w-[100%] flex-col bg-light-bg px-3 pb-2 dark:bg-dark-bg">
+      <div className="flex max-w-[100%] flex-col bg-light-bg px-3 pb-2">
         {shopBannerURL != "" && focusedPubkey != "" && !isFetchingShop ? (
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div ref={searchBarRef} className="w-full sm:order-2 sm:w-auto">
               <Input
-                className="text-light-text dark:text-dark-text"
+                className="text-dark-text"
                 placeholder="Listing title, naddr1..., npub..."
                 value={selectedSearch}
                 startContent={<MagnifyingGlassIcon height={"1em"} />}
@@ -305,7 +303,7 @@ function MarketplacePage({
 
             <div className="flex gap-1 sm:order-1">
               <Button
-                className="bg-transparent text-lg text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text sm:text-xl"
+                className="bg-transparent text-lg text-light-text hover:text-yellow-600 sm:text-xl"
                 onClick={() => {
                   setSelectedCategories(new Set<string>([]));
                   setSelectedLocation("");
@@ -316,7 +314,7 @@ function MarketplacePage({
                 Shop
               </Button>
               <Button
-                className="bg-transparent text-lg text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text sm:text-xl"
+                className="bg-transparent text-lg text-light-text hover:text-yellow-600 sm:text-xl"
                 onClick={() => {
                   setSelectedSection("reviews");
                 }}
@@ -324,7 +322,7 @@ function MarketplacePage({
                 Reviews
               </Button>
               <Button
-                className="bg-transparent text-lg text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text sm:text-xl"
+                className="bg-transparent text-lg text-light-text hover:text-yellow-600 sm:text-xl"
                 onClick={() => {
                   setSelectedSection("about");
                 }}
@@ -332,7 +330,7 @@ function MarketplacePage({
                 About
               </Button>
               <Button
-                className="bg-transparent text-lg text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text sm:text-xl"
+                className="bg-transparent text-lg text-light-text hover:text-yellow-600 sm:text-xl"
                 onClick={() => handleSendMessage(focusedPubkey)}
               >
                 Message
@@ -343,7 +341,7 @@ function MarketplacePage({
           <div className="flex flex-col gap-2 pb-3 sm:flex-row">
             <div ref={searchBarRef} className="w-full">
               <Input
-                className="mt-2 text-light-text dark:text-dark-text"
+                className="mt-2 text-dark-text"
                 isClearable
                 placeholder="Listing title, naddr1..., npub..."
                 value={selectedSearch}
@@ -357,7 +355,7 @@ function MarketplacePage({
             </div>
             <div className="flex w-full flex-row gap-2 pb-3">
               <Select
-                className="mt-2 text-light-text dark:text-dark-text"
+                className="mt-2 text-dark-text"
                 label="Categories"
                 placeholder="All"
                 selectedKeys={selectedCategories}
@@ -372,7 +370,7 @@ function MarketplacePage({
                 }}
                 selectionMode="multiple"
               >
-                <SelectSection className="text-light-text dark:text-dark-text">
+                <SelectSection className="text-dark-text">
                   {CATEGORIES.map((category) => (
                     <SelectItem value={category} key={category}>
                       {category}
@@ -390,7 +388,7 @@ function MarketplacePage({
                 }}
               />
               {!isFetchingFollows ? (
-                <ShopstrSwitch
+                <MilkMarketSwitch
                   wotFilter={wotFilter}
                   setWotFilter={setWotFilter}
                 />
@@ -400,7 +398,7 @@ function MarketplacePage({
         )}
       </div>
       <div className="flex">
-        {focusedPubkey && shopBannerURL && shopAbout && (
+        {focusedPubkey && shopBannerURL && (
           <SideShopNav
             focusedPubkey={focusedPubkey}
             categories={categories}
@@ -421,20 +419,20 @@ function MarketplacePage({
           />
         )}
         {selectedSection === "about" && shopAbout && (
-          <div className="flex w-full flex-col justify-start bg-transparent px-4 py-8 text-light-text dark:text-dark-text">
+          <div className="flex w-full flex-col justify-start bg-transparent px-4 py-8 text-light-text">
             <h2 className="pb-2 text-2xl font-bold">About</h2>
             <p className="text-base">{shopAbout}</p>
           </div>
         )}
         {selectedSection === "reviews" && !isFetchingReviews && (
-          <div className="flex w-full flex-col justify-start bg-transparent px-4 py-8 text-light-text dark:text-dark-text">
+          <div className="flex w-full flex-col justify-start bg-transparent px-4 py-8 text-light-text">
             <h2 className="pb-2 text-2xl font-bold">Reviews</h2>
             {merchantQuality !== "" ? (
               <div className="mt-4 p-4 pt-4">
-                <h3 className="mb-3 text-lg font-semibold text-light-text dark:text-dark-text">
+                <h3 className="mb-3 text-lg font-semibold text-light-text">
                   Merchant Quality
                 </h3>
-                <div className="inline-flex items-center gap-1 rounded-lg border-2 border-black px-2 dark:border-white">
+                <div className="inline-flex items-center gap-1 rounded-lg border-2 border-black px-2">
                   {merchantReview && merchantReview >= 0.5 ? (
                     <>
                       <FaceSmileIcon
@@ -444,7 +442,7 @@ function MarketplacePage({
                             : "text-green-300"
                         }`}
                       />
-                      <span className="mr-2 whitespace-nowrap text-sm text-light-text dark:text-dark-text">
+                      <span className="mr-2 whitespace-nowrap text-sm text-light-text">
                         {merchantQuality}
                       </span>
                     </>
@@ -457,7 +455,7 @@ function MarketplacePage({
                             : "text-red-500"
                         }`}
                       />
-                      <span className="mr-2 whitespace-nowrap text-sm text-light-text dark:text-dark-text">
+                      <span className="mr-2 whitespace-nowrap text-sm text-light-text">
                         {merchantQuality}
                       </span>
                     </>
@@ -466,11 +464,11 @@ function MarketplacePage({
               </div>
             ) : (
               <div className="mt-10 flex flex-grow items-center justify-center py-10">
-                <div className="w-full max-w-xl rounded-lg bg-light-fg p-10 text-center shadow-lg dark:bg-dark-fg">
-                  <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
+                <div className="w-full max-w-xl rounded-lg bg-dark-fg p-10 text-center shadow-lg">
+                  <p className="text-3xl font-semibold text-dark-text">
                     No reviews . . . yet!
                   </p>
-                  <p className="mt-4 text-lg text-light-text dark:text-dark-text">
+                  <p className="mt-4 text-lg text-dark-text">
                     Seems there aren&apos;t any reviews for this shop yet.
                   </p>
                 </div>
@@ -484,7 +482,7 @@ function MarketplacePage({
         !router.asPath.includes("npub") && (
           <Button
             radius="full"
-            className={`${SHOPSTRBUTTONCLASSNAMES} fixed bottom-24 right-8 z-50 h-16 w-16`}
+            className={`${BLACKBUTTONCLASSNAMES} fixed bottom-24 right-8 z-50 h-16 w-16`}
             onClick={() => handleAddNewListing()}
           >
             <PlusIcon />

@@ -80,7 +80,7 @@ export default function MigrationPromptModal({
       size="md"
     >
       <ModalContent>
-        <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+        <ModalBody className="flex flex-col overflow-hidden text-dark-text">
           <div className="mb-4 text-center">
             <h3 className="text-lg font-semibold">Encryption Upgrade</h3>
             <p className="mt-2 text-sm">

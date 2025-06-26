@@ -4,11 +4,11 @@ export default function Document() {
   return (
     <Html lang="en">
       <Head>
-        <link rel="favicon" href="/shopstr.ico" />
-        <link rel="icon" href="/shopstr.ico" />
-        <link rel="apple-icon" href="/shopstr.png" />
+        <link rel="favicon" href="/milk-market.ico" />
+        <link rel="icon" href="/milk-market.ico" />
+        <link rel="apple-icon" href="/milk-market.png" />
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#E8E8E8" />
+        <meta name="theme-color" content="#ffffff" />
       </Head>
       <body>
         <Main />

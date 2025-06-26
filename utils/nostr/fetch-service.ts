@@ -68,6 +68,7 @@ export const fetchAllPosts = async (
 
       const filter: Filter = {
         kinds: [30402],
+        "#t": ["MilkMarket", "FREEMILK"],
       };
 
       const productArrayFromRelay: NostrEvent[] = [];

@@ -7,9 +7,9 @@ export default function Faq() {
       title: "General Information",
       items: [
         {
-          title: "What is Shopstr?",
+          title: "What is Milk Market?",
           content:
-            "Shopstr is a permissionless marketplace built on Nostr that enables peer-to-peer commerce using Bitcoin. It provides a secure and private way to buy and sell items via the Lightning Network and Cashu token payments.",
+            "Milk Market is a permissionless marketplace built on Nostr that enables peer-to-peer commerce using Bitcoin. It provides a secure and private way to buy and sell items via the Lightning Network and Cashu token payments.",
         },
         {
           title: "What is Nostr?",
@@ -24,7 +24,7 @@ export default function Faq() {
         {
           title: "What payment methods are accepted?",
           content:
-            "Shopstr currently supports Bitcoin payments through the Lightning Network and Cashu. These help to facilitate fast, low-fee transactions while maintaining privacy.",
+            "Milk Market currently supports Bitcoin payments through the Lightning Network and Cashu. These help to facilitate fast, low-fee transactions while maintaining privacy.",
         },
         {
           title: "How do I claim a Cashu payment?",
@@ -37,14 +37,14 @@ export default function Faq() {
       title: "Selling",
       items: [
         {
-          title: "How do I start selling on Shopstr?",
+          title: "How do I start selling on Milk Market?",
           content:
             "To start selling, you'll simply need to: 1) Create a Nostr account or sign in with existing keys, 2) Set up your profile in settings, 3) List your products with descriptions and images, 4) Start receiving orders!",
         },
         {
           title: "What types of items can I sell?",
           content:
-            "Shopstr supports various product types including physical, resale, exchange, clothing, electronics, collectibles, and more. Each listing should clearly indicate the category and any shipping requirements.",
+            "Milk Market supports various product types including physical, resale, exchange, clothing, electronics, collectibles, and more. Each listing should clearly indicate the category and any shipping requirements.",
         },
         {
           title: "How does shipping work?",
@@ -79,12 +79,12 @@ export default function Faq() {
         {
           title: "Is there a rating system?",
           content:
-            "Yes, Shopstr implements NIP-85 for reviews, allowing buyers to leave feedback for sellers and their products, helping build trust in the marketplace. To leave a review, find the leave a review button at the bottom of an order message window. Merchants are also able to carry over their reviews to other marketplaces that support NIP-85.",
+            "Yes, Milk Market implements NIP-85 for reviews, allowing buyers to leave feedback for sellers and their products, helping build trust in the marketplace. To leave a review, find the leave a review button at the bottom of an order message window. Merchants are also able to carry over their reviews to other marketplaces that support NIP-85.",
         },
         {
           title: "How do I contact a seller?",
           content:
-            "You can contact sellers through Shopstr's encrypted messaging system. Simply navigate to a listing and click on the merchant profile to send a secure message to the seller.",
+            "You can contact sellers through Milk Market's encrypted messaging system. Simply navigate to a listing and click on the merchant profile to send a secure message to the seller.",
         },
         {
           title: "Am I able to return an item?",
@@ -96,19 +96,19 @@ export default function Faq() {
   ];
 
   return (
-    <div className="flex min-h-screen flex-col bg-light-bg pt-24 dark:bg-dark-bg md:pb-20">
+    <div className="flex min-h-screen flex-col bg-light-bg pt-24 md:pb-20">
       <div className="container mx-auto max-w-6xl px-4">
-        <h1 className="mb-8 text-center text-3xl font-bold text-light-text dark:text-dark-text">
+        <h1 className="mb-8 text-center text-3xl font-bold text-light-text">
           Frequently Asked Questions
         </h1>
 
-        <p className="mx-auto mb-10 max-w-3xl text-center text-light-text/80 dark:text-dark-text/80">
-          Answers to common questions about using Shopstr
+        <p className="mx-auto mb-10 max-w-3xl text-center text-light-text/80">
+          Answers to common questions about using Milk Market
         </p>
 
         {faqSections.map((section, sectionIndex) => (
           <div key={sectionIndex} className="mb-8">
-            <h2 className="mb-4 border-b border-gray-200 pb-2 text-xl font-semibold text-light-text dark:border-gray-700 dark:text-dark-text">
+            <h2 className="mb-4 border-b border-gray-200 pb-2 text-xl font-semibold text-light-text">
               {section.title}
             </h2>
 
@@ -121,7 +121,7 @@ export default function Faq() {
                 <AccordionItem
                   key={itemIndex}
                   title={
-                    <span className="font-medium text-light-text dark:text-dark-text">
+                    <span className="font-medium text-light-text">
                       {item.title}
                     </span>
                   }
@@ -129,12 +129,11 @@ export default function Faq() {
                     base: "group",
                     title: "text-md",
                     trigger:
-                      "py-5 px-3 data-[hover=true]:bg-gray-50 dark:data-[hover=true]:bg-gray-900/50 transition-all rounded-lg",
-                    content:
-                      "py-2 px-3 text-light-text/90 dark:text-dark-text/90",
+                      "py-5 px-3 data-[hover=true]:bg-gray-50 transition-all rounded-lg",
+                    content: "py-2 px-3 text-light-text/90",
                   }}
                 >
-                  <p className="leading-relaxed text-light-text dark:text-dark-text">
+                  <p className="leading-relaxed text-light-text">
                     {item.content}
                   </p>
                 </AccordionItem>

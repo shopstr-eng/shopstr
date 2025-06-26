@@ -8,13 +8,13 @@ import {
   Input,
   InputProps,
 } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { BLACKBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   setLocalStorageDataOnSignIn,
   validateNSecKey,
   parseBunkerToken,
 } from "@/utils/nostr/nostr-helper-functions";
-import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
+import MilkMarketSpinner from "@/components/utility-components/mm-spinner";
 import { RelaysContext } from "../../utils/context/context";
 import { useRouter } from "next/router";
 import FailureModal from "../../components/utility-components/failure-modal";
@@ -175,9 +175,8 @@ export default function SignInModal({
           setPassphrase("");
           onClose();
         }}
-        // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
         classNames={{
-          body: "py-6 ",
+          body: "py-6 bg-light-bg",
           backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
           header: "border-b-[1px] border-[#292f46]",
           footer: "border-t-[1px] border-[#292f46]",
@@ -189,7 +188,7 @@ export default function SignInModal({
         size="2xl"
       >
         <ModalContent>
-          <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+          <ModalBody className="flex flex-col overflow-hidden text-light-text">
             <div className="flex flex-row">
               <div className="hidden basis-1/2 flex-col md:flex">
                 <div className="mr-3">
@@ -213,16 +212,16 @@ export default function SignInModal({
                 <div className="space-y-2">
                   <div className="flex items-center justify-center">
                     <Image
-                      alt="Shopstr logo"
+                      alt="Milk Market logo"
                       height={50}
                       radius="sm"
-                      src="/shopstr-2000x2000.png"
+                      src="/milk-market.png"
                       width={50}
                     />
-                    <div>Shopstr</div>
+                    <div>Milk Market</div>
                   </div>
                   <Button
-                    className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
+                    className={`${BLACKBUTTONCLASSNAMES} w-full`}
                     onClick={startExtensionLogin}
                   >
                     Extension Sign-in
@@ -235,7 +234,7 @@ export default function SignInModal({
                           setShowNsecSignIn(false);
                           setShowBunkerSignIn(true);
                         }}
-                        className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
+                        className={`${BLACKBUTTONCLASSNAMES} w-full ${
                           showBunkerSignIn ? "hidden" : ""
                         }`}
                       >
@@ -260,13 +259,13 @@ export default function SignInModal({
                       </div>
                       <div>
                         <Button
-                          className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
+                          className={`${BLACKBUTTONCLASSNAMES} w-full`}
                           onClick={startBunkerLogin}
                           isDisabled={validBunkerToken != "success"} // Disable the button only if both key strings are invalid or the button has already been clicked
                         >
                           {isBunkerConnecting ? (
                             <div className="flex items-center justify-center">
-                              <ShopstrSpinner />
+                              <MilkMarketSpinner />
                             </div>
                           ) : (
                             <>Bunker Sign-in</>
@@ -328,7 +327,7 @@ export default function SignInModal({
                     </div>
                     <div>
                       <Button
-                        className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
+                        className={`${BLACKBUTTONCLASSNAMES} w-full`}
                         onClick={handleSignIn}
                         isDisabled={validPrivateKey != "success"} // Disable the button only if both key strings are invalid or the button has already been clicked
                       >

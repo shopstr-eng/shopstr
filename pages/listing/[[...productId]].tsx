@@ -67,7 +67,7 @@ const Listing = () => {
 
   return (
     <>
-      <div className="flex h-full min-h-screen flex-col bg-light-bg pt-20 dark:bg-dark-bg">
+      <div className="flex h-full min-h-screen flex-col bg-light-bg pt-20">
         {productData && (
           <ListingPage
             productData={productData}
@@ -89,7 +89,6 @@ const Listing = () => {
                 setCashuPaymentSent(false);
                 router.push("/marketplace");
               }}
-              // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
               classNames={{
                 body: "py-6 ",
                 backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -103,11 +102,11 @@ const Listing = () => {
               size="2xl"
             >
               <ModalContent>
-                <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <ModalHeader className="flex items-center justify-center text-dark-text">
                   <CheckCircleIcon className="h-6 w-6 text-green-500" />
                   <div className="ml-2">Order successful!</div>
                 </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <ModalBody className="flex flex-col overflow-hidden text-dark-text">
                   <div className="flex items-center justify-center">
                     The seller will receive a DM with your order details.
                   </div>
@@ -122,7 +121,6 @@ const Listing = () => {
               backdrop="blur"
               isOpen={invoiceGenerationFailed}
               onClose={() => setInvoiceGenerationFailed(false)}
-              // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
               classNames={{
                 body: "py-6 ",
                 backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -136,11 +134,11 @@ const Listing = () => {
               size="2xl"
             >
               <ModalContent>
-                <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <ModalHeader className="flex items-center justify-center text-dark-text">
                   <XCircleIcon className="h-6 w-6 text-red-500" />
                   <div className="ml-2">Invoice generation failed!</div>
                 </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <ModalBody className="flex flex-col overflow-hidden text-dark-text">
                   <div className="flex items-center justify-center">
                     The price and/or currency set for this listing was invalid.
                   </div>
@@ -155,7 +153,6 @@ const Listing = () => {
               backdrop="blur"
               isOpen={cashuPaymentFailed}
               onClose={() => setCashuPaymentFailed(false)}
-              // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
               classNames={{
                 body: "py-6 ",
                 backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -169,11 +166,11 @@ const Listing = () => {
               size="2xl"
             >
               <ModalContent>
-                <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <ModalHeader className="flex items-center justify-center text-dark-text">
                   <XCircleIcon className="h-6 w-6 text-red-500" />
                   <div className="ml-2">Purchase failed!</div>
                 </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <ModalBody className="flex flex-col overflow-hidden text-dark-text">
                   <div className="flex items-center justify-center">
                     You didn&apos;t have enough balance in your wallet to pay.
                   </div>

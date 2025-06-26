@@ -15,7 +15,7 @@ import {
   UseFormHandleSubmit,
   FieldValues,
 } from "react-hook-form";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { BLACKBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import CountryDropdown from "./utility-components/dropdowns/country-dropdown";
 
 export default function CombinedContactForm({
@@ -41,7 +41,6 @@ export default function CombinedContactForm({
       classNames={{
         body: "py-6",
         backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-        // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
         header: "border-b-[1px] border-[#292f46]",
         footer: "border-t-[1px] border-[#292f46]",
         closeButton: "hover:bg-black/5 active:bg-white/10",
@@ -50,7 +49,7 @@ export default function CombinedContactForm({
       size="2xl"
     >
       <ModalContent>
-        <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+        <ModalHeader className="flex flex-col gap-1 text-dark-text">
           Enter Contact Info
         </ModalHeader>
         <form onSubmit={handleCombinedSubmit(onCombinedSubmit)}>
@@ -71,7 +70,7 @@ export default function CombinedContactForm({
                   : "";
                 return (
                   <Input
-                    className="text-light-text dark:text-dark-text"
+                    className="text-dark-text"
                     autoFocus
                     variant="bordered"
                     fullWidth={true}
@@ -105,7 +104,7 @@ export default function CombinedContactForm({
                   : "";
                 return (
                   <Input
-                    className="text-light-text dark:text-dark-text"
+                    className="text-dark-text"
                     autoFocus
                     variant="bordered"
                     fullWidth={true}
@@ -139,7 +138,7 @@ export default function CombinedContactForm({
                   : "";
                 return (
                   <Textarea
-                    className="text-light-text dark:text-dark-text"
+                    className="text-dark-text"
                     variant="bordered"
                     fullWidth={true}
                     label="Delivery instructions"
@@ -157,8 +156,8 @@ export default function CombinedContactForm({
             />
 
             <div className="mx-4 my-2 flex items-center justify-center text-center">
-              <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-              <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+              <InformationCircleIcon className="h-6 w-6 text-dark-text" />
+              <p className="ml-2 text-xs text-dark-text">
                 The above information is for purchases not requiring shipping
                 ONLY.
               </p>
@@ -184,7 +183,7 @@ export default function CombinedContactForm({
                   : "";
                 return (
                   <Input
-                    className="text-light-text dark:text-dark-text"
+                    className="text-dark-text"
                     autoFocus
                     variant="bordered"
                     fullWidth={true}
@@ -221,7 +220,7 @@ export default function CombinedContactForm({
                   : "";
                 return (
                   <Input
-                    className="text-light-text dark:text-dark-text"
+                    className="text-dark-text"
                     autoFocus
                     variant="bordered"
                     fullWidth={true}
@@ -257,7 +256,7 @@ export default function CombinedContactForm({
                   : "";
                 return (
                   <Input
-                    className="text-light-text dark:text-dark-text"
+                    className="text-dark-text"
                     autoFocus
                     variant="bordered"
                     fullWidth={true}
@@ -294,7 +293,7 @@ export default function CombinedContactForm({
                   : "";
                 return (
                   <Input
-                    className="text-light-text dark:text-dark-text"
+                    className="text-dark-text"
                     autoFocus
                     variant="bordered"
                     fullWidth={true}
@@ -327,7 +326,7 @@ export default function CombinedContactForm({
                   : "";
                 return (
                   <Input
-                    className="text-light-text dark:text-dark-text"
+                    className="text-dark-text"
                     autoFocus
                     variant="bordered"
                     fullWidth={true}
@@ -364,7 +363,7 @@ export default function CombinedContactForm({
                   : "";
                 return (
                   <Input
-                    className="text-light-text dark:text-dark-text"
+                    className="text-dark-text"
                     autoFocus
                     variant="bordered"
                     fullWidth={true}
@@ -430,7 +429,7 @@ export default function CombinedContactForm({
                     : "";
                   return (
                     <Input
-                      className="text-light-text dark:text-dark-text"
+                      className="text-dark-text"
                       autoFocus
                       variant="bordered"
                       fullWidth={true}
@@ -458,7 +457,7 @@ export default function CombinedContactForm({
               Cancel
             </Button>
 
-            <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+            <Button className={BLACKBUTTONCLASSNAMES} type="submit">
               Submit
             </Button>
           </ModalFooter>

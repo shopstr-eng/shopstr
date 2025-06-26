@@ -10,7 +10,7 @@ import {
   ShoppingBagIcon,
 } from "@heroicons/react/24/outline";
 import {
-  SHOPSTRBUTTONCLASSNAMES,
+  BLACKBUTTONCLASSNAMES,
   ShippingOptionsType,
 } from "@/utils/STATIC-VARIABLES";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
@@ -41,7 +41,7 @@ function QuantitySelector({
       <button
         onClick={onDecrease}
         disabled={value <= min}
-        className="flex h-8 w-8 items-center justify-center rounded-full text-black disabled:opacity-50 dark:text-white"
+        className="flex h-8 w-8 items-center justify-center rounded-full text-black disabled:opacity-50"
       >
         <MinusIcon className="h-4 w-4" />
       </button>
@@ -54,13 +54,13 @@ function QuantitySelector({
         }}
         min={min}
         max={max}
-        className="w-12 rounded-md bg-white text-center text-gray-900 outline-none dark:bg-gray-800 dark:text-gray-100
+        className="w-12 rounded-md bg-white text-center text-gray-900 outline-none
           [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />
       <button
         onClick={onIncrease}
         disabled={value >= max}
-        className="flex h-8 w-8 items-center justify-center rounded-full text-black disabled:opacity-50 dark:text-white"
+        className="flex h-8 w-8 items-center justify-center rounded-full text-black disabled:opacity-50"
       >
         <PlusIcon className="h-4 w-4" />
       </button>
@@ -330,7 +330,7 @@ export default function Component() {
   return (
     <>
       {!isBeingPaid ? (
-        <div className="flex min-h-screen flex-col bg-light-bg p-4 text-light-text dark:bg-dark-bg dark:text-dark-text">
+        <div className="flex min-h-screen flex-col bg-light-bg p-4 text-light-text">
           <div className="mx-auto w-full max-w-4xl pt-20">
             <div className="mb-6 flex items-center">
               <h1 className="w-full text-left text-2xl font-bold">
@@ -343,7 +343,7 @@ export default function Component() {
                   {products.map((product) => (
                     <div
                       key={product.id}
-                      className="flex flex-col rounded-lg border border-gray-300 p-4 shadow-sm dark:border-gray-700 md:flex-row md:items-start md:justify-between"
+                      className="flex flex-col rounded-lg border border-gray-300 p-4 shadow-sm md:flex-row md:items-start md:justify-between"
                     >
                       <div className="flex w-full md:w-auto">
                         <img
@@ -412,13 +412,13 @@ export default function Component() {
                     </div>
                   ))}
                 </div>
-                <div className="mt-6 flex flex-col items-end border-t border-gray-300 pt-4 dark:border-gray-700">
+                <div className="mt-6 flex flex-col items-end border-t border-gray-300 pt-4">
                   <p className="mb-4 text-xl font-bold">
                     Subtotal ({products.length}{" "}
                     {products.length === 1 ? "item" : "items"}): {subtotal} sats
                   </p>
                   <Button
-                    className={SHOPSTRBUTTONCLASSNAMES}
+                    className={BLACKBUTTONCLASSNAMES}
                     onClick={toggleCheckout}
                     size="lg"
                   >
@@ -427,18 +427,18 @@ export default function Component() {
                 </div>
               </>
             ) : (
-              <div className="flex min-h-[60vh] flex-col items-center justify-center rounded-lg border border-gray-300 py-16 shadow-sm dark:border-gray-700 dark:shadow-none">
-                <div className="mb-8 flex items-center justify-center rounded-full border border-gray-300 bg-gray-100 p-6 dark:border-gray-600 dark:bg-gray-700">
-                  <ShoppingBagIcon className="h-16 w-16 text-gray-800 dark:text-gray-200" />
+              <div className="flex min-h-[60vh] flex-col items-center justify-center rounded-lg border border-gray-300 py-16 shadow-sm">
+                <div className="mb-8 flex items-center justify-center rounded-full border border-gray-300 bg-gray-100 p-6">
+                  <ShoppingBagIcon className="h-16 w-16 text-gray-800" />
                 </div>
-                <h2 className="mb-2 text-center text-3xl font-bold text-light-text dark:text-dark-text">
+                <h2 className="mb-2 text-center text-3xl font-bold text-light-text">
                   Your cart is empty . . .
                 </h2>
-                <p className="mb-6 max-w-md text-center text-gray-500 dark:text-gray-400">
+                <p className="mb-6 max-w-md text-center text-gray-500">
                   Go add some items to your cart!
                 </p>
                 <Button
-                  className={SHOPSTRBUTTONCLASSNAMES}
+                  className={BLACKBUTTONCLASSNAMES}
                   size="lg"
                   onClick={() => router.push("/marketplace")}
                 >
@@ -449,7 +449,7 @@ export default function Component() {
           </div>
         </div>
       ) : (
-        <div className="flex min-h-screen w-full bg-light-bg p-4 text-light-text dark:bg-dark-bg dark:text-dark-text sm:items-center sm:justify-center">
+        <div className="flex min-h-screen w-full bg-light-bg p-4 text-light-text sm:items-center sm:justify-center">
           <div className="mx-auto flex w-full max-w-4xl flex-col px-4 pb-4 pt-20">
             <h1 className="mb-6 text-2xl font-bold">Checkout</h1>
             {products.length > 0 && (
@@ -457,7 +457,7 @@ export default function Component() {
                 {products.map((product) => (
                   <div
                     key={product.id}
-                    className="mb-6 rounded-lg border border-gray-300 p-4 shadow-sm dark:border-gray-700"
+                    className="mb-6 rounded-lg border border-gray-300 p-4 shadow-sm"
                   >
                     <h2 className="mb-4 text-xl font-bold">{product.title}</h2>
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -474,7 +474,7 @@ export default function Component() {
                         </p>
                       )}
                     </div>
-                    <div className="mt-4 border-t border-gray-300 pt-4 dark:border-gray-700">
+                    <div className="mt-4 border-t border-gray-300 pt-4">
                       <DisplayCostBreakdown
                         subtotal={
                           satPrices[product.id]
@@ -496,9 +496,9 @@ export default function Component() {
                     </div>
                   </div>
                 ))}
-                <div className="mb-6 flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 p-4 text-center dark:border-gray-700 dark:bg-gray-800">
-                  <InformationCircleIcon className="mr-2 h-5 w-5 flex-shrink-0 text-gray-600 dark:text-gray-400" />
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                <div className="mb-6 flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 p-4 text-center">
+                  <InformationCircleIcon className="mr-2 h-5 w-5 flex-shrink-0 text-gray-600" />
+                  <p className="text-sm text-gray-600">
                     Once purchased, each seller will receive a DM with your
                     order details.
                   </p>
@@ -516,7 +516,7 @@ export default function Component() {
                 totalCost={totalCost}
               />
               <span
-                className="mt-4 cursor-pointer text-shopstr-purple hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light"
+                className="mt-4 cursor-pointer text-light-text hover:text-accent-light-text"
                 onClick={toggleCheckout}
               >
                 Return to Cart

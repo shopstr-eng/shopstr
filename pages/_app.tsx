@@ -58,7 +58,7 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 
-function Shopstr({ props }: { props: AppProps }) {
+function MilkMarket({ props }: { props: AppProps }) {
   const { Component, pageProps } = props;
   const { nostr } = useContext(NostrContext);
   const { signer, isLoggedIn } = useContext(SignerContext);
@@ -582,7 +582,7 @@ function App(props: AppProps) {
         <NextThemesProvider attribute="class">
           <NostrContextProvider>
             <SignerContextProvider>
-              <Shopstr props={props} />
+              <MilkMarket props={props} />
             </SignerContextProvider>
           </NostrContextProvider>
         </NextThemesProvider>

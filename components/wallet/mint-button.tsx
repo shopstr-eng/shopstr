@@ -20,7 +20,7 @@ import {
   Image,
   Input,
 } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { WHITEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   getLocalStorageData,
   publishProofEvent,
@@ -236,11 +236,9 @@ const MintButton = () => {
   return (
     <div>
       <Button
-        className={SHOPSTRBUTTONCLASSNAMES + " m-2"}
+        className={WHITEBUTTONCLASSNAMES + " m-2"}
         onClick={() => setShowMintModal(!showMintModal)}
-        startContent={
-          <BanknotesIcon className="h-6 w-6 hover:text-yellow-500 dark:hover:text-purple-500" />
-        }
+        startContent={<BanknotesIcon className="h-6 w-6 hover:text-gray-300" />}
       >
         Mint
       </Button>
@@ -251,7 +249,6 @@ const MintButton = () => {
         classNames={{
           body: "py-6",
           backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-          // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
           header: "border-b-[1px] border-[#292f46]",
           footer: "border-t-[1px] border-[#292f46]",
           closeButton: "hover:bg-black/5 active:bg-white/10",
@@ -260,7 +257,7 @@ const MintButton = () => {
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+          <ModalHeader className="flex flex-col gap-1 text-dark-text">
             Mint Tokens
           </ModalHeader>
           <form onSubmit={handleMintSubmit(onMintSubmit)}>
@@ -287,7 +284,7 @@ const MintButton = () => {
                     : "";
                   return (
                     <Input
-                      className="text-light-text dark:text-dark-text"
+                      className="text-dark-text"
                       autoFocus
                       variant="bordered"
                       fullWidth={true}
@@ -305,8 +302,8 @@ const MintButton = () => {
               />
               {signer instanceof NostrNIP46Signer && (
                 <div className="mx-4 my-2 flex items-center justify-center text-center">
-                  <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-                  <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+                  <InformationCircleIcon className="h-6 w-6 text-dark-text" />
+                  <p className="ml-2 text-xs text-dark-text">
                     If the token is taking a while to be minted, make sure to
                     check your bunker application to approve the transaction
                     events.
@@ -343,12 +340,12 @@ const MintButton = () => {
                               </p>
                               <ClipboardIcon
                                 onClick={handleCopyInvoice}
-                                className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
+                                className={`ml-2 h-4 w-4 cursor-pointer text-dark-text ${
                                   copiedToClipboard ? "hidden" : ""
                                 }`}
                               />
                               <CheckIcon
-                                className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
+                                className={`ml-2 h-4 w-4 cursor-pointer text-dark-text ${
                                   copiedToClipboard ? "" : "hidden"
                                 }`}
                               />
@@ -387,7 +384,7 @@ const MintButton = () => {
                 Cancel
               </Button>
 
-              <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+              <Button className={WHITEBUTTONCLASSNAMES} type="submit">
                 Mint
               </Button>
             </ModalFooter>

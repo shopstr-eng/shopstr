@@ -10,7 +10,10 @@ import {
   ModalHeader,
   ModalBody,
 } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import {
+  BLACKBUTTONCLASSNAMES,
+  WHITEBUTTONCLASSNAMES,
+} from "@/utils/STATIC-VARIABLES";
 import {
   ArrowUturnLeftIcon,
   ArrowsUpDownIcon,
@@ -248,18 +251,18 @@ const ChatPanel = ({
 
   if (!currentChatPubkey)
     return (
-      <div className="absolute z-20 hidden h-[85vh] w-full flex-col overflow-clip px-2 dark:bg-dark-bg md:relative md:flex">
+      <div className="absolute z-20 hidden h-[85vh] w-full flex-col overflow-clip bg-light-bg px-2 md:relative md:flex">
         <div className="mt-10 flex flex-grow items-center justify-center py-10">
-          <div className="w-full max-w-xl rounded-lg bg-light-fg p-10 text-center shadow-lg dark:bg-dark-fg">
-            <ChatBubbleLeftIcon className="mx-auto mb-5 h-20 w-20 text-light-text dark:text-dark-text" />
-            <span className="block text-5xl text-light-text dark:text-dark-text">
+          <div className="w-full max-w-xl rounded-lg bg-dark-fg p-10 text-center shadow-lg">
+            <ChatBubbleLeftIcon className="mx-auto mb-5 h-20 w-20 text-dark-text" />
+            <span className="block text-5xl text-dark-text">
               No chat selected . . .
             </span>
             <div className="opacity-4 flex flex-col items-center justify-center gap-3 pt-5">
-              <span className="text-2xl text-light-text dark:text-dark-text">
+              <span className="text-2xl text-dark-text">
                 Use your up and down arrow keys to select chats!
               </span>
-              <ArrowsUpDownIcon className="h-10 w-10 text-light-text dark:text-dark-text" />
+              <ArrowsUpDownIcon className="h-10 w-10 text-dark-text" />
             </div>
           </div>
         </div>
@@ -272,19 +275,20 @@ const ChatPanel = ({
   };
 
   return (
-    <div className="absolute flex h-full w-full flex-col overflow-clip bg-light-bg px-2 pb-20 dark:bg-dark-bg md:relative md:h-[85vh] md:pb-0 lg:pb-0">
-      <h2 className="flex h-[60px] w-full flex-row items-center overflow-clip align-middle text-shopstr-purple-light dark:text-shopstr-yellow-light">
+    <div className="absolute flex h-full w-full flex-col overflow-clip bg-light-bg px-2 pb-20 md:relative md:h-[85vh] md:pb-0 lg:pb-0">
+      <h2 className="text-ligh-text flex h-[60px] w-full flex-row items-center overflow-clip align-middle">
         <ArrowUturnLeftIcon
           onClick={handleGoBack}
-          className="mx-3 h-9 w-9 cursor-pointer rounded-md p-1 text-shopstr-purple-light hover:bg-shopstr-yellow hover:text-purple-700 dark:text-shopstr-yellow-light  hover:dark:bg-shopstr-purple"
+          className="mx-3 h-9 w-9 cursor-pointer rounded-md p-1 text-light-text hover:bg-dark-bg hover:text-yellow-600"
         />
         <ProfileWithDropdown
           pubkey={currentChatPubkey}
           dropDownKeys={["shop"]}
           nameClassname="block"
+          bg="light"
         />
       </h2>
-      <div className="my-2 h-full overflow-y-scroll rounded-md border-2 border-light-fg bg-light-fg p-3 dark:border-dark-fg dark:bg-dark-fg">
+      <div className="my-2 h-full overflow-y-scroll rounded-md border-2 border-dark-fg bg-dark-fg p-3">
         {messages
           .filter(
             (message, index, self) =>
@@ -309,7 +313,7 @@ const ChatPanel = ({
       {!isPayment ? (
         <div className="space-x flex items-center p-2">
           <Input
-            className="pr-3 text-light-text dark:text-dark-text"
+            className="pr-3 text-light-text"
             type="text"
             width="100%"
             size="md"
@@ -327,7 +331,7 @@ const ChatPanel = ({
             }}
           />
           <Button
-            className={SHOPSTRBUTTONCLASSNAMES}
+            className={BLACKBUTTONCLASSNAMES}
             isDisabled={messageInput === "" || isSendingDMLoading}
             isLoading={isSendingDMLoading}
             onClick={async () => await sendMessage()}
@@ -339,7 +343,7 @@ const ChatPanel = ({
         <>
           <div className="flex items-center justify-between border-t p-4">
             <Button
-              className={SHOPSTRBUTTONCLASSNAMES}
+              className={BLACKBUTTONCLASSNAMES}
               onClick={handleToggleShippingModal}
             >
               Send Shipping Info
@@ -360,7 +364,7 @@ const ChatPanel = ({
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+              <ModalHeader className="flex flex-col gap-1 text-dark-text">
                 Enter Shipping Details
               </ModalHeader>
               <form onSubmit={handleShippingSubmit(onShippingSubmit)}>
@@ -387,7 +391,7 @@ const ChatPanel = ({
                           variant="bordered"
                           isInvalid={isErrored}
                           errorMessage={errorMessage}
-                          className="text-light-text dark:text-dark-text"
+                          className="text-dark-text"
                           type="number"
                           onChange={onChange}
                           onBlur={onBlur}
@@ -417,7 +421,7 @@ const ChatPanel = ({
                           placeholder="Fedex, UPS, etc. "
                           isInvalid={isErrored}
                           errorMessage={errorMessage}
-                          className="text-light-text dark:text-dark-text"
+                          className="text-dark-text"
                           onChange={onChange}
                           onBlur={onBlur}
                           value={value}
@@ -450,7 +454,7 @@ const ChatPanel = ({
                           variant="bordered"
                           isInvalid={isErrored}
                           errorMessage={errorMessage}
-                          className="text-light-text dark:text-dark-text"
+                          className="text-dark-text"
                           onChange={onChange}
                           onBlur={onBlur}
                           value={value}
@@ -467,7 +471,7 @@ const ChatPanel = ({
                   >
                     Cancel
                   </Button>
-                  <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                  <Button className={WHITEBUTTONCLASSNAMES} type="submit">
                     Confirm Shipping
                   </Button>
                 </ModalFooter>
@@ -481,7 +485,7 @@ const ChatPanel = ({
           <>
             <div className="flex items-center justify-between border-t p-4">
               <Button
-                className={SHOPSTRBUTTONCLASSNAMES}
+                className={BLACKBUTTONCLASSNAMES}
                 onClick={handleToggleReviewModal}
               >
                 Leave a Review
@@ -502,21 +506,19 @@ const ChatPanel = ({
               size="2xl"
             >
               <ModalContent>
-                <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+                <ModalHeader className="flex flex-col gap-1 text-dark-text">
                   Leave a Review
                 </ModalHeader>
                 <form onSubmit={handleReviewSubmit(onReviewSubmit)}>
                   <ModalBody>
                     <div className="mb-4 flex items-center justify-center gap-16">
                       <div className="flex items-center gap-3">
-                        <span className="text-light-text dark:text-dark-text">
-                          Good Overall
-                        </span>
+                        <span className="text-dark-text">Good Overall</span>
                         <HandThumbUpIcon
                           className={`h-12 w-12 cursor-pointer rounded-lg border-2 p-2 transition-colors ${
                             selectedThumb === "up"
                               ? "border-green-500 text-green-500"
-                              : "border-light-text text-light-text hover:border-green-500 hover:text-green-500 dark:border-dark-text dark:text-dark-text"
+                              : "border-dark-text text-dark-text hover:border-green-500 hover:text-green-500"
                           }`}
                           onClick={() => setSelectedThumb("up")}
                         />
@@ -526,13 +528,11 @@ const ChatPanel = ({
                           className={`h-12 w-12 cursor-pointer rounded-lg border-2 p-2 transition-colors ${
                             selectedThumb === "down"
                               ? "border-red-500 text-red-500"
-                              : "border-light-text text-light-text hover:border-red-500 hover:text-red-500 dark:border-dark-text dark:text-dark-text"
+                              : "border-dark-text text-dark-text hover:border-red-500 hover:text-red-500"
                           }`}
                           onClick={() => setSelectedThumb("down")}
                         />
-                        <span className="text-light-text dark:text-dark-text">
-                          Bad Overall
-                        </span>
+                        <span className="text-dark-text">Bad Overall</span>
                       </div>
                     </div>
 
@@ -549,9 +549,7 @@ const ChatPanel = ({
                             })
                           }
                         />
-                        <span className="text-light-text dark:text-dark-text">
-                          Good Value
-                        </span>
+                        <span className="text-dark-text">Good Value</span>
                       </label>
                       <label className="flex items-center gap-2">
                         <input
@@ -565,9 +563,7 @@ const ChatPanel = ({
                             })
                           }
                         />
-                        <span className="text-light-text dark:text-dark-text">
-                          Good Quality
-                        </span>
+                        <span className="text-dark-text">Good Quality</span>
                       </label>
                       <label className="flex items-center gap-2">
                         <input
@@ -581,9 +577,7 @@ const ChatPanel = ({
                             })
                           }
                         />
-                        <span className="text-light-text dark:text-dark-text">
-                          Quick Delivery
-                        </span>
+                        <span className="text-dark-text">Quick Delivery</span>
                       </label>
                       <label className="flex items-center gap-2">
                         <input
@@ -600,7 +594,7 @@ const ChatPanel = ({
                             })
                           }
                         />
-                        <span className="text-light-text dark:text-dark-text">
+                        <span className="text-dark-text">
                           Good Communication
                         </span>
                       </label>
@@ -614,7 +608,7 @@ const ChatPanel = ({
                         <div>
                           <textarea
                             {...field}
-                            className="w-full rounded-md border-2 border-light-fg bg-light-bg p-2 text-light-text dark:border-dark-fg dark:bg-dark-bg dark:text-dark-text"
+                            className="w-full rounded-md border-2 border-dark-fg bg-dark-bg p-2 text-dark-text"
                             rows={4}
                             placeholder="Write your review comment here..."
                           />
@@ -634,7 +628,7 @@ const ChatPanel = ({
                       Cancel
                     </Button>
                     <Button
-                      className={SHOPSTRBUTTONCLASSNAMES}
+                      className={WHITEBUTTONCLASSNAMES}
                       type="submit"
                       isDisabled={!selectedThumb}
                     >

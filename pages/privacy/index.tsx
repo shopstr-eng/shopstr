@@ -6,12 +6,12 @@ export default function PrivacyPolicy() {
     {
       title: "Introduction",
       content:
-        "Shopstr is committed to protecting your privacy. As a permissionless marketplace, we minimize data collection and processing to ensure your privacy and security. This policy explains our approach to data handling in the context of a permissionless platform.",
+        "Milk Market is committed to protecting your privacy. As a permissionless marketplace, we minimize data collection and processing to ensure your privacy and security. This policy explains our approach to data handling in the context of a permissionless platform.",
     },
     {
       title: "Information We Don't Collect",
       content:
-        "As a fully permissionless platform with no centralized backend, Shopstr does not collect or store: personal identification information, KYC (Know Your Customer) data, financial information, usage tracking data, or user behavior analytics. All data remains under user control through the Nostr protocol and Bitcoin network.",
+        "As a fully permissionless platform with no centralized backend, Milk Market does not collect or store: personal identification information, KYC (Know Your Customer) data, financial information, usage tracking data, or user behavior analytics. All data remains under user control through the Nostr protocol and Bitcoin network.",
     },
     {
       title: "Nostr Protocol Data",
@@ -26,7 +26,7 @@ export default function PrivacyPolicy() {
     {
       title: "Website Usage",
       content:
-        "Our website interface is static and does not use cookies or tracking mechanisms. Any data stored is kept locally in your browser and includes: local keys (if using in-browser storage), user preferences, relay selections, and interface settings. Shopstr has no access to this locally stored information.",
+        "Our website interface is static and does not use cookies or tracking mechanisms. Any data stored is kept locally in your browser and includes: local keys (if using in-browser storage), user preferences, relay selections, and interface settings. Milk Market has no access to this locally stored information.",
     },
     {
       title: "Third-Party Services",
@@ -51,22 +51,22 @@ export default function PrivacyPolicy() {
     {
       title: "Contact Information",
       content:
-        "For privacy-related questions, you can reach the Shopstr team through our Nostr channels or GitHub repository.",
+        "For privacy-related questions, you can reach the Milk Market team through our Nostr channels or GitHub repository.",
     },
   ];
 
   return (
-    <div className="flex min-h-screen flex-col bg-light-bg pt-24 dark:bg-dark-bg md:pb-20">
+    <div className="flex min-h-screen flex-col bg-light-bg pt-24 md:pb-20">
       <div className="container mx-auto max-w-6xl px-4">
-        <h1 className="mb-8 text-center text-3xl font-bold text-light-text dark:text-dark-text">
+        <h1 className="mb-8 text-center text-3xl font-bold text-light-text">
           Privacy Policy
         </h1>
 
-        <p className="mx-auto mb-10 max-w-3xl text-center text-light-text/80 dark:text-dark-text/80">
-          How Shopstr protects your privacy
+        <p className="mx-auto mb-10 max-w-3xl text-center text-light-text/80">
+          How Milk Market protects your privacy
         </p>
 
-        <div className="mb-4 text-right text-sm text-light-text/70 dark:text-dark-text/70">
+        <div className="mb-4 text-right text-sm text-light-text/70">
           Last updated: 2025-04-25
         </div>
 
@@ -79,7 +79,7 @@ export default function PrivacyPolicy() {
             <AccordionItem
               key={sectionIndex}
               title={
-                <span className="font-medium text-light-text dark:text-dark-text">
+                <span className="font-medium text-light-text">
                   {section.title}
                 </span>
               }
@@ -87,11 +87,11 @@ export default function PrivacyPolicy() {
                 base: "group",
                 title: "text-md",
                 trigger:
-                  "py-5 px-3 data-[hover=true]:bg-gray-50 dark:data-[hover=true]:bg-gray-900/50 transition-all rounded-lg",
-                content: "py-2 px-3 text-light-text/90 dark:text-dark-text/90",
+                  "py-5 px-3 data-[hover=true]:bg-gray-50 transition-all rounded-lg",
+                content: "py-2 px-3 text-light-text/90",
               }}
             >
-              <p className="leading-relaxed text-light-text dark:text-dark-text">
+              <p className="leading-relaxed text-light-text">
                 {section.content}
               </p>
             </AccordionItem>

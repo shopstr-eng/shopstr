@@ -78,7 +78,7 @@ export default function ImageCarousel({
             }}
             title={label}
           >
-            <ChevronLeftIcon className="h-6 w-6 text-black dark:text-white" />
+            <ChevronLeftIcon className="h-6 w-6 text-dark-text" />
           </button>
         )
       }
@@ -92,7 +92,7 @@ export default function ImageCarousel({
             }}
             title={label}
           >
-            <ChevronRightIcon className="h-6 w-6 text-black dark:text-white" />
+            <ChevronRightIcon className="h-6 w-6 text-dark-text" />
           </button>
         )
       }
@@ -103,7 +103,7 @@ export default function ImageCarousel({
             key={index}
             className={
               isSelected
-                ? `${base} bg-blue-500`
+                ? `${base} bg-pink-500`
                 : `${base} bg-gray-300 hover:bg-gray-500`
             }
             onClick={(e) => {

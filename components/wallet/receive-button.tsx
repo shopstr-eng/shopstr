@@ -15,7 +15,7 @@ import {
   Button,
   Textarea,
 } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { WHITEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   getLocalStorageData,
   publishProofEvent,
@@ -126,10 +126,10 @@ const ReceiveButton = () => {
     <>
       <div>
         <Button
-          className={SHOPSTRBUTTONCLASSNAMES + " m-2"}
+          className={WHITEBUTTONCLASSNAMES + " m-2"}
           onClick={() => setShowReceiveModal(!showReceiveModal)}
           startContent={
-            <ArrowDownTrayIcon className="h-6 w-6 hover:text-yellow-500 dark:hover:text-purple-500" />
+            <ArrowDownTrayIcon className="h-6 w-6 hover:text-gray-300" />
           }
         >
           Receive
@@ -141,7 +141,6 @@ const ReceiveButton = () => {
           classNames={{
             body: "py-6",
             backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-            // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
             header: "border-b-[1px] border-[#292f46]",
             footer: "border-t-[1px] border-[#292f46]",
             closeButton: "hover:bg-black/5 active:bg-white/10",
@@ -150,7 +149,7 @@ const ReceiveButton = () => {
           size="2xl"
         >
           <ModalContent>
-            <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+            <ModalHeader className="flex flex-col gap-1 text-dark-text">
               Receive Token
             </ModalHeader>
             <form onSubmit={handleReceiveSubmit(onReceiveSubmit)}>
@@ -176,7 +175,7 @@ const ReceiveButton = () => {
                       : "";
                     return (
                       <Textarea
-                        className="text-light-text dark:text-dark-text"
+                        className="text-dark-text"
                         autoFocus
                         variant="bordered"
                         fullWidth={true}
@@ -194,8 +193,8 @@ const ReceiveButton = () => {
                 />
                 {signer instanceof NostrNIP46Signer && (
                   <div className="mx-4 my-2 flex items-center justify-center text-center">
-                    <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-                    <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+                    <InformationCircleIcon className="h-6 w-6 text-dark-text" />
+                    <p className="ml-2 text-xs text-dark-text">
                       If the token is taking a while to be received, make sure
                       to check your bunker application to approve the
                       transaction events.
@@ -213,7 +212,7 @@ const ReceiveButton = () => {
                   Cancel
                 </Button>
 
-                <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                <Button className={WHITEBUTTONCLASSNAMES} type="submit">
                   Receive
                 </Button>
               </ModalFooter>
@@ -227,7 +226,6 @@ const ReceiveButton = () => {
             backdrop="blur"
             isOpen={isClaimed}
             onClose={() => setIsClaimed(false)}
-            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
             classNames={{
               body: "py-6 ",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -241,13 +239,13 @@ const ReceiveButton = () => {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="flex items-center justify-center text-dark-text">
                 <CheckCircleIcon className="h-6 w-6 text-green-500" />
                 <div className="ml-2">Token successfully claimed!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="flex flex-col overflow-hidden text-dark-text">
                 <div className="flex items-center justify-center">
-                  Your Shopstr wallet balance should now be updated.
+                  Your Milk Market wallet balance should now be updated.
                 </div>
               </ModalBody>
             </ModalContent>
@@ -260,7 +258,6 @@ const ReceiveButton = () => {
             backdrop="blur"
             isOpen={isDuplicateToken}
             onClose={() => setIsDuplicateToken(false)}
-            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
             classNames={{
               body: "py-6 ",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -274,14 +271,14 @@ const ReceiveButton = () => {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="flex items-center justify-center text-dark-text">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Duplicate token!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="flex flex-col overflow-hidden text-dark-text">
                 <div className="flex items-center justify-center">
-                  The token you are trying to claim is already in your Shopstr
-                  wallet.
+                  The token you are trying to claim is already in your Milk
+                  Market wallet.
                 </div>
               </ModalBody>
             </ModalContent>
@@ -294,7 +291,6 @@ const ReceiveButton = () => {
             backdrop="blur"
             isOpen={isInvalidToken}
             onClose={() => setIsInvalidToken(false)}
-            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
             classNames={{
               body: "py-6 ",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -308,11 +304,11 @@ const ReceiveButton = () => {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="flex items-center justify-center text-dark-text">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Invalid token!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="flex flex-col overflow-hidden text-dark-text">
                 <div className="flex items-center justify-center">
                   The token you are trying to claim is not a valid Cashu string.
                 </div>
@@ -327,7 +323,6 @@ const ReceiveButton = () => {
             backdrop="blur"
             isOpen={isSpent}
             onClose={() => setIsSpent(false)}
-            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
             classNames={{
               body: "py-6 ",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -341,11 +336,11 @@ const ReceiveButton = () => {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="flex items-center justify-center text-dark-text">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Spent token!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="flex flex-col overflow-hidden text-dark-text">
                 <div className="flex items-center justify-center">
                   The token you are trying to claim has already been redeemed.
                 </div>

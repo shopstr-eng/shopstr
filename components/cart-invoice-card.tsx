@@ -57,7 +57,7 @@ import {
   DisplayCostBreakdown,
   formatWithCommas,
 } from "./utility-components/display-monetary-info";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { BLACKBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import SignInModal from "./sign-in/SignInModal";
 import FailureModal from "@/components/utility-components/failure-modal";
 import ShippingForm from "./shipping-form";
@@ -655,7 +655,7 @@ export default function CartInvoiceCard({
             quantities[product.id] +
             " of your " +
             title +
-            " listing on Shopstr! Message them with your " +
+            " listing on Milk Market! Message them with your " +
             selectedFiatOption +
             "payment details to finalize.";
         } else {
@@ -664,7 +664,7 @@ export default function CartInvoiceCard({
             quantities[product.id] +
             " of your " +
             title +
-            " listing on Shopstr! Message them with your " +
+            " listing on Milk Market! Message them with your " +
             selectedFiatOption +
             "payment details to finalize.";
         }
@@ -675,14 +675,14 @@ export default function CartInvoiceCard({
             userNPub +
             " for your " +
             title +
-            " listing on Shopstr! Message them with your " +
+            " listing on Milk Market! Message them with your " +
             selectedFiatOption +
             "payment details to finalize.";
         } else {
           paymentMessage =
             "You have received an order for your " +
             title +
-            " listing on Shopstr! Message them with your " +
+            " listing on Milk Market! Message them with your " +
             selectedFiatOption +
             "payment details to finalize.";
         }
@@ -849,7 +849,7 @@ export default function CartInvoiceCard({
               title +
               " listing in a size " +
               product.selectedSize +
-              " on Shopstr, please contact " +
+              " on Milk Market, please contact " +
               contact +
               " over " +
               contactType +
@@ -867,7 +867,7 @@ export default function CartInvoiceCard({
             contactMessage =
               "To finalize the sale of your " +
               title +
-              " listing on Shopstr, please contact " +
+              " listing on Milk Market, please contact " +
               contact +
               " over " +
               contactType +
@@ -1298,7 +1298,7 @@ export default function CartInvoiceCard({
                   quantities[product.id] +
                   " of your " +
                   title +
-                  " listing on Shopstr! Check your Lightning address (" +
+                  " listing on Milk Market! Check your Lightning address (" +
                   lnurl +
                   ") for your sats.";
               } else {
@@ -1307,7 +1307,7 @@ export default function CartInvoiceCard({
                   quantities[product.id] +
                   " of your " +
                   title +
-                  " listing on Shopstr! Check your Lightning address (" +
+                  " listing on Milk Market! Check your Lightning address (" +
                   lnurl +
                   ") for your sats.";
               }
@@ -1318,14 +1318,14 @@ export default function CartInvoiceCard({
                   userNPub +
                   " for your " +
                   title +
-                  " listing on Shopstr! Check your Lightning address (" +
+                  " listing on Milk Market! Check your Lightning address (" +
                   lnurl +
                   ") for your sats.";
               } else {
                 paymentMessage =
                   "You have received a payment for your " +
                   title +
-                  " listing on Shopstr! Check your Lightning address (" +
+                  " listing on Milk Market! Check your Lightning address (" +
                   lnurl +
                   ") for your sats.";
               }
@@ -1390,7 +1390,7 @@ export default function CartInvoiceCard({
                     quantities[product.id] +
                     " of your " +
                     title +
-                    " listing on Shopstr: " +
+                    " listing on Milk Market: " +
                     unusedToken;
                 } else {
                   paymentMessage =
@@ -1398,7 +1398,7 @@ export default function CartInvoiceCard({
                     quantities[product.id] +
                     " of your " +
                     title +
-                    " listing on Shopstr: " +
+                    " listing on Milk Market: " +
                     unusedToken;
                 }
               }
@@ -1410,13 +1410,13 @@ export default function CartInvoiceCard({
                     userNPub +
                     " for your " +
                     title +
-                    " listing on Shopstr: " +
+                    " listing on Milk Market: " +
                     unusedToken;
                 } else {
                   paymentMessage =
                     "This is a Cashu token payment for your " +
                     title +
-                    " listing on Shopstr: " +
+                    " listing on Milk Market: " +
                     unusedToken;
                 }
               }
@@ -1451,7 +1451,7 @@ export default function CartInvoiceCard({
                 quantities[product.id] +
                 " of your " +
                 title +
-                " listing on Shopstr: " +
+                " listing on Milk Market: " +
                 sellerToken;
             } else {
               paymentMessage =
@@ -1459,7 +1459,7 @@ export default function CartInvoiceCard({
                 quantities[product.id] +
                 " of your " +
                 title +
-                " listing on Shopstr: " +
+                " listing on Milk Market: " +
                 sellerToken;
             }
           }
@@ -1471,13 +1471,13 @@ export default function CartInvoiceCard({
                 userNPub +
                 " for your " +
                 title +
-                " listing on Shopstr: " +
+                " listing on Milk Market: " +
                 sellerToken;
             } else {
               paymentMessage =
                 "This is a Cashu token payment for your " +
                 title +
-                " listing on Shopstr: " +
+                " listing on Milk Market: " +
                 sellerToken;
             }
           }
@@ -1658,7 +1658,7 @@ export default function CartInvoiceCard({
               title +
               " listing in a size " +
               product.selectedSize +
-              " on Shopstr, please contact " +
+              " on Milk Market, please contact " +
               contact +
               " over " +
               contactType +
@@ -1676,7 +1676,7 @@ export default function CartInvoiceCard({
             contactMessage =
               "To finalize the sale of your " +
               title +
-              " listing on Shopstr, please contact " +
+              " listing on Milk Market, please contact " +
               contact +
               " over " +
               contactType +
@@ -1929,7 +1929,7 @@ export default function CartInvoiceCard({
           {fiatPaymentOptions.length > 0 && (
             <Button
               type="submit"
-              className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
+              className={BLACKBUTTONCLASSNAMES + " mt-3"}
               onClick={() => {
                 if (!userLoggedIn) {
                   onOpen();
@@ -1977,7 +1977,7 @@ export default function CartInvoiceCard({
                 }
               }}
               startContent={
-                <CurrencyDollarIcon className="h-6 w-6 hover:text-yellow-500" />
+                <CurrencyDollarIcon className="h-6 w-6 hover:text-yellow-600" />
               }
             >
               Pay with Fiat
@@ -1985,7 +1985,7 @@ export default function CartInvoiceCard({
           )}
           <Button
             type="submit"
-            className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
+            className={BLACKBUTTONCLASSNAMES + " mt-3"}
             onClick={() => {
               if (!userLoggedIn) {
                 onOpen();
@@ -2032,14 +2032,14 @@ export default function CartInvoiceCard({
               }
             }}
             startContent={
-              <BoltIcon className="h-6 w-6 hover:text-yellow-500" />
+              <BoltIcon className="h-6 w-6 hover:text-yellow-600" />
             }
           >
             Pay with Lightning: {formattedTotalCost}
           </Button>
           <Button
             type="submit"
-            className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
+            className={BLACKBUTTONCLASSNAMES + " mt-3"}
             onClick={() => {
               if (!userLoggedIn) {
                 onOpen();
@@ -2082,7 +2082,7 @@ export default function CartInvoiceCard({
               }
             }}
             startContent={
-              <BanknotesIcon className="h-6 w-6 hover:text-yellow-500" />
+              <BanknotesIcon className="h-6 w-6 hover:text-yellow-600" />
             }
           >
             Pay with Cashu: {formattedTotalCost}
@@ -2106,7 +2106,7 @@ export default function CartInvoiceCard({
               <div className="flex flex-col items-center justify-center">
                 {qrCodeUrl ? (
                   <>
-                    <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900 text-light-text dark:text-dark-text">
+                    <h3 className="mt-3 text-center text-lg font-medium leading-6 text-dark-text text-gray-900">
                       Don&apos;t refresh or close the page until the payment has
                       been confirmed!
                     </h3>
@@ -2126,12 +2126,12 @@ export default function CartInvoiceCard({
                       </p>
                       <ClipboardIcon
                         onClick={handleCopyInvoice}
-                        className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
+                        className={`ml-2 h-4 w-4 cursor-pointer text-dark-text ${
                           copiedToClipboard ? "hidden" : ""
                         }`}
                       />
                       <CheckIcon
-                        className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
+                        className={`ml-2 h-4 w-4 cursor-pointer text-dark-text ${
                           copiedToClipboard ? "" : "hidden"
                         }`}
                       />
@@ -2193,7 +2193,7 @@ export default function CartInvoiceCard({
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+          <ModalHeader className="flex items-center justify-center text-dark-text">
             Select your fiat payment preference:
           </ModalHeader>
           <ModalBody className="flex flex-col overflow-hidden">
@@ -2216,7 +2216,7 @@ export default function CartInvoiceCard({
                     <SelectItem
                       key={option}
                       value={option}
-                      className="text-light-text dark:text-dark-text"
+                      className="text-dark-text"
                     >
                       {option}
                     </SelectItem>
@@ -2246,7 +2246,7 @@ export default function CartInvoiceCard({
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+          <ModalHeader className="flex items-center justify-center text-dark-text">
             Select your delivery option:
           </ModalHeader>
           <ModalBody className="flex flex-col overflow-hidden">
@@ -2254,7 +2254,7 @@ export default function CartInvoiceCard({
               <Select label="Delivery Method" className="max-w-xs">
                 <SelectItem
                   key="in-person"
-                  className="text-light-text dark:text-dark-text"
+                  className="text-dark-text"
                   onClick={async () => {
                     setShowShippingOption(false);
                     if (isFiatPayment) {
@@ -2270,7 +2270,7 @@ export default function CartInvoiceCard({
                 </SelectItem>
                 <SelectItem
                   key="free"
-                  className="text-light-text dark:text-dark-text"
+                  className="text-dark-text"
                   onClick={() => {
                     handleToggleShippingModal();
                     setShowShippingOption(false);
@@ -2280,7 +2280,7 @@ export default function CartInvoiceCard({
                 </SelectItem>
                 <SelectItem
                   key="pickup"
-                  className="text-light-text dark:text-dark-text"
+                  className="text-dark-text"
                   onClick={() => {
                     handleToggleContactModal();
                     setShowShippingOption(false);
@@ -2313,7 +2313,7 @@ export default function CartInvoiceCard({
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+          <ModalHeader className="flex items-center justify-center text-dark-text">
             Select your purchase type:
           </ModalHeader>
           <ModalBody className="flex flex-col overflow-hidden">
@@ -2321,7 +2321,7 @@ export default function CartInvoiceCard({
               <Select label="Purchase Type" className="max-w-xs">
                 <SelectItem
                   key="in-person"
-                  className="text-light-text dark:text-dark-text"
+                  className="text-dark-text"
                   onClick={async () => {
                     setShowPurchaseTypeOption(false);
                     if (isFiatPayment) {
@@ -2337,7 +2337,7 @@ export default function CartInvoiceCard({
                 </SelectItem>
                 <SelectItem
                   key="online-order"
-                  className="text-light-text dark:text-dark-text"
+                  className="text-dark-text"
                   onClick={() => {
                     if (needsCombinedInfo) {
                       handleToggleCombinedModal();
@@ -2395,7 +2395,6 @@ export default function CartInvoiceCard({
               setCashuPaymentSent(false);
               router.push("/marketplace");
             }}
-            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
             classNames={{
               body: "py-6 ",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -2409,11 +2408,11 @@ export default function CartInvoiceCard({
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="flex items-center justify-center text-dark-text">
                 <CheckCircleIcon className="h-6 w-6 text-green-500" />
                 <div className="ml-2">Order successful!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="flex flex-col overflow-hidden text-dark-text">
                 <div className="flex items-center justify-center">
                   The seller will receive a DM with your order details.
                 </div>
@@ -2428,7 +2427,6 @@ export default function CartInvoiceCard({
             backdrop="blur"
             isOpen={invoiceGenerationFailed}
             onClose={() => setInvoiceGenerationFailed(false)}
-            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
             classNames={{
               body: "py-6 ",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -2442,11 +2440,11 @@ export default function CartInvoiceCard({
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="flex items-center justify-center text-dark-text">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Invoice generation failed!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="flex flex-col overflow-hidden text-dark-text">
                 <div className="flex items-center justify-center">
                   The price and/or currency set for this listing was invalid.
                 </div>
@@ -2461,7 +2459,6 @@ export default function CartInvoiceCard({
             backdrop="blur"
             isOpen={cashuPaymentFailed}
             onClose={() => setCashuPaymentFailed(false)}
-            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
             classNames={{
               body: "py-6 ",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -2475,11 +2472,11 @@ export default function CartInvoiceCard({
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="flex items-center justify-center text-dark-text">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Purchase failed!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="flex flex-col overflow-hidden text-dark-text">
                 <div className="flex items-center justify-center">
                   You didn&apos;t have enough balance in your wallet to pay.
                 </div>

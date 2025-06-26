@@ -1,6 +1,5 @@
 import { useContext, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
-import { useTheme } from "next-themes";
 import {
   BoltIcon,
   CheckCircleIcon,
@@ -21,7 +20,7 @@ import {
   getLocalStorageData,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { WHITEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { CashuMint, CashuWallet, MintKeyset, Proof } from "@cashu/cashu-ts";
 import { formatWithCommas } from "../utility-components/display-monetary-info";
 import { CashuWalletContext } from "../../utils/context/context";
@@ -44,8 +43,6 @@ const PayButton = () => {
   const { nostr } = useContext(NostrContext);
 
   const { mints, tokens, history } = getLocalStorageData();
-
-  const { theme } = useTheme();
 
   const walletContext = useContext(CashuWalletContext);
 
@@ -188,11 +185,9 @@ const PayButton = () => {
   return (
     <div>
       <Button
-        className={SHOPSTRBUTTONCLASSNAMES + " m-2"}
+        className={WHITEBUTTONCLASSNAMES + " m-2"}
         onClick={() => setShowPayModal(!showPayModal)}
-        startContent={
-          <BoltIcon className="h-6 w-6 hover:text-yellow-500 dark:hover:text-purple-500" />
-        }
+        startContent={<BoltIcon className="h-6 w-6 hover:text-gray-300" />}
       >
         Pay
       </Button>
@@ -203,7 +198,6 @@ const PayButton = () => {
         classNames={{
           body: "py-6",
           backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-          // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
           header: "border-b-[1px] border-[#292f46]",
           footer: "border-t-[1px] border-[#292f46]",
           closeButton: "hover:bg-black/5 active:bg-white/10",
@@ -212,7 +206,7 @@ const PayButton = () => {
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+          <ModalHeader className="flex flex-col gap-1 text-dark-text">
             Pay Lightning Invoice
           </ModalHeader>
           <form onSubmit={handlePaySubmit(onPaySubmit)}>
@@ -240,7 +234,7 @@ const PayButton = () => {
                   return (
                     <>
                       <Textarea
-                        className="text-light-text dark:text-dark-text"
+                        className="text-dark-text"
                         autoFocus
                         variant="bordered"
                         fullWidth={true}
@@ -261,12 +255,12 @@ const PayButton = () => {
                         value={value}
                       />
                       {feeReserveAmount && (
-                        <div className="mt-2 text-left text-light-text dark:text-dark-text">
+                        <div className="mt-2 text-left text-dark-text">
                           Fee Reserve: {feeReserveAmount}
                         </div>
                       )}
                       {/* {totalAmount && totalAmount >= 1 && (
-                        <div className="mt-2 text-right text-light-text dark:text-dark-text">
+                        <div className="mt-2 text-right text-dark-text">
                           Total Amount: {totalAmount} sats
                         </div>
                       )} */}
@@ -276,8 +270,8 @@ const PayButton = () => {
               />
               {signer instanceof NostrNIP46Signer && (
                 <div className="mx-4 my-2 flex items-center justify-center text-center">
-                  <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-                  <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+                  <InformationCircleIcon className="h-6 w-6 text-dark-text" />
+                  <p className="ml-2 text-xs text-dark-text">
                     If the invoice payment is taking a while to be confirmed,
                     make sure to check your bunker application to approve the
                     transaction events.
@@ -292,7 +286,6 @@ const PayButton = () => {
                   backdrop="blur"
                   isOpen={paymentFailed}
                   onClose={() => setPaymentFailed(false)}
-                  // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
                   classNames={{
                     body: "py-6 ",
                     backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -306,11 +299,11 @@ const PayButton = () => {
                   size="2xl"
                 >
                   <ModalContent>
-                    <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                    <ModalHeader className="flex items-center justify-center text-dark-text">
                       <XCircleIcon className="h-6 w-6 text-red-500" />
                       <div className="ml-2">Payment failed!</div>
                     </ModalHeader>
-                    <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                    <ModalBody className="flex flex-col overflow-hidden text-dark-text">
                       <div className="flex items-center justify-center">
                         No routes could be found, or you don&apos;t have enough
                         funds. Please try again with a new invoice, or change
@@ -328,7 +321,6 @@ const PayButton = () => {
                   backdrop="blur"
                   isOpen={isPaid}
                   onClose={() => setIsPaid(false)}
-                  // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
                   classNames={{
                     body: "py-6 ",
                     backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -342,11 +334,11 @@ const PayButton = () => {
                   size="2xl"
                 >
                   <ModalContent>
-                    <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                    <ModalHeader className="flex items-center justify-center text-dark-text">
                       <CheckCircleIcon className="h-6 w-6 text-green-500" />
                       <div className="ml-2">Invoice successfully paid!</div>
                     </ModalHeader>
-                    <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                    <ModalBody className="flex flex-col overflow-hidden text-dark-text">
                       <div className="flex items-center justify-center">
                         Check your external Lightning wallet for your sats.
                       </div>
@@ -365,14 +357,10 @@ const PayButton = () => {
                 Cancel
               </Button>
 
-              <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+              <Button className={WHITEBUTTONCLASSNAMES} type="submit">
                 {isRedeeming ? (
                   <>
-                    {theme === "dark" ? (
-                      <Spinner size={"sm"} color="warning" />
-                    ) : (
-                      <Spinner size={"sm"} color="secondary" />
-                    )}
+                    <Spinner size={"sm"} color="warning" />
                   </>
                 ) : (
                   <>Pay</>

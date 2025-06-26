@@ -104,7 +104,7 @@ const ChatMessage = ({
         return (
           <span
             key={index}
-            className="cursor-pointer text-shopstr-purple hover:underline dark:text-shopstr-yellow"
+            className="cursor-pointer text-yellow-600 hover:underline"
             onClick={() => {
               router.replace({
                 pathname: "/orders",
@@ -136,8 +136,8 @@ const ChatMessage = ({
       <div
         className={`flex max-w-[90%] flex-col rounded-t-large p-3 ${
           isUserMessage
-            ? "dark:from-shopstr-yellow-dark rounded-bl-lg bg-gradient-to-br from-shopstr-purple to-shopstr-purple-light text-white dark:to-shopstr-yellow-light dark:text-dark-bg"
-            : "rounded-br-lg bg-gray-300 text-light-text dark:bg-gray-700 dark:text-dark-text"
+            ? "rounded-bl-lg bg-gray-300 text-light-text"
+            : "rounded-br-lg bg-gray-600 text-dark-text"
         }`}
       >
         <p className="inline-block flex-wrap overflow-x-hidden break-all">

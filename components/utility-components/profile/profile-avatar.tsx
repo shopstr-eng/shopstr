@@ -48,8 +48,8 @@ export const ProfileAvatar = ({
       }}
       className={"transition-transform"}
       classNames={{
-        name: `overflow-hidden text-ellipsis whitespace-nowrap text-light-text dark:text-dark-text hidden block ${
-          isNip05Verified ? "text-shopstr-purple dark:text-shopstr-yellow" : ""
+        name: `overflow-hidden text-ellipsis whitespace-nowrap text-light-text hidden block ${
+          isNip05Verified ? "text-dark-bg" : ""
         }`,
         base: `${baseClassname}`,
         description: `${descriptionClassname}`,

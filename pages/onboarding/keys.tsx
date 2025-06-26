@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
 import { Card, CardBody, Button, Input, Image } from "@nextui-org/react";
 import { ArrowLongRightIcon } from "@heroicons/react/24/outline";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { WHITEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   generateKeys,
   setLocalStorageDataOnSignIn,
@@ -90,27 +90,27 @@ const Keys = () => {
 
   return (
     <>
-      <div className="flex h-[100vh] flex-col bg-light-bg pt-24 dark:bg-dark-bg">
+      <div className="flex h-[100vh] flex-col bg-light-bg pt-24">
         <div className="mx-auto w-full max-w-2xl px-4 py-6">
-          <Card>
+          <Card className="bg-dark-fg">
             <CardBody>
               <div className="mb-4 flex flex-row items-center justify-center">
                 <Image
-                  alt="Shopstr logo"
+                  alt="Milk Market logo"
                   height={50}
                   radius="sm"
-                  src="/shopstr-2000x2000.png"
+                  src="/milk-market.png"
                   width={50}
                 />
-                <h1 className="cursor-pointer text-center text-3xl font-bold text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light">
-                  Shopstr
+                <h1 className="cursor-pointer text-center text-3xl font-bold text-dark-text">
+                  Milk Market
                 </h1>
               </div>
               <div className="mb-4 text-center">
-                <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
+                <h2 className="text-2xl font-bold text-dark-text">
                   Step 1: Secure Your Keys
                 </h2>
-                <p className="text-light-text dark:text-dark-text">
+                <p className="text-dark-text">
                   Make sure to save your public and private keys in a secure
                   format! You can always view them again under your profile
                   settings.
@@ -118,11 +118,11 @@ const Keys = () => {
               </div>
 
               {/* Public Key Section */}
-              <div className="mb-4 flex flex-col space-y-2">
+              <div className="mb-4 flex flex-col space-y-2 text-dark-text">
                 <label className="text-xl">Public Key:</label>
                 {npub && (
                   <div
-                    className="cursor-pointer break-all rounded-md border border-shopstr-purple bg-light-bg p-2 text-lg dark:border-shopstr-yellow dark:bg-dark-bg"
+                    className="cursor-pointer break-all rounded-md border border-dark-bg bg-light-bg p-2 text-lg text-light-text"
                     onClick={handleCopyPubkey}
                   >
                     {npub}
@@ -130,10 +130,10 @@ const Keys = () => {
                 )}
               </div>
 
-              <div className="mb-4 flex flex-col space-y-2">
+              <div className="mb-4 flex flex-col space-y-2 text-dark-text">
                 <label className="text-xl">Private Key:</label>
                 {privateKey && (
-                  <div className="relative flex items-center rounded-md border border-shopstr-purple bg-light-bg dark:border-shopstr-yellow dark:bg-dark-bg">
+                  <div className="relative flex items-center rounded-md border border-dark-bg bg-light-bg text-light-text">
                     <div
                       className="w-full cursor-pointer break-all px-2 py-1"
                       onClick={handleCopyPrivkey}
@@ -159,7 +159,7 @@ const Keys = () => {
                 )}
               </div>
 
-              <div className="mb-4 flex flex-col space-y-2">
+              <div className="mb-4 flex flex-col space-y-2 text-dark-text">
                 <label className="text-xl">
                   Encryption Passphrase:<span className="text-red-500">*</span>
                 </label>
@@ -181,10 +181,7 @@ const Keys = () => {
               </div>
 
               <div className="flex justify-center">
-                <Button
-                  className={SHOPSTRBUTTONCLASSNAMES}
-                  onClick={handleNext}
-                >
+                <Button className={WHITEBUTTONCLASSNAMES} onClick={handleNext}>
                   Next <ArrowLongRightIcon className="h-5 w-5" />
                 </Button>
               </div>
