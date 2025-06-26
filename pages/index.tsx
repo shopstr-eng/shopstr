@@ -397,7 +397,8 @@ export default function StandaloneLanding() {
                   Privacy First
                 </h3>
                 <p className="mb-4 text-lg font-semibold text-light-text">
-                  "Your Data, Your Business — Zero Surveillance Architecture"
+                  &ldquo;Your Data, Your Business — Zero Surveillance
+                  Architecture&rdquo;
                 </p>
                 <ul className="space-y-3 text-gray-700">
                   <li className="flex items-start">
@@ -423,7 +424,7 @@ export default function StandaloneLanding() {
                   Permissionless Network
                 </h3>
                 <p className="mb-4 text-lg font-semibold text-light-text">
-                  "No Gatekeepers, No Approvals — Trade Freely"
+                  &ldquo;No Gatekeepers, No Approvals — Trade Freely&rdquo;
                 </p>
                 <ul className="space-y-3 text-gray-700">
                   <li className="flex items-start">
@@ -579,12 +580,12 @@ export default function StandaloneLanding() {
             <CardBody className="p-8 md:p-12">
               <span className="mb-6 block text-6xl">🐄</span>
               <blockquote className="mb-6 text-xl font-medium leading-relaxed md:text-2xl">
-                "Seeing how ever growing agregious regulations limit our freedom
-                to transact, especially when it comes to something as simple as
-                milk, the need for change was apparent. This was why I started
-                Shopstr, and why I now see Milk Market as the first stage in
-                making a real stand. No more censorship, no more
-                gatekeepers—just direct farmer-to-consumer freedom."
+                &ldquo;Seeing how ever growing agregious regulations limit our
+                freedom to transact, especially when it comes to something as
+                simple as milk, the need for change was apparent. This was why I
+                started Shopstr, and why I now see Milk Market as the first
+                stage in making a real stand. No more censorship, no more
+                gatekeepers—just direct farmer-to-consumer freedom.&rdquo;
               </blockquote>
               <cite className="text-lg text-gray-300">
                 — Calvadev, Founder & CEO @ Shopstr
@@ -743,7 +744,9 @@ export default function StandaloneLanding() {
       <section className="relative z-10 bg-dark-bg py-20 text-dark-text">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-16 text-center">
-            <h2 className="mb-4 text-4xl font-bold md:text-5xl">Can't Wait?</h2>
+            <h2 className="mb-4 text-4xl font-bold md:text-5xl">
+              Can&apos;t Wait?
+            </h2>
             <p className="mb-6 text-xl text-gray-300">
               Head over to{" "}
               <a
@@ -903,7 +906,7 @@ export default function StandaloneLanding() {
                 <span className="text-xl font-bold">Milk Market</span>
               </div>
               <p className="mb-4 text-2xl font-bold">
-                The Milk Revolution Won't Be Pasteurized. Join Us.
+                The Milk Revolution Won&apos;t Be Pasteurized. Join Us.
               </p>
             </div>
           </div>
