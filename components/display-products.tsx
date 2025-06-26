@@ -9,9 +9,9 @@ import {
 } from "../utils/context/context";
 import ProductCard from "./utility-components/product-card";
 import DisplayProductModal from "./display-product-modal";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { WHITEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { Button, Pagination } from "@nextui-org/react";
-import ShopstrSpinner from "./utility-components/shopstr-spinner";
+import MilkMarketSpinner from "./utility-components/mm-spinner";
 import { useRouter } from "next/router";
 import parseTags, {
   ProductData,
@@ -286,7 +286,7 @@ const DisplayProducts = ({
           productEventContext.isLoading ||
           isProductsLoading) ? (
           <div className="mb-6 mt-6 flex items-center justify-center">
-            <ShopstrSpinner />
+            <MilkMarketSpinner />
           </div>
         ) : null}
         {filteredProducts.length > 0 ? (
@@ -311,13 +311,13 @@ const DisplayProducts = ({
                   onChange={handlePageChange}
                   showControls
                   classNames={{
-                    cursor: "bg-purple-500",
+                    cursor: "bg-yellow-700",
                   }}
                 />
               </div>
             )}
 
-            <div className="mb-6 mt-2 text-center text-xs text-light-text dark:text-dark-text">
+            <div className="mb-6 mt-2 text-center text-xs text-light-text">
               Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
               {Math.min(filteredProducts.length, currentPage * itemsPerPage)} of{" "}
               {filteredProducts.length} products
@@ -327,11 +327,11 @@ const DisplayProducts = ({
           wotFilter &&
           !isProductsLoading && (
             <div className="mt-20 flex flex-grow items-center justify-center py-10">
-              <div className="w-full max-w-lg rounded-lg bg-light-fg p-8 text-center shadow-lg dark:bg-dark-fg">
-                <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
+              <div className="w-full max-w-lg rounded-lg bg-dark-fg p-8 text-center shadow-lg">
+                <p className="text-3xl font-semibold text-dark-text">
                   No products found...
                 </p>
-                <p className="mt-4 text-lg text-light-text dark:text-dark-text">
+                <p className="mt-4 text-lg text-dark-text">
                   Try turning off the trust filter!
                 </p>
               </div>
@@ -342,15 +342,15 @@ const DisplayProducts = ({
           !isProductsLoading &&
           !productEvents.some((product) => product.pubkey === userPubkey) && (
             <div className="mt-20 flex flex-grow items-center justify-center py-10">
-              <div className="w-full max-w-lg rounded-lg bg-light-fg p-8 text-center shadow-lg dark:bg-dark-fg">
-                <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
+              <div className="w-full max-w-lg rounded-lg bg-dark-fg p-8 text-center shadow-lg">
+                <p className="text-3xl font-semibold text-dark-text">
                   No products found...
                 </p>
-                <p className="mt-4 text-lg text-light-text dark:text-dark-text">
+                <p className="mt-4 text-lg text-dark-text">
                   Try adding a new listing!
                 </p>
                 <Button
-                  className={`${SHOPSTRBUTTONCLASSNAMES} mt-6`}
+                  className={`${WHITEBUTTONCLASSNAMES} mt-6`}
                   onClick={() => router.push("?addNewListing")}
                 >
                   Add Listing

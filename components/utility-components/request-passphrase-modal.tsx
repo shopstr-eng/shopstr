@@ -8,7 +8,7 @@ import {
   Input,
   Button,
 } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { BLACKBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { useRouter } from "next/router";
 
 export default function PassphraseChallengeModal({
@@ -35,7 +35,7 @@ export default function PassphraseChallengeModal({
   const passphraseInputRef = useRef<HTMLInputElement>(null);
 
   const buttonClassName = useMemo(() => {
-    const enabledStyle = SHOPSTRBUTTONCLASSNAMES;
+    const enabledStyle = BLACKBUTTONCLASSNAMES;
     const className = "text-white shadow-lg bg-gradient-to-tr" + enabledStyle;
     return className;
   }, []);
@@ -67,7 +67,6 @@ export default function PassphraseChallengeModal({
       classNames={{
         body: "py-6",
         backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-        // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
         header: "border-b-[1px] border-[#292f46]",
         footer: "border-t-[1px] border-[#292f46]",
         closeButton: "hover:bg-black/5 active:bg-white/10",
@@ -77,12 +76,12 @@ export default function PassphraseChallengeModal({
       isDismissable={false}
     >
       <ModalContent>
-        <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+        <ModalHeader className="flex flex-col gap-1 text-dark-text">
           Enter Passphrase
         </ModalHeader>
         <ModalBody>
           <Input
-            className="text-light-text dark:text-dark-text"
+            className="text-dark-text"
             autoFocus
             ref={passphraseInputRef}
             variant="flat"
@@ -101,7 +100,7 @@ export default function PassphraseChallengeModal({
               checked={remindToggled}
               onChange={() => setRemindToggled(!remindToggled)}
             />
-            <label className="text-light-text dark:text-dark-text">
+            <label className="text-dark-text">
               Remember passphrase for this session
             </label>
           </div>

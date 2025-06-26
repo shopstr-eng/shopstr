@@ -18,9 +18,8 @@ import ProductForm from "./product-form";
 import ImageCarousel from "./utility-components/image-carousel";
 import CompactCategories from "./utility-components/compact-categories";
 import { locationAvatar } from "./utility-components/dropdowns/location-dropdown";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { BLACKBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
-import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
 import SuccessModal from "./utility-components/success-modal";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { nip19 } from "nostr-tools";
@@ -101,7 +100,6 @@ export default function DisplayProductModal({
         backdrop="blur"
         isOpen={showModal}
         onClose={handleModalToggle}
-        // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
         classNames={{
           body: "py-6",
           backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -114,26 +112,26 @@ export default function DisplayProductModal({
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="flex flex-col text-light-text dark:text-dark-text">
+          <ModalHeader className="flex flex-col text-dark-text">
             <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
+              <h2 className="text-2xl font-bold text-dark-text">
                 {productData.title}
               </h2>
               <div>
                 {productData.status === "active" && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900 dark:text-green-300">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-green-900 px-2 py-0.5 text-xs font-medium text-green-300">
                     Active
                   </span>
                 )}
                 {productData.status === "sold" && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900 dark:text-red-300">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-900 px-2 py-0.5 text-xs font-medium text-red-300">
                     Sold
                   </span>
                 )}
               </div>
             </div>
           </ModalHeader>
-          <ModalBody className="text-light-text dark:text-dark-text">
+          <ModalBody className="text-dark-text">
             {productData.images ? (
               <ImageCarousel
                 images={productData.images}
@@ -143,14 +141,6 @@ export default function DisplayProductModal({
             ) : null}
             <Divider />
             <div className="flex h-fit w-full flex-row flex-wrap items-center justify-between gap-2">
-              <ProfileWithDropdown
-                pubkey={productData.pubkey}
-                dropDownKeys={
-                  productData.pubkey === userPubkey
-                    ? ["shop_profile"]
-                    : ["shop", "inquiry", "copy_npub"]
-                }
-              />
               <Chip
                 key={productData.location}
                 startContent={locationAvatar(productData.location)}
@@ -178,10 +168,7 @@ export default function DisplayProductModal({
                 <div className="flex flex-wrap items-center">
                   {productData.sizes && productData.sizes.length > 0
                     ? productData.sizes.map((size: string) => (
-                        <span
-                          key={size}
-                          className="mb-2 mr-4 text-light-text dark:text-dark-text"
-                        >
+                        <span key={size} className="mb-2 mr-4 text-dark-text">
                           {size}: {productData.sizeQuantities?.get(size) || 0}
                         </span>
                       ))
@@ -191,7 +178,7 @@ export default function DisplayProductModal({
             ) : null}
             {productData.condition && (
               <>
-                <div className="text-left text-xs text-light-text dark:text-dark-text">
+                <div className="text-left text-xs text-dark-text">
                   <span className="text-xl font-semibold">Condition: </span>
                   <span className="text-xl">{productData.condition}</span>
                 </div>
@@ -199,7 +186,7 @@ export default function DisplayProductModal({
             )}
             {productData.quantity && (
               <>
-                <div className="text-left text-xs text-light-text dark:text-dark-text">
+                <div className="text-left text-xs text-dark-text">
                   <span className="text-xl font-semibold">Quantity: </span>
                   <span className="text-xl">{productData.quantity}</span>
                 </div>
@@ -207,7 +194,7 @@ export default function DisplayProductModal({
             )}
             {productData.restrictions && (
               <>
-                <div className="text-left text-xs text-light-text dark:text-dark-text">
+                <div className="text-left text-xs text-dark-text">
                   <span className="text-xl font-semibold">Restrictions: </span>
                   <span className="text-xl text-red-500">
                     {productData.restrictions}
@@ -217,7 +204,7 @@ export default function DisplayProductModal({
             )}
             {productData.required && (
               <>
-                <div className="text-left text-xs text-light-text dark:text-dark-text">
+                <div className="text-left text-xs text-dark-text">
                   <span className="text-xl font-semibold">
                     Required Customer Information:{" "}
                   </span>
@@ -231,9 +218,9 @@ export default function DisplayProductModal({
             <div className="flex w-full flex-wrap justify-evenly gap-2">
               <Button
                 type="submit"
-                className={SHOPSTRBUTTONCLASSNAMES}
+                className={BLACKBUTTONCLASSNAMES}
                 startContent={
-                  <ShareIcon className="h-6 w-6 hover:text-yellow-500" />
+                  <ShareIcon className="h-6 w-6 hover:text-yellow-600" />
                 }
                 onClick={() => {
                   handleShare().catch((e) => console.error(e));
@@ -245,9 +232,9 @@ export default function DisplayProductModal({
                 <>
                   <Button
                     type="submit"
-                    className={SHOPSTRBUTTONCLASSNAMES}
+                    className={BLACKBUTTONCLASSNAMES}
                     startContent={
-                      <PencilSquareIcon className="h-6 w-6 hover:text-yellow-500" />
+                      <PencilSquareIcon className="h-6 w-6 hover:text-yellow-600" />
                     }
                     onClick={handleEditToggle}
                     isDisabled={deleteLoading}
@@ -262,7 +249,7 @@ export default function DisplayProductModal({
                     <Button
                       className="min-w-fit bg-gradient-to-tr from-red-600 via-red-500 to-red-600 text-white shadow-lg"
                       startContent={
-                        <TrashIcon className="h-6 w-6 hover:text-yellow-500" />
+                        <TrashIcon className="h-6 w-6 hover:text-yellow-600" />
                       }
                       isDisabled={deleteLoading}
                       isLoading={deleteLoading}

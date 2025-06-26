@@ -13,20 +13,17 @@ import {
   ModalFooter,
   Button,
   Textarea,
-  Radio,
-  RadioGroup,
 } from "@nextui-org/react";
 import { Relay } from "nostr-tools";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { BLACKBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   createBlossomServerEvent,
   createNostrRelayEvent,
   getLocalStorageData,
   publishWalletEvent,
 } from "@/utils/nostr/nostr-helper-functions";
-import { useTheme } from "next-themes";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
-import ShopstrSlider from "../../components/utility-components/shopstr-slider";
+import MilkMarketSlider from "../../components/utility-components/mm-slider";
 import FailureModal from "../../components/utility-components/failure-modal";
 import {
   NostrContext,
@@ -80,8 +77,6 @@ const PreferencesPage = () => {
       localStorage.setItem("blossomServers", JSON.stringify(blossomServers));
     }
   }, [blossomServers]);
-
-  const { theme, setTheme } = useTheme();
 
   const {
     handleSubmit: handleMintSubmit,
@@ -260,35 +255,33 @@ const PreferencesPage = () => {
 
   return (
     <>
-      <div className="flex min-h-screen flex-col bg-light-bg pb-6 pt-24 dark:bg-dark-bg">
+      <div className="flex min-h-screen flex-col bg-light-bg pb-6 pt-24">
         <div className="mx-auto px-4">
           <SettingsBreadCrumbs />
-          <span className="my-4 flex  text-2xl font-bold text-light-text dark:text-dark-text">
+          <span className="my-4 flex  text-2xl font-bold text-light-text">
             Mint
           </span>
 
           <div>
             {mints.length === 0 && (
               <div className="mt-8 flex items-center justify-center">
-                <p className="text-liht-text break-words text-center text-xl dark:text-dark-text">
+                <p className="text-liht-text break-words text-center text-xl">
                   No mint added . . .
                 </p>
               </div>
             )}
-            <div className="mt-4 max-h-96 overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
+            <div className="mt-4 max-h-96 overflow-y-scroll rounded-md bg-light-bg">
               {mints.map((mint, index) => (
                 <div
                   key={mint}
                   className={`mb-2 flex items-center justify-between rounded-md border-2 ${
-                    index === 0
-                      ? "relative border-purple-500 dark:border-yellow-500"
-                      : "border-light-fg dark:border-dark-fg"
+                    index === 0 ? "border-yellow-700" : "border-dark-fg"
                   } px-3 py-2`}
                 >
-                  <div className="max-w-xsm break-all text-light-text dark:text-dark-text ">
+                  <div className="max-w-xsm break-all text-light-text">
                     {mint}
                     {index === 0 && (
-                      <span className="bg-light-bg px-3 text-xs text-gray-500 dark:bg-dark-bg">
+                      <span className="bg-light-bg px-3 text-xs text-gray-500">
                         Active Mint
                       </span>
                     )}
@@ -304,8 +297,8 @@ const PreferencesPage = () => {
             </div>
             {mints.length > 0 && (
               <div className="mx-4 my-4 flex items-center justify-center text-center">
-                <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-                <p className="ml-2 text-sm text-light-text dark:text-dark-text">
+                <InformationCircleIcon className="h-6 w-6 text-light-text" />
+                <p className="ml-2 text-sm text-light-text">
                   This mint is used to handle{" "}
                   <Link href="https://cashu.space" passHref legacyBehavior>
                     <a
@@ -322,9 +315,9 @@ const PreferencesPage = () => {
               </div>
             )}
 
-            <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+            <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px]">
               <Button
-                className={SHOPSTRBUTTONCLASSNAMES}
+                className={BLACKBUTTONCLASSNAMES}
                 onClick={handleToggleMintModal}
               >
                 Change Active Mint
@@ -337,7 +330,6 @@ const PreferencesPage = () => {
               classNames={{
                 body: "py-6",
                 backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-                // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
                 header: "border-b-[1px] border-[#292f46]",
                 footer: "border-t-[1px] border-[#292f46]",
                 closeButton: "hover:bg-black/5 active:bg-white/10",
@@ -346,7 +338,7 @@ const PreferencesPage = () => {
               size="2xl"
             >
               <ModalContent>
-                <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+                <ModalHeader className="flex flex-col gap-1 text-light-text">
                   Change Active Mint
                 </ModalHeader>
                 <form onSubmit={handleMintSubmit(onMintSubmit)}>
@@ -374,7 +366,7 @@ const PreferencesPage = () => {
                           : "";
                         return (
                           <Textarea
-                            className="text-light-text dark:text-dark-text"
+                            className="text-light-text"
                             variant="bordered"
                             fullWidth={true}
                             placeholder="https://..."
@@ -405,7 +397,7 @@ const PreferencesPage = () => {
                       Cancel
                     </Button>
 
-                    <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                    <Button className={BLACKBUTTONCLASSNAMES} type="submit">
                       Change Mint
                     </Button>
                   </ModalFooter>
@@ -414,24 +406,24 @@ const PreferencesPage = () => {
             </Modal>
           </div>
 
-          <span className="mt-4 flex text-2xl font-bold text-light-text dark:text-dark-text">
+          <span className="mt-4 flex text-2xl font-bold text-light-text">
             Read/Write Relays
           </span>
 
           {relays.length === 0 && (
             <div className="mt-4 flex items-center justify-center">
-              <p className="break-words text-center text-xl text-light-text dark:text-dark-text">
+              <p className="break-words text-center text-xl text-light-text">
                 No relays added . . .
               </p>
             </div>
           )}
-          <div className="mt-4 max-h-96 overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
+          <div className="mt-4 max-h-96 overflow-y-scroll rounded-md bg-light-bg">
             {relays.map((relay) => (
               <div
                 key={relay}
-                className="mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg"
+                className="mb-2 flex items-center justify-between rounded-md border-2 border-dark-fg px-3 py-2"
               >
-                <div className="max-w-xsm break-all text-light-text dark:text-dark-text ">
+                <div className="max-w-xsm break-all text-light-text">
                   {relay}
                 </div>
                 {relays.length > 1 && (
@@ -443,16 +435,16 @@ const PreferencesPage = () => {
               </div>
             ))}
           </div>
-          <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+          <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px]">
             <Button
-              className={SHOPSTRBUTTONCLASSNAMES}
+              className={BLACKBUTTONCLASSNAMES}
               onClick={() => handleToggleRelayModal("all")}
             >
               Add Relay
             </Button>
             {relaysAreChanged && (
               <Button
-                className={SHOPSTRBUTTONCLASSNAMES}
+                className={BLACKBUTTONCLASSNAMES}
                 onClick={() => publishRelays()}
               >
                 Save
@@ -466,7 +458,6 @@ const PreferencesPage = () => {
             classNames={{
               body: "py-6",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-              // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
               header: "border-b-[1px] border-[#292f46]",
               footer: "border-t-[1px] border-[#292f46]",
               closeButton: "hover:bg-black/5 active:bg-white/10",
@@ -475,7 +466,7 @@ const PreferencesPage = () => {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+              <ModalHeader className="flex flex-col gap-1 text-light-text">
                 Add Relay
               </ModalHeader>
               <form onSubmit={handleRelaySubmit(onRelaySubmit)}>
@@ -503,7 +494,7 @@ const PreferencesPage = () => {
                         : "";
                       return (
                         <Textarea
-                          className="text-light-text dark:text-dark-text"
+                          className="text-light-text"
                           variant="bordered"
                           fullWidth={true}
                           placeholder="wss://..."
@@ -534,7 +525,7 @@ const PreferencesPage = () => {
                     Cancel
                   </Button>
 
-                  <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                  <Button className={BLACKBUTTONCLASSNAMES} type="submit">
                     Add Relay
                   </Button>
                 </ModalFooter>
@@ -542,24 +533,24 @@ const PreferencesPage = () => {
             </ModalContent>
           </Modal>
 
-          <span className="mt-4 flex text-2xl font-bold text-light-text dark:text-dark-text">
+          <span className="mt-4 flex text-2xl font-bold text-light-text">
             Read Only Relays
           </span>
 
           {readRelays.length === 0 && (
             <div className="mt-4 flex items-center justify-center">
-              <p className="break-words text-center text-xl dark:text-dark-text">
+              <p className="break-words text-center text-xl">
                 No relays added . . .
               </p>
             </div>
           )}
-          <div className="mt-4 max-h-96 overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
+          <div className="mt-4 max-h-96 overflow-y-scroll rounded-md bg-light-bg">
             {readRelays.map((relay) => (
               <div
                 key={relay}
-                className="mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg"
+                className="mb-2 flex items-center justify-between rounded-md border-2 border-dark-fg px-3 py-2"
               >
-                <div className="max-w-xsm break-all text-light-text dark:text-dark-text ">
+                <div className="max-w-xsm break-all text-light-text">
                   {relay}
                 </div>
                 {readRelays.length > 1 && (
@@ -571,17 +562,17 @@ const PreferencesPage = () => {
               </div>
             ))}
           </div>
-          <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+          <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px]">
             <Button
-              className={SHOPSTRBUTTONCLASSNAMES}
+              className={BLACKBUTTONCLASSNAMES}
               onClick={() => handleToggleRelayModal("read")}
             >
               Add Relay
             </Button>
             {relaysAreChanged && (
-              <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+              <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px]">
                 <Button
-                  className={SHOPSTRBUTTONCLASSNAMES}
+                  className={BLACKBUTTONCLASSNAMES}
                   onClick={() => publishRelays()}
                 >
                   Save
@@ -596,7 +587,6 @@ const PreferencesPage = () => {
             classNames={{
               body: "py-6",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-              // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
               header: "border-b-[1px] border-[#292f46]",
               footer: "border-t-[1px] border-[#292f46]",
               closeButton: "hover:bg-black/5 active:bg-white/10",
@@ -605,7 +595,7 @@ const PreferencesPage = () => {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+              <ModalHeader className="flex flex-col gap-1 text-light-text">
                 Add Relay
               </ModalHeader>
               <form onSubmit={handleRelaySubmit(onRelaySubmit)}>
@@ -633,7 +623,7 @@ const PreferencesPage = () => {
                         : "";
                       return (
                         <Textarea
-                          className="text-light-text dark:text-dark-text"
+                          className="text-light-text"
                           variant="bordered"
                           fullWidth={true}
                           placeholder="wss://..."
@@ -664,7 +654,7 @@ const PreferencesPage = () => {
                     Cancel
                   </Button>
 
-                  <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                  <Button className={BLACKBUTTONCLASSNAMES} type="submit">
                     Add Relay
                   </Button>
                 </ModalFooter>
@@ -672,24 +662,24 @@ const PreferencesPage = () => {
             </ModalContent>
           </Modal>
 
-          <span className="mt-4 flex text-2xl font-bold text-light-text dark:text-dark-text">
+          <span className="mt-4 flex text-2xl font-bold text-light-text">
             Write Only Relays
           </span>
 
           {writeRelays.length === 0 && (
             <div className="mt-4 flex items-center justify-center">
-              <p className="break-words text-center text-xl dark:text-dark-text">
+              <p className="break-words text-center text-xl text-light-text">
                 No relays added . . .
               </p>
             </div>
           )}
-          <div className="mt-4 max-h-96 overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
+          <div className="mt-4 max-h-96 overflow-y-scroll rounded-md bg-light-bg">
             {writeRelays.map((relay) => (
               <div
                 key={relay}
-                className="mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg"
+                className="mb-2 flex items-center justify-between rounded-md border-2 border-dark-fg px-3 py-2"
               >
-                <div className="max-w-xsm break-all text-light-text dark:text-dark-text ">
+                <div className="max-w-xsm break-all text-light-text">
                   {relay}
                 </div>
                 {writeRelays.length > 1 && (
@@ -701,17 +691,17 @@ const PreferencesPage = () => {
               </div>
             ))}
           </div>
-          <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+          <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px]">
             <Button
-              className={SHOPSTRBUTTONCLASSNAMES}
+              className={BLACKBUTTONCLASSNAMES}
               onClick={() => handleToggleRelayModal("write")}
             >
               Add Relay
             </Button>
             {relaysAreChanged && (
-              <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+              <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px]">
                 <Button
-                  className={SHOPSTRBUTTONCLASSNAMES}
+                  className={BLACKBUTTONCLASSNAMES}
                   onClick={() => publishRelays()}
                 >
                   Save
@@ -726,7 +716,6 @@ const PreferencesPage = () => {
             classNames={{
               body: "py-6",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-              // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
               header: "border-b-[1px] border-[#292f46]",
               footer: "border-t-[1px] border-[#292f46]",
               closeButton: "hover:bg-black/5 active:bg-white/10",
@@ -735,7 +724,7 @@ const PreferencesPage = () => {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+              <ModalHeader className="flex flex-col gap-1 text-light-text">
                 Add Relay
               </ModalHeader>
               <form onSubmit={handleRelaySubmit(onRelaySubmit)}>
@@ -763,7 +752,7 @@ const PreferencesPage = () => {
                         : "";
                       return (
                         <Textarea
-                          className="text-light-text dark:text-dark-text"
+                          className="text-light-text"
                           variant="bordered"
                           fullWidth={true}
                           placeholder="wss://..."
@@ -794,7 +783,7 @@ const PreferencesPage = () => {
                     Cancel
                   </Button>
 
-                  <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                  <Button className={BLACKBUTTONCLASSNAMES} type="submit">
                     Add Relay
                   </Button>
                 </ModalFooter>
@@ -802,31 +791,29 @@ const PreferencesPage = () => {
             </ModalContent>
           </Modal>
 
-          <span className="mt-4 flex text-2xl font-bold text-light-text dark:text-dark-text">
+          <span className="mt-4 flex text-2xl font-bold text-light-text">
             Blossom Media Servers
           </span>
 
           {blossomServers.length === 0 && (
             <div className="mt-4 flex items-center justify-center">
-              <p className="break-words text-center text-xl dark:text-dark-text">
+              <p className="break-words text-center text-xl text-light-text">
                 No servers added . . .
               </p>
             </div>
           )}
-          <div className="mt-4 max-h-96 overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
+          <div className="mt-4 max-h-96 overflow-y-scroll rounded-md bg-light-bg">
             {blossomServers.map((server, index) => (
               <div
                 key={server}
                 className={`mb-2 flex items-center justify-between rounded-md border-2 ${
-                  index === 0
-                    ? "relative border-purple-500 dark:border-yellow-500"
-                    : "border-light-fg dark:border-dark-fg"
+                  index === 0 ? "border-yellow-700" : "border-dark-fg"
                 } px-3 py-2`}
               >
-                <div className="max-w-xsm break-all text-light-text dark:text-dark-text ">
+                <div className="max-w-xsm break-all text-light-text">
                   {server}
                   {index === 0 && (
-                    <span className="bg-light-bg px-3 text-xs text-gray-500 dark:bg-dark-bg">
+                    <span className="bg-light-bg px-3 text-xs text-gray-500">
                       Primary Server
                     </span>
                   )}
@@ -840,17 +827,17 @@ const PreferencesPage = () => {
               </div>
             ))}
           </div>
-          <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+          <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px]">
             <Button
-              className={SHOPSTRBUTTONCLASSNAMES}
+              className={BLACKBUTTONCLASSNAMES}
               onClick={() => handleToggleBlossomServerModal()}
             >
               Add Server
             </Button>
             {blossomServersAreChanged && (
-              <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+              <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px]">
                 <Button
-                  className={SHOPSTRBUTTONCLASSNAMES}
+                  className={BLACKBUTTONCLASSNAMES}
                   onClick={() => publishBlossomServers()}
                 >
                   Save
@@ -865,7 +852,6 @@ const PreferencesPage = () => {
             classNames={{
               body: "py-6",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-              // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
               header: "border-b-[1px] border-[#292f46]",
               footer: "border-t-[1px] border-[#292f46]",
               closeButton: "hover:bg-black/5 active:bg-white/10",
@@ -874,7 +860,7 @@ const PreferencesPage = () => {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+              <ModalHeader className="flex flex-col gap-1 text-light-text">
                 Add Server
               </ModalHeader>
               <form onSubmit={handleBlossomSubmit(onBlossomSubmit)}>
@@ -902,7 +888,7 @@ const PreferencesPage = () => {
                         : "";
                       return (
                         <Textarea
-                          className="text-light-text dark:text-dark-text"
+                          className="text-light-text"
                           variant="bordered"
                           fullWidth={true}
                           placeholder="https://..."
@@ -933,7 +919,7 @@ const PreferencesPage = () => {
                     Cancel
                   </Button>
 
-                  <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                  <Button className={BLACKBUTTONCLASSNAMES} type="submit">
                     Add Server
                   </Button>
                 </ModalFooter>
@@ -941,50 +927,22 @@ const PreferencesPage = () => {
             </ModalContent>
           </Modal>
 
-          <span className="my-4 flex  text-2xl font-bold text-light-text dark:text-dark-text">
+          <span className="my-4 flex  text-2xl font-bold text-light-text">
             Web of Trust
           </span>
 
           {isLoaded && (
             <>
-              <ShopstrSlider />
+              <MilkMarketSlider />
             </>
           )}
 
           <div className="mx-4 my-4 flex items-center justify-center text-center">
-            <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-            <p className="ml-2 text-sm text-light-text dark:text-dark-text">
+            <InformationCircleIcon className="h-6 w-6 text-light-text" />
+            <p className="ml-2 text-sm text-light-text">
               This filters for listings from friends and friends of friends.
             </p>
           </div>
-
-          <span className="my-4 flex text-2xl font-bold text-light-text dark:text-dark-text">
-            Theme
-          </span>
-          {isLoaded && (
-            <RadioGroup
-              className="ml-2"
-              label="Select your prefered theme:"
-              orientation={"horizontal"}
-              defaultValue={
-                (localStorage.getItem("theme") as string) || theme || "system"
-              }
-              onChange={(e) => {
-                localStorage.setItem("theme", e.target.value);
-                setTheme(e.target.value);
-              }}
-            >
-              <Radio value="system" className="mr-4">
-                System
-              </Radio>
-              <Radio value="light" className="mx-4">
-                Light
-              </Radio>
-              <Radio value="dark" className="mx-4">
-                Dark
-              </Radio>
-            </RadioGroup>
-          )}
         </div>
       </div>
       <FailureModal

@@ -11,14 +11,17 @@ import {
   SelectItem,
 } from "@nextui-org/react";
 import { ProfileMapContext } from "@/utils/context/context";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import {
+  BLACKBUTTONCLASSNAMES,
+  WHITEBUTTONCLASSNAMES,
+} from "@/utils/STATIC-VARIABLES";
 import {
   SignerContext,
   NostrContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { createNostrProfileEvent } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
-import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
+import MilkMarketSpinner from "@/components/utility-components/mm-spinner";
 
 interface UserProfileFormProps {
   isOnboarding?: boolean;
@@ -90,13 +93,13 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   };
 
   if (isFetchingProfile) {
-    return <ShopstrSpinner />;
+    return <MilkMarketSpinner />;
   }
 
   return (
     <>
-      <div className="mb-20 h-40 rounded-lg bg-light-fg dark:bg-dark-fg">
-        <div className="relative flex h-40 items-center justify-center rounded-lg bg-shopstr-purple-light dark:bg-dark-fg">
+      <div className="mb-20 h-40 rounded-lg bg-dark-fg">
+        <div className="relative flex h-40 items-center justify-center rounded-lg bg-light-bg">
           {watchBanner && (
             <Image
               alt={"User banner image"}
@@ -105,7 +108,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             />
           )}
           <FileUploaderButton
-            className={`absolute bottom-5 right-5 z-20 border-2 border-white bg-shopstr-purple shadow-md ${SHOPSTRBUTTONCLASSNAMES}`}
+            className={`absolute bottom-5 right-5 z-20 border-2 border-white shadow-md ${BLACKBUTTONCLASSNAMES}`}
             imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
           >
             Upload Banner
@@ -116,7 +119,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             <div className="">
               <FileUploaderButton
                 isIconOnly
-                className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
+                className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${BLACKBUTTONCLASSNAMES}`}
                 imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
               />
               {watchPicture ? (
@@ -149,9 +152,9 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
-                className="pb-4 text-light-text dark:text-dark-text"
+                className="pb-4 text-dark-text"
                 classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
+                  label: "text-light-text text-lg",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -179,9 +182,9 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
-                className="pb-4 text-light-text dark:text-dark-text"
+                className="pb-4 text-dark-text"
                 classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
+                  label: "text-light-text text-lg",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -209,9 +212,9 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Textarea
-                className="pb-4 text-light-text dark:text-dark-text"
+                className="pb-4 text-dark-text"
                 classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
+                  label: "text-light-text text-lg",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -239,9 +242,9 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
-                className="pb-4 text-light-text dark:text-dark-text"
+                className="pb-4 text-dark-text"
                 classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
+                  label: "text-light-text text-lg",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -269,9 +272,9 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
-                className="pb-4 text-light-text dark:text-dark-text"
+                className="pb-4 text-dark-text"
                 classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
+                  label: "text-light-text text-lg",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -299,9 +302,9 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
-                className="pb-4 text-light-text dark:text-dark-text"
+                className="pb-4 text-dark-text"
                 classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
+                  label: "text-light-text text-lg",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -323,9 +326,9 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
           control={control}
           render={({ field: { onChange, onBlur, value } }) => (
             <Select
-              className="pb-4 text-light-text dark:text-dark-text"
+              className="pb-4 text-dark-text"
               classNames={{
-                label: "text-light-text dark:text-dark-text text-lg",
+                label: "text-light-text text-lg",
               }}
               variant="bordered"
               fullWidth={true}
@@ -335,17 +338,13 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               onChange={(e) => onChange(e.target.value)}
               onBlur={onBlur}
             >
-              <SelectItem
-                key="ecash"
-                value="ecash"
-                className="text-light-text dark:text-dark-text"
-              >
+              <SelectItem key="ecash" value="ecash" className="text-dark-text">
                 Cashu
               </SelectItem>
               <SelectItem
                 key="lightning"
                 value="lightning"
-                className="text-light-text dark:text-dark-text"
+                className="text-dark-text"
               >
                 Lightning
               </SelectItem>
@@ -364,9 +363,9 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
                 : [];
             return (
               <Select
-                className="pb-4 text-light-text dark:text-dark-text"
+                className="pb-4 text-dark-text"
                 classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
+                  label: "text-dark-text text-lg",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -391,52 +390,48 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
                   </div>
                 )}
               >
-                <SelectItem
-                  key="cash"
-                  value="cash"
-                  className="text-light-text dark:text-dark-text"
-                >
+                <SelectItem key="cash" value="cash" className="text-dark-text">
                   Cash
                 </SelectItem>
                 <SelectItem
                   key="venmo"
                   value="venmo"
-                  className="text-light-text dark:text-dark-text"
+                  className="text-dark-text"
                 >
                   Venmo
                 </SelectItem>
                 <SelectItem
                   key="zelle"
                   value="zelle"
-                  className="text-light-text dark:text-dark-text"
+                  className="text-dark-text"
                 >
                   Zelle
                 </SelectItem>
                 <SelectItem
                   key="cashapp"
                   value="cashapp"
-                  className="text-light-text dark:text-dark-text"
+                  className="text-dark-text"
                 >
                   Cash App
                 </SelectItem>
                 <SelectItem
                   key="applepay"
                   value="applepay"
-                  className="text-light-text dark:text-dark-text"
+                  className="text-dark-text"
                 >
                   Apple Pay
                 </SelectItem>
                 <SelectItem
                   key="googlepay"
                   value="googlepay"
-                  className="text-light-text dark:text-dark-text"
+                  className="text-dark-text"
                 >
                   Google Pay
                 </SelectItem>
                 <SelectItem
                   key="paypal"
                   value="paypal"
-                  className="text-light-text dark:text-dark-text"
+                  className="text-dark-text"
                 >
                   PayPal
                 </SelectItem>
@@ -454,13 +449,13 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               min={0}
               max={100}
               step={0.1}
-              className="pb-4 text-light-text dark:text-dark-text"
+              className="pb-4 text-dark-text"
               classNames={{
-                label: "text-light-text dark:text-dark-text text-lg",
+                label: "text-light-text text-lg",
               }}
               variant="bordered"
               fullWidth
-              label="Shopstr donation (%)"
+              label="Milk Market donation (%)"
               labelPlacement="outside"
               onChange={onChange}
               onBlur={onBlur}
@@ -470,7 +465,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
         />
 
         <Button
-          className={`mb-10 w-full ${SHOPSTRBUTTONCLASSNAMES}`}
+          className={`mb-10 w-full ${WHITEBUTTONCLASSNAMES}`}
           type="submit"
           onKeyDown={(e) => {
             if (e.key === "Enter") {

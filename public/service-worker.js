@@ -1,12 +1,10 @@
-const CACHE_NAME = "shopstr-cache-v1";
+const CACHE_NAME = "milk-market-cache-v1";
 
 const STATIC_ASSETS = [
   "/",
-  "/shopstr.ico",
+  "/milk-market.ico",
   "/manifest.json",
-  "/shopstr-144x144.png",
-  "/shopstr-512x512.png",
-  "/shopstr-2000x2000.png",
+  "/milk-market.png",
 ];
 
 // Install event - cache static assets
@@ -79,7 +77,7 @@ self.addEventListener("push", function (event) {
     event.waitUntil(
       self.registration.showNotification(data.title, {
         body: data.message,
-        icon: "/shopstr-144x144.png",
+        icon: "/milk-market.png",
         data: {
           url: data.url ?? "/",
         },

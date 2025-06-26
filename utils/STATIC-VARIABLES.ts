@@ -1,27 +1,10 @@
 export const CATEGORIES = [
-  "Digital",
-  "Physical",
-  "Services",
-  "Resale",
-  "Exchange",
-  "Swap",
-  "Clothing",
-  "Shoes",
-  "Accessories",
-  "Electronics",
-  "Collectibles",
-  "Entertainment",
-  "Books",
   "Pets",
-  "Sports",
-  "Tickets",
+  "Health",
   "Fitness",
-  "Art",
-  "Crafts",
-  "Home",
-  "Office",
   "Food",
-  "Miscellaneous",
+  "Milk",
+  "Dairy",
 ];
 
 export type ShippingOptionsType =
@@ -39,8 +22,11 @@ export const SHIPPING_OPTIONS = [
   "Added Cost", // you are going to charge for shipping
 ];
 
-export const SHOPSTRBUTTONCLASSNAMES =
-  "text-dark-text dark:text-light-text shadow-lg bg-gradient-to-tr from-shopstr-purple via-shopstr-purple-light to-shopstr-purple min-w-fit dark:from-shopstr-yellow dark:via-shopstr-yellow-light dark:to-shopstr-yellow";
+export const BLACKBUTTONCLASSNAMES =
+  "text-dark-text shadow-lg bg-gradient-to-tr min-w-fit from-dark-bg via-dark-fg to-dark-bg";
+
+export const WHITEBUTTONCLASSNAMES =
+  "text-light-text shadow-lg bg-light-bg min-w-fit";
 
 export const PREVNEXTBUTTONSTYLES =
-  "absolute z-10 top-1/2 transform -translate-y-1/2 p-2 bg-white dark:bg-neutral-800 bg-opacity-60 rounded-full shadow-md hover:bg-opacity-90 transition duration-200";
+  "absolute z-10 top-1/2 transform -translate-y-1/2 p-2 bg-neutral-800 bg-opacity-60 rounded-full shadow-md hover:bg-opacity-90 transition duration-200";

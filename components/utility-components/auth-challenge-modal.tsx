@@ -7,7 +7,7 @@ import {
   ModalFooter,
   Button,
 } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { BLACKBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { useRouter } from "next/router";
 
 function sanitizeURL(s: string) {
@@ -56,7 +56,6 @@ export default function AuthChallengeModal({
       classNames={{
         body: "py-6",
         backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-        // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
         header: "border-b-[1px] border-[#292f46]",
         footer: "border-t-[1px] border-[#292f46]",
         closeButton: "hover:bg-black/5 active:bg-white/10",
@@ -66,11 +65,11 @@ export default function AuthChallengeModal({
       isDismissable={false}
     >
       <ModalContent>
-        <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+        <ModalHeader className="flex flex-col gap-1 text-dark-text">
           Waiting for confirmation
         </ModalHeader>
         <ModalBody>
-          <div className="text-light-text dark:text-dark-text">
+          <div className="text-dark-text">
             {challengeUrl
               ? "Please confirm this action on your remote signer"
               : challenge}
@@ -88,8 +87,7 @@ export default function AuthChallengeModal({
           {challengeUrl && (
             <Button
               className={
-                "bg-gradient-to-tr text-white shadow-lg" +
-                SHOPSTRBUTTONCLASSNAMES
+                "bg-gradient-to-tr text-white shadow-lg" + BLACKBUTTONCLASSNAMES
               }
               type="submit"
               onClick={() => {

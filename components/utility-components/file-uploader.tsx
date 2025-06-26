@@ -260,7 +260,7 @@ export const FileUploaderButton = ({
         onDrop={handleDrop}
         className={`relative w-full duration-300 transition-all ${
           isPlaceholder
-            ? "flex h-full min-h-[250px] items-center justify-center rounded-xl border-2 border-dashed border-shopstr-purple p-6 dark:border-shopstr-yellow"
+            ? "flex h-full min-h-[250px] items-center justify-center rounded-xl border-2 border-dashed border-dark-text p-6"
             : !isDragging && "border-2 border-dashed border-transparent"
         }`}
       >
@@ -278,12 +278,12 @@ export const FileUploaderButton = ({
               animate={{ scale: [1, 1.1, 1] }}
               transition={{ duration: 0.8, repeat: Infinity }}
             >
-              <PhotoIcon className="mb-4 h-16 w-16 text-shopstr-purple dark:text-shopstr-yellow" />
+              <PhotoIcon className="mb-4 h-16 w-16 text-dark-text" />
             </motion.div>
-            <p className="text-xl font-semibold text-light-text dark:text-dark-text">
+            <p className="text-xl font-semibold text-dark-text">
               {isDragging ? "Drop to upload" : "Drag & Drop Images Here"}
             </p>
-            <p className="mt-1 text-center text-sm text-light-text dark:text-dark-text">
+            <p className="mt-1 text-center text-sm text-dark-text">
               {isPlaceholder && !isDragging
                 ? "Or click below to select files"
                 : "Supports JPEG, PNG, WebP"}
@@ -351,7 +351,7 @@ export const FileUploaderButton = ({
                 Uploading {previews.length} image
                 {previews.length > 1 ? "s" : ""}
               </span>
-              <span className="text-sm font-medium text-shopstr-purple dark:text-shopstr-yellow">
+              <span className="text-sm font-medium text-yellow-600">
                 {progress}%
               </span>
             </div>

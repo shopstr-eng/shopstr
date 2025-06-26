@@ -13,7 +13,7 @@ import {
   UseFormHandleSubmit,
   FieldValues,
 } from "react-hook-form";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { WHITEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import CountryDropdown from "./utility-components/dropdowns/country-dropdown";
 
 export default function ShippingForm({
@@ -39,7 +39,6 @@ export default function ShippingForm({
       classNames={{
         body: "py-6",
         backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-        // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
         header: "border-b-[1px] border-[#292f46]",
         footer: "border-t-[1px] border-[#292f46]",
         closeButton: "hover:bg-black/5 active:bg-white/10",
@@ -48,7 +47,7 @@ export default function ShippingForm({
       size="2xl"
     >
       <ModalContent>
-        <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+        <ModalHeader className="flex flex-col gap-1 text-dark-text">
           Enter Shipping Info
         </ModalHeader>
         <form onSubmit={handleShippingSubmit(onShippingSubmit)}>
@@ -73,7 +72,7 @@ export default function ShippingForm({
                   : "";
                 return (
                   <Input
-                    className="text-light-text dark:text-dark-text"
+                    className="text-dark-text"
                     autoFocus
                     variant="bordered"
                     fullWidth={true}
@@ -110,7 +109,7 @@ export default function ShippingForm({
                   : "";
                 return (
                   <Input
-                    className="text-light-text dark:text-dark-text"
+                    className="text-dark-text"
                     autoFocus
                     variant="bordered"
                     fullWidth={true}
@@ -146,7 +145,7 @@ export default function ShippingForm({
                   : "";
                 return (
                   <Input
-                    className="text-light-text dark:text-dark-text"
+                    className="text-dark-text"
                     autoFocus
                     variant="bordered"
                     fullWidth={true}
@@ -183,7 +182,7 @@ export default function ShippingForm({
                   : "";
                 return (
                   <Input
-                    className="text-light-text dark:text-dark-text"
+                    className="text-dark-text"
                     autoFocus
                     variant="bordered"
                     fullWidth={true}
@@ -216,7 +215,7 @@ export default function ShippingForm({
                   : "";
                 return (
                   <Input
-                    className="text-light-text dark:text-dark-text"
+                    className="text-dark-text"
                     autoFocus
                     variant="bordered"
                     fullWidth={true}
@@ -253,7 +252,7 @@ export default function ShippingForm({
                   : "";
                 return (
                   <Input
-                    className="text-light-text dark:text-dark-text"
+                    className="text-dark-text"
                     autoFocus
                     variant="bordered"
                     fullWidth={true}
@@ -319,7 +318,7 @@ export default function ShippingForm({
                     : "";
                   return (
                     <Input
-                      className="text-light-text dark:text-dark-text"
+                      className="text-dark-text"
                       autoFocus
                       variant="bordered"
                       fullWidth={true}
@@ -347,7 +346,7 @@ export default function ShippingForm({
               Cancel
             </Button>
 
-            <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+            <Button className={WHITEBUTTONCLASSNAMES} type="submit">
               Submit
             </Button>
           </ModalFooter>

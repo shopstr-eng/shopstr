@@ -102,14 +102,14 @@ const Wallet = () => {
 
   return (
     <>
-      <div className="flex min-h-screen flex-col bg-light-bg px-4 pt-[8rem] dark:bg-dark-bg">
+      <div className="flex min-h-screen flex-col bg-light-bg px-4 pt-[8rem]">
         <div className="mx-auto w-full max-w-3xl">
-          <div className="mb-8 rounded-lg bg-white p-6 shadow-md dark:bg-gray-800">
-            <h1 className="mb-2 text-center text-6xl font-bold text-light-text dark:text-dark-text">
+          <div className="mb-8 rounded-lg bg-dark-fg p-6 shadow-md">
+            <h1 className="mb-2 text-center text-6xl font-bold text-dark-text">
               {totalBalance} sats
             </h1>
             <p
-              className="mb-4 cursor-pointer break-words text-center text-sm italic text-gray-500 transition-colors hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300"
+              className="mb-4 cursor-pointer break-words text-center text-sm italic text-gray-400 transition-colors hover:text-gray-300"
               onClick={handleMintClick}
             >
               {mint}: {walletBalance} sats

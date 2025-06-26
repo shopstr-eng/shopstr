@@ -1,8 +1,7 @@
 import { Switch } from "@nextui-org/react";
 import { useRouter } from "next/router";
-import { useTheme } from "next-themes";
 
-const ShopstrSwitch = ({
+const MilkMarketSwitch = ({
   wotFilter,
   setWotFilter,
 }: {
@@ -10,7 +9,6 @@ const ShopstrSwitch = ({
   setWotFilter: (value: boolean) => void;
 }) => {
   const router = useRouter();
-  const { theme } = useTheme();
 
   const handleTrustClick = () => {
     router.push("/settings/preferences");
@@ -20,14 +18,14 @@ const ShopstrSwitch = ({
     <div className="flex items-center p-2">
       <Switch
         size={"lg"}
-        color={theme === "dark" ? "warning" : "secondary"}
+        color={"warning"}
         onClick={() => {
           setWotFilter(!wotFilter);
         }}
       />
       <span>
         <p
-          className="text-light-text hover:underline dark:text-dark-text"
+          className="text-light-text hover:underline"
           onClick={handleTrustClick}
         >
           Trust
@@ -37,4 +35,4 @@ const ShopstrSwitch = ({
   );
 };
 
-export default ShopstrSwitch;
+export default MilkMarketSwitch;

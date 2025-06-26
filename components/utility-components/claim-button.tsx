@@ -13,7 +13,6 @@ import {
   CheckCircleIcon,
   XCircleIcon,
 } from "@heroicons/react/24/outline";
-import { useTheme } from "next-themes";
 import { ProfileMapContext, ChatsContext } from "../../utils/context/context";
 import {
   generateKeys,
@@ -25,7 +24,10 @@ import {
   sendGiftWrappedMessageEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import { addChatMessagesToCache } from "@/utils/nostr/cache-service";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import {
+  BLACKBUTTONCLASSNAMES,
+  WHITEBUTTONCLASSNAMES,
+} from "@/utils/STATIC-VARIABLES";
 import { LightningAddress } from "@getalby/lightning-tools";
 import { nip19 } from "nostr-tools";
 import {
@@ -66,8 +68,6 @@ export default function ClaimButton({ token }: { token: string }) {
   const [isDuplicateToken, setIsDuplicateToken] = useState(false);
 
   const { mints, tokens, history } = getLocalStorageData();
-
-  const { theme } = useTheme();
 
   const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
   const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
@@ -314,7 +314,7 @@ export default function ClaimButton({ token }: { token: string }) {
   const buttonClassName = useMemo(() => {
     const disabledStyle =
       "min-w-fit from-gray-300 to-gray-400 cursor-not-allowed";
-    const enabledStyle = SHOPSTRBUTTONCLASSNAMES;
+    const enabledStyle = BLACKBUTTONCLASSNAMES;
     const className = isRedeemed ? disabledStyle : enabledStyle;
     return className;
   }, [isRedeemed]);
@@ -328,11 +328,7 @@ export default function ClaimButton({ token }: { token: string }) {
       >
         {isRedeeming ? (
           <>
-            {theme === "dark" ? (
-              <Spinner size={"sm"} color="warning" />
-            ) : (
-              <Spinner size={"sm"} color="secondary" />
-            )}
+            <Spinner size={"sm"} color="warning" />
           </>
         ) : isRedeemed ? (
           <>Claimed: {formattedTokenAmount}</>
@@ -344,7 +340,6 @@ export default function ClaimButton({ token }: { token: string }) {
         backdrop="blur"
         isOpen={openClaimTypeModal}
         onClose={() => setOpenClaimTypeModal(false)}
-        // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
         classNames={{
           body: "py-6 ",
           backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -358,26 +353,26 @@ export default function ClaimButton({ token }: { token: string }) {
         size="2xl"
       >
         <ModalContent>
-          <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+          <ModalBody className="flex flex-col overflow-hidden text-dark-text">
             <div className="flex items-center justify-center">
-              Would you like to claim the token directly to your Shopstr wallet,
-              or to your Lightning address?
+              Would you like to receive the token directly to your Milk Market
+              wallet, or redeem it to your Lightning address?
             </div>
             <div className="flex w-full flex-wrap justify-evenly gap-2">
               <Button
-                className={SHOPSTRBUTTONCLASSNAMES + " mt-2 w-[20%]"}
+                className={WHITEBUTTONCLASSNAMES + " mt-2 w-[20%]"}
                 onClick={() => handleClaimType("receive")}
                 startContent={
-                  <ArrowDownTrayIcon className="h-6 w-6 hover:text-yellow-500" />
+                  <ArrowDownTrayIcon className="h-6 w-6 hover:text-yellow-600" />
                 }
               >
                 Receive
               </Button>
               <Button
-                className={SHOPSTRBUTTONCLASSNAMES + " mt-2 w-[20%]"}
+                className={WHITEBUTTONCLASSNAMES + " mt-2 w-[20%]"}
                 onClick={() => handleClaimType("redeem")}
                 startContent={
-                  <BoltIcon className="h-6 w-6 hover:text-yellow-500" />
+                  <BoltIcon className="h-6 w-6 hover:text-yellow-600" />
                 }
               >
                 Redeem
@@ -392,7 +387,6 @@ export default function ClaimButton({ token }: { token: string }) {
             backdrop="blur"
             isOpen={isInvalidSuccess}
             onClose={() => setIsInvalidSuccess(false)}
-            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
             classNames={{
               body: "py-6 ",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -406,13 +400,13 @@ export default function ClaimButton({ token }: { token: string }) {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="flex items-center justify-center text-dark-text">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">No valid Lightning address found!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="flex flex-col overflow-hidden text-dark-text">
                 <div className="flex items-center justify-center">
-                  Check your Shopstr wallet for your sats.
+                  Check your Milk Market wallet for your sats.
                 </div>
               </ModalBody>
             </ModalContent>
@@ -425,7 +419,6 @@ export default function ClaimButton({ token }: { token: string }) {
             backdrop="blur"
             isOpen={isReceived}
             onClose={() => setIsReceived(false)}
-            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
             classNames={{
               body: "py-6 ",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -439,13 +432,13 @@ export default function ClaimButton({ token }: { token: string }) {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="flex items-center justify-center text-dark-text">
                 <CheckCircleIcon className="h-6 w-6 text-green-500" />
                 <div className="ml-2">Token successfully claimed!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="flex flex-col overflow-hidden text-dark-text">
                 <div className="flex items-center justify-center">
-                  Check your Shopstr wallet for your sats.
+                  Check your Milk Market wallet for your sats.
                 </div>
               </ModalBody>
             </ModalContent>
@@ -458,7 +451,6 @@ export default function ClaimButton({ token }: { token: string }) {
             backdrop="blur"
             isOpen={isDuplicateToken}
             onClose={() => setIsDuplicateToken(false)}
-            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
             classNames={{
               body: "py-6 ",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -472,14 +464,14 @@ export default function ClaimButton({ token }: { token: string }) {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="flex items-center justify-center text-dark-text">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Duplicate token!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="flex flex-col overflow-hidden text-dark-text">
                 <div className="flex items-center justify-center">
-                  The token you are trying to claim is already in your Shopstr
-                  wallet.
+                  The token you are trying to claim is already in your Milk
+                  Market wallet.
                 </div>
               </ModalBody>
             </ModalContent>
@@ -492,7 +484,6 @@ export default function ClaimButton({ token }: { token: string }) {
             backdrop="blur"
             isOpen={isInvalidToken}
             onClose={() => setIsInvalidToken(false)}
-            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
             classNames={{
               body: "py-6 ",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -506,11 +497,11 @@ export default function ClaimButton({ token }: { token: string }) {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="flex items-center justify-center text-dark-text">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Invalid token!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="flex flex-col overflow-hidden text-dark-text">
                 <div className="flex items-center justify-center">
                   The token you are trying to claim is not a valid Cashu string.
                 </div>
@@ -525,7 +516,6 @@ export default function ClaimButton({ token }: { token: string }) {
             backdrop="blur"
             isOpen={isSpent}
             onClose={() => setIsSpent(false)}
-            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
             classNames={{
               body: "py-6 ",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -539,11 +529,11 @@ export default function ClaimButton({ token }: { token: string }) {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="flex items-center justify-center text-dark-text">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Spent token!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="flex flex-col overflow-hidden text-dark-text">
                 <div className="flex items-center justify-center">
                   The token you are trying to claim has already been redeemed.
                 </div>
@@ -558,7 +548,6 @@ export default function ClaimButton({ token }: { token: string }) {
             backdrop="blur"
             isOpen={openRedemptionModal}
             onClose={() => setOpenRedemptionModal(false)}
-            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
             classNames={{
               body: "py-6 ",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -572,11 +561,11 @@ export default function ClaimButton({ token }: { token: string }) {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="flex items-center justify-center text-dark-text">
                 <CheckCircleIcon className="h-6 w-6 text-green-500" />
                 <div className="ml-2">Token successfully redeemed!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="flex flex-col overflow-hidden text-dark-text">
                 <div className="flex items-center justify-center">
                   Check your Lightning address ({lnurl}) for your sats.
                 </div>
@@ -590,7 +579,6 @@ export default function ClaimButton({ token }: { token: string }) {
             backdrop="blur"
             isOpen={openRedemptionModal}
             onClose={() => setOpenRedemptionModal(false)}
-            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
             classNames={{
               body: "py-6 ",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -604,11 +592,11 @@ export default function ClaimButton({ token }: { token: string }) {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="flex items-center justify-center text-dark-text">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Token redemption failed!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="flex flex-col overflow-hidden text-dark-text">
                 <div className="flex items-center justify-center">
                   You are attempting to redeem a token that has already been
                   redeemed, is too small/large, or for which there were no

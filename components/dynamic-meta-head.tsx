@@ -20,9 +20,9 @@ const getMetaTags = (
   shopEvents: Map<string, ShopProfile>
 ): MetaTagsType => {
   const defaultTags = {
-    title: "Shopstr",
-    description: "Shop freely.",
-    image: "/shopstr-2000x2000.png",
+    title: "Milk Market",
+    description: "FREE MILK",
+    image: "/milk-market.png",
     url: `${windowOrigin}`,
   };
 
@@ -44,17 +44,17 @@ const getMetaTags = (
       const productData = parseTags(product);
       if (productData) {
         return {
-          title: productData.title || "Shopstr Listing",
+          title: productData.title || "Milk Market Listing",
           description:
-            productData.summary || "Check out this product on Shopstr!",
-          image: productData.images?.[0] || "/shopstr-2000x2000.png",
+            productData.summary || "Check out this product on Milk Makret!",
+          image: productData.images?.[0] || "/milk-market.png",
           url: `${windowOrigin}/listing/${naddr}`,
         };
       }
       return {
         ...defaultTags,
-        title: "Shopstr Listing",
-        description: "Check out this listing on Shopstr!",
+        title: "Milk Market Listing",
+        description: "Check out this listing on Milk Market!",
         url: `${windowOrigin}/listing/${naddr}`,
       };
     }
@@ -68,17 +68,17 @@ const getMetaTags = (
 
     if (shopInfo) {
       return {
-        title: `${shopInfo.content.name} Shop` || "Shopstr Shop",
+        title: `${shopInfo.content.name} Shop` || "Milk Market Shop",
         description:
-          shopInfo.content.about || "Check out this shop on Shopstr!",
-        image: shopInfo.content.ui.picture || "/shopstr-2000x2000.png",
+          shopInfo.content.about || "Check out this shop on Milk Market!",
+        image: shopInfo.content.ui.picture || "/milk-market.png",
         url: `${windowOrigin}/marketplace/${npub}`,
       };
     }
     return {
       ...defaultTags,
-      title: "Shopstr Shop",
-      description: "Check out this shop on Shopstr!",
+      title: "Milk Market Shop",
+      description: "Check out this shop on Milk Market!",
       url: `${windowOrigin}/marketplace/${npub}`,
     };
   }
@@ -101,7 +101,7 @@ const DynamicHead = ({
   }, []);
 
   const metaTags = getMetaTags(
-    origin ? origin : "https://shopstr.store",
+    origin ? origin : "https://milk.marekt",
     router.pathname,
     router.query,
     productEvents,

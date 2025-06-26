@@ -118,13 +118,9 @@ export function DisplayCheckoutCost({
 
   return (
     <div>
-      <p className="text-lg font-semibold text-light-text dark:text-dark-text">
-        {formattedPrice}
-      </p>
+      <p className="text-lg font-semibold text-light-text">{formattedPrice}</p>
       {shippingType && (
-        <p className="mb-4 text-sm text-light-text dark:text-dark-text">
-          Shipping: {shippingType}
-        </p>
+        <p className="mb-4 text-sm text-light-text">Shipping: {shippingType}</p>
       )}
     </div>
   );

@@ -45,4 +45,4 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           github-comment: true
           alias-domains: |
-            shopstr-pr-${{ github.event.number }}.vercel.app
+            milk-market-pr-${{ github.event.number }}.vercel.app

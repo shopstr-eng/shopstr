@@ -10,7 +10,7 @@ import {
 } from "./display-monetary-info";
 import ProductInvoiceCard from "../product-invoice-card";
 import { useRouter } from "next/router";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { BLACKBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { Button, Chip, useDisclosure } from "@nextui-org/react";
 import { locationAvatar } from "./dropdowns/location-dropdown";
 import {
@@ -271,8 +271,8 @@ export default function CheckoutCard({
               key={size}
               className={`rounded-md border p-2 text-sm ${
                 selectedSize === size
-                  ? "bg-shopstr-purple text-white dark:bg-shopstr-yellow dark:text-black"
-                  : "bg-white text-black dark:bg-black dark:text-white"
+                  ? "bg-black text-white"
+                  : "border-black bg-white text-black"
               }`}
               onClick={() => setSelectedSize(size)}
             >
@@ -312,7 +312,7 @@ export default function CheckoutCard({
                             alt={`Product image ${index + 1}`}
                             className={`w-full cursor-pointer rounded-xl object-cover ${
                               image === selectedImage
-                                ? "border-2 border-shopstr-purple dark:border-shopstr-yellow"
+                                ? "border-2 border-dark-bg"
                                 : ""
                             }`}
                             style={{ aspectRatio: "1 / 1" }}
@@ -324,7 +324,7 @@ export default function CheckoutCard({
                     {productData.images.length > visibleImages.length && (
                       <button
                         onClick={() => setShowAllImages(!showAllImages)}
-                        className="mt-2 text-sm text-purple-500 hover:text-purple-700 dark:text-yellow-500 dark:hover:text-yellow-700"
+                        className="hover:text-black-500 mt-2 text-sm text-black"
                       >
                         {showAllImages ? "∧" : "∨"}
                       </button>
@@ -350,9 +350,10 @@ export default function CheckoutCard({
                           ? ["shop_profile"]
                           : ["shop", "inquiry", "copy_npub"]
                       }
+                      bg="light"
                     />
                     {merchantQuality !== "" && (
-                      <div className="inline-flex items-center gap-1 rounded-lg border-2 border-black px-2 dark:border-white">
+                      <div className="inline-flex items-center gap-1 rounded-lg border-2 border-black px-2">
                         {merchantReview >= 0.5 ? (
                           <>
                             <FaceSmileIcon
@@ -362,7 +363,7 @@ export default function CheckoutCard({
                                   : "text-green-300"
                               }`}
                             />
-                            <span className="mr-2 whitespace-nowrap text-sm text-light-text dark:text-dark-text">
+                            <span className="mr-2 whitespace-nowrap text-sm text-light-text">
                               {merchantQuality}
                             </span>
                           </>
@@ -375,7 +376,7 @@ export default function CheckoutCard({
                                   : "text-red-500"
                               }`}
                             />
-                            <span className="mr-2 whitespace-nowrap text-sm text-light-text dark:text-dark-text">
+                            <span className="mr-2 whitespace-nowrap text-sm text-light-text">
                               {merchantQuality}
                             </span>
                           </>
@@ -384,16 +385,16 @@ export default function CheckoutCard({
                     )}
                   </div>
                 </div>
-                <h2 className="mt-4 w-full text-left text-2xl font-bold text-light-text dark:text-dark-text">
+                <h2 className="mt-4 w-full text-left text-2xl font-bold text-light-text">
                   {productData.title}
                 </h2>
                 {productData.condition && (
-                  <div className="text-left text-xs text-light-text dark:text-dark-text">
+                  <div className="text-left text-xs text-light-text">
                     <span>Condition: {productData.condition}</span>
                   </div>
                 )}
                 {productData.restrictions && (
-                  <div className="text-left text-xs text-light-text dark:text-dark-text">
+                  <div className="text-left text-xs text-light-text">
                     <span>Restrictions: </span>
                     <span className="text-red-500">
                       {productData.restrictions}
@@ -401,13 +402,13 @@ export default function CheckoutCard({
                   </div>
                 )}
                 <div className="hidden sm:block">
-                  <p className="mt-4 w-full text-left text-lg text-light-text dark:text-dark-text">
+                  <p className="mt-4 w-full text-left text-lg text-light-text">
                     {renderSummary()}
                   </p>
                   {productData.summary.length > SUMMARY_CHARACTER_LIMIT && (
                     <button
                       onClick={toggleExpand}
-                      className="mt-2 text-purple-500 hover:text-purple-700 dark:text-yellow-500 dark:hover:text-yellow-700"
+                      className="mt-2 text-gray-500 hover:text-light-text"
                     >
                       {isExpanded ? "Show less" : "Show more"}
                     </button>
@@ -430,7 +431,7 @@ export default function CheckoutCard({
                     {productData.status !== "sold" ? (
                       <>
                         <Button
-                          className={`min-w-fit bg-gradient-to-tr from-purple-700 via-purple-500 to-purple-700 text-dark-text shadow-lg dark:from-yellow-700 dark:via-yellow-500 dark:to-yellow-700 dark:text-light-text ${
+                          className={`min-w-fit bg-gradient-to-tr from-yellow-700 via-yellow-500 to-yellow-700 text-light-text shadow-lg ${
                             hasSizes && !selectedSize
                               ? "cursor-not-allowed opacity-50"
                               : ""
@@ -441,7 +442,7 @@ export default function CheckoutCard({
                           Buy Now
                         </Button>
                         <Button
-                          className={`${SHOPSTRBUTTONCLASSNAMES} ${
+                          className={`${BLACKBUTTONCLASSNAMES} ${
                             isAdded || (hasSizes && !selectedSize)
                               ? "cursor-not-allowed opacity-50"
                               : ""
@@ -455,7 +456,7 @@ export default function CheckoutCard({
                     ) : (
                       <>
                         <Button
-                          className={`${SHOPSTRBUTTONCLASSNAMES} cursor-not-allowed opacity-50`}
+                          className={`${BLACKBUTTONCLASSNAMES} cursor-not-allowed opacity-50`}
                           disabled
                         >
                           Sold Out
@@ -464,7 +465,7 @@ export default function CheckoutCard({
                     )}
                     <Button
                       type="submit"
-                      className={SHOPSTRBUTTONCLASSNAMES}
+                      className={BLACKBUTTONCLASSNAMES}
                       onClick={handleShare}
                     >
                       Share
@@ -479,7 +480,7 @@ export default function CheckoutCard({
                     className="cursor-pointer text-gray-500"
                   >
                     or{" "}
-                    <span className="underline hover:text-light-text dark:hover:text-dark-text">
+                    <span className="underline hover:text-light-text">
                       contact
                     </span>{" "}
                     seller
@@ -488,13 +489,13 @@ export default function CheckoutCard({
               </div>
             </div>
             <div className="max-w-screen mx-3 my-3 max-w-full overflow-hidden whitespace-normal break-words sm:hidden">
-              <p className="break-words-all w-full text-left text-lg text-light-text dark:text-dark-text">
+              <p className="break-words-all w-full text-left text-lg text-light-text">
                 {renderSummary()}
               </p>
               {productData.summary.length > SUMMARY_CHARACTER_LIMIT && (
                 <button
                   onClick={toggleExpand}
-                  className="mt-2 text-purple-500 hover:text-purple-700 dark:text-yellow-500 dark:hover:text-yellow-700"
+                  className="mt-2 text-gray-500 hover:text-light-text"
                 >
                   {isExpanded ? "Show less" : "Show more"}
                 </button>
@@ -502,7 +503,7 @@ export default function CheckoutCard({
             </div>
             {!isFetchingReviews && productReviews && (
               <div className="mt-4 max-w-full p-4 pt-4">
-                <h3 className="mb-3 text-lg font-semibold text-light-text dark:text-dark-text">
+                <h3 className="mb-3 text-lg font-semibold text-light-text">
                   Product Reviews
                 </h3>
                 {productReviews.size > 0 ? (
@@ -511,7 +512,7 @@ export default function CheckoutCard({
                       ([reviewerPubkey, reviewData]) => (
                         <div
                           key={reviewerPubkey}
-                          className="rounded-lg border-2 border-black p-3 dark:border-white"
+                          className="rounded-lg border-2 border-black p-3"
                         >
                           <div className="mb-2 flex items-center gap-2">
                             <ProfileWithDropdown
@@ -521,6 +522,7 @@ export default function CheckoutCard({
                                   ? ["shop_profile"]
                                   : ["shop", "inquiry", "copy_npub"]
                               }
+                              bg="light"
                             />
                           </div>
                           <div className="flex flex-col">
@@ -533,7 +535,7 @@ export default function CheckoutCard({
                                   return (
                                     <Chip
                                       key={index}
-                                      className={`text-light-text dark:text-dark-text ${
+                                      className={`text-light-textt ${
                                         value === "1"
                                           ? "bg-green-500"
                                           : "bg-red-500"
@@ -549,7 +551,7 @@ export default function CheckoutCard({
                                   return (
                                     <Chip
                                       key={index}
-                                      className={`text-light-text dark:text-dark-text ${
+                                      className={`text-light-text ${
                                         value === "1"
                                           ? "bg-green-500"
                                           : "bg-red-500"
@@ -569,7 +571,7 @@ export default function CheckoutCard({
                                 return (
                                   <p
                                     key={index}
-                                    className="italic text-light-text dark:text-dark-text"
+                                    className="italic text-light-text"
                                   >
                                     &ldquo;{value}&rdquo;
                                   </p>
@@ -584,16 +586,14 @@ export default function CheckoutCard({
                   </div>
                 ) : (
                   <div className="flex justify-center">
-                    <div className="w-full max-w-xl rounded-lg bg-light-fg p-10 text-center shadow-lg dark:bg-dark-fg">
-                      <FaceFrownIcon className="mx-auto mb-5 h-20 w-20 text-light-text dark:text-dark-text" />
-                      <span className="block text-5xl text-light-text dark:text-dark-text">
+                    <div className="w-full max-w-xl rounded-lg bg-dark-fg p-10 text-center shadow-lg">
+                      <span className="block text-5xl text-dark-text">
                         No reviews . . . yet!
                       </span>
                       <div className="flex flex-col items-center justify-center gap-3 pt-5 opacity-80">
-                        <span className="text-2xl text-light-text dark:text-dark-text">
+                        <span className="text-2xl text-dark-text">
                           Be the first to leave a review!
                         </span>
-                        <InformationCircleIcon className="h-10 w-10 text-light-text dark:text-dark-text" />
                       </div>
                     </div>
                   </div>
@@ -604,15 +604,15 @@ export default function CheckoutCard({
         </>
       ) : (
         <>
-          <div className="p-4 text-light-text dark:text-dark-text">
+          <div className="p-4 text-light-text">
             <h2 className="mb-4 text-2xl font-bold">{productData.title}</h2>
             {selectedSize && (
               <p className="mb-4 text-lg">Size: {selectedSize}</p>
             )}
             <DisplayCostBreakdown monetaryInfo={productData} />
             <div className="mx-4 mt-2 flex items-center justify-center text-center">
-              <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-              <p className="ml-2 text-xs text-light-text dark:text-dark-text">
+              <InformationCircleIcon className="h-6 w-6 text-light-text" />
+              <p className="ml-2 text-xs text-light-text">
                 Once purchased, the seller will receive a DM with your order
                 details.
               </p>

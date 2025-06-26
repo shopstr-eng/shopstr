@@ -18,18 +18,13 @@ const config: Config = {
           "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
       },
       colors: {
-        "dark-bg": "#212121",
-        "dark-fg": "#4d4c4e", // dark foreground
-        "light-bg": "#e8e8e8",
-        "light-fg": "#f5f5f5",
-        "shopstr-purple": "#a438ba",
-        "shopstr-purple-light": "#a655f7",
-        "shopstr-yellow": "#fcd34d",
-        "shopstr-yellow-light": "#fef08a",
-        "dark-text": "#e8e8e8",
-        "accent-dark-text": "#fef08a", // shopstr yellow
-        "light-text": "#212121",
-        "accent-light-text": "#a438ba", // shopstr purple
+        "dark-bg": "#000000",
+        "dark-fg": "#1f1f1f",
+        "light-bg": "#ffffff",
+        "dark-text": "#ffffff",
+        "accent-dark-text": "#80807d",
+        "light-text": "#000000",
+        "accent-light-text": "#e1e1e0",
       },
     },
   },

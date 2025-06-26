@@ -4,14 +4,17 @@ import { Button, Textarea, Input, Image } from "@nextui-org/react";
 
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { ShopMapContext } from "@/utils/context/context";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import {
+  BLACKBUTTONCLASSNAMES,
+  WHITEBUTTONCLASSNAMES,
+} from "@/utils/STATIC-VARIABLES";
 import {
   SignerContext,
   NostrContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { createNostrShopEvent } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
-import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
+import MilkMarketSpinner from "@/components/utility-components/mm-spinner";
 
 const ShopProfilePage = () => {
   const { nostr } = useContext(NostrContext);
@@ -32,7 +35,7 @@ const ShopProfilePage = () => {
 
   const watchBanner = watch("banner");
   const watchPicture = watch("picture");
-  const defaultImage = "/shopstr-2000x2000.png";
+  const defaultImage = "/milk-market.png";
 
   useEffect(() => {
     setIsFetchingShop(true);
@@ -82,15 +85,15 @@ const ShopProfilePage = () => {
 
   return (
     <>
-      <div className="flex min-h-screen flex-col bg-light-bg pt-24 dark:bg-dark-bg md:pb-20">
+      <div className="flex min-h-screen flex-col bg-light-bg pt-24 md:pb-20">
         <div className="mx-auto h-full w-full px-4 lg:w-1/2">
           <SettingsBreadCrumbs />
           {isFetchingShop ? (
-            <ShopstrSpinner />
+            <MilkMarketSpinner />
           ) : (
             <>
-              <div className="mb-20 h-40 rounded-lg bg-light-fg dark:bg-dark-fg">
-                <div className="relative flex h-40 items-center justify-center rounded-lg bg-shopstr-purple-light dark:bg-dark-fg">
+              <div className="mb-20 h-40 rounded-lg">
+                <div className="relative flex h-40 items-center justify-center rounded-lg bg-dark-fg">
                   {watchBanner && (
                     <Image
                       alt={"Shop banner image"}
@@ -99,7 +102,7 @@ const ShopProfilePage = () => {
                     />
                   )}
                   <FileUploaderButton
-                    className={`absolute bottom-5 right-5 z-20 border-2 border-white bg-shopstr-purple shadow-md ${SHOPSTRBUTTONCLASSNAMES}`}
+                    className={`absolute bottom-5 right-5 z-20 border-2 border-white shadow-md ${WHITEBUTTONCLASSNAMES}`}
                     imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
                   >
                     Upload Banner
@@ -110,7 +113,7 @@ const ShopProfilePage = () => {
                     <div className="">
                       <FileUploaderButton
                         isIconOnly={true}
-                        className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
+                        className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${WHITEBUTTONCLASSNAMES}`}
                         imgCallbackOnUpload={(imgUrl) =>
                           setValue("picture", imgUrl)
                         }
@@ -153,9 +156,9 @@ const ShopProfilePage = () => {
                       : "";
                     return (
                       <Input
-                        className="pb-4 text-light-text dark:text-dark-text"
+                        className="pb-4 text-light-text"
                         classNames={{
-                          label: "text-light-text dark:text-dark-text text-lg",
+                          label: "!text-light-text text-lg",
                         }}
                         variant="bordered"
                         fullWidth={true}
@@ -192,9 +195,9 @@ const ShopProfilePage = () => {
                       : "";
                     return (
                       <Textarea
-                        className="pb-4 text-light-text dark:text-dark-text"
+                        className="pb-4 text-light-text"
                         classNames={{
-                          label: "text-light-text dark:text-dark-text text-lg",
+                          label: "!text-light-text text-lg",
                         }}
                         variant="bordered"
                         fullWidth={true}
@@ -213,7 +216,7 @@ const ShopProfilePage = () => {
                 />
 
                 <Button
-                  className={`mb-10 w-full ${SHOPSTRBUTTONCLASSNAMES}`}
+                  className={`mb-10 w-full ${BLACKBUTTONCLASSNAMES}`}
                   type="submit"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {

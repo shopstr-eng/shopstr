@@ -17,7 +17,7 @@ import {
   EyeSlashIcon,
   EyeIcon,
 } from "@heroicons/react/24/outline";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { BLACKBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   SignerContext,
   NostrContext,
@@ -25,7 +25,7 @@ import {
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
 import { createNostrProfileEvent } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
-import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
+import MilkMarketSpinner from "@/components/utility-components/mm-spinner";
 
 const UserProfilePage = () => {
   const { nostr } = useContext(NostrContext);
@@ -108,15 +108,15 @@ const UserProfilePage = () => {
 
   return (
     <>
-      <div className="flex min-h-screen flex-col bg-light-bg pt-24 dark:bg-dark-bg md:pb-20">
+      <div className="flex min-h-screen flex-col bg-light-bg pt-24 md:pb-20">
         <div className="mx-auto h-full w-full px-4 lg:w-1/2">
           <SettingsBreadCrumbs />
           {isFetchingProfile ? (
-            <ShopstrSpinner />
+            <MilkMarketSpinner />
           ) : (
             <>
-              <div className="mb-20 h-40 rounded-lg bg-light-fg dark:bg-dark-fg">
-                <div className="relative flex h-40 items-center justify-center rounded-lg bg-shopstr-purple-light dark:bg-dark-fg">
+              <div className="mb-20 h-40 rounded-lg bg-dark-fg">
+                <div className="relative flex h-40 items-center justify-center rounded-lg bg-dark-fg">
                   {watchBanner && (
                     <Image
                       alt={"User banner image"}
@@ -125,7 +125,7 @@ const UserProfilePage = () => {
                     />
                   )}
                   <FileUploaderButton
-                    className={`absolute bottom-5 right-5 z-20 border-2 border-white bg-shopstr-purple shadow-md ${SHOPSTRBUTTONCLASSNAMES}`}
+                    className={`absolute bottom-5 right-5 z-20 border-2 border-white shadow-md ${BLACKBUTTONCLASSNAMES}`}
                     imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
                   >
                     Upload Banner
@@ -136,7 +136,7 @@ const UserProfilePage = () => {
                     <div className="">
                       <FileUploaderButton
                         isIconOnly
-                        className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
+                        className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${BLACKBUTTONCLASSNAMES}`}
                         imgCallbackOnUpload={(imgUrl) =>
                           setValue("picture", imgUrl)
                         }
@@ -160,7 +160,7 @@ const UserProfilePage = () => {
               </div>
 
               <div
-                className="mx-auto mb-2 flex w-full max-w-2xl cursor-pointer flex-row items-center justify-center rounded-lg border-2 border-light-fg p-2 hover:opacity-60 dark:border-dark-fg"
+                className="mx-auto mb-2 flex w-full max-w-2xl cursor-pointer flex-row items-center justify-center rounded-lg border-2 border-dark-fg p-2 hover:opacity-60"
                 onClick={() => {
                   navigator.clipboard.writeText(userNPub!);
                   setIsNPubCopied(true);
@@ -170,7 +170,7 @@ const UserProfilePage = () => {
                 }}
               >
                 <span
-                  className="lg:text-md break-all pr-2 text-[0.50rem] font-bold text-light-text dark:text-dark-text sm:text-xs md:text-sm"
+                  className="lg:text-md break-all pr-2 text-[0.50rem] font-bold text-light-text sm:text-xs md:text-sm"
                   suppressHydrationWarning
                 >
                   {userNPub!}
@@ -179,21 +179,21 @@ const UserProfilePage = () => {
                   <CheckIcon
                     width={15}
                     height={15}
-                    className="flex-shrink-0 text-light-text dark:text-dark-text"
+                    className="flex-shrink-0 text-light-text"
                   />
                 ) : (
                   <ClipboardIcon
                     width={15}
                     height={15}
-                    className="flex-shrink-0 text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
+                    className="flex-shrink-0 text-light-text hover:text-yellow-600"
                   />
                 )}
               </div>
 
               {userNSec ? (
-                <div className="mx-auto mb-12 flex w-full max-w-2xl cursor-pointer flex-row items-center justify-center rounded-lg border-2 border-light-fg p-2 dark:border-dark-fg">
+                <div className="mx-auto mb-12 flex w-full max-w-2xl cursor-pointer flex-row items-center justify-center rounded-lg border-2 border-dark-fg p-2">
                   <span
-                    className="lg:text-md break-all pr-2 text-[0.50rem] font-bold text-light-text dark:text-dark-text sm:text-xs md:text-sm"
+                    className="lg:text-md break-all pr-2 text-[0.50rem] font-bold text-light-text sm:text-xs md:text-sm"
                     suppressHydrationWarning
                   >
                     {viewState === "shown"
@@ -204,13 +204,13 @@ const UserProfilePage = () => {
                     <CheckIcon
                       width={15}
                       height={15}
-                      className="flex-shrink-0 text-light-text dark:text-dark-text"
+                      className="flex-shrink-0 text-light-text"
                     />
                   ) : (
                     <ClipboardIcon
                       width={15}
                       height={15}
-                      className="flex-shrink-0 text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
+                      className="flex-shrink-0 text-light-text hover:text-yellow-600"
                       onClick={() => {
                         navigator.clipboard.writeText(userNSec);
                         setIsNSecCopied(true);
@@ -222,14 +222,14 @@ const UserProfilePage = () => {
                   )}
                   {viewState === "shown" ? (
                     <EyeSlashIcon
-                      className="h-6 w-6 flex-shrink-0 px-1 text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
+                      className="h-6 w-6 flex-shrink-0 px-1 text-light-text hover:text-yellow-600"
                       onClick={() => {
                         setViewState("hidden");
                       }}
                     />
                   ) : (
                     <EyeIcon
-                      className="h-6 w-6 flex-shrink-0 px-1 text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
+                      className="h-6 w-6 flex-shrink-0 px-1 text-light-text hover:text-yellow-600"
                       onClick={() => {
                         setViewState("shown");
                       }}
@@ -254,9 +254,9 @@ const UserProfilePage = () => {
                       : "";
                     return (
                       <Input
-                        className="pb-4 text-light-text dark:text-dark-text"
+                        className="pb-4 text-light-text"
                         classNames={{
-                          label: "text-light-text dark:text-dark-text text-lg",
+                          label: "!text-light-text text-lg",
                         }}
                         variant="bordered"
                         fullWidth={true}
@@ -287,9 +287,9 @@ const UserProfilePage = () => {
                       : "";
                     return (
                       <Input
-                        className="pb-4 text-light-text dark:text-dark-text"
+                        className="pb-4 text-light-text"
                         classNames={{
-                          label: "text-light-text dark:text-dark-text text-lg",
+                          label: "!text-light-text text-lg",
                         }}
                         variant="bordered"
                         fullWidth={true}
@@ -320,9 +320,9 @@ const UserProfilePage = () => {
                       : "";
                     return (
                       <Textarea
-                        className="pb-4 text-light-text dark:text-dark-text"
+                        className="pb-4 text-light-text"
                         classNames={{
-                          label: "text-light-text dark:text-dark-text text-lg",
+                          label: "!text-light-text text-lg",
                         }}
                         variant="bordered"
                         fullWidth={true}
@@ -353,9 +353,9 @@ const UserProfilePage = () => {
                       : "";
                     return (
                       <Input
-                        className="pb-4 text-light-text dark:text-dark-text"
+                        className="pb-4 text-light-text"
                         classNames={{
-                          label: "text-light-text dark:text-dark-text text-lg",
+                          label: "!text-light-text text-lg",
                         }}
                         variant="bordered"
                         fullWidth={true}
@@ -385,9 +385,9 @@ const UserProfilePage = () => {
                       : "";
                     return (
                       <Input
-                        className="pb-4 text-light-text dark:text-dark-text"
+                        className="pb-4 text-light-text"
                         classNames={{
-                          label: "text-light-text dark:text-dark-text text-lg",
+                          label: "!text-light-text text-lg",
                         }}
                         variant="bordered"
                         fullWidth={true}
@@ -418,9 +418,9 @@ const UserProfilePage = () => {
                       : "";
                     return (
                       <Input
-                        className="pb-4 text-light-text dark:text-dark-text"
+                        className="pb-4 text-light-text"
                         classNames={{
-                          label: "text-light-text dark:text-dark-text text-lg",
+                          label: "!text-light-text text-lg",
                         }}
                         variant="bordered"
                         fullWidth={true}
@@ -442,9 +442,9 @@ const UserProfilePage = () => {
                   control={control}
                   render={({ field: { onChange, onBlur, value } }) => (
                     <Select
-                      className="pb-4 text-light-text dark:text-dark-text"
+                      className="pb-4 text-light-text"
                       classNames={{
-                        label: "text-light-text dark:text-dark-text text-lg",
+                        label: "!text-light-text text-lg",
                       }}
                       variant="bordered"
                       fullWidth={true}
@@ -457,21 +457,21 @@ const UserProfilePage = () => {
                       {/* <SelectItem
                         key="service"
                         value="service"
-                        className="text-light-text dark:text-dark-text"
+                        className="text-light-text"
                       >
                         Service
                       </SelectItem> */}
                       <SelectItem
                         key="ecash"
                         value="ecash"
-                        className="text-light-text dark:text-dark-text"
+                        className="text-dark-text"
                       >
                         Cashu
                       </SelectItem>
                       <SelectItem
                         key="lightning"
                         value="lightning"
-                        className="text-light-text dark:text-dark-text"
+                        className="text-dark-text"
                       >
                         Lightning
                       </SelectItem>
@@ -490,9 +490,9 @@ const UserProfilePage = () => {
                         : [];
                     return (
                       <Select
-                        className="pb-4 text-light-text dark:text-dark-text"
+                        className="pb-4 text-light-text"
                         classNames={{
-                          label: "text-light-text dark:text-dark-text text-lg",
+                          label: "!text-light-text text-lg",
                         }}
                         variant="bordered"
                         fullWidth={true}
@@ -522,49 +522,49 @@ const UserProfilePage = () => {
                         <SelectItem
                           key="cash"
                           value="cash"
-                          className="text-light-text dark:text-dark-text"
+                          className="text-dark-text"
                         >
                           Cash
                         </SelectItem>
                         <SelectItem
                           key="venmo"
                           value="venmo"
-                          className="text-light-text dark:text-dark-text"
+                          className="text-dark-text"
                         >
                           Venmo
                         </SelectItem>
                         <SelectItem
                           key="zelle"
                           value="zelle"
-                          className="text-light-text dark:text-dark-text"
+                          className="text-dark-text"
                         >
                           Zelle
                         </SelectItem>
                         <SelectItem
                           key="cashapp"
                           value="cashapp"
-                          className="text-light-text dark:text-dark-text"
+                          className="text-dark-text"
                         >
                           Cash App
                         </SelectItem>
                         <SelectItem
                           key="applepay"
                           value="applepay"
-                          className="text-light-text dark:text-dark-text"
+                          className="text-dark-text"
                         >
                           Apple Pay
                         </SelectItem>
                         <SelectItem
                           key="googlepay"
                           value="googlepay"
-                          className="text-light-text dark:text-dark-text"
+                          className="text-dark-text"
                         >
                           Google Pay
                         </SelectItem>
                         <SelectItem
                           key="paypal"
                           value="paypal"
-                          className="text-light-text dark:text-dark-text"
+                          className="text-dark-text"
                         >
                           PayPal
                         </SelectItem>
@@ -582,13 +582,13 @@ const UserProfilePage = () => {
                       min={0}
                       max={100}
                       step={0.1}
-                      className="pb-4 text-light-text dark:text-dark-text"
+                      className="pb-4 text-light-text"
                       classNames={{
-                        label: "text-light-text dark:text-dark-text text-lg",
+                        label: "!text-light-text text-lg",
                       }}
                       variant="bordered"
                       fullWidth
-                      label="Shopstr donation (%)"
+                      label="Milk Market donation (%)"
                       labelPlacement="outside"
                       onChange={onChange}
                       onBlur={onBlur}
@@ -598,7 +598,7 @@ const UserProfilePage = () => {
                 />
 
                 <Button
-                  className={`mb-10 w-full ${SHOPSTRBUTTONCLASSNAMES}`}
+                  className={`mb-10 w-full ${BLACKBUTTONCLASSNAMES}`}
                   type="submit"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {

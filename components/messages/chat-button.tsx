@@ -30,7 +30,7 @@ const ChatButton = ({
   return (
     <div
       key={pubkeyOfChat}
-      className={`mx-3 mb-2 flex cursor-pointer items-center gap-4 rounded-md border-2 border-light-fg px-3 py-2 hover:opacity-70 dark:border-dark-fg ${
+      className={`mx-3 mb-2 flex cursor-pointer items-center gap-4 rounded-md border-2 border-dark-fg px-3 py-2 hover:opacity-70 ${
         pubkeyOfChat === openedChatPubkey ? "bg-[#ccccccb9]" : ""
       }`}
       onClick={() => handleClickChat(pubkeyOfChat)}
@@ -39,14 +39,14 @@ const ChatButton = ({
       <ProfileAvatar
         pubkey={pubkeyOfChat}
         description={lastMessage ? lastMessage.content : "No messages yet"}
-        descriptionClassname="line-clamp-1 break-all overflow-hidden text-light-text dark:text-dark-text w-full h-[15px]"
+        descriptionClassname="line-clamp-1 break-all overflow-hidden text-light-text w-full h-[15px]"
         baseClassname="justify-start w-4/5"
         wrapperClassname="w-4/5 h-full"
       />
-      <div className="flex flex-shrink-0 flex-grow flex-col text-right text-light-text dark:text-dark-text">
+      <div className="flex flex-shrink-0 flex-grow flex-col text-right text-light-text">
         <div className="h-1/2">
           {unreadCount > 0 ? (
-            <span className="ml-2 rounded-full bg-shopstr-purple-light p-1 text-xs text-light-bg dark:bg-shopstr-yellow-light dark:text-dark-bg">
+            <span className="ml-2 rounded-full bg-dark-fg p-1 text-xs text-light-bg">
               {unreadCount}
             </span>
           ) : (

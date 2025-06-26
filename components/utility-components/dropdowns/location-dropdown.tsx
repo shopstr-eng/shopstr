@@ -25,7 +25,7 @@ export const locationAvatar = (location: string) => {
 const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
   const locationOptions = useMemo(() => {
     const headingClasses =
-      "flex w-full sticky top-1 z-20 py-1.5 px-2 dark:bg-dark-bg bg-light-bg shadow-small rounded-small";
+      "flex w-full sticky top-1 z-20 py-1.5 px-2 bg-light-bg shadow-small rounded-small";
 
     const countryOptions = (
       <SelectSection
@@ -34,14 +34,14 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
         classNames={{
           heading: headingClasses,
         }}
-        className="text-light-text dark:text-dark-text"
+        className="text-dark-text"
       >
         {locations.countries.map((country) => {
           return (
             <SelectItem
               key={country.country}
               classNames={{
-                wrapper: "dark:bg-dark-bg bg-dark-bg",
+                wrapper: "bg-light-bg",
               }}
               // startContent={
               //   <Avatar
@@ -65,7 +65,7 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
         classNames={{
           heading: headingClasses,
         }}
-        className="text-light-text dark:text-dark-text"
+        className="text-dark-text"
       >
         {locations.states.map((state) => {
           return (
@@ -93,7 +93,7 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
         classNames={{
           heading: headingClasses,
         }}
-        className="text-light-text dark:text-dark-text"
+        className="text-dark-text"
       >
         <SelectItem key={"Worldwide"}>Worldwide</SelectItem>
         <SelectItem key={"US & Canada"}>US &amp; Canada</SelectItem>
@@ -108,7 +108,7 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
     <Select
       startContent={locationAvatar(value)}
       {...props}
-      className="mt-2 text-light-text dark:text-dark-text"
+      className="mt-2 text-dark-text"
     >
       {locationOptions}
     </Select>

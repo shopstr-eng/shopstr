@@ -20,7 +20,7 @@ export default function ListingPage({
   if (!productData) return null;
 
   return (
-    <div className="flex w-full items-center justify-center bg-light-bg dark:bg-dark-bg">
+    <div className="flex w-full items-center justify-center bg-light-bg">
       <div className="flex flex-col">
         <CheckoutCard
           productData={productData}
