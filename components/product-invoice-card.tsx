@@ -68,6 +68,7 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { ShippingFormData, ContactFormData } from "@/utils/types/types";
+import { sendPaymentConfirmationMessage } from "@/utils/nostr/nostr-helper-functions";
 
 export default function ProductInvoiceCard({
   productData,
@@ -97,6 +98,7 @@ export default function ProductInvoiceCard({
   const profileContext = useContext(ProfileMapContext);
 
   const { nostr } = useContext(NostrContext);
+  const [merchantPubkey, setMerchantPubkey] = useState<string>();
 
   const [showInvoiceCard, setShowInvoiceCard] = useState(false);
 
@@ -159,6 +161,10 @@ export default function ProductInvoiceCard({
 
     fetchKeys();
   }, []);
+
+  useEffect(() => {
+    if (signer) signer.getPubKey().then(pk => setMerchantPubkey(pk));
+  }, [signer]);
 
   useEffect(() => {
     const sellerProfile = profileContext.profileData.get(productData.pubkey);
@@ -965,6 +971,18 @@ export default function ProductInvoiceCard({
               setQrCodeUrl(null);
               if (setInvoiceIsPaid) {
                 setInvoiceIsPaid(true);
+                const buyerPubkey = productData.pubkey;
+                const orderId     = productData.d as string;
+                const amount      = productData.totalCost;
+                if (merchantPubkey) {
+                  await sendPaymentConfirmationMessage(
+                    signer!,
+                    merchantPubkey,
+                    buyerPubkey,
+                    orderId,
+                    amount
+                  );
+                }
               }
               break;
             }
@@ -1664,6 +1682,18 @@ export default function ProductInvoiceCard({
       );
       if (setCashuPaymentSent) {
         setCashuPaymentSent(true);
+        const buyerPubkey = productData.pubkey;
+        const orderId     = productData.d as string;
+        const amount      = productData.totalCost;
+        if (merchantPubkey) {
+          await sendPaymentConfirmationMessage(
+            signer!,
+            merchantPubkey,
+            buyerPubkey,
+            orderId,
+            amount
+          );
+        }
       }
     } catch (error) {
       console.error(error);

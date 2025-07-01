@@ -1233,3 +1233,118 @@ export async function verifyNip05Identifier(
     return false;
   }
 }
+
+
+export async function sendPaymentConfirmationMessage(
+  signer: NostrSigner,
+  merchantPubkey: string,
+  buyerPubkey: string,
+  orderId: string,
+  amountSats: number
+): Promise<void> {
+  try {
+    // Create the message content
+    const messageContent = JSON.stringify({
+      type: "payment_confirmation",
+      orderId,
+      amount: amountSats,
+      timestamp: Date.now(),
+      text: `We have received payment of ${amountSats} sats for order ${orderId}.`
+    });
+
+    // Create the inner message event (kind 14) with id property
+    const messageEvent: GiftWrappedMessageEvent = {
+      id: "", // Will be set when signed
+      kind: 14,
+      content: messageContent,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [["p", buyerPubkey]],
+      pubkey: merchantPubkey,
+    };
+
+    // Generate random keys for the gift wrap
+    const randomPrivkey = generateSecretKey();
+    const randomPubkey = getPublicKey(randomPrivkey);
+
+    // Create the seal using existing function
+    const sealEvent = await constructMessageSeal(
+      signer,
+      messageEvent,
+      merchantPubkey,
+      buyerPubkey,
+      randomPrivkey
+    );
+
+    // Create the gift wrap using existing function
+    const giftWrappedEvent = await constructMessageGiftWrap(
+      sealEvent,
+      randomPubkey,
+      randomPrivkey,
+      buyerPubkey
+    );
+
+    // Send using existing function
+    await sendGiftWrappedMessageEvent(giftWrappedEvent);
+    
+    console.log("Payment confirmation DM sent successfully");
+  } catch (error) {
+    console.error("Error sending payment confirmation DM:", error);
+    throw error;
+  }
+}
+
+export async function sendShippingConfirmationMessage(
+  signer: NostrSigner,
+  merchantPubkey: string,
+  buyerPubkey: string,
+  orderId: string
+): Promise<void> {
+  try {
+    // Create the message content
+    const messageContent = JSON.stringify({
+      type: "shipping_confirmation",
+      orderId,
+      timestamp: Date.now(),
+      text: `Your order ${orderId} has shipped!`
+    });
+
+    // Create the inner message event (kind 14) with id property
+    const messageEvent: GiftWrappedMessageEvent = {
+      id: "", // Will be set when signed
+      kind: 14,
+      content: messageContent,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [["p", buyerPubkey]],
+      pubkey: merchantPubkey,
+    };
+
+    // Generate random keys for the gift wrap
+    const randomPrivkey = generateSecretKey();
+    const randomPubkey = getPublicKey(randomPrivkey);
+
+    // Create the seal using existing function
+    const sealEvent = await constructMessageSeal(
+      signer,
+      messageEvent,
+      merchantPubkey,
+      buyerPubkey,
+      randomPrivkey
+    );
+
+    // Create the gift wrap using existing function
+    const giftWrappedEvent = await constructMessageGiftWrap(
+      sealEvent,
+      randomPubkey,
+      randomPrivkey,
+      buyerPubkey
+    );
+
+    // Send using your existing function
+    await sendGiftWrappedMessageEvent(giftWrappedEvent);
+    
+    console.log("Shipping confirmation DM sent successfully");
+  } catch (error) {
+    console.error("Error sending shipping confirmation DM:", error);
+    throw error;
+  }
+}

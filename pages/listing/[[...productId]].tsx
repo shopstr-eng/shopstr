@@ -8,9 +8,14 @@ import parseTags, {
 import ListingPage from "../../components/listing-page";
 import { ProductContext } from "../../utils/context/context";
 import { Event, nip19 } from "nostr-tools";
+import { sendShippingConfirmationMessage } from "@/utils/nostr/nostr-helper-functions";
+import { NostrContext, SignerContext } from "@/components/utility-components/nostr-context-provider";
 
 const Listing = () => {
   const router = useRouter();
+  const { nostr } = useContext(NostrContext);
+  const { signer } = useContext(SignerContext);
+  const [merchantPubkey, setMerchantPubkey] = useState<string>();
   const [productData, setProductData] = useState<ProductData | undefined>(
     undefined
   );
@@ -21,7 +26,7 @@ const Listing = () => {
   const [invoiceGenerationFailed, setInvoiceGenerationFailed] = useState(false);
   const [cashuPaymentSent, setCashuPaymentSent] = useState(false);
   const [cashuPaymentFailed, setCashuPaymentFailed] = useState(false);
-
+  
   const productContext = useContext(ProductContext);
 
   useEffect(() => {
@@ -34,6 +39,12 @@ const Listing = () => {
       }
     }
   }, [router]);
+
+  useEffect(() => {
+    if (signer) {
+      signer.getPubKey().then(pk => setMerchantPubkey(pk));
+    }
+  }, [signer]);
 
   useEffect(() => {
     if (!productContext.isLoading && productContext.productEvents) {
@@ -64,6 +75,19 @@ const Listing = () => {
       }
     }
   }, [productContext.isLoading, productContext.productEvents, productIdString]);
+
+  useEffect(() => {
+    if ((invoiceIsPaid || cashuPaymentSent) && productData && merchantPubkey) {
+      const buyerPubkey = productData.pubkey;
+      const orderId     = productIdString;
+      sendShippingConfirmationMessage(
+        signer!,
+        merchantPubkey!,
+        buyerPubkey,
+        orderId
+      ).catch(console.error);
+    }
+  }, [invoiceIsPaid, cashuPaymentSent, productData, productIdString,merchantPubkey,nostr,signer]);
 
   return (
     <>
