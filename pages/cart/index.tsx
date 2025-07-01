@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useContext } from "react";
 import { useRouter } from "next/router";
 import { Button } from "@nextui-org/react";
 import {
@@ -18,6 +18,7 @@ import { DisplayCostBreakdown } from "../../components/utility-components/displa
 import CartInvoiceCard from "../../components/cart-invoice-card";
 import { fiat } from "@getalby/lightning-tools";
 import currencySelection from "../../public/currencySelection.json";
+import { ProfileMapContext } from "@/utils/context/context";
 
 interface QuantitySelectorProps {
   value: number;
@@ -70,6 +71,7 @@ function QuantitySelector({
 
 export default function Component() {
   const [products, setProducts] = useState<ProductData[]>([]);
+  const profileContext = useContext(ProfileMapContext);
   const [satPrices, setSatPrices] = useState<{ [key: string]: number | null }>(
     {}
   );
@@ -363,6 +365,25 @@ export default function Component() {
                                   : "Price unavailable"
                                 : "Loading..."}
                             </p>
+                            {(() => {
+                              const sellerProfile = profileContext.profileData.get(
+                                product.pubkey
+                              );
+                              if (sellerProfile?.content.p2pk?.enabled) {
+                                const now = Math.floor(Date.now() / 1000);
+                                const locktime = sellerProfile.content.p2pk.locktime;
+                                const days = Math.max(
+                                  0,
+                                  Math.ceil((locktime - now) / 86400)
+                                );
+                                return (
+                                  <p className="mt-1 text-xs italic text-gray-500 dark:text-gray-400">
+                                    🔒 Locked for {days} day{days !== 1 ? "s" : ""}
+                                  </p>
+                                );
+                              }
+                              return null;
+                            })()}
                           </div>
                           {product.quantity && (
                             <div className="mt-2">
@@ -460,6 +481,25 @@ export default function Component() {
                     className="mb-6 rounded-lg border border-gray-300 p-4 shadow-sm dark:border-gray-700"
                   >
                     <h2 className="mb-4 text-xl font-bold">{product.title}</h2>
+                    {(() => {
+                      const sellerProfile = profileContext.profileData.get(
+                        product.pubkey
+                      );
+                      if (sellerProfile?.content.p2pk?.enabled) {
+                        const now = Math.floor(Date.now() / 1000);
+                        const locktime = sellerProfile.content.p2pk.locktime;
+                        const days = Math.max(
+                          0,
+                          Math.ceil((locktime - now) / 86400)
+                        );
+                        return (
+                          <p className="mb-2 text-sm italic text-gray-500 dark:text-gray-400">
+                            🔒 Locked for {days} day{days !== 1 ? "s" : ""}
+                          </p>
+                        );
+                      }
+                      return null;
+                    })()}
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       {product.selectedSize && (
                         <p className="text-base">

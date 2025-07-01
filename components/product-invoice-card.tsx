@@ -36,7 +36,7 @@ import {
   CashuWallet,
   getEncodedToken,
   MintKeyset,
-  Proof,
+  Proof, 
 } from "@cashu/cashu-ts";
 import {
   constructGiftWrappedEvent,
@@ -145,6 +145,8 @@ export default function ProductInvoiceCard({
     control: contactControl,
     reset: contactReset,
   } = useForm();
+
+  const { pubkey: buyerPubkey } = useContext(SignerContext);
 
   useEffect(() => {
     const fetchKeys = async () => {
@@ -1064,6 +1066,11 @@ export default function ProductInvoiceCard({
     let sellerProofs: Proof[] = [];
 
     if (sellerAmount > 0) {
+      const mint = new CashuMint(mints[0]!);
+      const info = await mint.getInfo();
+      if (!info.nuts?.[11]) {
+        throw new Error("Mint does not support P2PK (NUT-11)");
+      }
       const { keep, send } = await wallet.send(sellerAmount, remainingProofs, {
         includeFees: true,
       });
@@ -1581,9 +1588,32 @@ export default function ProductInvoiceCard({
         (p: Proof) =>
           mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
+      
+      const pubkey = productData.pubkey;
+      const sellerProfile = profileContext.profileData.get(pubkey);
+      const p2pk = sellerProfile?.content?.p2pk;
+
+      const tags = p2pk?.tags || [];
+      // build p2pk options only if enabled
+      const p2pkOptions = p2pk?.enabled
+        ? {
+            pubkey:     p2pk.pubkey,
+            locktime:   p2pk.locktime,
+            refundKeys: [
+              ...(p2pk.refund || []),
+              buyerPubkey! 
+            ],
+            sigflag:    tags.find((t: any) => t[0] === "sigflag")?.[1],
+            nSigs:      Number(tags.find((t: any) => t[0] === "n_sigs")?.[1]),
+            pubkeys:    tags.filter((t: any) => t[0] === "pubkeys").map((t: any) => t[1]),
+          }
+        : undefined;
+      
       const { keep, send } = await wallet.send(price, filteredProofs, {
         includeFees: true,
+        ...(p2pkOptions ? { p2pk: p2pkOptions } : {}),
       });
+
       const deletedEventIds = [
         ...new Set([
           ...walletContext.proofEvents

@@ -44,6 +44,15 @@ export interface ProfileData {
     payment_preference?: string;
     fiat_options?: string[];
     shopstr_donation?: number;
+    display_name?: string;
+    website?: string;
+    p2pk?: {
+      enabled: boolean;
+      pubkey: string;
+      locktime: number;
+      refund?: string[];
+      tags?: [string, string][];
+    };
   };
   created_at: number;
 }
@@ -91,4 +100,12 @@ declare global {
     webln: any;
     nostr: any;
   }
+}
+
+export interface GetInfoResponse {
+  version: string;
+  network: string;
+  methods?: {
+    [nutId: string]: { supported: boolean };
+  };
 }
