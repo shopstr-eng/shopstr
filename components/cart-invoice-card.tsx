@@ -72,7 +72,7 @@ import {
   ContactFormData,
   CombinedFormData,
 } from "@/utils/types/types";
-import { ARBITER_PUBKEY } from "@/utils/constants";
+import { ARBITER_PUBKEY, DONATION_PUBKEY } from "@/utils/constants";
 
 export default function CartInvoiceCard({
   products,
@@ -1450,7 +1450,7 @@ export default function CartInvoiceCard({
       if (donationToken) {
         donationMessage = "Sale donation: " + donationToken;
         await sendPaymentAndContactMessage(
-          "a37118a4888e02d28e8767c08caaf73b49abdac391ad7ff18a304891e416dc33",
+          DONATION_PUBKEY,
           donationMessage,
           product,
           false,
