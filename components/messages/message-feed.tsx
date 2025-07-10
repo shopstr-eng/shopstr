@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useTabs } from "@/components/hooks/use-tabs";
 import { Framer } from "@/components/framer";
 import Messages from "./messages";
+import Disputes from "../disputes/Disputes";
 import { useRouter } from "next/router";
 
 const MessageFeed = ({ isInquiry = false }) => {
@@ -22,13 +23,18 @@ const MessageFeed = ({ isInquiry = false }) => {
         children: <Messages isPayment={false} />,
         id: "inquiries",
       },
+      {
+        label: "Disputes",
+        children: <Disputes />,
+        id: "disputes",
+      },
     ],
     initialTabId: "orders",
   });
 
   const framer = useTabs({
     tabs: hookProps.tabs,
-    initialTabId: isInquiry ? "inquiries" : "orders",
+    initialTabId: router.query.tab === "disputes" ? "disputes" : (isInquiry ? "inquiries" : "orders"),
   });
 
   useEffect(() => {
@@ -41,9 +47,14 @@ const MessageFeed = ({ isInquiry = false }) => {
 
   useEffect(() => {
     const handleRouteChange = (url: string) => {
-      const isInquiryTab = url.includes("isInquiry=true");
-      const newTab = isInquiryTab ? "inquiries" : "orders";
+      const urlParams = new URLSearchParams(url.split("?")[1]);
+      const tab = urlParams.get("tab");
 
+      let newTab: string = url.includes("isInquiry=true") ? "inquiries" : "orders";
+      if (tab === "disputes") {
+        newTab = "disputes";
+      } 
+      
       const newIndex = hookProps.tabs.findIndex((tab) => tab.id === newTab);
       if (newIndex !== -1 && framer.tabProps.selectedTabIndex !== newIndex) {
         framer.tabProps.setSelectedTab([newIndex, 0]);

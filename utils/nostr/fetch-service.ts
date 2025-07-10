@@ -1061,3 +1061,11 @@ export const fetchCashuWallet = async (
     }
   });
 };
+
+export const fetchDisputes = async (
+  nostr: NostrManager,
+  userPubkey: string
+): Promise<NostrEvent[]> => {
+  const filter: Filter = { kinds: [30006], '#p': [userPubkey] };
+  return nostr.fetch([filter], {}, getLocalStorageData().relays);
+};

@@ -13,6 +13,7 @@ import {
   NostrSigner,
 } from "@/utils/nostr/signers/nostr-signer";
 import * as nip49 from "nostr-tools/nip49";
+import { schnorr } from "@noble/curves/secp256k1";
 
 export type PassphraseResponse = {
   passphrase: string;
@@ -221,5 +222,10 @@ export class NostrNSecSigner implements NostrSigner {
 
   public async close(): Promise<void> {
     this.rememberedPassphrase = undefined;
+  }
+
+  public async signSchnorr(hash: string): Promise<string> {
+    const privKey = await this._getPrivKey();
+    return Buffer.from(schnorr.sign(hash, privKey)).toString("hex");
   }
 }

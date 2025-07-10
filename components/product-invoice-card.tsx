@@ -36,7 +36,7 @@ import {
   CashuWallet,
   getEncodedToken,
   MintKeyset,
-  Proof,
+  Proof, 
 } from "@cashu/cashu-ts";
 import {
   constructGiftWrappedEvent,
@@ -68,6 +68,7 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { ShippingFormData, ContactFormData } from "@/utils/types/types";
+import { ARBITER_PUBKEY } from "@/utils/constants";
 
 export default function ProductInvoiceCard({
   productData,
@@ -145,6 +146,8 @@ export default function ProductInvoiceCard({
     control: contactControl,
     reset: contactReset,
   } = useForm();
+
+  const { pubkey: buyerPubkey } = useContext(SignerContext);
 
   useEffect(() => {
     const fetchKeys = async () => {
@@ -932,84 +935,35 @@ export default function ProductInvoiceCard({
     contactInstructions?: string,
     additionalInfo?: string
   ) {
-    let retryCount = 0;
-    const maxRetries = 30; // Maximum 30 retries (about 1 minute)
-
-    while (retryCount < maxRetries) {
+    while (true) {
       try {
-        // First check if the quote has been paid
-        const quoteState = await wallet.checkMintQuote(hash);
-
-        if (quoteState.state === "PAID") {
-          // Quote is paid, try to mint proofs
-          try {
-            const proofs = await wallet.mintProofs(newPrice, hash);
-            if (proofs && proofs.length > 0) {
-              await sendTokens(
-                wallet,
-                proofs,
-                newPrice,
-                shippingName ? shippingName : undefined,
-                shippingAddress ? shippingAddress : undefined,
-                shippingUnitNo ? shippingUnitNo : undefined,
-                shippingCity ? shippingCity : undefined,
-                shippingPostalCode ? shippingPostalCode : undefined,
-                shippingState ? shippingState : undefined,
-                shippingCountry ? shippingCountry : undefined,
-                contact ? contact : undefined,
-                contactType ? contactType : undefined,
-                contactInstructions ? contactInstructions : undefined,
-                additionalInfo ? additionalInfo : undefined
-              );
-              setPaymentConfirmed(true);
-              setQrCodeUrl(null);
-              if (setInvoiceIsPaid) {
-                setInvoiceIsPaid(true);
-              }
-              break;
-            }
-          } catch (mintError) {
-            // If minting fails but quote is paid, it might be already issued
-            if (
-              mintError instanceof Error &&
-              mintError.message.includes("issued")
-            ) {
-              // Quote was already processed, consider it successful
-              setPaymentConfirmed(true);
-              setQrCodeUrl(null);
-              if (setInvoiceIsPaid) {
-                setInvoiceIsPaid(true);
-              }
-              setFailureText(
-                "Payment was received but your connection dropped! Please check your wallet balance."
-              );
-              setShowFailureModal(true);
-              break;
-            }
-            throw mintError;
-          }
-        } else if (quoteState.state === "UNPAID") {
-          // Quote not paid yet, continue waiting
-          retryCount++;
-          await new Promise((resolve) => setTimeout(resolve, 2100));
-          continue;
-        } else if (quoteState.state === "ISSUED") {
-          // Quote was already processed successfully
+        const proofs = await wallet.mintProofs(newPrice, hash);
+        if (proofs) {
+          await sendTokens(
+            wallet,
+            proofs,
+            newPrice,
+            shippingName ? shippingName : undefined,
+            shippingAddress ? shippingAddress : undefined,
+            shippingUnitNo ? shippingUnitNo : undefined,
+            shippingCity ? shippingCity : undefined,
+            shippingPostalCode ? shippingPostalCode : undefined,
+            shippingState ? shippingState : undefined,
+            shippingCountry ? shippingCountry : undefined,
+            contact ? contact : undefined,
+            contactType ? contactType : undefined,
+            contactInstructions ? contactInstructions : undefined,
+            additionalInfo ? additionalInfo : undefined
+          );
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           if (setInvoiceIsPaid) {
             setInvoiceIsPaid(true);
           }
-          setFailureText(
-            "Payment was received but your connection dropped! Please check your wallet balance."
-          );
-          setShowFailureModal(true);
           break;
         }
       } catch (error) {
-        console.error("Invoice check error:", error);
-        retryCount++;
-
+        console.error(error);
         if (error instanceof TypeError) {
           setShowInvoiceCard(false);
           setInvoice("");
@@ -1020,19 +974,6 @@ export default function ProductInvoiceCard({
           setShowFailureModal(true);
           break;
         }
-
-        // If we've exceeded max retries, show error
-        if (retryCount >= maxRetries) {
-          setShowInvoiceCard(false);
-          setInvoice("");
-          setQrCodeUrl(null);
-          setFailureText(
-            "Payment timed out! Please check your wallet balance or try again."
-          );
-          setShowFailureModal(true);
-          break;
-        }
-
         await new Promise((resolve) => setTimeout(resolve, 2100));
       }
     }
@@ -1064,6 +1005,11 @@ export default function ProductInvoiceCard({
     let sellerProofs: Proof[] = [];
 
     if (sellerAmount > 0) {
+      const mint = new CashuMint(mints[0]!);
+      const info = await mint.getInfo();
+      if (!info.nuts?.[11]) {
+        throw new Error("Mint does not support P2PK (NUT-11)");
+      }
       const { keep, send } = await wallet.send(sellerAmount, remainingProofs, {
         includeFees: true,
       });
@@ -1575,15 +1521,46 @@ export default function ProductInvoiceCard({
       }
 
       const mint = new CashuMint(mints[0]!);
+      //Ensure mint supports NUT-11 P2PK escrow
+      const mintInfo = await mint.getInfo();
+      if (!mintInfo.nuts?.["11"]?.supported) {
+        throw new Error("Cashu mint does not support P2PK escrow (NUT-11)");
+      }
       const wallet = new CashuWallet(mint);
       const mintKeySetIds = await wallet.getKeySets();
       const filteredProofs = tokens.filter(
         (p: Proof) =>
           mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
+      
+      const pubkey = productData.pubkey;
+      const sellerProfile = profileContext.profileData.get(pubkey);
+      const p2pk = sellerProfile?.content?.p2pk;
+
+      const tags = p2pk?.tags || [];
+      // build p2pk options only if enabled
+      const p2pkOptions = p2pk?.enabled
+        ? {
+            pubkey:     p2pk.pubkey,
+            locktime:   p2pk.locktime,
+            refundKeys: [
+              ...(p2pk.refund || []),
+              buyerPubkey! 
+            ],
+            sigflag: tags.find((t: string[]) => t[0] === "sigflag")?.[1] || "SIG_ALL",
+            nSigs:   2,                        // require 2-of-3 signatures
+            pubkeys: [
+              buyerPubkey!,                    // buyer
+              ARBITER_PUBKEY                   // arbiter
+            ],
+          }
+        : undefined;
+      
       const { keep, send } = await wallet.send(price, filteredProofs, {
         includeFees: true,
+        ...(p2pkOptions ? { p2pk: p2pkOptions } : {}),
       });
+
       const deletedEventIds = [
         ...new Set([
           ...walletContext.proofEvents
