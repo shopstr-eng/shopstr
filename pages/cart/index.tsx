@@ -232,11 +232,15 @@ export default function Component() {
   };
 
   const convertPriceToSats = async (product: ProductData): Promise<number> => {
+    // Use volumePrice if it exists, otherwise use default price
+    const basePrice =
+      product.volumePrice !== undefined ? product.volumePrice : product.price;
+
     if (
       product.currency.toLowerCase() === "sats" ||
       product.currency.toLowerCase() === "sat"
     ) {
-      return product.price;
+      return basePrice;
     }
     let price = 0;
     if (!currencySelection.hasOwnProperty(product.currency.toUpperCase())) {
@@ -248,7 +252,7 @@ export default function Component() {
     ) {
       try {
         const currencyData = {
-          amount: product.price,
+          amount: basePrice,
           currency: product.currency,
         };
         const numSats = await fiat.getSatoshiValue(currencyData);
@@ -257,7 +261,7 @@ export default function Component() {
         console.error("ERROR", err);
       }
     } else if (product.currency.toLowerCase() === "btc") {
-      price = product.price * 100000000;
+      price = basePrice * 100000000;
     }
     return price;
   };
@@ -297,11 +301,17 @@ export default function Component() {
   };
 
   const convertTotalToSats = async (product: ProductData): Promise<number> => {
+    // Use volumePrice if it exists, otherwise use default price
+    const basePrice =
+      product.volumePrice !== undefined ? product.volumePrice : product.price;
+    const shippingCost = product.shippingCost || 0;
+    const totalCost = basePrice + shippingCost;
+
     if (
       product.currency.toLowerCase() === "sats" ||
       product.currency.toLowerCase() === "sat"
     ) {
-      return product.totalCost;
+      return totalCost;
     }
     let total = 0;
     if (!currencySelection.hasOwnProperty(product.currency.toUpperCase())) {
@@ -313,7 +323,7 @@ export default function Component() {
     ) {
       try {
         const currencyData = {
-          amount: product.totalCost,
+          amount: totalCost,
           currency: product.currency,
         };
         const numSats = await fiat.getSatoshiValue(currencyData);
@@ -322,7 +332,7 @@ export default function Component() {
         console.error("ERROR", err);
       }
     } else if (product.currency.toLowerCase() === "btc") {
-      total = product.totalCost * 100000000;
+      total = totalCost * 100000000;
     }
     return total;
   };

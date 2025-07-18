@@ -740,9 +740,23 @@ export default function CartInvoiceCard({
           (product.shippingType === "Free/Pickup" && needsShippingInfo === true)
         ) {
           let contactMessage = "";
-          if (!shippingUnitNo && !product.selectedSize) {
+          let productDetails = "";
+          if (product.selectedSize) {
+            productDetails += "in a size " + product.selectedSize;
+          }
+          if (product.selectedVolume) {
+            if (productDetails) {
+              productDetails += " and a " + product.selectedVolume;
+            } else {
+              productDetails += " " + product.selectedVolume;
+            }
+          }
+
+          if (!shippingUnitNo) {
             contactMessage =
-              "Please ship the product to " +
+              "Please ship the product " +
+              (productDetails ? productDetails + " " : "") +
+              "to " +
               shippingName +
               " at " +
               shippingAddress +
@@ -755,45 +769,11 @@ export default function CartInvoiceCard({
               ", " +
               shippingCountry +
               ".";
-          } else if (!shippingUnitNo && product.selectedSize) {
+          } else {
             contactMessage =
-              "Please ship the product in a size " +
-              product.selectedSize +
-              " to " +
-              shippingName +
-              " at " +
-              shippingAddress +
-              ", " +
-              shippingCity +
-              ", " +
-              shippingPostalCode +
-              ", " +
-              shippingState +
-              ", " +
-              shippingCountry +
-              ".";
-          } else if (shippingUnitNo && !product.selectedSize) {
-            contactMessage =
-              "Please ship the product to " +
-              shippingName +
-              " at " +
-              shippingAddress +
-              " " +
-              shippingUnitNo +
-              ", " +
-              shippingCity +
-              ", " +
-              shippingPostalCode +
-              ", " +
-              shippingState +
-              ", " +
-              shippingCountry +
-              ".";
-          } else if (shippingUnitNo && product.selectedSize) {
-            contactMessage =
-              "Please ship the product in a size " +
-              product.selectedSize +
-              " to " +
+              "Please ship the product " +
+              (productDetails ? productDetails + " " : "") +
+              "to " +
               shippingName +
               " at " +
               shippingAddress +
@@ -860,7 +840,7 @@ export default function CartInvoiceCard({
               product.title +
               "in a size " +
               product.selectedSize +
-              " was processed successfully.  You should be receiving payment information from " +
+              " was processed successfully. You should be receiving payment information from " +
               nip19.npubEncode(product.pubkey) +
               " as soon as they review your oder.";
           } else {
@@ -901,9 +881,20 @@ export default function CartInvoiceCard({
             );
           }
         }
-      } else if (product.selectedSize) {
-        const contactMessage =
-          "This purchase was for a size " + product.selectedSize + ".";
+      } else if (product.selectedSize || product.selectedVolume) {
+        let productDetails = "";
+        if (product.selectedSize) {
+          productDetails += "a size " + product.selectedSize;
+        }
+        if (product.selectedVolume) {
+          if (productDetails) {
+            productDetails += " and a " + product.selectedVolume;
+          } else {
+            productDetails += "a " + product.selectedVolume;
+          }
+        }
+
+        const contactMessage = "This purchase was for " + productDetails + ".";
         await sendPaymentAndContactMessage(
           pubkey,
           contactMessage,
@@ -917,8 +908,8 @@ export default function CartInvoiceCard({
           const receiptMessage =
             "Thank you for your purchase of " +
             title +
-            " in a size " +
-            product.selectedSize +
+            " in " +
+            productDetails +
             " from " +
             nip19.npubEncode(product.pubkey) +
             ".";
@@ -1549,9 +1540,23 @@ export default function CartInvoiceCard({
           (product.shippingType === "Free/Pickup" && needsShippingInfo === true)
         ) {
           let contactMessage = "";
-          if (!shippingUnitNo && !product.selectedSize) {
+          let productDetails = "";
+          if (product.selectedSize) {
+            productDetails += "in a size " + product.selectedSize;
+          }
+          if (product.selectedVolume) {
+            if (productDetails) {
+              productDetails += " and a " + product.selectedVolume;
+            } else {
+              productDetails += "in volume " + product.selectedVolume;
+            }
+          }
+
+          if (!shippingUnitNo) {
             contactMessage =
-              "Please ship the product to " +
+              "Please ship the product " +
+              (productDetails ? productDetails + " " : "") +
+              "to " +
               shippingName +
               " at " +
               shippingAddress +
@@ -1564,45 +1569,11 @@ export default function CartInvoiceCard({
               ", " +
               shippingCountry +
               ".";
-          } else if (!shippingUnitNo && product.selectedSize) {
+          } else {
             contactMessage =
-              "Please ship the product in a size " +
-              product.selectedSize +
-              " to " +
-              shippingName +
-              " at " +
-              shippingAddress +
-              ", " +
-              shippingCity +
-              ", " +
-              shippingPostalCode +
-              ", " +
-              shippingState +
-              ", " +
-              shippingCountry +
-              ".";
-          } else if (shippingUnitNo && !product.selectedSize) {
-            contactMessage =
-              "Please ship the product to " +
-              shippingName +
-              " at " +
-              shippingAddress +
-              " " +
-              shippingUnitNo +
-              ", " +
-              shippingCity +
-              ", " +
-              shippingPostalCode +
-              ", " +
-              shippingState +
-              ", " +
-              shippingCountry +
-              ".";
-          } else if (shippingUnitNo && product.selectedSize) {
-            contactMessage =
-              "Please ship the product in a size " +
-              product.selectedSize +
-              " to " +
+              "Please ship the product " +
+              (productDetails ? productDetails + " " : "") +
+              "to " +
               shippingName +
               " at " +
               shippingAddress +
@@ -1710,9 +1681,20 @@ export default function CartInvoiceCard({
             );
           }
         }
-      } else if (product.selectedSize) {
-        const contactMessage =
-          "This purchase was for a size " + product.selectedSize + ".";
+      } else if (product.selectedSize || product.selectedVolume) {
+        let productDetails = "";
+        if (product.selectedSize) {
+          productDetails += "a size " + product.selectedSize;
+        }
+        if (product.selectedVolume) {
+          if (productDetails) {
+            productDetails += " and a " + product.selectedVolume;
+          } else {
+            productDetails += "a " + product.selectedVolume;
+          }
+        }
+
+        const contactMessage = "This purchase was for " + productDetails + ".";
         await sendPaymentAndContactMessage(
           pubkey,
           contactMessage,
@@ -1726,8 +1708,8 @@ export default function CartInvoiceCard({
           const receiptMessage =
             "Thank you for your purchase of " +
             title +
-            " in a size " +
-            product.selectedSize +
+            " in " +
+            productDetails +
             " from " +
             nip19.npubEncode(product.pubkey) +
             ".";

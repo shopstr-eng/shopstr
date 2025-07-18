@@ -24,6 +24,7 @@ import SuccessModal from "../utility-components/success-modal";
 import SignInModal from "../sign-in/SignInModal";
 import currencySelection from "../../public/currencySelection.json";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import VolumeSelector from "./volume-selector";
 
 const SUMMARY_CHARACTER_LIMIT = 100;
 
@@ -72,8 +73,23 @@ export default function CheckoutCard({
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   const [cart, setCart] = useState<ProductData[]>([]);
+  const [selectedVolume, setSelectedVolume] = useState<string>("");
+  const [currentPrice, setCurrentPrice] = useState(productData.price);
 
   const reviewsContext = useContext(ReviewsContext);
+
+  const hasVolumes = productData.volumes && productData.volumes.length > 0;
+
+  useEffect(() => {
+    if (selectedVolume && productData.volumePrices) {
+      const volumePrice = productData.volumePrices.get(selectedVolume);
+      if (volumePrice !== undefined) {
+        setCurrentPrice(volumePrice);
+      }
+    } else {
+      setCurrentPrice(productData.price);
+    }
+  }, [selectedVolume, productData.price, productData.volumePrices]);
 
   const toggleExpand = () => {
     setIsExpanded(!isExpanded);
@@ -214,12 +230,23 @@ export default function CheckoutCard({
         return;
       }
       let updatedCart = [];
+      let productToAdd = { ...productData };
+
       if (selectedSize) {
-        const productWithSize = { ...productData, selectedSize: selectedSize };
-        updatedCart = [...cart, productWithSize];
-      } else {
-        updatedCart = [...cart, productData];
+        productToAdd.selectedSize = selectedSize;
       }
+      if (selectedVolume) {
+        productToAdd.selectedVolume = selectedVolume;
+        // Set the volume price if one exists
+        if (productData.volumePrices) {
+          const volumePrice = productData.volumePrices.get(selectedVolume);
+          if (volumePrice !== undefined) {
+            productToAdd.volumePrice = volumePrice;
+          }
+        }
+      }
+
+      updatedCart = [...cart, productToAdd];
       setCart(updatedCart);
       localStorage.setItem("cart", JSON.stringify(updatedCart));
     } else {
@@ -282,6 +309,13 @@ export default function CheckoutCard({
         )}
       </div>
     );
+  };
+
+  // Create updated product data with selected volume price
+  const updatedProductData = {
+    ...productData,
+    price: currentPrice,
+    totalCost: currentPrice + productData.shippingCost,
   };
 
   return (
@@ -413,8 +447,18 @@ export default function CheckoutCard({
                     </button>
                   )}
                 </div>
+                {hasVolumes && (
+                  <VolumeSelector
+                    volumes={productData.volumes!}
+                    volumePrices={productData.volumePrices!}
+                    currency={productData.currency}
+                    selectedVolume={selectedVolume}
+                    onVolumeChange={setSelectedVolume}
+                    isRequired={true}
+                  />
+                )}
                 <div className="mt-4">
-                  <DisplayCheckoutCost monetaryInfo={productData} />
+                  <DisplayCheckoutCost monetaryInfo={updatedProductData} />
                 </div>
                 <div className="pb-1">
                   <Chip
@@ -431,23 +475,33 @@ export default function CheckoutCard({
                       <>
                         <Button
                           className={`min-w-fit bg-gradient-to-tr from-purple-700 via-purple-500 to-purple-700 text-dark-text shadow-lg dark:from-yellow-700 dark:via-yellow-500 dark:to-yellow-700 dark:text-light-text ${
-                            hasSizes && !selectedSize
+                            (hasSizes && !selectedSize) ||
+                            (hasVolumes && !selectedVolume)
                               ? "cursor-not-allowed opacity-50"
                               : ""
                           }`}
                           onClick={toggleBuyNow}
-                          disabled={hasSizes && !selectedSize}
+                          disabled={
+                            (hasSizes && !selectedSize) ||
+                            (hasVolumes && !selectedVolume)
+                          }
                         >
                           Buy Now
                         </Button>
                         <Button
                           className={`${SHOPSTRBUTTONCLASSNAMES} ${
-                            isAdded || (hasSizes && !selectedSize)
+                            isAdded ||
+                            (hasSizes && !selectedSize) ||
+                            (hasVolumes && !selectedVolume)
                               ? "cursor-not-allowed opacity-50"
                               : ""
                           }`}
                           onClick={handleAddToCart}
-                          disabled={isAdded || (hasSizes && !selectedSize)}
+                          disabled={
+                            isAdded ||
+                            (hasSizes && !selectedSize) ||
+                            (hasVolumes && !selectedVolume)
+                          }
                         >
                           Add To Cart
                         </Button>
@@ -585,7 +639,6 @@ export default function CheckoutCard({
                 ) : (
                   <div className="flex justify-center">
                     <div className="w-full max-w-xl rounded-lg bg-light-fg p-10 text-center shadow-lg dark:bg-dark-fg">
-                      <FaceFrownIcon className="mx-auto mb-5 h-20 w-20 text-light-text dark:text-dark-text" />
                       <span className="block text-5xl text-light-text dark:text-dark-text">
                         No reviews . . . yet!
                       </span>
@@ -593,7 +646,6 @@ export default function CheckoutCard({
                         <span className="text-2xl text-light-text dark:text-dark-text">
                           Be the first to leave a review!
                         </span>
-                        <InformationCircleIcon className="h-10 w-10 text-light-text dark:text-dark-text" />
                       </div>
                     </div>
                   </div>
@@ -609,7 +661,7 @@ export default function CheckoutCard({
             {selectedSize && (
               <p className="mb-4 text-lg">Size: {selectedSize}</p>
             )}
-            <DisplayCostBreakdown monetaryInfo={productData} />
+            <DisplayCostBreakdown monetaryInfo={updatedProductData} />
             <div className="mx-4 mt-2 flex items-center justify-center text-center">
               <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
               <p className="ml-2 text-xs text-light-text dark:text-dark-text">
@@ -620,13 +672,14 @@ export default function CheckoutCard({
           </div>
           <div className="flex flex-col items-center">
             <ProductInvoiceCard
-              productData={productData}
+              productData={updatedProductData}
               setFiatOrderIsPlaced={setFiatOrderIsPlaced}
               setInvoiceIsPaid={setInvoiceIsPaid}
               setInvoiceGenerationFailed={setInvoiceGenerationFailed}
               setCashuPaymentSent={setCashuPaymentSent}
               setCashuPaymentFailed={setCashuPaymentFailed}
               selectedSize={selectedSize}
+              selectedVolume={selectedVolume}
             />
           </div>
         </>

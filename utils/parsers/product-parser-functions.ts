@@ -22,10 +22,14 @@ export type ProductData = {
   quantity?: number;
   sizes?: string[];
   sizeQuantities?: Map<string, number>;
+  volumes?: string[];
+  volumePrices?: Map<string, number>;
   condition?: string;
   status?: string;
   selectedSize?: string;
   selectedQuantity?: number;
+  selectedVolume?: string;
+  volumePrice?: number;
   required?: string;
   restrictions?: string;
 };
@@ -128,6 +132,18 @@ export const parseTags = (productEvent: NostrEvent) => {
         if (parsedData.sizeQuantities === undefined)
           parsedData.sizeQuantities = new Map<string, number>();
         parsedData.sizeQuantities.set(size!, Number(quantity));
+        break;
+      case "volume":
+        if (!parsedData.volumes) {
+          parsedData.volumes = [];
+          parsedData.volumePrices = new Map<string, number>();
+        }
+        if (values[0]) {
+          parsedData.volumes.push(values[0]);
+          if (values[1]) {
+            parsedData.volumePrices!.set(values[0], parseFloat(values[1]));
+          }
+        }
         break;
       case "condition":
         parsedData.condition = values[0];

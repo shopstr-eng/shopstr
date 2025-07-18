@@ -76,6 +76,7 @@ export default function ProductInvoiceCard({
   setCashuPaymentSent,
   setCashuPaymentFailed,
   selectedSize,
+  selectedVolume,
 }: {
   productData: ProductData;
   setFiatOrderIsPlaced?: (fiatOrderIsPlaced: boolean) => void;
@@ -84,6 +85,7 @@ export default function ProductInvoiceCard({
   setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
   setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
   selectedSize?: string;
+  selectedVolume?: string;
 }) {
   const router = useRouter();
   const { mints, tokens, history } = getLocalStorageData();
@@ -449,7 +451,6 @@ export default function ProductInvoiceCard({
           undefined,
           undefined,
           undefined,
-          undefined,
           contact,
           contactType,
           contactInstructions,
@@ -604,9 +605,22 @@ export default function ProductInvoiceCard({
           needsShippingInfo === true)
       ) {
         let contactMessage = "";
-        if (!shippingUnitNo && !productData.selectedSize) {
+        let productDetails = "";
+        if (selectedSize) {
+          productDetails += "in a size " + selectedSize;
+        }
+        if (selectedVolume) {
+          if (productDetails) {
+            productDetails += " and volume " + selectedVolume;
+          } else {
+            productDetails += "in volume " + selectedVolume;
+          }
+        }
+        if (!shippingUnitNo) {
           contactMessage =
-            "Please ship the product to " +
+            "Please ship the product " +
+            (productDetails ? productDetails + " " : "") +
+            "to " +
             shippingName +
             " at " +
             shippingAddress +
@@ -619,45 +633,11 @@ export default function ProductInvoiceCard({
             ", " +
             shippingCountry +
             ".";
-        } else if (!shippingUnitNo && productData.selectedSize) {
+        } else {
           contactMessage =
-            "Please ship the product in a size " +
-            productData.selectedSize +
-            " to " +
-            shippingName +
-            " at " +
-            shippingAddress +
-            ", " +
-            shippingCity +
-            ", " +
-            shippingPostalCode +
-            ", " +
-            shippingState +
-            ", " +
-            shippingCountry +
-            ".";
-        } else if (shippingUnitNo && !productData.selectedSize) {
-          contactMessage =
-            "Please ship the product to " +
-            shippingName +
-            " at " +
-            shippingAddress +
-            " " +
-            shippingUnitNo +
-            ", " +
-            shippingCity +
-            ", " +
-            shippingPostalCode +
-            ", " +
-            shippingState +
-            ", " +
-            shippingCountry +
-            ".";
-        } else if (shippingUnitNo && productData.selectedSize) {
-          contactMessage =
-            "Please ship the product in a size " +
-            productData.selectedSize +
-            " to " +
+            "Please ship the product " +
+            (productDetails ? productDetails + " " : "") +
+            "to " +
             shippingName +
             " at " +
             shippingAddress +
@@ -705,12 +685,24 @@ export default function ProductInvoiceCard({
       ) {
         let contactMessage;
         let receiptMessage;
-        if (productData.selectedSize) {
+        let productDetails = "";
+        if (selectedSize) {
+          productDetails += "in a size " + selectedSize;
+        }
+        if (selectedVolume) {
+          if (productDetails) {
+            productDetails += " and volume " + selectedVolume;
+          } else {
+            productDetails += "in volume " + selectedVolume;
+          }
+        }
+
+        if (productDetails) {
           contactMessage =
             "To finalize the sale of your " +
             title +
-            " listing in a size " +
-            productData.selectedSize +
+            " listing " +
+            productDetails +
             " on Shopstr, please contact " +
             contact +
             " over " +
@@ -720,8 +712,8 @@ export default function ProductInvoiceCard({
           receiptMessage =
             "Your order for " +
             productData.title +
-            "in a size " +
-            productData.selectedSize +
+            " " +
+            productDetails +
             " was processed successfully! You should be receiving payment information from " +
             nip19.npubEncode(productData.pubkey) +
             " as soon as they review your order.";
@@ -761,9 +753,20 @@ export default function ProductInvoiceCard({
           );
         }
       }
-    } else if (productData.selectedSize) {
-      const contactMessage =
-        "This purchase was for a size " + productData.selectedSize + ".";
+    } else if (selectedSize || selectedVolume) {
+      let productDetails = "";
+      if (selectedSize) {
+        productDetails += "a size " + selectedSize;
+      }
+      if (selectedVolume) {
+        if (productDetails) {
+          productDetails += " and a " + selectedVolume;
+        } else {
+          productDetails += "a " + selectedVolume;
+        }
+      }
+
+      const contactMessage = "This purchase was for " + productDetails + ".";
       await sendPaymentAndContactMessage(
         pubkey,
         contactMessage,
@@ -776,8 +779,8 @@ export default function ProductInvoiceCard({
         const receiptMessage =
           "Thank you for your purchase of " +
           title +
-          " in a size " +
-          productData.selectedSize +
+          " in " +
+          productDetails +
           " from " +
           nip19.npubEncode(productData.pubkey) +
           ".";
@@ -1304,10 +1307,24 @@ export default function ProductInvoiceCard({
           " was processed successfully. You should be receiving tracking information from " +
           nip19.npubEncode(productData.pubkey) +
           " as soon as they claim their payment.";
+        let productDetails = "";
+        if (selectedSize) {
+          productDetails += "in a size " + selectedSize;
+        }
+        if (selectedVolume) {
+          if (productDetails) {
+            productDetails += " and volume " + selectedVolume;
+          } else {
+            productDetails += "in volume " + selectedVolume;
+          }
+        }
+
         let contactMessage = "";
-        if (!shippingUnitNo && !selectedSize) {
+        if (!shippingUnitNo) {
           contactMessage =
-            "Please ship the product to " +
+            "Please ship the product " +
+            (productDetails ? productDetails + " " : "") +
+            "to " +
             shippingName +
             " at " +
             shippingAddress +
@@ -1320,45 +1337,11 @@ export default function ProductInvoiceCard({
             ", " +
             shippingCountry +
             ".";
-        } else if (!shippingUnitNo && selectedSize) {
+        } else {
           contactMessage =
-            "Please ship the product in a size " +
-            selectedSize +
-            " to " +
-            shippingName +
-            " at " +
-            shippingAddress +
-            ", " +
-            shippingCity +
-            ", " +
-            shippingPostalCode +
-            ", " +
-            shippingState +
-            ", " +
-            shippingCountry +
-            ".";
-        } else if (shippingUnitNo && !selectedSize) {
-          contactMessage =
-            "Please ship the product to " +
-            shippingName +
-            " at " +
-            shippingAddress +
-            " " +
-            shippingUnitNo +
-            ", " +
-            shippingCity +
-            ", " +
-            shippingPostalCode +
-            ", " +
-            shippingState +
-            ", " +
-            shippingCountry +
-            ".";
-        } else if (shippingUnitNo && selectedSize) {
-          contactMessage =
-            "Please ship the product in a size " +
-            selectedSize +
-            " to " +
+            "Please ship the product " +
+            (productDetails ? productDetails + " " : "") +
+            "to " +
             shippingName +
             " at " +
             shippingAddress +
@@ -1395,12 +1378,24 @@ export default function ProductInvoiceCard({
       } else if (contact && contactType && contactInstructions) {
         let contactMessage;
         let receiptMessage;
+        let productDetails = "";
         if (selectedSize) {
+          productDetails += "in a size " + selectedSize;
+        }
+        if (selectedVolume) {
+          if (productDetails) {
+            productDetails += " and volume " + selectedVolume;
+          } else {
+            productDetails += "in volume " + selectedVolume;
+          }
+        }
+
+        if (productDetails) {
           contactMessage =
             "To finalize the sale of your " +
             productData.title +
-            " listing in a size " +
-            selectedSize +
+            " listing " +
+            productDetails +
             " on Shopstr, please contact " +
             contact +
             " over " +
@@ -1410,8 +1405,8 @@ export default function ProductInvoiceCard({
           receiptMessage =
             "Your order for " +
             productData.title +
-            " in a size " +
-            selectedSize +
+            " " +
+            productDetails +
             " was processed successfully. You should be receiving delivery information from " +
             nip19.npubEncode(productData.pubkey) +
             " as soon as they claim their payment.";
@@ -1451,9 +1446,20 @@ export default function ProductInvoiceCard({
           );
         }
       }
-    } else if (selectedSize) {
-      const contactMessage =
-        "This purchase was for a size " + selectedSize + ".";
+    } else if (selectedSize || selectedVolume) {
+      let productDetails = "";
+      if (selectedSize) {
+        productDetails += "a size " + selectedSize;
+      }
+      if (selectedVolume) {
+        if (productDetails) {
+          productDetails += " and a " + selectedVolume;
+        } else {
+          productDetails += "a " + selectedVolume;
+        }
+      }
+
+      const contactMessage = "This purchase was for " + productDetails + ".";
       await sendPaymentAndContactMessage(
         productData.pubkey,
         contactMessage,
@@ -1466,8 +1472,8 @@ export default function ProductInvoiceCard({
         const receiptMessage =
           "Thank you for your purchase of " +
           productData.title +
-          " in a size " +
-          selectedSize +
+          " in " +
+          productDetails +
           " from " +
           nip19.npubEncode(productData.pubkey) +
           ".";
