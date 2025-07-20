@@ -10,7 +10,6 @@ import {
   Card,
   CardHeader,
   CardBody,
-  CardFooter,
   Divider,
   Image,
   useDisclosure,
@@ -76,8 +75,6 @@ export default function CartInvoiceCard({
   quantities,
   shippingTypes,
   totalCostsInSats,
-  subtotal,
-  totalShippingCost,
   totalCost,
   onBackToCart,
 }: {
@@ -85,8 +82,6 @@ export default function CartInvoiceCard({
   quantities: { [key: string]: number };
   shippingTypes: { [key: string]: string };
   totalCostsInSats: { [key: string]: number };
-  subtotal: number;
-  totalShippingCost: number;
   totalCost: number;
   onBackToCart?: () => void;
 }) {
@@ -130,6 +125,10 @@ export default function CartInvoiceCard({
   const [failureText, setFailureText] = useState("");
 
   const [isFormValid, setIsFormValid] = useState(false);
+  const [freePickupPreference, setFreePickupPreference] = useState<
+    "shipping" | "contact"
+  >("shipping");
+  const [showFreePickupSelection, setShowFreePickupSelection] = useState(false);
 
   const {
     handleSubmit: handleFormSubmit,
@@ -144,6 +143,14 @@ export default function CartInvoiceCard({
   const uniqueShippingTypes = useMemo(() => {
     return Array.from(new Set(Object.values(shippingTypes)));
   }, [shippingTypes]);
+
+  const hasFreePickupProducts = useMemo(() => {
+    return Object.values(shippingTypes).includes("Free/Pickup");
+  }, [shippingTypes]);
+
+  const hasMixedShippingWithFreePickup = useMemo(() => {
+    return uniqueShippingTypes.length > 1 && hasFreePickupProducts;
+  }, [uniqueShippingTypes, hasFreePickupProducts]);
 
   const [requiredInfo, setRequiredInfo] = useState("");
 
@@ -518,6 +525,10 @@ export default function CartInvoiceCard({
     } else if (selectedOrderType === "combined") {
       setFormType("combined");
       setShowPaymentButtons(false);
+      // Show Free/Pickup preference selection if we have mixed shipping with Free/Pickup
+      if (hasMixedShippingWithFreePickup) {
+        setShowFreePickupSelection(true);
+      }
     }
 
     // After form type selection, check if we need to show fiat options
@@ -634,119 +645,141 @@ export default function CartInvoiceCard({
           );
         }
 
-        // Handle shipping or contact messages based on form type
-        if (formType === "shipping" || formType === "combined") {
-          if (data.shippingName && data.shippingAddress && data.shippingCity) {
-            let contactMessage = "";
-            let productDetails = "";
-            if (product.selectedSize) {
-              productDetails += "in a size " + product.selectedSize;
-            }
-            if (product.selectedVolume) {
-              if (productDetails) {
-                productDetails += " and a " + product.selectedVolume;
-              } else {
-                productDetails += "in a " + product.selectedVolume;
-              }
-            }
+        // Handle shipping or contact messages based on form type and product shipping type
+        const productShippingType = shippingTypes[product.id];
+        const shouldUseShipping =
+          formType === "shipping" ||
+          (formType === "combined" &&
+            (productShippingType !== "Free/Pickup" ||
+              (productShippingType === "Free/Pickup" &&
+                freePickupPreference === "shipping")));
 
-            if (!data.shippingUnitNo) {
-              contactMessage =
-                "Please ship the product " +
-                (productDetails ? productDetails + " " : "") +
-                "to " +
-                data.shippingName +
-                " at " +
-                data.shippingAddress +
-                ", " +
-                data.shippingCity +
-                ", " +
-                data.shippingPostalCode +
-                ", " +
-                data.shippingState +
-                ", " +
-                data.shippingCountry +
-                ".";
-            } else {
-              contactMessage =
-                "Please ship the product " +
-                (productDetails ? productDetails + " " : "") +
-                "to " +
-                data.shippingName +
-                " at " +
-                data.shippingAddress +
-                " " +
-                data.shippingUnitNo +
-                ", " +
-                data.shippingCity +
-                ", " +
-                data.shippingPostalCode +
-                ", " +
-                data.shippingState +
-                ", " +
-                data.shippingCountry +
-                ".";
-            }
-            await sendPaymentAndContactMessage(
-              pubkey,
-              contactMessage,
-              product,
-              false,
-              false,
-              false,
-              orderId
-            );
+        const shouldUseContact =
+          formType === "contact" ||
+          (formType === "combined" &&
+            (productShippingType === "N/A" ||
+              productShippingType === "Pickup" ||
+              (productShippingType === "Free/Pickup" &&
+                freePickupPreference === "contact")));
+
+        if (
+          shouldUseShipping &&
+          data.shippingName &&
+          data.shippingAddress &&
+          data.shippingCity
+        ) {
+          let contactMessage = "";
+          let productDetails = "";
+          if (product.selectedSize) {
+            productDetails += "in a size " + product.selectedSize;
           }
+          if (product.selectedVolume) {
+            if (productDetails) {
+              productDetails += " and a " + product.selectedVolume;
+            } else {
+              productDetails += "in a " + product.selectedVolume;
+            }
+          }
+
+          if (!data.shippingUnitNo) {
+            contactMessage =
+              "Please ship the product " +
+              (productDetails ? productDetails + " " : "") +
+              "to " +
+              data.shippingName +
+              " at " +
+              data.shippingAddress +
+              ", " +
+              data.shippingCity +
+              ", " +
+              data.shippingPostalCode +
+              ", " +
+              data.shippingState +
+              ", " +
+              data.shippingCountry +
+              ".";
+          } else {
+            contactMessage =
+              "Please ship the product " +
+              (productDetails ? productDetails + " " : "") +
+              "to " +
+              data.shippingName +
+              " at " +
+              data.shippingAddress +
+              " " +
+              data.shippingUnitNo +
+              ", " +
+              data.shippingCity +
+              ", " +
+              data.shippingPostalCode +
+              ", " +
+              data.shippingState +
+              ", " +
+              data.shippingCountry +
+              ".";
+          }
+          await sendPaymentAndContactMessage(
+            pubkey,
+            contactMessage,
+            product,
+            false,
+            false,
+            false,
+            orderId
+          );
         }
 
-        if (formType === "contact" || formType === "combined") {
-          if (data.contact && data.contactType && data.contactInstructions) {
-            let contactMessage;
-            let productDetails = "";
-            if (product.selectedSize) {
-              productDetails += "in a size " + product.selectedSize;
-            }
-            if (product.selectedVolume) {
-              if (productDetails) {
-                productDetails += " and a " + product.selectedVolume;
-              } else {
-                productDetails += "in a " + product.selectedVolume;
-              }
-            }
-
-            if (productDetails) {
-              contactMessage =
-                "To finalize the sale of your " +
-                title +
-                " listing " +
-                productDetails +
-                " on Shopstr, please contact " +
-                data.contact +
-                " over " +
-                data.contactType +
-                " using the following instructions: " +
-                data.contactInstructions;
-            } else {
-              contactMessage =
-                "To finalize the sale of your " +
-                title +
-                " listing on Shopstr, please contact " +
-                data.contact +
-                " over " +
-                data.contactType +
-                " using the following instructions: " +
-                data.contactInstructions;
-            }
-            await sendPaymentAndContactMessage(
-              pubkey,
-              contactMessage,
-              product,
-              false,
-              false,
-              false,
-              orderId
-            );
+        if (
+          shouldUseContact &&
+          data.contact &&
+          data.contactType &&
+          data.contactInstructions
+        ) {
+          let contactMessage;
+          let productDetails = "";
+          if (product.selectedSize) {
+            productDetails += "in a size " + product.selectedSize;
           }
+          if (product.selectedVolume) {
+            if (productDetails) {
+              productDetails += " and a " + product.selectedVolume;
+            } else {
+              productDetails += "in a " + product.selectedVolume;
+            }
+          }
+
+          if (productDetails) {
+            contactMessage =
+              "To finalize the sale of your " +
+              title +
+              " listing " +
+              productDetails +
+              " on Shopstr, please contact " +
+              data.contact +
+              " over " +
+              data.contactType +
+              " using the following instructions: " +
+              data.contactInstructions;
+          } else {
+            contactMessage =
+              "To finalize the sale of your " +
+              title +
+              " listing on Shopstr, please contact " +
+              data.contact +
+              " over " +
+              data.contactType +
+              " using the following instructions: " +
+              data.contactInstructions;
+          }
+          await sendPaymentAndContactMessage(
+            pubkey,
+            contactMessage,
+            product,
+            false,
+            false,
+            false,
+            orderId
+          );
         }
 
         // Send receipt to user
@@ -1253,119 +1286,141 @@ export default function CartInvoiceCard({
         );
       }
 
-      // Handle shipping or contact messages
-      if (formType === "shipping" || formType === "combined") {
-        if (data.shippingName && data.shippingAddress && data.shippingCity) {
-          let contactMessage = "";
-          let productDetails = "";
-          if (product.selectedSize) {
-            productDetails += "in a size " + product.selectedSize;
-          }
-          if (product.selectedVolume) {
-            if (productDetails) {
-              productDetails += " and a " + product.selectedVolume;
-            } else {
-              productDetails += "in a " + product.selectedVolume;
-            }
-          }
+      // Handle shipping or contact messages based on form type and product shipping type
+      const productShippingType = shippingTypes[product.id];
+      const shouldUseShipping =
+        formType === "shipping" ||
+        (formType === "combined" &&
+          (productShippingType !== "Free/Pickup" ||
+            (productShippingType === "Free/Pickup" &&
+              freePickupPreference === "shipping")));
 
-          if (!data.shippingUnitNo) {
-            contactMessage =
-              "Please ship the product " +
-              (productDetails ? productDetails + " " : "") +
-              "to " +
-              data.shippingName +
-              " at " +
-              data.shippingAddress +
-              ", " +
-              data.shippingCity +
-              ", " +
-              data.shippingPostalCode +
-              ", " +
-              data.shippingState +
-              ", " +
-              data.shippingCountry +
-              ".";
-          } else {
-            contactMessage =
-              "Please ship the product " +
-              (productDetails ? productDetails + " " : "") +
-              "to " +
-              data.shippingName +
-              " at " +
-              data.shippingAddress +
-              " " +
-              data.shippingUnitNo +
-              ", " +
-              data.shippingCity +
-              ", " +
-              data.shippingPostalCode +
-              ", " +
-              data.shippingState +
-              ", " +
-              data.shippingCountry +
-              ".";
-          }
-          await sendPaymentAndContactMessage(
-            pubkey,
-            contactMessage,
-            product,
-            false,
-            false,
-            false,
-            orderId
-          );
+      const shouldUseContact =
+        formType === "contact" ||
+        (formType === "combined" &&
+          (productShippingType === "N/A" ||
+            productShippingType === "Pickup" ||
+            (productShippingType === "Free/Pickup" &&
+              freePickupPreference === "contact")));
+
+      if (
+        shouldUseShipping &&
+        data.shippingName &&
+        data.shippingAddress &&
+        data.shippingCity
+      ) {
+        let contactMessage = "";
+        let productDetails = "";
+        if (product.selectedSize) {
+          productDetails += "in a size " + product.selectedSize;
         }
+        if (product.selectedVolume) {
+          if (productDetails) {
+            productDetails += " and a " + product.selectedVolume;
+          } else {
+            productDetails += "in a " + product.selectedVolume;
+          }
+        }
+
+        if (!data.shippingUnitNo) {
+          contactMessage =
+            "Please ship the product " +
+            (productDetails ? productDetails + " " : "") +
+            "to " +
+            data.shippingName +
+            " at " +
+            data.shippingAddress +
+            ", " +
+            data.shippingCity +
+            ", " +
+            data.shippingPostalCode +
+            ", " +
+            data.shippingState +
+            ", " +
+            data.shippingCountry +
+            ".";
+        } else {
+          contactMessage =
+            "Please ship the product " +
+            (productDetails ? productDetails + " " : "") +
+            "to " +
+            data.shippingName +
+            " at " +
+            data.shippingAddress +
+            " " +
+            data.shippingUnitNo +
+            ", " +
+            data.shippingCity +
+            ", " +
+            data.shippingPostalCode +
+            ", " +
+            data.shippingState +
+            ", " +
+            data.shippingCountry +
+            ".";
+        }
+        await sendPaymentAndContactMessage(
+          pubkey,
+          contactMessage,
+          product,
+          false,
+          false,
+          false,
+          orderId
+        );
       }
 
-      if (formType === "contact" || formType === "combined") {
-        if (data.contact && data.contactType && data.contactInstructions) {
-          let contactMessage;
-          let productDetails = "";
-          if (product.selectedSize) {
-            productDetails += "in a size " + product.selectedSize;
-          }
-          if (product.selectedVolume) {
-            if (productDetails) {
-              productDetails += " and a " + product.selectedVolume;
-            } else {
-              productDetails += "in a " + product.selectedVolume;
-            }
-          }
-
-          if (productDetails) {
-            contactMessage =
-              "To finalize the sale of your " +
-              title +
-              " listing " +
-              productDetails +
-              " on Shopstr, please contact " +
-              data.contact +
-              " over " +
-              data.contactType +
-              " using the following instructions: " +
-              data.contactInstructions;
-          } else {
-            contactMessage =
-              "To finalize the sale of your " +
-              title +
-              " listing on Shopstr, please contact " +
-              data.contact +
-              " over " +
-              data.contactType +
-              " using the following instructions: " +
-              data.contactInstructions;
-          }
-          await sendPaymentAndContactMessage(
-            pubkey,
-            contactMessage,
-            product,
-            false,
-            false,
-            false,
-            orderId
-          );
+      if (
+        shouldUseContact &&
+        data.contact &&
+        data.contactType &&
+        data.contactInstructions
+      ) {
+        let contactMessage;
+        let productDetails = "";
+        if (product.selectedSize) {
+          productDetails += "in a size " + product.selectedSize;
         }
+        if (product.selectedVolume) {
+          if (productDetails) {
+            productDetails += " and a " + product.selectedVolume;
+          } else {
+            productDetails += "in a " + product.selectedVolume;
+          }
+        }
+
+        if (productDetails) {
+          contactMessage =
+            "To finalize the sale of your " +
+            title +
+            " listing " +
+            productDetails +
+            " on Shopstr, please contact " +
+            data.contact +
+            " over " +
+            data.contactType +
+            " using the following instructions: " +
+            data.contactInstructions;
+        } else {
+          contactMessage =
+            "To finalize the sale of your " +
+            title +
+            " listing on Shopstr, please contact " +
+            data.contact +
+            " over " +
+            data.contactType +
+            " using the following instructions: " +
+            data.contactInstructions;
+        }
+        await sendPaymentAndContactMessage(
+          pubkey,
+          contactMessage,
+          product,
+          false,
+          false,
+          false,
+          orderId
+        );
       }
 
       // Send receipt to user
@@ -2096,6 +2151,70 @@ export default function CartInvoiceCard({
             <>
               <h2 className="mb-6 text-2xl font-bold">Select Order Type</h2>
               <div className="space-y-4">
+                {/* Check if we have mixed shipping types or all products are Free/Pickup */}
+                {uniqueShippingTypes.length > 1 ? (
+                  <>
+                    {/* Mixed shipping types - only show combined and in-person */}
+                    <button
+                      onClick={() => handleOrderTypeSelection("combined")}
+                      className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
+                    >
+                      <div className="font-medium">Mixed delivery</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        {hasFreePickupProducts
+                          ? "Products require different delivery methods (includes flexible shipping/pickup options)"
+                          : "Products require different delivery methods"}
+                      </div>
+                    </button>
+                  </>
+                ) : uniqueShippingTypes.length === 1 &&
+                  uniqueShippingTypes[0] === "Free/Pickup" ? (
+                  <>
+                    {/* All products have Free/Pickup - show shipping and contact options */}
+                    <button
+                      onClick={() => handleOrderTypeSelection("shipping")}
+                      className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
+                    >
+                      <div className="font-medium">Free shipping</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        Get products shipped to your address
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => handleOrderTypeSelection("contact")}
+                      className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
+                    >
+                      <div className="font-medium">Pickup</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        Arrange pickup with seller
+                      </div>
+                    </button>
+                  </>
+                ) : uniqueShippingTypes.includes("Free") ||
+                  uniqueShippingTypes.includes("Added Cost") ? (
+                  <button
+                    onClick={() => handleOrderTypeSelection("shipping")}
+                    className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
+                  >
+                    <div className="font-medium">
+                      Online order with shipping
+                    </div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      Get products shipped to your address
+                    </div>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleOrderTypeSelection("contact")}
+                    className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
+                  >
+                    <div className="font-medium">Online order</div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      Digital or pickup delivery
+                    </div>
+                  </button>
+                )}
+
                 <button
                   onClick={() => handleOrderTypeSelection("in-person")}
                   className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
@@ -2105,53 +2224,59 @@ export default function CartInvoiceCard({
                     Complete your purchase in person
                   </div>
                 </button>
+              </div>
+            </>
+          )}
 
-                {uniqueShippingTypes.includes("Free") ||
-                uniqueShippingTypes.includes("Added Cost") ||
-                uniqueShippingTypes.includes("Free/Pickup") ? (
-                  <button
-                    onClick={() => handleOrderTypeSelection("shipping")}
-                    className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
-                  >
-                    <div className="font-medium">Shipping</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      Get products shipped to your address
-                    </div>
-                  </button>
-                ) : null}
-
-                {uniqueShippingTypes.includes("N/A") ||
-                uniqueShippingTypes.includes("Pickup") ||
-                uniqueShippingTypes.includes("Free/Pickup") ? (
-                  <button
-                    onClick={() => handleOrderTypeSelection("contact")}
-                    className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
-                  >
-                    <div className="font-medium">Digital/Pickup</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      Digital delivery or pickup arrangement
-                    </div>
-                  </button>
-                ) : null}
-
-                {/* Show combined option if products have mixed shipping types */}
-                {uniqueShippingTypes.length > 1 && (
-                  <button
-                    onClick={() => handleOrderTypeSelection("combined")}
-                    className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
-                  >
-                    <div className="font-medium">Mixed delivery</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                      Products require different delivery methods
-                    </div>
-                  </button>
-                )}
+          {/* Free/Pickup Preference Selection */}
+          {showFreePickupSelection && (
+            <>
+              <h2 className="mb-6 text-2xl font-bold">
+                Free/Pickup Products Preference
+              </h2>
+              <p className="mb-4 text-gray-600 dark:text-gray-400">
+                Some products offer both free shipping and pickup options. How
+                would you like to handle these products?
+              </p>
+              <div className="mb-6 space-y-4">
+                <button
+                  onClick={() => {
+                    setFreePickupPreference("shipping");
+                    setShowFreePickupSelection(false);
+                  }}
+                  className={`w-full rounded-lg border p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-600 ${
+                    freePickupPreference === "shipping"
+                      ? "border-shopstr-purple bg-purple-50 dark:border-shopstr-yellow dark:bg-yellow-50"
+                      : "border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700"
+                  }`}
+                >
+                  <div className="font-medium">Free shipping</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    Use free shipping for products that offer it
+                  </div>
+                </button>
+                <button
+                  onClick={() => {
+                    setFreePickupPreference("contact");
+                    setShowFreePickupSelection(false);
+                  }}
+                  className={`w-full rounded-lg border p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-600 ${
+                    freePickupPreference === "contact"
+                      ? "border-shopstr-purple bg-purple-50 dark:border-shopstr-yellow dark:bg-yellow-50"
+                      : "border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700"
+                  }`}
+                >
+                  <div className="font-medium">Pickup</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    Arrange pickup for products that offer it
+                  </div>
+                </button>
               </div>
             </>
           )}
 
           {/* Contact/Shipping Form */}
-          {formType && (
+          {formType && !showFreePickupSelection && (
             <>
               <h2 className="mb-6 text-2xl font-bold">
                 {formType === "shipping" && "Shipping Information"}

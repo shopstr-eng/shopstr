@@ -10,7 +10,6 @@ import {
   Card,
   CardHeader,
   CardBody,
-  CardFooter,
   Divider,
   Image,
   useDisclosure,
