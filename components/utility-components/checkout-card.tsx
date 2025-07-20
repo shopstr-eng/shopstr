@@ -4,10 +4,7 @@ import React, { useContext, useEffect, useRef, useState } from "react";
 import { nip19 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
-import {
-  DisplayCostBreakdown,
-  DisplayCheckoutCost,
-} from "./display-monetary-info";
+import { DisplayCheckoutCost } from "./display-monetary-info";
 import ProductInvoiceCard from "../product-invoice-card";
 import { useRouter } from "next/router";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
@@ -16,7 +13,8 @@ import { locationAvatar } from "./dropdowns/location-dropdown";
 import {
   FaceFrownIcon,
   FaceSmileIcon,
-  InformationCircleIcon,
+  ArrowLongDownIcon,
+  ArrowLongUpIcon,
 } from "@heroicons/react/24/outline";
 import { ReviewsContext } from "@/utils/context/context";
 import FailureModal from "../utility-components/failure-modal";
@@ -104,7 +102,7 @@ export default function CheckoutCard({
 
   const calculateVisibleImages = (containerHeight: number) => {
     const imageHeight = containerHeight / 3;
-    const visibleCount = Math.floor(containerHeight / imageHeight);
+    const visibleCount = Math.max(3, Math.floor(containerHeight / imageHeight));
     setVisibleImages(productData.images.slice(0, visibleCount));
   };
 
@@ -181,7 +179,7 @@ export default function CheckoutCard({
       };
     }
     return;
-  }, [selectedImage]);
+  }, [selectedImage, isBeingPaid]);
 
   useEffect(() => {
     setHasSizes(
@@ -230,7 +228,7 @@ export default function CheckoutCard({
         return;
       }
       let updatedCart = [];
-      let productToAdd = { ...productData };
+      const productToAdd = { ...productData };
 
       if (selectedSize) {
         productToAdd.selectedSize = selectedSize;
@@ -315,7 +313,7 @@ export default function CheckoutCard({
   const updatedProductData = {
     ...productData,
     price: currentPrice,
-    totalCost: currentPrice + productData.shippingCost,
+    totalCost: currentPrice + productData.shippingCost!,
   };
 
   return (
@@ -355,12 +353,16 @@ export default function CheckoutCard({
                         ))}
                       </div>
                     </div>
-                    {productData.images.length > visibleImages.length && (
+                    {productData.images.length > 3 && (
                       <button
                         onClick={() => setShowAllImages(!showAllImages)}
-                        className="mt-2 text-sm text-purple-500 hover:text-purple-700 dark:text-yellow-500 dark:hover:text-yellow-700"
+                        className="mt-2 flex flex-col items-center text-sm text-purple-500 hover:text-purple-700 dark:text-yellow-500 dark:hover:text-yellow-700"
                       >
-                        {showAllImages ? "∧" : "∨"}
+                        {showAllImages ? (
+                          <ArrowLongUpIcon className="h-5 w-5" />
+                        ) : (
+                          <ArrowLongDownIcon className="h-5 w-5" />
+                        )}
                       </button>
                     )}
                   </div>
@@ -464,6 +466,11 @@ export default function CheckoutCard({
                   <Chip
                     key={productData.location}
                     startContent={locationAvatar(productData.location)}
+                    className="min-h-fit max-w-full"
+                    classNames={{
+                      base: "h-auto py-1",
+                      content: "whitespace-normal break-words text-wrap",
+                    }}
                   >
                     {productData.location}
                   </Chip>
@@ -655,34 +662,19 @@ export default function CheckoutCard({
           </div>
         </>
       ) : (
-        <>
-          <div className="p-4 text-light-text dark:text-dark-text">
-            <h2 className="mb-4 text-2xl font-bold">{productData.title}</h2>
-            {selectedSize && (
-              <p className="mb-4 text-lg">Size: {selectedSize}</p>
-            )}
-            <DisplayCostBreakdown monetaryInfo={updatedProductData} />
-            <div className="mx-4 mt-2 flex items-center justify-center text-center">
-              <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-              <p className="ml-2 text-xs text-light-text dark:text-dark-text">
-                Once purchased, the seller will receive a DM with your order
-                details.
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-col items-center">
-            <ProductInvoiceCard
-              productData={updatedProductData}
-              setFiatOrderIsPlaced={setFiatOrderIsPlaced}
-              setInvoiceIsPaid={setInvoiceIsPaid}
-              setInvoiceGenerationFailed={setInvoiceGenerationFailed}
-              setCashuPaymentSent={setCashuPaymentSent}
-              setCashuPaymentFailed={setCashuPaymentFailed}
-              selectedSize={selectedSize}
-              selectedVolume={selectedVolume}
-            />
-          </div>
-        </>
+        <div className="flex flex-col items-center">
+          <ProductInvoiceCard
+            productData={updatedProductData}
+            setFiatOrderIsPlaced={setFiatOrderIsPlaced}
+            setInvoiceIsPaid={setInvoiceIsPaid}
+            setInvoiceGenerationFailed={setInvoiceGenerationFailed}
+            setCashuPaymentSent={setCashuPaymentSent}
+            setCashuPaymentFailed={setCashuPaymentFailed}
+            selectedSize={selectedSize}
+            selectedVolume={selectedVolume}
+            setIsBeingPaid={setIsBeingPaid}
+          />
+        </div>
       )}
       <SignInModal isOpen={isOpen} onClose={onClose} />
       <FailureModal

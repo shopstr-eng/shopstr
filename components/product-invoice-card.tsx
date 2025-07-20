@@ -4,7 +4,6 @@ import {
   ChatsContext,
   ProfileMapContext,
 } from "../utils/context/context";
-import { useRouter } from "next/router";
 import { useForm } from "react-hook-form";
 import {
   Button,
@@ -21,6 +20,8 @@ import {
   ModalBody,
   Select,
   SelectItem,
+  Input,
+  Textarea,
 } from "@nextui-org/react";
 import {
   BanknotesIcon,
@@ -28,7 +29,6 @@ import {
   CheckIcon,
   ClipboardIcon,
   CurrencyDollarIcon,
-  EnvelopeIcon,
 } from "@heroicons/react/24/outline";
 import { fiat } from "@getalby/lightning-tools";
 import {
@@ -53,24 +53,23 @@ import QRCode from "qrcode";
 import { v4 as uuidv4 } from "uuid";
 import { nip19 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
-import {
-  DisplayCostBreakdown,
-  formatWithCommas,
-} from "./utility-components/display-monetary-info";
+import { formatWithCommas } from "./utility-components/display-monetary-info";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import SignInModal from "./sign-in/SignInModal";
 import currencySelection from "../public/currencySelection.json";
 import FailureModal from "@/components/utility-components/failure-modal";
-import ShippingForm from "./shipping-form";
-import ContactForm from "./contact-form";
+import CountryDropdown from "./utility-components/dropdowns/country-dropdown";
 import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { ShippingFormData, ContactFormData } from "@/utils/types/types";
+import { Controller } from "react-hook-form";
+import { useRouter } from "next/navigation";
 
 export default function ProductInvoiceCard({
   productData,
+  setIsBeingPaid,
   setInvoiceIsPaid,
   setInvoiceGenerationFailed,
   setCashuPaymentSent,
@@ -79,6 +78,7 @@ export default function ProductInvoiceCard({
   selectedVolume,
 }: {
   productData: ProductData;
+  setIsBeingPaid: (isBeingPaid: boolean) => void;
   setFiatOrderIsPlaced?: (fiatOrderIsPlaced: boolean) => void;
   setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
   setInvoiceGenerationFailed?: (invoiceGenerationFailed: boolean) => void;
@@ -87,7 +87,6 @@ export default function ProductInvoiceCard({
   selectedSize?: string;
   selectedVolume?: string;
 }) {
-  const router = useRouter();
   const { mints, tokens, history } = getLocalStorageData();
   const {
     pubkey: userPubkey,
@@ -95,6 +94,9 @@ export default function ProductInvoiceCard({
     isLoggedIn,
     signer,
   } = useContext(SignerContext);
+
+  // Check if there are tokens available for Cashu payment
+  const hasTokensAvailable = tokens && tokens.length > 0;
   const chatsContext = useContext(ChatsContext);
   const profileContext = useContext(ProfileMapContext);
 
@@ -120,14 +122,12 @@ export default function ProductInvoiceCard({
 
   const { isOpen, onOpen, onClose } = useDisclosure();
 
-  const [showShippingModal, setShowShippingModal] = useState(false);
-  const [showContactModal, setShowContactModal] = useState(false);
-  const [showShippingOption, setShowShippingOption] = useState(false);
   const [isCashuPayment, setIsCashuPayment] = useState(false);
   const [isFiatPayment, setIsFiatPayment] = useState(false);
 
-  const [showPurchaseTypeOption, setShowPurchaseTypeOption] = useState(false);
-  const [needsShippingInfo, setNeedsShippingInfo] = useState(false);
+  const [formType, setFormType] = useState<"shipping" | "contact" | null>(null);
+  const [showOrderTypeSelection, setShowOrderTypeSelection] = useState(true);
+  const [showPaymentButtons, setShowPaymentButtons] = useState(false);
 
   const [fiatPaymentOptions, setFiatPaymentOptions] = useState([]);
   const [showFiatTypeOption, setShowFiatTypeOption] = useState(false);
@@ -136,17 +136,17 @@ export default function ProductInvoiceCard({
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
 
-  const {
-    handleSubmit: handleShippingSubmit,
-    control: shippingControl,
-    reset: shippingReset,
-  } = useForm();
+  const [isFormValid, setIsFormValid] = useState(false);
 
   const {
-    handleSubmit: handleContactSubmit,
-    control: contactControl,
-    reset: contactReset,
+    handleSubmit: handleFormSubmit,
+    control: formControl,
+    watch,
   } = useForm();
+
+  // Watch form values to validate completion
+  const watchedValues = watch();
+  const router = useRouter();
 
   useEffect(() => {
     const fetchKeys = async () => {
@@ -167,6 +167,37 @@ export default function ProductInvoiceCard({
     const fiatOptions = sellerProfile?.content?.fiat_options || [];
     setFiatPaymentOptions(fiatOptions);
   }, [productData.pubkey, profileContext.profileData]);
+
+  // Validate form completion
+  useEffect(() => {
+    if (!formType || !watchedValues) {
+      setIsFormValid(false);
+      return;
+    }
+
+    let isValid = false;
+
+    if (formType === "shipping") {
+      isValid = !!(
+        watchedValues.Name?.trim() &&
+        watchedValues.Address?.trim() &&
+        watchedValues.City?.trim() &&
+        watchedValues["Postal Code"]?.trim() &&
+        watchedValues["State/Province"]?.trim() &&
+        watchedValues.Country?.trim() &&
+        (!productData.required || watchedValues.Required?.trim())
+      );
+    } else if (formType === "contact") {
+      isValid = !!(
+        watchedValues.Contact?.trim() &&
+        watchedValues["Contact Type"]?.trim() &&
+        watchedValues.Instructions?.trim() &&
+        (!productData.required || watchedValues.Required?.trim())
+      );
+    }
+
+    setIsFormValid(isValid);
+  }, [watchedValues, formType, productData.required]);
 
   const sendPaymentAndContactMessage = async (
     pubkeyToReceiveMessage: string,
@@ -299,7 +330,7 @@ export default function ProductInvoiceCard({
     }
   };
 
-  const onShippingSubmit = async (data: { [x: string]: string }) => {
+  const onFormSubmit = async (data: { [x: string]: string }) => {
     try {
       let price = productData.totalCost;
       if (
@@ -329,60 +360,40 @@ export default function ProductInvoiceCard({
         throw new Error("Listing price is less than 1 sat.");
       }
 
-      const shippingName = data["Name"];
-      const shippingAddress = data["Address"];
-      const shippingUnitNo = data["Unit"];
-      const shippingCity = data["City"];
-      const shippingPostalCode = data["Postal Code"];
-      const shippingState = data["State/Province"];
-      const shippingCountry = data["Country"];
-      const additionalInfo = data["Required"];
-      setShowShippingModal(false);
+      const commonData = {
+        additionalInfo: data["Required"],
+      };
+
+      let paymentData: any = commonData;
+
+      if (formType === "shipping") {
+        paymentData = {
+          ...paymentData,
+          shippingName: data["Name"],
+          shippingAddress: data["Address"],
+          shippingUnitNo: data["Unit"],
+          shippingCity: data["City"],
+          shippingPostalCode: data["Postal Code"],
+          shippingState: data["State/Province"],
+          shippingCountry: data["Country"],
+        };
+      }
+
+      if (formType === "contact") {
+        paymentData = {
+          ...paymentData,
+          contact: data["Contact"],
+          contactType: data["Contact Type"],
+          contactInstructions: data["Instructions"],
+        };
+      }
+
       if (isFiatPayment) {
-        await handleFiatPayment(
-          price,
-          shippingName,
-          shippingAddress,
-          shippingUnitNo,
-          shippingCity,
-          shippingPostalCode,
-          shippingState,
-          shippingCountry,
-          undefined,
-          undefined,
-          undefined,
-          additionalInfo
-        );
+        await handleFiatPayment(price, paymentData);
       } else if (isCashuPayment) {
-        await handleCashuPayment(
-          price,
-          shippingName,
-          shippingAddress,
-          shippingUnitNo,
-          shippingCity,
-          shippingPostalCode,
-          shippingState,
-          shippingCountry,
-          undefined,
-          undefined,
-          undefined,
-          additionalInfo
-        );
+        await handleCashuPayment(price, paymentData);
       } else {
-        await handleLightningPayment(
-          price,
-          shippingName,
-          shippingAddress,
-          shippingUnitNo,
-          shippingCity,
-          shippingPostalCode,
-          shippingState,
-          shippingCountry,
-          undefined,
-          undefined,
-          undefined,
-          additionalInfo
-        );
+        await handleLightningPayment(price, paymentData);
       }
     } catch (error) {
       console.error(error);
@@ -392,142 +403,73 @@ export default function ProductInvoiceCard({
     }
   };
 
-  const onContactSubmit = async (data: { [x: string]: string }) => {
-    try {
-      let price = productData.totalCost;
-      if (
-        !currencySelection.hasOwnProperty(productData.currency.toUpperCase())
-      ) {
-        throw new Error(`${productData.currency} is not a supported currency.`);
-      } else if (
-        currencySelection.hasOwnProperty(productData.currency.toUpperCase()) &&
-        productData.currency.toLowerCase() !== "sats" &&
-        productData.currency.toLowerCase() !== "sat"
-      ) {
-        try {
-          const currencyData = {
-            amount: price,
-            currency: productData.currency,
-          };
-          const numSats = await fiat.getSatoshiValue(currencyData);
-          price = Math.round(numSats);
-        } catch (err) {
-          console.error("ERROR", err);
-        }
-      } else if (productData.currency.toLowerCase() === "btc") {
-        price = price * 100000000;
-      }
+  const handleOrderTypeSelection = (selectedOrderType: string) => {
+    setShowOrderTypeSelection(false);
 
-      if (price < 1) {
-        throw new Error("Listing price is less than 1 sat.");
-      }
+    if (selectedOrderType === "in-person") {
+      setFormType(null);
+      setShowPaymentButtons(true);
+    } else if (selectedOrderType === "shipping") {
+      setFormType("shipping");
+      setShowPaymentButtons(false);
+    } else if (selectedOrderType === "contact") {
+      setFormType("contact");
+      setShowPaymentButtons(false);
+    }
 
-      const contact = data["Contact"];
-      const contactType = data["Contact Type"];
-      const contactInstructions = data["Instructions"];
-      const additionalInfo = data["Required"];
-      setShowContactModal(false);
-      if (isFiatPayment) {
-        await handleFiatPayment(
-          price,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          contact,
-          contactType,
-          contactInstructions,
-          additionalInfo
-        );
-      } else if (isCashuPayment) {
-        await handleCashuPayment(
-          price,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          contact,
-          contactType,
-          contactInstructions,
-          additionalInfo
-        );
-      } else {
-        await handleLightningPayment(
-          price,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          contact,
-          contactType,
-          contactInstructions,
-          additionalInfo
-        );
-      }
-    } catch (error) {
-      console.error(error);
-      if (setCashuPaymentFailed) {
-        setCashuPaymentFailed(true);
-      }
+    // After form type selection, check if we need to show fiat options
+    if (isFiatPayment && fiatPaymentOptions.length > 0) {
+      setShowFiatTypeOption(true);
     }
   };
 
-  const handleToggleShippingModal = () => {
-    shippingReset();
-    setShowShippingModal(!showShippingModal);
-  };
-
-  const handleToggleContactModal = () => {
-    contactReset();
-    setShowContactModal(!showContactModal);
-  };
-
-  const handleFiatPayment = async (
-    convertedPrice: number,
-    shippingName?: string,
-    shippingAddress?: string,
-    shippingUnitNo?: string,
-    shippingCity?: string,
-    shippingPostalCode?: string,
-    shippingState?: string,
-    shippingCountry?: string,
-    contact?: string,
-    contactType?: string,
-    contactInstructions?: string,
-    additionalInfo?: string
+  const handlePaymentMethodClick = (
+    paymentType: "fiat" | "lightning" | "cashu"
   ) => {
+    if (!isLoggedIn) {
+      onOpen();
+      return;
+    }
+
+    if (randomNsecForReceiver !== "" && randomNpubForSender !== "") {
+      setIsFiatPayment(paymentType === "fiat");
+      setIsCashuPayment(paymentType === "cashu");
+
+      if (paymentType === "fiat") {
+        handleFiatPayment(productData.totalCost, {});
+      } else if (paymentType === "lightning") {
+        handleLightningPayment(productData.totalCost, {});
+      } else if (paymentType === "cashu") {
+        handleCashuPayment(productData.totalCost, {});
+      }
+    }
+  };
+
+  const handleFiatPayment = async (convertedPrice: number, data: any) => {
     if (
-      shippingName ||
-      shippingAddress ||
-      shippingCity ||
-      shippingPostalCode ||
-      shippingState ||
-      shippingCountry
+      data.shippingName ||
+      data.shippingAddress ||
+      data.shippingCity ||
+      data.shippingPostalCode ||
+      data.shippingState ||
+      data.shippingCountry
     ) {
       validatePaymentData(convertedPrice, {
-        Name: shippingName || "",
-        Address: shippingAddress || "",
-        Unit: shippingUnitNo || "",
-        City: shippingCity || "",
-        "Postal Code": shippingPostalCode || "",
-        "State/Province": shippingState || "",
-        Country: shippingCountry || "",
-        Required: additionalInfo || "",
+        Name: data.shippingName || "",
+        Address: data.shippingAddress || "",
+        Unit: data.shippingUnitNo || "",
+        City: data.shippingCity || "",
+        "Postal Code": data.shippingPostalCode || "",
+        "State/Province": data.shippingState || "",
+        Country: data.shippingCountry || "",
+        Required: data.additionalInfo || "",
       });
-    } else if (contact || contactType || contactInstructions) {
+    } else if (data.contact || data.contactType || data.contactInstructions) {
       validatePaymentData(convertedPrice, {
-        Contact: contact || "",
-        "Contact Type": contactType || "",
-        Instructions: contactInstructions || "",
-        Required: additionalInfo || "",
+        Contact: data.contact || "",
+        "Contact Type": data.contactType || "",
+        Instructions: data.contactInstructions || "",
+        Required: data.additionalInfo || "",
       });
     } else {
       validatePaymentData(convertedPrice);
@@ -570,9 +512,9 @@ export default function ProductInvoiceCard({
     );
 
     if (required && required !== "") {
-      if (additionalInfo) {
+      if (data.additionalInfo) {
         const additionalMessage =
-          "Additional customer information: " + additionalInfo;
+          "Additional customer information: " + data.additionalInfo;
         await sendPaymentAndContactMessage(
           pubkey,
           additionalMessage,
@@ -586,23 +528,22 @@ export default function ProductInvoiceCard({
 
     if (
       !(
-        shippingName === undefined &&
-        shippingAddress === undefined &&
-        shippingUnitNo === undefined &&
-        shippingCity === undefined &&
-        shippingPostalCode === undefined &&
-        shippingState === undefined &&
-        shippingCountry === undefined &&
-        contact === undefined &&
-        contactType === undefined &&
-        contactInstructions === undefined
+        data.shippingName === undefined &&
+        data.shippingAddress === undefined &&
+        data.shippingUnitNo === undefined &&
+        data.shippingCity === undefined &&
+        data.shippingPostalCode === undefined &&
+        data.shippingState === undefined &&
+        data.shippingCountry === undefined &&
+        data.contact === undefined &&
+        data.contactType === undefined &&
+        data.contactInstructions === undefined
       )
     ) {
       if (
         productData.shippingType === "Added Cost" ||
         productData.shippingType === "Free" ||
-        (productData.shippingType === "Free/Pickup" &&
-          needsShippingInfo === true)
+        (productData.shippingType === "Free/Pickup" && formType === "shipping")
       ) {
         let contactMessage = "";
         let productDetails = "";
@@ -611,46 +552,46 @@ export default function ProductInvoiceCard({
         }
         if (selectedVolume) {
           if (productDetails) {
-            productDetails += " and volume " + selectedVolume;
+            productDetails += " and a " + selectedVolume;
           } else {
-            productDetails += "in volume " + selectedVolume;
+            productDetails += "in a " + selectedVolume;
           }
         }
-        if (!shippingUnitNo) {
+        if (!data.shippingUnitNo) {
           contactMessage =
             "Please ship the product " +
             (productDetails ? productDetails + " " : "") +
             "to " +
-            shippingName +
+            data.shippingName +
             " at " +
-            shippingAddress +
+            data.shippingAddress +
             ", " +
-            shippingCity +
+            data.shippingCity +
             ", " +
-            shippingPostalCode +
+            data.shippingPostalCode +
             ", " +
-            shippingState +
+            data.shippingState +
             ", " +
-            shippingCountry +
+            data.shippingCountry +
             ".";
         } else {
           contactMessage =
             "Please ship the product " +
             (productDetails ? productDetails + " " : "") +
             "to " +
-            shippingName +
+            data.shippingName +
             " at " +
-            shippingAddress +
+            data.shippingAddress +
             " " +
-            shippingUnitNo +
+            data.shippingUnitNo +
             ", " +
-            shippingCity +
+            data.shippingCity +
             ", " +
-            shippingPostalCode +
+            data.shippingPostalCode +
             ", " +
-            shippingState +
+            data.shippingState +
             ", " +
-            shippingCountry +
+            data.shippingCountry +
             ".";
         }
         await sendPaymentAndContactMessage(
@@ -680,8 +621,7 @@ export default function ProductInvoiceCard({
       } else if (
         productData.shippingType === "N/A" ||
         productData.shippingType === "Pickup" ||
-        (productData.shippingType === "Free/Pickup" &&
-          needsShippingInfo === false)
+        (productData.shippingType === "Free/Pickup" && formType === "contact")
       ) {
         let contactMessage;
         let receiptMessage;
@@ -691,9 +631,9 @@ export default function ProductInvoiceCard({
         }
         if (selectedVolume) {
           if (productDetails) {
-            productDetails += " and volume " + selectedVolume;
+            productDetails += " and a " + selectedVolume;
           } else {
-            productDetails += "in volume " + selectedVolume;
+            productDetails += "in a " + selectedVolume;
           }
         }
 
@@ -704,11 +644,11 @@ export default function ProductInvoiceCard({
             " listing " +
             productDetails +
             " on Shopstr, please contact " +
-            contact +
+            data.contact +
             " over " +
-            contactType +
+            data.contactType +
             " using the following instructions: " +
-            contactInstructions;
+            data.contactInstructions;
           receiptMessage =
             "Your order for " +
             productData.title +
@@ -722,11 +662,11 @@ export default function ProductInvoiceCard({
             "To finalize the sale of your " +
             title +
             " listing on Shopstr, please contact " +
-            contact +
+            data.contact +
             " over " +
-            contactType +
+            data.contactType +
             " using the following instructions: " +
-            contactInstructions;
+            data.contactInstructions;
           receiptMessage =
             "Your order for " +
             productData.title +
@@ -778,7 +718,7 @@ export default function ProductInvoiceCard({
       if (userPubkey) {
         const receiptMessage =
           "Thank you for your purchase of " +
-          title +
+          productData.title +
           " in " +
           productDetails +
           " from " +
@@ -796,7 +736,7 @@ export default function ProductInvoiceCard({
     } else if (userPubkey) {
       const receiptMessage =
         "Thank you for your purchase of " +
-        title +
+        productData.title +
         " from " +
         nip19.npubEncode(productData.pubkey) +
         ".";
@@ -809,48 +749,34 @@ export default function ProductInvoiceCard({
         orderId
       );
     }
-    setOrderConfirmed(true);
   };
 
-  const handleLightningPayment = async (
-    convertedPrice: number,
-    shippingName?: string,
-    shippingAddress?: string,
-    shippingUnitNo?: string,
-    shippingCity?: string,
-    shippingPostalCode?: string,
-    shippingState?: string,
-    shippingCountry?: string,
-    contact?: string,
-    contactType?: string,
-    contactInstructions?: string,
-    additionalInfo?: string
-  ) => {
+  const handleLightningPayment = async (convertedPrice: number, data: any) => {
     try {
       if (
-        shippingName ||
-        shippingAddress ||
-        shippingCity ||
-        shippingPostalCode ||
-        shippingState ||
-        shippingCountry
+        data.shippingName ||
+        data.shippingAddress ||
+        data.shippingCity ||
+        data.shippingPostalCode ||
+        data.shippingState ||
+        data.shippingCountry
       ) {
         validatePaymentData(convertedPrice, {
-          Name: shippingName || "",
-          Address: shippingAddress || "",
-          Unit: shippingUnitNo || "",
-          City: shippingCity || "",
-          "Postal Code": shippingPostalCode || "",
-          "State/Province": shippingState || "",
-          Country: shippingCountry || "",
-          Required: additionalInfo || "",
+          Name: data.shippingName || "",
+          Address: data.shippingAddress || "",
+          Unit: data.shippingUnitNo || "",
+          City: data.shippingCity || "",
+          "Postal Code": data.shippingPostalCode || "",
+          "State/Province": data.shippingState || "",
+          Country: data.shippingCountry || "",
+          Required: data.additionalInfo || "",
         });
-      } else if (contact || contactType || contactInstructions) {
+      } else if (data.contact || data.contactType || data.contactInstructions) {
         validatePaymentData(convertedPrice, {
-          Contact: contact || "",
-          "Contact Type": contactType || "",
-          Instructions: contactInstructions || "",
-          Required: additionalInfo || "",
+          Contact: data.contact || "",
+          "Contact Type": data.contactType || "",
+          Instructions: data.contactInstructions || "",
+          Required: data.additionalInfo || "",
         });
       } else {
         validatePaymentData(convertedPrice);
@@ -895,17 +821,17 @@ export default function ProductInvoiceCard({
         wallet,
         convertedPrice,
         hash,
-        shippingName ? shippingName : undefined,
-        shippingAddress ? shippingAddress : undefined,
-        shippingUnitNo ? shippingUnitNo : undefined,
-        shippingCity ? shippingCity : undefined,
-        shippingPostalCode ? shippingPostalCode : undefined,
-        shippingState ? shippingState : undefined,
-        shippingCountry ? shippingCountry : undefined,
-        contact ? contact : undefined,
-        contactType ? contactType : undefined,
-        contactInstructions ? contactInstructions : undefined,
-        additionalInfo ? additionalInfo : undefined
+        data.shippingName ? data.shippingName : undefined,
+        data.shippingAddress ? data.shippingAddress : undefined,
+        data.shippingUnitNo ? data.shippingUnitNo : undefined,
+        data.shippingCity ? data.shippingCity : undefined,
+        data.shippingPostalCode ? data.shippingPostalCode : undefined,
+        data.shippingState ? data.shippingState : undefined,
+        data.shippingCountry ? data.shippingCountry : undefined,
+        data.contact ? data.contact : undefined,
+        data.contactType ? data.contactType : undefined,
+        data.contactInstructions ? data.contactInstructions : undefined,
+        data.additionalInfo ? data.additionalInfo : undefined
       );
     } catch (error) {
       console.error(error);
@@ -1102,7 +1028,7 @@ export default function ProductInvoiceCard({
       paymentPreference === "lightning" &&
       lnurl &&
       lnurl !== "" &&
-      !lnurl.contains("@zeuspay.com") &&
+      !lnurl.includes("@zeuspay.com") &&
       sellerProofs
     ) {
       const newAmount = Math.floor(sellerAmount * 0.98 - 2);
@@ -1313,9 +1239,9 @@ export default function ProductInvoiceCard({
         }
         if (selectedVolume) {
           if (productDetails) {
-            productDetails += " and volume " + selectedVolume;
+            productDetails += " and a " + selectedVolume;
           } else {
-            productDetails += "in volume " + selectedVolume;
+            productDetails += "in a " + selectedVolume;
           }
         }
 
@@ -1384,9 +1310,9 @@ export default function ProductInvoiceCard({
         }
         if (selectedVolume) {
           if (productDetails) {
-            productDetails += " and volume " + selectedVolume;
+            productDetails += " and a " + selectedVolume;
           } else {
-            productDetails += "in volume " + selectedVolume;
+            productDetails += "in a " + selectedVolume;
           }
         }
 
@@ -1512,36 +1438,12 @@ export default function ProductInvoiceCard({
     }, 2100);
   };
 
-  const handleSendMessage = (pubkeyToOpenChatWith: string) => {
-    if (!isLoggedIn) {
-      onOpen();
-      return;
-    }
-    router.push({
-      pathname: "/orders",
-      query: { pk: nip19.npubEncode(pubkeyToOpenChatWith), isInquiry: true },
-    });
-  };
-
   const formattedTotalCost = formatWithCommas(
     productData.totalCost,
     productData.currency
   );
 
-  const handleCashuPayment = async (
-    price: number,
-    shippingName?: string,
-    shippingAddress?: string,
-    shippingUnitNo?: string,
-    shippingCity?: string,
-    shippingPostalCode?: string,
-    shippingState?: string,
-    shippingCountry?: string,
-    contact?: string,
-    contactType?: string,
-    contactInstructions?: string,
-    additionalInfo?: string
-  ) => {
+  const handleCashuPayment = async (price: number, data: any) => {
     try {
       if (!mints || mints.length === 0) {
         throw new Error("No Cashu mint available");
@@ -1552,29 +1454,29 @@ export default function ProductInvoiceCard({
       }
 
       if (
-        shippingName ||
-        shippingAddress ||
-        shippingCity ||
-        shippingPostalCode ||
-        shippingState ||
-        shippingCountry
+        data.shippingName ||
+        data.shippingAddress ||
+        data.shippingCity ||
+        data.shippingPostalCode ||
+        data.shippingState ||
+        data.shippingCountry
       ) {
         validatePaymentData(price, {
-          Name: shippingName || "",
-          Address: shippingAddress || "",
-          Unit: shippingUnitNo || "",
-          City: shippingCity || "",
-          "Postal Code": shippingPostalCode || "",
-          "State/Province": shippingState || "",
-          Country: shippingCountry || "",
-          Required: additionalInfo || "",
+          Name: data.shippingName || "",
+          Address: data.shippingAddress || "",
+          Unit: data.shippingUnitNo || "",
+          City: data.shippingCity || "",
+          "Postal Code": data.shippingPostalCode || "",
+          "State/Province": data.shippingState || "",
+          Country: data.shippingCountry || "",
+          Required: data.additionalInfo || "",
         });
-      } else if (contact || contactType || contactInstructions) {
+      } else if (data.contact || data.contactType || data.contactInstructions) {
         validatePaymentData(price, {
-          Contact: contact || "",
-          "Contact Type": contactType || "",
-          Instructions: contactInstructions || "",
-          Required: additionalInfo || "",
+          Contact: data.contact || "",
+          "Contact Type": data.contactType || "",
+          Instructions: data.contactInstructions || "",
+          Required: data.additionalInfo || "",
         });
       } else {
         validatePaymentData(price);
@@ -1628,17 +1530,17 @@ export default function ProductInvoiceCard({
         wallet,
         send,
         price,
-        shippingName ? shippingName : undefined,
-        shippingAddress ? shippingAddress : undefined,
-        shippingUnitNo ? shippingUnitNo : undefined,
-        shippingCity ? shippingCity : undefined,
-        shippingPostalCode ? shippingPostalCode : undefined,
-        shippingState ? shippingState : undefined,
-        shippingCountry ? shippingCountry : undefined,
-        contact ? contact : undefined,
-        contactType ? contactType : undefined,
-        contactInstructions ? contactInstructions : undefined,
-        additionalInfo ? additionalInfo : undefined
+        data.shippingName ? data.shippingName : undefined,
+        data.shippingAddress ? data.shippingAddress : undefined,
+        data.shippingUnitNo ? data.shippingUnitNo : undefined,
+        data.shippingCity ? data.shippingCity : undefined,
+        data.shippingPostalCode ? data.shippingPostalCode : undefined,
+        data.shippingState ? data.shippingState : undefined,
+        data.shippingCountry ? data.shippingCountry : undefined,
+        data.contact ? data.contact : undefined,
+        data.contactType ? data.contactType : undefined,
+        data.contactInstructions ? data.contactInstructions : undefined,
+        data.additionalInfo ? data.additionalInfo : undefined
       );
       const changeProofs = keep;
       const remainingProofs = tokens.filter(
@@ -1679,234 +1581,787 @@ export default function ProductInvoiceCard({
     }
   };
 
-  return (
-    <>
-      {!showInvoiceCard && (
-        <>
-          <Button
-            type="submit"
-            className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
-            onClick={() => {
-              handleSendMessage(productData.pubkey);
-            }}
-            startContent={
-              <EnvelopeIcon className="h-6 w-6 hover:text-yellow-500" />
-            }
-          >
-            Message
-          </Button>
-          {fiatPaymentOptions.length > 0 && (
-            <Button
-              type="submit"
-              className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
-              onClick={() => {
-                if (!isLoggedIn) {
-                  onOpen();
-                  return;
-                }
-                if (
-                  randomNsecForReceiver !== "" &&
-                  randomNpubForSender !== ""
-                ) {
-                  if (
-                    productData.shippingType === "Free" ||
-                    productData.shippingType === "Added Cost"
-                  ) {
-                    setIsFiatPayment(true);
-                    setNeedsShippingInfo(true);
-                    setShowFiatTypeOption(true);
-                  } else if (
-                    productData.shippingType === "N/A" ||
-                    productData.shippingType === "Pickup"
-                  ) {
-                    setIsFiatPayment(true);
-                    setNeedsShippingInfo(false);
-                    setShowFiatTypeOption(true);
-                  } else if (productData.shippingType === "Free/Pickup") {
-                    setIsFiatPayment(true);
-                    setShowFiatTypeOption(true);
-                  } else {
-                    setIsFiatPayment(true);
-                    setNeedsShippingInfo(false);
-                    setShowFiatTypeOption(true);
+  const handleCloseOrderConfirmed = () => {
+    setOrderConfirmed(false);
+    router.push("/orders");
+  };
+
+  const renderContactForm = () => {
+    if (!formType) return null;
+
+    return (
+      <div className="space-y-4">
+        {formType === "contact" && (
+          <>
+            <Controller
+              name="Contact"
+              control={formControl}
+              rules={{ required: "A contact is required." }}
+              render={({
+                field: { onChange, onBlur, value },
+                fieldState: { error },
+              }) => (
+                <Input
+                  variant="bordered"
+                  fullWidth={true}
+                  label={
+                    <span>
+                      Contact <span className="text-red-500">*</span>
+                    </span>
                   }
-                }
+                  labelPlacement="inside"
+                  placeholder="@shopstr"
+                  isInvalid={!!error}
+                  errorMessage={error?.message}
+                  onChange={onChange}
+                  onBlur={onBlur}
+                  value={value || ""}
+                />
+              )}
+            />
+
+            <Controller
+              name="Contact Type"
+              control={formControl}
+              rules={{ required: "A contact type is required." }}
+              render={({
+                field: { onChange, onBlur, value },
+                fieldState: { error },
+              }) => (
+                <Input
+                  variant="bordered"
+                  fullWidth={true}
+                  label={
+                    <span>
+                      Contact type <span className="text-red-500">*</span>
+                    </span>
+                  }
+                  labelPlacement="inside"
+                  placeholder="Nostr, Signal, Telegram, email, phone, etc."
+                  isInvalid={!!error}
+                  errorMessage={error?.message}
+                  onChange={onChange}
+                  onBlur={onBlur}
+                  value={value || ""}
+                />
+              )}
+            />
+
+            <Controller
+              name="Instructions"
+              control={formControl}
+              rules={{ required: "Delivery instructions are required." }}
+              render={({
+                field: { onChange, onBlur, value },
+                fieldState: { error },
+              }) => (
+                <Textarea
+                  variant="bordered"
+                  fullWidth={true}
+                  label={
+                    <span>
+                      Delivery instructions{" "}
+                      <span className="text-red-500">*</span>
+                    </span>
+                  }
+                  labelPlacement="inside"
+                  placeholder="Meet me by . . .; Send file to . . ."
+                  isInvalid={!!error}
+                  errorMessage={error?.message}
+                  onChange={onChange}
+                  onBlur={onBlur}
+                  value={value || ""}
+                />
+              )}
+            />
+          </>
+        )}
+
+        {formType === "shipping" && (
+          <>
+            <Controller
+              name="Name"
+              control={formControl}
+              rules={{
+                required: "A name is required.",
+                maxLength: {
+                  value: 50,
+                  message: "This input exceed maxLength of 50.",
+                },
               }}
-              startContent={
-                <CurrencyDollarIcon className="h-6 w-6 hover:text-yellow-500" />
-              }
-            >
-              Pay with Fiat
-            </Button>
-          )}
-          <Button
-            type="submit"
-            className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
-            onClick={() => {
-              if (!isLoggedIn) {
-                onOpen();
-                return;
-              }
-              if (randomNsecForReceiver !== "" && randomNpubForSender !== "") {
-                if (
-                  productData.shippingType === "Free" ||
-                  productData.shippingType === "Added Cost"
-                ) {
-                  setIsCashuPayment(false);
-                  setNeedsShippingInfo(true);
-                  setShowPurchaseTypeOption(true);
-                } else if (
-                  productData.shippingType === "N/A" ||
-                  productData.shippingType === "Pickup"
-                ) {
-                  setIsCashuPayment(false);
-                  setNeedsShippingInfo(false);
-                  setShowPurchaseTypeOption(true);
-                } else if (productData.shippingType === "Free/Pickup") {
-                  setIsCashuPayment(false);
-                  setShowShippingOption(true);
-                } else {
-                  setIsCashuPayment(false);
-                  setNeedsShippingInfo(false);
-                  setShowPurchaseTypeOption(true);
+              render={({
+                field: { onChange, onBlur, value },
+                fieldState: { error },
+              }) => (
+                <Input
+                  variant="bordered"
+                  fullWidth={true}
+                  label={
+                    <span>
+                      Name <span className="text-red-500">*</span>
+                    </span>
+                  }
+                  labelPlacement="inside"
+                  isInvalid={!!error}
+                  errorMessage={error?.message}
+                  onChange={onChange}
+                  onBlur={onBlur}
+                  value={value || ""}
+                />
+              )}
+            />
+
+            <Controller
+              name="Address"
+              control={formControl}
+              rules={{
+                required: "An address is required.",
+                maxLength: {
+                  value: 50,
+                  message: "This input exceed maxLength of 50.",
+                },
+              }}
+              render={({
+                field: { onChange, onBlur, value },
+                fieldState: { error },
+              }) => (
+                <Input
+                  variant="bordered"
+                  fullWidth={true}
+                  label={
+                    <span>
+                      Address <span className="text-red-500">*</span>
+                    </span>
+                  }
+                  labelPlacement="inside"
+                  isInvalid={!!error}
+                  errorMessage={error?.message}
+                  onChange={onChange}
+                  onBlur={onBlur}
+                  value={value || ""}
+                />
+              )}
+            />
+
+            <Controller
+              name="Unit"
+              control={formControl}
+              rules={{
+                maxLength: {
+                  value: 50,
+                  message: "This input exceed maxLength of 50.",
+                },
+              }}
+              render={({
+                field: { onChange, onBlur, value },
+                fieldState: { error },
+              }) => (
+                <Input
+                  variant="bordered"
+                  fullWidth={true}
+                  label="Apt, suite, unit, etc."
+                  labelPlacement="inside"
+                  isInvalid={!!error}
+                  errorMessage={error?.message}
+                  onChange={onChange}
+                  onBlur={onBlur}
+                  value={value || ""}
+                />
+              )}
+            />
+
+            <Controller
+              name="City"
+              control={formControl}
+              rules={{
+                required: "A city is required.",
+                maxLength: {
+                  value: 50,
+                  message: "This input exceed maxLength of 50.",
+                },
+              }}
+              render={({
+                field: { onChange, onBlur, value },
+                fieldState: { error },
+              }) => (
+                <Input
+                  variant="bordered"
+                  fullWidth={true}
+                  label={
+                    <span>
+                      City <span className="text-red-500">*</span>
+                    </span>
+                  }
+                  labelPlacement="inside"
+                  isInvalid={!!error}
+                  errorMessage={error?.message}
+                  onChange={onChange}
+                  onBlur={onBlur}
+                  value={value || ""}
+                />
+              )}
+            />
+
+            <Controller
+              name="State/Province"
+              control={formControl}
+              rules={{ required: "A state/province is required." }}
+              render={({
+                field: { onChange, onBlur, value },
+                fieldState: { error },
+              }) => (
+                <Input
+                  variant="bordered"
+                  fullWidth={true}
+                  label={
+                    <span>
+                      State/Province <span className="text-red-500">*</span>
+                    </span>
+                  }
+                  labelPlacement="inside"
+                  isInvalid={!!error}
+                  errorMessage={error?.message}
+                  onChange={onChange}
+                  onBlur={onBlur}
+                  value={value || ""}
+                />
+              )}
+            />
+
+            <Controller
+              name="Postal Code"
+              control={formControl}
+              rules={{
+                required: "A postal code is required.",
+                maxLength: {
+                  value: 50,
+                  message: "This input exceed maxLength of 50.",
+                },
+              }}
+              render={({
+                field: { onChange, onBlur, value },
+                fieldState: { error },
+              }) => (
+                <Input
+                  variant="bordered"
+                  fullWidth={true}
+                  label={
+                    <span>
+                      Postal code <span className="text-red-500">*</span>
+                    </span>
+                  }
+                  labelPlacement="inside"
+                  isInvalid={!!error}
+                  errorMessage={error?.message}
+                  onChange={onChange}
+                  onBlur={onBlur}
+                  value={value || ""}
+                />
+              )}
+            />
+
+            <Controller
+              name="Country"
+              control={formControl}
+              rules={{ required: "A country is required." }}
+              render={({
+                field: { onChange, onBlur, value },
+                fieldState: { error },
+              }) => (
+                <CountryDropdown
+                  variant="bordered"
+                  aria-label="Select Country"
+                  label={
+                    <span>
+                      Country <span className="text-red-500">*</span>
+                    </span>
+                  }
+                  labelPlacement="inside"
+                  isInvalid={!!error}
+                  errorMessage={error?.message}
+                  onChange={onChange}
+                  onBlur={onBlur}
+                  value={value || ""}
+                />
+              )}
+            />
+          </>
+        )}
+
+        {productData.required && productData.required !== "" && (
+          <Controller
+            name="Required"
+            control={formControl}
+            rules={{ required: "Additional information is required." }}
+            render={({
+              field: { onChange, onBlur, value },
+              fieldState: { error },
+            }) => (
+              <Input
+                variant="bordered"
+                fullWidth={true}
+                label={
+                  <span>
+                    Enter {productData.required}{" "}
+                    <span className="text-red-500">*</span>
+                  </span>
                 }
-              }
-            }}
-            startContent={
-              <BoltIcon className="h-6 w-6 hover:text-yellow-500" />
-            }
-          >
-            Pay with Lightning: {formattedTotalCost}
-          </Button>
-          <Button
-            type="submit"
-            className={SHOPSTRBUTTONCLASSNAMES + " mt-3"}
-            onClick={() => {
-              if (!isLoggedIn) {
-                onOpen();
-                return;
-              }
-              if (randomNsecForReceiver !== "" && randomNpubForSender !== "") {
-                if (
-                  productData.shippingType === "Free" ||
-                  productData.shippingType === "Added Cost"
-                ) {
-                  setIsCashuPayment(true);
-                  setNeedsShippingInfo(true);
-                  setShowPurchaseTypeOption(true);
-                } else if (
-                  productData.shippingType === "N/A" ||
-                  productData.shippingType === "Pickup"
-                ) {
-                  setIsCashuPayment(true);
-                  setNeedsShippingInfo(false);
-                  setShowPurchaseTypeOption(true);
-                } else if (productData.shippingType === "Free/Pickup") {
-                  setIsCashuPayment(true);
-                  setShowShippingOption(true);
-                } else {
-                  setIsCashuPayment(true);
-                  setNeedsShippingInfo(false);
-                  setShowPurchaseTypeOption(true);
-                }
-              }
-            }}
-            startContent={
-              <BanknotesIcon className="h-6 w-6 hover:text-yellow-500" />
-            }
-          >
-            Pay with Cashu: {formattedTotalCost}
-          </Button>
-        </>
-      )}
-      {showInvoiceCard && (
-        <Card className="mt-3 w-3/4">
-          <CardHeader className="flex justify-center gap-3">
-            <span className="text-xl font-bold">Lightning Invoice</span>
-          </CardHeader>
-          <Divider />
-          <CardBody className="flex flex-col items-center">
-            <DisplayCostBreakdown monetaryInfo={productData} />
-          </CardBody>
-          <CardFooter className="flex flex-col items-center">
-            {!paymentConfirmed ? (
-              <div className="flex flex-col items-center justify-center">
-                {qrCodeUrl ? (
-                  <>
-                    <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900 text-light-text dark:text-dark-text">
-                      Don&apos;t refresh or close the page until the payment has
-                      been confirmed!
+                labelPlacement="inside"
+                isInvalid={!!error}
+                errorMessage={error?.message}
+                onChange={onChange}
+                onBlur={onBlur}
+                value={value || ""}
+              />
+            )}
+          />
+        )}
+      </div>
+    );
+  };
+
+  if (showInvoiceCard) {
+    return (
+      <div className="flex min-h-screen w-full bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text">
+        <div className="mx-auto flex w-full max-w-7xl flex-col lg:flex-row">
+          {/* Left Side - Product Summary - maintain same width */}
+          <div className="w-full bg-gray-50 p-6 dark:bg-gray-800 lg:w-1/2">
+            <div className="sticky top-6">
+              <h2 className="mb-6 text-2xl font-bold">Order Summary</h2>
+
+              <div className="mb-6">
+                <Image
+                  src={productData.images[0]}
+                  alt={productData.title}
+                  className="mb-4 h-32 w-32 rounded-lg object-cover"
+                />
+
+                <h3 className="mb-2 text-xl font-semibold">
+                  {productData.title}
+                </h3>
+
+                {selectedSize && (
+                  <p className="mb-1 text-gray-600 dark:text-gray-400">
+                    Size: {selectedSize}
+                  </p>
+                )}
+
+                {selectedVolume && (
+                  <p className="mb-1 text-gray-600 dark:text-gray-400">
+                    Volume: {selectedVolume}
+                  </p>
+                )}
+
+                <p className="mb-1 text-gray-600 dark:text-gray-400">
+                  Quantity: 1
+                </p>
+              </div>
+
+              <div className="border-t pt-4">
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-gray-700 dark:text-gray-300">
+                    Cost Breakdown
+                  </h4>
+                  <div className="space-y-2 border-l-2 border-gray-200 pl-3 dark:border-gray-600">
+                    <div className="text-sm font-medium">
+                      {productData.title}
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="ml-2">Product cost:</span>
+                      <span>
+                        {formatWithCommas(
+                          productData.price,
+                          productData.currency
+                        )}
+                      </span>
+                    </div>
+                    {productData.shippingCost! > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="ml-2">Shipping cost:</span>
+                        <span>
+                          {formatWithCommas(
+                            productData.shippingCost!,
+                            productData.currency
+                          )}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex justify-between border-t pt-2 font-semibold">
+                    <span>Total:</span>
+                    <span>
+                      {formatWithCommas(
+                        productData.totalCost,
+                        productData.currency
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setIsBeingPaid(false)}
+                className="mt-4 text-shopstr-purple underline hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light"
+              >
+                ← Back to product
+              </button>
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="h-px w-full bg-gray-300 dark:bg-gray-600 lg:h-full lg:w-px"></div>
+
+          {/* Right Side - Lightning Invoice - maintain consistent width */}
+          <div className="w-full p-6 lg:w-1/2">
+            <Card className="w-full">
+              <CardHeader className="flex justify-center gap-3">
+                <span className="text-xl font-bold">Lightning Invoice</span>
+              </CardHeader>
+              <Divider />
+              <CardBody className="flex flex-col items-center">
+                {!paymentConfirmed ? (
+                  <div className="flex flex-col items-center justify-center">
+                    {qrCodeUrl ? (
+                      <>
+                        <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900 text-light-text dark:text-dark-text">
+                          Don&apos;t refresh or close the page until the payment
+                          has been confirmed!
+                        </h3>
+                        <Image
+                          alt="Lightning invoice"
+                          className="object-cover"
+                          src={qrCodeUrl}
+                        />
+                        <div className="flex items-center justify-center">
+                          <p className="text-center">
+                            {invoice.length > 30
+                              ? `${invoice.substring(
+                                  0,
+                                  10
+                                )}...${invoice.substring(
+                                  invoice.length - 10,
+                                  invoice.length
+                                )}`
+                              : invoice}
+                          </p>
+                          <ClipboardIcon
+                            onClick={handleCopyInvoice}
+                            className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
+                              copiedToClipboard ? "hidden" : ""
+                            }`}
+                          />
+                          <CheckIcon
+                            className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
+                              copiedToClipboard ? "" : "hidden"
+                            }`}
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <div>
+                        <p>Waiting for lightning invoice...</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center">
+                    <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
+                      Payment confirmed!
                     </h3>
                     <Image
-                      alt="Lightning invoice"
+                      alt="Payment Confirmed"
                       className="object-cover"
-                      src={qrCodeUrl}
+                      src="../payment-confirmed.gif"
+                      width={350}
                     />
-                    <div className="flex items-center justify-center">
-                      <p className="text-center">
-                        {invoice.length > 30
-                          ? `${invoice.substring(0, 10)}...${invoice.substring(
-                              invoice.length - 10,
-                              invoice.length
-                            )}`
-                          : invoice}
-                      </p>
-                      <ClipboardIcon
-                        onClick={handleCopyInvoice}
-                        className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
-                          copiedToClipboard ? "hidden" : ""
-                        }`}
-                      />
-                      <CheckIcon
-                        className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
-                          copiedToClipboard ? "" : "hidden"
-                        }`}
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <div>
-                    <p>Waiting for lightning invoice...</p>
                   </div>
                 )}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center">
-                <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
-                  Payment confirmed!
-                </h3>
-                <Image
-                  alt="Payment Confirmed"
-                  className="object-cover"
-                  src="../payment-confirmed.gif"
-                  width={350}
-                />
-              </div>
-            )}
-          </CardFooter>
-        </Card>
-      )}
+              </CardBody>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
+  return (
+    <div className="flex min-h-screen w-full bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text">
+      <div className="mx-auto flex w-full max-w-7xl flex-col lg:flex-row">
+        {/* Left Side - Product Summary */}
+        <div className="w-full bg-gray-50 p-6 dark:bg-gray-800 lg:w-1/2">
+          <div className="sticky top-6">
+            <h2 className="mb-6 text-2xl font-bold">Order Summary</h2>
+
+            <div className="mb-6">
+              <Image
+                src={productData.images[0]}
+                alt={productData.title}
+                className="mb-4 h-32 w-32 rounded-lg object-cover"
+              />
+
+              <h3 className="mb-2 text-xl font-semibold">
+                {productData.title}
+              </h3>
+
+              {selectedSize && (
+                <p className="mb-1 text-gray-600 dark:text-gray-400">
+                  Size: {selectedSize}
+                </p>
+              )}
+
+              {selectedVolume && (
+                <p className="mb-1 text-gray-600 dark:text-gray-400">
+                  Volume: {selectedVolume}
+                </p>
+              )}
+
+              <p className="mb-1 text-gray-600 dark:text-gray-400">
+                Quantity: 1
+              </p>
+            </div>
+
+            <div className="border-t pt-4">
+              <div className="space-y-3">
+                <h4 className="font-semibold text-gray-700 dark:text-gray-300">
+                  Cost Breakdown
+                </h4>
+                <div className="space-y-2 border-l-2 border-gray-200 pl-3 dark:border-gray-600">
+                  <div className="text-sm font-medium">{productData.title}</div>
+                  <div className="flex justify-between text-sm">
+                    <span className="ml-2">Product cost:</span>
+                    <span>
+                      {formatWithCommas(
+                        productData.price,
+                        productData.currency
+                      )}
+                    </span>
+                  </div>
+                  {productData.shippingCost! > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="ml-2">Shipping cost:</span>
+                      <span>
+                        {formatWithCommas(
+                          productData.shippingCost!,
+                          productData.currency
+                        )}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-between border-t pt-2 font-semibold">
+                  <span>Total:</span>
+                  <span>
+                    {formatWithCommas(
+                      productData.totalCost,
+                      productData.currency
+                    )}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setIsBeingPaid(false)}
+              className="mt-4 text-shopstr-purple underline hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light"
+            >
+              ← Back to product
+            </button>
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div className="h-px w-full bg-gray-300 dark:bg-gray-600 lg:h-full lg:w-px"></div>
+
+        {/* Right Side - Order Type Selection, Forms, and Payment */}
+        <div className="w-full p-6 lg:w-1/2">
+          {/* Order Type Selection */}
+          {showOrderTypeSelection && (
+            <>
+              <h2 className="mb-6 text-2xl font-bold">Select Order Type</h2>
+              <div className="space-y-4">
+                <button
+                  onClick={() => handleOrderTypeSelection("in-person")}
+                  className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
+                >
+                  <div className="font-medium">In-person purchase</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    Complete your purchase in person
+                  </div>
+                </button>
+
+                {productData.shippingType === "Free/Pickup" ? (
+                  <>
+                    <button
+                      onClick={() => handleOrderTypeSelection("shipping")}
+                      className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
+                    >
+                      <div className="font-medium">Free shipping</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        Get it shipped to your address
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => handleOrderTypeSelection("contact")}
+                      className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
+                    >
+                      <div className="font-medium">Pickup</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        Arrange pickup with seller
+                      </div>
+                    </button>
+                  </>
+                ) : productData.shippingType === "Free" ||
+                  productData.shippingType === "Added Cost" ? (
+                  <button
+                    onClick={() => handleOrderTypeSelection("shipping")}
+                    className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
+                  >
+                    <div className="font-medium">
+                      Online order with shipping
+                    </div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      Get it shipped to your address
+                    </div>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleOrderTypeSelection("contact")}
+                    className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
+                  >
+                    <div className="font-medium">Online order</div>
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                      Digital or pickup delivery
+                    </div>
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Contact/Shipping Form */}
+          {formType && (
+            <>
+              <h2 className="mb-6 text-2xl font-bold">
+                {formType === "shipping" && "Shipping Information"}
+                {formType === "contact" && "Contact Information"}
+              </h2>
+
+              <form
+                onSubmit={handleFormSubmit(onFormSubmit)}
+                className="space-y-6"
+              >
+                {renderContactForm()}
+
+                <div className="space-y-4 border-t pt-6">
+                  <h3 className="mb-4 text-lg font-semibold">Payment Method</h3>
+
+                  {fiatPaymentOptions.length > 0 && (
+                    <Button
+                      type="submit"
+                      className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
+                        !isFormValid ? "cursor-not-allowed opacity-50" : ""
+                      }`}
+                      disabled={!isFormValid}
+                      startContent={<CurrencyDollarIcon className="h-6 w-6" />}
+                    >
+                      Pay with Fiat
+                    </Button>
+                  )}
+
+                  <Button
+                    type="submit"
+                    className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
+                      !isFormValid ? "cursor-not-allowed opacity-50" : ""
+                    }`}
+                    disabled={!isFormValid}
+                    startContent={<BoltIcon className="h-6 w-6" />}
+                  >
+                    Pay with Lightning: {formattedTotalCost}
+                  </Button>
+
+                  {hasTokensAvailable && (
+                    <Button
+                      type="submit"
+                      className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
+                        !isFormValid ? "cursor-not-allowed opacity-50" : ""
+                      }`}
+                      disabled={!isFormValid}
+                      startContent={<BanknotesIcon className="h-6 w-6" />}
+                    >
+                      Pay with Cashu: {formattedTotalCost}
+                    </Button>
+                  )}
+                </div>
+              </form>
+            </>
+          )}
+
+          {/* Payment Buttons for In-Person */}
+          {showPaymentButtons && (
+            <>
+              <h2 className="mb-6 text-2xl font-bold">Payment Method</h2>
+              <p className="mb-6 text-gray-600 dark:text-gray-400">
+                Complete your in-person purchase by selecting a payment method
+                below.
+              </p>
+
+              <div className="space-y-4">
+                {fiatPaymentOptions.length > 0 && (
+                  <Button
+                    className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
+                    onClick={() => handlePaymentMethodClick("fiat")}
+                    startContent={<CurrencyDollarIcon className="h-6 w-6" />}
+                  >
+                    Pay with Fiat
+                  </Button>
+                )}
+
+                <Button
+                  className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
+                  onClick={() => handlePaymentMethodClick("lightning")}
+                  startContent={<BoltIcon className="h-6 w-6" />}
+                >
+                  Pay with Lightning: {formattedTotalCost}
+                </Button>
+
+                {hasTokensAvailable && (
+                  <Button
+                    className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
+                    onClick={() => handlePaymentMethodClick("cashu")}
+                    startContent={<BanknotesIcon className="h-6 w-6" />}
+                  >
+                    Pay with Cashu: {formattedTotalCost}
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Order Confirmed Display */}
       {orderConfirmed && (
-        <div className="flex flex-col items-center justify-center">
-          <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
-            Order confirmed!
-          </h3>
-          <Image
-            alt="Payment Confirmed"
-            className="object-cover"
-            src="../payment-confirmed.gif"
-            width={350}
-          />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="rounded-lg bg-white p-8 text-center dark:bg-gray-800">
+            <h3 className="mb-4 text-2xl font-bold text-gray-900 dark:text-white">
+              Order confirmed!
+            </h3>
+            <Image
+              alt="Payment Confirmed"
+              className="mx-auto object-cover"
+              src="../payment-confirmed.gif"
+              width={350}
+            />
+            <Button onClick={handleCloseOrderConfirmed}>Close</Button>
+          </div>
         </div>
       )}
 
+      {/* Modals */}
       <Modal
         backdrop="blur"
         isOpen={showFiatTypeOption}
-        onClose={() => {
-          setShowFiatTypeOption(false);
-        }}
+        onClose={() => setShowFiatTypeOption(false)}
         classNames={{
           body: "py-6 ",
           backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -1930,11 +2385,6 @@ export default function ProductInvoiceCard({
                 className="max-w-xs"
                 onChange={(e) => {
                   setSelectedFiatOption(e.target.value);
-                  if (productData.shippingType === "Free/Pickup") {
-                    setShowShippingOption(true);
-                  } else {
-                    setShowPurchaseTypeOption(true);
-                  }
                   setShowFiatTypeOption(false);
                 }}
               >
@@ -1954,216 +2404,6 @@ export default function ProductInvoiceCard({
         </ModalContent>
       </Modal>
 
-      <Modal
-        backdrop="blur"
-        isOpen={showShippingOption}
-        onClose={() => {
-          setShowShippingOption(false);
-        }}
-        classNames={{
-          body: "py-6 ",
-          backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-          header: "border-b-[1px] border-[#292f46]",
-          footer: "border-t-[1px] border-[#292f46]",
-          closeButton: "hover:bg-black/5 active:bg-white/10",
-        }}
-        isDismissable={true}
-        scrollBehavior={"normal"}
-        placement={"center"}
-        size="2xl"
-      >
-        <ModalContent>
-          <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
-            Select your delivery option:
-          </ModalHeader>
-          <ModalBody className="flex flex-col overflow-hidden">
-            <div className="flex items-center justify-center">
-              <Select label="Delivery Method" className="max-w-xs">
-                <SelectItem
-                  key="in-person"
-                  className="text-light-text dark:text-dark-text"
-                  onClick={async () => {
-                    setShowShippingOption(false);
-                    let price = productData.totalCost;
-                    if (
-                      !currencySelection.hasOwnProperty(
-                        productData.currency.toUpperCase()
-                      )
-                    ) {
-                      throw new Error(
-                        `${productData.currency} is not a supported currency.`
-                      );
-                    } else if (
-                      currencySelection.hasOwnProperty(
-                        productData.currency.toUpperCase()
-                      ) &&
-                      productData.currency.toLowerCase() !== "sats" &&
-                      productData.currency.toLowerCase() !== "sat"
-                    ) {
-                      try {
-                        const currencyData = {
-                          amount: price,
-                          currency: productData.currency,
-                        };
-                        const numSats =
-                          await fiat.getSatoshiValue(currencyData);
-                        price = Math.round(numSats);
-                      } catch (err) {
-                        console.error("ERROR", err);
-                      }
-                    } else if (productData.currency.toLowerCase() === "btc") {
-                      price = price * 100000000;
-                    }
-                    if (isFiatPayment) {
-                      await handleFiatPayment(price);
-                    } else if (isCashuPayment) {
-                      await handleCashuPayment(price);
-                    } else {
-                      await handleLightningPayment(price);
-                    }
-                  }}
-                >
-                  In-person
-                </SelectItem>
-                <SelectItem
-                  key="free"
-                  className="text-light-text dark:text-dark-text"
-                  onClick={() => {
-                    handleToggleShippingModal();
-                    setShowShippingOption(false);
-                  }}
-                >
-                  Free shipping
-                </SelectItem>
-                <SelectItem
-                  key="pickup"
-                  className="text-light-text dark:text-dark-text"
-                  onClick={() => {
-                    handleToggleContactModal();
-                    setShowShippingOption(false);
-                  }}
-                >
-                  Pickup
-                </SelectItem>
-              </Select>
-            </div>
-          </ModalBody>
-        </ModalContent>
-      </Modal>
-
-      <Modal
-        backdrop="blur"
-        isOpen={showPurchaseTypeOption}
-        onClose={() => {
-          setShowPurchaseTypeOption(false);
-        }}
-        classNames={{
-          body: "py-6 ",
-          backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-          header: "border-b-[1px] border-[#292f46]",
-          footer: "border-t-[1px] border-[#292f46]",
-          closeButton: "hover:bg-black/5 active:bg-white/10",
-        }}
-        isDismissable={true}
-        scrollBehavior={"normal"}
-        placement={"center"}
-        size="2xl"
-      >
-        <ModalContent>
-          <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
-            Select your purchase type:
-          </ModalHeader>
-          <ModalBody className="flex flex-col overflow-hidden">
-            <div className="flex items-center justify-center">
-              <Select label="Purchase Type" className="max-w-xs">
-                <SelectItem
-                  key="in-person"
-                  className="text-light-text dark:text-dark-text"
-                  onClick={async () => {
-                    setShowPurchaseTypeOption(false);
-                    let price = productData.totalCost;
-                    if (
-                      !currencySelection.hasOwnProperty(
-                        productData.currency.toUpperCase()
-                      )
-                    ) {
-                      throw new Error(
-                        `${productData.currency} is not a supported currency.`
-                      );
-                    } else if (
-                      currencySelection.hasOwnProperty(
-                        productData.currency.toUpperCase()
-                      ) &&
-                      productData.currency.toLowerCase() !== "sats" &&
-                      productData.currency.toLowerCase() !== "sat"
-                    ) {
-                      try {
-                        const currencyData = {
-                          amount: price,
-                          currency: productData.currency,
-                        };
-                        const numSats =
-                          await fiat.getSatoshiValue(currencyData);
-                        price = Math.round(numSats);
-                      } catch (err) {
-                        console.error("ERROR", err);
-                      }
-                    } else if (productData.currency.toLowerCase() === "btc") {
-                      price = price * 100000000;
-                    }
-                    if (isFiatPayment) {
-                      await handleFiatPayment(price);
-                    } else if (isCashuPayment) {
-                      await handleCashuPayment(price);
-                    } else {
-                      await handleLightningPayment(price);
-                    }
-                  }}
-                >
-                  In-person
-                </SelectItem>
-                <SelectItem
-                  key="online-order"
-                  className="text-light-text dark:text-dark-text"
-                  onClick={() => {
-                    if (needsShippingInfo) {
-                      handleToggleShippingModal();
-                    } else {
-                      handleToggleContactModal();
-                    }
-                    setShowPurchaseTypeOption(false);
-                  }}
-                >
-                  Online order
-                </SelectItem>
-              </Select>
-            </div>
-          </ModalBody>
-        </ModalContent>
-      </Modal>
-
-      <ShippingForm
-        showShippingModal={showShippingModal}
-        handleToggleShippingModal={handleToggleShippingModal}
-        handleShippingSubmit={handleShippingSubmit}
-        onShippingSubmit={onShippingSubmit}
-        shippingControl={shippingControl}
-        requiredInfo={
-          productData.required !== "" ? productData.required : undefined
-        }
-      />
-
-      <ContactForm
-        showContactModal={showContactModal}
-        handleToggleContactModal={handleToggleContactModal}
-        handleContactSubmit={handleContactSubmit}
-        onContactSubmit={onContactSubmit}
-        contactControl={contactControl}
-        requiredInfo={
-          productData.required !== "" ? productData.required : undefined
-        }
-      />
-
       <SignInModal isOpen={isOpen} onClose={onClose} />
 
       <FailureModal
@@ -2174,6 +2414,6 @@ export default function ProductInvoiceCard({
           setFailureText("");
         }}
       />
-    </>
+    </div>
   );
 }
