@@ -230,7 +230,7 @@ export default function CheckoutCard({
         return;
       }
       let updatedCart = [];
-      let productToAdd = { ...productData };
+      const productToAdd = { ...productData };
 
       if (selectedSize) {
         productToAdd.selectedSize = selectedSize;
@@ -315,7 +315,7 @@ export default function CheckoutCard({
   const updatedProductData = {
     ...productData,
     price: currentPrice,
-    totalCost: currentPrice + productData.shippingCost,
+    totalCost: currentPrice + (productData.shippingCost ?? 0),
   };
 
   return (
