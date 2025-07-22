@@ -563,7 +563,6 @@ export default function CartInvoiceCard({
 
       const userPubkey = await signer?.getPubKey?.();
       const userNPub = userPubkey ? nip19.npubEncode(userPubkey) : undefined;
-
       for (const product of products) {
         const title = product.title;
         const pubkey = product.pubkey;
@@ -959,7 +958,6 @@ export default function CartInvoiceCard({
     const userPubkey = await signer?.getPubKey?.();
     const userNPub = userPubkey ? nip19.npubEncode(userPubkey) : undefined;
     let remainingProofs = proofs;
-
     for (const product of products) {
       const title = product.title;
       const pubkey = product.pubkey;
@@ -1944,7 +1942,10 @@ export default function CartInvoiceCard({
                           <span className="ml-2">Product cost:</span>
                           <span>
                             {formatWithCommas(
-                              product.price * (quantities[product.id] || 1),
+                              (product.volumePrice !== undefined
+                                ? product.volumePrice
+                                : product.price) *
+                                (quantities[product.id] || 1),
                               "sats"
                             )}
                           </span>
@@ -2109,7 +2110,9 @@ export default function CartInvoiceCard({
                         <span className="ml-2">Product cost:</span>
                         <span>
                           {formatWithCommas(
-                            product.price * (quantities[product.id] || 1),
+                            (product.volumePrice !== undefined
+                              ? product.volumePrice
+                              : product.price) * (quantities[product.id] || 1),
                             "sats"
                           )}
                         </span>

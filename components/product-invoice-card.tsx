@@ -479,7 +479,6 @@ export default function ProductInvoiceCard({
     const pubkey = productData.pubkey;
     const required = productData.required;
     const orderId = uuidv4();
-
     let paymentMessage = "";
     if (userNPub) {
       paymentMessage =
@@ -1969,7 +1968,9 @@ export default function ProductInvoiceCard({
                       <span className="ml-2">Product cost:</span>
                       <span>
                         {formatWithCommas(
-                          productData.price,
+                          productData.volumePrice !== undefined
+                            ? productData.volumePrice
+                            : productData.price,
                           productData.currency
                         )}
                       </span>
