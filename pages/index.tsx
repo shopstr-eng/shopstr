@@ -353,8 +353,8 @@ export default function StandaloneLanding() {
                       Anonymous Trading
                     </h4>
                     <p className="text-gray-600">
-                      Trade freely without identity verification or government
-                      oversight.
+                      Trade freely without KYC or government
+                      overreach.
                     </p>
                   </CardBody>
                 </Card>
@@ -407,7 +407,7 @@ export default function StandaloneLanding() {
                   </li>
                   <li className="flex items-start">
                     <span className="mr-2 text-purple-500">✓</span>
-                    No KYC requirements or identity verification
+                    No KYC requirements
                   </li>
                   <li className="flex items-start">
                     <span className="mr-2 text-purple-500">✓</span>
@@ -757,8 +757,7 @@ export default function StandaloneLanding() {
               >
                 Milk Market
               </a>{" "}
-              to already start listing milk on the open market before milk
-              market launches!
+              to start listing milk before the dedicated site launches!
             </p>
             <Button
               className={WHITEBUTTONCLASSNAMES}

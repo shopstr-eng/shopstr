@@ -6,22 +6,80 @@ import ProductForm from "../product-form";
 import { useRouter } from "next/router";
 import { useSearchParams } from "next/navigation";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import {
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Input,
+  Button,
+} from "@nextui-org/react";
+import { BLACKBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+
+const LISTING_PASSWORD = process.env.LISTING_PASSWORD || "";
+const PASSWORD_STORAGE_KEY = "listingPasswordAuthenticated";
 
 const MyListingsFeed = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const [showModal, setShowModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const { isLoggedIn } = useContext(SignerContext);
+
+  // Check if password was previously authenticated
+  useEffect(() => {
+    const storedAuth = localStorage.getItem(PASSWORD_STORAGE_KEY);
+    if (storedAuth === "true") {
+      setIsAuthenticated(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (!searchParams || !isLoggedIn) return;
-    setShowModal(searchParams.has("addNewListing"));
-  }, [searchParams, isLoggedIn]);
+    
+    if (searchParams.has("addNewListing")) {
+      if (isAuthenticated) {
+        setShowModal(true);
+      } else {
+        setShowPasswordModal(true);
+      }
+    }
+  }, [searchParams, isLoggedIn, isAuthenticated]);
 
   const handleProductModalToggle = () => {
     setShowModal(!showModal);
     router.push("");
+  };
+
+  const handlePasswordSubmit = () => {
+    if (passwordInput.trim() === LISTING_PASSWORD) {
+      setIsAuthenticated(true);
+      localStorage.setItem(PASSWORD_STORAGE_KEY, "true");
+      setShowPasswordModal(false);
+      setShowModal(true);
+      setPasswordInput("");
+      setPasswordError("");
+    } else {
+      setPasswordError("Incorrect password. Please try again.");
+    }
+  };
+
+  const handlePasswordModalClose = () => {
+    setShowPasswordModal(false);
+    setPasswordInput("");
+    setPasswordError("");
+    router.push("");
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handlePasswordSubmit();
+    }
   };
 
   return (
@@ -34,6 +92,58 @@ const MyListingsFeed = () => {
         showModal={showModal}
         handleModalToggle={handleProductModalToggle}
       />
+
+      <Modal
+        backdrop="blur"
+        isOpen={showPasswordModal}
+        onClose={handlePasswordModalClose}
+        classNames={{
+          body: "py-6",
+          backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+          header: "border-b-[1px] border-[#292f46]",
+          footer: "border-t-[1px] border-[#292f46]",
+          closeButton: "hover:bg-black/5 active:bg-white/10",
+        }}
+        scrollBehavior={"outside"}
+        size="md"
+        isDismissable={true}
+      >
+        <ModalContent>
+          <ModalHeader className="flex flex-col gap-1 text-dark-text">
+            Enter Listing Password
+          </ModalHeader>
+          <ModalBody>
+            <Input
+              className="text-dark-text"
+              autoFocus
+              variant="flat"
+              label="Password"
+              labelPlacement="inside"
+              type="password"
+              value={passwordInput}
+              onChange={(e) => setPasswordInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              isInvalid={!!passwordError}
+              errorMessage={passwordError}
+            />
+            {passwordError && (
+              <div className="mt-2 text-sm text-red-500">{passwordError}</div>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <Button color="danger" variant="light" onClick={handlePasswordModalClose}>
+              Cancel
+            </Button>
+            <Button 
+              className={`text-white shadow-lg bg-gradient-to-tr ${BLACKBUTTONCLASSNAMES}`}
+              onClick={handlePasswordSubmit}
+              isDisabled={!passwordInput.trim()}
+            >
+              Submit
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </div>
   );
 };
