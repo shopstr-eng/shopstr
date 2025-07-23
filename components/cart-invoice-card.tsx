@@ -2722,7 +2722,7 @@ export default function CartInvoiceCard({
               </h2>
 
               <form
-                onSubmit={handleFormSubmit(onFormSubmit)}
+                onSubmit={handleFormSubmit((data) => onFormSubmit(data))}
                 className="space-y-6"
               >
                 {renderContactForm()}
