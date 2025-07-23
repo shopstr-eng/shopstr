@@ -1,10 +1,12 @@
-import React from "react";
+import React, { useContext } from "react";
 import { Chip } from "@nextui-org/react";
 import { locationAvatar } from "./dropdowns/location-dropdown";
 import ImageCarousel from "./image-carousel";
 import CompactPriceDisplay from "./display-monetary-info";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
+import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { useRouter } from "next/router";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 
 export default function ProductCard({
   productData,
@@ -14,13 +16,14 @@ export default function ProductCard({
   onProductClick?: (productId: ProductData) => void;
 }) {
   const router = useRouter();
+  const { pubkey: userPubkey } = useContext(SignerContext);
   if (!productData) return null;
 
   const cardHoverStyle = "hover:shadow-yellow-700/30 hover:scale-[1.01]";
 
   return (
     <div
-      className={`${cardHoverStyle} mx-2 my-4 rounded-2xl bg-neutral-900 shadow-md duration-300 transition-all`}
+      className={`${cardHoverStyle} mx-2 my-4 rounded-2xl bg-white border-2 border-black shadow-md duration-300 transition-all`}
     >
       <div className="w-80 overflow-hidden rounded-2xl">
         <div
@@ -39,7 +42,7 @@ export default function ProductCard({
           <div className="flex flex-col p-4">
             {router.pathname !== "/" && (
               <div className="mb-2 flex items-center justify-between">
-                <h2 className="max-w-[70%] truncate text-xl font-semibold text-dark-text">
+                <h2 className="max-w-[70%] truncate text-xl font-semibold text-light-text">
                   {productData.title}
                 </h2>
                 {productData.status === "active" && (
@@ -54,7 +57,16 @@ export default function ProductCard({
                 )}
               </div>
             )}
-            <div className="mb-3" />
+            <div className="mb-3">
+              <ProfileWithDropdown
+                pubkey={productData.pubkey}
+                dropDownKeys={
+                  productData.pubkey === userPubkey
+                    ? ["shop_profile"]
+                    : ["shop", "inquiry", "copy_npub"]
+                }
+              />
+            </div>
             {router.pathname !== "/" && (
               <div className="mt-1 flex items-center justify-between">
                 <Chip

@@ -54,6 +54,10 @@ export interface Transaction {
   date: number;
 }
 
+export type FiatOptionsType = {
+  [key: string]: string;
+};
+
 export interface ShippingFormData {
   Name: string;
   Address: string;

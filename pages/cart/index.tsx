@@ -2,19 +2,25 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { Button } from "@nextui-org/react";
+import {
+  Button,
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+} from "@nextui-org/react";
 import {
   PlusIcon,
   MinusIcon,
-  InformationCircleIcon,
   ShoppingBagIcon,
+  CheckCircleIcon,
+  XCircleIcon,
 } from "@heroicons/react/24/outline";
 import {
   BLACKBUTTONCLASSNAMES,
   ShippingOptionsType,
 } from "@/utils/STATIC-VARIABLES";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
-import { DisplayCostBreakdown } from "../../components/utility-components/display-monetary-info";
 import CartInvoiceCard from "../../components/cart-invoice-card";
 import { fiat } from "@getalby/lightning-tools";
 import currencySelection from "../../public/currencySelection.json";
@@ -73,14 +79,10 @@ export default function Component() {
   const [satPrices, setSatPrices] = useState<{ [key: string]: number | null }>(
     {}
   );
-  const [shippingSatPrices, setShippingSatPrices] = useState<{
-    [key: string]: number | null;
-  }>({});
   const [totalCostsInSats, setTotalCostsInSats] = useState<{
     [key: string]: number;
   }>({});
   const [subtotal, setSubtotal] = useState<number>(0);
-  const [totalShippingCost, setTotalShippingCost] = useState<number>(0);
   const [totalCost, setTotalCost] = useState<number>(0);
   const [shippingTypes, setShippingTypes] = useState<{
     [key: string]: ShippingOptionsType;
@@ -103,6 +105,13 @@ export default function Component() {
     [key: string]: boolean;
   }>(Object.fromEntries(products.map((product) => [product.id, false])));
   const [isBeingPaid, setIsBeingPaid] = useState(false);
+
+  const [fiatOrderIsPlaced, setFiatOrderIsPlaced] = useState(false);
+  const [fiatOrderFailed, setFiatOrderFailed] = useState(false);
+  const [invoiceIsPaid, setInvoiceIsPaid] = useState(false);
+  const [invoiceGenerationFailed, setInvoiceGenerationFailed] = useState(false);
+  const [cashuPaymentSent, setCashuPaymentSent] = useState(false);
+  const [cashuPaymentFailed, setCashuPaymentFailed] = useState(false);
 
   const router = useRouter();
 
@@ -131,7 +140,6 @@ export default function Component() {
       const shipping: { [key: string]: number | null } = {};
       const totals: { [key: string]: number } = {};
       let subtotalAmount = 0;
-      let shippingCostAmount = 0;
       let totalCostAmount = 0;
 
       for (const product of products) {
@@ -152,11 +160,9 @@ export default function Component() {
               productShipping = shippingSatPrice * quantities[product.id]!;
               productTotal = totalSatPrice * quantities[product.id]!;
               subtotalAmount += productSubtotal;
-              shippingCostAmount += productShipping;
               totalCostAmount += productTotal;
             } else {
               subtotalAmount += subtotalSatPrice;
-              shippingCostAmount += shippingSatPrice;
               totalCostAmount += totalSatPrice;
               productSubtotal = subtotalSatPrice;
               productShipping = shippingSatPrice;
@@ -178,8 +184,6 @@ export default function Component() {
 
       setSatPrices(prices);
       setSubtotal(subtotalAmount);
-      setShippingSatPrices(shipping);
-      setTotalShippingCost(shippingCostAmount);
       setTotalCost(totalCostAmount);
       setTotalCostsInSats(totals);
     };
@@ -232,11 +236,15 @@ export default function Component() {
   };
 
   const convertPriceToSats = async (product: ProductData): Promise<number> => {
+    // Use volumePrice if it exists, otherwise use default price
+    const basePrice =
+      product.volumePrice !== undefined ? product.volumePrice : product.price;
+
     if (
       product.currency.toLowerCase() === "sats" ||
       product.currency.toLowerCase() === "sat"
     ) {
-      return product.price;
+      return basePrice;
     }
     let price = 0;
     if (!currencySelection.hasOwnProperty(product.currency.toUpperCase())) {
@@ -248,7 +256,7 @@ export default function Component() {
     ) {
       try {
         const currencyData = {
-          amount: product.price,
+          amount: basePrice,
           currency: product.currency,
         };
         const numSats = await fiat.getSatoshiValue(currencyData);
@@ -257,7 +265,7 @@ export default function Component() {
         console.error("ERROR", err);
       }
     } else if (product.currency.toLowerCase() === "btc") {
-      price = product.price * 100000000;
+      price = basePrice * 100000000;
     }
     return price;
   };
@@ -297,11 +305,17 @@ export default function Component() {
   };
 
   const convertTotalToSats = async (product: ProductData): Promise<number> => {
+    // Use volumePrice if it exists, otherwise use default price
+    const basePrice =
+      product.volumePrice !== undefined ? product.volumePrice : product.price;
+    const shippingCost = product.shippingCost || 0;
+    const totalCost = basePrice + shippingCost;
+
     if (
       product.currency.toLowerCase() === "sats" ||
       product.currency.toLowerCase() === "sat"
     ) {
-      return product.totalCost;
+      return totalCost;
     }
     let total = 0;
     if (!currencySelection.hasOwnProperty(product.currency.toUpperCase())) {
@@ -313,7 +327,7 @@ export default function Component() {
     ) {
       try {
         const currencyData = {
-          amount: product.totalCost,
+          amount: totalCost,
           currency: product.currency,
         };
         const numSats = await fiat.getSatoshiValue(currencyData);
@@ -322,7 +336,7 @@ export default function Component() {
         console.error("ERROR", err);
       }
     } else if (product.currency.toLowerCase() === "btc") {
-      total = product.totalCost * 100000000;
+      total = totalCost * 100000000;
     }
     return total;
   };
@@ -353,7 +367,7 @@ export default function Component() {
                         />
                         <div className="flex-1">
                           <div className="flex flex-col md:flex-row md:items-start md:justify-between md:gap-5">
-                            <h2 className="mb-2 text-lg font-semibold md:mb-0">
+                            <h2 className="mb-2 text-lg md:mb-0">
                               {product.title}
                             </h2>
                             <p className="text-lg font-bold">
@@ -449,82 +463,169 @@ export default function Component() {
           </div>
         </div>
       ) : (
-        <div className="flex min-h-screen w-full bg-light-bg p-4 text-light-text sm:items-center sm:justify-center">
-          <div className="mx-auto flex w-full max-w-4xl flex-col px-4 pb-4 pt-20">
-            <h1 className="mb-6 text-2xl font-bold">Checkout</h1>
-            {products.length > 0 && (
-              <>
-                {products.map((product) => (
-                  <div
-                    key={product.id}
-                    className="mb-6 rounded-lg border border-gray-300 p-4 shadow-sm"
-                  >
-                    <h2 className="mb-4 text-xl font-bold">{product.title}</h2>
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      {product.selectedSize && (
-                        <p className="text-base">
-                          <span className="font-medium">Size:</span>{" "}
-                          {product.selectedSize}
-                        </p>
-                      )}
-                      {quantities[product.id]! > 1 && (
-                        <p className="text-base">
-                          <span className="font-medium">Quantity:</span>{" "}
-                          {quantities[product.id]}
-                        </p>
-                      )}
-                    </div>
-                    <div className="mt-4 border-t border-gray-300 pt-4">
-                      <DisplayCostBreakdown
-                        subtotal={
-                          satPrices[product.id]
-                            ? (satPrices[product.id] as number)
-                            : 0
-                        }
-                        shippingType={product.shippingType}
-                        shippingCost={
-                          shippingSatPrices[product.id]
-                            ? (shippingSatPrices[product.id] as number)
-                            : 0
-                        }
-                        totalCost={
-                          totalCostsInSats[product.pubkey]
-                            ? totalCostsInSats[product.pubkey]
-                            : 0
-                        }
-                      />
-                    </div>
-                  </div>
-                ))}
-                <div className="mb-6 flex items-center justify-center rounded-lg border border-gray-200 bg-gray-50 p-4 text-center">
-                  <InformationCircleIcon className="mr-2 h-5 w-5 flex-shrink-0 text-gray-600" />
-                  <p className="text-sm text-gray-600">
-                    Once purchased, each seller will receive a DM with your
-                    order details.
-                  </p>
-                </div>
-              </>
-            )}
+        <div className="flex min-h-screen w-full bg-light-bg text-light-text sm:items-center sm:justify-center">
+          <div className="mx-auto flex w-full flex-col pt-20">
             <div className="flex flex-col items-center">
               <CartInvoiceCard
                 products={products}
                 quantities={quantities}
                 shippingTypes={shippingTypes}
                 totalCostsInSats={totalCostsInSats}
-                subtotal={subtotal}
-                totalShippingCost={totalShippingCost}
                 totalCost={totalCost}
+                onBackToCart={toggleCheckout}
+                setFiatOrderIsPlaced={setFiatOrderIsPlaced}
+                setFiatOrderFailed={setFiatOrderFailed}
+                setInvoiceIsPaid={setInvoiceIsPaid}
+                setInvoiceGenerationFailed={setInvoiceGenerationFailed}
+                setCashuPaymentSent={setCashuPaymentSent}
+                setCashuPaymentFailed={setCashuPaymentFailed}
               />
-              <span
-                className="mt-4 cursor-pointer text-light-text hover:text-accent-light-text"
-                onClick={toggleCheckout}
-              >
-                Return to Cart
-              </span>
             </div>
           </div>
         </div>
       )}
+
+      {/* Success Modal */}
+      {fiatOrderIsPlaced || invoiceIsPaid || cashuPaymentSent ? (
+        <>
+          <Modal
+            backdrop="blur"
+            isOpen={fiatOrderIsPlaced || invoiceIsPaid || cashuPaymentSent}
+            onClose={() => {
+              setFiatOrderIsPlaced(false);
+              setInvoiceIsPaid(false);
+              setCashuPaymentSent(false);
+              router.push("/orders");
+            }}
+            classNames={{
+              body: "py-6 ",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
+            }}
+            isDismissable={true}
+            scrollBehavior={"normal"}
+            placement={"center"}
+            size="2xl"
+          >
+            <ModalContent>
+              <ModalHeader className="flex items-center justify-center text-dark-text">
+                <CheckCircleIcon className="h-6 w-6 text-green-500" />
+                <div className="ml-2">Order successful!</div>
+              </ModalHeader>
+              <ModalBody className="flex flex-col overflow-hidden text-dark-text">
+                <div className="flex items-center justify-center">
+                  The seller will receive a message with your order details.
+                </div>
+              </ModalBody>
+            </ModalContent>
+          </Modal>
+        </>
+      ) : null}
+
+      {/* Invoice Generation Failed Modal */}
+      {invoiceGenerationFailed ? (
+        <>
+          <Modal
+            backdrop="blur"
+            isOpen={invoiceGenerationFailed}
+            onClose={() => setInvoiceGenerationFailed(false)}
+            classNames={{
+              body: "py-6 ",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
+            }}
+            isDismissable={true}
+            scrollBehavior={"normal"}
+            placement={"center"}
+            size="2xl"
+          >
+            <ModalContent>
+              <ModalHeader className="flex items-center justify-center text-dark-text">
+                <XCircleIcon className="h-6 w-6 text-red-500" />
+                <div className="ml-2">Invoice generation failed!</div>
+              </ModalHeader>
+              <ModalBody className="flex flex-col overflow-hidden text-dark-text">
+                <div className="flex items-center justify-center">
+                  The price and/or currency set for this listing was invalid.
+                </div>
+              </ModalBody>
+            </ModalContent>
+          </Modal>
+        </>
+      ) : null}
+
+      {/* Cashu Payment Failed Modal */}
+      {cashuPaymentFailed ? (
+        <>
+          <Modal
+            backdrop="blur"
+            isOpen={cashuPaymentFailed}
+            onClose={() => setCashuPaymentFailed(false)}
+            classNames={{
+              body: "py-6 ",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
+            }}
+            isDismissable={true}
+            scrollBehavior={"normal"}
+            placement={"center"}
+            size="2xl"
+          >
+            <ModalContent>
+              <ModalHeader className="flex items-center justify-center text-dark-text">
+                <XCircleIcon className="h-6 w-6 text-red-500" />
+                <div className="ml-2">Purchase failed!</div>
+              </ModalHeader>
+              <ModalBody className="flex flex-col overflow-hidden text-dark-text">
+                <div className="flex items-center justify-center">
+                  You didn&apos;t have enough balance in your wallet to pay.
+                </div>
+              </ModalBody>
+            </ModalContent>
+          </Modal>
+        </>
+      ) : null}
+
+      {/* Fiat Order Failed Modal */}
+      {fiatOrderFailed ? (
+        <>
+          <Modal
+            backdrop="blur"
+            isOpen={fiatOrderFailed}
+            onClose={() => setFiatOrderFailed(false)}
+            classNames={{
+              body: "py-6 ",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
+            }}
+            isDismissable={true}
+            scrollBehavior={"normal"}
+            placement={"center"}
+            size="2xl"
+          >
+            <ModalContent>
+              <ModalHeader className="flex items-center justify-center text-dark-text">
+                <XCircleIcon className="h-6 w-6 text-red-500" />
+                <div className="ml-2">Order failed!</div>
+              </ModalHeader>
+              <ModalBody className="flex flex-col overflow-hidden text-dark-text">
+                <div className="flex items-center justify-center">
+                  Your order information was not delivered to the seller. Please
+                  try again.
+                </div>
+              </ModalBody>
+            </ModalContent>
+          </Modal>
+        </>
+      ) : null}
     </>
   );
 }
