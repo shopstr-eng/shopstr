@@ -43,13 +43,6 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
               classNames={{
                 wrapper: "bg-light-bg",
               }}
-              // startContent={
-              //   <Avatar
-              //     alt={country.country}
-              //     className="h-6 w-6"
-              //     src={`https://flagcdn.com/16x12/${country.iso3166}.png`}
-              //   />
-              // }
             >
               {country.country}
             </SelectItem>
@@ -68,20 +61,7 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
         className="text-dark-text"
       >
         {locations.states.map((state) => {
-          return (
-            <SelectItem
-              key={state.state}
-              // startContent={
-              //   <Avatar
-              //     alt={state.state}
-              //     className="h-6 w-6"
-              //     src={`https://flagcdn.com/16x12/${state.iso3166}.png`}
-              //   />
-              // }
-            >
-              {state.state}
-            </SelectItem>
-          );
+          return <SelectItem key={state.state}>{state.state}</SelectItem>;
         })}
       </SelectSection>
     );
@@ -101,7 +81,7 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
         <SelectItem key={"Online"}>Online</SelectItem>
       </SelectSection>
     );
-    return [regionalOptions, countryOptions, stateOptions];
+    return [stateOptions, countryOptions, regionalOptions];
   }, []);
 
   return (
