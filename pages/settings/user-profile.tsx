@@ -534,7 +534,7 @@ const UserProfilePage = () => {
                                 });
                               }
                             } else {
-                              const { [option.key]: removed, ...rest } =
+                              const { [option.key]: _removed, ...rest } =
                                 currentOptions;
                               setValue("fiat_options", rest);
                             }

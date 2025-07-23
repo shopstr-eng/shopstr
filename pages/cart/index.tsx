@@ -140,7 +140,6 @@ export default function Component() {
       const shipping: { [key: string]: number | null } = {};
       const totals: { [key: string]: number } = {};
       let subtotalAmount = 0;
-      let shippingCostAmount = 0;
       let totalCostAmount = 0;
 
       for (const product of products) {
@@ -161,11 +160,9 @@ export default function Component() {
               productShipping = shippingSatPrice * quantities[product.id]!;
               productTotal = totalSatPrice * quantities[product.id]!;
               subtotalAmount += productSubtotal;
-              shippingCostAmount += productShipping;
               totalCostAmount += productTotal;
             } else {
               subtotalAmount += subtotalSatPrice;
-              shippingCostAmount += shippingSatPrice;
               totalCostAmount += totalSatPrice;
               productSubtotal = subtotalSatPrice;
               productShipping = shippingSatPrice;

@@ -396,7 +396,8 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
                         });
                       }
                     } else {
-                      const { [option.key]: removed, ...rest } = currentOptions;
+                      const { [option.key]: _removed, ...rest } =
+                        currentOptions;
                       setValue("fiat_options", rest);
                     }
                   }}
