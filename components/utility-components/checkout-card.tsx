@@ -4,10 +4,7 @@ import React, { useContext, useEffect, useRef, useState } from "react";
 import { nip19 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
-import {
-  DisplayCostBreakdown,
-  DisplayCheckoutCost,
-} from "./display-monetary-info";
+import { DisplayCheckoutCost } from "./display-monetary-info";
 import ProductInvoiceCard from "../product-invoice-card";
 import { useRouter } from "next/router";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
@@ -16,7 +13,8 @@ import { locationAvatar } from "./dropdowns/location-dropdown";
 import {
   FaceFrownIcon,
   FaceSmileIcon,
-  InformationCircleIcon,
+  ArrowLongDownIcon,
+  ArrowLongUpIcon,
 } from "@heroicons/react/24/outline";
 import { ReviewsContext } from "@/utils/context/context";
 import FailureModal from "../utility-components/failure-modal";
@@ -31,6 +29,7 @@ const SUMMARY_CHARACTER_LIMIT = 100;
 export default function CheckoutCard({
   productData,
   setFiatOrderIsPlaced,
+  setFiatOrderFailed,
   setInvoiceIsPaid,
   setInvoiceGenerationFailed,
   setCashuPaymentSent,
@@ -39,6 +38,7 @@ export default function CheckoutCard({
 }: {
   productData: ProductData;
   setFiatOrderIsPlaced?: (fiatOrderIsPlaced: boolean) => void;
+  setFiatOrderFailed?: (fiatOrderFailed: boolean) => void;
   setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
   setInvoiceGenerationFailed?: (invoiceGenerationFailed: boolean) => void;
   setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
@@ -104,7 +104,7 @@ export default function CheckoutCard({
 
   const calculateVisibleImages = (containerHeight: number) => {
     const imageHeight = containerHeight / 3;
-    const visibleCount = Math.floor(containerHeight / imageHeight);
+    const visibleCount = Math.max(3, Math.floor(containerHeight / imageHeight));
     setVisibleImages(productData.images.slice(0, visibleCount));
   };
 
@@ -181,7 +181,7 @@ export default function CheckoutCard({
       };
     }
     return;
-  }, [selectedImage]);
+  }, [selectedImage, isBeingPaid]);
 
   useEffect(() => {
     setHasSizes(
@@ -319,382 +319,384 @@ export default function CheckoutCard({
   };
 
   return (
-    <>
-      {!isBeingPaid ? (
-        <>
-          <div className="max-w-screen pt-4">
-            <div
-              className="max-w-screen mx-3 my-3 flex flex-row whitespace-normal break-words"
-              key={uniqueKey}
-            >
-              <div className="w-1/2 pr-4">
-                <div className="flex w-full flex-row">
-                  <div className="flex w-1/4 flex-col pr-4">
-                    <div ref={containerRef} className="flex-1 overflow-hidden">
+    <div className="flex w-full items-center justify-center bg-light-bg dark:bg-dark-bg">
+      <div className="flex flex-col">
+        {!isBeingPaid ? (
+          <>
+            <div className="max-w-screen pt-4">
+              <div
+                className="max-w-screen mx-3 my-3 flex flex-row whitespace-normal break-words"
+                key={uniqueKey}
+              >
+                <div className="w-1/2 pr-4">
+                  <div className="flex w-full flex-row">
+                    <div className="flex w-1/4 flex-col pr-4">
                       <div
-                        className={`flex flex-col space-y-2 ${
-                          showAllImages ? "overflow-y-auto" : ""
-                        }`}
+                        ref={containerRef}
+                        className="flex-1 overflow-hidden"
                       >
-                        {(showAllImages
-                          ? productData.images
-                          : visibleImages
-                        ).map((image, index) => (
-                          <img
-                            key={index}
-                            src={image}
-                            alt={`Product image ${index + 1}`}
-                            className={`w-full cursor-pointer rounded-xl object-cover ${
-                              image === selectedImage
-                                ? "border-2 border-shopstr-purple dark:border-shopstr-yellow"
-                                : ""
-                            }`}
-                            style={{ aspectRatio: "1 / 1" }}
-                            onClick={() => setSelectedImage(image)}
-                          />
-                        ))}
+                        <div
+                          className={`flex flex-col space-y-2 ${
+                            showAllImages ? "overflow-y-auto" : ""
+                          }`}
+                        >
+                          {(showAllImages
+                            ? productData.images
+                            : visibleImages
+                          ).map((image, index) => (
+                            <img
+                              key={index}
+                              src={image}
+                              alt={`Product image ${index + 1}`}
+                              className={`w-full cursor-pointer rounded-xl object-cover ${
+                                image === selectedImage
+                                  ? "border-2 border-shopstr-purple dark:border-shopstr-yellow"
+                                  : ""
+                              }`}
+                              style={{ aspectRatio: "1 / 1" }}
+                              onClick={() => setSelectedImage(image)}
+                            />
+                          ))}
+                        </div>
                       </div>
+                      {productData.images.length > 3 && (
+                        <button
+                          onClick={() => setShowAllImages(!showAllImages)}
+                          className="mt-2 flex flex-col items-center text-sm text-purple-500 hover:text-purple-700 dark:text-yellow-500 dark:hover:text-yellow-700"
+                        >
+                          {showAllImages ? (
+                            <ArrowLongUpIcon className="h-5 w-5" />
+                          ) : (
+                            <ArrowLongDownIcon className="h-5 w-5" />
+                          )}
+                        </button>
+                      )}
                     </div>
-                    {productData.images.length > visibleImages.length && (
+                    <div className="w-3/4">
+                      <img
+                        src={selectedImage}
+                        alt="Selected product image"
+                        className="w-full rounded-xl object-cover"
+                        style={{ aspectRatio: "1 / 1" }}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="w-1/2 px-3">
+                  <div className="flex w-full flex-col gap-4">
+                    <div className="flex flex-wrap items-center gap-4">
+                      <ProfileWithDropdown
+                        pubkey={productData.pubkey}
+                        dropDownKeys={
+                          productData.pubkey === userPubkey
+                            ? ["shop_profile"]
+                            : ["shop", "inquiry", "copy_npub"]
+                        }
+                      />
+                      {merchantQuality !== "" && (
+                        <div className="inline-flex items-center gap-1 rounded-lg border-2 border-black px-2 dark:border-white">
+                          {merchantReview >= 0.5 ? (
+                            <>
+                              <FaceSmileIcon
+                                className={`h-10 w-10 p-1 ${
+                                  merchantReview >= 0.75
+                                    ? "text-green-500"
+                                    : "text-green-300"
+                                }`}
+                              />
+                              <span className="mr-2 whitespace-nowrap text-sm text-light-text dark:text-dark-text">
+                                {merchantQuality}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <FaceFrownIcon
+                                className={`h-10 w-10 p-1 ${
+                                  merchantReview >= 0.25
+                                    ? "text-red-300"
+                                    : "text-red-500"
+                                }`}
+                              />
+                              <span className="mr-2 whitespace-nowrap text-sm text-light-text dark:text-dark-text">
+                                {merchantQuality}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <h2 className="mt-4 w-full text-left text-2xl font-bold text-light-text dark:text-dark-text">
+                    {productData.title}
+                  </h2>
+                  {productData.condition && (
+                    <div className="text-left text-xs text-light-text dark:text-dark-text">
+                      <span>Condition: {productData.condition}</span>
+                    </div>
+                  )}
+                  {productData.restrictions && (
+                    <div className="text-left text-xs text-light-text dark:text-dark-text">
+                      <span>Restrictions: </span>
+                      <span className="text-red-500">
+                        {productData.restrictions}
+                      </span>
+                    </div>
+                  )}
+                  <div className="hidden sm:block">
+                    <p className="mt-4 w-full text-left text-lg text-light-text dark:text-dark-text">
+                      {renderSummary()}
+                    </p>
+                    {productData.summary.length > SUMMARY_CHARACTER_LIMIT && (
                       <button
-                        onClick={() => setShowAllImages(!showAllImages)}
-                        className="mt-2 text-sm text-purple-500 hover:text-purple-700 dark:text-yellow-500 dark:hover:text-yellow-700"
+                        onClick={toggleExpand}
+                        className="mt-2 text-purple-500 hover:text-purple-700 dark:text-yellow-500 dark:hover:text-yellow-700"
                       >
-                        {showAllImages ? "∧" : "∨"}
+                        {isExpanded ? "Show less" : "Show more"}
                       </button>
                     )}
                   </div>
-                  <div className="w-3/4">
-                    <img
-                      src={selectedImage}
-                      alt="Selected product image"
-                      className="w-full rounded-xl object-cover"
-                      style={{ aspectRatio: "1 / 1" }}
+                  {hasVolumes && (
+                    <VolumeSelector
+                      volumes={productData.volumes!}
+                      volumePrices={productData.volumePrices!}
+                      currency={productData.currency}
+                      selectedVolume={selectedVolume}
+                      onVolumeChange={setSelectedVolume}
+                      isRequired={true}
                     />
-                  </div>
-                </div>
-              </div>
-              <div className="w-1/2 px-3">
-                <div className="flex w-full flex-col gap-4">
-                  <div className="flex flex-wrap items-center gap-4">
-                    <ProfileWithDropdown
-                      pubkey={productData.pubkey}
-                      dropDownKeys={
-                        productData.pubkey === userPubkey
-                          ? ["shop_profile"]
-                          : ["shop", "inquiry", "copy_npub"]
-                      }
-                    />
-                    {merchantQuality !== "" && (
-                      <div className="inline-flex items-center gap-1 rounded-lg border-2 border-black px-2 dark:border-white">
-                        {merchantReview >= 0.5 ? (
-                          <>
-                            <FaceSmileIcon
-                              className={`h-10 w-10 p-1 ${
-                                merchantReview >= 0.75
-                                  ? "text-green-500"
-                                  : "text-green-300"
-                              }`}
-                            />
-                            <span className="mr-2 whitespace-nowrap text-sm text-light-text dark:text-dark-text">
-                              {merchantQuality}
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <FaceFrownIcon
-                              className={`h-10 w-10 p-1 ${
-                                merchantReview >= 0.25
-                                  ? "text-red-300"
-                                  : "text-red-500"
-                              }`}
-                            />
-                            <span className="mr-2 whitespace-nowrap text-sm text-light-text dark:text-dark-text">
-                              {merchantQuality}
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <h2 className="mt-4 w-full text-left text-2xl font-bold text-light-text dark:text-dark-text">
-                  {productData.title}
-                </h2>
-                {productData.condition && (
-                  <div className="text-left text-xs text-light-text dark:text-dark-text">
-                    <span>Condition: {productData.condition}</span>
-                  </div>
-                )}
-                {productData.restrictions && (
-                  <div className="text-left text-xs text-light-text dark:text-dark-text">
-                    <span>Restrictions: </span>
-                    <span className="text-red-500">
-                      {productData.restrictions}
-                    </span>
-                  </div>
-                )}
-                <div className="hidden sm:block">
-                  <p className="mt-4 w-full text-left text-lg text-light-text dark:text-dark-text">
-                    {renderSummary()}
-                  </p>
-                  {productData.summary.length > SUMMARY_CHARACTER_LIMIT && (
-                    <button
-                      onClick={toggleExpand}
-                      className="mt-2 text-purple-500 hover:text-purple-700 dark:text-yellow-500 dark:hover:text-yellow-700"
-                    >
-                      {isExpanded ? "Show less" : "Show more"}
-                    </button>
                   )}
-                </div>
-                {hasVolumes && (
-                  <VolumeSelector
-                    volumes={productData.volumes!}
-                    volumePrices={productData.volumePrices!}
-                    currency={productData.currency}
-                    selectedVolume={selectedVolume}
-                    onVolumeChange={setSelectedVolume}
-                    isRequired={true}
-                  />
-                )}
-                <div className="mt-4">
-                  <DisplayCheckoutCost monetaryInfo={updatedProductData} />
-                </div>
-                <div className="pb-1">
-                  <Chip
-                    key={productData.location}
-                    startContent={locationAvatar(productData.location)}
-                  >
-                    {productData.location}
-                  </Chip>
-                </div>
-                {renderSizeGrid()}
-                <div className="flex w-full flex-col gap-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {productData.status !== "sold" ? (
-                      <>
-                        <Button
-                          className={`min-w-fit bg-gradient-to-tr from-purple-700 via-purple-500 to-purple-700 text-dark-text shadow-lg dark:from-yellow-700 dark:via-yellow-500 dark:to-yellow-700 dark:text-light-text ${
-                            (hasSizes && !selectedSize) ||
-                            (hasVolumes && !selectedVolume)
-                              ? "cursor-not-allowed opacity-50"
-                              : ""
-                          }`}
-                          onClick={toggleBuyNow}
-                          disabled={
-                            (hasSizes && !selectedSize) ||
-                            (hasVolumes && !selectedVolume)
-                          }
-                        >
-                          Buy Now
-                        </Button>
-                        <Button
-                          className={`${SHOPSTRBUTTONCLASSNAMES} ${
-                            isAdded ||
-                            (hasSizes && !selectedSize) ||
-                            (hasVolumes && !selectedVolume)
-                              ? "cursor-not-allowed opacity-50"
-                              : ""
-                          }`}
-                          onClick={handleAddToCart}
-                          disabled={
-                            isAdded ||
-                            (hasSizes && !selectedSize) ||
-                            (hasVolumes && !selectedVolume)
-                          }
-                        >
-                          Add To Cart
-                        </Button>
-                      </>
-                    ) : (
-                      <>
-                        <Button
-                          className={`${SHOPSTRBUTTONCLASSNAMES} cursor-not-allowed opacity-50`}
-                          disabled
-                        >
-                          Sold Out
-                        </Button>
-                      </>
-                    )}
-                    <Button
-                      type="submit"
-                      className={SHOPSTRBUTTONCLASSNAMES}
-                      onClick={handleShare}
+                  <div className="mt-4">
+                    <DisplayCheckoutCost monetaryInfo={updatedProductData} />
+                  </div>
+                  <div className="pb-1">
+                    <Chip
+                      key={productData.location}
+                      startContent={locationAvatar(productData.location)}
+                      className="min-h-fit max-w-full"
+                      classNames={{
+                        base: "h-auto py-1",
+                        content: "whitespace-normal break-words text-wrap",
+                      }}
                     >
-                      Share
-                    </Button>
+                      {productData.location}
+                    </Chip>
                   </div>
-                </div>
-                {productData.pubkey !== userPubkey && (
-                  <span
-                    onClick={() => {
-                      handleSendMessage(productData.pubkey);
-                    }}
-                    className="cursor-pointer text-gray-500"
-                  >
-                    or{" "}
-                    <span className="underline hover:text-light-text dark:hover:text-dark-text">
-                      contact
-                    </span>{" "}
-                    seller
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="max-w-screen mx-3 my-3 max-w-full overflow-hidden whitespace-normal break-words sm:hidden">
-              <p className="break-words-all w-full text-left text-lg text-light-text dark:text-dark-text">
-                {renderSummary()}
-              </p>
-              {productData.summary.length > SUMMARY_CHARACTER_LIMIT && (
-                <button
-                  onClick={toggleExpand}
-                  className="mt-2 text-purple-500 hover:text-purple-700 dark:text-yellow-500 dark:hover:text-yellow-700"
-                >
-                  {isExpanded ? "Show less" : "Show more"}
-                </button>
-              )}
-            </div>
-            {!isFetchingReviews && productReviews && (
-              <div className="mt-4 max-w-full p-4 pt-4">
-                <h3 className="mb-3 text-lg font-semibold text-light-text dark:text-dark-text">
-                  Product Reviews
-                </h3>
-                {productReviews.size > 0 ? (
-                  <div className="space-y-3">
-                    {Array.from(productReviews.entries()).map(
-                      ([reviewerPubkey, reviewData]) => (
-                        <div
-                          key={reviewerPubkey}
-                          className="rounded-lg border-2 border-black p-3 dark:border-white"
-                        >
-                          <div className="mb-2 flex items-center gap-2">
-                            <ProfileWithDropdown
-                              pubkey={reviewerPubkey}
-                              dropDownKeys={
-                                reviewerPubkey === userPubkey
-                                  ? ["shop_profile"]
-                                  : ["shop", "inquiry", "copy_npub"]
-                              }
-                            />
-                          </div>
-                          <div className="flex flex-col">
-                            <div className="mb-1 flex flex-wrap gap-2">
-                              {reviewData.map(([_, value, category], index) => {
-                                if (category === undefined) {
-                                  // Don't render the comment here; we'll show it later.
-                                  return null;
-                                } else if (category === "thumb") {
-                                  return (
-                                    <Chip
-                                      key={index}
-                                      className={`text-light-text dark:text-dark-text ${
-                                        value === "1"
-                                          ? "bg-green-500"
-                                          : "bg-red-500"
-                                      }`}
-                                    >
-                                      {`overall: ${
-                                        value === "1" ? "👍" : "👎"
-                                      }`}
-                                    </Chip>
-                                  );
-                                } else {
-                                  // Render chips for other categories
-                                  return (
-                                    <Chip
-                                      key={index}
-                                      className={`text-light-text dark:text-dark-text ${
-                                        value === "1"
-                                          ? "bg-green-500"
-                                          : "bg-red-500"
-                                      }`}
-                                    >
-                                      {`${category}: ${
-                                        value === "1" ? "👍" : "👎"
-                                      }`}
-                                    </Chip>
-                                  );
-                                }
-                              })}
-                            </div>
-                            {reviewData.map(([category, value], index) => {
-                              if (category === "comment" && value !== "") {
-                                // Render the comment text below the chips
-                                return (
-                                  <p
-                                    key={index}
-                                    className="italic text-light-text dark:text-dark-text"
-                                  >
-                                    &ldquo;{value}&rdquo;
-                                  </p>
-                                );
-                              }
-                              return null;
-                            })}
-                          </div>
-                        </div>
-                      )
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex justify-center">
-                    <div className="w-full max-w-xl rounded-lg bg-light-fg p-10 text-center shadow-lg dark:bg-dark-fg">
-                      <span className="block text-5xl text-light-text dark:text-dark-text">
-                        No reviews . . . yet!
-                      </span>
-                      <div className="flex flex-col items-center justify-center gap-3 pt-5 opacity-80">
-                        <span className="text-2xl text-light-text dark:text-dark-text">
-                          Be the first to leave a review!
-                        </span>
-                      </div>
+                  {renderSizeGrid()}
+                  <div className="flex w-full flex-col gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {productData.status !== "sold" ? (
+                        <>
+                          <Button
+                            className={`min-w-fit bg-gradient-to-tr from-purple-700 via-purple-500 to-purple-700 text-dark-text shadow-lg dark:from-yellow-700 dark:via-yellow-500 dark:to-yellow-700 dark:text-light-text ${
+                              (hasSizes && !selectedSize) ||
+                              (hasVolumes && !selectedVolume)
+                                ? "cursor-not-allowed opacity-50"
+                                : ""
+                            }`}
+                            onClick={toggleBuyNow}
+                            disabled={
+                              (hasSizes && !selectedSize) ||
+                              (hasVolumes && !selectedVolume)
+                            }
+                          >
+                            Buy Now
+                          </Button>
+                          <Button
+                            className={`${SHOPSTRBUTTONCLASSNAMES} ${
+                              isAdded ||
+                              (hasSizes && !selectedSize) ||
+                              (hasVolumes && !selectedVolume)
+                                ? "cursor-not-allowed opacity-50"
+                                : ""
+                            }`}
+                            onClick={handleAddToCart}
+                            disabled={
+                              isAdded ||
+                              (hasSizes && !selectedSize) ||
+                              (hasVolumes && !selectedVolume)
+                            }
+                          >
+                            Add To Cart
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            className={`${SHOPSTRBUTTONCLASSNAMES} cursor-not-allowed opacity-50`}
+                            disabled
+                          >
+                            Sold Out
+                          </Button>
+                        </>
+                      )}
+                      <Button
+                        type="submit"
+                        className={SHOPSTRBUTTONCLASSNAMES}
+                        onClick={handleShare}
+                      >
+                        Share
+                      </Button>
                     </div>
                   </div>
+                  {productData.pubkey !== userPubkey && (
+                    <span
+                      onClick={() => {
+                        handleSendMessage(productData.pubkey);
+                      }}
+                      className="cursor-pointer text-gray-500"
+                    >
+                      or{" "}
+                      <span className="underline hover:text-light-text dark:hover:text-dark-text">
+                        contact
+                      </span>{" "}
+                      seller
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="max-w-screen mx-3 my-3 max-w-full overflow-hidden whitespace-normal break-words sm:hidden">
+                <p className="break-words-all w-full text-left text-lg text-light-text dark:text-dark-text">
+                  {renderSummary()}
+                </p>
+                {productData.summary.length > SUMMARY_CHARACTER_LIMIT && (
+                  <button
+                    onClick={toggleExpand}
+                    className="mt-2 text-purple-500 hover:text-purple-700 dark:text-yellow-500 dark:hover:text-yellow-700"
+                  >
+                    {isExpanded ? "Show less" : "Show more"}
+                  </button>
                 )}
               </div>
-            )}
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="p-4 text-light-text dark:text-dark-text">
-            <h2 className="mb-4 text-2xl font-bold">{productData.title}</h2>
-            {selectedSize && (
-              <p className="mb-4 text-lg">Size: {selectedSize}</p>
-            )}
-            <DisplayCostBreakdown monetaryInfo={updatedProductData} />
-            <div className="mx-4 mt-2 flex items-center justify-center text-center">
-              <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-              <p className="ml-2 text-xs text-light-text dark:text-dark-text">
-                Once purchased, the seller will receive a DM with your order
-                details.
-              </p>
+              {!isFetchingReviews && productReviews && (
+                <div className="mt-4 max-w-full p-4 pt-4">
+                  <h3 className="mb-3 text-lg font-semibold text-light-text dark:text-dark-text">
+                    Product Reviews
+                  </h3>
+                  {productReviews.size > 0 ? (
+                    <div className="space-y-3">
+                      {Array.from(productReviews.entries()).map(
+                        ([reviewerPubkey, reviewData]) => (
+                          <div
+                            key={reviewerPubkey}
+                            className="rounded-lg border-2 border-black p-3 dark:border-white"
+                          >
+                            <div className="mb-2 flex items-center gap-2">
+                              <ProfileWithDropdown
+                                pubkey={reviewerPubkey}
+                                dropDownKeys={
+                                  reviewerPubkey === userPubkey
+                                    ? ["shop_profile"]
+                                    : ["shop", "inquiry", "copy_npub"]
+                                }
+                              />
+                            </div>
+                            <div className="flex flex-col">
+                              <div className="mb-1 flex flex-wrap gap-2">
+                                {reviewData.map(
+                                  ([_, value, category], index) => {
+                                    if (category === undefined) {
+                                      // Don't render the comment here; we'll show it later.
+                                      return null;
+                                    } else if (category === "thumb") {
+                                      return (
+                                        <Chip
+                                          key={index}
+                                          className={`text-light-text dark:text-dark-text ${
+                                            value === "1"
+                                              ? "bg-green-500"
+                                              : "bg-red-500"
+                                          }`}
+                                        >
+                                          {`overall: ${
+                                            value === "1" ? "👍" : "👎"
+                                          }`}
+                                        </Chip>
+                                      );
+                                    } else {
+                                      // Render chips for other categories
+                                      return (
+                                        <Chip
+                                          key={index}
+                                          className={`text-light-text dark:text-dark-text ${
+                                            value === "1"
+                                              ? "bg-green-500"
+                                              : "bg-red-500"
+                                          }`}
+                                        >
+                                          {`${category}: ${
+                                            value === "1" ? "👍" : "👎"
+                                          }`}
+                                        </Chip>
+                                      );
+                                    }
+                                  }
+                                )}
+                              </div>
+                              {reviewData.map(([category, value], index) => {
+                                if (category === "comment" && value !== "") {
+                                  // Render the comment text below the chips
+                                  return (
+                                    <p
+                                      key={index}
+                                      className="italic text-light-text dark:text-dark-text"
+                                    >
+                                      &ldquo;{value}&rdquo;
+                                    </p>
+                                  );
+                                }
+                                return null;
+                              })}
+                            </div>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex justify-center">
+                      <div className="w-full max-w-xl rounded-lg bg-light-fg p-10 text-center shadow-lg dark:bg-dark-fg">
+                        <span className="block text-5xl text-light-text dark:text-dark-text">
+                          No reviews . . . yet!
+                        </span>
+                        <div className="flex flex-col items-center justify-center gap-3 pt-5 opacity-80">
+                          <span className="text-2xl text-light-text dark:text-dark-text">
+                            Be the first to leave a review!
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-          </div>
+          </>
+        ) : (
           <div className="flex flex-col items-center">
             <ProductInvoiceCard
               productData={updatedProductData}
               setFiatOrderIsPlaced={setFiatOrderIsPlaced}
+              setFiatOrderFailed={setFiatOrderFailed}
               setInvoiceIsPaid={setInvoiceIsPaid}
               setInvoiceGenerationFailed={setInvoiceGenerationFailed}
               setCashuPaymentSent={setCashuPaymentSent}
               setCashuPaymentFailed={setCashuPaymentFailed}
               selectedSize={selectedSize}
               selectedVolume={selectedVolume}
+              setIsBeingPaid={setIsBeingPaid}
             />
           </div>
-        </>
-      )}
-      <SignInModal isOpen={isOpen} onClose={onClose} />
-      <FailureModal
-        bodyText={failureText}
-        isOpen={showFailureModal}
-        onClose={() => setShowFailureModal(false)}
-      />
-      <SuccessModal
-        bodyText="Listing URL copied to clipboard!"
-        isOpen={showSuccessModal}
-        onClose={() => setShowSuccessModal(false)}
-      />
-    </>
+        )}
+        <SignInModal isOpen={isOpen} onClose={onClose} />
+        <FailureModal
+          bodyText={failureText}
+          isOpen={showFailureModal}
+          onClose={() => setShowFailureModal(false)}
+        />
+        <SuccessModal
+          bodyText="Listing URL copied to clipboard!"
+          isOpen={showSuccessModal}
+          onClose={() => setShowSuccessModal(false)}
+        />
+      </div>
+    </div>
   );
 }

@@ -32,6 +32,7 @@ export type ProductData = {
   volumePrice?: number;
   required?: string;
   restrictions?: string;
+  pickupLocations?: string[];
 };
 
 export const parseTags = (productEvent: NostrEvent) => {
@@ -156,6 +157,11 @@ export const parseTags = (productEvent: NostrEvent) => {
         break;
       case "restrictions":
         parsedData.restrictions = values[0];
+        break;
+      case "pickup_location":
+        if (parsedData.pickupLocations === undefined)
+          parsedData.pickupLocations = [];
+        parsedData.pickupLocations.push(values[0]!);
         break;
       default:
         return;
