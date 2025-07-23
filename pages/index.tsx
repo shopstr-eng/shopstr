@@ -725,12 +725,12 @@ export default function StandaloneLanding() {
                   <span className="text-2xl">⚡</span>
                   <span className="font-semibold text-gray-800">Nostr:</span>
                   <a
-                    href="https://njump.me/shopstr@shopstr.store"
+                    href="https://njump.me/shopstr@shopstrmarkets.com"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-mono font-medium text-light-text underline transition-colors hover:text-gray-600"
                   >
-                    shopstr@shopstr.store
+                    shopstr@shopstrmarkets.com
                   </a>
                 </div>
               </div>
@@ -852,7 +852,7 @@ export default function StandaloneLanding() {
                 </button>
                 <div className="flex h-auto items-center gap-6">
                   <a
-                    href="https://github.com/shopstr-eng/shopstr"
+                    href="https://github.com/shopstr-eng/milk-market"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="transition-transform hover:scale-110"

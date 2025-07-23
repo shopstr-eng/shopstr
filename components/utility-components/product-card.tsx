@@ -23,7 +23,7 @@ export default function ProductCard({
 
   return (
     <div
-      className={`${cardHoverStyle} mx-2 my-4 rounded-2xl bg-white border-2 border-black shadow-md duration-300 transition-all`}
+      className={`${cardHoverStyle} mx-2 my-4 rounded-2xl border-2 border-black bg-white shadow-md duration-300 transition-all`}
     >
       <div className="w-80 overflow-hidden rounded-2xl">
         <div

@@ -182,10 +182,7 @@ export default function DisplayProductModal({
                 <div className="flex flex-wrap items-center">
                   {productData.volumes && productData.volumes.length > 0
                     ? productData.volumes.map((volume: string) => (
-                        <span
-                          key={volume}
-                          className="mb-2 mr-4 text-light-text dark:text-dark-text"
-                        >
+                        <span key={volume} className="mb-2 mr-4 text-dark-text">
                           {volume}: {productData.volumePrices?.get(volume) || 0}{" "}
                           {productData.currency}
                         </span>

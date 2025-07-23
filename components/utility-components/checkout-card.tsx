@@ -653,7 +653,7 @@ export default function CheckoutCard({
                     </div>
                   ) : (
                     <div className="flex justify-center">
-                      <div className="w-full max-w-xl rounded-lg p-10 text-center shadow-lg bg-dark-fg">
+                      <div className="w-full max-w-xl rounded-lg bg-dark-fg p-10 text-center shadow-lg">
                         <span className="block text-5xl text-dark-text">
                           No reviews . . . yet!
                         </span>

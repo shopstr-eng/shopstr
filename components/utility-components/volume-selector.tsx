@@ -24,7 +24,7 @@ export default function VolumeSelector({
     <Select
       variant="bordered"
       aria-label="Volume"
-      label="Select Volume"
+      label={<span className="text-light-text">Select Volume</span>}
       labelPlacement="inside"
       selectedKeys={selectedVolume ? new Set([selectedVolume]) : new Set()}
       onSelectionChange={(keys) => {
@@ -34,9 +34,9 @@ export default function VolumeSelector({
         }
       }}
       isRequired={isRequired}
-      className="mb-4 w-full text-light-text dark:text-dark-text md:w-1/2"
+      className="mb-4 w-full text-dark-text md:w-1/2"
     >
-      <SelectSection className="text-light-text dark:text-dark-text">
+      <SelectSection className=":text-dark-text">
         {volumes.map((volume) => {
           const price = volumePrices.get(volume) || 0;
           return (
@@ -44,7 +44,7 @@ export default function VolumeSelector({
               key={volume}
               value={volume}
               textValue={`${volume} - ${price} ${currency}`}
-              className="text-light-text dark:text-dark-text"
+              className="text-dark-text"
             >
               {volume} - {price} {currency}
             </SelectItem>

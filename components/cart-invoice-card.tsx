@@ -1928,11 +1928,7 @@ export default function CartInvoiceCard({
                 <Input
                   variant="bordered"
                   fullWidth={true}
-                  label={
-                    <span className="text-light-text">
-                      Contact
-                    </span>
-                  }
+                  label={<span className="text-light-text">Contact</span>}
                   labelPlacement="inside"
                   placeholder="@milkmarket"
                   isInvalid={!!error}
@@ -1956,11 +1952,7 @@ export default function CartInvoiceCard({
                 <Input
                   variant="bordered"
                   fullWidth={true}
-                  label={
-                    <span className="text-light-text">
-                      Contact type
-                    </span>
-                  }
+                  label={<span className="text-light-text">Contact type</span>}
                   labelPlacement="inside"
                   placeholder="Nostr, Signal, Telegram, email, phone, etc."
                   isInvalid={!!error}
@@ -2022,11 +2014,7 @@ export default function CartInvoiceCard({
                 <Input
                   variant="bordered"
                   fullWidth={true}
-                  label={
-                    <span className="text-light-text">
-                      Name
-                    </span>
-                  }
+                  label={<span className="text-light-text">Name</span>}
                   labelPlacement="inside"
                   isInvalid={!!error}
                   errorMessage={error?.message}
@@ -2055,11 +2043,7 @@ export default function CartInvoiceCard({
                 <Input
                   variant="bordered"
                   fullWidth={true}
-                  label={
-                    <span className="text-light-text">
-                      Address
-                    </span>
-                  }
+                  label={<span className="text-light-text">Address</span>}
                   labelPlacement="inside"
                   isInvalid={!!error}
                   errorMessage={error?.message}
@@ -2115,11 +2099,7 @@ export default function CartInvoiceCard({
                 <Input
                   variant="bordered"
                   fullWidth={true}
-                  label={
-                    <span className="text-light-text">
-                      City
-                    </span>
-                  }
+                  label={<span className="text-light-text">City</span>}
                   labelPlacement="inside"
                   isInvalid={!!error}
                   errorMessage={error?.message}
@@ -2143,9 +2123,7 @@ export default function CartInvoiceCard({
                   variant="bordered"
                   fullWidth={true}
                   label={
-                    <span className="text-light-text">
-                      State/Province
-                    </span>
+                    <span className="text-light-text">State/Province</span>
                   }
                   labelPlacement="inside"
                   isInvalid={!!error}
@@ -2175,11 +2153,7 @@ export default function CartInvoiceCard({
                 <Input
                   variant="bordered"
                   fullWidth={true}
-                  label={
-                    <span className="text-light-text">
-                      Postal code
-                    </span>
-                  }
+                  label={<span className="text-light-text">Postal code</span>}
                   labelPlacement="inside"
                   isInvalid={!!error}
                   errorMessage={error?.message}
@@ -2202,11 +2176,7 @@ export default function CartInvoiceCard({
                 <CountryDropdown
                   variant="bordered"
                   aria-label="Select Country"
-                  label={
-                    <span className="text-light-text">
-                      Country
-                    </span>
-                  }
+                  label={<span className="text-light-text">Country</span>}
                   labelPlacement="inside"
                   isInvalid={!!error}
                   errorMessage={error?.message}
@@ -2285,9 +2255,7 @@ export default function CartInvoiceCard({
                 variant="bordered"
                 fullWidth={true}
                 label={
-                  <span className="text-light-text">
-                    Enter {requiredInfo}
-                  </span>
+                  <span className="text-light-text">Enter {requiredInfo}</span>
                 }
                 labelPlacement="inside"
                 isInvalid={!!error}
@@ -2412,7 +2380,7 @@ export default function CartInvoiceCard({
                   <div className="flex flex-col items-center justify-center">
                     {qrCodeUrl ? (
                       <>
-                        <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900 text-dark-text">
+                        <h3 className="mt-3 text-center text-lg font-medium leading-6 text-dark-text text-gray-900">
                           Don&apos;t refresh or close the page until the payment
                           has been confirmed!
                         </h3>
@@ -2511,9 +2479,7 @@ export default function CartInvoiceCard({
 
             <div className="border-t pt-4">
               <div className="space-y-3">
-                <h4 className="font-semibold text-gray-700">
-                  Cost Breakdown
-                </h4>
+                <h4 className="font-semibold text-gray-700">Cost Breakdown</h4>
                 <div className="space-y-3">
                   {products.map((product) => (
                     <div
@@ -2923,10 +2889,7 @@ export default function CartInvoiceCard({
                     onChange={(e) => setFiatPaymentConfirmed(e.target.checked)}
                     className="h-4 w-4 rounded border-gray-300 text-light-text focus:ring-accent-light-text"
                   />
-                  <label
-                    htmlFor="paymentConfirmed"
-                    className="text-gray-300"
-                  >
+                  <label htmlFor="paymentConfirmed" className="text-gray-300">
                     I have sent the payment
                   </label>
                 </div>

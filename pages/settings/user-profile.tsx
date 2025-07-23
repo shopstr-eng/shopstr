@@ -541,10 +541,7 @@ const UserProfilePage = () => {
                           }}
                           className="h-4 w-4 rounded border-gray-300 text-light-text focus:ring-accent-light-text"
                         />
-                        <label
-                          htmlFor={option.key}
-                          className="text-light-text"
-                        >
+                        <label htmlFor={option.key} className="text-light-text">
                           {option.label}
                         </label>
                         {option.requiresUsername &&

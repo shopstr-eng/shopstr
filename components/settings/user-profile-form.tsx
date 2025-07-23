@@ -338,11 +338,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               onChange={(e) => onChange(e.target.value)}
               onBlur={onBlur}
             >
-              <SelectItem
-                key="ecash"
-                value="ecash"
-                className="text-dark-text"
-              >
+              <SelectItem key="ecash" value="ecash" className="text-dark-text">
                 Cashu (Bitcoin)
               </SelectItem>
               <SelectItem
@@ -352,11 +348,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               >
                 Lightning (Bitcoin)
               </SelectItem>
-              <SelectItem
-                key="fiat"
-                value="fiat"
-                className="text-dark-text"
-              >
+              <SelectItem key="fiat" value="fiat" className="text-dark-text">
                 Local Currency (Fiat)
               </SelectItem>
             </Select>
@@ -406,10 +398,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
                   }}
                   className="h-4 w-4 rounded border-gray-300 text-dark-text focus:ring-accent-dark-text"
                 />
-                <label
-                  htmlFor={option.key}
-                  className="text-dark-text"
-                >
+                <label htmlFor={option.key} className="text-dark-text">
                   {option.label}
                 </label>
                 {option.requiresUsername &&

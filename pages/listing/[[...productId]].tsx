@@ -187,7 +187,6 @@ const Listing = () => {
               backdrop="blur"
               isOpen={fiatOrderFailed}
               onClose={() => setFiatOrderFailed(false)}
-              // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
               classNames={{
                 body: "py-6 ",
                 backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -201,11 +200,11 @@ const Listing = () => {
               size="2xl"
             >
               <ModalContent>
-                <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <ModalHeader className="flex items-center justify-center text-dark-text">
                   <XCircleIcon className="h-6 w-6 text-red-500" />
                   <div className="ml-2">Order failed!</div>
                 </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <ModalBody className="flex flex-col overflow-hidden text-dark-text">
                   <div className="flex items-center justify-center">
                     Your order information was not delivered to the seller.
                     Please try again.

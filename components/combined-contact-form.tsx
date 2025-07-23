@@ -76,7 +76,7 @@ export default function CombinedContactForm({
                     fullWidth={true}
                     label="Contact"
                     labelPlacement="inside"
-                    placeholder="@shopstr"
+                    placeholder="@milkmarket"
                     isInvalid={isErrored}
                     errorMessage={errorMessage}
                     // controller props

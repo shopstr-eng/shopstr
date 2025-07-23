@@ -727,10 +727,10 @@ export default function ProductForm({
             {(watchShippingOption === "Pickup" ||
               watchShippingOption === "Free/Pickup") && (
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-light-text dark:text-dark-text">
+                <h3 className="text-lg font-semibold text-dark-text">
                   Pickup Locations
                 </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="text-sm text-gray-400">
                   Add one or more pickup locations where customers can collect
                   their orders (if applicable).
                 </p>
@@ -744,7 +744,7 @@ export default function ProductForm({
                       {value.map((location: string, index: number) => (
                         <div key={index} className="flex items-center gap-2">
                           <Input
-                            className="flex-1 text-light-text dark:text-dark-text"
+                            className="flex-1 text-dark-text"
                             variant="bordered"
                             placeholder={`Pickup location ${
                               index + 1
@@ -1028,7 +1028,7 @@ export default function ProductForm({
                           trigger: "min-h-unit-12 py-2",
                         }}
                       >
-                        <SelectSection className="text-light-text dark:text-dark-text">
+                        <SelectSection className="text-dark-text">
                           <SelectItem key="Half-pint" value="Half-pint">
                             Half-pint
                           </SelectItem>
@@ -1079,7 +1079,7 @@ export default function ProductForm({
                       <div className="mt-4 flex flex-wrap gap-4">
                         {volumeArray.map((volume: string) => (
                           <div key={volume} className="flex items-center">
-                            <span className="mr-2 text-light-text dark:text-dark-text">
+                            <span className="mr-2 text-dark-text">
                               {volume}:
                             </span>
                             <Input
@@ -1105,7 +1105,7 @@ export default function ProductForm({
                           </div>
                         ))}
                         {volumeArray.length > 0 && (
-                          <div className="w-full text-xs text-light-text opacity-75 dark:text-dark-text">
+                          <div className="w-full text-xs text-dark-text opacity-75">
                             Note: Volume prices will override the main product
                             price when selected.
                           </div>
