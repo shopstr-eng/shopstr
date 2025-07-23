@@ -353,8 +353,7 @@ export default function StandaloneLanding() {
                       Anonymous Trading
                     </h4>
                     <p className="text-gray-600">
-                      Trade freely without KYC or government
-                      overreach.
+                      Trade freely without KYC or government overreach.
                     </p>
                   </CardBody>
                 </Card>

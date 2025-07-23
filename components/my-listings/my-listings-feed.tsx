@@ -41,7 +41,7 @@ const MyListingsFeed = () => {
 
   useEffect(() => {
     if (!searchParams || !isLoggedIn) return;
-    
+
     if (searchParams.has("addNewListing")) {
       if (isAuthenticated) {
         setShowModal(true);
@@ -131,11 +131,15 @@ const MyListingsFeed = () => {
             )}
           </ModalBody>
           <ModalFooter>
-            <Button color="danger" variant="light" onClick={handlePasswordModalClose}>
+            <Button
+              color="danger"
+              variant="light"
+              onClick={handlePasswordModalClose}
+            >
               Cancel
             </Button>
-            <Button 
-              className={`text-white shadow-lg bg-gradient-to-tr ${BLACKBUTTONCLASSNAMES}`}
+            <Button
+              className={`bg-gradient-to-tr text-white shadow-lg ${BLACKBUTTONCLASSNAMES}`}
               onClick={handlePasswordSubmit}
               isDisabled={!passwordInput.trim()}
             >

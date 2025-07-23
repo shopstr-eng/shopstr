@@ -71,10 +71,21 @@ export const fetchAllPosts = async (
         "#t": ["MilkMarket", "FREEMILK"],
       };
 
+      const specificPubkeyFilter: Filter = {
+        kinds: [30402],
+        authors: [
+          "99cefa645b00817373239aebb96d2d1990244994e5e565566c82c04b8dc65b54",
+        ],
+      };
+
       const productArrayFromRelay: NostrEvent[] = [];
       const profileSetFromProducts: Set<string> = new Set();
 
-      const fetchedEvents = await nostr.fetch([filter], {}, relays);
+      const fetchedEvents = await nostr.fetch(
+        [filter, specificPubkeyFilter],
+        {},
+        relays
+      );
       if (!fetchedEvents.length) {
         console.error("No products found with filter: ", filter);
       }
