@@ -2,11 +2,19 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { Button } from "@nextui-org/react";
+import {
+  Button,
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+} from "@nextui-org/react";
 import {
   PlusIcon,
   MinusIcon,
   ShoppingBagIcon,
+  CheckCircleIcon,
+  XCircleIcon,
 } from "@heroicons/react/24/outline";
 import {
   SHOPSTRBUTTONCLASSNAMES,
@@ -75,7 +83,6 @@ export default function Component() {
     [key: string]: number;
   }>({});
   const [subtotal, setSubtotal] = useState<number>(0);
-  const [totalShippingCost, setTotalShippingCost] = useState<number>(0);
   const [totalCost, setTotalCost] = useState<number>(0);
   const [shippingTypes, setShippingTypes] = useState<{
     [key: string]: ShippingOptionsType;
@@ -98,6 +105,13 @@ export default function Component() {
     [key: string]: boolean;
   }>(Object.fromEntries(products.map((product) => [product.id, false])));
   const [isBeingPaid, setIsBeingPaid] = useState(false);
+
+  const [fiatOrderIsPlaced, setFiatOrderIsPlaced] = useState(false);
+  const [fiatOrderFailed, setFiatOrderFailed] = useState(false);
+  const [invoiceIsPaid, setInvoiceIsPaid] = useState(false);
+  const [invoiceGenerationFailed, setInvoiceGenerationFailed] = useState(false);
+  const [cashuPaymentSent, setCashuPaymentSent] = useState(false);
+  const [cashuPaymentFailed, setCashuPaymentFailed] = useState(false);
 
   const router = useRouter();
 
@@ -173,7 +187,6 @@ export default function Component() {
 
       setSatPrices(prices);
       setSubtotal(subtotalAmount);
-      setTotalShippingCost(shippingCostAmount);
       setTotalCost(totalCostAmount);
       setTotalCostsInSats(totals);
     };
@@ -461,15 +474,161 @@ export default function Component() {
                 quantities={quantities}
                 shippingTypes={shippingTypes}
                 totalCostsInSats={totalCostsInSats}
-                subtotal={subtotal}
-                totalShippingCost={totalShippingCost}
                 totalCost={totalCost}
                 onBackToCart={toggleCheckout}
+                setFiatOrderIsPlaced={setFiatOrderIsPlaced}
+                setFiatOrderFailed={setFiatOrderFailed}
+                setInvoiceIsPaid={setInvoiceIsPaid}
+                setInvoiceGenerationFailed={setInvoiceGenerationFailed}
+                setCashuPaymentSent={setCashuPaymentSent}
+                setCashuPaymentFailed={setCashuPaymentFailed}
               />
             </div>
           </div>
         </div>
       )}
+
+      {/* Success Modal */}
+      {fiatOrderIsPlaced || invoiceIsPaid || cashuPaymentSent ? (
+        <>
+          <Modal
+            backdrop="blur"
+            isOpen={fiatOrderIsPlaced || invoiceIsPaid || cashuPaymentSent}
+            onClose={() => {
+              setFiatOrderIsPlaced(false);
+              setInvoiceIsPaid(false);
+              setCashuPaymentSent(false);
+              router.push("/orders");
+            }}
+            classNames={{
+              body: "py-6 ",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
+            }}
+            isDismissable={true}
+            scrollBehavior={"normal"}
+            placement={"center"}
+            size="2xl"
+          >
+            <ModalContent>
+              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <CheckCircleIcon className="h-6 w-6 text-green-500" />
+                <div className="ml-2">Order successful!</div>
+              </ModalHeader>
+              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <div className="flex items-center justify-center">
+                  The seller will receive a message with your order details.
+                </div>
+              </ModalBody>
+            </ModalContent>
+          </Modal>
+        </>
+      ) : null}
+
+      {/* Invoice Generation Failed Modal */}
+      {invoiceGenerationFailed ? (
+        <>
+          <Modal
+            backdrop="blur"
+            isOpen={invoiceGenerationFailed}
+            onClose={() => setInvoiceGenerationFailed(false)}
+            classNames={{
+              body: "py-6 ",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
+            }}
+            isDismissable={true}
+            scrollBehavior={"normal"}
+            placement={"center"}
+            size="2xl"
+          >
+            <ModalContent>
+              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <XCircleIcon className="h-6 w-6 text-red-500" />
+                <div className="ml-2">Invoice generation failed!</div>
+              </ModalHeader>
+              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <div className="flex items-center justify-center">
+                  The price and/or currency set for this listing was invalid.
+                </div>
+              </ModalBody>
+            </ModalContent>
+          </Modal>
+        </>
+      ) : null}
+
+      {/* Cashu Payment Failed Modal */}
+      {cashuPaymentFailed ? (
+        <>
+          <Modal
+            backdrop="blur"
+            isOpen={cashuPaymentFailed}
+            onClose={() => setCashuPaymentFailed(false)}
+            classNames={{
+              body: "py-6 ",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
+            }}
+            isDismissable={true}
+            scrollBehavior={"normal"}
+            placement={"center"}
+            size="2xl"
+          >
+            <ModalContent>
+              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <XCircleIcon className="h-6 w-6 text-red-500" />
+                <div className="ml-2">Purchase failed!</div>
+              </ModalHeader>
+              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <div className="flex items-center justify-center">
+                  You didn&apos;t have enough balance in your wallet to pay.
+                </div>
+              </ModalBody>
+            </ModalContent>
+          </Modal>
+        </>
+      ) : null}
+
+      {/* Fiat Order Failed Modal */}
+      {fiatOrderFailed ? (
+        <>
+          <Modal
+            backdrop="blur"
+            isOpen={fiatOrderFailed}
+            onClose={() => setFiatOrderFailed(false)}
+            classNames={{
+              body: "py-6 ",
+              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+              header: "border-b-[1px] border-[#292f46]",
+              footer: "border-t-[1px] border-[#292f46]",
+              closeButton: "hover:bg-black/5 active:bg-white/10",
+            }}
+            isDismissable={true}
+            scrollBehavior={"normal"}
+            placement={"center"}
+            size="2xl"
+          >
+            <ModalContent>
+              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <XCircleIcon className="h-6 w-6 text-red-500" />
+                <div className="ml-2">Order failed!</div>
+              </ModalHeader>
+              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <div className="flex items-center justify-center">
+                  Your order information was not delivered to the seller. Please
+                  try again.
+                </div>
+              </ModalBody>
+            </ModalContent>
+          </Modal>
+        </>
+      ) : null}
     </>
   );
 }

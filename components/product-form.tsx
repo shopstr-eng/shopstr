@@ -48,6 +48,7 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { ProductFormValues } from "../utils/types/types";
+import { useTheme } from "next-themes";
 
 interface ProductFormProps {
   handleModalToggle: () => void;
@@ -65,6 +66,7 @@ export default function ProductForm({
   onSubmitCallback,
 }: ProductFormProps) {
   const router = useRouter();
+  const { theme } = useTheme();
   const [images, setImages] = useState<string[]>([]);
   const [imageError, setImageError] = useState<string | null>(null);
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -93,6 +95,7 @@ export default function ProductForm({
           Location: oldValues.location,
           "Shipping Option": oldValues.shippingType,
           "Shipping Cost": oldValues.shippingCost,
+          "Pickup Locations": oldValues.pickupLocations || [""],
           Category: oldValues.categories ? oldValues.categories.join(",") : "",
           Quantity: oldValues.quantity ? String(oldValues.quantity) : "",
           Sizes: oldValues.sizes ? oldValues.sizes.join(",") : "",
@@ -112,6 +115,7 @@ export default function ProductForm({
           Currency: "SAT",
           "Shipping Option": "N/A",
           Status: "active",
+          "Pickup Locations": [""],
         },
   });
 
@@ -213,6 +217,20 @@ export default function ProductForm({
 
     if (data["Restrictions"]) {
       tags.push(["restrictions", data["Restrictions"] as string]);
+    }
+
+    // Add pickup locations if they exist and shipping involves pickup
+    if (
+      data["Pickup Locations"] &&
+      Array.isArray(data["Pickup Locations"]) &&
+      (data["Shipping Option"] === "Pickup" ||
+        data["Shipping Option"] === "Free/Pickup")
+    ) {
+      (data["Pickup Locations"] as string[])
+        .filter((location) => location.trim() !== "")
+        .forEach((location) => {
+          tags.push(["pickup_location", location.trim()]);
+        });
     }
 
     const newListing = await PostListing(tags, signer!, isLoggedIn!, nostr!);
@@ -703,6 +721,89 @@ export default function ProductForm({
                   );
                 }}
               />
+            )}
+
+            {(watchShippingOption === "Pickup" ||
+              watchShippingOption === "Free/Pickup") && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-light-text dark:text-dark-text">
+                  Pickup Locations
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Add one or more pickup locations where customers can collect
+                  their orders (if applicable).
+                </p>
+
+                <Controller
+                  name="Pickup Locations"
+                  control={control}
+                  defaultValue={[""]}
+                  render={({ field: { onChange, value = [""] } }) => (
+                    <div className="space-y-3">
+                      {value.map((location: string, index: number) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <Input
+                            className="flex-1 text-light-text dark:text-dark-text"
+                            variant="bordered"
+                            placeholder={`Pickup location ${
+                              index + 1
+                            } (e.g., 123 Main St, City, State)`}
+                            value={location}
+                            onChange={(e) => {
+                              const newLocations = [...value];
+                              newLocations[index] = e.target.value;
+                              onChange(newLocations);
+                            }}
+                            label={`Pickup Location ${index + 1}`}
+                            labelPlacement="inside"
+                          />
+                          {value.length > 1 && (
+                            <Button
+                              isIconOnly
+                              color="danger"
+                              variant="light"
+                              onClick={() => {
+                                const newLocations = value.filter(
+                                  (_: string, i: number) => i !== index
+                                );
+                                onChange(newLocations);
+                              }}
+                            >
+                              <TrashIcon className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+
+                      {theme === "dark" ? (
+                        <Button
+                          variant="bordered"
+                          color="warning"
+                          className="w-full"
+                          onClick={() => {
+                            const newLocations = [...value, ""];
+                            onChange(newLocations);
+                          }}
+                        >
+                          Add Another Pickup Location
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="bordered"
+                          color="secondary"
+                          className="w-full"
+                          onClick={() => {
+                            const newLocations = [...value, ""];
+                            onChange(newLocations);
+                          }}
+                        >
+                          Add Another Pickup Location
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                />
+              </div>
             )}
             <Controller
               name="Category"
@@ -1231,7 +1332,10 @@ export default function ProductForm({
                 {profileContext.profileData.get(pubkey)?.content
                   ?.payment_preference === "lightning"
                   ? "Lightning"
-                  : "Cashu"}
+                  : profileContext.profileData.get(pubkey)?.content
+                        ?.payment_preference === "fiat"
+                    ? "Fiat"
+                    : "Cashu"}
                 . You can modify this in your{" "}
                 <span
                   className="cursor-pointer underline hover:text-purple-500 dark:hover:text-yellow-500"

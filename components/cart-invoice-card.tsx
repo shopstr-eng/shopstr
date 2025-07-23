@@ -68,7 +68,6 @@ import {
   CombinedFormData,
 } from "@/utils/types/types";
 import { Controller } from "react-hook-form";
-import { useRouter as useNextRouter } from "next/navigation";
 
 export default function CartInvoiceCard({
   products,
@@ -77,6 +76,12 @@ export default function CartInvoiceCard({
   totalCostsInSats,
   totalCost,
   onBackToCart,
+  setFiatOrderIsPlaced,
+  setFiatOrderFailed,
+  setInvoiceIsPaid,
+  setInvoiceGenerationFailed,
+  setCashuPaymentSent,
+  setCashuPaymentFailed,
 }: {
   products: ProductData[];
   quantities: { [key: string]: number };
@@ -84,6 +89,12 @@ export default function CartInvoiceCard({
   totalCostsInSats: { [key: string]: number };
   totalCost: number;
   onBackToCart?: () => void;
+  setFiatOrderIsPlaced?: (fiatOrderIsPlaced: boolean) => void;
+  setFiatOrderFailed?: (fiatOrderFailed: boolean) => void;
+  setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
+  setInvoiceGenerationFailed?: (invoiceGenerationFailed: boolean) => void;
+  setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
+  setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
 }) {
   const { mints, tokens, history } = getLocalStorageData();
   const { isLoggedIn, signer } = useContext(SignerContext);
@@ -108,18 +119,18 @@ export default function CartInvoiceCard({
 
   const { isOpen, onOpen, onClose } = useDisclosure();
 
-  const [isCashuPayment, setIsCashuPayment] = useState(false);
-  const [isFiatPayment, setIsFiatPayment] = useState(false);
-
   const [formType, setFormType] = useState<
     "shipping" | "contact" | "combined" | null
   >(null);
   const [showOrderTypeSelection, setShowOrderTypeSelection] = useState(true);
-  const [showPaymentButtons, setShowPaymentButtons] = useState(false);
 
-  const [fiatPaymentOptions, setFiatPaymentOptions] = useState([]);
+  const [fiatPaymentOptions, setFiatPaymentOptions] = useState<string[]>([]);
   const [showFiatTypeOption, setShowFiatTypeOption] = useState(false);
   const [selectedFiatOption, setSelectedFiatOption] = useState("");
+  const [showFiatPaymentInstructions, setShowFiatPaymentInstructions] =
+    useState(false);
+  const [fiatPaymentConfirmed, setFiatPaymentConfirmed] = useState(false);
+  const [pendingPaymentData, setPendingPaymentData] = useState<any>(null);
 
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
@@ -129,6 +140,9 @@ export default function CartInvoiceCard({
     "shipping" | "contact"
   >("shipping");
   const [showFreePickupSelection, setShowFreePickupSelection] = useState(false);
+  const [selectedPickupLocations, setSelectedPickupLocations] = useState<{
+    [productId: string]: string;
+  }>({});
 
   const {
     handleSubmit: handleFormSubmit,
@@ -138,7 +152,6 @@ export default function CartInvoiceCard({
 
   // Watch form values to validate completion
   const watchedValues = watch();
-  const router = useNextRouter();
 
   const uniqueShippingTypes = useMemo(() => {
     return Array.from(new Set(Object.values(shippingTypes)));
@@ -164,6 +177,17 @@ export default function CartInvoiceCard({
     }
   }, [products]);
 
+  // Check if any products have pickup locations
+  const productsWithPickupLocations = useMemo(() => {
+    return products.filter(
+      (product) =>
+        (product.shippingType === "Free/Pickup" ||
+          product.shippingType === "Pickup") &&
+        product.pickupLocations &&
+        product.pickupLocations.length > 0
+    );
+  }, [products]);
+
   useEffect(() => {
     if (!products || products.length === 0) {
       setFiatPaymentOptions([]);
@@ -173,17 +197,21 @@ export default function CartInvoiceCard({
       const firstSellerProfile = profileContext.profileData.get(
         firstProduct.pubkey
       );
-      let commonFiatOptions = firstSellerProfile?.content?.fiat_options || [];
+      let commonFiatOptions = Object.keys(
+        firstSellerProfile?.content?.fiat_options || {}
+      );
 
       for (let i = 1; i < products.length; i++) {
         const productData = products[i]!;
         const sellerProfile = profileContext.profileData.get(
           productData.pubkey
         );
-        const currentFiatOptions = sellerProfile?.content?.fiat_options || [];
+        const currentFiatOptionsKeys = Object.keys(
+          sellerProfile?.content?.fiat_options || {}
+        );
 
         commonFiatOptions = commonFiatOptions.filter((option: string) =>
-          currentFiatOptions.includes(option)
+          currentFiatOptionsKeys.includes(option)
         );
 
         if (commonFiatOptions.length === 0) break;
@@ -202,6 +230,18 @@ export default function CartInvoiceCard({
 
     let isValid = false;
 
+    // Check pickup location requirements
+    const pickupLocationValid = productsWithPickupLocations.every((product) => {
+      const shouldCheckPickup =
+        formType === "contact" ||
+        (formType === "combined" && freePickupPreference === "contact");
+
+      if (shouldCheckPickup) {
+        return watchedValues[`pickupLocation_${product.id}`]?.trim();
+      }
+      return true;
+    });
+
     if (formType === "shipping") {
       isValid = !!(
         watchedValues.Name?.trim() &&
@@ -210,14 +250,16 @@ export default function CartInvoiceCard({
         watchedValues["Postal Code"]?.trim() &&
         watchedValues["State/Province"]?.trim() &&
         watchedValues.Country?.trim() &&
-        (!requiredInfo || watchedValues.Required?.trim())
+        (!requiredInfo || watchedValues.Required?.trim()) &&
+        pickupLocationValid
       );
     } else if (formType === "contact") {
       isValid = !!(
         watchedValues.Contact?.trim() &&
         watchedValues["Contact Type"]?.trim() &&
         watchedValues.Instructions?.trim() &&
-        (!requiredInfo || watchedValues.Required?.trim())
+        (!requiredInfo || watchedValues.Required?.trim()) &&
+        pickupLocationValid
       );
     } else if (formType === "combined") {
       isValid = !!(
@@ -230,12 +272,19 @@ export default function CartInvoiceCard({
         watchedValues.Contact?.trim() &&
         watchedValues["Contact Type"]?.trim() &&
         watchedValues.Instructions?.trim() &&
-        (!requiredInfo || watchedValues.Required?.trim())
+        (!requiredInfo || watchedValues.Required?.trim()) &&
+        pickupLocationValid
       );
     }
 
     setIsFormValid(isValid);
-  }, [watchedValues, formType, requiredInfo]);
+  }, [
+    watchedValues,
+    formType,
+    requiredInfo,
+    productsWithPickupLocations,
+    freePickupPreference,
+  ]);
 
   const generateNewKeys = async () => {
     try {
@@ -249,8 +298,7 @@ export default function CartInvoiceCard({
         receiverNpub: npubForReceiver,
         receiverNsec: nsecForReceiver,
       };
-    } catch (error) {
-      console.error(error);
+    } catch (_) {
       return null;
     }
   };
@@ -276,16 +324,59 @@ export default function CartInvoiceCard({
       return;
     }
 
+    await sendPaymentAndContactMessageWithKeys(
+      pubkeyToReceiveMessage,
+      message,
+      product,
+      isPayment,
+      isReceipt,
+      isDonation,
+      orderId,
+      paymentType,
+      paymentReference,
+      paymentProof,
+      messageAmount,
+      productQuantity,
+      newKeys
+    );
+  };
+
+  const sendPaymentAndContactMessageWithKeys = async (
+    pubkeyToReceiveMessage: string,
+    message: string,
+    product: ProductData,
+    isPayment?: boolean,
+    isReceipt?: boolean,
+    isDonation?: boolean,
+    orderId?: string,
+    paymentType?: string,
+    paymentReference?: string,
+    paymentProof?: string,
+    messageAmount?: number,
+    productQuantity?: number,
+    keys?: {
+      senderNpub: string;
+      senderNsec: string;
+      receiverNpub: string;
+      receiverNsec: string;
+    }
+  ) => {
+    if (!keys) {
+      setFailureText("Message keys are required!");
+      setShowFailureModal(true);
+      return;
+    }
+
     if (!isLoggedIn) {
       setFailureText("User is not logged in!");
       setShowFailureModal(true);
       return;
     }
 
-    const decodedRandomPubkeyForSender = nip19.decode(newKeys.senderNpub);
-    const decodedRandomPrivkeyForSender = nip19.decode(newKeys.senderNsec);
-    const decodedRandomPubkeyForReceiver = nip19.decode(newKeys.receiverNpub);
-    const decodedRandomPrivkeyForReceiver = nip19.decode(newKeys.receiverNsec);
+    const decodedRandomPubkeyForSender = nip19.decode(keys.senderNpub);
+    const decodedRandomPrivkeyForSender = nip19.decode(keys.senderNsec);
+    const decodedRandomPubkeyForReceiver = nip19.decode(keys.receiverNpub);
+    const decodedRandomPrivkeyForReceiver = nip19.decode(keys.receiverNsec);
 
     let messageSubject = "";
     let messageOptions = {};
@@ -415,7 +506,10 @@ export default function CartInvoiceCard({
     }
   };
 
-  const onFormSubmit = async (data: { [x: string]: string }) => {
+  const onFormSubmit = async (
+    data: { [x: string]: string },
+    paymentType?: "fiat" | "lightning" | "cashu"
+  ) => {
     try {
       let price = totalCost;
 
@@ -496,15 +590,22 @@ export default function CartInvoiceCard({
         };
       }
 
-      if (isFiatPayment) {
-        await handleFiatPayment(price, paymentData);
-      } else if (isCashuPayment) {
+      if (paymentType === "fiat") {
+        setPendingPaymentData(paymentData); // Store the payment data
+        if (fiatPaymentOptions.length === 1) {
+          setSelectedFiatOption(fiatPaymentOptions[0]!);
+          // Show payment instructions
+          setShowFiatPaymentInstructions(true);
+        } else if (fiatPaymentOptions.length > 1) {
+          setShowFiatTypeOption(true);
+        }
+        return; // Important: exit early for fiat payments
+      } else if (paymentType === "cashu") {
         await handleCashuPayment(price, paymentData);
       } else {
         await handleLightningPayment(price, paymentData);
       }
     } catch (error) {
-      console.error(error);
       setFailureText("Payment failed. Please try again.");
       setShowFailureModal(true);
     }
@@ -513,47 +614,16 @@ export default function CartInvoiceCard({
   const handleOrderTypeSelection = (selectedOrderType: string) => {
     setShowOrderTypeSelection(false);
 
-    if (selectedOrderType === "in-person") {
-      setFormType(null);
-      setShowPaymentButtons(true);
-    } else if (selectedOrderType === "shipping") {
+    if (selectedOrderType === "shipping") {
       setFormType("shipping");
-      setShowPaymentButtons(false);
     } else if (selectedOrderType === "contact") {
       setFormType("contact");
-      setShowPaymentButtons(false);
     } else if (selectedOrderType === "combined") {
       setFormType("combined");
-      setShowPaymentButtons(false);
       // Show Free/Pickup preference selection if we have mixed shipping with Free/Pickup
       if (hasMixedShippingWithFreePickup) {
         setShowFreePickupSelection(true);
       }
-    }
-
-    // After form type selection, check if we need to show fiat options
-    if (isFiatPayment && fiatPaymentOptions.length > 0) {
-      setShowFiatTypeOption(true);
-    }
-  };
-
-  const handlePaymentMethodClick = (
-    paymentType: "fiat" | "lightning" | "cashu"
-  ) => {
-    if (!isLoggedIn) {
-      onOpen();
-      return;
-    }
-
-    setIsFiatPayment(paymentType === "fiat");
-    setIsCashuPayment(paymentType === "cashu");
-
-    if (paymentType === "fiat") {
-      handleFiatPayment(totalCost, {});
-    } else if (paymentType === "lightning") {
-      handleLightningPayment(totalCost, {});
-    } else if (paymentType === "cashu") {
-      handleCashuPayment(totalCost, {});
     }
   };
 
@@ -569,50 +639,66 @@ export default function CartInvoiceCard({
         const required = product.required;
         const orderId = uuidv4();
 
-        let paymentMessage = "";
-        if (quantities[product.id] && quantities[product.id]! > 1) {
-          if (userNPub) {
-            paymentMessage =
-              "You have received an order from " +
-              userNPub +
-              " for " +
-              quantities[product.id] +
-              " of your " +
-              title +
-              " listing on Shopstr! Message them with your " +
-              selectedFiatOption +
-              " payment details to finalize.";
+        // Generate keys once per order to ensure consistent sender pubkey
+        const orderKeys = await generateNewKeys();
+        if (!orderKeys) {
+          setFailureText("Failed to generate new keys for messages!");
+          setShowFailureModal(true);
+          return;
+        }
+
+        let productDetails = "";
+        if (product.selectedSize) {
+          productDetails += " in a size " + product.selectedSize;
+        }
+        if (product.selectedVolume) {
+          if (productDetails) {
+            productDetails += " and a " + product.selectedVolume;
           } else {
-            paymentMessage =
-              "You have received an order for " +
-              quantities[product.id] +
-              " of your " +
-              title +
-              " listing on Shopstr! Message them with your " +
-              selectedFiatOption +
-              " payment details to finalize.";
-          }
-        } else {
-          if (userNPub) {
-            paymentMessage =
-              "You have received an order from " +
-              userNPub +
-              " for your " +
-              title +
-              " listing on Shopstr! Message them with your " +
-              selectedFiatOption +
-              " payment details to finalize.";
-          } else {
-            paymentMessage =
-              "You have received an order for your " +
-              title +
-              " listing on Shopstr! Message them with your " +
-              selectedFiatOption +
-              " payment details to finalize.";
+            productDetails += " in a " + product.selectedVolume;
           }
         }
 
-        await sendPaymentAndContactMessage(
+        // Add pickup location if available for this specific product
+        const pickupLocation =
+          selectedPickupLocations[product.id] ||
+          data[`pickupLocation_${product.id}`];
+        if (pickupLocation) {
+          if (productDetails) {
+            productDetails += " (pickup at: " + pickupLocation + ")";
+          } else {
+            productDetails += " (pickup at: " + pickupLocation + ")";
+          }
+        }
+
+        let paymentMessage = "";
+        if (quantities[product.id] && quantities[product.id]! > 1) {
+          paymentMessage =
+            "You have received an order from " +
+            userNPub +
+            " for " +
+            quantities[product.id] +
+            " of your " +
+            title +
+            " listing" +
+            productDetails +
+            " on Shopstr! Check your " +
+            selectedFiatOption +
+            " account for the payment.";
+        } else {
+          paymentMessage =
+            "You have received an order from " +
+            userNPub +
+            " for your " +
+            title +
+            " listing" +
+            productDetails +
+            " on Shopstr! Check your " +
+            selectedFiatOption +
+            " account for the payment.";
+        }
+
+        await sendPaymentAndContactMessageWithKeys(
           pubkey,
           paymentMessage,
           product,
@@ -626,185 +712,265 @@ export default function CartInvoiceCard({
           undefined,
           quantities[product.id] && quantities[product.id]! > 1
             ? quantities[product.id]
-            : 1
+            : 1,
+          orderKeys
         );
 
-        // Handle additional info and shipping/contact details
         if (required && required !== "" && data.additionalInfo) {
           const additionalMessage =
             "Additional customer information: " + data.additionalInfo;
-          await sendPaymentAndContactMessage(
+          await sendPaymentAndContactMessageWithKeys(
             pubkey,
             additionalMessage,
             product,
             false,
             false,
             false,
-            orderId
+            orderId,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            orderKeys
           );
         }
 
-        // Handle shipping or contact messages based on form type and product shipping type
-        const productShippingType = shippingTypes[product.id];
-        const shouldUseShipping =
-          formType === "shipping" ||
-          (formType === "combined" &&
-            (productShippingType !== "Free/Pickup" ||
-              (productShippingType === "Free/Pickup" &&
-                freePickupPreference === "shipping")));
-
-        const shouldUseContact =
-          formType === "contact" ||
-          (formType === "combined" &&
-            (productShippingType === "N/A" ||
-              productShippingType === "Pickup" ||
-              (productShippingType === "Free/Pickup" &&
-                freePickupPreference === "contact")));
-
         if (
-          shouldUseShipping &&
-          data.shippingName &&
-          data.shippingAddress &&
-          data.shippingCity
+          !(
+            data.shippingName === undefined &&
+            data.shippingAddress === undefined &&
+            data.shippingUnitNo === undefined &&
+            data.shippingCity === undefined &&
+            data.shippingPostalCode === undefined &&
+            data.shippingState === undefined &&
+            data.shippingCountry === undefined &&
+            data.contact === undefined &&
+            data.contactType === undefined &&
+            data.contactInstructions === undefined
+          )
         ) {
-          let contactMessage = "";
+          const productShippingType = shippingTypes[product.id];
+
+          if (
+            productShippingType === "Added Cost" ||
+            productShippingType === "Free" ||
+            (productShippingType === "Free/Pickup" && formType === "shipping")
+          ) {
+            let contactMessage = "";
+            if (!data.shippingUnitNo) {
+              contactMessage =
+                "Please ship the product" +
+                productDetails +
+                " to " +
+                data.shippingName +
+                " at " +
+                data.shippingAddress +
+                ", " +
+                data.shippingCity +
+                ", " +
+                data.shippingPostalCode +
+                ", " +
+                data.shippingState +
+                ", " +
+                data.shippingCountry +
+                ".";
+            } else {
+              contactMessage =
+                "Please ship the product" +
+                productDetails +
+                " to " +
+                data.shippingName +
+                " at " +
+                data.shippingAddress +
+                " " +
+                data.shippingUnitNo +
+                ", " +
+                data.shippingCity +
+                ", " +
+                data.shippingPostalCode +
+                ", " +
+                data.shippingState +
+                ", " +
+                data.shippingCountry +
+                ".";
+            }
+            await sendPaymentAndContactMessageWithKeys(
+              pubkey,
+              contactMessage,
+              product,
+              false,
+              false,
+              false,
+              orderId,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              orderKeys
+            );
+            if (userPubkey) {
+              const receiptMessage =
+                "Your order for " +
+                title +
+                productDetails +
+                " was processed successfully! If applicable, you should be receiving delivery information from " +
+                nip19.npubEncode(product.pubkey) +
+                " as soon as they review your order.";
+              await sendPaymentAndContactMessageWithKeys(
+                userPubkey,
+                receiptMessage,
+                product,
+                false,
+                true,
+                false,
+                orderId,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                orderKeys
+              );
+            }
+          } else if (
+            productShippingType === "N/A" ||
+            productShippingType === "Pickup" ||
+            (productShippingType === "Free/Pickup" && formType === "contact")
+          ) {
+            let contactMessage;
+            let receiptMessage;
+            if (productDetails) {
+              contactMessage =
+                "To finalize the sale of your " +
+                title +
+                " listing" +
+                productDetails +
+                " on Shopstr, please contact " +
+                data.contact +
+                " over " +
+                data.contactType +
+                " using the following instructions: " +
+                data.contactInstructions;
+              receiptMessage =
+                "Your order for " +
+                title +
+                productDetails +
+                " was processed successfully! If applicable, you should be receiving delivery information from " +
+                nip19.npubEncode(product.pubkey) +
+                " as soon as they review your order.";
+            } else {
+              contactMessage =
+                "To finalize the sale of your " +
+                title +
+                " listing on Shopstr, please contact " +
+                data.contact +
+                " over " +
+                data.contactType +
+                " using the following instructions: " +
+                data.contactInstructions;
+              receiptMessage =
+                "Your order for " +
+                title +
+                " was processed successfully! If applicable, you should be receiving delivery information from " +
+                nip19.npubEncode(product.pubkey) +
+                " as soon as they review your order.";
+            }
+            await sendPaymentAndContactMessageWithKeys(
+              pubkey,
+              contactMessage,
+              product,
+              false,
+              false,
+              false,
+              orderId,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              orderKeys
+            );
+            if (userPubkey) {
+              await sendPaymentAndContactMessageWithKeys(
+                userPubkey,
+                receiptMessage,
+                product,
+                false,
+                true,
+                false,
+                orderId,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                orderKeys
+              );
+            }
+          }
+        } else if (userPubkey) {
           let productDetails = "";
           if (product.selectedSize) {
-            productDetails += "in a size " + product.selectedSize;
+            productDetails += " in size " + product.selectedSize;
           }
           if (product.selectedVolume) {
             if (productDetails) {
               productDetails += " and a " + product.selectedVolume;
             } else {
-              productDetails += "in a " + product.selectedVolume;
+              productDetails += " in a " + product.selectedVolume;
             }
           }
 
-          if (!data.shippingUnitNo) {
-            contactMessage =
-              "Please ship the product " +
-              (productDetails ? productDetails + " " : "") +
-              "to " +
-              data.shippingName +
-              " at " +
-              data.shippingAddress +
-              ", " +
-              data.shippingCity +
-              ", " +
-              data.shippingPostalCode +
-              ", " +
-              data.shippingState +
-              ", " +
-              data.shippingCountry +
-              ".";
-          } else {
-            contactMessage =
-              "Please ship the product " +
-              (productDetails ? productDetails + " " : "") +
-              "to " +
-              data.shippingName +
-              " at " +
-              data.shippingAddress +
-              " " +
-              data.shippingUnitNo +
-              ", " +
-              data.shippingCity +
-              ", " +
-              data.shippingPostalCode +
-              ", " +
-              data.shippingState +
-              ", " +
-              data.shippingCountry +
-              ".";
-          }
-          await sendPaymentAndContactMessage(
-            pubkey,
-            contactMessage,
-            product,
-            false,
-            false,
-            false,
-            orderId
-          );
-        }
-
-        if (
-          shouldUseContact &&
-          data.contact &&
-          data.contactType &&
-          data.contactInstructions
-        ) {
-          let contactMessage;
-          let productDetails = "";
-          if (product.selectedSize) {
-            productDetails += "in a size " + product.selectedSize;
-          }
-          if (product.selectedVolume) {
+          // Add pickup location if available for this specific product
+          const pickupLocation =
+            selectedPickupLocations[product.id] ||
+            data[`pickupLocation_${product.id}`];
+          if (pickupLocation) {
             if (productDetails) {
-              productDetails += " and a " + product.selectedVolume;
+              productDetails += " (pickup at: " + pickupLocation + ")";
             } else {
-              productDetails += "in a " + product.selectedVolume;
+              productDetails += " (pickup at: " + pickupLocation + ")";
             }
           }
 
-          if (productDetails) {
-            contactMessage =
-              "To finalize the sale of your " +
-              title +
-              " listing " +
-              productDetails +
-              " on Shopstr, please contact " +
-              data.contact +
-              " over " +
-              data.contactType +
-              " using the following instructions: " +
-              data.contactInstructions;
-          } else {
-            contactMessage =
-              "To finalize the sale of your " +
-              title +
-              " listing on Shopstr, please contact " +
-              data.contact +
-              " over " +
-              data.contactType +
-              " using the following instructions: " +
-              data.contactInstructions;
-          }
-          await sendPaymentAndContactMessage(
-            pubkey,
-            contactMessage,
-            product,
-            false,
-            false,
-            false,
-            orderId
-          );
-        }
-
-        // Send receipt to user
-        if (userPubkey) {
           const receiptMessage =
-            "Your order for " +
-            product.title +
-            " was processed successfully! You should be receiving payment information from " +
+            "Thank you for your purchase of " +
+            title +
+            productDetails +
+            " from " +
             nip19.npubEncode(product.pubkey) +
-            " as soon as they review your order.";
-          await sendPaymentAndContactMessage(
+            ".";
+          await sendPaymentAndContactMessageWithKeys(
             userPubkey,
             receiptMessage,
             product,
             false,
             true,
             false,
-            orderId
+            orderId,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            orderKeys
           );
         }
       }
+      if (setFiatOrderIsPlaced) {
+        setFiatOrderIsPlaced(true);
+      }
+      setFormType(null);
       setOrderConfirmed(true);
     } catch (error) {
-      console.error(error);
-      setFailureText("Fiat payment failed. Please try again.");
-      setShowFailureModal(true);
+      if (setFiatOrderFailed) {
+        setFiatOrderFailed(true);
+      } else {
+        setFailureText("Fiat payment failed. Please try again.");
+        setShowFailureModal(true);
+      }
     }
   };
 
@@ -849,9 +1015,12 @@ export default function CartInvoiceCard({
       }
       await invoiceHasBeenPaid(wallet, convertedPrice, hash, data);
     } catch (error) {
-      console.error(error);
-      setFailureText("Lightning payment failed. Please try again.");
-      setShowFailureModal(true);
+      if (setInvoiceGenerationFailed) {
+        setInvoiceGenerationFailed(true);
+      } else {
+        setFailureText("Lightning payment failed. Please try again.");
+        setShowFailureModal(true);
+      }
       setShowInvoiceCard(false);
       setInvoice("");
       setQrCodeUrl(null);
@@ -881,6 +1050,9 @@ export default function CartInvoiceCard({
               await sendTokens(wallet, proofs, data);
               localStorage.setItem("cart", JSON.stringify([]));
               setPaymentConfirmed(true);
+              if (setInvoiceIsPaid) {
+                setInvoiceIsPaid(true);
+              }
               setQrCodeUrl(null);
               break;
             }
@@ -919,17 +1091,20 @@ export default function CartInvoiceCard({
           break;
         }
       } catch (error) {
-        console.error("Invoice check error:", error);
         retryCount++;
 
         if (error instanceof TypeError) {
           setShowInvoiceCard(false);
           setInvoice("");
           setQrCodeUrl(null);
-          setFailureText(
-            "Failed to validate invoice! Change your mint in settings and/or please try again."
-          );
-          setShowFailureModal(true);
+          if (setInvoiceGenerationFailed) {
+            setInvoiceGenerationFailed(true);
+          } else {
+            setFailureText(
+              "Failed to validate invoice! Change your mint in settings and/or please try again."
+            );
+            setShowFailureModal(true);
+          }
           break;
         }
 
@@ -938,10 +1113,14 @@ export default function CartInvoiceCard({
           setShowInvoiceCard(false);
           setInvoice("");
           setQrCodeUrl(null);
-          setFailureText(
-            "Payment timed out! Please check your wallet balance or try again."
-          );
-          setShowFailureModal(true);
+          if (setInvoiceGenerationFailed) {
+            setInvoiceGenerationFailed(true);
+          } else {
+            setFailureText(
+              "Payment timed out! Please check your wallet balance or try again."
+            );
+            setShowFailureModal(true);
+          }
           break;
         }
 
@@ -1006,6 +1185,14 @@ export default function CartInvoiceCard({
       }
 
       const orderId = uuidv4();
+
+      // Generate keys once per order to ensure consistent sender pubkey
+      const orderKeys = await generateNewKeys();
+      if (!orderKeys) {
+        setFailureText("Failed to generate new keys for messages!");
+        setShowFailureModal(true);
+        return;
+      }
       const paymentPreference =
         sellerProfile?.content?.payment_preference || "ecash";
       const lnurl = sellerProfile?.content?.lud16 || "";
@@ -1044,49 +1231,57 @@ export default function CartInvoiceCard({
                     0
                   )
                 : 0;
-            let paymentMessage = "";
-            if (quantities[product.id] && quantities[product.id]! > 1) {
-              if (userNPub) {
-                paymentMessage =
-                  "You have received a payment from " +
-                  userNPub +
-                  " for " +
-                  quantities[product.id] +
-                  " of your " +
-                  title +
-                  " listing on Shopstr! Check your Lightning address (" +
-                  lnurl +
-                  ") for your sats.";
+            let productDetails = "";
+            if (product.selectedSize) {
+              productDetails += " in size " + product.selectedSize;
+            }
+            if (product.selectedVolume) {
+              if (productDetails) {
+                productDetails += " and a " + product.selectedVolume;
               } else {
-                paymentMessage =
-                  "You have received a payment for " +
-                  quantities[product.id] +
-                  " of your " +
-                  title +
-                  " listing on Shopstr! Check your Lightning address (" +
-                  lnurl +
-                  ") for your sats.";
-              }
-            } else {
-              if (userNPub) {
-                paymentMessage =
-                  "You have received a payment from " +
-                  userNPub +
-                  " for your " +
-                  title +
-                  " listing on Shopstr! Check your Lightning address (" +
-                  lnurl +
-                  ") for your sats.";
-              } else {
-                paymentMessage =
-                  "You have received a payment for your " +
-                  title +
-                  " listing on Shopstr! Check your Lightning address (" +
-                  lnurl +
-                  ") for your sats.";
+                productDetails += " in a " + product.selectedVolume;
               }
             }
-            await sendPaymentAndContactMessage(
+
+            // Add pickup location if available for this specific product
+            const pickupLocation =
+              selectedPickupLocations[product.id] ||
+              data[`pickupLocation_${product.id}`];
+            if (pickupLocation) {
+              if (productDetails) {
+                productDetails += " (pickup at: " + pickupLocation + ")";
+              } else {
+                productDetails += " (pickup at: " + pickupLocation + ")";
+              }
+            }
+
+            let paymentMessage = "";
+            if (quantities[product.id] && quantities[product.id]! > 1) {
+              paymentMessage =
+                "You have received a payment from " +
+                userNPub +
+                " for " +
+                quantities[product.id] +
+                " of your " +
+                title +
+                " listing" +
+                productDetails +
+                " on Shopstr! Check your Lightning address (" +
+                lnurl +
+                ") for your sats.";
+            } else {
+              paymentMessage =
+                "You have received a payment from " +
+                userNPub +
+                " for your " +
+                title +
+                " listing" +
+                productDetails +
+                " on Shopstr! Check your Lightning address (" +
+                lnurl +
+                ") for your sats.";
+            }
+            await sendPaymentAndContactMessageWithKeys(
               pubkey,
               paymentMessage,
               product,
@@ -1100,7 +1295,8 @@ export default function CartInvoiceCard({
               meltAmount,
               quantities[product.id] && quantities[product.id]! > 1
                 ? quantities[product.id]
-                : 1
+                : 1,
+              orderKeys
             );
             if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
               const encodedChange = getEncodedToken({
@@ -1108,7 +1304,7 @@ export default function CartInvoiceCard({
                 proofs: changeProofs,
               });
               const changeMessage = "Overpaid fee change: " + encodedChange;
-              await sendPaymentAndContactMessage(
+              await sendPaymentAndContactMessageWithKeys(
                 pubkey,
                 changeMessage,
                 product,
@@ -1119,7 +1315,9 @@ export default function CartInvoiceCard({
                 "ecash",
                 mints[0],
                 JSON.stringify(changeProofs),
-                changeAmount
+                changeAmount,
+                undefined,
+                orderKeys
               );
             }
           } else {
@@ -1135,125 +1333,143 @@ export default function CartInvoiceCard({
               mint: mints[0]!,
               proofs: unusedProofs,
             });
-            let paymentMessage = "";
-            if (quantities[product.id] && quantities[product.id]! > 1) {
-              if (unusedToken) {
-                if (userNPub) {
-                  paymentMessage =
-                    "This is a Cashu token payment from " +
-                    userNPub +
-                    " for " +
-                    quantities[product.id] +
-                    " of your " +
-                    title +
-                    " listing on Shopstr: " +
-                    unusedToken;
-                } else {
-                  paymentMessage =
-                    "This is a Cashu token payment for " +
-                    quantities[product.id] +
-                    " of your " +
-                    title +
-                    " listing on Shopstr: " +
-                    unusedToken;
-                }
-              }
-            } else {
-              if (unusedToken) {
-                if (userNPub) {
-                  paymentMessage =
-                    "This is a Cashu token payment from " +
-                    userNPub +
-                    " for your " +
-                    title +
-                    " listing on Shopstr: " +
-                    unusedToken;
-                } else {
-                  paymentMessage =
-                    "This is a Cashu token payment for your " +
-                    title +
-                    " listing on Shopstr: " +
-                    unusedToken;
-                }
+            let productDetails = "";
+            if (product.selectedSize) {
+              productDetails += " in size " + product.selectedSize;
+            }
+            if (product.selectedVolume) {
+              if (productDetails) {
+                productDetails += " and a " + product.selectedVolume;
+              } else {
+                productDetails += " in a " + product.selectedVolume;
               }
             }
-            await sendPaymentAndContactMessage(
-              pubkey,
-              paymentMessage,
-              product,
-              true,
-              false,
-              false,
-              orderId,
-              "ecash",
-              mints[0],
-              JSON.stringify(unusedProofs),
-              unusedAmount,
-              quantities[product.id] && quantities[product.id]! > 1
-                ? quantities[product.id]
-                : 1
-            );
+
+            // Add pickup location if available for this specific product
+            const pickupLocation =
+              selectedPickupLocations[product.id] ||
+              data[`pickupLocation_${product.id}`];
+            if (pickupLocation) {
+              if (productDetails) {
+                productDetails += " (pickup at: " + pickupLocation + ")";
+              } else {
+                productDetails += " (pickup at: " + pickupLocation + ")";
+              }
+            }
+
+            let paymentMessage = "";
+            if (unusedToken && unusedProofs) {
+              if (quantities[product.id] && quantities[product.id]! > 1) {
+                paymentMessage =
+                  "This is a Cashu token payment from " +
+                  userNPub +
+                  " for " +
+                  quantities[product.id] +
+                  " of your " +
+                  title +
+                  " listing" +
+                  productDetails +
+                  " on Shopstr: " +
+                  unusedToken;
+              } else {
+                paymentMessage =
+                  "This is a Cashu token payment from " +
+                  userNPub +
+                  " for your " +
+                  title +
+                  " listing" +
+                  productDetails +
+                  " on Shopstr: " +
+                  unusedToken;
+              }
+              await sendPaymentAndContactMessageWithKeys(
+                pubkey,
+                paymentMessage,
+                product,
+                true,
+                false,
+                false,
+                orderId,
+                "ecash",
+                mints[0],
+                JSON.stringify(unusedProofs),
+                unusedAmount,
+                quantities[product.id] && quantities[product.id]! > 1
+                  ? quantities[product.id]
+                  : 1,
+                orderKeys
+              );
+            }
           }
         }
       } else {
-        let paymentMessage = "";
-        if (quantities[product.id] && quantities[product.id]! > 1) {
-          if (sellerToken) {
-            if (userNPub) {
-              paymentMessage =
-                "This is a Cashu token payment from " +
-                userNPub +
-                " for " +
-                quantities[product.id] +
-                " of your " +
-                title +
-                " listing on Shopstr: " +
-                sellerToken;
-            } else {
-              paymentMessage =
-                "This is a Cashu token payment for " +
-                quantities[product.id] +
-                " of your " +
-                title +
-                " listing on Shopstr: " +
-                sellerToken;
-            }
-          }
-        } else {
-          if (sellerToken) {
-            if (userNPub) {
-              paymentMessage =
-                "This is a Cashu token payment from " +
-                userNPub +
-                " for your " +
-                title +
-                " listing on Shopstr: " +
-                sellerToken;
-            } else {
-              paymentMessage =
-                "This is a Cashu token payment for your " +
-                title +
-                " listing on Shopstr: " +
-                sellerToken;
-            }
+        let productDetails = "";
+        if (product.selectedSize) {
+          productDetails += " in size " + product.selectedSize;
+        }
+        if (product.selectedVolume) {
+          if (productDetails) {
+            productDetails += " and a " + product.selectedVolume;
+          } else {
+            productDetails += " in a " + product.selectedVolume;
           }
         }
-        await sendPaymentAndContactMessage(
-          pubkey,
-          paymentMessage,
-          product,
-          true,
-          false,
-          false,
-          orderId,
-          "ecash",
-          mints[0],
-          JSON.stringify(sellerProofs),
-          sellerAmount,
-          quantities[product.id] && quantities[product.id]! > 1
-            ? quantities[product.id]
-            : 1
-        );
+
+        // Add pickup location if available for this specific product
+        const pickupLocation =
+          selectedPickupLocations[product.id] ||
+          data[`pickupLocation_${product.id}`];
+        if (pickupLocation) {
+          if (productDetails) {
+            productDetails += " (pickup at: " + pickupLocation + ")";
+          } else {
+            productDetails += " (pickup at: " + pickupLocation + ")";
+          }
+        }
+
+        let paymentMessage = "";
+        if (sellerToken && sellerProofs) {
+          if (quantities[product.id] && quantities[product.id]! > 1) {
+            paymentMessage =
+              "This is a Cashu token payment from " +
+              userNPub +
+              " for " +
+              quantities[product.id] +
+              " of your " +
+              title +
+              " listing" +
+              productDetails +
+              " on Shopstr: " +
+              sellerToken;
+          } else {
+            paymentMessage =
+              "This is a Cashu token payment from " +
+              userNPub +
+              " for your " +
+              title +
+              " listing" +
+              productDetails +
+              " on Shopstr: " +
+              sellerToken;
+          }
+          await sendPaymentAndContactMessageWithKeys(
+            pubkey,
+            paymentMessage,
+            product,
+            true,
+            false,
+            false,
+            orderId,
+            "ecash",
+            mints[0],
+            JSON.stringify(sellerProofs),
+            sellerAmount,
+            quantities[product.id] && quantities[product.id]! > 1
+              ? quantities[product.id]
+              : 1,
+            orderKeys
+          );
+        }
       }
 
       let donationMessage = "";
@@ -1269,22 +1485,27 @@ export default function CartInvoiceCard({
         );
       }
 
-      // Handle additional info, shipping, and contact messages similar to fiat payment
       if (required && required !== "" && data.additionalInfo) {
         const additionalMessage =
           "Additional customer information: " + data.additionalInfo;
-        await sendPaymentAndContactMessage(
+        await sendPaymentAndContactMessageWithKeys(
           pubkey,
           additionalMessage,
           product,
           false,
           false,
           false,
-          orderId
+          orderId,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          orderKeys
         );
       }
 
-      // Handle shipping or contact messages based on form type and product shipping type
+      // Handle shipping and contact information based on what was provided
       const productShippingType = shippingTypes[product.id];
       const shouldUseShipping =
         formType === "shipping" ||
@@ -1305,138 +1526,275 @@ export default function CartInvoiceCard({
         shouldUseShipping &&
         data.shippingName &&
         data.shippingAddress &&
-        data.shippingCity
+        data.shippingCity &&
+        data.shippingPostalCode &&
+        data.shippingState &&
+        data.shippingCountry
       ) {
-        let contactMessage = "";
-        let productDetails = "";
-        if (product.selectedSize) {
-          productDetails += "in a size " + product.selectedSize;
-        }
-        if (product.selectedVolume) {
-          if (productDetails) {
-            productDetails += " and a " + product.selectedVolume;
+        // Shipping information provided
+        if (
+          productShippingType === "Added Cost" ||
+          productShippingType === "Free" ||
+          productShippingType === "Free/Pickup"
+        ) {
+          let productDetails = "";
+          if (product.selectedSize) {
+            productDetails += " in size " + product.selectedSize;
+          }
+          if (product.selectedVolume) {
+            if (productDetails) {
+              productDetails += " and a " + product.selectedVolume;
+            } else {
+              productDetails += " in a " + product.selectedVolume;
+            }
+          }
+
+          // Add pickup location if available for this specific product
+          const pickupLocation =
+            selectedPickupLocations[product.id] ||
+            data[`pickupLocation_${product.id}`];
+          if (pickupLocation) {
+            if (productDetails) {
+              productDetails += " (pickup at: " + pickupLocation + ")";
+            } else {
+              productDetails += " (pickup at: " + pickupLocation + ")";
+            }
+          }
+
+          let contactMessage = "";
+          if (!data.shippingUnitNo) {
+            contactMessage =
+              "Please ship the product" +
+              productDetails +
+              " to " +
+              data.shippingName +
+              " at " +
+              data.shippingAddress +
+              ", " +
+              data.shippingCity +
+              ", " +
+              data.shippingPostalCode +
+              ", " +
+              data.shippingState +
+              ", " +
+              data.shippingCountry +
+              ".";
           } else {
-            productDetails += "in a " + product.selectedVolume;
+            contactMessage =
+              "Please ship the product" +
+              productDetails +
+              " to " +
+              data.shippingName +
+              " at " +
+              data.shippingAddress +
+              " " +
+              data.shippingUnitNo +
+              ", " +
+              data.shippingCity +
+              ", " +
+              data.shippingPostalCode +
+              ", " +
+              data.shippingState +
+              ", " +
+              data.shippingCountry +
+              ".";
+          }
+          await sendPaymentAndContactMessageWithKeys(
+            pubkey,
+            contactMessage,
+            product,
+            false,
+            false,
+            false,
+            orderId,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            orderKeys
+          );
+          if (userPubkey) {
+            const receiptMessage =
+              "Your order for " +
+              title +
+              productDetails +
+              " was processed successfully. If applicable, you should be receiving delivery information from " +
+              nip19.npubEncode(product.pubkey) +
+              " as soon as they review your order.";
+            await sendPaymentAndContactMessageWithKeys(
+              userPubkey,
+              receiptMessage,
+              product,
+              false,
+              true,
+              false,
+              orderId,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              orderKeys
+            );
           }
         }
-
-        if (!data.shippingUnitNo) {
-          contactMessage =
-            "Please ship the product " +
-            (productDetails ? productDetails + " " : "") +
-            "to " +
-            data.shippingName +
-            " at " +
-            data.shippingAddress +
-            ", " +
-            data.shippingCity +
-            ", " +
-            data.shippingPostalCode +
-            ", " +
-            data.shippingState +
-            ", " +
-            data.shippingCountry +
-            ".";
-        } else {
-          contactMessage =
-            "Please ship the product " +
-            (productDetails ? productDetails + " " : "") +
-            "to " +
-            data.shippingName +
-            " at " +
-            data.shippingAddress +
-            " " +
-            data.shippingUnitNo +
-            ", " +
-            data.shippingCity +
-            ", " +
-            data.shippingPostalCode +
-            ", " +
-            data.shippingState +
-            ", " +
-            data.shippingCountry +
-            ".";
-        }
-        await sendPaymentAndContactMessage(
-          pubkey,
-          contactMessage,
-          product,
-          false,
-          false,
-          false,
-          orderId
-        );
-      }
-
-      if (
+      } else if (
         shouldUseContact &&
         data.contact &&
         data.contactType &&
         data.contactInstructions
       ) {
-        let contactMessage;
+        // Contact information provided
+        if (
+          productShippingType === "N/A" ||
+          productShippingType === "Pickup" ||
+          productShippingType === "Free/Pickup"
+        ) {
+          let productDetails = "";
+          if (product.selectedSize) {
+            productDetails += " in size " + product.selectedSize;
+          }
+          if (product.selectedVolume) {
+            if (productDetails) {
+              productDetails += " and a " + product.selectedVolume;
+            } else {
+              productDetails += " in a " + product.selectedVolume;
+            }
+          }
+
+          // Add pickup location if available for this specific product
+          const pickupLocation =
+            selectedPickupLocations[product.id] ||
+            data[`pickupLocation_${product.id}`];
+          if (pickupLocation) {
+            if (productDetails) {
+              productDetails += " (pickup at: " + pickupLocation + ")";
+            } else {
+              productDetails += " (pickup at: " + pickupLocation + ")";
+            }
+          }
+
+          let contactMessage;
+          let receiptMessage;
+          if (productDetails) {
+            contactMessage =
+              "To finalize the sale of your " +
+              title +
+              " listing" +
+              productDetails +
+              " on Shopstr, please contact " +
+              data.contact +
+              " over " +
+              data.contactType +
+              " using the following instructions: " +
+              data.contactInstructions;
+            receiptMessage =
+              "Your order for " +
+              title +
+              productDetails +
+              " was processed successfully. If applicable, you should be receiving delivery information from " +
+              nip19.npubEncode(product.pubkey) +
+              " as soon as they review your order.";
+          } else {
+            contactMessage =
+              "To finalize the sale of your " +
+              title +
+              " listing on Shopstr, please contact " +
+              data.contact +
+              " over " +
+              data.contactType +
+              " using the following instructions: " +
+              data.contactInstructions;
+            receiptMessage =
+              "Your order for " +
+              title +
+              " was processed successfully. If applicable, you should be receiving delivery information from " +
+              nip19.npubEncode(product.pubkey) +
+              " as soon as they review your order.";
+          }
+          await sendPaymentAndContactMessageWithKeys(
+            pubkey,
+            contactMessage,
+            product,
+            false,
+            false,
+            false,
+            orderId,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            orderKeys
+          );
+          if (userPubkey) {
+            await sendPaymentAndContactMessageWithKeys(
+              userPubkey,
+              receiptMessage,
+              product,
+              false,
+              true,
+              false,
+              orderId,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              orderKeys
+            );
+          }
+        }
+      }
+
+      // Always send receipt message for successful payments
+      if (userPubkey) {
         let productDetails = "";
         if (product.selectedSize) {
-          productDetails += "in a size " + product.selectedSize;
+          productDetails += " in size " + product.selectedSize;
         }
         if (product.selectedVolume) {
           if (productDetails) {
             productDetails += " and a " + product.selectedVolume;
           } else {
-            productDetails += "in a " + product.selectedVolume;
+            productDetails += " in a " + product.selectedVolume;
           }
         }
 
-        if (productDetails) {
-          contactMessage =
-            "To finalize the sale of your " +
-            title +
-            " listing " +
-            productDetails +
-            " on Shopstr, please contact " +
-            data.contact +
-            " over " +
-            data.contactType +
-            " using the following instructions: " +
-            data.contactInstructions;
-        } else {
-          contactMessage =
-            "To finalize the sale of your " +
-            title +
-            " listing on Shopstr, please contact " +
-            data.contact +
-            " over " +
-            data.contactType +
-            " using the following instructions: " +
-            data.contactInstructions;
+        // Add pickup location if available for this specific product
+        const pickupLocation =
+          selectedPickupLocations[product.id] ||
+          data[`pickupLocation_${product.id}`];
+        if (pickupLocation) {
+          if (productDetails) {
+            productDetails += " (pickup at: " + pickupLocation + ")";
+          } else {
+            productDetails += " (pickup at: " + pickupLocation + ")";
+          }
         }
-        await sendPaymentAndContactMessage(
-          pubkey,
-          contactMessage,
-          product,
-          false,
-          false,
-          false,
-          orderId
-        );
-      }
 
-      // Send receipt to user
-      if (userPubkey) {
         const receiptMessage =
-          "Your order for " +
+          "Thank you for your purchase of " +
           title +
-          " was processed successfully. You should be receiving delivery information from " +
+          productDetails +
+          " from " +
           nip19.npubEncode(product.pubkey) +
-          " as soon as they claim their payment.";
-        await sendPaymentAndContactMessage(
+          ".";
+        await sendPaymentAndContactMessageWithKeys(
           userPubkey,
           receiptMessage,
           product,
           false,
           true,
           false,
-          orderId
+          orderId,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          orderKeys
         );
       }
     }
@@ -1539,16 +1897,17 @@ export default function CartInvoiceCard({
       );
       localStorage.setItem("cart", JSON.stringify([]));
       setOrderConfirmed(true);
+      if (setCashuPaymentSent) {
+        setCashuPaymentSent(true);
+      }
     } catch (error) {
-      console.error(error);
-      setFailureText("Cashu payment failed. Please try again.");
-      setShowFailureModal(true);
+      if (setCashuPaymentFailed) {
+        setCashuPaymentFailed(true);
+      } else {
+        setFailureText("Cashu payment failed. Please try again.");
+        setShowFailureModal(true);
+      }
     }
-  };
-
-  const handleCloseOrderConfirmed = () => {
-    setOrderConfirmed(false);
-    router.push("/orders");
   };
 
   const renderContactForm = () => {
@@ -1852,6 +2211,58 @@ export default function CartInvoiceCard({
             />
           </>
         )}
+
+        {/* Pickup location selectors for products with pickup locations */}
+        {productsWithPickupLocations.length > 0 &&
+          (formType === "contact" ||
+            (formType === "combined" &&
+              freePickupPreference === "contact")) && (
+            <div className="space-y-4">
+              <h4 className="font-medium text-gray-700 dark:text-gray-300">
+                Select Pickup Locations
+              </h4>
+              {productsWithPickupLocations.map((product) => (
+                <Controller
+                  key={product.id}
+                  name={`pickupLocation_${product.id}`}
+                  control={formControl}
+                  rules={{ required: "A pickup location is required." }}
+                  render={({
+                    field: { onChange, onBlur, value },
+                    fieldState: { error },
+                  }) => (
+                    <Select
+                      variant="bordered"
+                      label={
+                        <span>
+                          {product.title} - Pickup Location{" "}
+                          <span className="text-red-500">*</span>
+                        </span>
+                      }
+                      placeholder="Select pickup location"
+                      isInvalid={!!error}
+                      errorMessage={error?.message}
+                      onChange={(e) => {
+                        onChange(e);
+                        setSelectedPickupLocations((prev) => ({
+                          ...prev,
+                          [product.id]: e.target.value,
+                        }));
+                      }}
+                      onBlur={onBlur}
+                      value={value || ""}
+                    >
+                      {(product.pickupLocations || []).map((location) => (
+                        <SelectItem key={location} value={location}>
+                          {location}
+                        </SelectItem>
+                      ))}
+                    </Select>
+                  )}
+                />
+              ))}
+            </div>
+          )}
 
         {requiredInfo && requiredInfo !== "" && (
           <Controller
@@ -2157,7 +2568,7 @@ export default function CartInvoiceCard({
                 {/* Check if we have mixed shipping types or all products are Free/Pickup */}
                 {uniqueShippingTypes.length > 1 ? (
                   <>
-                    {/* Mixed shipping types - only show combined and in-person */}
+                    {/* Mixed shipping types - only show combined */}
                     <button
                       onClick={() => handleOrderTypeSelection("combined")}
                       className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
@@ -2217,16 +2628,6 @@ export default function CartInvoiceCard({
                     </div>
                   </button>
                 )}
-
-                <button
-                  onClick={() => handleOrderTypeSelection("in-person")}
-                  className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
-                >
-                  <div className="font-medium">In-person purchase</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                    Complete your purchase in person
-                  </div>
-                </button>
               </div>
             </>
           )}
@@ -2275,6 +2676,39 @@ export default function CartInvoiceCard({
                   </div>
                 </button>
               </div>
+
+              {/* Show pickup location selection for products with pickup locations */}
+              {productsWithPickupLocations.length > 0 &&
+                freePickupPreference === "contact" && (
+                  <div className="space-y-6">
+                    <h3 className="text-lg font-semibold">
+                      Select Pickup Locations
+                    </h3>
+                    {productsWithPickupLocations.map((product) => (
+                      <div key={product.id} className="space-y-2">
+                        <h4 className="font-medium">{product.title}</h4>
+                        <Select
+                          variant="bordered"
+                          label="Select pickup location"
+                          placeholder="Choose a pickup location"
+                          value={selectedPickupLocations[product.id] || ""}
+                          onChange={(e) => {
+                            setSelectedPickupLocations((prev) => ({
+                              ...prev,
+                              [product.id]: e.target.value,
+                            }));
+                          }}
+                        >
+                          {(product.pickupLocations || []).map((location) => (
+                            <SelectItem key={location} value={location}>
+                              {location}
+                            </SelectItem>
+                          ))}
+                        </Select>
+                      </div>
+                    ))}
+                  </div>
+                )}
             </>
           )}
 
@@ -2298,11 +2732,19 @@ export default function CartInvoiceCard({
 
                   {fiatPaymentOptions.length > 0 && (
                     <Button
-                      type="submit"
                       className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
                         !isFormValid ? "cursor-not-allowed opacity-50" : ""
                       }`}
                       disabled={!isFormValid}
+                      onClick={() => {
+                        if (!isLoggedIn) {
+                          onOpen();
+                          return;
+                        }
+                        handleFormSubmit((data) =>
+                          onFormSubmit(data, "fiat")
+                        )();
+                      }}
                       startContent={<CurrencyDollarIcon className="h-6 w-6" />}
                     >
                       Pay with Fiat
@@ -2310,11 +2752,19 @@ export default function CartInvoiceCard({
                   )}
 
                   <Button
-                    type="submit"
                     className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
                       !isFormValid ? "cursor-not-allowed opacity-50" : ""
                     }`}
                     disabled={!isFormValid}
+                    onClick={() => {
+                      if (!isLoggedIn) {
+                        onOpen();
+                        return;
+                      }
+                      handleFormSubmit((data) =>
+                        onFormSubmit(data, "lightning")
+                      )();
+                    }}
                     startContent={<BoltIcon className="h-6 w-6" />}
                   >
                     Pay with Lightning: {formattedTotalCost}
@@ -2322,11 +2772,19 @@ export default function CartInvoiceCard({
 
                   {hasTokensAvailable && (
                     <Button
-                      type="submit"
                       className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
                         !isFormValid ? "cursor-not-allowed opacity-50" : ""
                       }`}
                       disabled={!isFormValid}
+                      onClick={() => {
+                        if (!isLoggedIn) {
+                          onOpen();
+                          return;
+                        }
+                        handleFormSubmit((data) =>
+                          onFormSubmit(data, "cashu")
+                        )();
+                      }}
                       startContent={<BanknotesIcon className="h-6 w-6" />}
                     >
                       Pay with Cashu: {formattedTotalCost}
@@ -2336,67 +2794,21 @@ export default function CartInvoiceCard({
               </form>
             </>
           )}
-
-          {/* Payment Buttons for In-Person */}
-          {showPaymentButtons && (
-            <>
-              <h2 className="mb-6 text-2xl font-bold">Payment Method</h2>
-              <p className="mb-6 text-gray-600 dark:text-gray-400">
-                Complete your in-person purchase by selecting a payment method
-                below.
-              </p>
-
-              <div className="space-y-4">
-                {fiatPaymentOptions.length > 0 && (
-                  <Button
-                    className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
-                    onClick={() => handlePaymentMethodClick("fiat")}
-                    startContent={<CurrencyDollarIcon className="h-6 w-6" />}
-                  >
-                    Pay with Fiat
-                  </Button>
-                )}
-
-                <Button
-                  className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
-                  onClick={() => handlePaymentMethodClick("lightning")}
-                  startContent={<BoltIcon className="h-6 w-6" />}
-                >
-                  Pay with Lightning: {formattedTotalCost}
-                </Button>
-
-                {hasTokensAvailable && (
-                  <Button
-                    className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
-                    onClick={() => handlePaymentMethodClick("cashu")}
-                    startContent={<BanknotesIcon className="h-6 w-6" />}
-                  >
-                    Pay with Cashu: {formattedTotalCost}
-                  </Button>
-                )}
-              </div>
-            </>
+          {orderConfirmed && (
+            <div className="flex flex-col items-center justify-center">
+              <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
+                Order confirmed!
+              </h3>
+              <Image
+                alt="Payment Confirmed"
+                className="object-cover"
+                src="../payment-confirmed.gif"
+                width={350}
+              />
+            </div>
           )}
         </div>
       </div>
-
-      {/* Order Confirmed Display */}
-      {orderConfirmed && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="rounded-lg bg-white p-8 text-center dark:bg-gray-800">
-            <h3 className="mb-4 text-2xl font-bold text-gray-900 dark:text-white">
-              Order confirmed!
-            </h3>
-            <Image
-              alt="Payment Confirmed"
-              className="mx-auto object-cover"
-              src="../payment-confirmed.gif"
-              width={350}
-            />
-            <Button onClick={handleCloseOrderConfirmed}>Close</Button>
-          </div>
-        </div>
-      )}
 
       {/* Modals */}
       <Modal
@@ -2427,6 +2839,8 @@ export default function CartInvoiceCard({
                 onChange={(e) => {
                   setSelectedFiatOption(e.target.value);
                   setShowFiatTypeOption(false);
+                  // Show payment instructions
+                  setShowFiatPaymentInstructions(true);
                 }}
               >
                 {fiatPaymentOptions &&
@@ -2444,6 +2858,108 @@ export default function CartInvoiceCard({
           </ModalBody>
         </ModalContent>
       </Modal>
+
+      {/* Fiat Payment Instructions */}
+      {showFiatPaymentInstructions && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="max-w-md rounded-lg bg-white p-8 text-center dark:bg-gray-800">
+            {selectedFiatOption === "cash" ? (
+              <>
+                <h3 className="mb-4 text-2xl font-bold text-gray-900 dark:text-white">
+                  Cash Payment
+                </h3>
+                <p className="mb-6 text-gray-600 dark:text-gray-400">
+                  You will need {formatWithCommas(totalCost, "sats")} in cash
+                  for this order.
+                </p>
+                <div className="mb-6 flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="paymentConfirmed"
+                    checked={fiatPaymentConfirmed}
+                    onChange={(e) => setFiatPaymentConfirmed(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-shopstr-purple focus:ring-shopstr-purple"
+                  />
+                  <label
+                    htmlFor="paymentConfirmed"
+                    className="text-left text-gray-700 dark:text-gray-300"
+                  >
+                    I will have the sufficient cash to complete the order upon
+                    pickup or delivery
+                  </label>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="mb-4 text-2xl font-bold text-gray-900 dark:text-white">
+                  Send Payment
+                </h3>
+                <p className="mb-4 text-gray-600 dark:text-gray-400">
+                  Please send {formatWithCommas(totalCost, "sats")} to:
+                </p>
+                <div className="mb-6 rounded-lg bg-gray-100 p-4 dark:bg-gray-700">
+                  <p className="font-semibold text-gray-900 dark:text-white">
+                    {selectedFiatOption}:{" "}
+                    {(products.length > 0 &&
+                      profileContext.profileData.get(products[0]!.pubkey)
+                        ?.content?.fiat_options?.[selectedFiatOption]) ||
+                      "N/A"}
+                  </p>
+                </div>
+                <div className="mb-6 flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="paymentConfirmed"
+                    checked={fiatPaymentConfirmed}
+                    onChange={(e) => setFiatPaymentConfirmed(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-shopstr-purple focus:ring-shopstr-purple"
+                  />
+                  <label
+                    htmlFor="paymentConfirmed"
+                    className="text-gray-700 dark:text-gray-300"
+                  >
+                    I have sent the payment
+                  </label>
+                </div>
+              </>
+            )}
+            <div className="space-y-2">
+              <Button
+                onClick={async () => {
+                  if (fiatPaymentConfirmed) {
+                    setShowFiatPaymentInstructions(false);
+                    await handleFiatPayment(
+                      totalCost,
+                      pendingPaymentData || {}
+                    );
+                    setPendingPaymentData(null); // Clear stored data
+                  }
+                }}
+                disabled={!fiatPaymentConfirmed}
+                className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
+                  !fiatPaymentConfirmed ? "cursor-not-allowed opacity-50" : ""
+                }`}
+              >
+                {selectedFiatOption === "cash"
+                  ? "Confirm Order"
+                  : "Confirm Payment Sent"}
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowFiatPaymentInstructions(false);
+                  setFiatPaymentConfirmed(false);
+                  setSelectedFiatOption("");
+                  setPendingPaymentData(null); // Clear stored data
+                }}
+                variant="bordered"
+                className="w-full"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <SignInModal isOpen={isOpen} onClose={onClose} />
 

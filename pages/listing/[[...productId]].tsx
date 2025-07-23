@@ -5,7 +5,7 @@ import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/outline";
 import parseTags, {
   ProductData,
 } from "@/utils/parsers/product-parser-functions";
-import ListingPage from "../../components/listing-page";
+import CheckoutCard from "../../components/utility-components/checkout-card";
 import { ProductContext } from "../../utils/context/context";
 import { Event, nip19 } from "nostr-tools";
 
@@ -17,6 +17,7 @@ const Listing = () => {
   const [productIdString, setProductIdString] = useState("");
 
   const [fiatOrderIsPlaced, setFiatOrderIsPlaced] = useState(false);
+  const [fiatOrderFailed, setFiatOrderFailed] = useState(false);
   const [invoiceIsPaid, setInvoiceIsPaid] = useState(false);
   const [invoiceGenerationFailed, setInvoiceGenerationFailed] = useState(false);
   const [cashuPaymentSent, setCashuPaymentSent] = useState(false);
@@ -69,16 +70,17 @@ const Listing = () => {
     <>
       <div className="flex h-full min-h-screen flex-col bg-light-bg pt-20 dark:bg-dark-bg">
         {productData && (
-          <ListingPage
+          <CheckoutCard
             productData={productData}
             setFiatOrderIsPlaced={setFiatOrderIsPlaced}
+            setFiatOrderFailed={setFiatOrderFailed}
             setInvoiceIsPaid={setInvoiceIsPaid}
             setInvoiceGenerationFailed={setInvoiceGenerationFailed}
             setCashuPaymentSent={setCashuPaymentSent}
             setCashuPaymentFailed={setCashuPaymentFailed}
           />
         )}
-        {invoiceIsPaid || cashuPaymentSent ? (
+        {fiatOrderIsPlaced || invoiceIsPaid || cashuPaymentSent ? (
           <>
             <Modal
               backdrop="blur"
@@ -87,7 +89,7 @@ const Listing = () => {
                 setFiatOrderIsPlaced(false);
                 setInvoiceIsPaid(false);
                 setCashuPaymentSent(false);
-                router.push("/marketplace");
+                router.push("/orders");
               }}
               // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
               classNames={{
@@ -109,7 +111,7 @@ const Listing = () => {
                 </ModalHeader>
                 <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                   <div className="flex items-center justify-center">
-                    The seller will receive a DM with your order details.
+                    The seller will receive a message with your order details.
                   </div>
                 </ModalBody>
               </ModalContent>
@@ -176,6 +178,40 @@ const Listing = () => {
                 <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                   <div className="flex items-center justify-center">
                     You didn&apos;t have enough balance in your wallet to pay.
+                  </div>
+                </ModalBody>
+              </ModalContent>
+            </Modal>
+          </>
+        ) : null}
+        {fiatOrderFailed ? (
+          <>
+            <Modal
+              backdrop="blur"
+              isOpen={fiatOrderFailed}
+              onClose={() => setFiatOrderFailed(false)}
+              // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
+              classNames={{
+                body: "py-6 ",
+                backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+                header: "border-b-[1px] border-[#292f46]",
+                footer: "border-t-[1px] border-[#292f46]",
+                closeButton: "hover:bg-black/5 active:bg-white/10",
+              }}
+              isDismissable={true}
+              scrollBehavior={"normal"}
+              placement={"center"}
+              size="2xl"
+            >
+              <ModalContent>
+                <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                  <XCircleIcon className="h-6 w-6 text-red-500" />
+                  <div className="ml-2">Order failed!</div>
+                </ModalHeader>
+                <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                  <div className="flex items-center justify-center">
+                    Your order information was not delivered to the seller.
+                    Please try again.
                   </div>
                 </ModalBody>
               </ModalContent>
