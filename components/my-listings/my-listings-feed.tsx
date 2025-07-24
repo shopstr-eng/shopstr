@@ -17,7 +17,6 @@ import {
 } from "@nextui-org/react";
 import { BLACKBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
-const LISTING_PASSWORD = process.env["LISTING_PASSWORD"];
 const PASSWORD_STORAGE_KEY = "listingPasswordAuthenticated";
 
 const MyListingsFeed = () => {
@@ -56,16 +55,30 @@ const MyListingsFeed = () => {
     router.push("");
   };
 
-  const handlePasswordSubmit = () => {
-    if (passwordInput.trim() === LISTING_PASSWORD) {
-      setIsAuthenticated(true);
-      localStorage.setItem(PASSWORD_STORAGE_KEY, "true");
-      setShowPasswordModal(false);
-      setShowModal(true);
-      setPasswordInput("");
-      setPasswordError("");
-    } else {
-      setPasswordError("Incorrect password. Please try again.");
+  const handlePasswordSubmit = async () => {
+    try {
+      const response = await fetch("/api/validate-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ password: passwordInput.trim() }),
+      });
+
+      const data = await response.json();
+
+      if (data.valid) {
+        setIsAuthenticated(true);
+        localStorage.setItem(PASSWORD_STORAGE_KEY, "true");
+        setShowPasswordModal(false);
+        setShowModal(true);
+        setPasswordInput("");
+        setPasswordError("");
+      } else {
+        setPasswordError("Incorrect password. Please try again.");
+      }
+    } catch (error) {
+      setPasswordError("An error occurred. Please try again.");
     }
   };
 
