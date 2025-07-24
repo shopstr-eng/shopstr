@@ -44,7 +44,7 @@ export default function Faq() {
         {
           title: "What types of items can I sell?",
           content:
-            "Milk Market supports various product types including physical, resale, exchange, clothing, electronics, collectibles, and more. Each listing should clearly indicate the category and any shipping requirements.",
+            "Milk Market supports various product types related to raw milk and dairy. Each listing should clearly indicate the category and any shipping requirements.",
         },
         {
           title: "How does shipping work?",

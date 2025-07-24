@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useContext, useEffect } from "react";
 import { useRouter } from "next/router";
 import {
   Button,
@@ -14,24 +14,67 @@ import {
   BLACKBUTTONCLASSNAMES,
   WHITEBUTTONCLASSNAMES,
 } from "@/utils/STATIC-VARIABLES";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 
 export default function StandaloneLanding() {
   const router = useRouter();
   const [contactType, setContactType] = useState<"email" | "nostr">("email");
   const [contact, setContact] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const signerContext = useContext(SignerContext);
+  useEffect(() => {
+    if (router.pathname === "/" && signerContext.isLoggedIn) {
+      router.push("/marketplace");
+    }
+  }, [router.pathname, signerContext]);
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitMessage, setSubmitMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!contact.trim()) return;
+    if (!contact.trim() || !isValidContact) return;
 
-    // Handle form submission here - connect to your preferred backend
-    console.log("Signup:", { contact: contact.trim(), contactType });
-    alert(`Thanks for signing up with ${contactType}: ${contact}`);
-    setContact("");
-  };
+    setIsSubmitting(true);
+    setSubmitMessage(null);
 
-  const scrollToSignup = () => {
-    document.getElementById("signup")?.scrollIntoView({ behavior: "smooth" });
+    try {
+      const response = await fetch("/api/signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contact: contact.trim(),
+          contactType,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSubmitMessage({
+          type: "success",
+          text: "Thanks for signing up! We'll keep you updated on new features and products.",
+        });
+        setContact("");
+      } else {
+        setSubmitMessage({
+          type: "error",
+          text: data.error || "Something went wrong. Please try again.",
+        });
+      }
+    } catch (error) {
+      setSubmitMessage({
+        type: "error",
+        text: "Network error. Please check your connection and try again.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const isValidEmail = (email: string) => {
@@ -166,7 +209,7 @@ export default function StandaloneLanding() {
           <span className="text-xl font-bold">Milk Market</span>
         </div>
         <Button
-          onClick={scrollToSignup}
+          onClick={() => router.push("/marketplace")}
           color="default"
           variant="solid"
           className={BLACKBUTTONCLASSNAMES}
@@ -226,13 +269,13 @@ export default function StandaloneLanding() {
             </div>
 
             <Button
-              onClick={scrollToSignup}
+              onClick={() => router.push("/marketplace")}
               color="default"
               variant="solid"
               size="lg"
               className="transform rounded-full bg-dark-bg px-12 py-4 text-xl text-dark-text shadow-xl transition-all hover:scale-105 hover:bg-gray-800"
             >
-              Join the Raw Milk Revolution →
+              Join the FREE MILK Movement →
             </Button>
           </div>
         </div>
@@ -365,7 +408,7 @@ export default function StandaloneLanding() {
                       Community Power
                     </h4>
                     <p className="text-gray-600">
-                      Join raw milk advocates worldwide in the food freedom
+                      Join raw milk advocates worldwide in the FREE MILK
                       movement.
                     </p>
                   </CardBody>
@@ -452,9 +495,7 @@ export default function StandaloneLanding() {
             <h2 className="mb-4 text-4xl font-bold md:text-5xl">
               How It Works
             </h2>
-            <p className="text-xl text-gray-600">
-              Simple steps to join the movement
-            </p>
+            <p className="text-xl text-gray-600">Simple steps to join</p>
           </div>
 
           <div className="grid gap-16 lg:grid-cols-2">
@@ -600,12 +641,10 @@ export default function StandaloneLanding() {
         className="relative z-10 bg-gradient-to-b from-gray-50 to-white py-20"
       >
         <div className="mx-auto max-w-2xl px-4 text-center sm:px-6 lg:px-8">
-          <h2 className="mb-6 text-4xl font-bold md:text-5xl">
-            Join the Revolution
-          </h2>
+          <h2 className="mb-6 text-4xl font-bold md:text-5xl">Stay Milky</h2>
           <p className="mb-8 text-xl text-gray-600">
-            Be the first to know when we launch the permissionless milk
-            marketplace
+            Be the first to know when Be the first to know when new products are
+            listed and when updates are released
           </p>
 
           <Card className="border-gray-200 bg-light-bg shadow-xl">
@@ -678,15 +717,33 @@ export default function StandaloneLanding() {
 
                 <Button
                   type="submit"
-                  isDisabled={!isValidContact}
+                  isDisabled={!isValidContact || isSubmitting}
+                  isLoading={isSubmitting}
                   color="default"
                   variant="solid"
                   size="lg"
                   className="w-full bg-dark-bg px-6 py-3 text-lg text-dark-text"
                 >
-                  Join the Milk Revolution → 🥛
+                  {isSubmitting ? "Submitting..." : "Submit"}
                 </Button>
               </form>
+
+              {submitMessage && (
+                <div
+                  className={`mt-4 rounded-lg p-4 ${
+                    submitMessage.type === "success"
+                      ? "border border-green-200 bg-green-100 text-green-800"
+                      : "border border-red-200 bg-red-100 text-red-800"
+                  }`}
+                >
+                  <p className="flex items-center space-x-2">
+                    <span>
+                      {submitMessage.type === "success" ? "✅" : "❌"}
+                    </span>
+                    <span>{submitMessage.text}</span>
+                  </p>
+                </div>
+              )}
 
               <div className="mt-6 text-sm text-gray-500">
                 <p className="flex items-center justify-center space-x-1">
@@ -708,17 +765,17 @@ export default function StandaloneLanding() {
           <Card className="mx-auto max-w-2xl bg-light-bg shadow-lg">
             <CardBody className="p-8">
               <p className="mb-6 text-lg text-gray-700">
-                Have questions about the Raw Milk Marketplace? Reach out to us:
+                Have questions about Milk Market? Reach out to us:
               </p>
               <div className="space-y-4">
                 <div className="flex items-center justify-center space-x-3">
                   <span className="text-2xl">📧</span>
                   <span className="font-semibold text-gray-800">Email:</span>
                   <a
-                    href="mailto:milk@shopsr.store"
+                    href="mailto:freemilk@milk.market"
                     className="font-medium text-light-text underline transition-colors hover:text-gray-600"
                   >
-                    milk@shopsr.store
+                    freemilk@milk.market
                   </a>
                 </div>
                 <div className="flex items-center justify-center space-x-3">
@@ -744,25 +801,16 @@ export default function StandaloneLanding() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-16 text-center">
             <h2 className="mb-4 text-4xl font-bold md:text-5xl">
-              Can&apos;t Wait?
+              Ready to get started?
             </h2>
             <p className="mb-6 text-xl text-gray-300">
-              Head over to{" "}
-              <a
-                href="https://shopstr.store"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-semibold text-dark-text underline transition-colors hover:text-gray-300"
-              >
-                Milk Market
-              </a>{" "}
-              to start listing milk before the dedicated site launches!
+              Click below to join the Milk Market community!
             </p>
             <Button
               className={WHITEBUTTONCLASSNAMES}
-              onClick={() => window.open("https://shopstr.store", "_blank")}
+              onClick={() => router.push("/marketplace")}
             >
-              Shop Freely →
+              FREE MILK → 🥛
             </Button>
           </div>
         </div>

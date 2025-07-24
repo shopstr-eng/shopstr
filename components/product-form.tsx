@@ -806,6 +806,165 @@ export default function ProductForm({
                 />
               </div>
             )}
+
+            <Controller
+              name="Quantity"
+              control={control}
+              rules={{
+                min: { value: 1, message: "Quantity must be at least 1" },
+              }}
+              render={({
+                field: { onChange, value },
+                fieldState: { error },
+              }) => {
+                const isErrored = error !== undefined;
+                const errorMessage = error?.message || "";
+                return (
+                  <div className="flex flex-col">
+                    <Input
+                      variant="flat"
+                      autoFocus
+                      type="number"
+                      min="1"
+                      aria-label="Quantity"
+                      label="Quantity (optional)"
+                      labelPlacement="inside"
+                      value={value}
+                      onChange={(e) => onChange(parseInt(e.target.value) || 1)}
+                      className="w-20"
+                      isInvalid={isErrored}
+                      errorMessage={errorMessage}
+                    />
+                  </div>
+                );
+              }}
+            />
+
+            <Controller
+              name="Volumes"
+              control={control}
+              render={({
+                field: { onChange, onBlur, value },
+                fieldState: { error },
+              }) => {
+                const isErrored = error !== undefined;
+                const errorMessage = error?.message || "";
+
+                const selectedVolumes = Array.isArray(value)
+                  ? value
+                  : typeof value === "string"
+                    ? value.split(",").filter(Boolean)
+                    : [];
+
+                const handleVolumeChange = (newValue: string | string[]) => {
+                  const newVolumes = Array.isArray(newValue)
+                    ? newValue
+                    : newValue.split(",").filter(Boolean);
+                  onChange(newVolumes);
+                };
+
+                return (
+                  <Select
+                    variant="bordered"
+                    isMultiline={true}
+                    autoFocus
+                    aria-label="Volumes"
+                    label="Volumes (optional)"
+                    labelPlacement="inside"
+                    selectionMode="multiple"
+                    isInvalid={isErrored}
+                    errorMessage={errorMessage}
+                    onChange={(e) => handleVolumeChange(e.target.value)}
+                    onBlur={onBlur}
+                    value={selectedVolumes}
+                    defaultSelectedKeys={new Set(selectedVolumes)}
+                    classNames={{
+                      base: "mt-4",
+                      trigger: "min-h-unit-12 py-2",
+                    }}
+                  >
+                    <SelectSection className="text-dark-text">
+                      <SelectItem key="Half-pint" value="Half-pint">
+                        Half-pint
+                      </SelectItem>
+                      <SelectItem key="Pint" value="Pint">
+                        Pint
+                      </SelectItem>
+                      <SelectItem key="Quart" value="Quart">
+                        Quart
+                      </SelectItem>
+                      <SelectItem key="Half-gallon" value="Half-gallon">
+                        Half-gallon
+                      </SelectItem>
+                      <SelectItem key="Gallon" value="Gallon">
+                        Gallon
+                      </SelectItem>
+                    </SelectSection>
+                  </Select>
+                );
+              }}
+            />
+
+            <Controller
+              name="Volume Prices"
+              control={control}
+              render={({
+                field: { onChange, value = new Map<string, number>() },
+              }) => {
+                const handlePriceChange = (volume: string, price: number) => {
+                  const newPrices = new Map(value);
+                  newPrices.set(volume, price);
+                  onChange(newPrices);
+                };
+
+                const volumes = watch("Volumes");
+                const volumeArray = Array.isArray(volumes)
+                  ? volumes
+                  : typeof volumes === "string"
+                    ? volumes
+                        .split(",")
+                        .filter(Boolean)
+                        .map((v) => v.trim())
+                    : [];
+
+                return (
+                  <div className="mt-4 flex flex-wrap gap-4">
+                    {volumeArray.map((volume: string) => (
+                      <div key={volume} className="flex items-center">
+                        <span className="mr-2 text-dark-text">{volume}:</span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={(value.get(volume) || 0).toString()}
+                          onChange={(e) =>
+                            handlePriceChange(
+                              volume,
+                              parseFloat(e.target.value) || 0
+                            )
+                          }
+                          className="w-32"
+                          endContent={
+                            <div className="flex items-center">
+                              <span className="text-small text-default-400">
+                                {watchCurrency}
+                              </span>
+                            </div>
+                          }
+                        />
+                      </div>
+                    ))}
+                    {volumeArray.length > 0 && (
+                      <div className="w-full text-xs text-dark-text opacity-75">
+                        Note: Volume prices will override the main product price
+                        when selected.
+                      </div>
+                    )}
+                  </div>
+                );
+              }}
+            />
+
             <Controller
               name="Category"
               control={control}
@@ -865,6 +1024,38 @@ export default function ProductForm({
                 );
               }}
             />
+
+            <Controller
+              name="Restrictions"
+              control={control}
+              render={({
+                field: { onChange, onBlur, value },
+                fieldState: { error },
+              }) => {
+                const isErrored = error !== undefined;
+                const errorMessage: string = error?.message
+                  ? error.message
+                  : "";
+                return (
+                  <Input
+                    className="text-dark-text"
+                    autoFocus
+                    variant="bordered"
+                    placeholder="US shipping only, signature required, no P.O. box delivery, etc."
+                    fullWidth={true}
+                    label="Restrictions (optional)"
+                    labelPlacement="inside"
+                    isInvalid={isErrored}
+                    errorMessage={errorMessage}
+                    // controller props
+                    onChange={onChange} // send value to hook form
+                    onBlur={onBlur} // notify when input is touched/blur
+                    value={value}
+                  />
+                );
+              }}
+            />
+
             <div className="w-full max-w-xs">
               <Button
                 className="mb-2 mt-4 w-full justify-start rounded-md pl-2 text-dark-text"
@@ -880,41 +1071,6 @@ export default function ProductForm({
 
             {showOptionalTags && (
               <>
-                <Controller
-                  name="Quantity"
-                  control={control}
-                  rules={{
-                    min: { value: 1, message: "Quantity must be at least 1" },
-                  }}
-                  render={({
-                    field: { onChange, value },
-                    fieldState: { error },
-                  }) => {
-                    const isErrored = error !== undefined;
-                    const errorMessage = error?.message || "";
-                    return (
-                      <div className="flex flex-col">
-                        <Input
-                          variant="flat"
-                          autoFocus
-                          type="number"
-                          min="1"
-                          aria-label="Quantity"
-                          label="Quantity"
-                          labelPlacement="inside"
-                          value={value}
-                          onChange={(e) =>
-                            onChange(parseInt(e.target.value) || 1)
-                          }
-                          className="w-20"
-                          isInvalid={isErrored}
-                          errorMessage={errorMessage}
-                        />
-                      </div>
-                    );
-                  }}
-                />
-
                 <Controller
                   name="Sizes"
                   control={control}
@@ -979,138 +1135,6 @@ export default function ProductForm({
                           </SelectItem>
                         </SelectSection>
                       </Select>
-                    );
-                  }}
-                />
-
-                <Controller
-                  name="Volumes"
-                  control={control}
-                  render={({
-                    field: { onChange, onBlur, value },
-                    fieldState: { error },
-                  }) => {
-                    const isErrored = error !== undefined;
-                    const errorMessage = error?.message || "";
-
-                    const selectedVolumes = Array.isArray(value)
-                      ? value
-                      : typeof value === "string"
-                        ? value.split(",").filter(Boolean)
-                        : [];
-
-                    const handleVolumeChange = (
-                      newValue: string | string[]
-                    ) => {
-                      const newVolumes = Array.isArray(newValue)
-                        ? newValue
-                        : newValue.split(",").filter(Boolean);
-                      onChange(newVolumes);
-                    };
-
-                    return (
-                      <Select
-                        variant="bordered"
-                        isMultiline={true}
-                        autoFocus
-                        aria-label="Volumes"
-                        label="Volumes"
-                        labelPlacement="inside"
-                        selectionMode="multiple"
-                        isInvalid={isErrored}
-                        errorMessage={errorMessage}
-                        onChange={(e) => handleVolumeChange(e.target.value)}
-                        onBlur={onBlur}
-                        value={selectedVolumes}
-                        defaultSelectedKeys={new Set(selectedVolumes)}
-                        classNames={{
-                          base: "mt-4",
-                          trigger: "min-h-unit-12 py-2",
-                        }}
-                      >
-                        <SelectSection className="text-dark-text">
-                          <SelectItem key="Half-pint" value="Half-pint">
-                            Half-pint
-                          </SelectItem>
-                          <SelectItem key="Pint" value="Pint">
-                            Pint
-                          </SelectItem>
-                          <SelectItem key="Quart" value="Quart">
-                            Quart
-                          </SelectItem>
-                          <SelectItem key="Half-gallon" value="Half-gallon">
-                            Half-gallon
-                          </SelectItem>
-                          <SelectItem key="Gallon" value="Gallon">
-                            Gallon
-                          </SelectItem>
-                        </SelectSection>
-                      </Select>
-                    );
-                  }}
-                />
-
-                <Controller
-                  name="Volume Prices"
-                  control={control}
-                  render={({
-                    field: { onChange, value = new Map<string, number>() },
-                  }) => {
-                    const handlePriceChange = (
-                      volume: string,
-                      price: number
-                    ) => {
-                      const newPrices = new Map(value);
-                      newPrices.set(volume, price);
-                      onChange(newPrices);
-                    };
-
-                    const volumes = watch("Volumes");
-                    const volumeArray = Array.isArray(volumes)
-                      ? volumes
-                      : typeof volumes === "string"
-                        ? volumes
-                            .split(",")
-                            .filter(Boolean)
-                            .map((v) => v.trim())
-                        : [];
-
-                    return (
-                      <div className="mt-4 flex flex-wrap gap-4">
-                        {volumeArray.map((volume: string) => (
-                          <div key={volume} className="flex items-center">
-                            <span className="mr-2 text-dark-text">
-                              {volume}:
-                            </span>
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={(value.get(volume) || 0).toString()}
-                              onChange={(e) =>
-                                handlePriceChange(
-                                  volume,
-                                  parseFloat(e.target.value) || 0
-                                )
-                              }
-                              className="w-32"
-                              endContent={
-                                <div className="flex items-center">
-                                  <span className="text-small text-default-400">
-                                    {watchCurrency}
-                                  </span>
-                                </div>
-                              }
-                            />
-                          </div>
-                        ))}
-                        {volumeArray.length > 0 && (
-                          <div className="w-full text-xs text-dark-text opacity-75">
-                            Note: Volume prices will override the main product
-                            price when selected.
-                          </div>
-                        )}
-                      </div>
                     );
                   }}
                 />
@@ -1279,37 +1303,6 @@ export default function ProductForm({
                         placeholder="Email, phone number, etc."
                         fullWidth={true}
                         label="Required Customer Information"
-                        labelPlacement="inside"
-                        isInvalid={isErrored}
-                        errorMessage={errorMessage}
-                        // controller props
-                        onChange={onChange} // send value to hook form
-                        onBlur={onBlur} // notify when input is touched/blur
-                        value={value}
-                      />
-                    );
-                  }}
-                />
-
-                <Controller
-                  name="Restrictions"
-                  control={control}
-                  render={({
-                    field: { onChange, onBlur, value },
-                    fieldState: { error },
-                  }) => {
-                    const isErrored = error !== undefined;
-                    const errorMessage: string = error?.message
-                      ? error.message
-                      : "";
-                    return (
-                      <Input
-                        className="text-dark-text"
-                        autoFocus
-                        variant="bordered"
-                        placeholder="US shipping only, signature required, no P.O. box delivery, etc."
-                        fullWidth={true}
-                        label="Restrictions"
                         labelPlacement="inside"
                         isInvalid={isErrored}
                         errorMessage={errorMessage}

@@ -1,10 +1,13 @@
 export const CATEGORIES = [
+  "Milk",
+  "Cheese",
+  "Yogurt",
+  "Dairy",
   "Pets",
   "Health",
-  "Fitness",
   "Food",
-  "Milk",
-  "Dairy",
+  "Cow",
+  "Goat",
 ];
 
 export type ShippingOptionsType =
