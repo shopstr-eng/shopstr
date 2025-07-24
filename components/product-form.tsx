@@ -112,7 +112,7 @@ export default function ProductForm({
           Restrictions: oldValues.restrictions ? oldValues.restrictions : "",
         }
       : {
-          Currency: "SAT",
+          Currency: "USD",
           "Shipping Option": "N/A",
           Status: "active",
           "Pickup Locations": [""],
@@ -831,7 +831,7 @@ export default function ProductForm({
                       labelPlacement="inside"
                       value={value}
                       onChange={(e) => onChange(parseInt(e.target.value) || 1)}
-                      className="w-20"
+                      className="w-40"
                       isInvalid={isErrored}
                       errorMessage={errorMessage}
                     />

@@ -1,4 +1,13 @@
 {
+  "USD": {
+    "symbol": "$",
+    "name": "US Dollar",
+    "symbol_native": "$",
+    "decimal_digits": 2,
+    "rounding": 0,
+    "code": "USD",
+    "name_plural": "US dollars"
+  },
   "SAT": {
     "symbol": "丰",
     "name": "Satoshi",
@@ -16,15 +25,6 @@
     "rounding": 0,
     "code": "SATS",
     "name_plural": "Satoshis"
-  },
-  "USD": {
-    "symbol": "$",
-    "name": "US Dollar",
-    "symbol_native": "$",
-    "decimal_digits": 2,
-    "rounding": 0,
-    "code": "USD",
-    "name_plural": "US dollars"
   },
   "CAD": {
     "symbol": "CA$",

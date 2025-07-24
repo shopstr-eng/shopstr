@@ -620,11 +620,11 @@ export default function StandaloneLanding() {
             <CardBody className="p-8 md:p-12">
               <span className="mb-6 block text-6xl">🐄</span>
               <blockquote className="mb-6 text-xl font-medium leading-relaxed md:text-2xl">
-                &ldquo;Seeing how ever growing agregious regulations limit our
-                freedom to transact, especially when it comes to something as
-                simple as milk, the need for change was apparent. This was why I
-                started Shopstr, and why I now see Milk Market as the first
-                stage in making a real stand. No more censorship, no more
+                &ldquo;Seeing how ever-growing regulations limit our freedom to
+                transact, especially when it comes to something as simple as
+                milk, the need for change is apparent. This was why I started
+                Shopstr, and why I now see Milk Market as the first stage in
+                making a real stand. No more censorship, no more
                 gatekeepers—just direct farmer-to-consumer freedom.&rdquo;
               </blockquote>
               <cite className="text-lg text-gray-300">
@@ -643,8 +643,8 @@ export default function StandaloneLanding() {
         <div className="mx-auto max-w-2xl px-4 text-center sm:px-6 lg:px-8">
           <h2 className="mb-6 text-4xl font-bold md:text-5xl">Stay Milky</h2>
           <p className="mb-8 text-xl text-gray-600">
-            Be the first to know when Be the first to know when new products are
-            listed and when updates are released
+            Be the first to know when new products are listed and when updates
+            are released
           </p>
 
           <Card className="border-gray-200 bg-light-bg shadow-xl">
@@ -760,10 +760,10 @@ export default function StandaloneLanding() {
 
       {/* Contact Section */}
       <section className="relative z-10 bg-gray-50 py-16">
-        <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-7xl items-center px-4 text-center sm:px-6 lg:px-8">
           <h2 className="mb-8 text-3xl font-bold md:text-4xl">Get In Touch</h2>
           <Card className="mx-auto max-w-2xl bg-light-bg shadow-lg">
-            <CardBody className="p-8">
+            <CardBody className="items-center justify-center p-8">
               <p className="mb-6 text-lg text-gray-700">
                 Have questions about Milk Market? Reach out to us:
               </p>
