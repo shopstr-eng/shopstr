@@ -17,7 +17,7 @@ import {
 } from "@nextui-org/react";
 import { BLACKBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
-const LISTING_PASSWORD = process.env.LISTING_PASSWORD || "";
+const LISTING_PASSWORD = process.env["LISTING_PASSWORD"];
 const PASSWORD_STORAGE_KEY = "listingPasswordAuthenticated";
 
 const MyListingsFeed = () => {
