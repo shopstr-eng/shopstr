@@ -50,6 +50,16 @@ const MyListingsFeed = () => {
     }
   }, [searchParams, isLoggedIn, isAuthenticated]);
 
+  // Auto-close password modal if user becomes authenticated
+  useEffect(() => {
+    if (isAuthenticated && showPasswordModal) {
+      setShowPasswordModal(false);
+      setPasswordInput("");
+      setPasswordError("");
+      setShowModal(true);
+    }
+  }, [isAuthenticated, showPasswordModal]);
+
   const handleProductModalToggle = () => {
     setShowModal(!showModal);
     router.push("");
