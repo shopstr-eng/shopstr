@@ -231,6 +231,7 @@ export default function SignInModal({
                   <div className="flex flex-col	">
                     <div className="">
                       <Button
+                        data-testid="bunker-open-btn"
                         onClick={() => {
                           setShowNsecSignIn(false);
                           setShowBunkerSignIn(true);
@@ -260,6 +261,7 @@ export default function SignInModal({
                       </div>
                       <div>
                         <Button
+                          data-testid="bunker-submit-btn"
                           className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
                           onClick={startBunkerLogin}
                           isDisabled={validBunkerToken != "success"} // Disable the button only if both key strings are invalid or the button has already been clicked
@@ -280,6 +282,7 @@ export default function SignInModal({
                 <div className="flex flex-col	">
                   <div className="">
                     <Button
+                      data-testid="nsec-open-btn"
                       onClick={() => {
                         setShowBunkerSignIn(false);
                         setShowNsecSignIn(true);
@@ -328,6 +331,7 @@ export default function SignInModal({
                     </div>
                     <div>
                       <Button
+                        data-testid="nsec-submit-btn"
                         className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
                         onClick={handleSignIn}
                         isDisabled={validPrivateKey != "success"} // Disable the button only if both key strings are invalid or the button has already been clicked
