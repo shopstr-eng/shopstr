@@ -22,12 +22,17 @@ export type ProductData = {
   quantity?: number;
   sizes?: string[];
   sizeQuantities?: Map<string, number>;
+  volumes?: string[];
+  volumePrices?: Map<string, number>;
   condition?: string;
   status?: string;
   selectedSize?: string;
   selectedQuantity?: number;
+  selectedVolume?: string;
+  volumePrice?: number;
   required?: string;
   restrictions?: string;
+  pickupLocations?: string[];
 };
 
 export const parseTags = (productEvent: NostrEvent) => {
@@ -129,6 +134,18 @@ export const parseTags = (productEvent: NostrEvent) => {
           parsedData.sizeQuantities = new Map<string, number>();
         parsedData.sizeQuantities.set(size!, Number(quantity));
         break;
+      case "volume":
+        if (!parsedData.volumes) {
+          parsedData.volumes = [];
+          parsedData.volumePrices = new Map<string, number>();
+        }
+        if (values[0]) {
+          parsedData.volumes.push(values[0]);
+          if (values[1]) {
+            parsedData.volumePrices!.set(values[0], parseFloat(values[1]));
+          }
+        }
+        break;
       case "condition":
         parsedData.condition = values[0];
         break;
@@ -140,6 +157,11 @@ export const parseTags = (productEvent: NostrEvent) => {
         break;
       case "restrictions":
         parsedData.restrictions = values[0];
+        break;
+      case "pickup_location":
+        if (parsedData.pickupLocations === undefined)
+          parsedData.pickupLocations = [];
+        parsedData.pickupLocations.push(values[0]!);
         break;
       default:
         return;

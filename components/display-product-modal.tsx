@@ -189,6 +189,24 @@ export default function DisplayProductModal({
                 </div>
               </>
             ) : null}
+            {productData.volumes && productData.volumes.length > 0 ? (
+              <>
+                <span className="text-xl font-semibold">Volumes: </span>
+                <div className="flex flex-wrap items-center">
+                  {productData.volumes && productData.volumes.length > 0
+                    ? productData.volumes.map((volume: string) => (
+                        <span
+                          key={volume}
+                          className="mb-2 mr-4 text-light-text dark:text-dark-text"
+                        >
+                          {volume}: {productData.volumePrices?.get(volume) || 0}{" "}
+                          {productData.currency}
+                        </span>
+                      ))
+                    : null}
+                </div>
+              </>
+            ) : null}
             {productData.condition && (
               <>
                 <div className="text-left text-xs text-light-text dark:text-dark-text">

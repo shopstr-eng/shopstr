@@ -48,6 +48,7 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { ProductFormValues } from "../utils/types/types";
+import { useTheme } from "next-themes";
 
 interface ProductFormProps {
   handleModalToggle: () => void;
@@ -65,6 +66,7 @@ export default function ProductForm({
   onSubmitCallback,
 }: ProductFormProps) {
   const router = useRouter();
+  const { theme } = useTheme();
   const [images, setImages] = useState<string[]>([]);
   const [imageError, setImageError] = useState<string | null>(null);
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -93,11 +95,16 @@ export default function ProductForm({
           Location: oldValues.location,
           "Shipping Option": oldValues.shippingType,
           "Shipping Cost": oldValues.shippingCost,
+          "Pickup Locations": oldValues.pickupLocations || [""],
           Category: oldValues.categories ? oldValues.categories.join(",") : "",
           Quantity: oldValues.quantity ? String(oldValues.quantity) : "",
           Sizes: oldValues.sizes ? oldValues.sizes.join(",") : "",
           "Size Quantities": oldValues.sizeQuantities
             ? oldValues.sizeQuantities
+            : new Map<string, number>(),
+          Volumes: oldValues.volumes ? oldValues.volumes.join(",") : "",
+          "Volume Prices": oldValues.volumePrices
+            ? oldValues.volumePrices
             : new Map<string, number>(),
           Condition: oldValues.condition ? oldValues.condition : "",
           Status: oldValues.status ? oldValues.status : "",
@@ -108,6 +115,7 @@ export default function ProductForm({
           Currency: "SAT",
           "Shipping Option": "N/A",
           Status: "active",
+          "Pickup Locations": [""],
         },
   });
 
@@ -184,6 +192,17 @@ export default function ProductForm({
       });
     }
 
+    if (data["Volumes"]) {
+      const volumesArray = Array.isArray(data["Volumes"])
+        ? data["Volumes"]
+        : (data["Volumes"] as string).split(",").filter(Boolean);
+      volumesArray.forEach((volume) => {
+        const price =
+          (data["Volume Prices"] as Map<string, number>).get(volume) || 0;
+        tags.push(["volume", volume, price.toString()]);
+      });
+    }
+
     if (data["Condition"]) {
       tags.push(["condition", data["Condition"] as string]);
     }
@@ -198,6 +217,20 @@ export default function ProductForm({
 
     if (data["Restrictions"]) {
       tags.push(["restrictions", data["Restrictions"] as string]);
+    }
+
+    // Add pickup locations if they exist and shipping involves pickup
+    if (
+      data["Pickup Locations"] &&
+      Array.isArray(data["Pickup Locations"]) &&
+      (data["Shipping Option"] === "Pickup" ||
+        data["Shipping Option"] === "Free/Pickup")
+    ) {
+      (data["Pickup Locations"] as string[])
+        .filter((location) => location.trim() !== "")
+        .forEach((location) => {
+          tags.push(["pickup_location", location.trim()]);
+        });
     }
 
     const newListing = await PostListing(tags, signer!, isLoggedIn!, nostr!);
@@ -689,6 +722,89 @@ export default function ProductForm({
                 }}
               />
             )}
+
+            {(watchShippingOption === "Pickup" ||
+              watchShippingOption === "Free/Pickup") && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-light-text dark:text-dark-text">
+                  Pickup Locations
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  Add one or more pickup locations where customers can collect
+                  their orders (if applicable).
+                </p>
+
+                <Controller
+                  name="Pickup Locations"
+                  control={control}
+                  defaultValue={[""]}
+                  render={({ field: { onChange, value = [""] } }) => (
+                    <div className="space-y-3">
+                      {value.map((location: string, index: number) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <Input
+                            className="flex-1 text-light-text dark:text-dark-text"
+                            variant="bordered"
+                            placeholder={`Pickup location ${
+                              index + 1
+                            } (e.g., 123 Main St, City, State)`}
+                            value={location}
+                            onChange={(e) => {
+                              const newLocations = [...value];
+                              newLocations[index] = e.target.value;
+                              onChange(newLocations);
+                            }}
+                            label={`Pickup Location ${index + 1}`}
+                            labelPlacement="inside"
+                          />
+                          {value.length > 1 && (
+                            <Button
+                              isIconOnly
+                              color="danger"
+                              variant="light"
+                              onClick={() => {
+                                const newLocations = value.filter(
+                                  (_: string, i: number) => i !== index
+                                );
+                                onChange(newLocations);
+                              }}
+                            >
+                              <TrashIcon className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+
+                      {theme === "dark" ? (
+                        <Button
+                          variant="bordered"
+                          color="warning"
+                          className="w-full"
+                          onClick={() => {
+                            const newLocations = [...value, ""];
+                            onChange(newLocations);
+                          }}
+                        >
+                          Add Another Pickup Location
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="bordered"
+                          color="secondary"
+                          className="w-full"
+                          onClick={() => {
+                            const newLocations = [...value, ""];
+                            onChange(newLocations);
+                          }}
+                        >
+                          Add Another Pickup Location
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                />
+              </div>
+            )}
             <Controller
               name="Category"
               control={control}
@@ -862,6 +978,138 @@ export default function ProductForm({
                           </SelectItem>
                         </SelectSection>
                       </Select>
+                    );
+                  }}
+                />
+
+                <Controller
+                  name="Volumes"
+                  control={control}
+                  render={({
+                    field: { onChange, onBlur, value },
+                    fieldState: { error },
+                  }) => {
+                    const isErrored = error !== undefined;
+                    const errorMessage = error?.message || "";
+
+                    const selectedVolumes = Array.isArray(value)
+                      ? value
+                      : typeof value === "string"
+                        ? value.split(",").filter(Boolean)
+                        : [];
+
+                    const handleVolumeChange = (
+                      newValue: string | string[]
+                    ) => {
+                      const newVolumes = Array.isArray(newValue)
+                        ? newValue
+                        : newValue.split(",").filter(Boolean);
+                      onChange(newVolumes);
+                    };
+
+                    return (
+                      <Select
+                        variant="bordered"
+                        isMultiline={true}
+                        autoFocus
+                        aria-label="Volumes"
+                        label="Volumes"
+                        labelPlacement="inside"
+                        selectionMode="multiple"
+                        isInvalid={isErrored}
+                        errorMessage={errorMessage}
+                        onChange={(e) => handleVolumeChange(e.target.value)}
+                        onBlur={onBlur}
+                        value={selectedVolumes}
+                        defaultSelectedKeys={new Set(selectedVolumes)}
+                        classNames={{
+                          base: "mt-4",
+                          trigger: "min-h-unit-12 py-2",
+                        }}
+                      >
+                        <SelectSection className="text-light-text dark:text-dark-text">
+                          <SelectItem key="Half-pint" value="Half-pint">
+                            Half-pint
+                          </SelectItem>
+                          <SelectItem key="Pint" value="Pint">
+                            Pint
+                          </SelectItem>
+                          <SelectItem key="Quart" value="Quart">
+                            Quart
+                          </SelectItem>
+                          <SelectItem key="Half-gallon" value="Half-gallon">
+                            Half-gallon
+                          </SelectItem>
+                          <SelectItem key="Gallon" value="Gallon">
+                            Gallon
+                          </SelectItem>
+                        </SelectSection>
+                      </Select>
+                    );
+                  }}
+                />
+
+                <Controller
+                  name="Volume Prices"
+                  control={control}
+                  render={({
+                    field: { onChange, value = new Map<string, number>() },
+                  }) => {
+                    const handlePriceChange = (
+                      volume: string,
+                      price: number
+                    ) => {
+                      const newPrices = new Map(value);
+                      newPrices.set(volume, price);
+                      onChange(newPrices);
+                    };
+
+                    const volumes = watch("Volumes");
+                    const volumeArray = Array.isArray(volumes)
+                      ? volumes
+                      : typeof volumes === "string"
+                        ? volumes
+                            .split(",")
+                            .filter(Boolean)
+                            .map((v) => v.trim())
+                        : [];
+
+                    return (
+                      <div className="mt-4 flex flex-wrap gap-4">
+                        {volumeArray.map((volume: string) => (
+                          <div key={volume} className="flex items-center">
+                            <span className="mr-2 text-light-text dark:text-dark-text">
+                              {volume}:
+                            </span>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={(value.get(volume) || 0).toString()}
+                              onChange={(e) =>
+                                handlePriceChange(
+                                  volume,
+                                  parseFloat(e.target.value) || 0
+                                )
+                              }
+                              className="w-32"
+                              endContent={
+                                <div className="flex items-center">
+                                  <span className="text-small text-default-400">
+                                    {watchCurrency}
+                                  </span>
+                                </div>
+                              }
+                            />
+                          </div>
+                        ))}
+                        {volumeArray.length > 0 && (
+                          <div className="w-full text-xs text-light-text opacity-75 dark:text-dark-text">
+                            Note: Volume prices will override the main product
+                            price when selected.
+                          </div>
+                        )}
+                      </div>
                     );
                   }}
                 />
@@ -1084,7 +1332,10 @@ export default function ProductForm({
                 {profileContext.profileData.get(pubkey)?.content
                   ?.payment_preference === "lightning"
                   ? "Lightning"
-                  : "Cashu"}
+                  : profileContext.profileData.get(pubkey)?.content
+                        ?.payment_preference === "fiat"
+                    ? "Fiat"
+                    : "Cashu"}
                 . You can modify this in your{" "}
                 <span
                   className="cursor-pointer underline hover:text-purple-500 dark:hover:text-yellow-500"

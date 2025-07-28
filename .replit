@@ -1,5 +1,5 @@
 run = "npm run dev"
-modules = ["nodejs-18:v20-20231025-d04a94d"]
+modules = ["nodejs-18:v20-20231025-d04a94d", "postgresql-16"]
 
 [nix]
 channel = "stable-22_11"
@@ -12,3 +12,19 @@ build = ["sh", "-c", "npm run build"]
 [[ports]]
 localPort = 3000
 externalPort = 80
+
+[[ports]]
+localPort = 3001
+externalPort = 3001
+
+[workflows]
+runButton = "Run"
+
+[[workflows.workflow]]
+name = "Run"
+author = 20519411
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run dev"

@@ -4,7 +4,6 @@ import { ProfileMapContext } from "@/utils/context/context";
 import { useForm, Controller } from "react-hook-form";
 import {
   Button,
-  Chip,
   Textarea,
   Input,
   Image,
@@ -17,6 +16,7 @@ import {
   EyeSlashIcon,
   EyeIcon,
 } from "@heroicons/react/24/outline";
+import { FiatOptionsType } from "@/utils/types/types";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   SignerContext,
@@ -53,7 +53,7 @@ const UserProfilePage = () => {
       website: "",
       lud16: "", // Lightning address
       payment_preference: "ecash",
-      fiat_options: [],
+      fiat_options: {} as FiatOptionsType,
       shopstr_donation: 2.1,
     },
   });
@@ -454,124 +454,123 @@ const UserProfilePage = () => {
                       onChange={(e) => onChange(e.target.value)}
                       onBlur={onBlur}
                     >
-                      {/* <SelectItem
-                        key="service"
-                        value="service"
-                        className="text-light-text dark:text-dark-text"
-                      >
-                        Service
-                      </SelectItem> */}
                       <SelectItem
                         key="ecash"
                         value="ecash"
                         className="text-light-text dark:text-dark-text"
                       >
-                        Cashu
+                        Cashu (Bitcoin)
                       </SelectItem>
                       <SelectItem
                         key="lightning"
                         value="lightning"
                         className="text-light-text dark:text-dark-text"
                       >
-                        Lightning
+                        Lightning (Bitcoin)
+                      </SelectItem>
+                      <SelectItem
+                        key="fiat"
+                        value="fiat"
+                        className="text-light-text dark:text-dark-text"
+                      >
+                        Local Currency (Fiat)
                       </SelectItem>
                     </Select>
                   )}
                 />
 
-                <Controller
-                  name="fiat_options"
-                  control={control}
-                  render={({ field: { onChange, onBlur, value } }) => {
-                    const selectedOptions = Array.isArray(value)
-                      ? value
-                      : value
-                        ? [value]
-                        : [];
-                    return (
-                      <Select
-                        className="pb-4 text-light-text dark:text-dark-text"
-                        classNames={{
-                          label: "text-light-text dark:text-dark-text text-lg",
-                        }}
-                        variant="bordered"
-                        fullWidth={true}
-                        label="Alternative payment options"
-                        labelPlacement="outside"
-                        selectionMode="multiple"
-                        selectedKeys={new Set(selectedOptions)}
-                        onChange={(e) => {
-                          const selectedValues = Array.from(
-                            new Set(e.target.value.split(","))
-                          );
-                          onChange(selectedValues);
-                        }}
-                        onBlur={onBlur}
-                        renderValue={(items) => (
-                          <div className="flex flex-wrap gap-2">
-                            {items.map((item) => (
-                              <Chip key={item.key}>
-                                {item.key
-                                  ? (item.key as string)
-                                  : "unkown option"}
-                              </Chip>
-                            ))}
-                          </div>
-                        )}
+                <div className="pb-4">
+                  <label className="mb-2 block text-lg text-light-text dark:text-dark-text">
+                    Fiat payment options
+                  </label>
+                  <div className="space-y-4">
+                    {[
+                      { key: "cash", label: "Cash", requiresUsername: false },
+                      { key: "venmo", label: "Venmo", requiresUsername: true },
+                      { key: "zelle", label: "Zelle", requiresUsername: true },
+                      {
+                        key: "cashapp",
+                        label: "Cash App",
+                        requiresUsername: true,
+                      },
+                      {
+                        key: "applepay",
+                        label: "Apple Pay",
+                        requiresUsername: true,
+                      },
+                      {
+                        key: "googlepay",
+                        label: "Google Pay",
+                        requiresUsername: true,
+                      },
+                      {
+                        key: "paypal",
+                        label: "PayPal",
+                        requiresUsername: true,
+                      },
+                    ].map((option) => (
+                      <div
+                        key={option.key}
+                        className="flex items-center space-x-4"
                       >
-                        <SelectItem
-                          key="cash"
-                          value="cash"
+                        <input
+                          type="checkbox"
+                          id={option.key}
+                          checked={Object.keys(
+                            watch("fiat_options") || {}
+                          ).includes(option.key)}
+                          onChange={(e) => {
+                            const currentOptions = watch("fiat_options") || {};
+                            if (e.target.checked) {
+                              if (option.requiresUsername) {
+                                setValue("fiat_options", {
+                                  ...currentOptions,
+                                  [option.key]: "",
+                                });
+                              } else {
+                                setValue("fiat_options", {
+                                  ...currentOptions,
+                                  [option.key]: "available",
+                                });
+                              }
+                            } else {
+                              const { [option.key]: _removed, ...rest } =
+                                currentOptions;
+                              setValue("fiat_options", rest);
+                            }
+                          }}
+                          className="h-4 w-4 rounded border-gray-300 text-shopstr-purple focus:ring-shopstr-purple"
+                        />
+                        <label
+                          htmlFor={option.key}
                           className="text-light-text dark:text-dark-text"
                         >
-                          Cash
-                        </SelectItem>
-                        <SelectItem
-                          key="venmo"
-                          value="venmo"
-                          className="text-light-text dark:text-dark-text"
-                        >
-                          Venmo
-                        </SelectItem>
-                        <SelectItem
-                          key="zelle"
-                          value="zelle"
-                          className="text-light-text dark:text-dark-text"
-                        >
-                          Zelle
-                        </SelectItem>
-                        <SelectItem
-                          key="cashapp"
-                          value="cashapp"
-                          className="text-light-text dark:text-dark-text"
-                        >
-                          Cash App
-                        </SelectItem>
-                        <SelectItem
-                          key="applepay"
-                          value="applepay"
-                          className="text-light-text dark:text-dark-text"
-                        >
-                          Apple Pay
-                        </SelectItem>
-                        <SelectItem
-                          key="googlepay"
-                          value="googlepay"
-                          className="text-light-text dark:text-dark-text"
-                        >
-                          Google Pay
-                        </SelectItem>
-                        <SelectItem
-                          key="paypal"
-                          value="paypal"
-                          className="text-light-text dark:text-dark-text"
-                        >
-                          PayPal
-                        </SelectItem>
-                      </Select>
-                    );
-                  }}
-                />
+                          {option.label}
+                        </label>
+                        {option.requiresUsername &&
+                          Object.keys(watch("fiat_options") || {}).includes(
+                            option.key
+                          ) && (
+                            <Input
+                              size="sm"
+                              placeholder={`Enter your ${option.label} username/tag`}
+                              value={watch("fiat_options")?.[option.key] || ""}
+                              onChange={(e) => {
+                                const currentOptions =
+                                  watch("fiat_options") || {};
+                                setValue("fiat_options", {
+                                  ...currentOptions,
+                                  [option.key]: e.target.value,
+                                });
+                              }}
+                              className="flex-1 text-light-text dark:text-dark-text"
+                              variant="bordered"
+                            />
+                          )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
                 <Controller
                   name="shopstr_donation"
