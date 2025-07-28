@@ -448,7 +448,7 @@ const UserProfilePage = () => {
                       }}
                       variant="bordered"
                       fullWidth={true}
-                      label="Bitcoin payment preference"
+                      label="Payment preference"
                       labelPlacement="outside"
                       selectedKeys={value ? [value] : []}
                       onChange={(e) => onChange(e.target.value)}
