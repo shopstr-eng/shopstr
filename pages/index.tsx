@@ -64,13 +64,13 @@ export default function StandaloneLanding() {
       } else {
         setSubmitMessage({
           type: "error",
-          text: data.error || "Something went wrong. Please try again.",
+          text: data.error || "Something went wrong! Please try again.",
         });
       }
     } catch (error) {
       setSubmitMessage({
         type: "error",
-        text: "Network error. Please check your connection and try again.",
+        text: "Network error! Please check your connection and try again.",
       });
     } finally {
       setIsSubmitting(false);
@@ -254,16 +254,15 @@ export default function StandaloneLanding() {
                 <span className="mb-3 block text-2xl">🚜</span>
                 <h3 className="mb-2 text-lg font-semibold">For Producers</h3>
                 <p className="text-gray-600">
-                  Sell Directly to Your Community — Bypass Payment Bans &
-                  Regulatory Harassment
+                  Sell Directly to Your Community — No Payment Bans or Middlemen
                 </p>
               </div>
               <div className="rounded-2xl bg-gray-50 p-6">
                 <span className="mb-3 block text-2xl">🥛</span>
                 <h3 className="mb-2 text-lg font-semibold">For Drinkers</h3>
                 <p className="text-gray-600">
-                  Find Fresh, Local Raw Milk Sources — Support Farms, Not
-                  Corporations
+                  Find Fresh, Local Raw Milk Sources — Support Farms and Your
+                  Health
                 </p>
               </div>
             </div>
@@ -275,7 +274,7 @@ export default function StandaloneLanding() {
               size="lg"
               className="transform rounded-full bg-dark-bg px-12 py-4 text-xl text-dark-text shadow-xl transition-all hover:scale-105 hover:bg-gray-800"
             >
-              Join the FREE MILK Movement →
+              Join the &ldquo;FREE MILK&rdquo; Movement →
             </Button>
           </div>
         </div>
@@ -305,12 +304,25 @@ export default function StandaloneLanding() {
                 <Card className="hover-lift border-gray-100 bg-light-bg">
                   <CardBody className="p-6">
                     <h4 className="mb-3 flex items-center text-xl font-semibold text-light-text">
-                      <span className="mr-2">🚫</span>
-                      Avoid Restrictions
+                      <span className="mr-2">📈</span>
+                      Expanded Reach
                     </h4>
                     <p className="text-gray-600">
-                      List products without Stripe/PayPal account freezes or
-                      product takedowns.
+                      Cultivate your customer base through our growing
+                      community.
+                    </p>
+                  </CardBody>
+                </Card>
+
+                <Card className="hover-lift border-gray-100 bg-light-bg">
+                  <CardBody className="p-6">
+                    <h4 className="mb-3 flex items-center text-xl font-semibold text-light-text">
+                      <span className="mr-2">💰</span>
+                      Peer-to-Peer Payments
+                    </h4>
+                    <p className="text-gray-600">
+                      Accept Bitcoin, cash, or additional online payment options
+                      natively.
                     </p>
                   </CardBody>
                 </Card>
@@ -322,8 +334,7 @@ export default function StandaloneLanding() {
                       Choose Your Own Fees
                     </h4>
                     <p className="text-gray-600">
-                      Set the donation fee-rate to support the growth of Milk
-                      Market on your own terms.
+                      Set the site fees on your own terms.
                     </p>
                   </CardBody>
                 </Card>
@@ -331,24 +342,12 @@ export default function StandaloneLanding() {
                 <Card className="hover-lift border-gray-100 bg-light-bg">
                   <CardBody className="p-6">
                     <h4 className="mb-3 flex items-center text-xl font-semibold text-light-text">
-                      <span className="mr-2">💰</span>
-                      P2P Payments
+                      <span className="mr-2">🚫</span>
+                      Avoid Restrictions
                     </h4>
                     <p className="text-gray-600">
-                      Accept Bitcoin, cash, or additional online cash options
-                      with built-in payment handling.
-                    </p>
-                  </CardBody>
-                </Card>
-
-                <Card className="hover-lift border-gray-100 bg-light-bg">
-                  <CardBody className="p-6">
-                    <h4 className="mb-3 flex items-center text-xl font-semibold text-light-text">
-                      <span className="mr-2">📈</span>
-                      Expand Reach
-                    </h4>
-                    <p className="text-gray-600">
-                      Tap into the global billion dollar raw milk industry.
+                      List products without account freezes or product
+                      takedowns.
                     </p>
                   </CardBody>
                 </Card>
@@ -367,11 +366,11 @@ export default function StandaloneLanding() {
                   <CardBody className="p-6">
                     <h4 className="mb-3 flex items-center text-xl font-semibold text-light-text">
                       <span className="mr-2">🔍</span>
-                      Private Sourcing
+                      Direct Sourcing
                     </h4>
                     <p className="text-gray-600">
-                      Find milk farmers through our permissionless system
-                      without compromising privacy.
+                      Find local dairy farmers through our permissionless
+                      system.
                     </p>
                   </CardBody>
                 </Card>
@@ -380,11 +379,11 @@ export default function StandaloneLanding() {
                   <CardBody className="p-6">
                     <h4 className="mb-3 flex items-center text-xl font-semibold text-light-text">
                       <span className="mr-2">💬</span>
-                      Direct Relationships
+                      Reliable Communication
                     </h4>
                     <p className="text-gray-600">
-                      Message producers through encrypted chat to build
-                      meaningful connections.
+                      Stay in contact with producers through our encrypted chat
+                      system.
                     </p>
                   </CardBody>
                 </Card>
@@ -393,10 +392,10 @@ export default function StandaloneLanding() {
                   <CardBody className="p-6">
                     <h4 className="mb-3 flex items-center text-xl font-semibold text-light-text">
                       <span className="mr-2">🕶️</span>
-                      Anonymous Trading
+                      Seamless Purchases
                     </h4>
                     <p className="text-gray-600">
-                      Trade freely without KYC or government overreach.
+                      Transact freely online without friction.
                     </p>
                   </CardBody>
                 </Card>
@@ -405,85 +404,15 @@ export default function StandaloneLanding() {
                   <CardBody className="p-6">
                     <h4 className="mb-3 flex items-center text-xl font-semibold text-light-text">
                       <span className="mr-2">🤝</span>
-                      Community Power
+                      Community Support
                     </h4>
                     <p className="text-gray-600">
-                      Join raw milk advocates worldwide in the FREE MILK
-                      movement.
+                      Join raw milk enjoyers in your area and worldwide.
                     </p>
                   </CardBody>
                 </Card>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Trust Architecture */}
-      <section id="safety" className="relative z-10 bg-light-bg py-20">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="mb-16 text-center">
-            <h2 className="mb-4 text-4xl font-bold md:text-5xl">
-              Privacy & Freedom
-            </h2>
-            <p className="text-xl text-gray-600">
-              Built for true permissionless commerce
-            </p>
-          </div>
-
-          <div className="grid gap-12 md:grid-cols-2">
-            <Card className="border-purple-100 bg-purple-50">
-              <CardBody className="p-8">
-                <span className="mb-4 block text-3xl">🔒</span>
-                <h3 className="mb-4 text-2xl font-bold text-light-text">
-                  Privacy First
-                </h3>
-                <p className="mb-4 text-lg font-semibold text-light-text">
-                  &ldquo;Your Data, Your Business — Zero Surveillance
-                  Architecture&rdquo;
-                </p>
-                <ul className="space-y-3 text-gray-700">
-                  <li className="flex items-start">
-                    <span className="mr-2 text-purple-500">✓</span>
-                    End-to-end encrypted communications
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2 text-purple-500">✓</span>
-                    No KYC requirements
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2 text-purple-500">✓</span>
-                    Anonymous browsing and pseudonymous trading
-                  </li>
-                </ul>
-              </CardBody>
-            </Card>
-
-            <Card className="border-orange-100 bg-orange-50">
-              <CardBody className="p-8">
-                <span className="mb-4 block text-3xl">⚡</span>
-                <h3 className="mb-4 text-2xl font-bold text-light-text">
-                  Permissionless Network
-                </h3>
-                <p className="mb-4 text-lg font-semibold text-light-text">
-                  &ldquo;No Gatekeepers, No Approvals — Trade Freely&rdquo;
-                </p>
-                <ul className="space-y-3 text-gray-700">
-                  <li className="flex items-start">
-                    <span className="mr-2 text-orange-500">✓</span>
-                    Instant listing without approval process
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2 text-orange-500">✓</span>
-                    Censorship-resistant infrastructure
-                  </li>
-                  <li className="flex items-start">
-                    <span className="mr-2 text-orange-500">✓</span>
-                    Complete user control over data
-                  </li>
-                </ul>
-              </CardBody>
-            </Card>
           </div>
         </div>
       </section>
@@ -516,8 +445,7 @@ export default function StandaloneLanding() {
                       List Your Milk
                     </h4>
                     <p className="text-gray-600">
-                      Upload batch details and test results to showcase your
-                      quality standards.
+                      Add products to the marketplace with a few clicks.
                     </p>
                   </div>
                 </div>
@@ -541,7 +469,7 @@ export default function StandaloneLanding() {
                   </div>
                   <div>
                     <h4 className="mb-2 text-xl font-semibold">
-                      Grow Your Tribe
+                      Grow Your Business
                     </h4>
                     <p className="text-gray-600">
                       Leverage our online community to expand your customer
@@ -569,8 +497,7 @@ export default function StandaloneLanding() {
                       Local-first Connecions
                     </h4>
                     <p className="text-gray-600">
-                      Find and shake hands with farmers in your city, state, and
-                      country.
+                      Find and support farmers in your city, state, and country.
                     </p>
                   </div>
                 </div>
@@ -584,8 +511,7 @@ export default function StandaloneLanding() {
                       Secure Checkout
                     </h4>
                     <p className="text-gray-600">
-                      Choose Bitcoin, cash, or other online cash transfers for
-                      flexible payment options.
+                      Choose Bitcoin, cash, or other online payment options.
                     </p>
                   </div>
                 </div>
@@ -624,8 +550,8 @@ export default function StandaloneLanding() {
                 transact, especially when it comes to something as simple as
                 milk, the need for change is apparent. This was why I started
                 Shopstr, and why I now see Milk Market as the first stage in
-                making a real stand. No more censorship, no more
-                gatekeepers—just direct farmer-to-consumer freedom.&rdquo;
+                making a real stand. No censorship or gatekeepers, just direct
+                farmer-to-consumer freedom.&rdquo;
               </blockquote>
               <cite className="text-lg text-gray-300">
                 — Calvadev, Founder & CEO @ Shopstr
@@ -825,7 +751,7 @@ export default function StandaloneLanding() {
               <span className="mb-3 block text-3xl">🛡️</span>
               <h4 className="mb-2 text-lg font-semibold">Private</h4>
               <p className="text-gray-400">
-                All Information is Encrypted and Untraceable
+                All Information is Encrypted and Private
               </p>
             </div>
 
@@ -833,8 +759,7 @@ export default function StandaloneLanding() {
               <span className="mb-3 block text-3xl">🔒</span>
               <h4 className="mb-2 text-lg font-semibold">Permissionless</h4>
               <p className="text-gray-400">
-                Data Hosted on Nostr and Blossom – No Central Server Can Shut Us
-                Down
+                No Central Server Can Shut Us Down
               </p>
             </div>
 
