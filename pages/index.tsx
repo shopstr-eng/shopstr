@@ -548,8 +548,16 @@ export default function StandaloneLanding() {
               <blockquote className="mb-6 text-xl font-medium leading-relaxed md:text-2xl">
                 &ldquo;Seeing how ever-growing regulations limit our freedom to
                 transact, especially when it comes to something as simple as
-                milk, the need for change is apparent. This was why I started
-                Shopstr, and why I now see Milk Market as the first stage in
+                milk, the need for change is apparent. This was why I started{" "}
+                <a
+                  href="https://shopstrmarkets.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-gray-300 transition-colors"
+                >
+                  Shopstr
+                </a>
+                , and why I now see Milk Market as the first stage in
                 making a real stand. No censorship or gatekeepers, just direct
                 farmer-to-consumer freedom.&rdquo;
               </blockquote>
