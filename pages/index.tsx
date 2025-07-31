@@ -554,7 +554,7 @@ export default function StandaloneLanding() {
                 farmer-to-consumer freedom.&rdquo;
               </blockquote>
               <cite className="text-lg text-gray-300">
-                — Calvadev, Founder & CEO @ Shopstr
+                — Calvadev, Head Milkman @ Milk.Market
               </cite>
             </CardBody>
           </Card>
