@@ -34,7 +34,8 @@ const OnboardingShopProfile = () => {
                 Step 3: Setup Your Shop
               </h2>
               <p className="text-light-text dark:text-dark-text">
-                Set up your shop details or skip this step to finish onboarding.
+                Set up your shop details or, if you're not a seller, skip this
+                step to finish onboarding.
               </p>
             </div>
 

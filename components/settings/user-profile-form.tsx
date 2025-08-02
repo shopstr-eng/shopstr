@@ -329,7 +329,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               }}
               variant="bordered"
               fullWidth={true}
-              label="Bitcoin payment preference"
+              label="Payment preference (for sellers)"
               labelPlacement="outside"
               selectedKeys={value ? [value] : []}
               onChange={(e) => onChange(e.target.value)}
@@ -362,7 +362,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
 
         <div className="pb-4">
           <label className="mb-2 block text-lg text-light-text dark:text-dark-text">
-            Fiat payment options
+            Fiat payment options (for sellers)
           </label>
           <div className="space-y-4">
             {[
@@ -448,7 +448,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               }}
               variant="bordered"
               fullWidth
-              label="Shopstr donation (%)"
+              label="Shopstr donation % (for sellers)"
               labelPlacement="outside"
               onChange={onChange}
               onBlur={onBlur}
