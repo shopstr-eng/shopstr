@@ -356,7 +356,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
         />
 
         <div className="pb-4">
-          <label className="mb-2 block text-lg text-light-text dark:text-dark-text">
+          <label className="mb-2 block text-lg text-dark-text">
             Fiat payment options (for sellers)
           </label>
           <div className="space-y-4">
@@ -440,7 +440,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               }}
               variant="bordered"
               fullWidth
-              label="Milk Market donation (%)"
+              label="Milk Market donation % (for sellers)"
               labelPlacement="outside"
               onChange={onChange}
               onBlur={onBlur}

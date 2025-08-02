@@ -553,12 +553,12 @@ export default function StandaloneLanding() {
                   href="https://shopstrmarkets.com"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="underline hover:text-gray-300 transition-colors"
+                  className="underline transition-colors hover:text-gray-300"
                 >
                   Shopstr
                 </a>
-                , and why I now see Milk Market as the first stage in
-                making a real stand. No censorship or gatekeepers, just direct
+                , and why I now see Milk Market as the first stage in making a
+                real stand. No censorship or gatekeepers, just direct
                 farmer-to-consumer freedom.&rdquo;
               </blockquote>
               <cite className="text-lg text-gray-300">
