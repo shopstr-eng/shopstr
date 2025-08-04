@@ -8,7 +8,7 @@
   "theme_color": "#E8E8E8",
   "orientation": "any",
   "scope": "/",
-  "categories": ["shopping", "marketplace", "ecommerce"],
+  "categories": ["marketplace", "milk", "raw"],
   "icons": [
     {
       "src": "/milk-market.png",
