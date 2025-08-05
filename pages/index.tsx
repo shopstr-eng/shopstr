@@ -846,7 +846,7 @@ export default function StandaloneLanding() {
                     />
                   </a>
                   <a
-                    href="https://njump.me/npub15dc33fyg3cpd9r58vlqge2hh8dy6hkkrjxkhluv2xpyfreqkmsesesyv6e"
+                    href="https://njump.me/milkmarket@milk.market"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="transition-transform hover:scale-110"
@@ -859,14 +859,53 @@ export default function StandaloneLanding() {
                     />
                   </a>
                   <a
-                    href="https://x.com/_shopstr"
+                    href="https://x.com/milkmarketmedia"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="transition-transform hover:scale-110"
                   >
                     <Image
                       src="/x-logo-white.png"
-                      alt="X"
+                      alt="X (formerly Twitter)"
+                      width={24}
+                      height={24}
+                    />
+                  </a>
+                  <a
+                    href="https://www.youtube.com/@milk.market"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="transition-transform hover:scale-110"
+                  >
+                    <Image
+                      src="/youtube-icon.png"
+                      alt="YouTube"
+                      width={24}
+                      height={24}
+                    />
+                  </a>
+                  <a
+                    href="https://www.instagram.com/milkmarket.media/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="transition-transform hover:scale-110"
+                  >
+                    <Image
+                      src="/instagram-icon.png"
+                      alt="Instagram"
+                      width={24}
+                      height={24}
+                    />
+                  </a>
+                  <a
+                    href="https://www.tiktok.com/@milkmarket.media"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="transition-transform hover:scale-110"
+                  >
+                    <Image
+                      src="/tiktok-icon.png"
+                      alt="TikTok"
                       width={24}
                       height={24}
                     />
