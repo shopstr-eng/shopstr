@@ -545,12 +545,16 @@ function MilkMarket({ props }: { props: AppProps }) {
                           } as ChatsContextInterface
                         }
                       >
-                        {router.pathname !== "/" && (
-                          <TopNav
-                            setFocusedPubkey={setFocusedPubkey}
-                            setSelectedSection={setSelectedSection}
-                          />
-                        )}
+                        {router.pathname !== "/" &&
+                          router.pathname !== "/producers" &&
+                          router.pathname !== "/faq" &&
+                          router.pathname !== "/terms" &&
+                          router.pathname !== "/privacy" && (
+                            <TopNav
+                              setFocusedPubkey={setFocusedPubkey}
+                              setSelectedSection={setSelectedSection}
+                            />
+                          )}
                         <div className="flex">
                           <main className="flex-1">
                             <Component

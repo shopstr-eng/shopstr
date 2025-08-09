@@ -208,14 +208,24 @@ export default function StandaloneLanding() {
           <Image src="/milk-market.png" alt="Milk Market" className="h-8 w-8" />
           <span className="text-xl font-bold">Milk Market</span>
         </div>
-        <Button
-          onClick={() => router.push("/marketplace")}
-          color="default"
-          variant="solid"
-          className={BLACKBUTTONCLASSNAMES}
-        >
-          Join Now
-        </Button>
+        <div className="flex items-center space-x-4">
+          <Button
+            onClick={() => router.push("/producers")}
+            color="default"
+            variant="ghost"
+            className="text-light-text hover:text-gray-600"
+          >
+            Producer's Guide
+          </Button>
+          <Button
+            onClick={() => router.push("/marketplace")}
+            color="default"
+            variant="solid"
+            className={BLACKBUTTONCLASSNAMES}
+          >
+            Join Now
+          </Button>
+        </div>
       </nav>
 
       {/* Hero Section */}
@@ -744,7 +754,7 @@ export default function StandaloneLanding() {
               className={WHITEBUTTONCLASSNAMES}
               onClick={() => router.push("/marketplace")}
             >
-              FREE MILK → 🥛
+              FREE MILK 🥛
             </Button>
           </div>
         </div>
@@ -809,110 +819,112 @@ export default function StandaloneLanding() {
           {/* Final Message */}
           <div className="border-t border-gray-700 pt-8">
             <div className="mb-6 flex flex-col items-center justify-between md:flex-row">
-              <div className="mb-4 flex items-center gap-8 md:mb-0">
-                <button
-                  onClick={() => router.push("/faq")}
-                  className="flex items-center gap-1 text-dark-text transition-colors hover:text-gray-300"
-                >
-                  FAQ
-                  <ArrowUpRightIcon className="h-3 w-3" />
-                </button>
-                <button
-                  onClick={() => router.push("/terms")}
-                  className="flex items-center gap-1 text-dark-text transition-colors hover:text-gray-300"
-                >
-                  Terms
-                  <ArrowUpRightIcon className="h-3 w-3" />
-                </button>
-                <button
-                  onClick={() => router.push("/privacy")}
-                  className="flex items-center gap-1 text-dark-text transition-colors hover:text-gray-300"
-                >
-                  Privacy
-                  <ArrowUpRightIcon className="h-3 w-3" />
-                </button>
-                <div className="flex h-auto items-center gap-6">
-                  <a
-                    href="https://github.com/shopstr-eng/milk-market"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="transition-transform hover:scale-110"
+              <div className="mb-4 flex flex-col items-center gap-4 md:mb-0">
+                <div className="flex items-center gap-8">
+                  <button
+                    onClick={() => router.push("/faq")}
+                    className="flex items-center gap-1 text-dark-text transition-colors hover:text-gray-300"
                   >
-                    <Image
-                      src="/github-mark-white.png"
-                      alt="GitHub"
-                      width={24}
-                      height={24}
-                    />
-                  </a>
-                  <a
-                    href="https://njump.me/milkmarket@milk.market"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="transition-transform hover:scale-110"
+                    FAQ
+                    <ArrowUpRightIcon className="h-3 w-3" />
+                  </button>
+                  <button
+                    onClick={() => router.push("/terms")}
+                    className="flex items-center gap-1 text-dark-text transition-colors hover:text-gray-300"
                   >
-                    <Image
-                      src="/nostr-icon-white-transparent-256x256.png"
-                      alt="Nostr"
-                      width={32}
-                      height={32}
-                    />
-                  </a>
-                  <a
-                    href="https://x.com/milkmarketmedia"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="transition-transform hover:scale-110"
+                    Terms
+                    <ArrowUpRightIcon className="h-3 w-3" />
+                  </button>
+                  <button
+                    onClick={() => router.push("/privacy")}
+                    className="flex items-center gap-1 text-dark-text transition-colors hover:text-gray-300"
                   >
-                    <Image
-                      src="/x-logo-white.png"
-                      alt="X (formerly Twitter)"
-                      width={24}
-                      height={24}
-                    />
-                  </a>
-                  <a
-                    href="https://www.youtube.com/@milk.market"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="transition-transform hover:scale-110"
-                  >
-                    <Image
-                      src="/youtube-icon.png"
-                      alt="YouTube"
-                      width={24}
-                      height={24}
-                    />
-                  </a>
-                  <a
-                    href="https://www.instagram.com/milkmarket.media/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="transition-transform hover:scale-110"
-                  >
-                    <Image
-                      src="/instagram-icon.png"
-                      alt="Instagram"
-                      width={24}
-                      height={24}
-                    />
-                  </a>
-                  <a
-                    href="https://www.tiktok.com/@milkmarket.media"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="transition-transform hover:scale-110"
-                  >
-                    <Image
-                      src="/tiktok-icon.png"
-                      alt="TikTok"
-                      width={24}
-                      height={24}
-                    />
-                  </a>
+                    Privacy
+                    <ArrowUpRightIcon className="h-3 w-3" />
+                  </button>
                 </div>
+                <p className="text-dark-text">© 2025 Shopstr Markets Inc.</p>
               </div>
-              <p className="text-dark-text">© 2025 Shopstr Markets Inc.</p>
+              <div className="flex h-auto flex-shrink-0 items-center gap-6">
+                <a
+                  href="https://github.com/shopstr-eng/milk-market"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="transition-transform hover:scale-110"
+                >
+                  <Image
+                    src="/github-mark-white.png"
+                    alt="GitHub"
+                    width={24}
+                    height={24}
+                  />
+                </a>
+                <a
+                  href="https://njump.me/milkmarket@milk.market"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="transition-transform hover:scale-110"
+                >
+                  <Image
+                    src="/nostr-icon-white-transparent-256x256.png"
+                    alt="Nostr"
+                    width={32}
+                    height={32}
+                  />
+                </a>
+                <a
+                  href="https://x.com/milkmarketmedia"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="transition-transform hover:scale-110"
+                >
+                  <Image
+                    src="/x-logo-white.png"
+                    alt="X (formerly Twitter)"
+                    width={24}
+                    height={24}
+                  />
+                </a>
+                <a
+                  href="https://www.youtube.com/@milk.market"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="transition-transform hover:scale-110"
+                >
+                  <Image
+                    src="/youtube-icon.png"
+                    alt="YouTube"
+                    width={24}
+                    height={24}
+                  />
+                </a>
+                <a
+                  href="https://www.instagram.com/milkmarket.media/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="transition-transform hover:scale-110"
+                >
+                  <Image
+                    src="/instagram-icon.png"
+                    alt="Instagram"
+                    width={24}
+                    height={24}
+                  />
+                </a>
+                <a
+                  href="https://www.tiktok.com/@milkmarket.media"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="transition-transform hover:scale-110"
+                >
+                  <Image
+                    src="/tiktok-icon.png"
+                    alt="TikTok"
+                    width={24}
+                    height={24}
+                  />
+                </a>
+              </div>
             </div>
             <div className="text-center">
               <div className="mb-4 flex items-center justify-center space-x-2">

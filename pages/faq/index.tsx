@@ -1,7 +1,11 @@
 import React from "react";
-import { Accordion, AccordionItem } from "@nextui-org/react";
+import { useRouter } from "next/router";
+import { Accordion, AccordionItem, Button } from "@nextui-org/react";
+import { ArrowLeftIcon } from "@heroicons/react/24/outline";
+import { BLACKBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
 export default function Faq() {
+  const router = useRouter();
   const faqSections = [
     {
       title: "General Information",
@@ -96,11 +100,20 @@ export default function Faq() {
   ];
 
   return (
-    <div className="flex min-h-screen flex-col bg-light-bg pt-24 md:pb-20">
+    <div className="flex min-h-screen flex-col bg-light-bg py-8 md:pb-20">
       <div className="container mx-auto max-w-6xl px-4">
-        <h1 className="mb-8 text-center text-3xl font-bold text-light-text">
-          Frequently Asked Questions
-        </h1>
+        <div className="mb-8">
+          <Button
+            className={`mb-4 ${BLACKBUTTONCLASSNAMES}`}
+            onClick={() => router.back()}
+            startContent={<ArrowLeftIcon className="h-4 w-4" />}
+          >
+            Back
+          </Button>
+          <h1 className="text-center text-3xl font-bold text-light-text">
+            Frequently Asked Questions
+          </h1>
+        </div>
 
         <p className="mx-auto mb-10 max-w-3xl text-center text-light-text/80">
           Answers to common questions about using Milk Market
