@@ -49,7 +49,7 @@ const ProducersGuidePage = () => {
 
           <div className="text-center">
             <h1 className="mb-4 text-4xl font-bold text-light-text">
-              Producer's Guide
+              Producer&apos;s Guide
             </h1>
             <p className="text-lg text-light-text">
               Learn how to start selling your dairy products and other goods on
@@ -95,7 +95,7 @@ const ProducersGuidePage = () => {
                     communication with customers.
                   </p>
                   <ul className="list-disc space-y-2 pl-6 text-dark-text">
-                    <li>Click "Sign In" in the top navigation</li>
+                    <li>Click &ldquo;Sign In&rdquo; in the top navigation</li>
                     <li>
                       Choose your preferred login method or create a new account{" "}
                       <span className="inline-flex items-center">
@@ -276,7 +276,10 @@ const ProducersGuidePage = () => {
                     products and attract customers.
                   </p>
                   <ul className="list-disc space-y-2 pl-6 text-dark-text">
-                    <li>Navigate to "My Listings" and click "Add Product"</li>
+                    <li>
+                      Navigate to &ldquo;My Listings&rdquo; and click &ldquo;Add
+                      Product&rdquo;
+                    </li>
                     <li>
                       Enter the listing passphrase{" "}
                       <span className="inline-flex items-center">
@@ -326,7 +329,10 @@ const ProducersGuidePage = () => {
                       messaging system.
                     </p>
                     <ul className="list-disc space-y-2 pl-6 text-dark-text">
-                      <li>Monitor the "Orders" section for new messages</li>
+                      <li>
+                        Monitor the &ldquo;Orders&rdquo; section for new
+                        messages
+                      </li>
                       <li>Respond promptly to customer inquiries</li>
                       <li>Coordinate pickup/delivery details</li>
                       <li>
@@ -517,8 +523,8 @@ const ProducersGuidePage = () => {
                     your funds and transactions and protects your wealth over
                     time. Payment processors like Stripe, PayPal, etc. can
                     freeze your funds, close your account, or even ban you for
-                    selling products they don't deem acceptable (which milk and
-                    raw milk can easily fall under). If desired, you can
+                    selling products they don&apos;t deem acceptable (which milk
+                    and raw milk can easily fall under). If desired, you can
                     exchange it for cash or other currencies at your own pace
                     using tools like{" "}
                     <a
