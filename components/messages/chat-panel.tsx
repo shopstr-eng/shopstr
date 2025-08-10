@@ -87,13 +87,23 @@ const ChatPanel = ({
     handleSubmit: handleShippingSubmit,
     control: shippingControl,
     reset: shippingReset,
-  } = useForm();
+  } = useForm({
+    defaultValues: {
+      "Delivery Time": "",
+      "Shipping Carrier": "",
+      "Tracking Number": "",
+    },
+  });
 
   const {
     handleSubmit: handleReviewSubmit,
     control: reviewControl,
     reset: reviewReset,
-  } = useForm();
+  } = useForm({
+    defaultValues: {
+      comment: "",
+    },
+  });
 
   const {
     signer,
