@@ -60,7 +60,7 @@ const ProducerGuidePage = () => {
         </div>
 
         {/* Video Section */}
-        <Card className="mb-12">
+        <Card className="mb-12 bg-dark-fg">
           <CardBody className="p-8">
             <h2 className="mb-6 text-center text-2xl font-bold text-dark-text">
               Getting Started Video Guide
@@ -77,7 +77,7 @@ const ProducerGuidePage = () => {
         {/* Step-by-Step Guide */}
         <div className="space-y-12">
           {/* Step 1 */}
-          <Card>
+          <Card className="bg-dark-fg">
             <CardBody className="p-8">
               <div className="grid gap-8 md:grid-cols-2">
                 <div>
@@ -193,7 +193,7 @@ const ProducerGuidePage = () => {
           </Card>
 
           {/* Step 2 */}
-          <Card>
+          <Card className="bg-dark-fg">
             <CardBody className="p-8">
               <div className="grid gap-8 md:grid-cols-2">
                 <div className="flex items-center justify-center">
@@ -311,7 +311,7 @@ const ProducerGuidePage = () => {
           </Card>
 
           {/* Step 3 */}
-          <Card>
+          <Card className="bg-dark-fg">
             <CardBody className="p-8">
               <div className="grid gap-8 md:grid-cols-2">
                 <div>
@@ -426,7 +426,7 @@ const ProducerGuidePage = () => {
           </Card>
 
           {/* Step 4 */}
-          <Card>
+          <Card className="bg-dark-fg">
             <CardBody className="p-8">
               <div className="grid gap-8 md:grid-cols-2">
                 <div className="flex items-center justify-center">
@@ -461,7 +461,7 @@ const ProducerGuidePage = () => {
           </Card>
 
           {/* Producer's FAQ */}
-          <Card className="mt-12">
+          <Card className="mt-12 bg-dark-fg">
             <CardBody className="p-8">
               <h2 className="mb-8 text-center text-2xl font-bold text-dark-text">
                 New Producer FAQ
@@ -638,7 +638,7 @@ const ProducerGuidePage = () => {
         </div>
 
         {/* Call to Action */}
-        <Card className="mt-12">
+        <Card className="mt-12 bg-dark-fg">
           <CardBody className="p-8 text-center">
             <h2 className="mb-4 text-2xl font-bold text-dark-text">
               Ready to Start Selling?
