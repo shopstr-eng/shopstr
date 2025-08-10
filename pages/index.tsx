@@ -215,7 +215,7 @@ export default function StandaloneLanding() {
             variant="ghost"
             className="text-light-text hover:text-gray-600"
           >
-            Producer&apos;s Guide
+            Producer Guide
           </Button>
           <Button
             onClick={() => router.push("/marketplace")}

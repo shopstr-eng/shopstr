@@ -19,7 +19,7 @@ import {
   WHITEBUTTONCLASSNAMES,
 } from "@/utils/STATIC-VARIABLES";
 
-const ProducersGuidePage = () => {
+const ProducerGuidePage = () => {
   const router = useRouter();
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -49,7 +49,7 @@ const ProducersGuidePage = () => {
 
           <div className="text-center">
             <h1 className="mb-4 text-4xl font-bold text-light-text">
-              Producer&apos;s Guide
+              Producer Guide
             </h1>
             <p className="text-lg text-light-text">
               Learn how to start selling your dairy products and other goods on
@@ -696,4 +696,4 @@ const ProducersGuidePage = () => {
   );
 };
 
-export default ProducersGuidePage;
+export default ProducerGuidePage;
