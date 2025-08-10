@@ -478,7 +478,8 @@ const ProducerGuidePage = () => {
                     A passphrase is just a password you create as a user to keep
                     your private key stored safely in your browser so only you
                     can access your account. It is needed for securely sending
-                    messages or listing products on Milk Market.
+                    messages, listing products, or saving profile and shop
+                    information on Milk Market.
                   </p>
                 </div>
 
@@ -523,8 +524,8 @@ const ProducerGuidePage = () => {
                     your funds and transactions and protects your wealth over
                     time. Payment processors like Stripe, PayPal, etc. can
                     freeze your funds, close your account, or even ban you for
-                    selling products they don&apos;t deem acceptable (which milk
-                    and raw milk can easily fall under). If desired, you can
+                    selling products they don&apos;t deem acceptable (which raw
+                    milk and dairy can easily fall under). If desired, you can
                     exchange it for cash or other currencies at your own pace
                     using tools like{" "}
                     <a
@@ -572,7 +573,7 @@ const ProducerGuidePage = () => {
                   </h3>
                   <p className="text-dark-text">
                     If accepting Bitcoin payments, you can redeem them through
-                    the chat interface and into the site wallet. With the
+                    the chat interface and directly to the site wallet. With the
                     wallet, you can save your payments or send money to another
                     wallet like{" "}
                     <a
@@ -602,9 +603,10 @@ const ProducerGuidePage = () => {
                       Minibits
                     </a>
                     , etc. If accepting cash, you can arrange payment during
-                    pickup or delivery. With ther online fiat options, payment
-                    should be delivered with the payment order, so make sure to
-                    check your external accounts for any incoming payments.
+                    pickup or delivery. With other online fiat options, payment
+                    should be delivered with the order to the specified account,
+                    so make sure to check your external accounts for any
+                    incoming payments.
                   </p>
                 </div>
 
