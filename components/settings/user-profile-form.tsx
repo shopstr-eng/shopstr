@@ -154,7 +154,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               <Input
                 className="pb-4 text-dark-text"
                 classNames={{
-                  label: "text-light-text text-lg",
+                  label: "text-dark-text text-lg",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -184,7 +184,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               <Input
                 className="pb-4 text-dark-text"
                 classNames={{
-                  label: "text-light-text text-lg",
+                  label: "text-dark-text text-lg",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -214,7 +214,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               <Textarea
                 className="pb-4 text-dark-text"
                 classNames={{
-                  label: "text-light-text text-lg",
+                  label: "text-dark-text text-lg",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -244,7 +244,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               <Input
                 className="pb-4 text-dark-text"
                 classNames={{
-                  label: "text-light-text text-lg",
+                  label: "text-dark-text text-lg",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -274,7 +274,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               <Input
                 className="pb-4 text-dark-text"
                 classNames={{
-                  label: "text-light-text text-lg",
+                  label: "text-dark-text text-lg",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -304,7 +304,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               <Input
                 className="pb-4 text-dark-text"
                 classNames={{
-                  label: "text-light-text text-lg",
+                  label: "text-dark-text text-lg",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -328,7 +328,8 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             <Select
               className="pb-4 text-dark-text"
               classNames={{
-                label: "text-light-text text-lg",
+                label: "text-dark-text text-lg",
+                popoverContent: "bg-dark-fg",
               }}
               variant="bordered"
               fullWidth={true}
@@ -436,7 +437,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               step={0.1}
               className="pb-4 text-dark-text"
               classNames={{
-                label: "text-light-text text-lg",
+                label: "text-dark-text text-lg",
               }}
               variant="bordered"
               fullWidth

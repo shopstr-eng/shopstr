@@ -379,7 +379,6 @@ function MarketplacePage({
                 selectionMode="multiple"
                 classNames={{
                   trigger: "bg-dark-fg",
-                  value: "bg-dark-fg",
                   popoverContent: "bg-dark-fg",
                 }}
               >
@@ -498,7 +497,7 @@ function MarketplacePage({
             className={`${BLACKBUTTONCLASSNAMES} fixed bottom-24 right-8 z-50 h-16 w-16`}
             onClick={() => handleAddNewListing()}
           >
-            <PlusIcon className="text-dark-text" />
+            <PlusIcon className="text-white" />
           </Button>
         )}
       <SignInModal isOpen={isOpen} onClose={onClose} />

@@ -286,8 +286,8 @@ export default function ProductForm({
       classNames={{
         body: "py-6 bg-dark-fg",
         backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-        header: "border-b-[1px] border-[#292f46]",
-        footer: "border-t-[1px] border-[#292f46]",
+        header: "border-b-[1px] border-[#292f46] bg-dark-fg",
+        footer: "border-t-[1px] border-[#292f46] bg-dark-fg",
         closeButton: "hover:bg-black/5 active:bg-white/10",
       }}
       scrollBehavior={"outside"}
@@ -657,7 +657,6 @@ export default function ProductForm({
                     selectedKeys={[value as string]}
                     classNames={{
                       trigger: "!bg-dark-fg",
-                      value: "!bg-dark-fg",
                       popoverContent: "!bg-dark-fg",
                     }}
                   >
@@ -781,31 +780,17 @@ export default function ProductForm({
                         </div>
                       ))}
 
-                      {theme === "dark" ? (
-                        <Button
-                          variant="bordered"
-                          color="warning"
-                          className="w-full"
-                          onClick={() => {
-                            const newLocations = [...value, ""];
-                            onChange(newLocations);
-                          }}
-                        >
-                          Add Another Pickup Location
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="bordered"
-                          color="secondary"
-                          className="w-full"
-                          onClick={() => {
-                            const newLocations = [...value, ""];
-                            onChange(newLocations);
-                          }}
-                        >
-                          Add Another Pickup Location
-                        </Button>
-                      )}
+                      <Button
+                        variant="bordered"
+                        color="warning"
+                        className="w-full"
+                        onClick={() => {
+                          const newLocations = [...value, ""];
+                          onChange(newLocations);
+                        }}
+                      >
+                        Add Another Pickup Location
+                      </Button>
                     </div>
                   )}
                 />
@@ -886,7 +871,6 @@ export default function ProductForm({
                     classNames={{
                       base: "mt-4",
                       trigger: "min-h-unit-12 py-2 !bg-dark-fg",
-                      value: "!bg-dark-fg",
                       popoverContent: "!bg-dark-fg",
                     }}
                   >
@@ -1005,7 +989,6 @@ export default function ProductForm({
                     classNames={{
                       base: "mt-4",
                       trigger: "min-h-unit-12 py-2 !bg-dark-fg",
-                      value: "!bg-dark-fg",
                       popoverContent: "!bg-dark-fg",
                     }}
                     renderValue={(items) => {
@@ -1121,7 +1104,6 @@ export default function ProductForm({
                         classNames={{
                           base: "mt-4",
                           trigger: "min-h-unit-12 py-2 !bg-dark-fg",
-                          value: "!bg-dark-fg",
                           popoverContent: "!bg-dark-fg",
                         }}
                       >
@@ -1222,7 +1204,6 @@ export default function ProductForm({
                         selectedKeys={[value as string]}
                         classNames={{
                           trigger: "!bg-dark-fg",
-                          value: "!bg-dark-fg",
                           popoverContent: "!bg-dark-fg",
                         }}
                       >
@@ -1288,7 +1269,6 @@ export default function ProductForm({
                         selectedKeys={[value as string]}
                         classNames={{
                           trigger: "!bg-dark-fg",
-                          value: "!bg-dark-fg",
                           popoverContent: "!bg-dark-fg",
                         }}
                       >

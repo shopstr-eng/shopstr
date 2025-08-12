@@ -39,8 +39,8 @@ export default function ShippingForm({
       classNames={{
         body: "py-6 bg-dark-fg",
         backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-        header: "border-b-[1px] border-[#292f46]",
-        footer: "border-t-[1px] border-[#292f46]",
+        header: "border-b-[1px] border-[#292f46] bg-dark-fg",
+        footer: "border-t-[1px] border-[#292f46] bg-dark-fg",
         closeButton: "hover:bg-black/5 active:bg-white/10",
       }}
       scrollBehavior={"outside"}

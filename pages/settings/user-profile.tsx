@@ -445,6 +445,7 @@ const UserProfilePage = () => {
                       className="pb-4 text-light-text"
                       classNames={{
                         label: "!text-light-text text-lg",
+                        popoverContent: "bg-dark-fg",
                       }}
                       variant="bordered"
                       fullWidth={true}
