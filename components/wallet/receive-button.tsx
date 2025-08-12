@@ -139,7 +139,7 @@ const ReceiveButton = () => {
           isOpen={showReceiveModal}
           onClose={handleToggleReceiveModal}
           classNames={{
-            body: "py-6",
+            body: "py-6 bg-dark-fg",
             backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
             header: "border-b-[1px] border-[#292f46]",
             footer: "border-t-[1px] border-[#292f46]",
@@ -227,7 +227,7 @@ const ReceiveButton = () => {
             isOpen={isClaimed}
             onClose={() => setIsClaimed(false)}
             classNames={{
-              body: "py-6 ",
+              body: "py-6 bg-dark-fg",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
               header: "border-b-[1px] border-[#292f46]",
               footer: "border-t-[1px] border-[#292f46]",
@@ -259,7 +259,7 @@ const ReceiveButton = () => {
             isOpen={isDuplicateToken}
             onClose={() => setIsDuplicateToken(false)}
             classNames={{
-              body: "py-6 ",
+              body: "py-6 bg-dark-fg",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
               header: "border-b-[1px] border-[#292f46]",
               footer: "border-t-[1px] border-[#292f46]",
@@ -292,7 +292,7 @@ const ReceiveButton = () => {
             isOpen={isInvalidToken}
             onClose={() => setIsInvalidToken(false)}
             classNames={{
-              body: "py-6 ",
+              body: "py-6 bg-dark-fg",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
               header: "border-b-[1px] border-[#292f46]",
               footer: "border-t-[1px] border-[#292f46]",
@@ -324,7 +324,7 @@ const ReceiveButton = () => {
             isOpen={isSpent}
             onClose={() => setIsSpent(false)}
             classNames={{
-              body: "py-6 ",
+              body: "py-6 bg-dark-fg",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
               header: "border-b-[1px] border-[#292f46]",
               footer: "border-t-[1px] border-[#292f46]",

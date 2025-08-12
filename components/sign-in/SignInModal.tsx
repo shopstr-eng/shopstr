@@ -8,7 +8,7 @@ import {
   Input,
   InputProps,
 } from "@nextui-org/react";
-import { BLACKBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { WHITEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   setLocalStorageDataOnSignIn,
   validateNSecKey,
@@ -176,7 +176,7 @@ export default function SignInModal({
           onClose();
         }}
         classNames={{
-          body: "py-6 bg-light-bg",
+          body: "py-6 bg-dark-fg",
           backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
           header: "border-b-[1px] border-[#292f46]",
           footer: "border-t-[1px] border-[#292f46]",
@@ -188,7 +188,7 @@ export default function SignInModal({
         size="2xl"
       >
         <ModalContent>
-          <ModalBody className="flex flex-col overflow-hidden text-light-text">
+          <ModalBody className="flex flex-col overflow-hidden text-dark-text">
             <div className="flex flex-row">
               <div className="hidden basis-1/2 flex-col md:flex">
                 <div className="mr-3">
@@ -221,7 +221,7 @@ export default function SignInModal({
                     <div>Milk Market</div>
                   </div>
                   <Button
-                    className={`${BLACKBUTTONCLASSNAMES} w-full`}
+                    className={`${WHITEBUTTONCLASSNAMES} w-full`}
                     onClick={startExtensionLogin}
                   >
                     Extension Sign-in
@@ -234,7 +234,7 @@ export default function SignInModal({
                           setShowNsecSignIn(false);
                           setShowBunkerSignIn(true);
                         }}
-                        className={`${BLACKBUTTONCLASSNAMES} w-full ${
+                        className={`${WHITEBUTTONCLASSNAMES} w-full ${
                           showBunkerSignIn ? "hidden" : ""
                         }`}
                       >
@@ -259,7 +259,7 @@ export default function SignInModal({
                       </div>
                       <div>
                         <Button
-                          className={`${BLACKBUTTONCLASSNAMES} w-full`}
+                          className={`${WHITEBUTTONCLASSNAMES} w-full`}
                           onClick={startBunkerLogin}
                           isDisabled={validBunkerToken != "success"} // Disable the button only if both key strings are invalid or the button has already been clicked
                         >
@@ -327,7 +327,7 @@ export default function SignInModal({
                     </div>
                     <div>
                       <Button
-                        className={`${BLACKBUTTONCLASSNAMES} w-full`}
+                        className={`${WHITEBUTTONCLASSNAMES} w-full`}
                         onClick={handleSignIn}
                         isDisabled={validPrivateKey != "success"} // Disable the button only if both key strings are invalid or the button has already been clicked
                       >

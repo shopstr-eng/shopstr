@@ -17,7 +17,7 @@ export default function FailureModal({
         isOpen={isOpen}
         onClose={onClose}
         classNames={{
-          body: "py-6 bg-light-bg",
+          body: "py-6 bg-dark-fg",
           backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
           header: "border-b-[1px] bg-light-bg",
           closeButton: "hover:bg-black/5 active:bg-white/10",
@@ -28,11 +28,11 @@ export default function FailureModal({
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="flex items-center justify-center text-light-text">
+          <ModalHeader className="flex items-center justify-center text-dark-text">
             <XCircleIcon className="h-6 w-6 text-red-500" />
             <div className="ml-2">Error</div>
           </ModalHeader>
-          <ModalBody className="flex flex-col overflow-hidden text-light-text">
+          <ModalBody className="flex flex-col overflow-hidden text-dark-text">
             <div className="flex items-center justify-center">{bodyText}</div>
           </ModalBody>
         </ModalContent>

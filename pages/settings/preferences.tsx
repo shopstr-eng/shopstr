@@ -328,7 +328,7 @@ const PreferencesPage = () => {
               isOpen={showMintModal}
               onClose={handleToggleMintModal}
               classNames={{
-                body: "py-6",
+                body: "py-6 bg-dark-fg",
                 backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
                 header: "border-b-[1px] border-[#292f46]",
                 footer: "border-t-[1px] border-[#292f46]",
@@ -456,7 +456,7 @@ const PreferencesPage = () => {
             isOpen={showRelayModal}
             onClose={() => handleToggleRelayModal("all")}
             classNames={{
-              body: "py-6",
+              body: "py-6 bg-dark-fg",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
               header: "border-b-[1px] border-[#292f46]",
               footer: "border-t-[1px] border-[#292f46]",
@@ -585,7 +585,7 @@ const PreferencesPage = () => {
             isOpen={showRelayModal}
             onClose={() => handleToggleRelayModal("read")}
             classNames={{
-              body: "py-6",
+              body: "py-6 bg-dark-fg",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
               header: "border-b-[1px] border-[#292f46]",
               footer: "border-t-[1px] border-[#292f46]",
@@ -714,7 +714,7 @@ const PreferencesPage = () => {
             isOpen={showRelayModal}
             onClose={() => handleToggleRelayModal("write")}
             classNames={{
-              body: "py-6",
+              body: "py-6 bg-dark-fg",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
               header: "border-b-[1px] border-[#292f46]",
               footer: "border-t-[1px] border-[#292f46]",
@@ -850,7 +850,7 @@ const PreferencesPage = () => {
             isOpen={showBlossomServerModal}
             onClose={() => handleToggleBlossomServerModal()}
             classNames={{
-              body: "py-6",
+              body: "py-6 bg-dark-fg",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
               header: "border-b-[1px] border-[#292f46]",
               footer: "border-t-[1px] border-[#292f46]",

@@ -186,7 +186,7 @@ const SendButton = () => {
         isOpen={showSendModal}
         onClose={handleToggleSendModal}
         classNames={{
-          body: "py-6",
+          body: "py-6 bg-dark-fg",
           backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
           header: "border-b-[1px] border-[#292f46]",
           footer: "border-t-[1px] border-[#292f46]",

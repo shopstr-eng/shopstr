@@ -91,7 +91,7 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
       className="mt-2 text-dark-text"
       classNames={{
         trigger: "bg-dark-fg",
-        content: "bg-dark-fg",
+        value: "bg-dark-fg",
         popoverContent: "bg-dark-fg",
       }}
     >

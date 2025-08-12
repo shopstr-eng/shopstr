@@ -92,7 +92,7 @@ const Listing = () => {
                 router.push("/orders");
               }}
               classNames={{
-                body: "py-6 ",
+                body: "py-6 bg-dark-fg",
                 backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
                 header: "border-b-[1px] border-[#292f46]",
                 footer: "border-t-[1px] border-[#292f46]",
@@ -124,7 +124,7 @@ const Listing = () => {
               isOpen={invoiceGenerationFailed}
               onClose={() => setInvoiceGenerationFailed(false)}
               classNames={{
-                body: "py-6 ",
+                body: "py-6 bg-dark-fg",
                 backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
                 header: "border-b-[1px] border-[#292f46]",
                 footer: "border-t-[1px] border-[#292f46]",
@@ -156,7 +156,7 @@ const Listing = () => {
               isOpen={cashuPaymentFailed}
               onClose={() => setCashuPaymentFailed(false)}
               classNames={{
-                body: "py-6 ",
+                body: "py-6 bg-dark-fg",
                 backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
                 header: "border-b-[1px] border-[#292f46]",
                 footer: "border-t-[1px] border-[#292f46]",
@@ -188,7 +188,7 @@ const Listing = () => {
               isOpen={fiatOrderFailed}
               onClose={() => setFiatOrderFailed(false)}
               classNames={{
-                body: "py-6 ",
+                body: "py-6 bg-dark-fg",
                 backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
                 header: "border-b-[1px] border-[#292f46]",
                 footer: "border-t-[1px] border-[#292f46]",

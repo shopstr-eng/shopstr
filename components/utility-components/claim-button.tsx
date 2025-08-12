@@ -341,7 +341,7 @@ export default function ClaimButton({ token }: { token: string }) {
         isOpen={openClaimTypeModal}
         onClose={() => setOpenClaimTypeModal(false)}
         classNames={{
-          body: "py-6 ",
+          body: "py-6 bg-dark-fg",
           backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
           header: "border-b-[1px] border-[#292f46]",
           footer: "border-t-[1px] border-[#292f46]",
@@ -388,7 +388,7 @@ export default function ClaimButton({ token }: { token: string }) {
             isOpen={isInvalidSuccess}
             onClose={() => setIsInvalidSuccess(false)}
             classNames={{
-              body: "py-6 ",
+              body: "py-6 bg-dark-fg",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
               header: "border-b-[1px] border-[#292f46]",
               footer: "border-t-[1px] border-[#292f46]",
@@ -420,7 +420,7 @@ export default function ClaimButton({ token }: { token: string }) {
             isOpen={isReceived}
             onClose={() => setIsReceived(false)}
             classNames={{
-              body: "py-6 ",
+              body: "py-6 bg-dark-fg",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
               header: "border-b-[1px] border-[#292f46]",
               footer: "border-t-[1px] border-[#292f46]",
@@ -452,7 +452,7 @@ export default function ClaimButton({ token }: { token: string }) {
             isOpen={isDuplicateToken}
             onClose={() => setIsDuplicateToken(false)}
             classNames={{
-              body: "py-6 ",
+              body: "py-6 bg-dark-fg",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
               header: "border-b-[1px] border-[#292f46]",
               footer: "border-t-[1px] border-[#292f46]",
@@ -485,7 +485,7 @@ export default function ClaimButton({ token }: { token: string }) {
             isOpen={isInvalidToken}
             onClose={() => setIsInvalidToken(false)}
             classNames={{
-              body: "py-6 ",
+              body: "py-6 bg-dark-fg",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
               header: "border-b-[1px] border-[#292f46]",
               footer: "border-t-[1px] border-[#292f46]",
@@ -517,7 +517,7 @@ export default function ClaimButton({ token }: { token: string }) {
             isOpen={isSpent}
             onClose={() => setIsSpent(false)}
             classNames={{
-              body: "py-6 ",
+              body: "py-6 bg-dark-fg",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
               header: "border-b-[1px] border-[#292f46]",
               footer: "border-t-[1px] border-[#292f46]",
@@ -549,7 +549,7 @@ export default function ClaimButton({ token }: { token: string }) {
             isOpen={openRedemptionModal}
             onClose={() => setOpenRedemptionModal(false)}
             classNames={{
-              body: "py-6 ",
+              body: "py-6 bg-dark-fg",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
               header: "border-b-[1px] border-[#292f46]",
               footer: "border-t-[1px] border-[#292f46]",
@@ -580,7 +580,7 @@ export default function ClaimButton({ token }: { token: string }) {
             isOpen={openRedemptionModal}
             onClose={() => setOpenRedemptionModal(false)}
             classNames={{
-              body: "py-6 ",
+              body: "py-6 bg-dark-fg",
               backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
               header: "border-b-[1px] border-[#292f46]",
               footer: "border-t-[1px] border-[#292f46]",

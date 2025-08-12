@@ -379,7 +379,7 @@ function MarketplacePage({
                 selectionMode="multiple"
                 classNames={{
                   trigger: "bg-dark-fg",
-                  content: "bg-dark-fg",
+                  value: "bg-dark-fg",
                   popoverContent: "bg-dark-fg",
                 }}
               >
