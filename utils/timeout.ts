@@ -38,7 +38,7 @@ export async function newPromiseWithTimeout<T>(
       }
       const p = callback(wrap<T>(resolve), wrap<Error>(reject), abortSignal);
       if (p && p instanceof Promise) {
-        p.catch((err) => wrap<Error>(reject)(err));
+        p.then(wrap(resolve)).catch(wrap(reject));
       }
     }
   );
