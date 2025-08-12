@@ -89,7 +89,7 @@ export default function StandaloneLanding() {
     contactType === "email" ? isValidEmail(contact) : isValidNostrPub(contact);
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-light-bg text-light-text">
+    <div className="max-w-screen relative min-h-screen overflow-x-hidden bg-light-bg text-light-text">
       {/* Animated Ink Splatters Background */}
       <div className="pointer-events-none fixed inset-0 z-0">
         {/* Splatter 1 - Multiple connected circles */}

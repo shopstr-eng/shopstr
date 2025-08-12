@@ -290,6 +290,10 @@ function MarketplacePage({
             <div ref={searchBarRef} className="w-full sm:order-2 sm:w-auto">
               <Input
                 className="text-dark-text"
+                classNames={{
+                  input: "bg-dark-fg",
+                  inputWrapper: "bg-dark-fg",
+                }}
                 placeholder="Listing title, naddr1..., npub..."
                 value={selectedSearch}
                 startContent={<MagnifyingGlassIcon height={"1em"} />}
@@ -342,6 +346,10 @@ function MarketplacePage({
             <div ref={searchBarRef} className="w-full">
               <Input
                 className="mt-2 text-dark-text"
+                classNames={{
+                  input: "bg-dark-fg",
+                  inputWrapper: "bg-dark-fg",
+                }}
                 isClearable
                 placeholder="Listing title, naddr1..., npub..."
                 value={selectedSearch}
@@ -369,6 +377,11 @@ function MarketplacePage({
                   }
                 }}
                 selectionMode="multiple"
+                classNames={{
+                  trigger: "bg-dark-fg",
+                  content: "bg-dark-fg",
+                  popoverContent: "bg-dark-fg",
+                }}
               >
                 <SelectSection className="text-dark-text">
                   {CATEGORIES.map((category) => (
@@ -485,7 +498,7 @@ function MarketplacePage({
             className={`${BLACKBUTTONCLASSNAMES} fixed bottom-24 right-8 z-50 h-16 w-16`}
             onClick={() => handleAddNewListing()}
           >
-            <PlusIcon />
+            <PlusIcon className="text-dark-text" />
           </Button>
         )}
       <SignInModal isOpen={isOpen} onClose={onClose} />

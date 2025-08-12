@@ -19,6 +19,9 @@ const MilkMarketSwitch = ({
       <Switch
         size={"lg"}
         color={"warning"}
+        classNames={{
+          wrapper: "bg-dark-fg",
+        }}
         onClick={() => {
           setWotFilter(!wotFilter);
         }}

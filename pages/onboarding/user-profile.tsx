@@ -13,7 +13,7 @@ const OnboardingUserProfile = () => {
   };
 
   return (
-    <div className="flex h-[100vh] flex-col bg-light-bg pt-24">
+    <div className="flex min-h-screen flex-col bg-light-bg pt-24">
       <div className="mx-auto w-full max-w-2xl px-4 py-6">
         <Card className="bg-dark-fg">
           <CardBody>

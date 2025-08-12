@@ -174,7 +174,7 @@ export const ProfileWithDropdown = ({
 
   return (
     <>
-      <Dropdown placement="bottom-start">
+      <Dropdown className="bg-dark-fg" placement="bottom-start">
         <DropdownTrigger>
           <User
             as="button"

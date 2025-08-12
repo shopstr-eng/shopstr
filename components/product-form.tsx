@@ -285,7 +285,7 @@ export default function ProductForm({
       onClose={handleModalToggle}
       classNames={{
         body: "py-6",
-        backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+        backdrop: "bg-dark-fg/50 backdrop-opacity-60",
         header: "border-b-[1px] border-[#292f46]",
         footer: "border-t-[1px] border-[#292f46]",
         closeButton: "hover:bg-black/5 active:bg-white/10",
@@ -655,6 +655,11 @@ export default function ProductForm({
                     onChange={onChange} // send value to hook form
                     onBlur={onBlur} // notify when input is touched/blur
                     selectedKeys={[value as string]}
+                    classNames={{
+                      trigger: "bg-dark-fg",
+                      value: "bg-dark-fg",
+                      popoverContent: "bg-dark-fg",
+                    }}
                   >
                     <SelectSection className="text-dark-text">
                       {SHIPPING_OPTIONS.map((option) => (
@@ -880,7 +885,9 @@ export default function ProductForm({
                     defaultSelectedKeys={new Set(selectedVolumes)}
                     classNames={{
                       base: "mt-4",
-                      trigger: "min-h-unit-12 py-2",
+                      trigger: "min-h-unit-12 py-2 !bg-dark-fg",
+                      value: "!bg-dark-fg",
+                      popoverContent: "!bg-dark-fg",
                     }}
                   >
                     <SelectSection className="text-dark-text">
@@ -997,7 +1004,9 @@ export default function ProductForm({
                     defaultSelectedKeys={value ? value.split(",") : ""}
                     classNames={{
                       base: "mt-4",
-                      trigger: "min-h-unit-12 py-2",
+                      trigger: "min-h-unit-12 py-2 !bg-dark-fg",
+                      value: "!bg-dark-fg",
+                      popoverContent: "!bg-dark-fg",
                     }}
                     renderValue={(items) => {
                       return (
@@ -1111,7 +1120,9 @@ export default function ProductForm({
                         defaultSelectedKeys={new Set(selectedSizes)}
                         classNames={{
                           base: "mt-4",
-                          trigger: "min-h-unit-12 py-2",
+                          trigger: "min-h-unit-12 py-2 !bg-dark-fg",
+                          value: "!bg-dark-fg",
+                          popoverContent: "!bg-dark-fg",
                         }}
                       >
                         <SelectSection className="text-dark-text">
@@ -1209,6 +1220,11 @@ export default function ProductForm({
                         onChange={onChange} // send value to hook form
                         onBlur={onBlur} // notify when input is touched/blur
                         selectedKeys={[value as string]}
+                        classNames={{
+                          trigger: "!bg-dark-fg",
+                          value: "!bg-dark-fg",
+                          popoverContent: "!bg-dark-fg",
+                        }}
                       >
                         <SelectSection className="text-dark-text">
                           <SelectItem key="New" value="New">
@@ -1270,6 +1286,11 @@ export default function ProductForm({
                         onChange={onChange} // send value to hook form
                         onBlur={onBlur} // notify when input is touched/blur
                         selectedKeys={[value as string]}
+                        classNames={{
+                          trigger: "!bg-dark-fg",
+                          value: "!bg-dark-fg",
+                          popoverContent: "!bg-dark-fg",
+                        }}
                       >
                         <SelectSection className="text-dark-text">
                           <SelectItem key="active" value="active">

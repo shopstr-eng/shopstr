@@ -89,6 +89,11 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
       startContent={locationAvatar(value)}
       {...props}
       className="mt-2 text-dark-text"
+      classNames={{
+        trigger: "bg-dark-fg",
+        content: "bg-dark-fg",
+        popoverContent: "bg-dark-fg",
+      }}
     >
       {locationOptions}
     </Select>
