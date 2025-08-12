@@ -47,7 +47,11 @@ const ReceiveButton = () => {
     handleSubmit: handleReceiveSubmit,
     control: receiveControl,
     reset: receiveReset,
-  } = useForm();
+  } = useForm({
+    defaultValues: {
+      token: ''
+    }
+  });
 
   const handleToggleReceiveModal = () => {
     receiveReset();
