@@ -48,7 +48,6 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { ProductFormValues } from "../utils/types/types";
-import { useTheme } from "next-themes";
 
 interface ProductFormProps {
   handleModalToggle: () => void;
@@ -66,7 +65,6 @@ export default function ProductForm({
   onSubmitCallback,
 }: ProductFormProps) {
   const router = useRouter();
-  const { theme } = useTheme();
   const [images, setImages] = useState<string[]>([]);
   const [imageError, setImageError] = useState<string | null>(null);
   const [currentSlide, setCurrentSlide] = useState(0);
