@@ -7,7 +7,6 @@ import { CashuMint, CashuWallet } from '@cashu/cashu-ts';
 import * as NostrHelper from '@/utils/nostr/nostr-helper-functions';
 import QRCode from 'qrcode';
 
-// --- JEST MOCKS ---
 jest.mock('@cashu/cashu-ts');
 const mockCreateMintQuote = jest.fn();
 const mockCheckMintQuote = jest.fn();
@@ -49,14 +48,12 @@ jest.mock('@heroicons/react/24/outline', () => ({
     InformationCircleIcon: () => <div data-testid="info-icon" />,
 }));
 
-// Mock NostrNIP46Signer class
 jest.mock('@/utils/nostr/signers/nostr-nip46-signer', () => ({
     NostrNIP46Signer: jest.fn().mockImplementation(() => ({
         name: 'NostrNIP46Signer',
     })),
 }));
 
-// --- TEST SETUP ---
 const mockSigner = { name: 'mockSigner' };
 const mockNostr = { relays: [] };
 const mockLocalStorage = {
@@ -75,7 +72,6 @@ const renderComponent = (customSigner = mockSigner) => {
     );
 };
 
-// Mock WebLN
 const mockWebLN = {
     enable: jest.fn(),
     isEnabled: jest.fn(),
@@ -92,12 +88,10 @@ describe('MintButton Component', () => {
             value: { writeText: jest.fn().mockResolvedValue(undefined) },
             writable: true,
         });
-        // Clear window.webln before each test
         delete (window as any).webln;
         jest.spyOn(console, 'error').mockImplementation(() => {});
         jest.spyOn(console, 'warn').mockImplementation(() => {});
         
-        // Mock localStorage
         const localStorageMock = {
             setItem: jest.fn(),
             getItem: jest.fn(),
