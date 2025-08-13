@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, useState } from "react";
 import useNavigation from "@/components/hooks/use-navigation";
 import { Button, Image, useDisclosure } from "@nextui-org/react";
-import { Bars4Icon } from "@heroicons/react/24/outline";
+import { Bars4Icon, ShoppingCartIcon } from "@heroicons/react/24/outline";
 import { countNumberOfUnreadMessagesFromChatsContext } from "@/utils/messages/utils";
 import { ChatsContext, ShopMapContext } from "@/utils/context/context";
 import { db } from "@/utils/nostr/cache-service";
@@ -11,6 +11,7 @@ import { useRouter } from "next/router";
 import SignInModal from "./sign-in/SignInModal";
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
 import { ShopProfile } from "../utils/types/types";
+
 
 const TopNav = ({
   setFocusedPubkey,
@@ -119,7 +120,7 @@ const TopNav = ({
     router.push("/marketplace");
     setIsMobileMenuOpen(false);
   };
-
+  
   const MobileMenu = () => (
     <div className="absolute left-0 top-full w-full bg-light-fg shadow-lg dark:bg-dark-fg">
       <Button
@@ -240,7 +241,15 @@ const TopNav = ({
             className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
             onClick={() => handleRoute("/cart")}
           >
-            Cart {cartQuantity > 0 && `(${cartQuantity})`}
+             <div className="flex items-center">
+              <ShoppingCartIcon className="h-5 w-5 mr-1" />
+              Cart
+              {cartQuantity > 0 && (
+                <span className="ml-1 rounded-full bg-purple-600 px-2 py-0.5 text-xs text-white">
+                  {cartQuantity}
+                </span>
+              )}
+            </div>
           </Button>
           |
           {signedIn ? (
