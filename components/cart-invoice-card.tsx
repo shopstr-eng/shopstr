@@ -67,7 +67,9 @@ import {
   ContactFormData,
   CombinedFormData,
 } from "@/utils/types/types";
+import { ARBITER_PUBKEY, DONATION_PUBKEY } from "@/utils/constants";
 import { Controller } from "react-hook-form";
+
 
 export default function CartInvoiceCard({
   products,
@@ -166,7 +168,9 @@ export default function CartInvoiceCard({
   }, [uniqueShippingTypes, hasFreePickupProducts]);
 
   const [requiredInfo, setRequiredInfo] = useState("");
-
+  
+  const { pubkey: buyerPubkey } = useContext(SignerContext);
+  
   useEffect(() => {
     if (products && products.length > 0) {
       const requiredFields = products
@@ -1154,6 +1158,12 @@ export default function CartInvoiceCard({
       let sellerProofs: Proof[] = [];
 
       if (sellerAmount > 0) {
+        const mint = new CashuMint(mints[0]!);
+        const info = (await mint.getInfo()) as any;
+        // NUT-11 support is advertised in `methods["11"].supported`
+        if (!info.methods?.["11"]?.supported) {
+          throw new Error("Mint does not support P2PK (NUT-11)");
+        }
         const { keep, send } = await wallet.send(
           sellerAmount,
           remainingProofs,
@@ -1476,7 +1486,7 @@ export default function CartInvoiceCard({
       if (donationToken) {
         donationMessage = "Sale donation: " + donationToken;
         await sendPaymentAndContactMessage(
-          "a37118a4888e02d28e8767c08caaf73b49abdac391ad7ff18a304891e416dc33",
+          DONATION_PUBKEY,
           donationMessage,
           product,
           false,
@@ -1823,15 +1833,45 @@ export default function CartInvoiceCard({
       validatePaymentData(price, data);
 
       const mint = new CashuMint(mints[0]!);
+      //Ensure mint supports NUT-11 P2PK escrow
+      const mintInfo = await mint.getInfo();
+      if (!mintInfo.nuts?.["11"]?.supported) {
+        throw new Error("Cashu mint does not support P2PK escrow (NUT-11)");
+      }
       const wallet = new CashuWallet(mint);
       const mintKeySetIds = await wallet.getKeySets();
       const filteredProofs = tokens.filter(
         (p: Proof) =>
           mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
+       
+      const pubkey = products[0]!.pubkey;
+      const sellerProfile = profileContext.profileData.get(pubkey);
+      const p2pk = sellerProfile?.content?.p2pk;
+
+      const tags = p2pk?.tags || [];
+      const p2pkOptions = p2pk?.enabled
+        ? {
+            pubkey:     p2pk.pubkey,
+            locktime:   p2pk.locktime,
+            refundKeys: [
+              ...(p2pk.refund || []),
+              buyerPubkey!
+            ],
+            sigflag: tags.find((t: string[]) => t[0] === "sigflag")?.[1] || "SIG_ALL",
+            nSigs:   2,       // require 2-of-3 signatures
+            pubkeys: [
+              buyerPubkey!,   // buyer
+              ARBITER_PUBKEY  // arbiter
+            ],
+          }   
+        : undefined;
+      
       const { keep, send } = await wallet.send(price, filteredProofs, {
         includeFees: true,
+        ...(p2pkOptions ? { p2pk: p2pkOptions } : {}),
       });
+
       const deletedEventIds = [
         ...new Set([
           ...walletContext.proofEvents

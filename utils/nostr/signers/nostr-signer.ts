@@ -6,6 +6,7 @@ export interface NostrSigner {
   sign(event: NostrEventTemplate): Promise<NostrEvent>;
   encrypt(pubkey: string, plainText: string): Promise<string>;
   decrypt(pubkey: string, cipherText: string): Promise<string>;
+  signSchnorr(hash: string): Promise<string>;
   close(): Promise<void>;
   toJSON(): { [key: string]: any };
 }
