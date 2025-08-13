@@ -89,7 +89,7 @@ export default function StandaloneLanding() {
     contactType === "email" ? isValidEmail(contact) : isValidNostrPub(contact);
 
   return (
-    <div className="max-w-screen relative min-h-screen overflow-x-hidden bg-light-bg text-light-text">
+    <div className="relative min-h-screen w-full max-w-full overflow-x-hidden bg-light-bg text-light-text">
       {/* Animated Ink Splatters Background */}
       <div className="pointer-events-none fixed inset-0 z-0">
         {/* Splatter 1 - Multiple connected circles */}
@@ -203,17 +203,25 @@ export default function StandaloneLanding() {
       </div>
 
       {/* Navigation */}
-      <nav className="relative z-20 flex items-center justify-between p-6 md:px-12">
-        <div className="flex items-center space-x-2">
-          <Image src="/milk-market.png" alt="Milk Market" className="h-8 w-8" />
-          <span className="text-xl font-bold">Milk Market</span>
+      <nav className="relative z-20 flex items-start justify-between p-4 md:items-center md:p-6 md:px-12">
+        <div className="flex flex-col items-end space-y-1 md:flex-row md:items-center md:space-x-2 md:space-y-0">
+          <div className="flex items-center space-x-2">
+            <Image
+              src="/milk-market.png"
+              alt="Milk Market"
+              className="h-8 w-8"
+            />
+            <span className="text-xl font-bold">Milk</span>
+          </div>
+          <span className="text-xl font-bold md:hidden">Market</span>
+          <span className="hidden text-xl font-bold md:inline">Market</span>
         </div>
-        <div className="flex items-center space-x-4">
+        <div className="flex flex-col items-end space-y-2 md:flex-row md:items-center md:space-x-4 md:space-y-0">
           <Button
             onClick={() => router.push("/producers")}
             color="default"
             variant="ghost"
-            className="text-light-text hover:text-gray-600"
+            className="w-auto text-light-text hover:text-gray-600"
           >
             Producer Guide
           </Button>
@@ -221,7 +229,7 @@ export default function StandaloneLanding() {
             onClick={() => router.push("/marketplace")}
             color="default"
             variant="solid"
-            className={BLACKBUTTONCLASSNAMES}
+            className={`w-auto ${BLACKBUTTONCLASSNAMES}`}
           >
             Join Now
           </Button>
@@ -229,7 +237,7 @@ export default function StandaloneLanding() {
       </nav>
 
       {/* Hero Section */}
-      <section className="relative z-10 px-4 pb-32 pt-20 sm:px-6 lg:px-8">
+      <section className="relative z-10 px-4 pb-32 pt-8 sm:px-6 sm:pt-20 lg:px-8">
         <div className="mx-auto max-w-6xl text-center">
           <div className="animate-fadeInUp">
             <div className="mb-8 flex justify-center space-x-4">
@@ -282,7 +290,7 @@ export default function StandaloneLanding() {
               color="default"
               variant="solid"
               size="lg"
-              className="transform rounded-full bg-dark-bg px-12 py-4 text-xl text-dark-text shadow-xl transition-all hover:scale-105 hover:bg-gray-800"
+              className="transform rounded-xl bg-dark-bg px-6 py-3 text-xl text-dark-text shadow-xl transition-all hover:scale-105 hover:bg-gray-800"
             >
               Join the &ldquo;FREE MILK&rdquo; Movement →
             </Button>
@@ -703,33 +711,37 @@ export default function StandaloneLanding() {
       </section>
 
       {/* Contact Section */}
-      <section className="relative z-10 bg-gray-50 py-16">
-        <div className="mx-auto max-w-7xl items-center px-4 text-center sm:px-6 lg:px-8">
+      <section className="relative z-10 w-full bg-gray-50 py-16">
+        <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
           <h2 className="mb-8 text-3xl font-bold md:text-4xl">Get In Touch</h2>
           <Card className="mx-auto max-w-2xl bg-light-bg shadow-lg">
-            <CardBody className="items-center justify-center p-8">
-              <p className="mb-6 text-lg text-gray-700">
+            <CardBody className="p-4 sm:p-8">
+              <p className="mb-6 text-center text-base text-gray-700 sm:text-lg">
                 Have questions about Milk Market? Reach out to us:
               </p>
               <div className="space-y-4">
-                <div className="flex items-center justify-center space-x-3">
-                  <span className="text-2xl">📧</span>
-                  <span className="font-semibold text-gray-800">Email:</span>
+                <div className="flex flex-col items-center justify-center space-y-2 sm:flex-row sm:space-x-3 sm:space-y-0">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-2xl">📧</span>
+                    <span className="font-semibold text-gray-800">Email:</span>
+                  </div>
                   <a
                     href="mailto:freemilk@milk.market"
-                    className="font-medium text-light-text underline transition-colors hover:text-gray-600"
+                    className="break-words font-medium text-light-text underline transition-colors hover:text-gray-600"
                   >
                     freemilk@milk.market
                   </a>
                 </div>
-                <div className="flex items-center justify-center space-x-3">
-                  <span className="text-2xl">⚡</span>
-                  <span className="font-semibold text-gray-800">Nostr:</span>
+                <div className="flex flex-col items-center justify-center space-y-2 sm:flex-row sm:space-x-3 sm:space-y-0">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-2xl">⚡</span>
+                    <span className="font-semibold text-gray-800">Nostr:</span>
+                  </div>
                   <a
                     href="https://njump.me/shopstr@shopstrmarkets.com"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="font-mono font-medium text-light-text underline transition-colors hover:text-gray-600"
+                    className="break-words font-mono font-medium text-light-text underline transition-colors hover:text-gray-600"
                   >
                     shopstr@shopstrmarkets.com
                   </a>

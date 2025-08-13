@@ -160,7 +160,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
               <Input
                 className="pb-4 text-dark-text"
                 classNames={{
-                  label: "text-dark-text text-lg",
+                  label: "!text-dark-text text-lg",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -196,7 +196,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
               <Textarea
                 className="pb-4 text-dark-text"
                 classNames={{
-                  label: "text-dark-text text-lg",
+                  label: "!text-dark-text text-lg",
                 }}
                 variant="bordered"
                 fullWidth={true}

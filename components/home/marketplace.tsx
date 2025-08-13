@@ -291,7 +291,7 @@ function MarketplacePage({
               <Input
                 className="text-dark-text"
                 classNames={{
-                  input: "bg-dark-fg",
+                  input: "bg-dark-fg text-dark-text",
                   inputWrapper: "bg-dark-fg",
                 }}
                 placeholder="Listing title, naddr1..., npub..."
@@ -347,7 +347,7 @@ function MarketplacePage({
               <Input
                 className="mt-2 text-dark-text"
                 classNames={{
-                  input: "bg-dark-fg",
+                  input: "bg-dark-fg text-dark-text",
                   inputWrapper: "bg-dark-fg",
                 }}
                 isClearable
@@ -378,8 +378,9 @@ function MarketplacePage({
                 }}
                 selectionMode="multiple"
                 classNames={{
-                  trigger: "bg-dark-fg",
+                  trigger: "bg-dark-fg text-dark-text",
                   popoverContent: "bg-dark-fg",
+                  value: "text-dark-text",
                 }}
               >
                 <SelectSection className="text-dark-text">
@@ -497,7 +498,7 @@ function MarketplacePage({
             className={`${BLACKBUTTONCLASSNAMES} fixed bottom-24 right-8 z-50 h-16 w-16`}
             onClick={() => handleAddNewListing()}
           >
-            <PlusIcon className="text-white" />
+            <PlusIcon className="!text-white" />
           </Button>
         )}
       <SignInModal isOpen={isOpen} onClose={onClose} />
