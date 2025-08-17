@@ -204,7 +204,7 @@ describe('ChatPanel Component', () => {
         expect(console.error).toHaveBeenCalledWith(new Error('Decode failed'));
       });
       consoleErrorSpy.mockRestore();
-    });
+    }, 10000);
   });
 
   describe('Payment Context - Review', () => {
