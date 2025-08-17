@@ -174,7 +174,7 @@ describe('UserProfileForm', () => {
     renderWithProviders(<UserProfileForm />);
     await screen.findByLabelText('Display name');
 
-    const paymentSelect = screen.getByRole('button', { name: /Bitcoin payment preference/i });
+    const paymentSelect = screen.getByRole('button', { name: /Payment preference \(for sellers\)/i });
     await user.click(paymentSelect);
     const lightningOption = await screen.findByRole('option', { name: 'Lightning (Bitcoin)' });
     await user.click(lightningOption);
@@ -183,7 +183,7 @@ describe('UserProfileForm', () => {
       expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     });
 
-    const donationInput = screen.getByLabelText('Shopstr donation (%)');
+    const donationInput = screen.getByLabelText(/Shopstr donation %/);
     await user.clear(donationInput);
     await user.type(donationInput, '5.5');
 
