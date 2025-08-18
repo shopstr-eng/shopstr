@@ -435,7 +435,7 @@ export default function Landing() {
                   />
                 </a>
                 <a
-                  href="https://x.com/_shopstr"
+                  href="https://x.com/shopstrmarkets"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="transition-transform hover:scale-110"
