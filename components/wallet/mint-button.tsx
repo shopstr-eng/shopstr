@@ -194,7 +194,7 @@ const MintButton = () => {
           break;
         }
       } catch (error) {
-        console.error("Invoice check error:", error);
+        console.warn("Invoice check warning:", error);
         retryCount++;
 
         if (error instanceof TypeError) {

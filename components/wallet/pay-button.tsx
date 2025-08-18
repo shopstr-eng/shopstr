@@ -50,7 +50,9 @@ const PayButton = () => {
     handleSubmit: handlePaySubmit,
     control: payControl,
     reset: payReset,
-  } = useForm();
+  } = useForm({
+    defaultValues: { invoice: "" },
+  });
 
   const handleTogglePayModal = () => {
     payReset();

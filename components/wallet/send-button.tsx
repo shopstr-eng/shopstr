@@ -58,7 +58,11 @@ const SendButton = () => {
     handleSubmit: handleSendSubmit,
     control: sendControl,
     reset: sendReset,
-  } = useForm();
+  } = useForm({
+    defaultValues: {
+      sats: ""
+    }
+  });
 
   const handleToggleSendModal = () => {
     sendReset();
@@ -68,8 +72,10 @@ const SendButton = () => {
     setNewToken("");
   };
 
-  const onSendSubmit = async (data: { [x: string]: number }) => {
-    const numSats = data["sats"];
+  const onSendSubmit = async (data: { sats: string }) => {
+    const numSats = parseInt(data.sats, 10);
+    // Add a check to ensure parsing was successful before proceeding
+    if (isNaN(numSats) || numSats <= 0) return;
     await handleSend(numSats!);
   };
 
