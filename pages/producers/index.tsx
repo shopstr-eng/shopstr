@@ -41,10 +41,10 @@ const ProducerGuidePage = () => {
         <div className="mb-8">
           <Button
             className={`mb-4 ${BLACKBUTTONCLASSNAMES}`}
-            onClick={() => router.back()}
+            onClick={() => router.push("/")}
             startContent={<ArrowLeftIcon className="h-4 w-4" />}
           >
-            Back
+            Home
           </Button>
 
           <div className="text-center">
