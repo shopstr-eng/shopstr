@@ -11,7 +11,10 @@ const instanceMock = {
 };
 const staticGetEncrypted = jest.fn();
 const constructorMock = jest.fn().mockImplementation((opts: any, ch: any) => {
-  Object.assign(instanceMock, { encryptedPrivKey: opts.encryptedPrivKey, passphrase: opts.passphrase });
+  Object.assign(instanceMock, {
+    encryptedPrivKey: opts.encryptedPrivKey,
+    passphrase: opts.passphrase,
+  });
   return instanceMock;
 });
 constructorMock.getEncryptedNSEC = staticGetEncrypted;
@@ -38,7 +41,9 @@ describe("encryption-migration", () => {
 
   describe("needsMigration()", () => {
     it("returns false when migrationComplete===true", () => {
-      helperMock.getLocalStorageData.mockReturnValue({ migrationComplete: true });
+      helperMock.getLocalStorageData.mockReturnValue({
+        migrationComplete: true,
+      });
       expect(needsMigration()).toBe(false);
     });
 
@@ -150,5 +155,3 @@ describe("encryption-migration", () => {
     });
   });
 });
-
-

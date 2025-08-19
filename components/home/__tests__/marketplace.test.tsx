@@ -2,18 +2,44 @@ import React from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import MarketplacePage from "../marketplace";
-import { ShopMapContext, ReviewsContext, FollowsContext } from "@/utils/context/context";
+import {
+  ShopMapContext,
+  ReviewsContext,
+  FollowsContext,
+} from "@/utils/context/context";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { nip19 } from "nostr-tools";
 import { useRouter } from "next/router";
 
-jest.mock("../../display-products",    () => function MockDisplayProducts() { return <div data-testid="mock-display-products" />; });
-jest.mock("../side-shop-nav",          () => function MockSideShopNav() { return <div data-testid="mock-side-shop-nav" />; });
-jest.mock("../../sign-in/SignInModal", () => function MockSignInModal() { return <div data-testid="mock-signin-modal" />; });
+jest.mock(
+  "../../display-products",
+  () =>
+    function MockDisplayProducts() {
+      return <div data-testid="mock-display-products" />;
+    }
+);
+jest.mock(
+  "../side-shop-nav",
+  () =>
+    function MockSideShopNav() {
+      return <div data-testid="mock-side-shop-nav" />;
+    }
+);
+jest.mock(
+  "../../sign-in/SignInModal",
+  () =>
+    function MockSignInModal() {
+      return <div data-testid="mock-signin-modal" />;
+    }
+);
 
 jest.mock("next/router", () => ({ __esModule: true, useRouter: jest.fn() }));
 jest.mock("nostr-tools", () => ({
-  nip19: { decode: jest.fn(), naddrEncode: jest.fn(), npubEncode: jest.fn().mockReturnValue("encoded-pubkey") },
+  nip19: {
+    decode: jest.fn(),
+    naddrEncode: jest.fn(),
+    npubEncode: jest.fn().mockReturnValue("encoded-pubkey"),
+  },
 }));
 
 import { useDisclosure } from "@nextui-org/react";
@@ -64,9 +90,16 @@ const renderComponent = ({
   const setSelectedSection = jest.fn();
 
   render(
-    <SignerContext.Provider value={{ isLoggedIn, pubkey: isLoggedIn ? "user-pubkey" : null }}>
+    <SignerContext.Provider
+      value={{ isLoggedIn, pubkey: isLoggedIn ? "user-pubkey" : null }}
+    >
       <ShopMapContext.Provider value={{ shopData: mockShopData }}>
-        <ReviewsContext.Provider value={{ merchantReviewsData: new Map(), productReviewsData: new Map() }}>
+        <ReviewsContext.Provider
+          value={{
+            merchantReviewsData: new Map(),
+            productReviewsData: new Map(),
+          }}
+        >
           <FollowsContext.Provider value={{ followList: [], isLoading: false }}>
             <MarketplacePage
               focusedPubkey={focusedPubkey}
@@ -131,7 +164,10 @@ describe("MarketplacePage Component", () => {
   });
 
   it("navigates to orders when clicking Message as logged-in user", async () => {
-    const { mockRouterPush } = renderComponent({ focusedPubkey: "shop1", isLoggedIn: true });
+    const { mockRouterPush } = renderComponent({
+      focusedPubkey: "shop1",
+      isLoggedIn: true,
+    });
     await userEvent.click(screen.getByRole("button", { name: "Message" }));
     expect(mockRouterPush).toHaveBeenCalledWith({
       pathname: "/orders",
@@ -140,7 +176,10 @@ describe("MarketplacePage Component", () => {
   });
 
   it("opens sign-in modal when clicking Message as logged-out user", async () => {
-    const { mockOnOpen } = renderComponent({ focusedPubkey: "shop1", isLoggedIn: false });
+    const { mockOnOpen } = renderComponent({
+      focusedPubkey: "shop1",
+      isLoggedIn: false,
+    });
     await userEvent.click(screen.getByRole("button", { name: "Message" }));
     expect(mockOnOpen).toHaveBeenCalled();
   });

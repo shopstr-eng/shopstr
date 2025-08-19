@@ -60,8 +60,8 @@ const SendButton = () => {
     reset: sendReset,
   } = useForm({
     defaultValues: {
-      sats: ""
-    }
+      sats: "",
+    },
   });
 
   const handleToggleSendModal = () => {

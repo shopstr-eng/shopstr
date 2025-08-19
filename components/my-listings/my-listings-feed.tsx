@@ -17,8 +17,6 @@ import {
 } from "@nextui-org/react";
 import { BLACKBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
-const PASSWORD_STORAGE_KEY = "listingPasswordAuthenticated";
-
 const MyListingsFeed = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -28,14 +26,32 @@ const MyListingsFeed = () => {
   const [passwordInput, setPasswordInput] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [passwordStorageKey, setPasswordStorageKey] = useState<string>("");
   const { isLoggedIn } = useContext(SignerContext);
 
-  // Check if password was previously authenticated
   useEffect(() => {
-    const storedAuth = localStorage.getItem(PASSWORD_STORAGE_KEY);
-    if (storedAuth === "true") {
-      setIsAuthenticated(true);
-    }
+    const fetchPasswordStorageKey = async () => {
+      try {
+        const response = await fetch("/api/validate-password-auth", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+        const data = await response.json();
+        if (data.value) {
+          setPasswordStorageKey(data.value);
+          const storedAuth = localStorage.getItem(data.value);
+          if (storedAuth === "true") {
+            setIsAuthenticated(true);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch password storage key:", error);
+      }
+    };
+
+    fetchPasswordStorageKey();
   }, []);
 
   useEffect(() => {
@@ -79,7 +95,9 @@ const MyListingsFeed = () => {
 
       if (data.valid) {
         setIsAuthenticated(true);
-        localStorage.setItem(PASSWORD_STORAGE_KEY, "true");
+        if (passwordStorageKey) {
+          localStorage.setItem(passwordStorageKey, "true");
+        }
         setShowPasswordModal(false);
         setShowModal(true);
         setPasswordInput("");

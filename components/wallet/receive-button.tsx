@@ -49,8 +49,8 @@ const ReceiveButton = () => {
     reset: receiveReset,
   } = useForm({
     defaultValues: {
-      token: ''
-    }
+      token: "",
+    },
   });
 
   const handleToggleReceiveModal = () => {

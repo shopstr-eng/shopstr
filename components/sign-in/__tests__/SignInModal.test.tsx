@@ -16,7 +16,10 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
 }));
 jest
   .spyOn(NostrNSecSigner, "getEncryptedNSEC")
-  .mockReturnValue({ encryptedPrivKey: "encrypted-key", pubkey: "test-pubkey" });
+  .mockReturnValue({
+    encryptedPrivKey: "encrypted-key",
+    pubkey: "test-pubkey",
+  });
 
 const helpers = nostrHelpers as jest.Mocked<typeof nostrHelpers>;
 
@@ -30,7 +33,11 @@ const mockRelays = {
   setWriteRelayList: jest.fn(),
 };
 const mockNewSigner = jest.fn();
-const mockSignerCtx = { newSigner: mockNewSigner, signer: null, setSigner: jest.fn() };
+const mockSignerCtx = {
+  newSigner: mockNewSigner,
+  signer: null,
+  setSigner: jest.fn(),
+};
 
 function renderModal(open = true) {
   const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
@@ -74,7 +81,9 @@ describe("SignInModal", () => {
       mockNewSigner.mockReturnValue(signer);
 
       const { user, push } = renderModal();
-      await user.click(screen.getByRole("button", { name: /extension sign-in/i }));
+      await user.click(
+        screen.getByRole("button", { name: /extension sign-in/i })
+      );
       await waitFor(() => {
         expect(signer.getPubKey).toHaveBeenCalled();
         expect(push).toHaveBeenCalledWith("/onboarding/user-profile");
@@ -86,8 +95,12 @@ describe("SignInModal", () => {
         throw new Error("User rejected");
       });
       const { user } = renderModal();
-      await user.click(screen.getByRole("button", { name: /extension sign-in/i }));
-      expect(await screen.findByText(/extension sign-in failed!/i)).toBeInTheDocument();
+      await user.click(
+        screen.getByRole("button", { name: /extension sign-in/i })
+      );
+      expect(
+        await screen.findByText(/extension sign-in failed!/i)
+      ).toBeInTheDocument();
     });
   });
 
@@ -97,7 +110,9 @@ describe("SignInModal", () => {
       const { user } = renderModal();
       await user.click(screen.getByTestId("bunker-open-btn"));
 
-      const input = await screen.findByPlaceholderText(/paste your bunker token/i);
+      const input = await screen.findByPlaceholderText(
+        /paste your bunker token/i
+      );
       await user.type(input, "xyz");
       expect(helpers.parseBunkerToken).toHaveBeenCalledWith("xyz");
     });
@@ -112,11 +127,15 @@ describe("SignInModal", () => {
 
       const { user, push } = renderModal();
       await user.click(screen.getByTestId("bunker-open-btn"));
-      const input = await screen.findByPlaceholderText(/paste your bunker token/i);
+      const input = await screen.findByPlaceholderText(
+        /paste your bunker token/i
+      );
       await user.type(input, "bunker://valid-token");
 
       await user.click(screen.getByTestId("bunker-submit-btn"));
-      await waitFor(() => expect(push).toHaveBeenCalledWith("/onboarding/user-profile"));
+      await waitFor(() =>
+        expect(push).toHaveBeenCalledWith("/onboarding/user-profile")
+      );
     });
 
     it("shows a failure modal on connection error", async () => {
@@ -126,22 +145,27 @@ describe("SignInModal", () => {
 
       const { user } = renderModal();
       await user.click(screen.getByTestId("bunker-open-btn"));
-      const input = await screen.findByPlaceholderText(/paste your bunker token/i);
+      const input = await screen.findByPlaceholderText(
+        /paste your bunker token/i
+      );
       await user.type(input, "bunker://valid-token");
       await user.click(screen.getByTestId("bunker-submit-btn"));
 
-      expect(await screen.findByText(/bunker sign-in failed!/i)).toBeInTheDocument();
+      expect(
+        await screen.findByText(/bunker sign-in failed!/i)
+      ).toBeInTheDocument();
     });
   });
 
   describe("NSec Sign-in", () => {
-
     it("validates the private key on input", async () => {
       helpers.validateNSecKey.mockReturnValue(false);
       const { user } = renderModal();
       await user.click(screen.getByTestId("nsec-open-btn"));
 
-      const pkInput = await screen.findByPlaceholderText(/paste your nostr private key/i);
+      const pkInput = await screen.findByPlaceholderText(
+        /paste your nostr private key/i
+      );
       await user.type(pkInput, "abc");
       expect(helpers.validateNSecKey).toHaveBeenCalledWith("abc");
     });
@@ -154,16 +178,22 @@ describe("SignInModal", () => {
       const { user, push } = renderModal();
       await user.click(screen.getByTestId("nsec-open-btn"));
 
-      const pkInput = await screen.findByPlaceholderText(/paste your nostr private key/i);
-      const passInput = screen.getByPlaceholderText(/enter a passphrase of your choice/i);
+      const pkInput = await screen.findByPlaceholderText(
+        /paste your nostr private key/i
+      );
+      const passInput = screen.getByPlaceholderText(
+        /enter a passphrase of your choice/i
+      );
       await user.type(pkInput, "nsec1validkey");
       await user.type(passInput, "password123");
 
       await user.click(screen.getByTestId("nsec-submit-btn"));
-      
+
       act(() => jest.runAllTimers());
 
-      await waitFor(() => expect(push).toHaveBeenCalledWith("/onboarding/user-profile"));
+      await waitFor(() =>
+        expect(push).toHaveBeenCalledWith("/onboarding/user-profile")
+      );
     });
 
     it("shows a failure modal if passphrase is empty", async () => {
@@ -171,12 +201,15 @@ describe("SignInModal", () => {
       const { user } = renderModal();
       await user.click(screen.getByTestId("nsec-open-btn"));
 
-      const pkInput = await screen.findByPlaceholderText(/paste your nostr private key/i);
+      const pkInput = await screen.findByPlaceholderText(
+        /paste your nostr private key/i
+      );
       await user.type(pkInput, "nsec1validkey");
 
       await user.click(screen.getByTestId("nsec-submit-btn"));
-      expect(await screen.findByText(/No passphrase provided!/i)).toBeInTheDocument();
+      expect(
+        await screen.findByText(/No passphrase provided!/i)
+      ).toBeInTheDocument();
     });
   });
 });
-

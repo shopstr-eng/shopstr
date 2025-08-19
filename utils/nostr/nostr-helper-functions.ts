@@ -748,7 +748,10 @@ export async function blossomUploadImages(
       ["t", "upload"],
       ["x", hash],
       ["size", image.size.toString()],
-      ["expiration", Math.floor((Date.now() + 24 * 60 * 60 * 1000) / 1000).toString()],
+      [
+        "expiration",
+        Math.floor((Date.now() + 24 * 60 * 60 * 1000) / 1000).toString(),
+      ],
     ],
   };
 

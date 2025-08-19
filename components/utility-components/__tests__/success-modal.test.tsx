@@ -8,11 +8,22 @@ jest.mock("@heroicons/react/24/outline", () => ({
 }));
 
 jest.mock("@nextui-org/react", () => ({
-  Modal: ({ isOpen, children }: { isOpen: boolean; children: React.ReactNode }) =>
-    isOpen ? <div role="dialog">{children}</div> : null,
-  ModalContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  ModalHeader: ({ children }: { children: React.ReactNode }) => <header>{children}</header>,
-  ModalBody: ({ children }: { children: React.ReactNode }) => <main>{children}</main>,
+  Modal: ({
+    isOpen,
+    children,
+  }: {
+    isOpen: boolean;
+    children: React.ReactNode;
+  }) => (isOpen ? <div role="dialog">{children}</div> : null),
+  ModalContent: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  ModalHeader: ({ children }: { children: React.ReactNode }) => (
+    <header>{children}</header>
+  ),
+  ModalBody: ({ children }: { children: React.ReactNode }) => (
+    <main>{children}</main>
+  ),
 }));
 
 describe("SuccessModal", () => {

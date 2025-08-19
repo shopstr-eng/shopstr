@@ -33,14 +33,25 @@ jest.mock("@nextui-org/react", () => {
       <div>{children}</div>
     ),
     DropdownTrigger: ({ children }: { children: React.ReactNode }) => children,
-    DropdownMenu: ({ items, children }: { items: any[]; children: (item: any) => React.ReactNode }) => (
-      <div role="menu">
-        {items.map((item) => children(item))}
-      </div>
-    ),
-    DropdownItem: ({ children, onClick, startContent }: { children: React.ReactNode; onClick?: () => void; startContent?: React.ReactNode }) => (
+    DropdownMenu: ({
+      items,
+      children,
+    }: {
+      items: any[];
+      children: (item: any) => React.ReactNode;
+    }) => <div role="menu">{items.map((item) => children(item))}</div>,
+    DropdownItem: ({
+      children,
+      onClick,
+      startContent,
+    }: {
+      children: React.ReactNode;
+      onClick?: () => void;
+      startContent?: React.ReactNode;
+    }) => (
       <button role="menuitem" onClick={onClick}>
-        {startContent}{children}
+        {startContent}
+        {children}
       </button>
     ),
     User: jest.fn(({ name }) => <span>{name}</span>),
@@ -70,7 +81,9 @@ const renderWithProviders = (
 ) => {
   const { profileData = new Map(), isLoggedIn = false } = options;
   return render(
-    <ProfileMapContext.Provider value={{ profileData, setProfileData: jest.fn() }}>
+    <ProfileMapContext.Provider
+      value={{ profileData, setProfileData: jest.fn() }}
+    >
       <SignerContext.Provider value={{ isLoggedIn, setIsLoggedIn: jest.fn() }}>
         {ui}
       </SignerContext.Provider>
@@ -79,14 +92,15 @@ const renderWithProviders = (
 };
 
 describe("ProfileWithDropdown", () => {
-  const pubkey = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
+  const pubkey =
+    "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
   const npub = nip19.npubEncode(pubkey);
   let consoleWarnSpy: jest.SpyInstance;
 
   beforeAll(() => {
-    consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
   });
-  
+
   afterAll(() => {
     consoleWarnSpy.mockRestore();
   });
@@ -103,7 +117,7 @@ describe("ProfileWithDropdown", () => {
       <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["shop", "logout"]} />,
       {}
     );
-    
+
     expect(screen.getByText(npub.slice(0, 15) + "...")).toBeInTheDocument();
     expect(screen.getByText("Visit Seller")).toBeInTheDocument();
     expect(screen.getByText("Log Out")).toBeInTheDocument();
@@ -111,25 +125,34 @@ describe("ProfileWithDropdown", () => {
   });
 
   it("renders with profile data from context", () => {
-    const profile = { content: { name: "testuser", picture: "http://pic.com/img.png" }};
+    const profile = {
+      content: { name: "testuser", picture: "http://pic.com/img.png" },
+    };
     const profileMap = new Map();
     profileMap.set(pubkey, profile);
 
     renderWithProviders(
-      <ProfileWithDropdown pubkey={pubkey} dropDownKeys={[]} />, { profileData: profileMap }
+      <ProfileWithDropdown pubkey={pubkey} dropDownKeys={[]} />,
+      { profileData: profileMap }
     );
 
     expect(screen.getByText("testuser")).toBeInTheDocument();
   });
 
   it('handles "Visit Seller" click', () => {
-    renderWithProviders(<ProfileWithDropdown pubkey={pubkey} dropDownKeys={["shop"]} />, {});
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["shop"]} />,
+      {}
+    );
     fireEvent.click(screen.getByText("Visit Seller"));
     expect(mockRouterPush).toHaveBeenCalledWith(`/marketplace/${npub}`);
   });
-  
+
   it('handles "Shop Profile" click', () => {
-    renderWithProviders(<ProfileWithDropdown pubkey={pubkey} dropDownKeys={["shop_profile"]} />, {});
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["shop_profile"]} />,
+      {}
+    );
     fireEvent.click(screen.getByText("Shop Profile"));
     expect(mockRouterPush).toHaveBeenCalledWith("/settings/shop-profile");
   });
@@ -158,19 +181,28 @@ describe("ProfileWithDropdown", () => {
   });
 
   it('handles "Profile" click', () => {
-    renderWithProviders(<ProfileWithDropdown pubkey={pubkey} dropDownKeys={["user_profile"]} />, {});
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["user_profile"]} />,
+      {}
+    );
     fireEvent.click(screen.getByText("Profile"));
     expect(mockRouterPush).toHaveBeenCalledWith("/settings/user-profile");
   });
-  
+
   it('handles "Settings" click', () => {
-    renderWithProviders(<ProfileWithDropdown pubkey={pubkey} dropDownKeys={["settings"]} />, {});
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["settings"]} />,
+      {}
+    );
     fireEvent.click(screen.getByText("Settings"));
     expect(mockRouterPush).toHaveBeenCalledWith("/settings");
   });
 
   it('handles "Log Out" click', () => {
-    renderWithProviders(<ProfileWithDropdown pubkey={pubkey} dropDownKeys={["logout"]} />, {});
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["logout"]} />,
+      {}
+    );
     fireEvent.click(screen.getByText("Log Out"));
     expect(LogOut).toHaveBeenCalled();
     expect(mockRouterPush).toHaveBeenCalledWith("/marketplace");
@@ -179,8 +211,11 @@ describe("ProfileWithDropdown", () => {
   it('handles "Copy npub" click and icon change with timeout', () => {
     jest.useFakeTimers();
 
-    renderWithProviders(<ProfileWithDropdown pubkey={pubkey} dropDownKeys={["copy_npub"]} />, {});
-    
+    renderWithProviders(
+      <ProfileWithDropdown pubkey={pubkey} dropDownKeys={["copy_npub"]} />,
+      {}
+    );
+
     expect(screen.getByTestId("icon-clipboard")).toBeInTheDocument();
     expect(screen.queryByTestId("icon-check")).not.toBeInTheDocument();
 
