@@ -14,12 +14,10 @@ jest.mock("@/utils/nostr/nostr-helper-functions", () => ({
   parseBunkerToken: jest.fn(),
   setLocalStorageDataOnSignIn: jest.fn(),
 }));
-jest
-  .spyOn(NostrNSecSigner, "getEncryptedNSEC")
-  .mockReturnValue({
-    encryptedPrivKey: "encrypted-key",
-    pubkey: "test-pubkey",
-  });
+jest.spyOn(NostrNSecSigner, "getEncryptedNSEC").mockReturnValue({
+  encryptedPrivKey: "encrypted-key",
+  pubkey: "test-pubkey",
+});
 
 const helpers = nostrHelpers as jest.Mocked<typeof nostrHelpers>;
 
