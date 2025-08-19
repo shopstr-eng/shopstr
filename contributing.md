@@ -55,6 +55,7 @@ git remote -v
 ```
 
 You should see:
+
 ```
 origin    https://github.com/YOUR-USERNAME/shopstr.git (fetch)
 origin    https://github.com/YOUR-USERNAME/shopstr.git (push)

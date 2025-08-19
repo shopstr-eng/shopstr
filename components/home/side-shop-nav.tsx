@@ -77,13 +77,16 @@ const SideShopNav = ({
   };
 
   const tallyCategories = (categories: string[]): Record<string, number> => {
-    return categories.reduce(
-      (acc, category) => {
-        acc[category] = (acc[category] || 0) + 1;
-        return acc;
-      },
-      {} as Record<string, number>
-    );
+    const excludedCategories = ["shopstr"];
+    return categories
+      .filter((category) => !excludedCategories.includes(category))
+      .reduce(
+        (acc, category) => {
+          acc[category] = (acc[category] || 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>
+      );
   };
 
   const handleCreateNewListing = () => {

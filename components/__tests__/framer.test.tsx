@@ -1,24 +1,21 @@
-import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import '@testing-library/jest-dom';
-import { motion } from 'framer-motion';
-import { Framer } from '../framer';
-import type { Tab } from '@/components/hooks/use-tabs';
+import React from "react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import "@testing-library/jest-dom";
+import { motion } from "framer-motion";
+import { Framer } from "../framer";
+import type { Tab } from "@/components/hooks/use-tabs";
 
-jest.mock('framer-motion', () => {
-  const original = jest.requireActual('framer-motion');
+jest.mock("framer-motion", () => {
+  const original = jest.requireActual("framer-motion");
   return {
     ...original,
     motion: {
       ...original.motion,
-      div: jest.fn(({
-        _initial,
-        _animate,
-        _transition,
-        _variants,
-        children,
-        ...rest
-      }) => <div {...rest}>{children}</div>),
+      div: jest.fn(
+        ({ _initial, _animate, _transition, _variants, children, ...rest }) => (
+          <div {...rest}>{children}</div>
+        )
+      ),
     },
   };
 });
@@ -37,11 +34,11 @@ beforeAll(() => {
   }));
 });
 
-describe('Framer.Tabs', () => {
+describe("Framer.Tabs", () => {
   const mockTabs: Tab[] = [
-    { label: 'Tab 1' },
-    { label: 'Tab 2' },
-    { label: 'Tab 3' },
+    { label: "Tab 1" },
+    { label: "Tab 2" },
+    { label: "Tab 3" },
   ];
 
   const mockSetSelectedTab = jest.fn();
@@ -52,7 +49,7 @@ describe('Framer.Tabs', () => {
     jest.clearAllMocks();
   });
 
-  it('should render all tabs with their labels', () => {
+  it("should render all tabs with their labels", () => {
     render(
       <Framer.Tabs
         tabs={mockTabs}
@@ -61,12 +58,12 @@ describe('Framer.Tabs', () => {
       />
     );
 
-    expect(screen.getByText('Tab 1')).toBeInTheDocument();
-    expect(screen.getByText('Tab 2')).toBeInTheDocument();
-    expect(screen.getByText('Tab 3')).toBeInTheDocument();
+    expect(screen.getByText("Tab 1")).toBeInTheDocument();
+    expect(screen.getByText("Tab 2")).toBeInTheDocument();
+    expect(screen.getByText("Tab 3")).toBeInTheDocument();
   });
 
-  it('should apply active styles to the selected tab and inactive styles to others', () => {
+  it("should apply active styles to the selected tab and inactive styles to others", () => {
     render(
       <Framer.Tabs
         tabs={mockTabs}
@@ -75,14 +72,14 @@ describe('Framer.Tabs', () => {
       />
     );
 
-    const activeTab = screen.getByText('Tab 2');
-    const inactiveTab = screen.getByText('Tab 1');
+    const activeTab = screen.getByText("Tab 2");
+    const inactiveTab = screen.getByText("Tab 1");
 
-    expect(activeTab).toHaveClass('font-bold');
-    expect(inactiveTab).not.toHaveClass('font-bold');
+    expect(activeTab).toHaveClass("font-bold");
+    expect(inactiveTab).not.toHaveClass("font-bold");
   });
 
-  it('should call setSelectedTab with the correct index and direction when a tab is clicked', () => {
+  it("should call setSelectedTab with the correct index and direction when a tab is clicked", () => {
     render(
       <Framer.Tabs
         tabs={mockTabs}
@@ -91,12 +88,12 @@ describe('Framer.Tabs', () => {
       />
     );
 
-    fireEvent.click(screen.getByText('Tab 3'));
+    fireEvent.click(screen.getByText("Tab 3"));
     expect(mockSetSelectedTab).toHaveBeenCalledTimes(1);
     expect(mockSetSelectedTab).toHaveBeenCalledWith([2, 1]);
   });
 
-  it('should calculate the direction as -1 when moving to a previous tab', () => {
+  it("should calculate the direction as -1 when moving to a previous tab", () => {
     render(
       <Framer.Tabs
         tabs={mockTabs}
@@ -105,12 +102,12 @@ describe('Framer.Tabs', () => {
       />
     );
 
-    fireEvent.click(screen.getByText('Tab 1'));
+    fireEvent.click(screen.getByText("Tab 1"));
     expect(mockSetSelectedTab).toHaveBeenCalledTimes(1);
     expect(mockSetSelectedTab).toHaveBeenCalledWith([0, -1]);
   });
 
-  it('should render the animated indicator div after positions are calculated', async () => {
+  it("should render the animated indicator div after positions are calculated", async () => {
     render(
       <Framer.Tabs
         tabs={mockTabs}
@@ -125,8 +122,8 @@ describe('Framer.Tabs', () => {
     });
   });
 
-  it('should clean up the resize event listener on unmount', () => {
-    const removeEventListenerSpy = jest.spyOn(window, 'removeEventListener');
+  it("should clean up the resize event listener on unmount", () => {
+    const removeEventListenerSpy = jest.spyOn(window, "removeEventListener");
 
     const { unmount } = render(
       <Framer.Tabs
@@ -138,7 +135,10 @@ describe('Framer.Tabs', () => {
 
     unmount();
 
-    expect(removeEventListenerSpy).toHaveBeenCalledWith('resize', expect.any(Function));
+    expect(removeEventListenerSpy).toHaveBeenCalledWith(
+      "resize",
+      expect.any(Function)
+    );
 
     removeEventListenerSpy.mockRestore();
   });

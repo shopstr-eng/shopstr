@@ -1,17 +1,23 @@
 import React from "react";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import MyListingsFeed from "../my-listings-feed"; 
+import MyListingsFeed from "../my-listings-feed";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 
-jest.mock("../my-listings", () => { 
+jest.mock("../my-listings", () => {
   const MockMyListingsPage = () => <div data-testid="my-listings-page-mock" />;
   MockMyListingsPage.displayName = "MyListingsPage";
   return MockMyListingsPage;
 });
 
-jest.mock("../../product-form", () => { 
-  const MockProductForm = ({ showModal, handleModalToggle }: { showModal: boolean, handleModalToggle: () => void }) => (
+jest.mock("../../product-form", () => {
+  const MockProductForm = ({
+    showModal,
+    handleModalToggle,
+  }: {
+    showModal: boolean;
+    handleModalToggle: () => void;
+  }) => (
     <div data-testid="product-form-mock">
       {showModal && <div data-testid="modal-content">Modal is Open</div>}
       <button onClick={handleModalToggle}>Close Modal</button>
@@ -21,9 +27,8 @@ jest.mock("../../product-form", () => {
   return MockProductForm;
 });
 
-
 const mockRouterPush = jest.fn();
-jest.mock('next/router', () => ({
+jest.mock("next/router", () => ({
   useRouter: () => ({
     push: mockRouterPush,
   }),
@@ -32,14 +37,21 @@ jest.mock('next/router', () => ({
 const mockSearchParams = {
   has: jest.fn(),
 };
-jest.mock('next/navigation', () => ({
+jest.mock("next/navigation", () => ({
   useSearchParams: () => mockSearchParams,
 }));
 
 const renderComponent = (isLoggedIn: boolean, hasQueryParam: boolean) => {
   mockSearchParams.has.mockReturnValue(hasQueryParam);
   return render(
-    <SignerContext.Provider value={{ isLoggedIn, login: jest.fn(), logout: jest.fn(), nostrUser: null }}>
+    <SignerContext.Provider
+      value={{
+        isLoggedIn,
+        login: jest.fn(),
+        logout: jest.fn(),
+        nostrUser: null,
+      }}
+    >
       <MyListingsFeed />
     </SignerContext.Provider>
   );
@@ -83,9 +95,9 @@ describe("MyListingsFeed", () => {
     expect(screen.getByTestId("modal-content")).toBeInTheDocument();
 
     const closeButton = screen.getByText("Close Modal");
-    
+
     act(() => {
-        fireEvent.click(closeButton);
+      fireEvent.click(closeButton);
     });
 
     expect(mockRouterPush).toHaveBeenCalledWith("");

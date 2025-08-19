@@ -12,7 +12,7 @@ const fakePoolInstance = {
 const FakePool = jest.fn().mockImplementation(() => fakePoolInstance);
 
 const nip07 = { fromJSON: jest.fn() };
-const nsec  = { fromJSON: jest.fn() };
+const nsec = { fromJSON: jest.fn() };
 const nip46 = { fromJSON: jest.fn() };
 
 describe("NostrManager", () => {
@@ -26,11 +26,18 @@ describe("NostrManager", () => {
       SimplePool: FakePool,
       verifyEvent: (e: any) => verifyEventMock(e),
     }));
-    jest.doMock("@/utils/nostr/signers/nostr-nip07-signer", () => ({ NostrNIP07Signer: nip07 }));
-    jest.doMock("@/utils/nostr/signers/nostr-nsec-signer", () => ({ NostrNSecSigner: nsec }));
-    jest.doMock("@/utils/nostr/signers/nostr-nip46-signer", () => ({ NostrNIP46Signer: nip46 }));
+    jest.doMock("@/utils/nostr/signers/nostr-nip07-signer", () => ({
+      NostrNIP07Signer: nip07,
+    }));
+    jest.doMock("@/utils/nostr/signers/nostr-nsec-signer", () => ({
+      NostrNSecSigner: nsec,
+    }));
+    jest.doMock("@/utils/nostr/signers/nostr-nip46-signer", () => ({
+      NostrNIP46Signer: nip46,
+    }));
     jest.doMock("../../timeout", () => ({
-      newPromiseWithTimeout: (fn: any) => new Promise((resolve, reject) => fn(resolve, reject)),
+      newPromiseWithTimeout: (fn: any) =>
+        new Promise((resolve, reject) => fn(resolve, reject)),
     }));
 
     const mod = require("../nostr-manager");
@@ -53,7 +60,7 @@ describe("NostrManager", () => {
     it("falls back to NSEC", () => {
       nip07.fromJSON.mockReturnValue(undefined);
       nsec.fromJSON.mockReturnValue("SNSEC");
-      const s = NostrManager.signerFrom({ }, CH);
+      const s = NostrManager.signerFrom({}, CH);
       expect(s).toBe("SNSEC");
     });
 
@@ -61,7 +68,7 @@ describe("NostrManager", () => {
       nip07.fromJSON.mockReturnValue(undefined);
       nsec.fromJSON.mockReturnValue(undefined);
       nip46.fromJSON.mockReturnValue("S46");
-      const s = NostrManager.signerFrom({ }, CH);
+      const s = NostrManager.signerFrom({}, CH);
       expect(s).toBe("S46");
     });
 
@@ -69,7 +76,9 @@ describe("NostrManager", () => {
       nip07.fromJSON.mockReturnValue(undefined);
       nsec.fromJSON.mockReturnValue(undefined);
       nip46.fromJSON.mockReturnValue(undefined);
-      expect(() => NostrManager.signerFrom({ }, CH)).toThrow(/Invalid signer type/);
+      expect(() => NostrManager.signerFrom({}, CH)).toThrow(
+        /Invalid signer type/
+      );
     });
   });
 
@@ -108,11 +117,11 @@ describe("NostrManager", () => {
       verifyEventMock.mockReturnValueOnce(false).mockReturnValueOnce(true);
       const cb = jest.fn();
       await mgr.subscribe([], { onevent: cb }, ["u1"]);
-      
+
       const params = fakePoolInstance.subscribeMany.mock.calls[0][2];
       params.onevent!({ id: 1 });
       params.onevent!({ id: 2 });
-      
+
       expect(cb).toHaveBeenCalledTimes(1);
       expect(cb).toHaveBeenCalledWith({ id: 2 });
     });
@@ -139,10 +148,8 @@ describe("NostrManager", () => {
 
     it("publishes and resolves", async () => {
       await expect(mgr.publish(evt, ["p1"])).resolves.toBeUndefined();
-      
+
       expect(fakePoolInstance.publish).toHaveBeenCalledWith(["p1"], evt);
     });
   });
 });
-
-

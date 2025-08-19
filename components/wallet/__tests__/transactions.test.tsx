@@ -71,9 +71,10 @@ describe("Transactions", () => {
     expect(screen.getByTestId("icon-purchase")).toBeInTheDocument();
   });
 
-
   it("should poll for new transactions and update the view", async () => {
-    const initialHistory: Transaction[] = [{ type: 1, amount: 100, date: 1721915400 }];
+    const initialHistory: Transaction[] = [
+      { type: 1, amount: 100, date: 1721915400 },
+    ];
     mockedGetLocalStorageData.mockReturnValue({ history: initialHistory });
     render(<Transactions />);
 
@@ -81,26 +82,26 @@ describe("Transactions", () => {
     expect(screen.queryByText("200 sats")).not.toBeInTheDocument();
 
     const updatedHistory: Transaction[] = [
-        ...initialHistory,
-        { type: 2, amount: 200, date: 1721915500 }
+      ...initialHistory,
+      { type: 2, amount: 200, date: 1721915500 },
     ];
     mockedGetLocalStorageData.mockReturnValue({ history: updatedHistory });
 
     act(() => {
-        jest.advanceTimersByTime(2100);
+      jest.advanceTimersByTime(2100);
     });
 
     await waitFor(() => {
-        expect(screen.getByText("200 sats")).toBeInTheDocument();
+      expect(screen.getByText("200 sats")).toBeInTheDocument();
     });
     expect(mockedGetLocalStorageData).toHaveBeenCalledTimes(2);
   });
 
   it("should clean up the interval on component unmount", () => {
-    const clearIntervalSpy = jest.spyOn(global, 'clearInterval');
-    
+    const clearIntervalSpy = jest.spyOn(global, "clearInterval");
+
     const { unmount } = render(<Transactions />);
-    
+
     unmount();
 
     expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
