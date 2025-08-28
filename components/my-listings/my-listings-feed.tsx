@@ -15,7 +15,7 @@ import {
   Input,
   Button,
 } from "@nextui-org/react";
-import { BLACKBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { WHITEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
 const MyListingsFeed = () => {
   const router = useRouter();
@@ -180,7 +180,7 @@ const MyListingsFeed = () => {
               Cancel
             </Button>
             <Button
-              className={`bg-gradient-to-tr text-white shadow-lg ${BLACKBUTTONCLASSNAMES}`}
+              className={`bg-gradient-to-tr text-white shadow-lg ${WHITEBUTTONCLASSNAMES}`}
               onClick={handlePasswordSubmit}
               isDisabled={!passwordInput.trim()}
             >

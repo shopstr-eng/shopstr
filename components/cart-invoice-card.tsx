@@ -97,7 +97,12 @@ export default function CartInvoiceCard({
   setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
 }) {
   const { mints, tokens, history } = getLocalStorageData();
-  const { isLoggedIn, signer } = useContext(SignerContext);
+  const {
+    pubkey: userPubkey,
+    npub: userNPub,
+    isLoggedIn,
+    signer,
+  } = useContext(SignerContext);
 
   // Check if there are tokens available for Cashu payment
   const hasTokensAvailable = tokens && tokens.length > 0;
@@ -310,12 +315,14 @@ export default function CartInvoiceCard({
     isPayment?: boolean,
     isReceipt?: boolean,
     isDonation?: boolean,
+    isHerdshare?: boolean,
     orderId?: string,
     paymentType?: string,
     paymentReference?: string,
     paymentProof?: string,
     messageAmount?: number,
-    productQuantity?: number
+    productQuantity?: number,
+    retryCount: number = 3
   ) => {
     const newKeys = await generateNewKeys();
     if (!newKeys) {
@@ -324,21 +331,44 @@ export default function CartInvoiceCard({
       return;
     }
 
-    await sendPaymentAndContactMessageWithKeys(
-      pubkeyToReceiveMessage,
-      message,
-      product,
-      isPayment,
-      isReceipt,
-      isDonation,
-      orderId,
-      paymentType,
-      paymentReference,
-      paymentProof,
-      messageAmount,
-      productQuantity,
-      newKeys
-    );
+    for (let attempt = 0; attempt < retryCount; attempt++) {
+      try {
+        await sendPaymentAndContactMessageWithKeys(
+          pubkeyToReceiveMessage,
+          message,
+          product,
+          isPayment,
+          isReceipt,
+          isDonation,
+          orderId,
+          paymentType,
+          paymentReference,
+          paymentProof,
+          messageAmount,
+          productQuantity,
+          newKeys,
+          isHerdshare
+        );
+        // If we get here, the message was sent successfully
+        return;
+      } catch (error) {
+        console.warn(
+          `Attempt ${attempt + 1} failed for message sending:`,
+          error
+        );
+
+        if (attempt === retryCount - 1) {
+          // This was the last attempt, log the error but don't throw
+          console.error("Failed to send message after all retries:", error);
+          return; // Continue with the flow instead of breaking it
+        }
+
+        // Wait before retrying (exponential backoff)
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.pow(2, attempt) * 1000)
+        );
+      }
+    }
   };
 
   const sendPaymentAndContactMessageWithKeys = async (
@@ -359,7 +389,8 @@ export default function CartInvoiceCard({
       senderNsec: string;
       receiverNpub: string;
       receiverNsec: string;
-    }
+    },
+    isHerdshare?: boolean
   ) => {
     if (!keys) {
       setFailureText("Message keys are required!");
@@ -403,6 +434,16 @@ export default function CartInvoiceCard({
       };
     } else if (isDonation) {
       messageSubject = "donation";
+    } else if (isHerdshare) {
+      messageSubject = "order-info";
+      messageOptions = {
+        isOrder: true,
+        type: 1,
+        orderAmount: messageAmount ? messageAmount : undefined,
+        orderId,
+        productData: product,
+        quantity: productQuantity ? productQuantity : 1,
+      };
     } else if (orderId) {
       messageSubject = "order-info";
       messageOptions = {
@@ -437,7 +478,7 @@ export default function CartInvoiceCard({
     );
     await sendGiftWrappedMessageEvent(giftWrappedEvent);
 
-    if (isReceipt) {
+    if (isReceipt || isHerdshare) {
       chatsContext.addNewlyCreatedMessageEvent(
         {
           ...giftWrappedMessageEvent,
@@ -630,9 +671,6 @@ export default function CartInvoiceCard({
   const handleFiatPayment = async (convertedPrice: number, data: any) => {
     try {
       validatePaymentData(convertedPrice, data);
-
-      const userPubkey = await signer?.getPubKey?.();
-      const userNPub = userPubkey ? nip19.npubEncode(userPubkey) : undefined;
       for (const product of products) {
         const title = product.title;
         const pubkey = product.pubkey;
@@ -717,6 +755,9 @@ export default function CartInvoiceCard({
         );
 
         if (required && required !== "" && data.additionalInfo) {
+          // Add delay before additional info message
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
           const additionalMessage =
             "Additional customer information: " + data.additionalInfo;
           await sendPaymentAndContactMessageWithKeys(
@@ -810,30 +851,32 @@ export default function CartInvoiceCard({
               undefined,
               orderKeys
             );
-            if (userPubkey) {
-              const receiptMessage =
-                "Your order for " +
-                title +
-                productDetails +
-                " was processed successfully! If applicable, you should be receiving delivery information from " +
-                nip19.npubEncode(product.pubkey) +
-                " as soon as they review your order.";
-              await sendPaymentAndContactMessageWithKeys(
-                userPubkey,
-                receiptMessage,
-                product,
-                false,
-                true,
-                false,
-                orderId,
-                undefined,
-                undefined,
-                undefined,
-                undefined,
-                undefined,
-                orderKeys
-              );
-            }
+
+            // Add delay between messages
+            await new Promise((resolve) => setTimeout(resolve, 500));
+
+            const receiptMessage =
+              "Your order for " +
+              title +
+              productDetails +
+              " was processed successfully! If applicable, you should be receiving delivery information from " +
+              nip19.npubEncode(product.pubkey) +
+              " as soon as they review your order.";
+            await sendPaymentAndContactMessageWithKeys(
+              userPubkey!,
+              receiptMessage,
+              product,
+              false,
+              true,
+              false,
+              orderId,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              orderKeys
+            );
           } else if (
             productShippingType === "N/A" ||
             productShippingType === "Pickup" ||
@@ -892,25 +935,27 @@ export default function CartInvoiceCard({
               undefined,
               orderKeys
             );
-            if (userPubkey) {
-              await sendPaymentAndContactMessageWithKeys(
-                userPubkey,
-                receiptMessage,
-                product,
-                false,
-                true,
-                false,
-                orderId,
-                undefined,
-                undefined,
-                undefined,
-                undefined,
-                undefined,
-                orderKeys
-              );
-            }
+
+            // Add delay between messages
+            await new Promise((resolve) => setTimeout(resolve, 500));
+
+            await sendPaymentAndContactMessageWithKeys(
+              userPubkey!,
+              receiptMessage,
+              product,
+              false,
+              true,
+              false,
+              orderId,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              orderKeys
+            );
           }
-        } else if (userPubkey) {
+        } else {
           let productDetails = "";
           if (product.selectedSize) {
             productDetails += " in size " + product.selectedSize;
@@ -943,7 +988,7 @@ export default function CartInvoiceCard({
             nip19.npubEncode(product.pubkey) +
             ".";
           await sendPaymentAndContactMessageWithKeys(
-            userPubkey,
+            userPubkey!,
             receiptMessage,
             product,
             false,
@@ -956,6 +1001,32 @@ export default function CartInvoiceCard({
             undefined,
             undefined,
             orderKeys
+          );
+        }
+
+        // Send herdshare agreement if product has one
+        if (product.herdshareAgreement) {
+          // Add delay before herdshare message
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
+          const herdshareMessage =
+            "To finalize your purchase, sign and send the following herdshare agreement to the dairy: " +
+            product.herdshareAgreement;
+          await sendPaymentAndContactMessageWithKeys(
+            userPubkey!,
+            herdshareMessage,
+            product,
+            false,
+            false,
+            false,
+            orderId,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            orderKeys,
+            true
           );
         }
       }
@@ -1134,8 +1205,6 @@ export default function CartInvoiceCard({
     proofs: Proof[],
     data: any
   ) => {
-    const userPubkey = await signer?.getPubKey?.();
-    const userNPub = userPubkey ? nip19.npubEncode(userPubkey) : undefined;
     let remainingProofs = proofs;
     for (const product of products) {
       const title = product.title;
@@ -1298,7 +1367,11 @@ export default function CartInvoiceCard({
                 : 1,
               orderKeys
             );
+
             if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
+              // Add delay between messages to prevent browser throttling
+              await new Promise((resolve) => setTimeout(resolve, 500));
+
               const encodedChange = getEncodedToken({
                 mint: mints[0]!,
                 proofs: changeProofs,
@@ -1474,6 +1547,9 @@ export default function CartInvoiceCard({
 
       let donationMessage = "";
       if (donationToken) {
+        // Add delay before donation message
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
         donationMessage = "Sale donation: " + donationToken;
         await sendPaymentAndContactMessage(
           "a37118a4888e02d28e8767c08caaf73b49abdac391ad7ff18a304891e416dc33",
@@ -1486,6 +1562,9 @@ export default function CartInvoiceCard({
       }
 
       if (required && required !== "" && data.additionalInfo) {
+        // Add delay before additional info message
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
         const additionalMessage =
           "Additional customer information: " + data.additionalInfo;
         await sendPaymentAndContactMessageWithKeys(
@@ -1614,30 +1693,32 @@ export default function CartInvoiceCard({
             undefined,
             orderKeys
           );
-          if (userPubkey) {
-            const receiptMessage =
-              "Your order for " +
-              title +
-              productDetails +
-              " was processed successfully. If applicable, you should be receiving delivery information from " +
-              nip19.npubEncode(product.pubkey) +
-              " as soon as they review your order.";
-            await sendPaymentAndContactMessageWithKeys(
-              userPubkey,
-              receiptMessage,
-              product,
-              false,
-              true,
-              false,
-              orderId,
-              undefined,
-              undefined,
-              undefined,
-              undefined,
-              undefined,
-              orderKeys
-            );
-          }
+
+          // Add delay between messages
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
+          const receiptMessage =
+            "Your order for " +
+            title +
+            productDetails +
+            " was processed successfully. If applicable, you should be receiving delivery information from " +
+            nip19.npubEncode(product.pubkey) +
+            " as soon as they review your order.";
+          await sendPaymentAndContactMessageWithKeys(
+            userPubkey!,
+            receiptMessage,
+            product,
+            false,
+            true,
+            false,
+            orderId,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            orderKeys
+          );
         }
       } else if (
         shouldUseContact &&
@@ -1728,28 +1809,27 @@ export default function CartInvoiceCard({
             undefined,
             orderKeys
           );
-          if (userPubkey) {
-            await sendPaymentAndContactMessageWithKeys(
-              userPubkey,
-              receiptMessage,
-              product,
-              false,
-              true,
-              false,
-              orderId,
-              undefined,
-              undefined,
-              undefined,
-              undefined,
-              undefined,
-              orderKeys
-            );
-          }
-        }
-      }
 
-      // Always send receipt message for successful payments
-      if (userPubkey) {
+          // Add delay between messages
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
+          await sendPaymentAndContactMessageWithKeys(
+            userPubkey!,
+            receiptMessage,
+            product,
+            false,
+            true,
+            false,
+            orderId,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            orderKeys
+          );
+        }
+      } else {
         let productDetails = "";
         if (product.selectedSize) {
           productDetails += " in size " + product.selectedSize;
@@ -1782,7 +1862,7 @@ export default function CartInvoiceCard({
           nip19.npubEncode(product.pubkey) +
           ".";
         await sendPaymentAndContactMessageWithKeys(
-          userPubkey,
+          userPubkey!,
           receiptMessage,
           product,
           false,
@@ -1795,6 +1875,32 @@ export default function CartInvoiceCard({
           undefined,
           undefined,
           orderKeys
+        );
+      }
+
+      // Send herdshare agreement if product has one
+      if (product.herdshareAgreement) {
+        // Add delay before herdshare message
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        const herdshareMessage =
+          "To finalize your purchase, sign and send the following herdshare agreement to the dairy: " +
+          product.herdshareAgreement;
+        await sendPaymentAndContactMessageWithKeys(
+          userPubkey!,
+          herdshareMessage,
+          product,
+          false,
+          false,
+          false,
+          orderId,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          orderKeys,
+          true
         );
       }
     }
@@ -2380,7 +2486,7 @@ export default function CartInvoiceCard({
                   <div className="flex flex-col items-center justify-center">
                     {qrCodeUrl ? (
                       <>
-                        <h3 className="mt-3 text-center text-lg font-medium leading-6 text-dark-text text-gray-900">
+                        <h3 className="mt-3 text-center text-lg font-medium leading-6 text-dark-text">
                           Don&apos;t refresh or close the page until the payment
                           has been confirmed!
                         </h3>
@@ -2422,7 +2528,7 @@ export default function CartInvoiceCard({
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center">
-                    <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
+                    <h3 className="mt-3 text-center text-lg font-medium leading-6 text-dark-text">
                       Payment confirmed!
                     </h3>
                     <Image

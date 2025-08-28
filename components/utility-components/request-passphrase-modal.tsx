@@ -8,7 +8,7 @@ import {
   Input,
   Button,
 } from "@nextui-org/react";
-import { BLACKBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { WHITEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { useRouter } from "next/router";
 
 export default function PassphraseChallengeModal({
@@ -35,7 +35,7 @@ export default function PassphraseChallengeModal({
   const passphraseInputRef = useRef<HTMLInputElement>(null);
 
   const buttonClassName = useMemo(() => {
-    const enabledStyle = BLACKBUTTONCLASSNAMES;
+    const enabledStyle = WHITEBUTTONCLASSNAMES;
     const className = "text-white shadow-lg bg-gradient-to-tr" + enabledStyle;
     return className;
   }, []);

@@ -14,7 +14,7 @@ import {
   UseFormHandleSubmit,
   FieldValues,
 } from "react-hook-form";
-import { BLACKBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { WHITEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
 export default function ContactForm({
   showContactModal,
@@ -198,7 +198,7 @@ export default function ContactForm({
               Cancel
             </Button>
 
-            <Button className={BLACKBUTTONCLASSNAMES} type="submit">
+            <Button className={WHITEBUTTONCLASSNAMES} type="submit">
               Submit
             </Button>
           </ModalFooter>

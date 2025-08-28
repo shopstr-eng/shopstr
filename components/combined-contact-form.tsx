@@ -15,7 +15,7 @@ import {
   UseFormHandleSubmit,
   FieldValues,
 } from "react-hook-form";
-import { BLACKBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { WHITEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import CountryDropdown from "./utility-components/dropdowns/country-dropdown";
 
 export default function CombinedContactForm({
@@ -457,7 +457,7 @@ export default function CombinedContactForm({
               Cancel
             </Button>
 
-            <Button className={BLACKBUTTONCLASSNAMES} type="submit">
+            <Button className={WHITEBUTTONCLASSNAMES} type="submit">
               Submit
             </Button>
           </ModalFooter>

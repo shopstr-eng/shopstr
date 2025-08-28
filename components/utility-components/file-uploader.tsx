@@ -1,7 +1,7 @@
 import { useContext, useRef, useState } from "react";
 import { Button, Input, Progress } from "@nextui-org/react";
 import {
-  blossomUploadImages,
+  blossomUpload,
   getLocalStorageData,
 } from "@/utils/nostr/nostr-helper-functions";
 import FailureModal from "./failure-modal";
@@ -142,8 +142,9 @@ export const FileUploaderButton = ({
       if (isLoggedIn) {
         responses = await Promise.all(
           strippedImageFiles.map(async (imageFile, idx) => {
-            const tags = await blossomUploadImages(
+            const tags = await blossomUpload(
               imageFile,
+              true,
               signer!,
               blossomServers && blossomServers.length > 0
                 ? blossomServers

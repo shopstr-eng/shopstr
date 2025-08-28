@@ -42,6 +42,7 @@ import { addProductToCache } from "@/utils/nostr/cache-service";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { buildSrcSet } from "@/utils/images";
 import { FileUploaderButton } from "./utility-components/file-uploader";
+import { AgreementUploaderButton } from "./utility-components/agreement-uploader";
 import currencySelection from "../public/currencySelection.json";
 import {
   NostrContext,
@@ -74,6 +75,8 @@ export default function ProductForm({
   const [isPostingOrUpdatingProduct, setIsPostingOrUpdatingProduct] =
     useState(false);
   const [showOptionalTags, setShowOptionalTags] = useState(false);
+  const [herdshareAgreementUrl, setHerdshareAgreementUrl] =
+    useState<string>("");
   const productEventContext = useContext(ProductContext);
   const profileContext = useContext(ProfileMapContext);
   const {
@@ -128,6 +131,12 @@ export default function ProductForm({
   useEffect(() => {
     setImages(oldValues?.images || []);
     setIsEdit(oldValues ? true : false);
+    // Initialize herdshare agreement URL if editing existing product
+    if (oldValues?.herdshareAgreement) {
+      setHerdshareAgreementUrl(oldValues.herdshareAgreement);
+    } else {
+      setHerdshareAgreementUrl("");
+    }
   }, [showModal]);
 
   const onSubmit = async (data: {
@@ -219,6 +228,12 @@ export default function ProductForm({
       tags.push(["restrictions", data["Restrictions"] as string]);
     }
 
+    // Add herdshare agreement if URL exists and herdshare category is selected
+    const categories = (data["Category"] as string).toLowerCase();
+    if (herdshareAgreementUrl && categories.includes("herdshare")) {
+      tags.push(["herdshare_agreement", herdshareAgreementUrl]);
+    }
+
     // Add pickup locations if they exist and shipping involves pickup
     if (
       data["Pickup Locations"] &&
@@ -253,12 +268,14 @@ export default function ProductForm({
   const clear = () => {
     handleModalToggle();
     setImages([]);
+    setHerdshareAgreementUrl("");
     reset();
     setCurrentSlide(0);
   };
 
   const watchShippingOption = watch("Shipping Option");
   const watchCurrency = watch("Currency");
+  const watchCategory = watch("Category");
 
   const deleteImage = (index: number) => () => {
     setImages((prevValues) => {
@@ -1014,6 +1031,36 @@ export default function ProductForm({
                 );
               }}
             />
+
+            {/* Herdshare Agreement Upload - Show only when herdshare category is selected */}
+            {watchCategory &&
+              watchCategory.toLowerCase().includes("herdshare") && (
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-dark-text">
+                    Herdshare Agreement
+                  </h3>
+                  <p className="text-sm text-gray-400">
+                    Upload the herdshare agreement PDF that customers must
+                    review before purchase.
+                  </p>
+                  <AgreementUploaderButton
+                    isProductUpload={true}
+                    className="w-full"
+                    fileCallbackOnUpload={(fileUrl) => {
+                      setHerdshareAgreementUrl(fileUrl);
+                    }}
+                  >
+                    {herdshareAgreementUrl
+                      ? "Update Agreement"
+                      : "Upload Agreement"}
+                  </AgreementUploaderButton>
+                  {herdshareAgreementUrl && (
+                    <div className="text-sm text-green-600">
+                      ✓ Agreement uploaded successfully
+                    </div>
+                  )}
+                </div>
+              )}
 
             <Controller
               name="Restrictions"

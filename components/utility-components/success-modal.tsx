@@ -1,7 +1,7 @@
 import { Modal, ModalContent, ModalHeader, ModalBody } from "@nextui-org/react";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
 
-export default function FailureModal({
+export default function SuccessModal({
   bodyText,
   isOpen,
   onClose,

@@ -7,7 +7,7 @@ import {
   ModalFooter,
   Button,
 } from "@nextui-org/react";
-import { BLACKBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { WHITEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { useRouter } from "next/router";
 
 function sanitizeURL(s: string) {
@@ -87,7 +87,7 @@ export default function AuthChallengeModal({
           {challengeUrl && (
             <Button
               className={
-                "bg-gradient-to-tr text-white shadow-lg" + BLACKBUTTONCLASSNAMES
+                "bg-gradient-to-tr text-white shadow-lg" + WHITEBUTTONCLASSNAMES
               }
               type="submit"
               onClick={() => {

@@ -432,7 +432,6 @@ export async function sendGiftWrappedMessageEvent(
   const { relays, writeRelays } = getLocalStorageData();
   const pool = new SimplePool();
   const allWriteRelays = withBlastr([...writeRelays, ...relays]);
-
   await Promise.any(pool.publish(allWriteRelays, giftWrappedMessageEvent));
 }
 
@@ -728,26 +727,32 @@ export type BlossomUploadResponse = {
   type?: string;
 };
 
-export async function blossomUploadImages(
-  image: File,
+export async function blossomUpload(
+  fileUpload: File,
+  isImage: boolean,
   signer: NostrSigner,
   servers: Request["url"][]
 ) {
-  if (!image.type.includes("image"))
-    throw new Error("Only images are supported");
+  if (isImage) {
+    if (!fileUpload.type.includes("image"))
+      throw new Error("Only images are supported");
+  } else {
+    if (fileUpload.type !== "application/pdf")
+      throw new Error("Only images are supported");
+  }
 
-  const arrayBuffer = await image.arrayBuffer();
+  const arrayBuffer = await fileUpload.arrayBuffer();
   const wordArray = CryptoJS.lib.WordArray.create(arrayBuffer);
   const hash = CryptoJS.SHA256(wordArray).toString(CryptoJS.enc.Hex);
 
   const event = {
     kind: 24242,
-    content: `Upload ${image.name}`,
+    content: `Upload ${fileUpload.name}`,
     created_at: Math.floor(Date.now() / 1000),
     tags: [
       ["t", "upload"],
       ["x", hash],
-      ["size", image.size.toString()],
+      ["size", fileUpload.size.toString()],
       [
         "expiration",
         Math.floor((Date.now() + 24 * 60 * 60 * 1000) / 1000).toString(),
@@ -770,10 +775,10 @@ export async function blossomUploadImages(
 
       const response = await fetch(url, {
         method: "PUT",
-        body: image,
+        body: fileUpload,
         headers: {
           authorization,
-          "content-type": image.type,
+          "content-type": fileUpload.type,
         },
       }).then((res) => res.json());
 
@@ -799,7 +804,7 @@ export async function blossomUploadImages(
         }),
         headers: {
           authorization,
-          "content-type": image.type,
+          "content-type": fileUpload.type,
         },
       });
     }

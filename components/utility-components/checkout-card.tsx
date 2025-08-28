@@ -34,16 +34,14 @@ export default function CheckoutCard({
   setInvoiceGenerationFailed,
   setCashuPaymentSent,
   setCashuPaymentFailed,
-  uniqueKey,
 }: {
   productData: ProductData;
-  setFiatOrderIsPlaced?: (fiatOrderIsPlaced: boolean) => void;
-  setFiatOrderFailed?: (fiatOrderFailed: boolean) => void;
-  setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
-  setInvoiceGenerationFailed?: (invoiceGenerationFailed: boolean) => void;
-  setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
-  setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
-  uniqueKey?: string;
+  setFiatOrderIsPlaced: (fiatOrderIsPlaced: boolean) => void;
+  setFiatOrderFailed: (fiatOrderFailed: boolean) => void;
+  setInvoiceIsPaid: (invoiceIsPaid: boolean) => void;
+  setInvoiceGenerationFailed: (invoiceGenerationFailed: boolean) => void;
+  setCashuPaymentSent: (cashuPaymentSent: boolean) => void;
+  setCashuPaymentFailed: (cashuPaymentFailed: boolean) => void;
 }) {
   const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -326,7 +324,7 @@ export default function CheckoutCard({
             <div className="max-w-screen pt-4">
               <div
                 className="max-w-screen mx-3 my-3 flex flex-row whitespace-normal break-words"
-                key={uniqueKey}
+                key={productData.d}
               >
                 <div className="w-1/2 pr-4">
                   <div className="flex w-full flex-row">

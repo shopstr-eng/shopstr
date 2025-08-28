@@ -359,7 +359,7 @@ const MintButton = () => {
                       </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center">
-                        <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
+                        <h3 className="mt-3 text-center text-lg font-medium leading-6 text-dark-text">
                           Payment confirmed!
                         </h3>
                         <Image

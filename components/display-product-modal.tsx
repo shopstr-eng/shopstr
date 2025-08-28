@@ -18,7 +18,7 @@ import ProductForm from "./product-form";
 import ImageCarousel from "./utility-components/image-carousel";
 import CompactCategories from "./utility-components/compact-categories";
 import { locationAvatar } from "./utility-components/dropdowns/location-dropdown";
-import { BLACKBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { WHITEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 import SuccessModal from "./utility-components/success-modal";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
@@ -233,7 +233,7 @@ export default function DisplayProductModal({
             <div className="flex w-full flex-wrap justify-evenly gap-2">
               <Button
                 type="submit"
-                className={BLACKBUTTONCLASSNAMES}
+                className={WHITEBUTTONCLASSNAMES}
                 startContent={
                   <ShareIcon className="h-6 w-6 hover:text-yellow-600" />
                 }
@@ -247,7 +247,7 @@ export default function DisplayProductModal({
                 <>
                   <Button
                     type="submit"
-                    className={BLACKBUTTONCLASSNAMES}
+                    className={WHITEBUTTONCLASSNAMES}
                     startContent={
                       <PencilSquareIcon className="h-6 w-6 hover:text-yellow-600" />
                     }

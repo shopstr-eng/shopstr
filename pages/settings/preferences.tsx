@@ -15,7 +15,10 @@ import {
   Textarea,
 } from "@nextui-org/react";
 import { Relay } from "nostr-tools";
-import { BLACKBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import {
+  BLACKBUTTONCLASSNAMES,
+  WHITEBUTTONCLASSNAMES,
+} from "@/utils/STATIC-VARIABLES";
 import {
   createBlossomServerEvent,
   createNostrRelayEvent,
@@ -340,7 +343,7 @@ const PreferencesPage = () => {
               size="2xl"
             >
               <ModalContent>
-                <ModalHeader className="flex flex-col gap-1 text-light-text">
+                <ModalHeader className="flex flex-col gap-1 text-dark-text">
                   Change Active Mint
                 </ModalHeader>
                 <form onSubmit={handleMintSubmit(onMintSubmit)}>
@@ -368,7 +371,7 @@ const PreferencesPage = () => {
                           : "";
                         return (
                           <Textarea
-                            className="text-light-text"
+                            className="text-dark-text"
                             variant="bordered"
                             fullWidth={true}
                             placeholder="https://..."
@@ -399,7 +402,7 @@ const PreferencesPage = () => {
                       Cancel
                     </Button>
 
-                    <Button className={BLACKBUTTONCLASSNAMES} type="submit">
+                    <Button className={WHITEBUTTONCLASSNAMES} type="submit">
                       Change Mint
                     </Button>
                   </ModalFooter>
@@ -468,7 +471,7 @@ const PreferencesPage = () => {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex flex-col gap-1 text-light-text">
+              <ModalHeader className="flex flex-col gap-1 text-dark-text">
                 Add Relay
               </ModalHeader>
               <form onSubmit={handleRelaySubmit(onRelaySubmit)}>
@@ -496,7 +499,7 @@ const PreferencesPage = () => {
                         : "";
                       return (
                         <Textarea
-                          className="text-light-text"
+                          className="text-dark-text"
                           variant="bordered"
                           fullWidth={true}
                           placeholder="wss://..."
@@ -527,7 +530,7 @@ const PreferencesPage = () => {
                     Cancel
                   </Button>
 
-                  <Button className={BLACKBUTTONCLASSNAMES} type="submit">
+                  <Button className={WHITEBUTTONCLASSNAMES} type="submit">
                     Add Relay
                   </Button>
                 </ModalFooter>
@@ -597,7 +600,7 @@ const PreferencesPage = () => {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex flex-col gap-1 text-light-text">
+              <ModalHeader className="flex flex-col gap-1 text-dark-text">
                 Add Relay
               </ModalHeader>
               <form onSubmit={handleRelaySubmit(onRelaySubmit)}>
@@ -625,7 +628,7 @@ const PreferencesPage = () => {
                         : "";
                       return (
                         <Textarea
-                          className="text-light-text"
+                          className="text-dark-text"
                           variant="bordered"
                           fullWidth={true}
                           placeholder="wss://..."
@@ -656,7 +659,7 @@ const PreferencesPage = () => {
                     Cancel
                   </Button>
 
-                  <Button className={BLACKBUTTONCLASSNAMES} type="submit">
+                  <Button className={WHITEBUTTONCLASSNAMES} type="submit">
                     Add Relay
                   </Button>
                 </ModalFooter>
@@ -726,7 +729,7 @@ const PreferencesPage = () => {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex flex-col gap-1 text-light-text">
+              <ModalHeader className="flex flex-col gap-1 text-dark-text">
                 Add Relay
               </ModalHeader>
               <form onSubmit={handleRelaySubmit(onRelaySubmit)}>
@@ -754,7 +757,7 @@ const PreferencesPage = () => {
                         : "";
                       return (
                         <Textarea
-                          className="text-light-text"
+                          className="text-dark-text"
                           variant="bordered"
                           fullWidth={true}
                           placeholder="wss://..."
@@ -785,7 +788,7 @@ const PreferencesPage = () => {
                     Cancel
                   </Button>
 
-                  <Button className={BLACKBUTTONCLASSNAMES} type="submit">
+                  <Button className={WHITEBUTTONCLASSNAMES} type="submit">
                     Add Relay
                   </Button>
                 </ModalFooter>
@@ -862,7 +865,7 @@ const PreferencesPage = () => {
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex flex-col gap-1 text-light-text">
+              <ModalHeader className="flex flex-col gap-1 text-dark-text">
                 Add Server
               </ModalHeader>
               <form onSubmit={handleBlossomSubmit(onBlossomSubmit)}>
@@ -890,7 +893,7 @@ const PreferencesPage = () => {
                         : "";
                       return (
                         <Textarea
-                          className="text-light-text"
+                          className="text-dark-text"
                           variant="bordered"
                           fullWidth={true}
                           placeholder="https://..."
@@ -921,7 +924,7 @@ const PreferencesPage = () => {
                     Cancel
                   </Button>
 
-                  <Button className={BLACKBUTTONCLASSNAMES} type="submit">
+                  <Button className={WHITEBUTTONCLASSNAMES} type="submit">
                     Add Server
                   </Button>
                 </ModalFooter>
