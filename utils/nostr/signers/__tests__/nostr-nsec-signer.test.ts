@@ -19,12 +19,10 @@ jest.mock("nostr-tools", () => {
       decrypt: jest.fn().mockReturnValue("decryptedMessage"),
     },
     getPublicKey: jest.fn().mockReturnValue("mockPubKey"),
-    finalizeEvent: jest
-      .fn()
-      .mockImplementation((ev: any, _sk: Uint8Array) => ({
-        ...ev,
-        sig: "sig",
-      })),
+    finalizeEvent: jest.fn().mockImplementation((ev: any, _sk: Uint8Array) => ({
+      ...ev,
+      sig: "sig",
+    })),
   };
 });
 
