@@ -19,9 +19,10 @@ jest.mock("nostr-tools", () => {
       decrypt: jest.fn().mockReturnValue("decryptedMessage"),
     },
     getPublicKey: jest.fn().mockReturnValue("mockPubKey"),
-    finalizeEvent: jest
-      .fn()
-      .mockImplementation((ev: any, _sk: Uint8Array) => ({ ...ev, sig: "sig" })),
+    finalizeEvent: jest.fn().mockImplementation((ev: any, _sk: Uint8Array) => ({
+      ...ev,
+      sig: "sig",
+    })),
   };
 });
 
@@ -33,7 +34,7 @@ jest.mock("nostr-tools/nip49", () => ({
 jest.mock("crypto-js", () => ({
   AES: {
     decrypt: jest.fn().mockImplementation((_ct: string, _pw: string) => ({
-      toString: () => "0a0b0c", 
+      toString: () => "0a0b0c",
     })),
   },
   enc: { Utf8: "Utf8" },
@@ -41,14 +42,16 @@ jest.mock("crypto-js", () => ({
 
 describe("NostrNSecSigner", () => {
   const bytes = new Uint8Array([0x0a, 0x0b, 0x0c]);
-  const hex   = Buffer.from(bytes).toString("hex"); 
+  const hex = Buffer.from(bytes).toString("hex");
   const nsec1 = "nsec1dummy";
   const encrypted = "someEncrypted";
 
-  const mockCH = jest.fn<
-    Promise<{ res: string; remind: boolean }>,
-    [string, string, () => void, AbortSignal, Error?]
-  >().mockResolvedValue({ res: "passX", remind: true });
+  const mockCH = jest
+    .fn<
+      Promise<{ res: string; remind: boolean }>,
+      [string, string, () => void, AbortSignal, Error?]
+    >()
+    .mockResolvedValue({ res: "passX", remind: true });
 
   afterEach(() => jest.clearAllMocks());
 
@@ -78,9 +81,7 @@ describe("NostrNSecSigner", () => {
 
   describe("fromJSON / toJSON", () => {
     it("returns undefined when type ≠ 'nsec'", () => {
-      expect(
-        NostrNSecSigner.fromJSON({ type: "foo" }, mockCH)
-      ).toBeUndefined();
+      expect(NostrNSecSigner.fromJSON({ type: "foo" }, mockCH)).toBeUndefined();
     });
 
     it("returns undefined when encryptedPrivKey missing", () => {
@@ -125,10 +126,7 @@ describe("NostrNSecSigner", () => {
 
   it("_getPrivKey() decrypts NIP49 format when prefix 'ncryptsec'", async () => {
     const nip49Str = "ncryptsecXYZ";
-    const s = new NostrNSecSigner(
-      { encryptedPrivKey: nip49Str },
-      mockCH
-    );
+    const s = new NostrNSecSigner({ encryptedPrivKey: nip49Str }, mockCH);
     const priv = await s._getPrivKey();
     expect(nip49.decrypt).toHaveBeenCalledWith(nip49Str, "passX");
     expect(priv).toEqual(new Uint8Array([0x0a, 0x0b, 0x0c]));
@@ -145,7 +143,10 @@ describe("NostrNSecSigner", () => {
     await expect(withCache.getPubKey()).resolves.toBe("cached");
     expect(nostrTools.getPublicKey).not.toHaveBeenCalled();
 
-    const noCache = new NostrNSecSigner({ encryptedPrivKey: encrypted }, mockCH);
+    const noCache = new NostrNSecSigner(
+      { encryptedPrivKey: encrypted },
+      mockCH
+    );
     await expect(noCache.getPubKey()).resolves.toBe("mockPubKey");
     expect(nostrTools.getPublicKey).toHaveBeenCalled();
   });

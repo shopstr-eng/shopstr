@@ -75,9 +75,9 @@ describe("CompactCategories", () => {
 
     const trigger = screen.getByTestId("chip").parentElement;
     expect(trigger).toBeInTheDocument();
-    
+
     fireEvent.click(trigger!);
-    
+
     expect(screen.queryByText(/,\s*\.\.\./)).not.toBeInTheDocument();
   });
 });

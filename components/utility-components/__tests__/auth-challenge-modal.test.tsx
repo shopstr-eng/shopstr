@@ -38,7 +38,6 @@ jest.mock("@nextui-org/react", () => {
 
 window.open = jest.fn();
 
-
 describe("AuthChallengeModal", () => {
   const mockSetIsOpen = jest.fn();
   const defaultProps = {

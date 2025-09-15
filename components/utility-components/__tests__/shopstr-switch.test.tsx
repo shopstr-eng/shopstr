@@ -49,7 +49,7 @@ describe("ShopstrSwitch", () => {
 
   it('should have the "secondary" color in light mode', () => {
     render(<ShopstrSwitch wotFilter={false} setWotFilter={mockSetWotFilter} />);
-    
+
     const switchControl = screen.getByRole("switch");
 
     expect(switchControl).toHaveAttribute("data-color", "secondary");

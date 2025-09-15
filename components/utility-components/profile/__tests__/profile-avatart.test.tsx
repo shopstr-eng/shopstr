@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import { ProfileAvatar } from "../profile-avatar"; 
+import { ProfileAvatar } from "../profile-avatar";
 import { ProfileMapContext } from "@/utils/context/context";
 import { nip19 } from "nostr-tools";
 import React from "react";
@@ -44,7 +44,6 @@ describe("ProfileAvatar", () => {
   afterEach(() => {
     jest.clearAllMocks();
   });
-
 
   it("should render with fallback data when profile is not in context", () => {
     const mockContext = {
@@ -129,8 +128,7 @@ describe("ProfileAvatar", () => {
   });
 
   it("should truncate long display names", () => {
-    const longName =
-      "this_is_a_very_long_display_name_that_must_be_truncated";
+    const longName = "this_is_a_very_long_display_name_that_must_be_truncated";
     const truncatedName = "this_is_a_very_long_...";
 
     const profile = {
@@ -158,7 +156,7 @@ describe("ProfileAvatar", () => {
     const customClasses = {
       baseClassname: "custom-base",
       descriptionClassname: "custom-description",
-      wrapperClassname: "custom-wrapper", 
+      wrapperClassname: "custom-wrapper",
     };
 
     renderWithContext(<ProfileAvatar pubkey={pubkey} {...customClasses} />, {

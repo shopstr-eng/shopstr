@@ -6,17 +6,28 @@ import VolumeSelector from "../volume-selector";
 const mockOnSelectionChange = jest.fn();
 jest.mock("@nextui-org/react", () => ({
   Select: (props: any) => {
-    mockOnSelectionChange.mockImplementation((keys) => props.onSelectionChange(keys));
+    mockOnSelectionChange.mockImplementation((keys) =>
+      props.onSelectionChange(keys)
+    );
     return (
-      <div data-testid="select" data-selected-keys={JSON.stringify(Array.from(props.selectedKeys))}>
+      <div
+        data-testid="select"
+        data-selected-keys={JSON.stringify(Array.from(props.selectedKeys))}
+      >
         {props.children}
       </div>
     );
   },
-  SelectSection: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  SelectItem: ({ children, textValue }: { children: React.ReactNode, textValue: string }) => (
-    <div role="option">{textValue || children}</div>
+  SelectSection: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
   ),
+  SelectItem: ({
+    children,
+    textValue,
+  }: {
+    children: React.ReactNode;
+    textValue: string;
+  }) => <div role="option">{textValue || children}</div>,
 }));
 
 describe("VolumeSelector", () => {
@@ -38,7 +49,9 @@ describe("VolumeSelector", () => {
   });
 
   it("should render null if no volumes are provided", () => {
-    const { container } = render(<VolumeSelector {...defaultProps} volumes={[]} />);
+    const { container } = render(
+      <VolumeSelector {...defaultProps} volumes={[]} />
+    );
     expect(container.firstChild).toBeNull();
   });
 
@@ -60,7 +73,7 @@ describe("VolumeSelector", () => {
     const propsWithMissingPrice = {
       ...defaultProps,
       volumes: ["Small", "Extra Large"],
-      volumePrices: new Map([["Small", 100]]), 
+      volumePrices: new Map([["Small", 100]]),
     };
     render(<VolumeSelector {...propsWithMissingPrice} />);
     expect(screen.getByText("Extra Large - 0 SATS")).toBeInTheDocument();
@@ -68,7 +81,7 @@ describe("VolumeSelector", () => {
 
   it("should call onVolumeChange with the new volume when a selection is made", () => {
     render(<VolumeSelector {...defaultProps} />);
-    
+
     mockOnSelectionChange(new Set(["Large"]));
 
     expect(mockOnVolumeChange).toHaveBeenCalledWith("Large");
@@ -77,7 +90,7 @@ describe("VolumeSelector", () => {
 
   it("should handle an empty selection without calling onVolumeChange", () => {
     render(<VolumeSelector {...defaultProps} />);
-    
+
     mockOnSelectionChange(new Set());
 
     expect(mockOnVolumeChange).not.toHaveBeenCalled();

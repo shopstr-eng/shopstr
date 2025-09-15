@@ -23,7 +23,11 @@ jest.mock("@nextui-org/react", () => ({
   Slider: (props: any) => {
     mockOnChangeEnd.mockImplementation((value) => props.onChangeEnd(value));
     return (
-      <div data-testid="slider" data-max-value={props.maxValue} data-color={props.color}>
+      <div
+        data-testid="slider"
+        data-max-value={props.maxValue}
+        data-color={props.color}
+      >
         {props.label}
       </div>
     );
@@ -40,8 +44,8 @@ Object.defineProperty(window, "location", {
   writable: true,
 });
 Object.defineProperty(window, "localStorage", {
-    value: { setItem: mockLocalStorageSetItem },
-    writable: true,
+  value: { setItem: mockLocalStorageSetItem },
+  writable: true,
 });
 
 const renderWithContext = (contextValue: any) => {
@@ -52,80 +56,100 @@ const renderWithContext = (contextValue: any) => {
   );
 };
 
-
 describe("ShopstrSlider", () => {
-    beforeEach(() => {
-        jest.clearAllMocks();
-        mockUseTheme.theme = "light";
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockUseTheme.theme = "light";
+  });
+
+  it("initializes with a value from localStorage and does not show the refresh button", () => {
+    renderWithContext({});
+    expect(getLocalStorageData).toHaveBeenCalled();
+    expect(screen.getByTestId("slider")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Refresh to Apply" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("sets slider color based on the theme", () => {
+    const { rerender } = renderWithContext({});
+    expect(screen.getByTestId("slider")).toHaveAttribute(
+      "data-color",
+      "secondary"
+    );
+
+    mockUseTheme.theme = "dark";
+    rerender(
+      <FollowsContext.Provider value={{}}>
+        <ShopstrSlider />
+      </FollowsContext.Provider>
+    );
+    expect(screen.getByTestId("slider")).toHaveAttribute(
+      "data-color",
+      "warning"
+    );
+  });
+
+  it("uses firstDegreeFollowsLength for maxValue when available", () => {
+    const contextValue = { isLoading: false, firstDegreeFollowsLength: 150 };
+    renderWithContext(contextValue);
+    expect(screen.getByTestId("slider")).toHaveAttribute(
+      "data-max-value",
+      "150"
+    );
+  });
+
+  it("uses the wot value for maxValue when context data is not available", () => {
+    const contextValue = { isLoading: true };
+    renderWithContext(contextValue);
+    expect(screen.getByTestId("slider")).toHaveAttribute("data-max-value", "5");
+  });
+
+  it("updates wot, calls localStorage.setItem, and shows the refresh button on slider change", () => {
+    renderWithContext({});
+
+    expect(
+      screen.queryByRole("button", { name: "Refresh to Apply" })
+    ).not.toBeInTheDocument();
+
+    act(() => {
+      mockOnChangeEnd(10);
     });
 
-    it("initializes with a value from localStorage and does not show the refresh button", () => {
-        renderWithContext({});
-        expect(getLocalStorageData).toHaveBeenCalled();
-        expect(screen.getByTestId("slider")).toBeInTheDocument();
-        expect(screen.queryByRole("button", { name: "Refresh to Apply" })).not.toBeInTheDocument();
+    expect(mockLocalStorageSetItem).toHaveBeenCalledWith("wot", "10");
+    expect(
+      screen.getByRole("button", { name: "Refresh to Apply" })
+    ).toBeInTheDocument();
+  });
+
+  it("handles array values from the slider correctly", () => {
+    renderWithContext({});
+    act(() => {
+      mockOnChangeEnd([20]);
+    });
+    expect(mockLocalStorageSetItem).toHaveBeenCalledWith("wot", "20");
+    expect(
+      screen.getByRole("button", { name: "Refresh to Apply" })
+    ).toBeInTheDocument();
+  });
+
+  it("calls window.location.reload and hides the button when 'Refresh to Apply' is clicked", () => {
+    renderWithContext({});
+
+    act(() => {
+      mockOnChangeEnd(15);
     });
 
-    it("sets slider color based on the theme", () => {
-        const { rerender } = renderWithContext({});
-        expect(screen.getByTestId("slider")).toHaveAttribute("data-color", "secondary");
-
-        mockUseTheme.theme = "dark";
-        rerender(
-            <FollowsContext.Provider value={{}}>
-                <ShopstrSlider />
-            </FollowsContext.Provider>
-        );
-        expect(screen.getByTestId("slider")).toHaveAttribute("data-color", "warning");
+    const refreshButton = screen.getByRole("button", {
+      name: "Refresh to Apply",
     });
+    expect(refreshButton).toBeInTheDocument();
 
-    it("uses firstDegreeFollowsLength for maxValue when available", () => {
-        const contextValue = { isLoading: false, firstDegreeFollowsLength: 150 };
-        renderWithContext(contextValue);
-        expect(screen.getByTestId("slider")).toHaveAttribute("data-max-value", "150");
-    });
+    fireEvent.click(refreshButton);
 
-    it("uses the wot value for maxValue when context data is not available", () => {
-        const contextValue = { isLoading: true }; 
-        renderWithContext(contextValue);
-        expect(screen.getByTestId("slider")).toHaveAttribute("data-max-value", "5");
-    });
-
-    it("updates wot, calls localStorage.setItem, and shows the refresh button on slider change", () => {
-        renderWithContext({});
-        
-        expect(screen.queryByRole("button", { name: "Refresh to Apply" })).not.toBeInTheDocument();
-
-        act(() => {
-            mockOnChangeEnd(10);
-        });
-
-        expect(mockLocalStorageSetItem).toHaveBeenCalledWith("wot", "10");
-        expect(screen.getByRole("button", { name: "Refresh to Apply" })).toBeInTheDocument();
-    });
-
-    it("handles array values from the slider correctly", () => {
-        renderWithContext({});
-        act(() => {
-            mockOnChangeEnd([20]); 
-        });
-        expect(mockLocalStorageSetItem).toHaveBeenCalledWith("wot", "20");
-        expect(screen.getByRole("button", { name: "Refresh to Apply" })).toBeInTheDocument();
-    });
-
-    it("calls window.location.reload and hides the button when 'Refresh to Apply' is clicked", () => {
-        renderWithContext({});
-
-        act(() => {
-            mockOnChangeEnd(15);
-        });
-
-        const refreshButton = screen.getByRole("button", { name: "Refresh to Apply" });
-        expect(refreshButton).toBeInTheDocument();
-        
-        fireEvent.click(refreshButton);
-
-        expect(mockReload).toHaveBeenCalled();
-        expect(screen.queryByRole("button", { name: "Refresh to Apply" })).not.toBeInTheDocument();
-    });
+    expect(mockReload).toHaveBeenCalled();
+    expect(
+      screen.queryByRole("button", { name: "Refresh to Apply" })
+    ).not.toBeInTheDocument();
+  });
 });

@@ -1,40 +1,45 @@
-import { newPromiseWithTimeout } from '../timeout';
+import { newPromiseWithTimeout } from "../timeout";
 
 jest.useFakeTimers();
 
-describe('newPromiseWithTimeout', () => {
+describe("newPromiseWithTimeout", () => {
   beforeEach(() => {
     jest.clearAllTimers();
   });
 
-  it('should resolve successfully when the callback resolves before the timeout', async () => {
-    const promise = newPromiseWithTimeout<string>((resolve) => {
-      resolve('success');
-    }, { timeout: 1000 });
+  it("should resolve successfully when the callback resolves before the timeout", async () => {
+    const promise = newPromiseWithTimeout<string>(
+      (resolve) => {
+        resolve("success");
+      },
+      { timeout: 1000 }
+    );
 
-    await expect(promise).resolves.toBe('success');
+    await expect(promise).resolves.toBe("success");
   });
 
-  it('should reject with a Timeout error if the callback does not resolve in time', async () => {
-    const promise = newPromiseWithTimeout<void>(() => {
-    }, { timeout: 500 });
+  it("should reject with a Timeout error if the callback does not resolve in time", async () => {
+    const promise = newPromiseWithTimeout<void>(() => {}, { timeout: 500 });
 
     jest.runAllTimers();
 
-    await expect(promise).rejects.toThrow('Timeout');
+    await expect(promise).rejects.toThrow("Timeout");
   });
 
-  it('should reject successfully when the callback rejects before the timeout', async () => {
-    const customError = new Error('Custom rejection');
-    const promise = newPromiseWithTimeout<void>((resolve, reject) => {
-      reject(customError);
-    }, { timeout: 1000 });
+  it("should reject successfully when the callback rejects before the timeout", async () => {
+    const customError = new Error("Custom rejection");
+    const promise = newPromiseWithTimeout<void>(
+      (resolve, reject) => {
+        reject(customError);
+      },
+      { timeout: 1000 }
+    );
 
-    await expect(promise).rejects.toThrow('Custom rejection');
+    await expect(promise).rejects.toThrow("Custom rejection");
   });
 
-  it('should clear the timeout when the promise resolves', () => {
-    const clearTimeoutSpy = jest.spyOn(global, 'clearTimeout');
+  it("should clear the timeout when the promise resolves", () => {
+    const clearTimeoutSpy = jest.spyOn(global, "clearTimeout");
 
     newPromiseWithTimeout<void>((resolve) => {
       resolve();
@@ -44,8 +49,8 @@ describe('newPromiseWithTimeout', () => {
     clearTimeoutSpy.mockRestore();
   });
 
-  it('should clear the timeout when the promise rejects', () => {
-    const clearTimeoutSpy = jest.spyOn(global, 'clearTimeout');
+  it("should clear the timeout when the promise rejects", () => {
+    const clearTimeoutSpy = jest.spyOn(global, "clearTimeout");
 
     const promise = newPromiseWithTimeout<void>((resolve, reject) => {
       reject(new Error());
@@ -57,12 +62,15 @@ describe('newPromiseWithTimeout', () => {
     clearTimeoutSpy.mockRestore();
   });
 
-  it('should abort the AbortSignal on timeout', async () => {
+  it("should abort the AbortSignal on timeout", async () => {
     const abortListener = jest.fn();
 
-    const promise = newPromiseWithTimeout<void>((resolve, reject, abortSignal) => {
-      abortSignal.addEventListener('abort', abortListener);
-    }, { timeout: 500 });
+    const promise = newPromiseWithTimeout<void>(
+      (resolve, reject, abortSignal) => {
+        abortSignal.addEventListener("abort", abortListener);
+      },
+      { timeout: 500 }
+    );
 
     jest.runAllTimers();
 
@@ -71,21 +79,26 @@ describe('newPromiseWithTimeout', () => {
     await promise.catch(() => {});
   });
 
+  it("should handle a callback that returns a resolving promise", async () => {
+    const promise = newPromiseWithTimeout<string>(
+      () => {
+        return Promise.resolve("inner success");
+      },
+      { timeout: 1000 }
+    );
 
-  it('should handle a callback that returns a resolving promise', async () => {
-    const promise = newPromiseWithTimeout<string>(() => {
-      return Promise.resolve('inner success');
-    }, { timeout: 1000 });
-
-    await expect(promise).resolves.toBe('inner success');
+    await expect(promise).resolves.toBe("inner success");
   });
 
-  it('should handle a callback that returns a rejecting promise', async () => {
-    const innerError = new Error('inner rejection');
-    const promise = newPromiseWithTimeout<string>(() => {
-      return Promise.reject(innerError);
-    }, { timeout: 1000 });
+  it("should handle a callback that returns a rejecting promise", async () => {
+    const innerError = new Error("inner rejection");
+    const promise = newPromiseWithTimeout<string>(
+      () => {
+        return Promise.reject(innerError);
+      },
+      { timeout: 1000 }
+    );
 
-    await expect(promise).rejects.toThrow('inner rejection');
+    await expect(promise).rejects.toThrow("inner rejection");
   });
 });
