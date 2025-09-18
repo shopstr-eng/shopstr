@@ -1,0 +1,90 @@
+import React, { useEffect } from "react";
+import { Button, Input, Textarea } from "@nextui-org/react";
+import { Community } from "@/utils/types/types";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { v4 as uuidv4 } from "uuid";
+import { useForm, Controller } from "react-hook-form";
+
+interface CommunityFormData {
+  name: string;
+  description: string;
+  image: string;
+  d: string;
+}
+
+interface CreateCommunityFormProps {
+  existingCommunity: Community | null;
+  onSave: (data: CommunityFormData) => void;
+}
+
+const CreateCommunityForm: React.FC<CreateCommunityFormProps> = ({
+  existingCommunity,
+  onSave,
+}) => {
+  const { control, handleSubmit, setValue } = useForm<CommunityFormData>({
+    defaultValues: {
+      name: "",
+      description: "",
+      image: "",
+      d: uuidv4(),
+    },
+  });
+
+  useEffect(() => {
+    if (existingCommunity) {
+      setValue("name", existingCommunity.name);
+      setValue("description", existingCommunity.description);
+      setValue("image", existingCommunity.image);
+      setValue("d", existingCommunity.d);
+    }
+  }, [existingCommunity, setValue]);
+
+  return (
+    <form onSubmit={handleSubmit(onSave)} className="space-y-4">
+      <Controller
+        name="name"
+        control={control}
+        rules={{ required: "Community name is required" }}
+        render={({ field, fieldState }) => (
+          <Input
+            {...field}
+            label="Community Name"
+            isRequired
+            errorMessage={fieldState.error?.message}
+          />
+        )}
+      />
+      <Controller
+        name="description"
+        control={control}
+        rules={{ required: "Description is required" }}
+        render={({ field, fieldState }) => (
+          <Textarea
+            {...field}
+            label="Description"
+            isRequired
+            errorMessage={fieldState.error?.message}
+          />
+        )}
+      />
+      <Controller
+        name="image"
+        control={control}
+        render={({ field }) => (
+          <Input
+            {...field}
+            label="Image URL"
+            type="url"
+            placeholder="https://example.com/image.png"
+          />
+        )}
+      />
+
+      <Button type="submit" className={SHOPSTRBUTTONCLASSNAMES}>
+        {existingCommunity ? "Save Changes" : "Create Community"}
+      </Button>
+    </form>
+  );
+};
+
+export default CreateCommunityForm;

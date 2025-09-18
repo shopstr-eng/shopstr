@@ -95,7 +95,6 @@ const UserProfilePage = () => {
     await createNostrProfileEvent(
       nostr!,
       signer!,
-      userPubkey!,
       JSON.stringify(data)
     );
     profileContext.updateProfileData({

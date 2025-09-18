@@ -69,7 +69,6 @@ const ShopProfilePage = () => {
     await createNostrShopEvent(
       nostr!,
       signer!,
-      userPubkey!,
       JSON.stringify(transformedData)
     );
     shopContext.updateShopData({
