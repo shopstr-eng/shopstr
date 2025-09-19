@@ -832,6 +832,7 @@ export const fetchCashuWallet = async (
     const { tokens } = getLocalStorageData();
     const userPubkey = await signer?.getPubKey?.();
     if (!userPubkey) {
+      editCashuWalletContext([], [], [], false);
       resolve({
         proofEvents: [],
         cashuMints: [],
@@ -839,215 +840,277 @@ export const fetchCashuWallet = async (
       });
       return;
     }
-    const enc = new TextEncoder();
+
     try {
-      let mostRecentWalletEvent: NostrEvent[] = [];
+      const enc = new TextEncoder();
+      let mostRecentWalletEvent: NostrEvent | null = null;
       const proofEvents: any[] = [];
-
       const cashuRelays: string[] = [];
-      const cashuRelaySet: Set<string> = new Set();
-
       const cashuMints: string[] = [];
       const cashuMintSet: Set<string> = new Set();
-
-      let cashuProofs: Proof[] = [];
+      let cashuProofs: Proof[] = [...tokens]; // Start with existing tokens
       const incomingSpendingHistory: [][] = [];
-      const cashuWalletFilter: Filter = {
+
+      // Fetch wallet configuration events (17375) and wallet state events (37375)
+      const walletConfigFilter: Filter = {
         kinds: [17375, 37375],
         authors: [userPubkey],
       };
 
       const hEvents: NostrEvent[] = await nostr.fetch(
-        [cashuWalletFilter],
+        [walletConfigFilter],
         {},
         relays
       );
 
-      // find most recent wallet event
+      // Process wallet configuration events
       for (const event of hEvents) {
-        if (event.kind === 17375) {
-          const mints = event.tags.filter((tag: string[]) => tag[0] === "mint");
-          mints.forEach((tag) => {
-            if (!cashuMintSet.has(tag[1]!)) {
-              cashuMintSet.add(tag[1]!);
-              cashuMints.push(tag[1]!);
+        try {
+          if (event.kind === 17375) {
+            // Extract mints from configuration events
+            const mints = event.tags.filter(
+              (tag: string[]) => tag[0] === "mint"
+            );
+            mints.forEach((tag) => {
+              if (tag[1] && !cashuMintSet.has(tag[1])) {
+                cashuMintSet.add(tag[1]);
+                cashuMints.push(tag[1]);
+              }
+            });
+          } else if (event.kind === 37375) {
+            // Find the most recent wallet state event
+            if (
+              !mostRecentWalletEvent ||
+              event.created_at > mostRecentWalletEvent.created_at
+            ) {
+              mostRecentWalletEvent = event;
             }
-          });
-        } else if (
-          (event.kind === 37375 && mostRecentWalletEvent.length === 0) ||
-          event.created_at > mostRecentWalletEvent[0]!.created_at
-        ) {
-          mostRecentWalletEvent = [event];
+          }
+        } catch (error) {
+          console.error(
+            `Failed to process wallet config event ${event.id}:`,
+            error
+          );
         }
       }
-      if (mostRecentWalletEvent.length > 0) {
-        // extract cashu data
-        const relayList = mostRecentWalletEvent[0]!.tags.filter(
-          (tag: string[]) => tag[0] === "relay"
-        );
-        relayList.forEach((tag) => cashuRelaySet.add(tag[1]!));
-        cashuRelays.push(...relayList.map((tag: string[]) => tag[1]!));
-        const mints = mostRecentWalletEvent[0]!.tags.filter(
-          (tag: string[]) => tag[0] === "mint"
-        );
-        mints.forEach((tag) => {
-          if (!cashuMintSet.has(tag[1]!)) {
-            cashuMintSet.add(tag[1]!);
-            cashuMints.push(tag[1]!);
-          }
-        });
+
+      // Extract relay and mint information from most recent wallet event
+      if (mostRecentWalletEvent) {
+        try {
+          const relayTags = mostRecentWalletEvent.tags.filter(
+            (tag: string[]) => tag[0] === "relay"
+          );
+          relayTags.forEach((tag) => {
+            if (tag[1] && !cashuRelays.includes(tag[1])) {
+              cashuRelays.push(tag[1]);
+            }
+          });
+
+          const mintTags = mostRecentWalletEvent.tags.filter(
+            (tag: string[]) => tag[0] === "mint"
+          );
+          mintTags.forEach((tag) => {
+            if (tag[1] && !cashuMintSet.has(tag[1])) {
+              cashuMintSet.add(tag[1]);
+              cashuMints.push(tag[1]);
+            }
+          });
+        } catch (error) {
+          console.error("Failed to process most recent wallet event:", error);
+        }
       }
-      const cashuProofFilter: Filter = {
+
+      // Use cashu-specific relays if available, otherwise use default relays
+      const effectiveRelays = cashuRelays.length > 0 ? cashuRelays : relays;
+
+      // Fetch proof events (7375) and spending history events (7376)
+      const proofFilter: Filter = {
         kinds: [7375, 7376],
         authors: [userPubkey],
       };
 
-      const wEvent: NostrEvent[] = await nostr.fetch(
-        [cashuProofFilter],
+      const proofEvents_raw: NostrEvent[] = await nostr.fetch(
+        [proofFilter],
         {},
-        cashuRelays.length !== 0 ? cashuRelays : relays
+        effectiveRelays
       );
 
-      for (const event of wEvent) {
+      // Process proof and spending history events
+      for (const event of proofEvents_raw) {
         try {
           const eventContent = await signer!.decrypt(userPubkey, event.content);
-          const cashuWalletEventContent = eventContent
-            ? JSON.parse(eventContent)
-            : null;
-          if (
-            event.kind === 7375 &&
-            cashuWalletEventContent &&
-            cashuWalletEventContent.mint &&
-            cashuWalletEventContent.proofs
-          ) {
-            proofEvents.push({
-              id: event.id,
-              proofs: cashuWalletEventContent.proofs,
-            });
-            const wallet = new CashuWallet(
-              new CashuMint(cashuWalletEventContent?.mint)
-            );
-            const Ys = cashuWalletEventContent?.proofs.map((p: Proof) =>
-              hashToCurve(enc.encode(p.secret)).toHex(true)
-            );
-            const proofsStates = await wallet?.checkProofsStates(
+          if (!eventContent) {
+            console.warn(`Failed to decrypt event content for ${event.id}`);
+            continue;
+          }
+
+          const cashuWalletEventContent = JSON.parse(eventContent);
+
+          if (event.kind === 7375) {
+            // Process proof events
+            if (
+              cashuWalletEventContent?.mint &&
               cashuWalletEventContent?.proofs
-            );
-            const spentYs = new Set(
-              proofsStates
-                .filter((state) => state.state === "SPENT")
-                .map((state) => state.Y)
-            );
-            const allYsMatch =
-              Ys.length === spentYs.size &&
-              Ys.every((y: string) => spentYs.has(y));
-            if (proofsStates && proofsStates.length > 0 && allYsMatch) {
-              await deleteEvent(nostr, signer!, [event.id]);
-            } else if (cashuWalletEventContent.proofs) {
-              const allProofs = [
-                ...tokens,
-                ...cashuWalletEventContent?.proofs,
+            ) {
+              proofEvents.push({
+                id: event.id,
+                mint: cashuWalletEventContent.mint,
+                proofs: cashuWalletEventContent.proofs,
+                created_at: event.created_at,
+              });
+
+              // Add mint to our set if not already present
+              if (!cashuMintSet.has(cashuWalletEventContent.mint)) {
+                cashuMintSet.add(cashuWalletEventContent.mint);
+                cashuMints.push(cashuWalletEventContent.mint);
+              }
+
+              // Add proofs to our collection (will be filtered later)
+              cashuProofs = getUniqueProofs([
                 ...cashuProofs,
-              ];
-              cashuProofs = getUniqueProofs(allProofs);
+                ...cashuWalletEventContent.proofs,
+              ]);
             }
           } else if (event.kind === 7376 && cashuWalletEventContent) {
+            // Process spending history events
             incomingSpendingHistory.push(cashuWalletEventContent);
           }
         } catch (error) {
-          console.error("Failed to fetch legacy Cashu wallet event: ", error);
+          console.error(`Failed to process wallet event ${event.id}:`, error);
         }
       }
+
+      // Remove spent proofs and handle spending history
+      const eventsToDelete: string[] = [];
 
       for (const mint of cashuMints) {
         try {
           const wallet = new CashuWallet(new CashuMint(mint));
-          if (cashuProofs.length > 0) {
-            const Ys = cashuProofs.map((p: Proof) =>
+
+          // Filter proofs for this specific mint
+          const mintProofs = cashuProofs.filter((proof) => {
+            // Check if this proof belongs to this mint by checking keyset compatibility
+            return proofEvents.some(
+              (pe) =>
+                pe.mint === mint &&
+                pe.proofs.some((p: Proof) => p.id === proof.id)
+            );
+          });
+
+          if (mintProofs.length > 0) {
+            // Check proof states for this mint
+            const Ys = mintProofs.map((p: Proof) =>
               hashToCurve(enc.encode(p.secret)).toHex(true)
             );
-            const proofsStates = await wallet?.checkProofsStates(cashuProofs);
+
+            const proofsStates = await wallet.checkProofsStates(mintProofs);
             const spentYs = new Set(
               proofsStates
                 .filter((state) => state.state === "SPENT")
                 .map((state) => state.Y)
             );
-            if (spentYs.size > 0) {
-              cashuProofs = cashuProofs.filter(
-                (_, index) => !spentYs.has(Ys[index]!)
-              );
-            }
-          }
 
-          const outProofIds = incomingSpendingHistory
-            .filter((eventTags) =>
-              eventTags.some(
-                (tag) => tag[0] === "direction" && tag[1] === "out"
-              )
-            )
-            .map((eventTags) => {
-              const destroyedTag = eventTags.find(
-                (tag) => tag[0] === "e" && tag[3] === "destroyed"
-              );
-              return destroyedTag ? destroyedTag[1] : "";
-            })
-            .filter((eventId) => eventId !== "");
+            // Remove spent proofs
+            cashuProofs = cashuProofs.filter((proof, _index) => {
+              if (mintProofs.includes(proof)) {
+                const proofIndex = mintProofs.indexOf(proof);
+                return proofIndex === -1 || !spentYs.has(Ys[proofIndex]!);
+              }
+              return true;
+            });
 
-          const destroyedProofsArray = proofEvents
-            .filter((event) => outProofIds.includes(event.id))
-            .map((event) => event.proofs);
-
-          cashuProofs = cashuProofs.filter(
-            (cashuProof) => !destroyedProofsArray.includes(cashuProof)
-          );
-
-          const inProofIds = incomingSpendingHistory
-            .filter((eventTags) =>
-              eventTags.some(
-                (tag) =>
-                  tag[0] === "direction" &&
-                  (tag[1] === "out" || tag[1] === "in")
-              )
-            )
-            .map((eventTags) => {
-              const createdTag = eventTags.find(
-                (tag) => tag[0] === "e" && tag[3] === "created"
-              );
-              return createdTag ? createdTag[1] : "";
-            })
-            .filter((eventId) => eventId !== "");
-
-          const proofIdsToAddBack = inProofIds.filter(
-            (id) => !outProofIds.includes(id)
-          );
-          const arrayOfProofsToAddBack = proofEvents
-            .filter((event) => proofIdsToAddBack.includes(event.id))
-            .map((event) => event.proofs);
-
-          const proofExists = (
-            proofToAdd: Proof,
-            existingProofArray: Proof[]
-          ): boolean => {
-            return existingProofArray.includes(proofToAdd);
-          };
-
-          for (const proofsToAddBack of arrayOfProofsToAddBack) {
-            for (const proofToAdd of proofsToAddBack) {
-              if (proofToAdd && !proofExists(proofToAdd, cashuProofs)) {
-                cashuProofs.push(proofToAdd);
+            // Mark fully spent proof events for deletion
+            for (const proofEvent of proofEvents) {
+              if (proofEvent.mint === mint) {
+                const eventYs = proofEvent.proofs.map((p: Proof) =>
+                  hashToCurve(enc.encode(p.secret)).toHex(true)
+                );
+                const allSpent = eventYs.every((y: string) => spentYs.has(y));
+                if (allSpent && eventYs.length > 0) {
+                  eventsToDelete.push(proofEvent.id);
+                }
               }
             }
           }
-
-          cashuProofs = getUniqueProofs(cashuProofs);
-
-          if (outProofIds.length > 0) {
-            await deleteEvent(nostr, signer!, outProofIds);
-          }
         } catch (error) {
-          console.error("Failed to check spent proofs: ", error);
+          console.error(`Failed to check proofs for mint ${mint}:`, error);
         }
       }
+
+      // Process spending history to determine which proofs to add/remove
+      try {
+        const outProofIds = incomingSpendingHistory
+          .filter((eventTags) =>
+            eventTags.some((tag) => tag[0] === "direction" && tag[1] === "out")
+          )
+          .map((eventTags) => {
+            const destroyedTag = eventTags.find(
+              (tag) => tag[0] === "e" && tag[3] === "destroyed"
+            );
+            return destroyedTag ? destroyedTag[1] : "";
+          })
+          .filter((eventId) => eventId !== "");
+
+        const inProofIds = incomingSpendingHistory
+          .filter((eventTags) =>
+            eventTags.some(
+              (tag) =>
+                tag[0] === "direction" && (tag[1] === "in" || tag[1] === "out")
+            )
+          )
+          .map((eventTags) => {
+            const createdTag = eventTags.find(
+              (tag) => tag[0] === "e" && tag[3] === "created"
+            );
+            return createdTag ? createdTag[1] : "";
+          })
+          .filter((eventId) => eventId !== "");
+
+        // Remove proofs from events that were spent (out direction)
+        const destroyedProofs = proofEvents
+          .filter((event) => outProofIds.includes(event.id))
+          .flatMap((event) => event.proofs);
+
+        cashuProofs = cashuProofs.filter(
+          (proof) =>
+            !destroyedProofs.some(
+              (destroyed: Proof) =>
+                JSON.stringify(proof) === JSON.stringify(destroyed)
+            )
+        );
+
+        // Add back proofs that were created but not spent
+        const proofIdsToAddBack = inProofIds.filter(
+          (id) => !outProofIds.includes(id)
+        );
+
+        const proofsToAddBack = proofEvents
+          .filter((event) => proofIdsToAddBack.includes(event.id))
+          .flatMap((event) => event.proofs);
+
+        cashuProofs = getUniqueProofs([...cashuProofs, ...proofsToAddBack]);
+
+        // Add spent event IDs to deletion list
+        eventsToDelete.push(...outProofIds);
+      } catch (error) {
+        console.error("Failed to process spending history:", error);
+      }
+
+      // Delete spent events
+      if (eventsToDelete.length > 0) {
+        try {
+          await deleteEvent(
+            nostr,
+            signer!,
+            Array.from(new Set(eventsToDelete))
+          );
+        } catch (error) {
+          console.error("Failed to delete spent events:", error);
+        }
+      }
+
+      // Final deduplication
+      cashuProofs = getUniqueProofs(cashuProofs);
 
       editCashuWalletContext(proofEvents, cashuMints, cashuProofs, false);
 
@@ -1057,6 +1120,8 @@ export const fetchCashuWallet = async (
         cashuProofs: cashuProofs,
       });
     } catch (error) {
+      console.error("Fatal error in fetchCashuWallet:", error);
+      editCashuWalletContext([], [], [], false);
       reject(error);
     }
   });

@@ -640,9 +640,12 @@ describe("MintButton Component", () => {
       await Promise.resolve();
     });
 
-    await waitFor(() => {
-      expect(screen.getByText("Payment confirmed!")).toBeVisible();
-    }, { timeout: 5000 });
+    await waitFor(
+      () => {
+        expect(screen.getByText("Payment confirmed!")).toBeVisible();
+      },
+      { timeout: 5000 }
+    );
 
     expect(callCount).toBeGreaterThanOrEqual(2);
   });

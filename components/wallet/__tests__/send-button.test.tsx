@@ -337,9 +337,7 @@ describe("SendButton", () => {
     await userEvent.click(screen.getByRole("button", { name: /Send/i }));
 
     expect(
-      await screen.findByText(
-        /If the token is taking a while to be generated/i
-      )
+      await screen.findByText(/If the token is taking a while to be generated/i)
     ).toBeVisible();
   });
 

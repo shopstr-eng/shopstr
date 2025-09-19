@@ -40,4 +40,3 @@ afterAll(() => {
 jest.mock("@braintree/sanitize-url", () => ({
   sanitizeUrl: jest.fn((url) => (typeof url === "string" ? url : "")),
 }));
-
