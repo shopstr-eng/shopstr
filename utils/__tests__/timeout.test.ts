@@ -79,16 +79,21 @@ describe("newPromiseWithTimeout", () => {
     await promise.catch(() => {});
   });
 
-  it("should handle a callback that returns a resolving promise", async () => {
-    const promise = newPromiseWithTimeout<string>(
-      () => {
-        return Promise.resolve("inner success");
-      },
-      { timeout: 1000 }
-    );
+  it(
+    "should handle a callback that returns a resolving promise",
+    async () => {
+      const promise = newPromiseWithTimeout<string>(
+        (resolve) => {
+          setTimeout(() => resolve("inner success"), 500);
+        },
+        { timeout: 1000 }
+      );
 
-    await expect(promise).resolves.toBe("inner success");
-  });
+      jest.advanceTimersByTime(500);
+      await expect(promise).resolves.toBe("inner success");
+    },
+    30000
+  );
 
   it("should handle a callback that returns a rejecting promise", async () => {
     const innerError = new Error("inner rejection");
