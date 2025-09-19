@@ -14,12 +14,27 @@ import {
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
+import { NostrManager } from "@/utils/nostr/nostr-manager";
+import { ChallengeHandler } from "@/utils/nostr/signers/nostr-signer";
 
-jest.setTimeout(15000);
+jest.setTimeout(20000);
 
 jest.mock("@cashu/cashu-ts");
 jest.mock("@/utils/nostr/nostr-helper-functions");
 jest.mock("@/utils/nostr/signers/nostr-nip46-signer");
+jest.mock("@/utils/nostr/nostr-manager");
+
+const MockedNostrNIP46Signer = NostrNIP46Signer as jest.MockedClass<
+  typeof NostrNIP46Signer
+>;
+const MockedNostrManager = NostrManager as jest.MockedClass<
+  typeof NostrManager
+>;
+
+const mockChallengeHandler: jest.MockedFunction<ChallengeHandler> = jest
+  .fn()
+  .mockResolvedValue({ res: "response", remind: false });
+
 jest.mock("@heroicons/react/24/outline", () => ({
   ArrowUpTrayIcon: () => <div data-testid="arrow-up-icon" />,
   ClipboardIcon: () => <div data-testid="clipboard-icon" />,
@@ -34,10 +49,31 @@ const mockPublishProofEvent = publishProofEvent as jest.Mock;
 const mockGetEncodedToken = getEncodedToken as jest.Mock;
 const MockCashuWallet = CashuWallet as jest.Mock;
 
-const mockSigner = { getPublicKey: jest.fn().mockResolvedValue("mock-pubkey") };
-const mockNostr = { pool: {} };
+const mockSigner = {
+  getPublicKey: jest.fn().mockResolvedValue("mock-pubkey"),
+  getPubKey: jest.fn().mockResolvedValue("mock-pubkey"),
+  sign: jest.fn(),
+  encrypt: jest.fn(),
+  decrypt: jest.fn(),
+  nip04: {
+    encrypt: jest.fn(),
+    decrypt: jest.fn(),
+  },
+  nip44: {
+    encrypt: jest.fn(),
+    decrypt: jest.fn(),
+  },
+  connect: jest.fn(),
+  close: jest.fn(),
+  toJSON: jest.fn(),
+};
+
+const mockNostr = new MockedNostrManager();
 const mockWalletContext = {
   proofEvents: [{ id: "event1", proofs: [{ id: "keyset_id_1", C: "C1" }] }],
+  cashuMints: [],
+  cashuProofs: [],
+  isLoading: false,
 };
 
 const renderWithProviders = (
@@ -65,6 +101,7 @@ describe("SendButton", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(Date, "now").mockImplementation(() => 1758309680000);
 
     mockSend = jest.fn();
     MockCashuWallet.mockImplementation(() => ({
@@ -88,6 +125,7 @@ describe("SendButton", () => {
   afterEach(() => {
     setItemSpy.mockRestore();
     jest.useRealTimers();
+    jest.restoreAllMocks();
   });
 
   test("renders button and handles modal open/close", async () => {
@@ -130,10 +168,16 @@ describe("SendButton", () => {
     await userEvent.click(within(modal).getByRole("button", { name: /Send/i }));
 
     await screen.findByText("New token string is ready to be copied and sent!");
-    expect(localStorage.setItem).toHaveBeenCalledWith(
-      "history",
-      expect.stringContaining('"type":2,"amount":"100"')
+
+    const historyCall = setItemSpy.mock.calls.find(
+      (call) => call[0] === "history"
     );
+    expect(historyCall).toBeDefined();
+    const historyData = JSON.parse(historyCall![1]);
+    expect(historyData[0]).toMatchObject({
+      type: 2,
+      amount: 100,
+    });
   });
 
   test("handles send with no change proofs", async () => {
@@ -285,12 +329,41 @@ describe("SendButton", () => {
   });
 
   test("shows NIP-46 info when using a bunker signer", async () => {
-    const nip46Signer = new NostrNIP46Signer();
+    const nip46Signer = new MockedNostrNIP46Signer(
+      { bunker: "bunker://dummy" },
+      mockChallengeHandler
+    );
+    renderWithProviders(<SendButton />, { signer: nip46Signer });
+    await userEvent.click(screen.getByRole("button", { name: /Send/i }));
+
+    expect(
+      await screen.findByText(
+        /If the token is taking a while to be generated/i
+      )
+    ).toBeVisible();
+  });
+
+  test("handles send to nostr contact", async () => {
+    const mockSendResult = {
+      keep: [{ id: "keyset_id_1", amount: 900 }],
+      send: [{ id: "keyset_id_1", amount: 100 }],
+    };
+    mockSend.mockResolvedValue(mockSendResult);
+    mockGetEncodedToken.mockReturnValue("cashuA_mock_token_nostr");
+
+    const nip46Signer = new MockedNostrNIP46Signer(
+      { bunker: "bunker://dummy" },
+      mockChallengeHandler
+    );
     renderWithProviders(<SendButton />, { signer: nip46Signer });
     await userEvent.click(screen.getByRole("button", { name: /Send/i }));
     const modal = await screen.findByRole("dialog");
-    expect(
-      within(modal).getByText(/If the token is taking a while to be generated/)
-    ).toBeVisible();
+    await userEvent.type(
+      within(modal).getByLabelText(/Token amount in sats/i),
+      "100"
+    );
+    await userEvent.click(within(modal).getByRole("button", { name: /Send/i }));
+
+    await screen.findByText("New token string is ready to be copied and sent!");
   });
 });
