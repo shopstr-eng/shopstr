@@ -1,19 +1,18 @@
 import React, { useState, useEffect, useContext } from "react";
 import { useRouter } from "next/router";
-import { Modal, ModalContent, ModalHeader, ModalBody } from "@nextui-org/react";
-import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/outline";
-import parseTags, {
-  ProductData,
-} from "@/utils/parsers/product-parser-functions";
+import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Button, Textarea, useDisclosure } from "@nextui-org/react";
+import { CheckCircleIcon, XCircleIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
+import parseTags, { ProductData } from "@/utils/parsers/product-parser-functions";
 import CheckoutCard from "../../components/utility-components/checkout-card";
-import { ProductContext } from "../../utils/context/context";
+import { ProductContext } from "@/utils/context/context";
+import { NostrContext, SignerContext } from "@/components/utility-components/nostr-context-provider";
+import { activateDispute } from "@/utils/nostr/nostr-helper-functions"; 
 import { Event, nip19 } from "nostr-tools";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
 const Listing = () => {
   const router = useRouter();
-  const [productData, setProductData] = useState<ProductData | undefined>(
-    undefined
-  );
+  const [productData, setProductData] = useState<ProductData | undefined>(undefined);
   const [productIdString, setProductIdString] = useState("");
 
   const [fiatOrderIsPlaced, setFiatOrderIsPlaced] = useState(false);
@@ -23,7 +22,13 @@ const Listing = () => {
   const [cashuPaymentSent, setCashuPaymentSent] = useState(false);
   const [cashuPaymentFailed, setCashuPaymentFailed] = useState(false);
 
+  const [isBuyer, setIsBuyer] = useState(false);
+  const {isOpen: isDisputeModalOpen, onOpen: onDisputeModalOpen, onClose: onDisputeModalClose} = useDisclosure();
+  const [disputeReason, setDisputeReason] = useState("");
+
   const productContext = useContext(ProductContext);
+  const { nostr } = useContext(NostrContext);
+  const { signer, pubkey: userPubkey } = useContext(SignerContext);
 
   useEffect(() => {
     if (router.isReady) {
@@ -31,7 +36,7 @@ const Listing = () => {
       const productIdString = productId ? productId[0] : "";
       setProductIdString(productIdString!);
       if (!productIdString) {
-        router.push("/marketplace"); // if there isn't a productId, redirect to home page
+        router.push("/marketplace");
       }
     }
   }, [router]);
@@ -40,20 +45,13 @@ const Listing = () => {
     if (!productContext.isLoading && productContext.productEvents) {
       const matchingEvent = productContext.productEvents.find(
         (event: Event) => {
-          // check for matching naddr
           const naddrMatch =
             nip19.naddrEncode({
-              identifier:
-                event.tags.find((tag: string[]) => tag[0] === "d")?.[1] || "",
+              identifier: event.tags.find((tag: string[]) => tag[0] === "d")?.[1] || "",
               pubkey: event.pubkey,
               kind: event.kind,
             }) === productIdString;
-
-          // Check for matching d tag
-          const dTagMatch =
-            event.tags.find((tag: string[]) => tag[0] === "d")?.[1] ===
-            productIdString;
-          // Check for matching event id
+          const dTagMatch = event.tags.find((tag: string[]) => tag[0] === "d")?.[1] === productIdString;
           const idMatch = event.id === productIdString;
           return naddrMatch || dTagMatch || idMatch;
         }
@@ -64,7 +62,29 @@ const Listing = () => {
         setProductData(parsed);
       }
     }
-  }, [productContext.isLoading, productContext.productEvents, productIdString]);
+  }, [productContext.productEvents, productContext.isLoading, productIdString]);
+
+  useEffect(() => {
+    // Once a payment is successful, we know the current user is the buyer.
+    if (invoiceIsPaid || cashuPaymentSent) {
+      setIsBuyer(true);
+    }
+  }, [invoiceIsPaid, cashuPaymentSent]);
+
+  const handleActivateDispute = async () => {
+    if (!productData || !userPubkey || !signer || !nostr || !disputeReason.trim()) {
+      alert("Cannot open dispute. Missing required information.");
+      return;
+    }
+    try {
+      await activateDispute(nostr, signer, productData.d!, disputeReason, userPubkey!, productData.pubkey!);
+      onDisputeModalClose();
+      router.push('/orders?tab=disputes');
+    } catch (error) {
+      console.error("Failed to activate dispute:", error);
+      alert("There was an error opening the dispute. Please try again.");
+    }
+  };
 
   return (
     <>
@@ -80,7 +100,49 @@ const Listing = () => {
             setCashuPaymentFailed={setCashuPaymentFailed}
           />
         )}
-        {fiatOrderIsPlaced || invoiceIsPaid || cashuPaymentSent ? (
+
+        {isBuyer && (
+          <div className="mx-auto mt-8 max-w-2xl rounded-lg border-2 border-dashed border-red-500 p-6 text-center">
+            <ExclamationTriangleIcon className="mx-auto h-12 w-12 text-red-500" />
+            <h3 className="mt-2 text-lg font-medium text-light-text dark:text-dark-text">Problem with your order?</h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">If you have an issue with this transaction, you can open a dispute to begin mediation.</p>
+            <Button color="danger" variant="ghost" className="mt-4" onClick={onDisputeModalOpen}>
+              Open a Dispute
+            </Button>
+          </div>
+        )}
+
+        <Modal isOpen={isDisputeModalOpen} onClose={onDisputeModalClose} backdrop="blur">
+          <ModalContent>
+            <ModalHeader>Open a Dispute</ModalHeader>
+            <ModalBody>
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                Please briefly describe the reason for opening this dispute. This will be visible to the seller and the arbiter.
+              </p>
+              <Textarea
+                label="Reason for Dispute"
+                placeholder="e.g., Item not received, item not as described..."
+                value={disputeReason}
+                onChange={(e) => setDisputeReason(e.target.value)}
+              />
+            </ModalBody>
+            <ModalFooter>
+              <Button variant="light" onClick={onDisputeModalClose}>
+                Cancel
+              </Button>
+              <Button
+                className={SHOPSTRBUTTONCLASSNAMES}
+                onClick={handleActivateDispute}
+                isDisabled={!disputeReason.trim()}
+              >
+                Submit Dispute
+              </Button>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
+
+        {/* --- Existing Modals for Payment Status --- */}
+        {invoiceIsPaid || cashuPaymentSent ? (
           <>
             <Modal
               backdrop="blur"
@@ -91,7 +153,6 @@ const Listing = () => {
                 setCashuPaymentSent(false);
                 router.push("/orders");
               }}
-              // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
               classNames={{
                 body: "py-6 ",
                 backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -124,7 +185,6 @@ const Listing = () => {
               backdrop="blur"
               isOpen={invoiceGenerationFailed}
               onClose={() => setInvoiceGenerationFailed(false)}
-              // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
               classNames={{
                 body: "py-6 ",
                 backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -157,7 +217,6 @@ const Listing = () => {
               backdrop="blur"
               isOpen={cashuPaymentFailed}
               onClose={() => setCashuPaymentFailed(false)}
-              // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
               classNames={{
                 body: "py-6 ",
                 backdrop: "bg-[#292f46]/50 backdrop-opacity-60",

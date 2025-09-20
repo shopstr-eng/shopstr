@@ -57,4 +57,8 @@ export class NostrNIP07Signer implements NostrSigner {
   public async close(): Promise<void> {
     return;
   }
+
+  public async signSchnorr(hash: string): Promise<string> {
+    return await window.nostr.signSchnorr(hash);
+  }
 }

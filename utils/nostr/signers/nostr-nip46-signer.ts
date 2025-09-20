@@ -170,7 +170,7 @@ export class NostrNIP46Signer implements NostrSigner {
     args.push(this.bunker.bunkerPubkey);
     args.push(this.bunker.secret || "");
     args.push(
-      "sign_event:0,sign_event:5,sign_event:13,sign_event:1059,sign_event:7375,sign_event:7376,sign_event:10002,sign_event:17375,kind:30019,sign_event:30402,sign_event:30405,sign_event:30406,sign_event:31555,sign_event:31989,sign_event:31990,get_public_key,nip44_encrypt,nip44_decrypt"
+      "sign_event:0,sign_event:5,sign_event:13,sign_event:1059,sign_event:7375,sign_event:7376,sign_event:10002,sign_event:17375,kind:30019,sign_event:30402,sign_event:30405,sign_event:30406,sign_event:31555,sign_event:31989,sign_event:31990,get_public_key,nip44_encrypt,nip44_decrypt,sign_schnorr"
     );
     return await this.sendRPC("connect", args);
   }
@@ -196,6 +196,10 @@ export class NostrNIP46Signer implements NostrSigner {
 
   public async decrypt(pubkey: string, cipherText: string): Promise<string> {
     return await this.sendRPC("nip44_decrypt", [pubkey, cipherText]);
+  }
+
+  public async signSchnorr(hash: string): Promise<string> {
+    return await this.sendRPC("sign_schnorr", [hash]);
   }
 
   private getNewRequestId(): string {

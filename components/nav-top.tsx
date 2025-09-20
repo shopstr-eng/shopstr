@@ -136,6 +136,12 @@ const TopNav = ({
       </Button>
       <Button
         className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+        onClick={() => handleRoute("/orders?tab=disputes")}
+      >
+        Disputes
+      </Button>
+      <Button
+        className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
         onClick={() => handleRoute("/wallet")}
       >
         Wallet
@@ -220,6 +226,13 @@ const TopNav = ({
             onClick={() => handleRoute("/orders")}
           >
             Orders {unreadMsgCount > 0 && `(${unreadMsgCount})`}
+          </Button>
+          |
+          <Button
+            className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+            onClick={() => handleRoute("/orders?tab=disputes")}
+          >
+            Disputes
           </Button>
           |
           <Button
