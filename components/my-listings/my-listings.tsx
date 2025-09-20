@@ -174,7 +174,7 @@ const MyListingsPage = () => {
                   </Button>
                 </div>
               </div>
-              <div className="flex gap-2 md:hidden">
+              <div className="flex flex-col items-end gap-2 md:hidden">
                 <Button
                   className={`${SHOPSTRBUTTONCLASSNAMES}`}
                   onClick={() => handleCreateNewListing()}
@@ -236,7 +236,7 @@ const MyListingsPage = () => {
                   </Button>
                 </div>
               </div>
-              <div className="flex gap-2 md:hidden">
+              <div className="flex flex-col items-end gap-2 md:hidden">
                 <Button
                   className={`${SHOPSTRBUTTONCLASSNAMES}`}
                   onClick={() => handleCreateNewListing()}
@@ -250,7 +250,7 @@ const MyListingsPage = () => {
                   Edit Shop
                 </Button>
                 <Button
-                  className={`${SHOPSTRBUTTONCLASSNAMES} mt-2 w-full`}
+                  className={`${SHOPSTRBUTTONCLASSNAMES}`}
                   onClick={() => handleManageCommunity()}
                 >
                   Manage Community

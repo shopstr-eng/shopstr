@@ -1,9 +1,10 @@
 import React, { useEffect } from "react";
-import { Button, Input, Textarea } from "@nextui-org/react";
+import { Button, Input, Textarea, Image } from "@nextui-org/react";
 import { Community } from "@/utils/types/types";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { v4 as uuidv4 } from "uuid";
 import { useForm, Controller } from "react-hook-form";
+import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 
 interface CommunityFormData {
   name: string;
@@ -21,7 +22,7 @@ const CreateCommunityForm: React.FC<CreateCommunityFormProps> = ({
   existingCommunity,
   onSave,
 }) => {
-  const { control, handleSubmit, setValue } = useForm<CommunityFormData>({
+  const { control, handleSubmit, setValue, watch } = useForm<CommunityFormData>({
     defaultValues: {
       name: "",
       description: "",
@@ -29,6 +30,8 @@ const CreateCommunityForm: React.FC<CreateCommunityFormProps> = ({
       d: uuidv4(),
     },
   });
+
+  const watchImage = watch("image");
 
   useEffect(() => {
     if (existingCommunity) {
@@ -67,18 +70,18 @@ const CreateCommunityForm: React.FC<CreateCommunityFormProps> = ({
           />
         )}
       />
-      <Controller
-        name="image"
-        control={control}
-        render={({ field }) => (
-          <Input
-            {...field}
-            label="Image URL"
-            type="url"
-            placeholder="https://example.com/image.png"
-          />
+      <div className="flex flex-col gap-2">
+        <label className="text-sm">Community Image</label>
+        {watchImage && (
+          <Image src={watchImage} alt="Community image preview" width={200} className="rounded-lg" />
         )}
-      />
+        <FileUploaderButton
+          className={`${SHOPSTRBUTTONCLASSNAMES} w-fit`}
+          imgCallbackOnUpload={(imgUrl) => setValue("image", imgUrl)}
+        >
+          Upload Image
+        </FileUploaderButton>
+      </div>
 
       <Button type="submit" className={SHOPSTRBUTTONCLASSNAMES}>
         {existingCommunity ? "Save Changes" : "Create Community"}
