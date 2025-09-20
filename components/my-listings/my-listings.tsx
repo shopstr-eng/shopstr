@@ -88,6 +88,14 @@ const MyListingsPage = () => {
     }
   };
 
+  const handleManageCommunity = () => {
+    if (usersPubkey) {
+      router.push("/settings/community");
+    } else {
+      onOpen();
+    }
+  };
+
   const MobileMenu = () => (
     <div className="absolute left-0 top-full z-10 mt-2 w-48 rounded-md bg-light-fg shadow-lg dark:bg-dark-fg md:hidden">
       <div className="py-1">
@@ -166,7 +174,7 @@ const MyListingsPage = () => {
                   </Button>
                 </div>
               </div>
-              <div className="flex gap-2 md:hidden">
+              <div className="flex flex-col items-end gap-2 md:hidden">
                 <Button
                   className={`${SHOPSTRBUTTONCLASSNAMES}`}
                   onClick={() => handleCreateNewListing()}
@@ -178,6 +186,12 @@ const MyListingsPage = () => {
                   onClick={() => handleEditShop()}
                 >
                   Edit Shop
+                </Button>
+                <Button
+                  className={`${SHOPSTRBUTTONCLASSNAMES}`}
+                  onClick={() => handleManageCommunity()}
+                >
+                  Community
                 </Button>
               </div>
             </div>
@@ -214,9 +228,15 @@ const MyListingsPage = () => {
                   >
                     Orders
                   </Button>
+                  <Button
+                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                    onClick={() => handleManageCommunity()}
+                  >
+                    Community
+                  </Button>
                 </div>
               </div>
-              <div className="flex gap-2 md:hidden">
+              <div className="flex flex-col items-end gap-2 md:hidden">
                 <Button
                   className={`${SHOPSTRBUTTONCLASSNAMES}`}
                   onClick={() => handleCreateNewListing()}
@@ -228,6 +248,12 @@ const MyListingsPage = () => {
                   onClick={() => handleEditShop()}
                 >
                   Edit Shop
+                </Button>
+                <Button
+                  className={`${SHOPSTRBUTTONCLASSNAMES}`}
+                  onClick={() => handleManageCommunity()}
+                >
+                  Manage Community
                 </Button>
               </div>
             </div>

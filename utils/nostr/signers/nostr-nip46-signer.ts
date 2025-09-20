@@ -170,7 +170,7 @@ export class NostrNIP46Signer implements NostrSigner {
     args.push(this.bunker.bunkerPubkey);
     args.push(this.bunker.secret || "");
     args.push(
-      "sign_event:0,sign_event:5,sign_event:13,sign_event:1059,sign_event:7375,sign_event:7376,sign_event:10002,sign_event:17375,kind:30019,sign_event:30402,sign_event:30405,sign_event:30406,sign_event:31555,sign_event:31989,sign_event:31990,get_public_key,nip44_encrypt,nip44_decrypt"
+      "sign_event:0,sign_event:5,sign_event:13,sign_event:1059,sign_event:1111,sign_event:4550,sign_event:7375,sign_event:7376,sign_event:10002,sign_event:17375,kind:30019,sign_event:30402,sign_event:30405,sign_event:30406,sign_event:31555,sign_event:31989,sign_event:31990,sign_event:34550,get_public_key,nip44_encrypt,nip44_decrypt"
     );
     return await this.sendRPC("connect", args);
   }

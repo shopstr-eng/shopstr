@@ -1,6 +1,6 @@
 import { Event } from "nostr-tools";
 
-export type ItemType = "products" | "profiles" | "chats";
+export type ItemType = "products" | "profiles" | "chats" | "communities";
 
 type ProductFormValue = [key: string, ...values: string[]];
 export type ProductFormValues = ProductFormValue[];
@@ -14,6 +14,35 @@ export interface NostrMessageEvent extends NostrEvent {
 export interface ChatObject {
   unreadCount: number;
   decryptedChat: NostrMessageEvent[];
+}
+
+export interface CommunityRelays {
+  approvals: string[]; // relays to publish/fetch approvals
+  requests: string[]; // relays to publish/fetch post requests
+  metadata: string[]; // relays for community author metadata (profile)
+  all: string[]; // flattened list of all relays declared
+}
+
+export interface Community {
+  id: string; // community definition event id
+  kind: number;
+  pubkey: string; // author pubkey
+  createdAt: number;
+  d: string; // identifier (a-tag identifier)
+  name: string;
+  description: string;
+  image: string;
+  moderators: string[];
+  relays: CommunityRelays;
+  // backward compatibility: keep a simple relays array optional
+  relaysList?: string[];
+}
+
+export interface CommunityPost extends NostrEvent {
+  // Augmented by fetchCommunityPosts: optional approval metadata
+  approved?: boolean;
+  approvalEventId?: string;
+  approvedBy?: string;
 }
 
 export interface ShopProfile {
