@@ -11,7 +11,6 @@ import SignInModal from "../sign-in/SignInModal";
 import { ShopMapContext } from "@/utils/context/context";
 import { ShopProfile } from "../../utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
-import SideShopNav from "../home/side-shop-nav";
 
 const MyListingsPage = () => {
   const { pubkey: usersPubkey } = useContext(SignerContext);
@@ -22,11 +21,7 @@ const MyListingsPage = () => {
   const [isFetchingShop, setIsFetchingShop] = useState(false);
 
   const [selectedSection, setSelectedSection] = useState("Listings");
-
-  const [selectedCategories, setSelectedCategories] = useState(
-    new Set<string>([])
-  );
-  const [categories, setCategories] = useState([""]);
+  const [selectedCategories] = useState(new Set<string>([]));
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -126,6 +121,35 @@ const MyListingsPage = () => {
         >
           Orders
         </Button>
+        <Button
+          className="w-full bg-transparent px-4 py-2 text-left text-sm text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+          onClick={() => {
+            handleManageCommunity();
+            setIsMobileMenuOpen(false);
+          }}
+        >
+          Community
+        </Button>
+        {/* Divider */}
+        <div className="my-1 h-px bg-gray-200 dark:bg-gray-700" />
+        <Button
+          className="w-full bg-transparent px-4 py-2 text-left text-sm text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+          onClick={() => {
+            handleCreateNewListing();
+            setIsMobileMenuOpen(false);
+          }}
+        >
+          Add Listing
+        </Button>
+        <Button
+          className="w-full bg-transparent px-4 py-2 text-left text-sm text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+          onClick={() => {
+            handleEditShop();
+            setIsMobileMenuOpen(false);
+          }}
+        >
+          Edit Shop
+        </Button>
       </div>
     </div>
   );
@@ -142,63 +166,7 @@ const MyListingsPage = () => {
                 className="max-h-[210px] w-full items-center justify-center object-cover"
               />
             </div>
-            <div className="mt-3 flex items-center justify-between font-bold text-light-text dark:text-dark-text">
-              <div className="flex items-center gap-2">
-                <div className="relative md:hidden" ref={menuRef}>
-                  <Button
-                    className="bg-transparent p-1"
-                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                  >
-                    <Bars3Icon className="h-6 w-6 text-light-text dark:text-dark-text" />
-                  </Button>
-                  {isMobileMenuOpen && <MobileMenu />}
-                </div>
-                <div className="hidden gap-2 md:flex">
-                  <Button
-                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                    onClick={() => setSelectedSection("Listings")}
-                  >
-                    Listings
-                  </Button>
-                  <Button
-                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                    onClick={() => setSelectedSection("About")}
-                  >
-                    About
-                  </Button>
-                  <Button
-                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                    onClick={() => handleViewOrders()}
-                  >
-                    Orders
-                  </Button>
-                </div>
-              </div>
-              <div className="flex flex-col items-end gap-2 md:hidden">
-                <Button
-                  className={`${SHOPSTRBUTTONCLASSNAMES}`}
-                  onClick={() => handleCreateNewListing()}
-                >
-                  Add Listing
-                </Button>
-                <Button
-                  className={`${SHOPSTRBUTTONCLASSNAMES}`}
-                  onClick={() => handleEditShop()}
-                >
-                  Edit Shop
-                </Button>
-                <Button
-                  className={`${SHOPSTRBUTTONCLASSNAMES}`}
-                  onClick={() => handleManageCommunity()}
-                >
-                  Community
-                </Button>
-              </div>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="mt-3 flex items-center justify-between font-bold text-light-text dark:text-dark-text">
+            <div className="mt-3 flex flex-col items-start gap-4 font-bold text-light-text dark:text-dark-text">
               <div className="flex items-center gap-2">
                 <div className="relative md:hidden" ref={menuRef}>
                   <Button
@@ -236,7 +204,7 @@ const MyListingsPage = () => {
                   </Button>
                 </div>
               </div>
-              <div className="flex flex-col items-end gap-2 md:hidden">
+              <div className="hidden items-center gap-2 md:flex">
                 <Button
                   className={`${SHOPSTRBUTTONCLASSNAMES}`}
                   onClick={() => handleCreateNewListing()}
@@ -249,25 +217,67 @@ const MyListingsPage = () => {
                 >
                   Edit Shop
                 </Button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="mt-3 flex flex-col items-start gap-4 font-bold text-light-text dark:text-dark-text">
+              <div className="flex items-center gap-2">
+                <div className="relative md:hidden" ref={menuRef}>
+                  <Button
+                    className="bg-transparent p-1"
+                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                  >
+                    <Bars3Icon className="h-6 w-6 text-light-text dark:text-dark-text" />
+                  </Button>
+                  {isMobileMenuOpen && <MobileMenu />}
+                </div>
+                <div className="hidden gap-2 md:flex">
+                  <Button
+                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                    onClick={() => setSelectedSection("Listings")}
+                  >
+                    Listings
+                  </Button>
+                  <Button
+                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                    onClick={() => setSelectedSection("About")}
+                  >
+                    About
+                  </Button>
+                  <Button
+                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                    onClick={() => handleViewOrders()}
+                  >
+                    Orders
+                  </Button>
+                  <Button
+                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                    onClick={() => handleManageCommunity()}
+                  >
+                    Community
+                  </Button>
+                </div>
+              </div>
+              <div className="hidden items-center gap-2 md:flex">
                 <Button
                   className={`${SHOPSTRBUTTONCLASSNAMES}`}
-                  onClick={() => handleManageCommunity()}
+                  onClick={() => handleCreateNewListing()}
                 >
-                  Manage Community
+                  Add Listing
+                </Button>
+                <Button
+                  className={`${SHOPSTRBUTTONCLASSNAMES}`}
+                  onClick={() => handleEditShop()}
+                >
+                  Edit Shop
                 </Button>
               </div>
             </div>
           </>
         )}
         <div className="flex">
-          {usersPubkey && (
-            <SideShopNav
-              focusedPubkey={usersPubkey}
-              categories={categories}
-              setSelectedCategories={setSelectedCategories}
-              isEditingShop={true}
-            />
-          )}
           {usersPubkey && selectedSection === "Listings" && (
             <DisplayProducts
               focusedPubkey={usersPubkey}
@@ -275,7 +285,6 @@ const MyListingsPage = () => {
               selectedLocation={""}
               selectedSearch={""}
               isMyListings={true}
-              setCategories={setCategories}
             />
           )}
           {selectedSection === "About" && shopAbout && (

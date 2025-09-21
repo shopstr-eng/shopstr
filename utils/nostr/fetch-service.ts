@@ -1082,6 +1082,7 @@ export const fetchAllCommunities = async (
 
       const filter: Filter = {
         kinds: [34550],
+        "#t": ["shopstr"],
       };
 
       const fetchedEvents = await nostr.fetch([filter], {}, relays);
