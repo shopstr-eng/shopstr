@@ -8,7 +8,7 @@ jest.mock("nostr-tools", () => {
   return {
     ...real,
     nip19: {
-      decode: jest.fn().mockImplementation((input: string) => ({
+      decode: jest.fn().mockImplementation((_input: string) => ({
         data: new Uint8Array([0x01, 0x02, 0x03]),
       })),
       nsecEncode: jest.fn().mockReturnValue("nsecEncodedKey"),

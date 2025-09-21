@@ -1,5 +1,3 @@
-import { AbortSignal } from "abort-controller";
-
 const verifyEventMock = jest.fn();
 const fakePoolInstance = {
   ensureRelay: jest.fn().mockResolvedValue({
@@ -18,7 +16,7 @@ const nip46 = { fromJSON: jest.fn() };
 describe("NostrManager", () => {
   let NostrManager: any;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.resetModules();
     jest.clearAllMocks();
 
@@ -40,7 +38,7 @@ describe("NostrManager", () => {
         new Promise((resolve, reject) => fn(resolve, reject)),
     }));
 
-    const mod = require("../nostr-manager");
+    const mod = await import("../nostr-manager");
     NostrManager = mod.NostrManager;
   });
 
