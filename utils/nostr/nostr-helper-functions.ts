@@ -606,10 +606,12 @@ export async function publishWalletEvent(
     const cashuWalletEvent = {
       kind: 17375,
       tags: [],
-      content: await window.nostr.nip44.encrypt(
-        userPubkey,
-        JSON.stringify(walletContent)
-      ),
+      content: window.nostr && window.nostr.nip44
+        ? await window.nostr.nip44.encrypt(
+            userPubkey,
+            JSON.stringify(walletContent)
+          )
+        : "",
       created_at: Math.floor(Date.now() / 1000),
     };
     const signedEvent = await signer.sign(cashuWalletEvent);

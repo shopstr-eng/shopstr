@@ -85,7 +85,7 @@ function MarketplacePage({
       setFocusedPubkey(data as string);
       setSelectedSection("shop");
     }
-  }, [router.query.npub]);
+  }, [router.query.npub, setFocusedPubkey, setSelectedSection]);
 
   useEffect(() => {
     setIsFetchingReviews(true);
@@ -143,7 +143,7 @@ function MarketplacePage({
       }
     }
     setIsFetchingShop(false);
-  }, [focusedPubkey, shopMapContext, shopBannerURL]);
+  }, [focusedPubkey, shopMapContext]);
 
   useEffect(() => {
     setIsFetchingFollows(true);
@@ -385,7 +385,7 @@ function MarketplacePage({
                 placeholder="All"
                 label="Location"
                 value={selectedLocation}
-                onChange={(event: any) => {
+                onChange={(event: React.ChangeEvent<HTMLSelectElement>) => {
                   setSelectedLocation(event.target.value);
                 }}
               />

@@ -72,7 +72,16 @@ const UserProfilePage = () => {
       ? profileMap.get(userPubkey)
       : undefined;
     if (profile) {
-      reset(profile.content);
+      const content = {
+        ...profile.content,
+        fiat_options:
+          Array.isArray(profile.content.fiat_options)
+            ? Object.fromEntries(
+                (profile.content.fiat_options as string[]).map((key) => [key, "available"])
+              )
+            : profile.content.fiat_options ?? {},
+      };
+      reset(content);
     }
     setIsFetchingProfile(false);
 

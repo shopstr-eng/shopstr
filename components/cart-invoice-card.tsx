@@ -130,7 +130,7 @@ export default function CartInvoiceCard({
   const [showFiatPaymentInstructions, setShowFiatPaymentInstructions] =
     useState(false);
   const [fiatPaymentConfirmed, setFiatPaymentConfirmed] = useState(false);
-  const [pendingPaymentData, setPendingPaymentData] = useState<any>(null);
+  const [pendingPaymentData, setPendingPaymentData] = useState<Record<string, unknown> | null>(null);
 
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
@@ -454,7 +454,7 @@ export default function CartInvoiceCard({
 
   const validatePaymentData = (
     price: number,
-    data?: ShippingFormData | ContactFormData | CombinedFormData
+    data?: Record<string, unknown>
   ) => {
     if (price < 1) {
       throw new Error("Payment amount must be greater than 0 sats");
@@ -462,7 +462,7 @@ export default function CartInvoiceCard({
 
     if (data) {
       if ("Name" in data && "Contact" in data) {
-        const combinedData = data as CombinedFormData;
+        const combinedData = data as unknown as CombinedFormData;
         if (
           !combinedData.Name?.trim() ||
           !combinedData.Address?.trim() ||
@@ -477,7 +477,7 @@ export default function CartInvoiceCard({
           throw new Error("Required fields are missing");
         }
       } else if ("Name" in data) {
-        const shippingData = data as ShippingFormData;
+        const shippingData = data as unknown as ShippingFormData;
         if (
           !shippingData.Name?.trim() ||
           !shippingData.Address?.trim() ||
@@ -489,7 +489,7 @@ export default function CartInvoiceCard({
           throw new Error("Required shipping fields are missing");
         }
       } else if ("Contact" in data) {
-        const contactData = data as ContactFormData;
+        const contactData = data as unknown as ContactFormData;
         if (
           !contactData.Contact?.trim() ||
           !contactData["Contact Type"]?.trim() ||
@@ -499,7 +499,7 @@ export default function CartInvoiceCard({
         }
       }
       if ("Required" in data && data["Required"] !== "") {
-        if (!data["Required"]?.trim()) {
+        if (!(data["Required"] as string)?.trim()) {
           throw new Error("Required fields are missing");
         }
       }
@@ -554,7 +554,7 @@ export default function CartInvoiceCard({
         additionalInfo: data["Required"],
       };
 
-      let paymentData: any = commonData;
+      let paymentData: Record<string, unknown> = commonData;
 
       if (formType === "shipping") {
         paymentData = {
@@ -627,7 +627,7 @@ export default function CartInvoiceCard({
     }
   };
 
-  const handleFiatPayment = async (convertedPrice: number, data: any) => {
+  const handleFiatPayment = async (convertedPrice: number, data: Record<string, unknown>) => {
     try {
       validatePaymentData(convertedPrice, data);
 
@@ -974,7 +974,7 @@ export default function CartInvoiceCard({
     }
   };
 
-  const handleLightningPayment = async (convertedPrice: number, data: any) => {
+  const handleLightningPayment = async (convertedPrice: number, data: Record<string, unknown>) => {
     try {
       validatePaymentData(convertedPrice, data);
 
@@ -1032,7 +1032,7 @@ export default function CartInvoiceCard({
     wallet: CashuWallet,
     convertedPrice: number,
     hash: string,
-    data: any
+    data: Record<string, unknown>
   ) {
     let retryCount = 0;
     const maxRetries = 30; // Maximum 30 retries (about 1 minute)
@@ -1132,7 +1132,7 @@ export default function CartInvoiceCard({
   const sendTokens = async (
     wallet: CashuWallet,
     proofs: Proof[],
-    data: any
+    data: Record<string, unknown>
   ) => {
     const userPubkey = await signer?.getPubKey?.();
     const userNPub = userPubkey ? nip19.npubEncode(userPubkey) : undefined;
@@ -1810,7 +1810,7 @@ export default function CartInvoiceCard({
 
   const formattedTotalCost = formatWithCommas(totalCost, "sats");
 
-  const handleCashuPayment = async (price: number, data: any) => {
+  const handleCashuPayment = async (price: number, data: Record<string, unknown>) => {
     try {
       if (!mints || mints.length === 0) {
         throw new Error("No Cashu mint available");
@@ -2901,8 +2901,8 @@ export default function CartInvoiceCard({
                   <p className="font-semibold text-gray-900 dark:text-white">
                     {selectedFiatOption}:{" "}
                     {(products.length > 0 &&
-                      profileContext.profileData.get(products[0]!.pubkey)
-                        ?.content?.fiat_options?.[selectedFiatOption]) ||
+                      (profileContext.profileData.get(products[0]!.pubkey)
+                        ?.content?.fiat_options as unknown as Record<string, string>)?.[selectedFiatOption]) ||
                       "N/A"}
                   </p>
                 </div>
