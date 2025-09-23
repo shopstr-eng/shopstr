@@ -20,7 +20,7 @@ class ItemsFetchedFromRelays extends Dexie {
 
   public constructor() {
     super("ItemsFetchedFromRelays");
-    this.version(2).stores({
+    this.version(31).stores({
       products: "id, product",
       profiles: "id, profile",
       chatMessages: "id, message",
