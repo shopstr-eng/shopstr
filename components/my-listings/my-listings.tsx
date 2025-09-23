@@ -11,6 +11,7 @@ import SignInModal from "../sign-in/SignInModal";
 import { ShopMapContext } from "@/utils/context/context";
 import { ShopProfile } from "../../utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
+import SideShopNav from "../home/side-shop-nav";
 
 const MyListingsPage = () => {
   const { pubkey: usersPubkey } = useContext(SignerContext);
@@ -21,7 +22,11 @@ const MyListingsPage = () => {
   const [isFetchingShop, setIsFetchingShop] = useState(false);
 
   const [selectedSection, setSelectedSection] = useState("Listings");
-  const [selectedCategories] = useState(new Set<string>([]));
+
+  const [selectedCategories, setSelectedCategories] = useState(
+    new Set<string>([])
+  );
+  const [categories, setCategories] = useState([""]);
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -130,26 +135,6 @@ const MyListingsPage = () => {
         >
           Community
         </Button>
-        {/* Divider */}
-        <div className="my-1 h-px bg-gray-200 dark:bg-gray-700" />
-        <Button
-          className="w-full bg-transparent px-4 py-2 text-left text-sm text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-          onClick={() => {
-            handleCreateNewListing();
-            setIsMobileMenuOpen(false);
-          }}
-        >
-          Add Listing
-        </Button>
-        <Button
-          className="w-full bg-transparent px-4 py-2 text-left text-sm text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-          onClick={() => {
-            handleEditShop();
-            setIsMobileMenuOpen(false);
-          }}
-        >
-          Edit Shop
-        </Button>
       </div>
     </div>
   );
@@ -166,7 +151,7 @@ const MyListingsPage = () => {
                 className="max-h-[210px] w-full items-center justify-center object-cover"
               />
             </div>
-            <div className="mt-3 flex flex-col items-start gap-4 font-bold text-light-text dark:text-dark-text">
+            <div className="mt-3 flex items-center justify-between font-bold text-light-text dark:text-dark-text">
               <div className="flex items-center gap-2">
                 <div className="relative md:hidden" ref={menuRef}>
                   <Button
@@ -204,7 +189,7 @@ const MyListingsPage = () => {
                   </Button>
                 </div>
               </div>
-              <div className="hidden items-center gap-2 md:flex">
+              <div className="flex gap-2 md:hidden">
                 <Button
                   className={`${SHOPSTRBUTTONCLASSNAMES}`}
                   onClick={() => handleCreateNewListing()}
@@ -222,7 +207,7 @@ const MyListingsPage = () => {
           </>
         ) : (
           <>
-            <div className="mt-3 flex flex-col items-start gap-4 font-bold text-light-text dark:text-dark-text">
+            <div className="mt-3 flex items-center justify-between font-bold text-light-text dark:text-dark-text">
               <div className="flex items-center gap-2">
                 <div className="relative md:hidden" ref={menuRef}>
                   <Button
@@ -260,7 +245,7 @@ const MyListingsPage = () => {
                   </Button>
                 </div>
               </div>
-              <div className="hidden items-center gap-2 md:flex">
+              <div className="flex gap-2 md:hidden">
                 <Button
                   className={`${SHOPSTRBUTTONCLASSNAMES}`}
                   onClick={() => handleCreateNewListing()}
@@ -278,6 +263,14 @@ const MyListingsPage = () => {
           </>
         )}
         <div className="flex">
+          {usersPubkey && (
+            <SideShopNav
+              focusedPubkey={usersPubkey}
+              categories={categories}
+              setSelectedCategories={setSelectedCategories}
+              isEditingShop={true}
+            />
+          )}
           {usersPubkey && selectedSection === "Listings" && (
             <DisplayProducts
               focusedPubkey={usersPubkey}
@@ -285,6 +278,7 @@ const MyListingsPage = () => {
               selectedLocation={""}
               selectedSearch={""}
               isMyListings={true}
+              setCategories={setCategories}
             />
           )}
           {selectedSection === "About" && shopAbout && (

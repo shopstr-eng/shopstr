@@ -2,7 +2,11 @@ import { NostrEvent } from "nostr-tools";
 import { Community, CommunityRelays } from "../types/types";
 
 // Helper: push into categorized relays
-function addRelayToMap(map: Record<string, string[]>, url: string, type?: string) {
+function addRelayToMap(
+  map: Record<string, string[]>,
+  url: string,
+  type?: string
+) {
   if (!url) return;
   map.all = map.all || [];
   if (!map.all.includes(url)) map.all.push(url);
@@ -25,18 +29,26 @@ export const parseCommunityEvent = (event: NostrEvent): Community | null => {
   if (!dTag) return null; // d tag is required by NIP-72
 
   const nameTag = event.tags.find((tag) => tag[0] === "name")?.[1];
-  const descriptionTag = event.tags.find((tag) => tag[0] === "description")?.[1];
+  const descriptionTag = event.tags.find(
+    (tag) => tag[0] === "description"
+  )?.[1];
   const imageTag = event.tags.find((tag) => tag[0] === "image")?.[1];
 
   // moderators: p tags that optionally use the 4th element as role marker "moderator"
   const moderators = event.tags
-    .filter((tag) => tag[0] === "p" && (tag[3] === "moderator" || tag.length >= 2))
+    .filter(
+      (tag) => tag[0] === "p" && (tag[3] === "moderator" || tag.length >= 2)
+    )
     .map((tag) => tag[1])
     .filter((pubkey): pubkey is string => !!pubkey);
-    
 
   // parse relay tags: ["relay", "<url>", "<type>"] where type may be "approvals", "requests", "metadata"
-  const relayMap: Record<string, string[]> = { approvals: [], requests: [], metadata: [], all: [] };
+  const relayMap: Record<string, string[]> = {
+    approvals: [],
+    requests: [],
+    metadata: [],
+    all: [],
+  };
   const relayTags = event.tags.filter((tag) => tag[0] === "relay");
   for (const r of relayTags) {
     const url = r[1];

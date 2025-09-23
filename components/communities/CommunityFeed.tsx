@@ -1,4 +1,10 @@
-import React, { useContext, useEffect, useState, useCallback, useMemo } from "react";
+import React, {
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+} from "react";
 import { Community, CommunityPost, NostrEvent } from "@/utils/types/types";
 import {
   NostrContext,
@@ -37,9 +43,17 @@ const isYouTube = (url: string) =>
     url
   );
 
-const RenderContent = ({ content, tags }: { content: string, tags: string[][] }) => {
+const RenderContent = ({
+  content,
+  tags,
+}: {
+  content: string;
+  tags: string[][];
+}) => {
   const parts = content.split(/(\s+)/);
-  const taggedImages = tags.filter(tag => tag[0] === 'image').map(tag => tag[1]);
+  const taggedImages = tags
+    .filter((tag) => tag[0] === "image")
+    .map((tag) => tag[1]);
 
   return (
     <div className="space-y-2">
@@ -85,14 +99,14 @@ const RenderContent = ({ content, tags }: { content: string, tags: string[][] })
       </p>
       {taggedImages.length > 0 && (
         <div className="pt-2">
-            {taggedImages.map((url, index) => (
-                <img
-                key={index}
-                src={sanitizeUrl(url)}
-                alt="Tagged media"
-                className="mt-2 max-h-96 rounded-lg"
-              />
-            ))}
+          {taggedImages.map((url, index) => (
+            <img
+              key={index}
+              src={sanitizeUrl(url)}
+              alt="Tagged media"
+              className="mt-2 max-h-96 rounded-lg"
+            />
+          ))}
         </div>
       )}
     </div>
@@ -116,7 +130,11 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
     if (nostr) {
       setIsLoading(true);
       // fetch approved posts (annotated with approval metadata)
-      const approved = (await fetchCommunityPosts(nostr, community, 50)) as CommunityPost[];
+      const approved = (await fetchCommunityPosts(
+        nostr,
+        community,
+        50
+      )) as CommunityPost[];
       setApprovedPosts(approved);
 
       if (isModerator) {
@@ -134,11 +152,16 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
   const handlePost = async () => {
     if (!signer || !nostr || !newPostContent.trim()) return;
     try {
-      const newPost = await createCommunityPost(signer, nostr, community, newPostContent);
+      const newPost = await createCommunityPost(
+        signer,
+        nostr,
+        community,
+        newPostContent
+      );
       setNewPostContent("");
       // Optimistically add the new post to the pending list FIRST
       if (newPost) {
-        setPendingPosts(prevPending => [newPost, ...prevPending]);
+        setPendingPosts((prevPending) => [newPost, ...prevPending]);
       }
       alert(
         "Your post has been submitted for approval. It will appear once a moderator approves it."
@@ -152,12 +175,18 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
   const handleReply = async (parentPost: NostrEvent) => {
     if (!signer || !nostr || !replyContent.trim()) return;
     try {
-      const newReply = await createCommunityPost(signer, nostr, community, replyContent, { parentEvent: parentPost });
+      const newReply = await createCommunityPost(
+        signer,
+        nostr,
+        community,
+        replyContent,
+        { parentEvent: parentPost }
+      );
       setReplyContent("");
       setReplyingTo(null);
       // Optimistically add the new reply to the pending list FIRST
       if (newReply) {
-        setPendingPosts(prevPending => [newReply, ...prevPending]);
+        setPendingPosts((prevPending) => [newReply, ...prevPending]);
       }
       alert(
         "Your reply has been submitted for approval. It will appear once a moderator approves it."
@@ -171,7 +200,12 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
   const handleApprove = async (postToApprove: NostrEvent) => {
     if (!signer || !nostr) return;
     try {
-      const signedApproval = await approveCommunityPost(signer, nostr, postToApprove, community);
+      const signedApproval = await approveCommunityPost(
+        signer,
+        nostr,
+        postToApprove,
+        community
+      );
       // optimistic: remove from pending, add to approved with approval metadata
       setPendingPosts((prev) => prev.filter((p) => p.id !== postToApprove.id));
       const ap: CommunityPost = {
@@ -180,7 +214,9 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
         approvalEventId: signedApproval?.id,
         approvedBy: signedApproval?.pubkey,
       };
-      setApprovedPosts((prev) => [ap, ...prev].sort((a, b) => b.created_at - a.created_at));
+      setApprovedPosts((prev) =>
+        [ap, ...prev].sort((a, b) => b.created_at - a.created_at)
+      );
     } catch (error) {
       console.error("Failed to approve post", error);
       alert("Failed to approve post.");
@@ -190,9 +226,16 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
   const handleRetractApproval = async (approvalEventId?: string) => {
     if (!signer || !nostr || !approvalEventId) return;
     try {
-      await retractApproval(signer, nostr, approvalEventId, "Retracted by moderator");
+      await retractApproval(
+        signer,
+        nostr,
+        approvalEventId,
+        "Retracted by moderator"
+      );
       // optimistic: move that post from approved back to pending
-      setApprovedPosts((prev) => prev.filter((p) => p.approvalEventId !== approvalEventId));
+      setApprovedPosts((prev) =>
+        prev.filter((p) => p.approvalEventId !== approvalEventId)
+      );
       // reload pending posts shortly
       const pending = await fetchPendingPosts(nostr, community, 50);
       setPendingPosts(pending);
@@ -214,9 +257,7 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
     const repliesByParentId = new Map<string, CommunityPost[]>();
 
     for (const post of allPosts) {
-      const parentId = post.tags.find(
-        (tag) => tag[0] === "e"
-      )?.[1];
+      const parentId = post.tags.find((tag) => tag[0] === "e")?.[1];
 
       if (parentId) {
         if (!repliesByParentId.has(parentId)) {
@@ -390,7 +431,9 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
                             <div className="mt-4 border-t-2 pt-4 dark:border-zinc-800">
                               <Textarea
                                 value={replyContent}
-                                onChange={(e) => setReplyContent(e.target.value)}
+                                onChange={(e) =>
+                                  setReplyContent(e.target.value)
+                                }
                                 placeholder={`Replying to ${reply.pubkey.slice(
                                   0,
                                   8

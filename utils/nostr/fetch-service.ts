@@ -1069,7 +1069,10 @@ export const fetchCashuWallet = async (
 export const fetchAllCommunities = async (
   nostr: NostrManager,
   relays: string[],
-  editCommunityContext: (communities: Map<string, Community>, isLoading: boolean) => void
+  editCommunityContext: (
+    communities: Map<string, Community>,
+    isLoading: boolean
+  ) => void
 ): Promise<Map<string, Community>> => {
   return new Promise(async (resolve, reject) => {
     try {
@@ -1087,7 +1090,7 @@ export const fetchAllCommunities = async (
 
       const fetchedEvents = await nostr.fetch([filter], {}, relays);
       const parsedCommunities: Community[] = [];
-      
+
       for (const event of fetchedEvents) {
         const community = parseCommunityEvent(event);
         if (community) {
@@ -1137,12 +1140,16 @@ export const fetchCommunityPosts = async (
       // Step 1: Fetch approval events from relays where approvals are expected
       const approvalFilter: Filter = {
         kinds: [4550],
-        '#a': [communityAddress],
+        "#a": [communityAddress],
         limit: limit * 4, // fetch a bit more approval events
       };
 
       // fetch approvals across candidate relays
-      const approvalEvents = await nostr.fetch([approvalFilter], {}, approvalRelays);
+      const approvalEvents = await nostr.fetch(
+        [approvalFilter],
+        {},
+        approvalRelays
+      );
 
       // Step 2: Validate approval events: only accept those issued by moderators of the community.
       const validApprovals = approvalEvents.filter((ap) =>
@@ -1150,8 +1157,10 @@ export const fetchCommunityPosts = async (
       );
 
       // map post id -> single approval (take latest per approver)
-      const approvalByPostId: Map<string, { approvalId: string; approver: string; created_at: number }> =
-        new Map();
+      const approvalByPostId: Map<
+        string,
+        { approvalId: string; approver: string; created_at: number }
+      > = new Map();
 
       for (const ap of validApprovals) {
         const eTags = ap.tags
@@ -1161,7 +1170,11 @@ export const fetchCommunityPosts = async (
         for (const approvedId of eTags) {
           const existing = approvalByPostId.get(approvedId);
           if (!existing || ap.created_at > existing.created_at) {
-            approvalByPostId.set(approvedId, { approvalId: ap.id, approver: ap.pubkey, created_at: ap.created_at });
+            approvalByPostId.set(approvedId, {
+              approvalId: ap.id,
+              approver: ap.pubkey,
+              created_at: ap.created_at,
+            });
           }
         }
       }
@@ -1185,7 +1198,11 @@ export const fetchCommunityPosts = async (
             kinds: [1111],
             ids: batchIds,
           };
-          const batchEvents = await nostr.fetch([postsFilter], {}, requestRelays);
+          const batchEvents = await nostr.fetch(
+            [postsFilter],
+            {},
+            requestRelays
+          );
           postEvents.push(...batchEvents);
         }
       }
@@ -1223,12 +1240,20 @@ export const fetchPendingPosts = async (
     try {
       const { relays: userRelays } = getLocalStorageData();
       const communityAddress = `${community.kind}:${community.pubkey}:${community.d}`;
-      const approvedPostEvents = await fetchCommunityPosts(nostr, community, limit * 2);
+      const approvedPostEvents = await fetchCommunityPosts(
+        nostr,
+        community,
+        limit * 2
+      );
       const approvedPostIds = new Set(approvedPostEvents.map((p) => p.id));
 
       // Fetch post requests using 'requests' relays (or fallback to all)
       const requestRelays = Array.from(
-        new Set([...community.relays.requests, ...community.relays.all, ...userRelays])
+        new Set([
+          ...community.relays.requests,
+          ...community.relays.all,
+          ...userRelays,
+        ])
       );
       if (requestRelays.length === 0) {
         resolve([]);
@@ -1240,10 +1265,16 @@ export const fetchPendingPosts = async (
         limit: limit,
       };
 
-      const allPostRequests = await nostr.fetch([postRequestFilter], {}, requestRelays);
+      const allPostRequests = await nostr.fetch(
+        [postRequestFilter],
+        {},
+        requestRelays
+      );
 
       // Pending = requests that don't have an approval
-      const pendingPosts = allPostRequests.filter((post) => !approvedPostIds.has(post.id));
+      const pendingPosts = allPostRequests.filter(
+        (post) => !approvedPostIds.has(post.id)
+      );
       pendingPosts.sort((a, b) => b.created_at - a.created_at);
       resolve(pendingPosts);
     } catch (error) {

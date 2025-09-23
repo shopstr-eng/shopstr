@@ -24,14 +24,13 @@ export function middleware(request: NextRequest) {
   }
 
   // Handle community naddr redirects
-  if (
-    pathname.startsWith("/naddr") &&
-    !pathname.startsWith("/communities/")
-  ) {
+  if (pathname.startsWith("/naddr") && !pathname.startsWith("/communities/")) {
     try {
       const decoded = nip19.decode(pathname.substring(1));
       if (decoded.type === "naddr" && decoded.data.kind === 34550) {
-        return NextResponse.redirect(new URL(`/communities${pathname}`, request.url));
+        return NextResponse.redirect(
+          new URL(`/communities${pathname}`, request.url)
+        );
       }
     } catch (e) {
       /* ignore */

@@ -19,7 +19,8 @@ const TopNav = ({
   setFocusedPubkey: (value: string) => void;
   setSelectedSection: (value: string) => void;
 }) => {
-  const { isHomeActive, isProfileActive, isCommunitiesActive } = useNavigation();
+  const { isHomeActive, isProfileActive, isCommunitiesActive } =
+    useNavigation();
   const router = useRouter();
 
   const chatsContext = useContext(ChatsContext);
@@ -222,7 +223,11 @@ const TopNav = ({
           </Button>
           |
           <Button
-            className={`bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${isCommunitiesActive ? "font-bold text-shopstr-purple dark:text-shopstr-yellow" : ""}`}
+            className={`bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
+              isCommunitiesActive
+                ? "font-bold text-shopstr-purple dark:text-shopstr-yellow"
+                : ""
+            }`}
             onClick={() => router.push("/communities")}
           >
             Communities

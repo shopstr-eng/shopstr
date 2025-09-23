@@ -22,7 +22,7 @@ const CommunityCard: React.FC<CommunityCardProps> = ({ community }) => {
   };
 
   return (
-    <Card className="py-4">
+    <Card className="w-64 py-4">
       <CardHeader className="flex-col items-start px-4 pb-0 pt-2">
         <p className="text-tiny font-bold uppercase">Community</p>
         <h4 className="text-large font-bold">{community.name}</h4>

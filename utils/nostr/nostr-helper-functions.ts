@@ -10,7 +10,12 @@ import {
 } from "nostr-tools";
 import { v4 as uuidv4 } from "uuid";
 import CryptoJS from "crypto-js";
-import { Community, CommunityRelays, NostrEvent, ProductFormValues } from "@/utils/types/types";
+import {
+  Community,
+  CommunityRelays,
+  NostrEvent,
+  ProductFormValues,
+} from "@/utils/types/types";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { Proof } from "@cashu/cashu-ts";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
@@ -28,7 +33,6 @@ function generateRandomTimestamp(): number {
   const randomTimestamp = now - randomSeconds;
   return randomTimestamp;
 }
-
 
 export async function generateKeys(): Promise<{ nsec: string; npub: string }> {
   const sk = generateSecretKey();
@@ -61,9 +65,9 @@ export function createNostrDeleteEvent(
   const msg: EventTemplate = {
     kind: 5,
     content: content,
-    tags: event_ids.map(id => ["e", id]),
+    tags: event_ids.map((id) => ["e", id]),
     created_at: Math.floor(Date.now() / 1000),
-};
+  };
 
   return msg;
 }
@@ -113,7 +117,7 @@ export async function createNostrProfileEvent(
     content: content,
     tags: [],
     created_at: Math.floor(Date.now() / 1000),
-};
+  };
 
   await finalizeAndSendNostrEvent(signer, nostr, msg);
   return msg;
@@ -195,7 +199,7 @@ export async function createNostrShopEvent(
     content: content,
     tags: [],
     created_at: Math.floor(Date.now() / 1000),
-};
+  };
 
   await finalizeAndSendNostrEvent(signer, nostr, msg);
   return msg;
@@ -305,8 +309,8 @@ export async function constructGiftWrappedEvent(
   // we create a temporary full event object and hash it using the official NIP-01 method.
   const eventToHash: NostrEvent = {
     ...bareEvent,
-    id: '', // dummy value for hashing
-    sig: '' // dummy value for hashing
+    id: "", // dummy value for hashing
+    sig: "", // dummy value for hashing
   };
   const eventId = getEventHash(eventToHash);
   return {
@@ -412,7 +416,7 @@ export async function publishReviewEvent(
 }
 export async function createNostrRelayEvent(
   nostr: NostrManager,
-  signer: NostrSigner,
+  signer: NostrSigner
 ) {
   const relayList = getLocalStorageData().relays;
   const readRelayList = getLocalStorageData().readRelays;
@@ -446,7 +450,7 @@ export async function createNostrRelayEvent(
 
 export async function createBlossomServerEvent(
   nostr: NostrManager,
-  signer: NostrSigner,
+  signer: NostrSigner
 ) {
   const blossomServers = getLocalStorageData().blossomServers;
   const serverTags = [];
@@ -665,7 +669,12 @@ export async function createOrUpdateCommunity(
 
   // include relay tags if provided: ["relay", url, type]
   if (details.relays) {
-    const { approvals = [], requests = [], metadata = [], all = [] } = details.relays;
+    const {
+      approvals = [],
+      requests = [],
+      metadata = [],
+      all = [],
+    } = details.relays;
     for (const r of approvals) tags.push(["relay", r, "approvals"]);
     for (const r of requests) tags.push(["relay", r, "requests"]);
     for (const r of metadata) tags.push(["relay", r, "metadata"]);
@@ -790,7 +799,7 @@ export async function finalizeAndSendNostrEvent(
     const signedEvent = await signer.sign(eventTemplate);
     const allWriteRelays = withBlastr([...writeRelays, ...relays]);
     await nostr.publish(signedEvent, allWriteRelays);
-  // return the signed event to caller so we know generated IDs
+    // return the signed event to caller so we know generated IDs
     return signedEvent;
   } catch (error) {
     // Log the actual error and re-throw it so the calling function knows something went wrong

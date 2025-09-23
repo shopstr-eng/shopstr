@@ -507,11 +507,7 @@ function Shopstr({ props }: { props: AppProps }) {
           editReviewsContext
         );
 
-        await fetchAllCommunities(
-          nostr!,
-          allRelays,
-          editCommunityContext
-        );
+        await fetchAllCommunities(nostr!, allRelays, editCommunityContext);
 
         // Fetch wallet if logged in
         if (isLoggedIn) {
@@ -567,7 +563,7 @@ function Shopstr({ props }: { props: AppProps }) {
       />
       <CommunityContext.Provider value={communityContext}>
         <RelaysContext.Provider value={relaysContext}>
-          <BlossomContext.Provider value={blossomContext}> 
+          <BlossomContext.Provider value={blossomContext}>
             <CashuWalletContext.Provider value={cashuWalletContext}>
               <FollowsContext.Provider value={followsContext}>
                 <ProductContext.Provider value={productContext}>

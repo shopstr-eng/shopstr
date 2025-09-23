@@ -22,7 +22,7 @@ const useNavigation = () => {
     setIsProfileActive(false);
     setIsCommunitiesActive(false);
 
-    if (pathname.startsWith('/communities')) {
+    if (pathname.startsWith("/communities")) {
       setIsCommunitiesActive(true);
     } else {
       switch (pathname) {

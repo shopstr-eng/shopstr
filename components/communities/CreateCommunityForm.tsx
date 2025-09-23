@@ -16,20 +16,24 @@ interface CommunityFormData {
 interface CreateCommunityFormProps {
   existingCommunity: Community | null;
   onSave: (data: CommunityFormData) => void;
+  onCancel?: () => void;
 }
 
 const CreateCommunityForm: React.FC<CreateCommunityFormProps> = ({
   existingCommunity,
   onSave,
+  onCancel,
 }) => {
-  const { control, handleSubmit, setValue, watch } = useForm<CommunityFormData>({
-    defaultValues: {
-      name: "",
-      description: "",
-      image: "",
-      d: uuidv4(),
-    },
-  });
+  const { control, handleSubmit, setValue, watch } = useForm<CommunityFormData>(
+    {
+      defaultValues: {
+        name: "",
+        description: "",
+        image: "",
+        d: uuidv4(),
+      },
+    }
+  );
 
   const watchImage = watch("image");
 
@@ -73,7 +77,12 @@ const CreateCommunityForm: React.FC<CreateCommunityFormProps> = ({
       <div className="flex flex-col gap-2">
         <label className="text-sm">Community Image</label>
         {watchImage && (
-          <Image src={watchImage} alt="Community image preview" width={200} className="rounded-lg" />
+          <Image
+            src={watchImage}
+            alt="Community image preview"
+            width={200}
+            className="rounded-lg"
+          />
         )}
         <FileUploaderButton
           className={`${SHOPSTRBUTTONCLASSNAMES} w-fit`}
@@ -83,9 +92,16 @@ const CreateCommunityForm: React.FC<CreateCommunityFormProps> = ({
         </FileUploaderButton>
       </div>
 
-      <Button type="submit" className={SHOPSTRBUTTONCLASSNAMES}>
-        {existingCommunity ? "Save Changes" : "Create Community"}
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button type="submit" className={SHOPSTRBUTTONCLASSNAMES}>
+          {existingCommunity ? "Save Changes" : "Create Community"}
+        </Button>
+        {onCancel && (
+          <Button variant="light" onClick={onCancel}>
+            Cancel
+          </Button>
+        )}
+      </div>
     </form>
   );
 };

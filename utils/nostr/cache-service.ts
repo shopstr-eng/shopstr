@@ -1,4 +1,9 @@
-import { NostrEvent, ItemType, NostrMessageEvent, Community } from "../types/types";
+import {
+  NostrEvent,
+  ItemType,
+  NostrMessageEvent,
+  Community,
+} from "../types/types";
 import Dexie, { Table } from "dexie";
 
 export let db: ItemsFetchedFromRelays | null = null;
@@ -22,15 +27,17 @@ class ItemsFetchedFromRelays extends Dexie {
 
   public constructor() {
     super("ItemsFetchedFromRelays");
-    this.version(3).stores({
-      products: "id, product",
-      profiles: "id, profile",
-      chatMessages: "id, message",
-      communities: "id, community",
-      lastFetchedTime: "itemType, time",
-    }).upgrade(_tx => {
-      // placeholder for future migration logic
-    });
+    this.version(32)
+      .stores({
+        products: "id, product",
+        profiles: "id, profile",
+        chatMessages: "id, message",
+        communities: "id, community",
+        lastFetchedTime: "itemType, time",
+      })
+      .upgrade((_tx) => {
+        // placeholder for future migration logic
+      });
   }
 }
 

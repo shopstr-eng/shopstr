@@ -58,9 +58,7 @@ const SettingsPage = () => {
               key="community"
               description="Create and manage your seller community"
               classNames={listBoxClassnames}
-              startContent={
-                <UserGroupIcon className={startIconClassnames} />
-              }
+              startContent={<UserGroupIcon className={startIconClassnames} />}
               onClick={() => {
                 router.push("/settings/community");
               }}
