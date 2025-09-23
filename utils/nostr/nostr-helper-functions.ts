@@ -5,15 +5,19 @@ import {
   nip19,
   nip44,
   SimplePool,
+  EventTemplate as NostrEventTemplate,
 } from "nostr-tools";
 import CryptoJS from "crypto-js";
 import { v4 as uuidv4 } from "uuid";
-import { NostrEvent, ProductFormValues } from "@/utils/types/types";
+import { NostrEvent, ProductFormValues } from "@/utils/types/types"; 
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { Proof } from "@cashu/cashu-ts";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { removeProductFromCache } from "@/utils/nostr/cache-service";
+import { sha256 } from "@noble/hashes/sha256";
+import { bytesToHex } from "@noble/curves/abstract/utils";
+import { ARBITER_PUBKEY } from "@/utils/constants";
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
@@ -1182,6 +1186,129 @@ export function getDefaultMint(): string {
 
 export function getDefaultBlossomServer(): string {
   return "https://cdn.nostrcheck.me";
+}
+
+export async function activateDispute(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  orderId: string,
+  initialDisputeReason: string,
+  buyerPubkey: string,
+  sellerPubkey: string
+): Promise<boolean> {
+  if (!orderId || !initialDisputeReason.trim() || !buyerPubkey || !sellerPubkey) {
+    console.error("Invalid input for dispute activation: Missing required data.");
+    return false;
+  }
+
+  const disputeId = orderId; 
+  const tags = [
+    ['d', disputeId],
+    ['orderId', orderId],
+    ['p', buyerPubkey],
+    ['p', sellerPubkey],
+    ['p', ARBITER_PUBKEY] // Tag all 3 parties
+  ];
+  
+  const eventTemplate: NostrEventTemplate = {
+    kind: 30006,
+    content: `DISPUTE OPENED: ${initialDisputeReason}`,
+    tags,
+    created_at: Math.floor(Date.now() / 1000),
+  };
+  
+  try {
+    await finalizeAndSendNostrEvent(signer, nostr, eventTemplate as NostrEvent);
+    return true;
+  } catch (error) {
+    console.error("Failed to publish dispute activation event:", error);
+    return false;
+  }
+}
+
+/**
+ * Given the proofs already locked in a 2-of-3 P2PK escrow, produce
+ * the arbiter’s Schnorr signatures on each proof.secret
+ */
+export async function createPartialRedemption(
+  escrowedProofs: Proof[],
+  arbiterSigner: NostrSigner
+): Promise<{ inputs: Proof[]; signatures: string[] }> {
+  if (escrowedProofs.length === 0) {
+    throw new Error("No proofs to redeem");
+  }
+
+  const arbiterSigs: string[] = [];
+
+  for (const proof of escrowedProofs) {
+    const msgHash = sha256(new TextEncoder().encode(proof.secret));
+    const sig = await arbiterSigner.signSchnorr(bytesToHex(msgHash));
+    arbiterSigs.push(sig);
+  }
+
+  return {
+    inputs: escrowedProofs,
+    signatures: arbiterSigs,
+  };
+}
+
+export async function publishDisputeResolutionEvent(
+  signer: NostrSigner,
+  nostr: NostrManager,
+  orderId: string,
+  outcome: 'buyer' | 'seller'
+): Promise<boolean> {
+  const status = outcome === 'buyer' ? 'closed-buyer' : 'closed-seller';
+
+  const eventTemplate: NostrEventTemplate = {
+    kind: 30007,
+    content: `Dispute resolved: Ruling for ${outcome}`,
+    tags: [
+      ['d', orderId],
+      ['status', status]
+    ],
+    created_at: Math.floor(Date.now() / 1000),
+  };
+
+  try {
+    await finalizeAndSendNostrEvent(signer, nostr, eventTemplate as NostrEvent);
+    return true;
+  } catch (error) {
+    console.error("Failed to publish resolution event:", error);
+    return false;
+  }
+}
+
+//Unwraps a NIP-59 gift-wrap event to reveal the final inner event.
+export async function unwrapGiftWrap(
+  signer: NostrSigner,
+  giftWrapEvent: NostrEvent
+): Promise<NostrEvent | null> {
+  if (giftWrapEvent.kind !== 1059) {
+    console.error("Attempted to unwrap an event that is not a NIP-59 gift wrap.");
+    return null;
+  }
+
+  try {
+    // Step 1: Decrypt the gift wrap to get the inner "seal" event.
+    const sealJson = await signer.decrypt(giftWrapEvent.pubkey, giftWrapEvent.content);
+    const sealEvent = JSON.parse(sealJson) as NostrEvent;
+
+    // A valid seal event must be kind 13.
+    if (sealEvent.kind !== 13) {
+      console.error("The unwrapped event is not a valid NIP-59 seal (kind 13).");
+      return null;
+    }
+
+    // Step 2: Decrypt the seal to get the final "rumor" event.
+    const finalEventJson = await signer.decrypt(sealEvent.pubkey, sealEvent.content);
+    const finalEvent = JSON.parse(finalEventJson) as NostrEvent;
+
+    return finalEvent;
+  } catch (error) {
+    console.error("Failed to unwrap gift-wrap event. It may not be intended for you or could be malformed.", error);
+    return null;
+  }
 }
 
 export async function verifyNip05Identifier(

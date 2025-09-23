@@ -35,7 +35,7 @@ import {
   CashuWallet,
   getEncodedToken,
   MintKeyset,
-  Proof,
+  Proof, 
 } from "@cashu/cashu-ts";
 import {
   constructGiftWrappedEvent,
@@ -63,6 +63,7 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { ShippingFormData, ContactFormData } from "@/utils/types/types";
+import { ARBITER_PUBKEY, DONATION_PUBKEY } from "@/utils/constants";
 import { Controller } from "react-hook-form";
 
 export default function ProductInvoiceCard({
@@ -145,7 +146,9 @@ export default function ProductInvoiceCard({
     watch,
   } = useForm();
 
-  // Watch form values to validate completion
+const { pubkey: buyerPubkey } = useContext(SignerContext);
+
+  // watch form values to validate completion
   const watchedValues = watch();
   const [selectedPickupLocation, setSelectedPickupLocation] = useState<
     string | null
@@ -997,6 +1000,11 @@ export default function ProductInvoiceCard({
     let sellerProofs: Proof[] = [];
 
     if (sellerAmount > 0) {
+      const mint = new CashuMint(mints[0]!);
+      const info = await mint.getInfo();
+      if (!info.nuts?.[11]) {
+        throw new Error("Mint does not support P2PK (NUT-11)");
+      }
       const { keep, send } = await wallet.send(sellerAmount, remainingProofs, {
         includeFees: true,
       });
@@ -1223,7 +1231,7 @@ export default function ProductInvoiceCard({
     if (donationToken) {
       donationMessage = "Sale donation: " + donationToken;
       await sendPaymentAndContactMessage(
-        "a37118a4888e02d28e8767c08caaf73b49abdac391ad7ff18a304891e416dc33",
+        DONATION_PUBKEY,
         donationMessage,
         false,
         false,
@@ -1519,15 +1527,46 @@ export default function ProductInvoiceCard({
       }
 
       const mint = new CashuMint(mints[0]!);
+      //Ensure mint supports NUT-11 P2PK escrow
+      const mintInfo = await mint.getInfo();
+      if (!mintInfo.nuts?.["11"]?.supported) {
+        throw new Error("Cashu mint does not support P2PK escrow (NUT-11)");
+      }
       const wallet = new CashuWallet(mint);
       const mintKeySetIds = await wallet.getKeySets();
       const filteredProofs = tokens.filter(
         (p: Proof) =>
           mintKeySetIds?.some((keysetId: MintKeyset) => keysetId.id === p.id)
       );
+      
+      const pubkey = productData.pubkey;
+      const sellerProfile = profileContext.profileData.get(pubkey);
+      const p2pk = sellerProfile?.content?.p2pk;
+
+      const tags = p2pk?.tags || [];
+      // build p2pk options only if enabled
+      const p2pkOptions = p2pk?.enabled
+        ? {
+            pubkey:     p2pk.pubkey,
+            locktime:   p2pk.locktime,
+            refundKeys: [
+              ...(p2pk.refund || []),
+              buyerPubkey! 
+            ],
+            sigflag: tags.find((t: string[]) => t[0] === "sigflag")?.[1] || "SIG_ALL",
+            nSigs:   2,                        // require 2-of-3 signatures
+            pubkeys: [
+              buyerPubkey!,                    // buyer
+              ARBITER_PUBKEY                   // arbiter
+            ],
+          }
+        : undefined;
+      
       const { keep, send } = await wallet.send(price, filteredProofs, {
         includeFees: true,
+        ...(p2pkOptions ? { p2pk: p2pkOptions } : {}),
       });
+
       const deletedEventIds = [
         ...new Set([
           ...walletContext.proofEvents

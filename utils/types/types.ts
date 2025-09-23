@@ -1,4 +1,5 @@
 import { Event } from "nostr-tools";
+import { Proof } from "@cashu/cashu-ts";
 
 export type ItemType = "products" | "profiles" | "chats";
 
@@ -95,4 +96,17 @@ declare global {
     webln: any;
     nostr: any;
   }
+}
+
+export interface DisputeData {
+  disputeId: string;
+  orderId: string;
+  status: 'open' | 'closed-buyer' | 'closed-seller' | 'mediation';
+  participants: {
+    buyer: string;
+    seller: string;
+    arbiter: string;
+  };
+  messages: NostrMessageEvent[];
+  escrowToken: Proof[]; // The token locked in escrow
 }

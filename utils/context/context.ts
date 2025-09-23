@@ -1,5 +1,5 @@
 import { createContext } from "react";
-import { NostrMessageEvent, ProfileData, ShopProfile } from "../types/types";
+import { NostrMessageEvent, ProfileData, ShopProfile, DisputeData } from "../types/types";
 import { Proof } from "@cashu/cashu-ts";
 
 export interface ProfileContextInterface {
@@ -151,3 +151,11 @@ export const CashuWalletContext = createContext({
   cashuProofs: [],
   isLoading: true,
 } as CashuWalletContextInterface);
+
+export interface DisputeContextInterface {
+  disputesMap: Map<string, DisputeData>;
+  isLoading: boolean;
+}
+
+export const DisputeContext =
+  createContext<DisputeContextInterface>({ disputesMap: new Map(), isLoading: true });
