@@ -1,5 +1,3 @@
-import type { AbortSignal } from "abort-controller";
-
 const helperMock = {
   getLocalStorageData: jest.fn(),
   setLocalStorageDataOnSignIn: jest.fn(),
@@ -10,14 +8,14 @@ const instanceMock = {
   _getPrivKey: jest.fn(),
 };
 const staticGetEncrypted = jest.fn();
-const constructorMock = jest.fn().mockImplementation((opts: any, ch: any) => {
+const constructorMock = jest.fn().mockImplementation((opts: { encryptedPrivKey?: string; passphrase?: string }, _ch: unknown) => {
   Object.assign(instanceMock, {
     encryptedPrivKey: opts.encryptedPrivKey,
     passphrase: opts.passphrase,
   });
   return instanceMock;
 });
-constructorMock.getEncryptedNSEC = staticGetEncrypted;
+(constructorMock as typeof constructorMock & { getEncryptedNSEC: jest.Mock }).getEncryptedNSEC = staticGetEncrypted;
 jest.mock("../signers/nostr-nsec-signer", () => ({
   NostrNSecSigner: constructorMock,
 }));
@@ -26,7 +24,7 @@ describe("encryption-migration", () => {
   let needsMigration: () => boolean;
   let migrateToNip49: (pass: string) => Promise<boolean>;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.resetModules();
     helperMock.getLocalStorageData.mockReset();
     helperMock.setLocalStorageDataOnSignIn.mockReset();
@@ -34,7 +32,7 @@ describe("encryption-migration", () => {
     staticGetEncrypted.mockReset();
     constructorMock.mockClear();
 
-    const mod = require("../encryption-migration");
+    const mod = await import("../encryption-migration");
     needsMigration = mod.needsMigration;
     migrateToNip49 = mod.migrateToNip49;
   });
