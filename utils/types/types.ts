@@ -1,4 +1,5 @@
 import { Event } from "nostr-tools";
+import { NostrEventTemplate } from "@/utils/nostr/nostr-manager";
 
 export type ItemType = "products" | "profiles" | "chats";
 
@@ -46,6 +47,7 @@ export interface ProfileData {
     shopstr_donation?: number;
   };
   created_at: number;
+  nip05Verified?: boolean;
 }
 
 export interface Transaction {
@@ -90,9 +92,25 @@ export interface CombinedFormData {
   Required?: string;
 }
 
+export interface WebLNInterface {
+  enable(): Promise<void>;
+  isEnabled(): Promise<boolean>;
+  sendPayment(paymentRequest: string): Promise<{ preimage?: string } | null>;
+}
+
+export interface NostrNIP44Interface {
+  encrypt(pubkey: string, plainText: string): Promise<string>;
+  decrypt(pubkey: string, cipherText: string): Promise<string>;
+}
+
+export interface NostrInterface {
+  getPublicKey(): Promise<string>;
+  signEvent(event: NostrEventTemplate): Promise<NostrEvent>;
+  nip44: NostrNIP44Interface;
+}
 declare global {
   interface Window {
-    webln: any;
-    nostr: any;
+    webln?: WebLNInterface;
+    nostr?: NostrInterface;
   }
 }

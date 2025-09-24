@@ -24,6 +24,7 @@ import {
   CashuWalletContext,
   CashuWalletContextInterface,
 } from "../utils/context/context";
+import { ProofEvent } from "../utils/context/context";
 import {
   getLocalStorageData,
   getDefaultRelays,
@@ -67,9 +68,12 @@ function Shopstr({ props }: { props: AppProps }) {
     {
       productEvents: [],
       isLoading: true,
-      addNewlyCreatedProductEvent: (productEvent: any) => {
+      addNewlyCreatedProductEvent: (productEvent: NostrEvent) => {
         setProductContext((productContext) => {
-          const productEvents = [...productContext.productEvents, productEvent];
+          const productEvents = [
+            ...(productContext.productEvents ?? []),
+            productEvent,
+          ];
           return {
             productEvents: productEvents,
             isLoading: false,
@@ -81,9 +85,9 @@ function Shopstr({ props }: { props: AppProps }) {
       },
       removeDeletedProductEvent: (productId: string) => {
         setProductContext((productContext) => {
-          const productEvents = [...productContext.productEvents].filter(
-            (event) => event.id !== productId
-          );
+          const productEvents = [
+            ...(productContext.productEvents ?? []),
+          ].filter((event) => event.id !== productId);
           return {
             productEvents: productEvents,
             isLoading: false,
@@ -341,7 +345,7 @@ function Shopstr({ props }: { props: AppProps }) {
   };
 
   const editCashuWalletContext = (
-    proofEvents: any[],
+    proofEvents: ProofEvent[],
     cashuMints: string[],
     cashuProofs: Proof[],
     isLoading: boolean
@@ -524,7 +528,7 @@ function Shopstr({ props }: { props: AppProps }) {
   return (
     <>
       <DynamicHead
-        productEvents={productContext.productEvents}
+        productEvents={productContext.productEvents ?? []}
         shopEvents={shopContext.shopData}
       />
       <RelaysContext.Provider value={relaysContext}>

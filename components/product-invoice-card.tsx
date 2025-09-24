@@ -126,7 +126,7 @@ export default function ProductInvoiceCard({
   const [formType, setFormType] = useState<"shipping" | "contact" | null>(null);
   const [showOrderTypeSelection, setShowOrderTypeSelection] = useState(true);
 
-  const [fiatPaymentOptions, setFiatPaymentOptions] = useState({});
+  const [fiatPaymentOptions, setFiatPaymentOptions] = useState<Record<string, string>>({});
   const [showFiatTypeOption, setShowFiatTypeOption] = useState(false);
   const [selectedFiatOption, setSelectedFiatOption] = useState("");
   const [showFiatPaymentInstructions, setShowFiatPaymentInstructions] =
@@ -382,7 +382,7 @@ export default function ProductInvoiceCard({
         additionalInfo: data["Required"],
       };
 
-      let paymentData: any = commonData;
+      let paymentData: Record<string, unknown> = commonData;
 
       if (formType === "shipping") {
         paymentData = {
@@ -439,7 +439,7 @@ export default function ProductInvoiceCard({
     }
   };
 
-  const handleFiatPayment = async (convertedPrice: number, data: any) => {
+  const handleFiatPayment = async (convertedPrice: number, data: Record<string, unknown>) => {
     try {
       if (
         data.shippingName ||
@@ -450,21 +450,21 @@ export default function ProductInvoiceCard({
         data.shippingCountry
       ) {
         validatePaymentData(convertedPrice, {
-          Name: data.shippingName || "",
-          Address: data.shippingAddress || "",
-          Unit: data.shippingUnitNo || "",
-          City: data.shippingCity || "",
-          "Postal Code": data.shippingPostalCode || "",
-          "State/Province": data.shippingState || "",
-          Country: data.shippingCountry || "",
-          Required: data.additionalInfo || "",
+          Name: data.shippingName as string || "",
+          Address: data.shippingAddress as string || "",
+          Unit: data.shippingUnitNo as string || "",
+          City: data.shippingCity as string || "",
+          "Postal Code": data.shippingPostalCode as string || "",
+          "State/Province": data.shippingState as string || "",
+          Country: data.shippingCountry as string || "",
+          Required: data.additionalInfo as string || "",
         });
       } else if (data.contact || data.contactType || data.contactInstructions) {
         validatePaymentData(convertedPrice, {
-          Contact: data.contact || "",
-          "Contact Type": data.contactType || "",
-          Instructions: data.contactInstructions || "",
-          Required: data.additionalInfo || "",
+          Contact: data.contact as string || "",
+          "Contact Type": data.contactType as string || "",
+          Instructions: data.contactInstructions as string || "",
+          Required: data.additionalInfo as string || "",
         });
       } else {
         validatePaymentData(convertedPrice);
@@ -763,7 +763,7 @@ export default function ProductInvoiceCard({
     }
   };
 
-  const handleLightningPayment = async (convertedPrice: number, data: any) => {
+  const handleLightningPayment = async (convertedPrice: number, data: Record<string, unknown>) => {
     try {
       if (
         data.shippingName ||
@@ -774,21 +774,21 @@ export default function ProductInvoiceCard({
         data.shippingCountry
       ) {
         validatePaymentData(convertedPrice, {
-          Name: data.shippingName || "",
-          Address: data.shippingAddress || "",
-          Unit: data.shippingUnitNo || "",
-          City: data.shippingCity || "",
-          "Postal Code": data.shippingPostalCode || "",
-          "State/Province": data.shippingState || "",
-          Country: data.shippingCountry || "",
-          Required: data.additionalInfo || "",
+          Name: data.shippingName as string || "",
+          Address: data.shippingAddress as string || "",
+          Unit: data.shippingUnitNo as string || "",
+          City: data.shippingCity as string || "",
+          "Postal Code": data.shippingPostalCode as string || "",
+          "State/Province": data.shippingState as string || "",
+          Country: data.shippingCountry as string || "",
+          Required: data.additionalInfo as string || "",
         });
       } else if (data.contact || data.contactType || data.contactInstructions) {
         validatePaymentData(convertedPrice, {
-          Contact: data.contact || "",
-          "Contact Type": data.contactType || "",
-          Instructions: data.contactInstructions || "",
-          Required: data.additionalInfo || "",
+          Contact: data.contact as string || "",
+          "Contact Type": data.contactType as string || "",
+          Instructions: data.contactInstructions as string || "",
+          Required: data.additionalInfo as string || "",
         });
       } else {
         validatePaymentData(convertedPrice);
@@ -833,17 +833,17 @@ export default function ProductInvoiceCard({
         wallet,
         convertedPrice,
         hash,
-        data.shippingName ? data.shippingName : undefined,
-        data.shippingAddress ? data.shippingAddress : undefined,
-        data.shippingUnitNo ? data.shippingUnitNo : undefined,
-        data.shippingCity ? data.shippingCity : undefined,
-        data.shippingPostalCode ? data.shippingPostalCode : undefined,
-        data.shippingState ? data.shippingState : undefined,
-        data.shippingCountry ? data.shippingCountry : undefined,
-        data.contact ? data.contact : undefined,
-        data.contactType ? data.contactType : undefined,
-        data.contactInstructions ? data.contactInstructions : undefined,
-        data.additionalInfo ? data.additionalInfo : undefined
+        typeof data.shippingName === "string" && data.shippingName.trim() !== "" ? data.shippingName : undefined,
+        typeof data.shippingAddress === "string" && data.shippingAddress.trim() !== "" ? data.shippingAddress : undefined,
+        typeof data.shippingUnitNo === "string" && data.shippingUnitNo.trim() !== "" ? data.shippingUnitNo : undefined,
+        typeof data.shippingCity === "string" && data.shippingCity.trim() !== "" ? data.shippingCity : undefined,
+        typeof data.shippingPostalCode === "string" && data.shippingPostalCode.trim() !== "" ? data.shippingPostalCode : undefined,
+        typeof data.shippingState === "string" && data.shippingState.trim() !== "" ? data.shippingState : undefined,
+        typeof data.shippingCountry === "string" && data.shippingCountry.trim() !== "" ? data.shippingCountry : undefined,
+        typeof data.contact === "string" && data.contact.trim() !== "" ? data.contact : undefined,
+        typeof data.contactType === "string" && data.contactType.trim() !== "" ? data.contactType : undefined,
+        typeof data.contactInstructions === "string" && data.contactInstructions.trim() !== "" ? data.contactInstructions : undefined,
+        typeof data.additionalInfo === "string" && data.additionalInfo.trim() !== "" ? data.additionalInfo : undefined
       );
     } catch (error) {
       if (setInvoiceGenerationFailed) {
@@ -1479,7 +1479,7 @@ export default function ProductInvoiceCard({
     productData.currency
   );
 
-  const handleCashuPayment = async (price: number, data: any) => {
+  const handleCashuPayment = async (price: number, data: Record<string, unknown>) => {
     try {
       if (!mints || mints.length === 0) {
         throw new Error("No Cashu mint available");
@@ -1498,21 +1498,21 @@ export default function ProductInvoiceCard({
         data.shippingCountry
       ) {
         validatePaymentData(price, {
-          Name: data.shippingName || "",
-          Address: data.shippingAddress || "",
-          Unit: data.shippingUnitNo || "",
-          City: data.shippingCity || "",
-          "Postal Code": data.shippingPostalCode || "",
-          "State/Province": data.shippingState || "",
-          Country: data.shippingCountry || "",
-          Required: data.additionalInfo || "",
+          Name: data.shippingName as string  || "",
+          Address: data.shippingAddress as string || "",
+          Unit: data.shippingUnitNo as string || "",
+          City: data.shippingCity as string || "",
+          "Postal Code": data.shippingPostalCode as string || "",
+          "State/Province": data.shippingState as string || "",
+          Country: data.shippingCountry as string || "",
+          Required: data.additionalInfo as string || "",
         });
       } else if (data.contact || data.contactType || data.contactInstructions) {
         validatePaymentData(price, {
-          Contact: data.contact || "",
-          "Contact Type": data.contactType || "",
-          Instructions: data.contactInstructions || "",
-          Required: data.additionalInfo || "",
+          Contact: data.contact  as string ||  "",
+          "Contact Type": data.contactType as string || "",
+          Instructions: data.contactInstructions as string || "",
+          Required: data.additionalInfo as string || "",
         });
       } else {
         validatePaymentData(price);
@@ -1566,17 +1566,17 @@ export default function ProductInvoiceCard({
         wallet,
         send,
         price,
-        data.shippingName ? data.shippingName : undefined,
-        data.shippingAddress ? data.shippingAddress : undefined,
-        data.shippingUnitNo ? data.shippingUnitNo : undefined,
-        data.shippingCity ? data.shippingCity : undefined,
-        data.shippingPostalCode ? data.shippingPostalCode : undefined,
-        data.shippingState ? data.shippingState : undefined,
-        data.shippingCountry ? data.shippingCountry : undefined,
-        data.contact ? data.contact : undefined,
-        data.contactType ? data.contactType : undefined,
-        data.contactInstructions ? data.contactInstructions : undefined,
-        data.additionalInfo ? data.additionalInfo : undefined
+        typeof data.shippingName === "string" && data.shippingName.trim() !== "" ? data.shippingName : undefined,
+        typeof data.shippingAddress === "string" && data.shippingAddress.trim() !== "" ? data.shippingAddress : undefined,
+        typeof data.shippingUnitNo === "string" && data.shippingUnitNo.trim() !== "" ? data.shippingUnitNo : undefined,
+        typeof data.shippingCity === "string" && data.shippingCity.trim() !== "" ? data.shippingCity : undefined,
+        typeof data.shippingPostalCode === "string" && data.shippingPostalCode.trim() !== "" ? data.shippingPostalCode : undefined,
+        typeof data.shippingState === "string" && data.shippingState.trim() !== "" ? data.shippingState : undefined,
+        typeof data.shippingCountry === "string" && data.shippingCountry.trim() !== "" ? data.shippingCountry : undefined,
+        typeof data.contact === "string" && data.contact.trim() !== "" ? data.contact : undefined,
+        typeof data.contactType === "string" && data.contactType.trim() !== "" ? data.contactType : undefined,
+        typeof data.contactInstructions === "string" && data.contactInstructions.trim() !== "" ? data.contactInstructions : undefined,
+        typeof data.additionalInfo === "string" && data.additionalInfo.trim() !== "" ? data.additionalInfo : undefined
       );
       const changeProofs = keep;
       const remainingProofs = tokens.filter(
@@ -2450,8 +2450,12 @@ export default function ProductInvoiceCard({
                 <div className="mb-6 rounded-lg bg-gray-100 p-4 dark:bg-gray-700">
                   <p className="font-semibold text-gray-900 dark:text-white">
                     {selectedFiatOption}:{" "}
-                    {profileContext.profileData.get(productData.pubkey)?.content
-                      ?.fiat_options?.[selectedFiatOption] || "N/A"}
+                    {
+                      (
+                        profileContext.profileData.get(productData.pubkey)?.content
+                          ?.fiat_options as Record<string, string> | undefined
+                      )?.[selectedFiatOption] || "N/A"
+                    }
                   </p>
                 </div>
                 <div className="mb-6 flex items-center space-x-2">

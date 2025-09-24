@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from "react";
+import { useState, useEffect, useContext, useCallback } from "react";
 import { nip19 } from "nostr-tools";
 import { deleteEvent } from "@/utils/nostr/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
@@ -60,6 +60,82 @@ const DisplayProducts = ({
   const { nostr } = useContext(NostrContext);
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
 
+  const productSatisfiesCategoryFilter = useCallback((productData: ProductData) => {
+    if (selectedCategories.size === 0) return true;
+    return Array.from(selectedCategories).some((selectedCategory) => {
+      const re = new RegExp(selectedCategory, "gi");
+      return productData?.categories?.some((category) => {
+        const match = category.match(re);
+        return match && match.length > 0;
+      });
+    });
+  }, [selectedCategories]);
+
+  const productSatisfieslocationFilter = useCallback((productData: ProductData) => {
+    return !selectedLocation || productData.location === selectedLocation;
+  }, [selectedLocation]);
+
+  const productSatisfiesSearchFilter = useCallback((productData: ProductData) => {
+    if (!selectedSearch) return true;
+    if (!productData.title) return false;
+
+    if (selectedSearch.includes("naddr")) {
+      try {
+        const parsedNaddr = nip19.decode(selectedSearch);
+        if (parsedNaddr.type === "naddr") {
+          return (
+            productData.d === parsedNaddr.data.identifier &&
+            productData.pubkey === parsedNaddr.data.pubkey
+          );
+        }
+        return false;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    if (selectedSearch.includes("npub")) {
+      try {
+        const parsedNpub = nip19.decode(selectedSearch);
+        if (parsedNpub.type === "npub") {
+          return parsedNpub.data === productData.pubkey;
+        }
+        return false;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    try {
+      const re = new RegExp(selectedSearch, "gi");
+
+      const titleMatch = productData.title.match(re);
+      if (titleMatch && titleMatch.length > 0) return true;
+
+      if (productData.summary) {
+        const summaryMatch = productData.summary.match(re);
+        if (summaryMatch && summaryMatch.length > 0) return true;
+      }
+
+      const numericSearch = parseFloat(selectedSearch);
+      if (!isNaN(numericSearch) && productData.price === numericSearch) {
+        return true;
+      }
+
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }, [selectedSearch]);
+
+  const productSatisfiesAllFilters = useCallback((productData: ProductData) => {
+    return (
+      productSatisfiesCategoryFilter(productData) &&
+      productSatisfieslocationFilter(productData) &&
+      productSatisfiesSearchFilter(productData)
+    );
+  }, [productSatisfiesCategoryFilter, productSatisfieslocationFilter, productSatisfiesSearchFilter]);
+
   useEffect(() => {
     if (!productEventContext) return;
     if (!productEventContext.isLoading && productEventContext.productEvents) {
@@ -87,7 +163,7 @@ const DisplayProducts = ({
       setProductEvents(parsedProductData);
       setIsProductLoading(false);
     }
-  }, [productEventContext, wotFilter]);
+  }, [productEventContext, wotFilter, followsContext.followList, followsContext.isLoading]);
 
   useEffect(() => {
     if (focusedPubkey && setCategories) {
@@ -99,7 +175,7 @@ const DisplayProducts = ({
       });
       setCategories(productCategories);
     }
-  }, [productEvents, focusedPubkey]);
+  }, [productEvents, focusedPubkey, setCategories]);
 
   useEffect(() => {
     if (!productEvents) return;
@@ -132,6 +208,9 @@ const DisplayProducts = ({
     selectedLocation,
     selectedCategories,
     focusedPubkey,
+    productSatisfiesAllFilters,
+    userPubkey,
+    onFilteredProductsChange,
   ]);
 
   // Scroll effect only on page change
@@ -189,82 +268,6 @@ const DisplayProducts = ({
         router.push(`/listing/${product.id}`);
       }
     }
-  };
-
-  const productSatisfiesCategoryFilter = (productData: ProductData) => {
-    if (selectedCategories.size === 0) return true;
-    return Array.from(selectedCategories).some((selectedCategory) => {
-      const re = new RegExp(selectedCategory, "gi");
-      return productData?.categories?.some((category) => {
-        const match = category.match(re);
-        return match && match.length > 0;
-      });
-    });
-  };
-
-  const productSatisfieslocationFilter = (productData: ProductData) => {
-    return !selectedLocation || productData.location === selectedLocation;
-  };
-
-  const productSatisfiesSearchFilter = (productData: ProductData) => {
-    if (!selectedSearch) return true;
-    if (!productData.title) return false;
-
-    if (selectedSearch.includes("naddr")) {
-      try {
-        const parsedNaddr = nip19.decode(selectedSearch);
-        if (parsedNaddr.type === "naddr") {
-          return (
-            productData.d === parsedNaddr.data.identifier &&
-            productData.pubkey === parsedNaddr.data.pubkey
-          );
-        }
-        return false;
-      } catch (_) {
-        return false;
-      }
-    }
-
-    if (selectedSearch.includes("npub")) {
-      try {
-        const parsedNpub = nip19.decode(selectedSearch);
-        if (parsedNpub.type === "npub") {
-          return parsedNpub.data === productData.pubkey;
-        }
-        return false;
-      } catch (_) {
-        return false;
-      }
-    }
-
-    try {
-      const re = new RegExp(selectedSearch, "gi");
-
-      const titleMatch = productData.title.match(re);
-      if (titleMatch && titleMatch.length > 0) return true;
-
-      if (productData.summary) {
-        const summaryMatch = productData.summary.match(re);
-        if (summaryMatch && summaryMatch.length > 0) return true;
-      }
-
-      const numericSearch = parseFloat(selectedSearch);
-      if (!isNaN(numericSearch) && productData.price === numericSearch) {
-        return true;
-      }
-
-      return false;
-    } catch (_) {
-      return false;
-    }
-  };
-
-  const productSatisfiesAllFilters = (productData: ProductData) => {
-    return (
-      productSatisfiesCategoryFilter(productData) &&
-      productSatisfieslocationFilter(productData) &&
-      productSatisfiesSearchFilter(productData)
-    );
   };
 
   const getCurrentPageProducts = () => {
