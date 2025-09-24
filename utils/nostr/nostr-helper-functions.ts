@@ -1,14 +1,21 @@
 import {
+  EventTemplate,
   finalizeEvent,
   generateSecretKey,
   getPublicKey,
+  getEventHash,
   nip19,
   nip44,
   SimplePool,
 } from "nostr-tools";
-import CryptoJS from "crypto-js";
 import { v4 as uuidv4 } from "uuid";
-import { NostrEvent, ProductFormValues } from "@/utils/types/types";
+import CryptoJS from "crypto-js";
+import {
+  Community,
+  CommunityRelays,
+  NostrEvent,
+  ProductFormValues,
+} from "@/utils/types/types";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { Proof } from "@cashu/cashu-ts";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
@@ -37,48 +44,13 @@ export async function generateKeys(): Promise<{ nsec: string; npub: string }> {
   return { nsec, npub };
 }
 
-function generateEventId(event: EncryptedMessageEvent) {
-  // Step 1: Create the array structure
-  const eventArray = [
-    0,
-    event.pubkey.toLowerCase(),
-    event.created_at,
-    event.kind,
-    event.tags,
-    event.content,
-  ];
-
-  // Step 2: JSON stringify the array with custom replacer for proper escaping
-  const serialized = JSON.stringify(eventArray, (_, value) => {
-    if (typeof value === "string") {
-      return value
-        .replace(/\\/g, "\\\\")
-        .replace(/\n/g, "\\n")
-        .replace(/"/g, '\\"')
-        .replace(/\r/g, "\\r")
-        .replace(/\t/g, "\\t")
-        .replace(/\b/g, "\\b")
-        .replace(/\f/g, "\\f");
-    }
-    return value;
-  });
-
-  // Step 3: Create SHA256 hash of the serialized string
-  const hashHex = CryptoJS.SHA256(serialized).toString(CryptoJS.enc.Hex);
-  return hashHex;
-}
-
 export async function deleteEvent(
   nostr: NostrManager,
   signer: NostrSigner,
   event_ids_to_delete: string[]
 ) {
-  const userPubkey: string = await signer.getPubKey();
-  const deletionEvent = await createNostrDeleteEvent(
-    nostr,
-    signer,
+  const deletionEvent = createNostrDeleteEvent(
     event_ids_to_delete,
-    userPubkey,
     "NIP-99 listing deletion request"
   );
 
@@ -86,27 +58,16 @@ export async function deleteEvent(
   await removeProductFromCache(event_ids_to_delete);
 }
 
-export async function createNostrDeleteEvent(
-  nostr: NostrManager,
-  signer: NostrSigner,
+export function createNostrDeleteEvent(
   event_ids: string[],
-  pubkey: string,
   content: string
-) {
-  if (!signer || !nostr) throw new Error("Login required");
-  const msg = {
+): EventTemplate {
+  const msg: EventTemplate = {
     kind: 5,
     content: content,
-    tags: [],
+    tags: event_ids.map((id) => ["e", id]),
     created_at: Math.floor(Date.now() / 1000),
-    pubkey,
-    id: "",
-    sig: "",
-  } as NostrEvent;
-
-  for (const event_id of event_ids) {
-    msg.tags.push(["e", event_id]);
-  }
+  };
 
   return msg;
 }
@@ -149,18 +110,14 @@ export function parseBunkerToken(token: string): BunkerTokenParams | null {
 export async function createNostrProfileEvent(
   nostr: NostrManager,
   signer: NostrSigner,
-  pubkey: string,
   content: string
 ) {
-  const msg = {
+  const msg: EventTemplate = {
     kind: 0,
     content: content,
     tags: [],
     created_at: Math.floor(Date.now() / 1000),
-    pubkey: pubkey,
-    id: "",
-    sig: "",
-  } as NostrEvent;
+  };
 
   await finalizeAndSendNostrEvent(signer, nostr, msg);
   return msg;
@@ -235,29 +192,17 @@ export async function PostListing(
 export async function createNostrShopEvent(
   nostr: NostrManager,
   signer: NostrSigner,
-  pubkey: string,
   content: string
 ) {
-  const msg = {
+  const msg: EventTemplate = {
     kind: 30019, // NIP-15 - Stall Metadata
     content: content,
     tags: [],
     created_at: Math.floor(Date.now() / 1000),
-    pubkey: pubkey,
-    id: "",
-    sig: "",
-  } as NostrEvent;
+  };
 
   await finalizeAndSendNostrEvent(signer, nostr, msg);
   return msg;
-}
-
-interface EncryptedMessageEvent {
-  pubkey: string;
-  created_at: number;
-  content: string;
-  kind: number;
-  tags: string[][];
 }
 
 interface GiftWrappedMessageEvent {
@@ -360,11 +305,18 @@ export async function constructGiftWrappedEvent(
     tags,
   };
 
-  const eventId = generateEventId(bareEvent);
+  // To generate a predictable ID before signing (as required by NIP-17 gift wrap structure),
+  // we create a temporary full event object and hash it using the official NIP-01 method.
+  const eventToHash: NostrEvent = {
+    ...bareEvent,
+    id: "", // dummy value for hashing
+    sig: "", // dummy value for hashing
+  };
+  const eventId = getEventHash(eventToHash);
   return {
     id: eventId,
     ...bareEvent,
-  };
+  } as GiftWrappedMessageEvent;
 }
 
 export async function constructMessageSeal(
@@ -464,19 +416,14 @@ export async function publishReviewEvent(
 }
 export async function createNostrRelayEvent(
   nostr: NostrManager,
-  signer: NostrSigner,
-  pubkey: string
+  signer: NostrSigner
 ) {
-  if (!signer || !nostr) throw new Error("Login required");
   const relayList = getLocalStorageData().relays;
   const readRelayList = getLocalStorageData().readRelays;
   const writeRelayList = getLocalStorageData().writeRelays;
   const relayTags = [];
-  if (relayList.length != 0) {
-    for (const relay of relayList) {
-      const relayTag = ["r", relay];
-      relayTags.push(relayTag);
-    }
+  for (const relay of relayList) {
+    relayTags.push(["r", relay]);
   }
   if (readRelayList.length != 0) {
     for (const relay of readRelayList) {
@@ -490,15 +437,12 @@ export async function createNostrRelayEvent(
       relayTags.push(relayTag);
     }
   }
-  const relayEvent = {
+  const relayEvent: EventTemplate = {
     kind: 10002, // NIP-65 - Relay List Metadata
     content: "",
     tags: relayTags,
     created_at: Math.floor(Date.now() / 1000),
-    pubkey: pubkey,
-    id: "",
-    sig: "",
-  } as NostrEvent;
+  };
 
   await finalizeAndSendNostrEvent(signer, nostr, relayEvent);
   return relayEvent;
@@ -506,27 +450,19 @@ export async function createNostrRelayEvent(
 
 export async function createBlossomServerEvent(
   nostr: NostrManager,
-  signer: NostrSigner,
-  pubkey: string
+  signer: NostrSigner
 ) {
-  if (!signer || !nostr) throw new Error("Login required");
   const blossomServers = getLocalStorageData().blossomServers;
   const serverTags = [];
-  if (blossomServers.length != 0) {
-    for (const server of blossomServers) {
-      const serverTag = ["server", server];
-      serverTags.push(serverTag);
-    }
+  for (const server of blossomServers) {
+    serverTags.push(["server", server]);
   }
-  const blossomServerEvent = {
+  const blossomServerEvent: EventTemplate = {
     kind: 10063,
     content: "",
     tags: serverTags,
     created_at: Math.floor(Date.now() / 1000),
-    pubkey: pubkey,
-    id: "",
-    sig: "",
-  } as NostrEvent;
+  };
 
   await finalizeAndSendNostrEvent(signer, nostr, blossomServerEvent);
   return blossomServerEvent;
@@ -706,18 +642,168 @@ export async function publishSpendingHistoryEvent(
   }
 }
 
+export async function createOrUpdateCommunity(
+  signer: NostrSigner,
+  nostr: NostrManager,
+  details: {
+    d: string; // The unique identifier, should be constant for a community
+    name: string;
+    description: string;
+    image: string;
+    moderators: string[];
+    relays?: CommunityRelays; // optional relay declarations
+  }
+) {
+  const tags: string[][] = [
+    ["d", details.d],
+    ["name", details.name],
+    ["description", details.description],
+    ["image", details.image],
+    ["t", "shopstr"],
+  ];
+
+  // moderators as p tags with role marker
+  for (const mod_pk of details.moderators) {
+    tags.push(["p", mod_pk, "", "moderator"]);
+  }
+
+  // include relay tags if provided: ["relay", url, type]
+  if (details.relays) {
+    const {
+      approvals = [],
+      requests = [],
+      metadata = [],
+      all = [],
+    } = details.relays;
+    for (const r of approvals) tags.push(["relay", r, "approvals"]);
+    for (const r of requests) tags.push(["relay", r, "requests"]);
+    for (const r of metadata) tags.push(["relay", r, "metadata"]);
+    for (const r of all) tags.push(["relay", r]);
+  }
+
+  const eventTemplate: EventTemplate = {
+    kind: 34550,
+    created_at: Math.floor(Date.now() / 1000),
+    tags,
+    content: "",
+  };
+
+  return await finalizeAndSendNostrEvent(signer, nostr, eventTemplate);
+}
+
+export async function createCommunityPost(
+  signer: NostrSigner,
+  nostr: NostrManager,
+  community: Community,
+  content: string,
+  options?: {
+    parentEvent?: NostrEvent; // reply
+    crosspostCommunities?: Community[]; // cross-post to other communities (NIP-18)
+    externalId?: string; // NIP-73 external content id
+    contentKind?: string; // optional k/i usage
+  }
+) {
+  const communityAddress = `${community.kind}:${community.pubkey}:${community.d}`;
+  const tags: string[][] = [];
+
+  // Always include uppercase A/P tags pointing to the community address/pubkey
+  tags.push(["A", communityAddress]);
+  tags.push(["P", community.pubkey]);
+  tags.push(["K", String(community.kind)]);
+
+  if (options?.parentEvent) {
+    // reply: reference parent event via e and p tags and include parent kind
+    tags.push(["a", communityAddress]);
+    tags.push(["e", options.parentEvent.id, ""]);
+    tags.push(["p", options.parentEvent.pubkey, ""]);
+    tags.push(["k", String(options.parentEvent.kind)]);
+  } else {
+    // top-level announcement: include lowercase a/p/k pointing to the community address/kind
+    tags.push(["a", communityAddress]);
+    tags.push(["p", community.pubkey]);
+    tags.push(["k", String(community.kind)]);
+  }
+
+  // cross-posting: include additional lowercase a tags pointing to other communities' addresses
+  if (options?.crosspostCommunities) {
+    for (const c of options.crosspostCommunities) {
+      const addr = `${c.kind}:${c.pubkey}:${c.d}`;
+      tags.push(["a", addr]);
+    }
+  }
+
+  // NIP-73 external ID support (i tag)
+  if (options?.externalId) {
+    tags.push(["i", options.externalId]);
+    if (options?.contentKind) tags.push(["k", options.contentKind]);
+  }
+
+  const eventTemplate: EventTemplate = {
+    kind: 1111,
+    created_at: Math.floor(Date.now() / 1000),
+    tags,
+    content,
+  };
+
+  // returns signed event (so caller can know id)
+  return await finalizeAndSendNostrEvent(signer, nostr, eventTemplate);
+}
+
+export async function approveCommunityPost(
+  signer: NostrSigner,
+  nostr: NostrManager,
+  postToApprove: NostrEvent,
+  community: Community
+) {
+  const communityAddress = `${community.kind}:${community.pubkey}:${community.d}`;
+  const tags: string[][] = [
+    ["a", communityAddress],
+    ["e", postToApprove.id],
+    ["p", postToApprove.pubkey],
+    ["k", String(postToApprove.kind)],
+  ];
+  const eventTemplate: EventTemplate = {
+    kind: 4550,
+    created_at: Math.floor(Date.now() / 1000),
+    tags,
+    content: JSON.stringify(postToApprove),
+  };
+
+  // returns signed approval event (so caller can persist approval id)
+  return await finalizeAndSendNostrEvent(signer, nostr, eventTemplate);
+}
+
+// Moderator retract of approval -> publish deletion event (NIP-09, kind 5)
+export async function retractApproval(
+  signer: NostrSigner,
+  nostr: NostrManager,
+  approvalEventId: string,
+  reason?: string
+) {
+  const eventTemplate: EventTemplate = {
+    kind: 5,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [["e", approvalEventId]],
+    content: reason || `Retract approval ${approvalEventId}`,
+  };
+  return await finalizeAndSendNostrEvent(signer, nostr, eventTemplate);
+}
+
 export async function finalizeAndSendNostrEvent(
   signer: NostrSigner,
   nostr: NostrManager,
-  nostrEvent: NostrEvent
+  eventTemplate: EventTemplate
 ) {
   try {
     const { writeRelays, relays } = getLocalStorageData();
-    const signedEvent = await signer.sign(nostrEvent);
+    const signedEvent = await signer.sign(eventTemplate);
     const allWriteRelays = withBlastr([...writeRelays, ...relays]);
     await nostr.publish(signedEvent, allWriteRelays);
-  } catch (_) {
-    return;
+    // return the signed event to caller so we know generated IDs
+    return signedEvent;
+  } catch (error) {
+    // Log the actual error and re-throw it so the calling function knows something went wrong
+    throw error;
   }
 }
 

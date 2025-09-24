@@ -1,9 +1,11 @@
 import { Filter } from "nostr-tools";
 import {
   addChatMessageToCache,
+  addCommunitiesToCache,
   addProductToCache,
   addProfilesToCache,
   fetchAllProductsFromCache,
+  fetchAllCommunitiesFromCache,
   fetchChatMessagesFromCache,
   fetchProfileDataFromCache,
   removeProductFromCache,
@@ -12,6 +14,7 @@ import {
   NostrEvent,
   NostrMessageEvent,
   ShopProfile,
+  Community,
 } from "@/utils/types/types";
 import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
 import { ChatsMap } from "@/utils/context/context";
@@ -24,6 +27,7 @@ import {
   ProductData,
   parseTags,
 } from "@/utils/parsers/product-parser-functions";
+import { parseCommunityEvent } from "../parsers/community-parser-functions";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
 import { hashToCurve } from "@cashu/crypto/modules/common";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
@@ -1122,6 +1126,224 @@ export const fetchCashuWallet = async (
     } catch (error) {
       console.error("Fatal error in fetchCashuWallet:", error);
       editCashuWalletContext([], [], [], false);
+      reject(error);
+    }
+  });
+};
+
+export const fetchAllCommunities = async (
+  nostr: NostrManager,
+  relays: string[],
+  editCommunityContext: (
+    communities: Map<string, Community>,
+    isLoading: boolean
+  ) => void
+): Promise<Map<string, Community>> => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      // Try to load from cache first
+      const cachedCommunities = await fetchAllCommunitiesFromCache();
+      if (cachedCommunities.length > 0) {
+        const communityMap = new Map(cachedCommunities.map((c) => [c.id, c]));
+        editCommunityContext(communityMap, false);
+      }
+
+      const filter: Filter = {
+        kinds: [34550],
+        "#t": ["shopstr"],
+      };
+
+      const fetchedEvents = await nostr.fetch([filter], {}, relays);
+      const parsedCommunities: Community[] = [];
+
+      for (const event of fetchedEvents) {
+        const community = parseCommunityEvent(event);
+        if (community) {
+          parsedCommunities.push(community);
+        }
+      }
+
+      const communityMap = new Map(parsedCommunities.map((c) => [c.id, c]));
+      editCommunityContext(communityMap, false);
+      await addCommunitiesToCache(parsedCommunities);
+      resolve(communityMap);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+// returns CommunityPost[] (posts augmented with approval metadata)
+export const fetchCommunityPosts = async (
+  nostr: NostrManager,
+  community: Community,
+  limit: number = 20
+): Promise<NostrEvent[]> => {
+  return new Promise(async (resolve, reject) => {
+    if (!community) {
+      resolve([]);
+      return;
+    }
+    try {
+      const communityAddress = `${community.kind}:${community.pubkey}:${community.d}`;
+      const { relays: userRelays } = getLocalStorageData();
+      // Create a combined, unique list of relays for fetching
+      const combinedRelays = Array.from(
+        new Set([...community.relays.all, ...userRelays])
+      );
+
+      if (combinedRelays.length === 0) {
+        resolve([]);
+        return;
+      }
+
+      // choose relays to check approvals: prefer explicitly labeled approvals relays, fallback to all
+      const approvalRelays = community.relays.approvals.length
+        ? community.relays.approvals
+        : combinedRelays;
+
+      // Step 1: Fetch approval events from relays where approvals are expected
+      const approvalFilter: Filter = {
+        kinds: [4550],
+        "#a": [communityAddress],
+        limit: limit * 4, // fetch a bit more approval events
+      };
+
+      // fetch approvals across candidate relays
+      const approvalEvents = await nostr.fetch(
+        [approvalFilter],
+        {},
+        approvalRelays
+      );
+
+      // Step 2: Validate approval events: only accept those issued by moderators of the community.
+      const validApprovals = approvalEvents.filter((ap) =>
+        community.moderators.includes(ap.pubkey)
+      );
+
+      // map post id -> single approval (take latest per approver)
+      const approvalByPostId: Map<
+        string,
+        { approvalId: string; approver: string; created_at: number }
+      > = new Map();
+
+      for (const ap of validApprovals) {
+        const eTags = ap.tags
+          .filter((t) => t[0] === "e")
+          .map((t) => t[1])
+          .filter((id): id is string => !!id);
+        for (const approvedId of eTags) {
+          const existing = approvalByPostId.get(approvedId);
+          if (!existing || ap.created_at > existing.created_at) {
+            approvalByPostId.set(approvedId, {
+              approvalId: ap.id,
+              approver: ap.pubkey,
+              created_at: ap.created_at,
+            });
+          }
+        }
+      }
+
+      const approvedEventIds = Array.from(approvalByPostId.keys());
+      if (approvedEventIds.length === 0) {
+        resolve([]);
+        return;
+      }
+
+      // Step 3: Fetch approved posts in batches using request relays or all
+      const requestRelays = community.relays.requests.length
+        ? community.relays.requests
+        : combinedRelays;
+      const batchSize = 50;
+      const postEvents: NostrEvent[] = [];
+      for (let i = 0; i < approvedEventIds.length; i += batchSize) {
+        const batchIds = approvedEventIds.slice(i, i + batchSize);
+        if (batchIds.length > 0) {
+          const postsFilter: Filter = {
+            kinds: [1111],
+            ids: batchIds,
+          };
+          const batchEvents = await nostr.fetch(
+            [postsFilter],
+            {},
+            requestRelays
+          );
+          postEvents.push(...batchEvents);
+        }
+      }
+
+      // Annotate posts with approval metadata where available
+      const annotatedPosts = postEvents.map((post) => {
+        const approval = approvalByPostId.get(post.id);
+        const annotated: any = { ...post };
+        if (approval) {
+          annotated.approved = true;
+          annotated.approvalEventId = approval.approvalId;
+          annotated.approvedBy = approval.approver;
+        } else {
+          annotated.approved = false;
+        }
+        return annotated as NostrEvent;
+      });
+
+      // Sort posts by creation date, newest first.
+      annotatedPosts.sort((a, b) => b.created_at - a.created_at);
+      resolve(annotatedPosts);
+    } catch (error) {
+      console.error("Failed to fetch community posts:", error);
+      reject(error);
+    }
+  });
+};
+
+export const fetchPendingPosts = async (
+  nostr: NostrManager,
+  community: Community,
+  limit: number = 20
+): Promise<NostrEvent[]> => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const { relays: userRelays } = getLocalStorageData();
+      const communityAddress = `${community.kind}:${community.pubkey}:${community.d}`;
+      const approvedPostEvents = await fetchCommunityPosts(
+        nostr,
+        community,
+        limit * 2
+      );
+      const approvedPostIds = new Set(approvedPostEvents.map((p) => p.id));
+
+      // Fetch post requests using 'requests' relays (or fallback to all)
+      const requestRelays = Array.from(
+        new Set([
+          ...community.relays.requests,
+          ...community.relays.all,
+          ...userRelays,
+        ])
+      );
+      if (requestRelays.length === 0) {
+        resolve([]);
+        return;
+      }
+      const postRequestFilter: Filter = {
+        kinds: [1111],
+        "#a": [communityAddress],
+        limit: limit,
+      };
+
+      const allPostRequests = await nostr.fetch(
+        [postRequestFilter],
+        {},
+        requestRelays
+      );
+
+      // Pending = requests that don't have an approval
+      const pendingPosts = allPostRequests.filter(
+        (post) => !approvedPostIds.has(post.id)
+      );
+      pendingPosts.sort((a, b) => b.created_at - a.created_at);
+      resolve(pendingPosts);
+    } catch (error) {
+      console.error("Failed to fetch pending posts:", error);
       reject(error);
     }
   });

@@ -19,7 +19,8 @@ const TopNav = ({
   setFocusedPubkey: (value: string) => void;
   setSelectedSection: (value: string) => void;
 }) => {
-  const { isHomeActive, isProfileActive } = useNavigation();
+  const { isHomeActive, isProfileActive, isCommunitiesActive } =
+    useNavigation();
   const router = useRouter();
 
   const chatsContext = useContext(ChatsContext);
@@ -130,6 +131,12 @@ const TopNav = ({
       </Button>
       <Button
         className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+        onClick={() => router.push("/communities")}
+      >
+        Communities
+      </Button>
+      <Button
+        className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
         onClick={() => handleRoute("/orders")}
       >
         Orders {unreadMsgCount > 0 && `(${unreadMsgCount})`}
@@ -213,6 +220,17 @@ const TopNav = ({
             onClick={handleHomeClick}
           >
             Marketplace
+          </Button>
+          |
+          <Button
+            className={`bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
+              isCommunitiesActive
+                ? "font-bold text-shopstr-purple dark:text-shopstr-yellow"
+                : ""
+            }`}
+            onClick={() => router.push("/communities")}
+          >
+            Communities
           </Button>
           |
           <Button

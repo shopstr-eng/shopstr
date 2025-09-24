@@ -88,6 +88,14 @@ const MyListingsPage = () => {
     }
   };
 
+  const handleManageCommunity = () => {
+    if (usersPubkey) {
+      router.push("/settings/community");
+    } else {
+      onOpen();
+    }
+  };
+
   const MobileMenu = () => (
     <div className="absolute left-0 top-full z-10 mt-2 w-48 rounded-md bg-light-fg shadow-lg dark:bg-dark-fg md:hidden">
       <div className="py-1">
@@ -117,6 +125,15 @@ const MyListingsPage = () => {
           }}
         >
           Orders
+        </Button>
+        <Button
+          className="w-full bg-transparent px-4 py-2 text-left text-sm text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+          onClick={() => {
+            handleManageCommunity();
+            setIsMobileMenuOpen(false);
+          }}
+        >
+          Community
         </Button>
       </div>
     </div>
@@ -163,6 +180,12 @@ const MyListingsPage = () => {
                     onClick={() => handleViewOrders()}
                   >
                     Orders
+                  </Button>
+                  <Button
+                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                    onClick={() => handleManageCommunity()}
+                  >
+                    Community
                   </Button>
                 </div>
               </div>
@@ -213,6 +236,12 @@ const MyListingsPage = () => {
                     onClick={() => handleViewOrders()}
                   >
                     Orders
+                  </Button>
+                  <Button
+                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                    onClick={() => handleManageCommunity()}
+                  >
+                    Community
                   </Button>
                 </div>
               </div>
