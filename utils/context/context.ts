@@ -1,5 +1,11 @@
 import { createContext } from "react";
-import { NostrMessageEvent, ProfileData, ShopProfile } from "../types/types";
+import {
+  NostrMessageEvent,
+  ProfileData,
+  ShopProfile,
+  Community,
+  CommunityPost,
+} from "../types/types";
 import { Proof } from "@cashu/cashu-ts";
 
 export interface ProfileContextInterface {
@@ -151,3 +157,17 @@ export const CashuWalletContext = createContext({
   cashuProofs: [],
   isLoading: true,
 } as CashuWalletContextInterface);
+
+export interface CommunityContextInterface {
+  communities: Map<string, Community>; // key is event id
+  posts: Map<string, CommunityPost[]>; // key is community address (a-tag)
+  isLoading: boolean;
+  addCommunity: (community: Community) => void;
+}
+
+export const CommunityContext = createContext({
+  communities: new Map(),
+  posts: new Map(),
+  isLoading: true,
+  addCommunity: (_community: Community) => {},
+} as CommunityContextInterface);

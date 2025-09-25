@@ -92,12 +92,7 @@ const UserProfilePage = () => {
   const onSubmit = async (data: { [x: string]: string }) => {
     if (!userPubkey) throw new Error("pubkey is undefined");
     setIsUploadingProfile(true);
-    await createNostrProfileEvent(
-      nostr!,
-      signer!,
-      userPubkey!,
-      JSON.stringify(data)
-    );
+    await createNostrProfileEvent(nostr!, signer!, JSON.stringify(data));
     profileContext.updateProfileData({
       pubkey: userPubkey!,
       content: data,

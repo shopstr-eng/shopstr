@@ -23,6 +23,8 @@ import {
   BlossomContext,
   CashuWalletContext,
   CashuWalletContextInterface,
+  CommunityContext,
+  CommunityContextInterface,
 } from "../utils/context/context";
 import {
   getLocalStorageData,
@@ -40,10 +42,12 @@ import {
   fetchAllRelays,
   fetchAllBlossomServers,
   fetchCashuWallet,
+  fetchAllCommunities,
   fetchGiftWrappedChatsAndMessages,
 } from "@/utils/nostr/fetch-service";
 import {
   NostrEvent,
+  Community,
   ProfileData,
   NostrMessageEvent,
   ShopProfile,
@@ -224,6 +228,23 @@ function Shopstr({ props }: { props: AppProps }) {
     }
   );
 
+  const [communityContext, setCommunityContext] =
+    useState<CommunityContextInterface>({
+      communities: new Map(),
+      posts: new Map(),
+      isLoading: true,
+      addCommunity: (community: Community) => {
+        setCommunityContext((prev) => {
+          const newCommunities = new Map(prev.communities);
+          newCommunities.set(community.id, community);
+          return {
+            ...prev,
+            communities: newCommunities,
+          };
+        });
+      },
+    });
+
   const [relaysContext, setRelaysContext] = useState<RelaysContextInterface>({
     relayList: [],
     readRelayList: [],
@@ -317,6 +338,17 @@ function Shopstr({ props }: { props: AppProps }) {
       firstDegreeFollowsLength,
       isLoading,
     });
+  };
+
+  const editCommunityContext = (
+    communities: Map<string, Community>,
+    isLoading: boolean
+  ) => {
+    setCommunityContext((prev) => ({
+      ...prev,
+      communities,
+      isLoading,
+    }));
   };
 
   const editRelaysContext = (
@@ -475,6 +507,8 @@ function Shopstr({ props }: { props: AppProps }) {
           editReviewsContext
         );
 
+        await fetchAllCommunities(nostr!, allRelays, editCommunityContext);
+
         // Fetch wallet if logged in
         if (isLoggedIn) {
           const { cashuMints, cashuProofs } = await fetchCashuWallet(
@@ -527,50 +561,52 @@ function Shopstr({ props }: { props: AppProps }) {
         productEvents={productContext.productEvents}
         shopEvents={shopContext.shopData}
       />
-      <RelaysContext.Provider value={relaysContext}>
-        <BlossomContext.Provider value={blossomContext}>
-          <CashuWalletContext.Provider value={cashuWalletContext}>
-            <FollowsContext.Provider value={followsContext}>
-              <ProductContext.Provider value={productContext}>
-                <ReviewsContext.Provider value={reviewsContext}>
-                  <ProfileMapContext.Provider value={profileContext}>
-                    <ShopMapContext.Provider value={shopContext}>
-                      <ChatsContext.Provider
-                        value={
-                          {
-                            chatsMap: chatsMap,
-                            isLoading: isChatLoading,
-                            addNewlyCreatedMessageEvent:
-                              addNewlyCreatedMessageEvent,
-                          } as ChatsContextInterface
-                        }
-                      >
-                        {router.pathname !== "/" && (
-                          <TopNav
-                            setFocusedPubkey={setFocusedPubkey}
-                            setSelectedSection={setSelectedSection}
-                          />
-                        )}
-                        <div className="flex">
-                          <main className="flex-1">
-                            <Component
-                              {...pageProps}
-                              focusedPubkey={focusedPubkey}
+      <CommunityContext.Provider value={communityContext}>
+        <RelaysContext.Provider value={relaysContext}>
+          <BlossomContext.Provider value={blossomContext}>
+            <CashuWalletContext.Provider value={cashuWalletContext}>
+              <FollowsContext.Provider value={followsContext}>
+                <ProductContext.Provider value={productContext}>
+                  <ReviewsContext.Provider value={reviewsContext}>
+                    <ProfileMapContext.Provider value={profileContext}>
+                      <ShopMapContext.Provider value={shopContext}>
+                        <ChatsContext.Provider
+                          value={
+                            {
+                              chatsMap: chatsMap,
+                              isLoading: isChatLoading,
+                              addNewlyCreatedMessageEvent:
+                                addNewlyCreatedMessageEvent,
+                            } as ChatsContextInterface
+                          }
+                        >
+                          {router.pathname !== "/" && (
+                            <TopNav
                               setFocusedPubkey={setFocusedPubkey}
-                              selectedSection={selectedSection}
                               setSelectedSection={setSelectedSection}
                             />
-                          </main>
-                        </div>
-                      </ChatsContext.Provider>
-                    </ShopMapContext.Provider>
-                  </ProfileMapContext.Provider>
-                </ReviewsContext.Provider>
-              </ProductContext.Provider>
-            </FollowsContext.Provider>
-          </CashuWalletContext.Provider>
-        </BlossomContext.Provider>
-      </RelaysContext.Provider>
+                          )}
+                          <div className="flex">
+                            <main className="flex-1">
+                              <Component
+                                {...pageProps}
+                                focusedPubkey={focusedPubkey}
+                                setFocusedPubkey={setFocusedPubkey}
+                                selectedSection={selectedSection}
+                                setSelectedSection={setSelectedSection}
+                              />
+                            </main>
+                          </div>
+                        </ChatsContext.Provider>
+                      </ShopMapContext.Provider>
+                    </ProfileMapContext.Provider>
+                  </ReviewsContext.Provider>
+                </ProductContext.Provider>
+              </FollowsContext.Provider>
+            </CashuWalletContext.Provider>
+          </BlossomContext.Provider>
+        </RelaysContext.Provider>
+      </CommunityContext.Provider>
     </>
   );
 }

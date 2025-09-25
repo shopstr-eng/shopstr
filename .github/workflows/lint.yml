@@ -33,7 +33,7 @@ jobs:
         id: eslint
         run: |
           npx eslint "pages/**/*.{js,ts,tsx}" "components/**/*.{js,ts,tsx}" --format json > eslint-report.json || true
-          count=$(jq '[.[].messages[]] | length' eslint-report.json)
+          count=$(jq '[.[].messages[] | select(.severity == 2)] | length' eslint-report.json)
           echo "eslint_errors=$count" >> $GITHUB_OUTPUT
 
       - name: Run Prettier

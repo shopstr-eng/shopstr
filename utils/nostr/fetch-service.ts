@@ -1,9 +1,11 @@
 import { Filter } from "nostr-tools";
 import {
   addChatMessageToCache,
+  addCommunitiesToCache,
   addProductToCache,
   addProfilesToCache,
   fetchAllProductsFromCache,
+  fetchAllCommunitiesFromCache,
   fetchChatMessagesFromCache,
   fetchProfileDataFromCache,
   removeProductFromCache,
@@ -12,6 +14,7 @@ import {
   NostrEvent,
   NostrMessageEvent,
   ShopProfile,
+  Community,
 } from "@/utils/types/types";
 import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
 import { ChatsMap } from "@/utils/context/context";
@@ -24,6 +27,7 @@ import {
   ProductData,
   parseTags,
 } from "@/utils/parsers/product-parser-functions";
+import { parseCommunityEvent } from "../parsers/community-parser-functions";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
 import { hashToCurve } from "@cashu/crypto/modules/common";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
@@ -832,6 +836,7 @@ export const fetchCashuWallet = async (
     const { tokens } = getLocalStorageData();
     const userPubkey = await signer?.getPubKey?.();
     if (!userPubkey) {
+      editCashuWalletContext([], [], [], false);
       resolve({
         proofEvents: [],
         cashuMints: [],
@@ -839,215 +844,277 @@ export const fetchCashuWallet = async (
       });
       return;
     }
-    const enc = new TextEncoder();
+
     try {
-      let mostRecentWalletEvent: NostrEvent[] = [];
+      const enc = new TextEncoder();
+      let mostRecentWalletEvent: NostrEvent | null = null;
       const proofEvents: any[] = [];
-
       const cashuRelays: string[] = [];
-      const cashuRelaySet: Set<string> = new Set();
-
       const cashuMints: string[] = [];
       const cashuMintSet: Set<string> = new Set();
-
-      let cashuProofs: Proof[] = [];
+      let cashuProofs: Proof[] = [...tokens]; // Start with existing tokens
       const incomingSpendingHistory: [][] = [];
-      const cashuWalletFilter: Filter = {
+
+      // Fetch wallet configuration events (17375) and wallet state events (37375)
+      const walletConfigFilter: Filter = {
         kinds: [17375, 37375],
         authors: [userPubkey],
       };
 
       const hEvents: NostrEvent[] = await nostr.fetch(
-        [cashuWalletFilter],
+        [walletConfigFilter],
         {},
         relays
       );
 
-      // find most recent wallet event
+      // Process wallet configuration events
       for (const event of hEvents) {
-        if (event.kind === 17375) {
-          const mints = event.tags.filter((tag: string[]) => tag[0] === "mint");
-          mints.forEach((tag) => {
-            if (!cashuMintSet.has(tag[1]!)) {
-              cashuMintSet.add(tag[1]!);
-              cashuMints.push(tag[1]!);
+        try {
+          if (event.kind === 17375) {
+            // Extract mints from configuration events
+            const mints = event.tags.filter(
+              (tag: string[]) => tag[0] === "mint"
+            );
+            mints.forEach((tag) => {
+              if (tag[1] && !cashuMintSet.has(tag[1])) {
+                cashuMintSet.add(tag[1]);
+                cashuMints.push(tag[1]);
+              }
+            });
+          } else if (event.kind === 37375) {
+            // Find the most recent wallet state event
+            if (
+              !mostRecentWalletEvent ||
+              event.created_at > mostRecentWalletEvent.created_at
+            ) {
+              mostRecentWalletEvent = event;
             }
-          });
-        } else if (
-          (event.kind === 37375 && mostRecentWalletEvent.length === 0) ||
-          event.created_at > mostRecentWalletEvent[0]!.created_at
-        ) {
-          mostRecentWalletEvent = [event];
+          }
+        } catch (error) {
+          console.error(
+            `Failed to process wallet config event ${event.id}:`,
+            error
+          );
         }
       }
-      if (mostRecentWalletEvent.length > 0) {
-        // extract cashu data
-        const relayList = mostRecentWalletEvent[0]!.tags.filter(
-          (tag: string[]) => tag[0] === "relay"
-        );
-        relayList.forEach((tag) => cashuRelaySet.add(tag[1]!));
-        cashuRelays.push(...relayList.map((tag: string[]) => tag[1]!));
-        const mints = mostRecentWalletEvent[0]!.tags.filter(
-          (tag: string[]) => tag[0] === "mint"
-        );
-        mints.forEach((tag) => {
-          if (!cashuMintSet.has(tag[1]!)) {
-            cashuMintSet.add(tag[1]!);
-            cashuMints.push(tag[1]!);
-          }
-        });
+
+      // Extract relay and mint information from most recent wallet event
+      if (mostRecentWalletEvent) {
+        try {
+          const relayTags = mostRecentWalletEvent.tags.filter(
+            (tag: string[]) => tag[0] === "relay"
+          );
+          relayTags.forEach((tag) => {
+            if (tag[1] && !cashuRelays.includes(tag[1])) {
+              cashuRelays.push(tag[1]);
+            }
+          });
+
+          const mintTags = mostRecentWalletEvent.tags.filter(
+            (tag: string[]) => tag[0] === "mint"
+          );
+          mintTags.forEach((tag) => {
+            if (tag[1] && !cashuMintSet.has(tag[1])) {
+              cashuMintSet.add(tag[1]);
+              cashuMints.push(tag[1]);
+            }
+          });
+        } catch (error) {
+          console.error("Failed to process most recent wallet event:", error);
+        }
       }
-      const cashuProofFilter: Filter = {
+
+      // Use cashu-specific relays if available, otherwise use default relays
+      const effectiveRelays = cashuRelays.length > 0 ? cashuRelays : relays;
+
+      // Fetch proof events (7375) and spending history events (7376)
+      const proofFilter: Filter = {
         kinds: [7375, 7376],
         authors: [userPubkey],
       };
 
-      const wEvent: NostrEvent[] = await nostr.fetch(
-        [cashuProofFilter],
+      const proofEvents_raw: NostrEvent[] = await nostr.fetch(
+        [proofFilter],
         {},
-        cashuRelays.length !== 0 ? cashuRelays : relays
+        effectiveRelays
       );
 
-      for (const event of wEvent) {
+      // Process proof and spending history events
+      for (const event of proofEvents_raw) {
         try {
           const eventContent = await signer!.decrypt(userPubkey, event.content);
-          const cashuWalletEventContent = eventContent
-            ? JSON.parse(eventContent)
-            : null;
-          if (
-            event.kind === 7375 &&
-            cashuWalletEventContent &&
-            cashuWalletEventContent.mint &&
-            cashuWalletEventContent.proofs
-          ) {
-            proofEvents.push({
-              id: event.id,
-              proofs: cashuWalletEventContent.proofs,
-            });
-            const wallet = new CashuWallet(
-              new CashuMint(cashuWalletEventContent?.mint)
-            );
-            const Ys = cashuWalletEventContent?.proofs.map((p: Proof) =>
-              hashToCurve(enc.encode(p.secret)).toHex(true)
-            );
-            const proofsStates = await wallet?.checkProofsStates(
+          if (!eventContent) {
+            console.warn(`Failed to decrypt event content for ${event.id}`);
+            continue;
+          }
+
+          const cashuWalletEventContent = JSON.parse(eventContent);
+
+          if (event.kind === 7375) {
+            // Process proof events
+            if (
+              cashuWalletEventContent?.mint &&
               cashuWalletEventContent?.proofs
-            );
-            const spentYs = new Set(
-              proofsStates
-                .filter((state) => state.state === "SPENT")
-                .map((state) => state.Y)
-            );
-            const allYsMatch =
-              Ys.length === spentYs.size &&
-              Ys.every((y: string) => spentYs.has(y));
-            if (proofsStates && proofsStates.length > 0 && allYsMatch) {
-              await deleteEvent(nostr, signer!, [event.id]);
-            } else if (cashuWalletEventContent.proofs) {
-              const allProofs = [
-                ...tokens,
-                ...cashuWalletEventContent?.proofs,
+            ) {
+              proofEvents.push({
+                id: event.id,
+                mint: cashuWalletEventContent.mint,
+                proofs: cashuWalletEventContent.proofs,
+                created_at: event.created_at,
+              });
+
+              // Add mint to our set if not already present
+              if (!cashuMintSet.has(cashuWalletEventContent.mint)) {
+                cashuMintSet.add(cashuWalletEventContent.mint);
+                cashuMints.push(cashuWalletEventContent.mint);
+              }
+
+              // Add proofs to our collection (will be filtered later)
+              cashuProofs = getUniqueProofs([
                 ...cashuProofs,
-              ];
-              cashuProofs = getUniqueProofs(allProofs);
+                ...cashuWalletEventContent.proofs,
+              ]);
             }
           } else if (event.kind === 7376 && cashuWalletEventContent) {
+            // Process spending history events
             incomingSpendingHistory.push(cashuWalletEventContent);
           }
         } catch (error) {
-          console.error("Failed to fetch legacy Cashu wallet event: ", error);
+          console.error(`Failed to process wallet event ${event.id}:`, error);
         }
       }
+
+      // Remove spent proofs and handle spending history
+      const eventsToDelete: string[] = [];
 
       for (const mint of cashuMints) {
         try {
           const wallet = new CashuWallet(new CashuMint(mint));
-          if (cashuProofs.length > 0) {
-            const Ys = cashuProofs.map((p: Proof) =>
+
+          // Filter proofs for this specific mint
+          const mintProofs = cashuProofs.filter((proof) => {
+            // Check if this proof belongs to this mint by checking keyset compatibility
+            return proofEvents.some(
+              (pe) =>
+                pe.mint === mint &&
+                pe.proofs.some((p: Proof) => p.id === proof.id)
+            );
+          });
+
+          if (mintProofs.length > 0) {
+            // Check proof states for this mint
+            const Ys = mintProofs.map((p: Proof) =>
               hashToCurve(enc.encode(p.secret)).toHex(true)
             );
-            const proofsStates = await wallet?.checkProofsStates(cashuProofs);
+
+            const proofsStates = await wallet.checkProofsStates(mintProofs);
             const spentYs = new Set(
               proofsStates
                 .filter((state) => state.state === "SPENT")
                 .map((state) => state.Y)
             );
-            if (spentYs.size > 0) {
-              cashuProofs = cashuProofs.filter(
-                (_, index) => !spentYs.has(Ys[index]!)
-              );
-            }
-          }
 
-          const outProofIds = incomingSpendingHistory
-            .filter((eventTags) =>
-              eventTags.some(
-                (tag) => tag[0] === "direction" && tag[1] === "out"
-              )
-            )
-            .map((eventTags) => {
-              const destroyedTag = eventTags.find(
-                (tag) => tag[0] === "e" && tag[3] === "destroyed"
-              );
-              return destroyedTag ? destroyedTag[1] : "";
-            })
-            .filter((eventId) => eventId !== "");
+            // Remove spent proofs
+            cashuProofs = cashuProofs.filter((proof, _index) => {
+              if (mintProofs.includes(proof)) {
+                const proofIndex = mintProofs.indexOf(proof);
+                return proofIndex === -1 || !spentYs.has(Ys[proofIndex]!);
+              }
+              return true;
+            });
 
-          const destroyedProofsArray = proofEvents
-            .filter((event) => outProofIds.includes(event.id))
-            .map((event) => event.proofs);
-
-          cashuProofs = cashuProofs.filter(
-            (cashuProof) => !destroyedProofsArray.includes(cashuProof)
-          );
-
-          const inProofIds = incomingSpendingHistory
-            .filter((eventTags) =>
-              eventTags.some(
-                (tag) =>
-                  tag[0] === "direction" &&
-                  (tag[1] === "out" || tag[1] === "in")
-              )
-            )
-            .map((eventTags) => {
-              const createdTag = eventTags.find(
-                (tag) => tag[0] === "e" && tag[3] === "created"
-              );
-              return createdTag ? createdTag[1] : "";
-            })
-            .filter((eventId) => eventId !== "");
-
-          const proofIdsToAddBack = inProofIds.filter(
-            (id) => !outProofIds.includes(id)
-          );
-          const arrayOfProofsToAddBack = proofEvents
-            .filter((event) => proofIdsToAddBack.includes(event.id))
-            .map((event) => event.proofs);
-
-          const proofExists = (
-            proofToAdd: Proof,
-            existingProofArray: Proof[]
-          ): boolean => {
-            return existingProofArray.includes(proofToAdd);
-          };
-
-          for (const proofsToAddBack of arrayOfProofsToAddBack) {
-            for (const proofToAdd of proofsToAddBack) {
-              if (proofToAdd && !proofExists(proofToAdd, cashuProofs)) {
-                cashuProofs.push(proofToAdd);
+            // Mark fully spent proof events for deletion
+            for (const proofEvent of proofEvents) {
+              if (proofEvent.mint === mint) {
+                const eventYs = proofEvent.proofs.map((p: Proof) =>
+                  hashToCurve(enc.encode(p.secret)).toHex(true)
+                );
+                const allSpent = eventYs.every((y: string) => spentYs.has(y));
+                if (allSpent && eventYs.length > 0) {
+                  eventsToDelete.push(proofEvent.id);
+                }
               }
             }
           }
-
-          cashuProofs = getUniqueProofs(cashuProofs);
-
-          if (outProofIds.length > 0) {
-            await deleteEvent(nostr, signer!, outProofIds);
-          }
         } catch (error) {
-          console.error("Failed to check spent proofs: ", error);
+          console.error(`Failed to check proofs for mint ${mint}:`, error);
         }
       }
+
+      // Process spending history to determine which proofs to add/remove
+      try {
+        const outProofIds = incomingSpendingHistory
+          .filter((eventTags) =>
+            eventTags.some((tag) => tag[0] === "direction" && tag[1] === "out")
+          )
+          .map((eventTags) => {
+            const destroyedTag = eventTags.find(
+              (tag) => tag[0] === "e" && tag[3] === "destroyed"
+            );
+            return destroyedTag ? destroyedTag[1] : "";
+          })
+          .filter((eventId) => eventId !== "");
+
+        const inProofIds = incomingSpendingHistory
+          .filter((eventTags) =>
+            eventTags.some(
+              (tag) =>
+                tag[0] === "direction" && (tag[1] === "in" || tag[1] === "out")
+            )
+          )
+          .map((eventTags) => {
+            const createdTag = eventTags.find(
+              (tag) => tag[0] === "e" && tag[3] === "created"
+            );
+            return createdTag ? createdTag[1] : "";
+          })
+          .filter((eventId) => eventId !== "");
+
+        // Remove proofs from events that were spent (out direction)
+        const destroyedProofs = proofEvents
+          .filter((event) => outProofIds.includes(event.id))
+          .flatMap((event) => event.proofs);
+
+        cashuProofs = cashuProofs.filter(
+          (proof) =>
+            !destroyedProofs.some(
+              (destroyed: Proof) =>
+                JSON.stringify(proof) === JSON.stringify(destroyed)
+            )
+        );
+
+        // Add back proofs that were created but not spent
+        const proofIdsToAddBack = inProofIds.filter(
+          (id) => !outProofIds.includes(id)
+        );
+
+        const proofsToAddBack = proofEvents
+          .filter((event) => proofIdsToAddBack.includes(event.id))
+          .flatMap((event) => event.proofs);
+
+        cashuProofs = getUniqueProofs([...cashuProofs, ...proofsToAddBack]);
+
+        // Add spent event IDs to deletion list
+        eventsToDelete.push(...outProofIds);
+      } catch (error) {
+        console.error("Failed to process spending history:", error);
+      }
+
+      // Delete spent events
+      if (eventsToDelete.length > 0) {
+        try {
+          await deleteEvent(
+            nostr,
+            signer!,
+            Array.from(new Set(eventsToDelete))
+          );
+        } catch (error) {
+          console.error("Failed to delete spent events:", error);
+        }
+      }
+
+      // Final deduplication
+      cashuProofs = getUniqueProofs(cashuProofs);
 
       editCashuWalletContext(proofEvents, cashuMints, cashuProofs, false);
 
@@ -1057,6 +1124,226 @@ export const fetchCashuWallet = async (
         cashuProofs: cashuProofs,
       });
     } catch (error) {
+      console.error("Fatal error in fetchCashuWallet:", error);
+      editCashuWalletContext([], [], [], false);
+      reject(error);
+    }
+  });
+};
+
+export const fetchAllCommunities = async (
+  nostr: NostrManager,
+  relays: string[],
+  editCommunityContext: (
+    communities: Map<string, Community>,
+    isLoading: boolean
+  ) => void
+): Promise<Map<string, Community>> => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      // Try to load from cache first
+      const cachedCommunities = await fetchAllCommunitiesFromCache();
+      if (cachedCommunities.length > 0) {
+        const communityMap = new Map(cachedCommunities.map((c) => [c.id, c]));
+        editCommunityContext(communityMap, false);
+      }
+
+      const filter: Filter = {
+        kinds: [34550],
+        "#t": ["shopstr"],
+      };
+
+      const fetchedEvents = await nostr.fetch([filter], {}, relays);
+      const parsedCommunities: Community[] = [];
+
+      for (const event of fetchedEvents) {
+        const community = parseCommunityEvent(event);
+        if (community) {
+          parsedCommunities.push(community);
+        }
+      }
+
+      const communityMap = new Map(parsedCommunities.map((c) => [c.id, c]));
+      editCommunityContext(communityMap, false);
+      await addCommunitiesToCache(parsedCommunities);
+      resolve(communityMap);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+// returns CommunityPost[] (posts augmented with approval metadata)
+export const fetchCommunityPosts = async (
+  nostr: NostrManager,
+  community: Community,
+  limit: number = 20
+): Promise<NostrEvent[]> => {
+  return new Promise(async (resolve, reject) => {
+    if (!community) {
+      resolve([]);
+      return;
+    }
+    try {
+      const communityAddress = `${community.kind}:${community.pubkey}:${community.d}`;
+      const { relays: userRelays } = getLocalStorageData();
+      // Create a combined, unique list of relays for fetching
+      const combinedRelays = Array.from(
+        new Set([...community.relays.all, ...userRelays])
+      );
+
+      if (combinedRelays.length === 0) {
+        resolve([]);
+        return;
+      }
+
+      // choose relays to check approvals: prefer explicitly labeled approvals relays, fallback to all
+      const approvalRelays = community.relays.approvals.length
+        ? community.relays.approvals
+        : combinedRelays;
+
+      // Step 1: Fetch approval events from relays where approvals are expected
+      const approvalFilter: Filter = {
+        kinds: [4550],
+        "#a": [communityAddress],
+        limit: limit * 4, // fetch a bit more approval events
+      };
+
+      // fetch approvals across candidate relays
+      const approvalEvents = await nostr.fetch(
+        [approvalFilter],
+        {},
+        approvalRelays
+      );
+
+      // Step 2: Validate approval events: only accept those issued by moderators of the community.
+      const validApprovals = approvalEvents.filter((ap) =>
+        community.moderators.includes(ap.pubkey)
+      );
+
+      // map post id -> single approval (take latest per approver)
+      const approvalByPostId: Map<
+        string,
+        { approvalId: string; approver: string; created_at: number }
+      > = new Map();
+
+      for (const ap of validApprovals) {
+        const eTags = ap.tags
+          .filter((t) => t[0] === "e")
+          .map((t) => t[1])
+          .filter((id): id is string => !!id);
+        for (const approvedId of eTags) {
+          const existing = approvalByPostId.get(approvedId);
+          if (!existing || ap.created_at > existing.created_at) {
+            approvalByPostId.set(approvedId, {
+              approvalId: ap.id,
+              approver: ap.pubkey,
+              created_at: ap.created_at,
+            });
+          }
+        }
+      }
+
+      const approvedEventIds = Array.from(approvalByPostId.keys());
+      if (approvedEventIds.length === 0) {
+        resolve([]);
+        return;
+      }
+
+      // Step 3: Fetch approved posts in batches using request relays or all
+      const requestRelays = community.relays.requests.length
+        ? community.relays.requests
+        : combinedRelays;
+      const batchSize = 50;
+      const postEvents: NostrEvent[] = [];
+      for (let i = 0; i < approvedEventIds.length; i += batchSize) {
+        const batchIds = approvedEventIds.slice(i, i + batchSize);
+        if (batchIds.length > 0) {
+          const postsFilter: Filter = {
+            kinds: [1111],
+            ids: batchIds,
+          };
+          const batchEvents = await nostr.fetch(
+            [postsFilter],
+            {},
+            requestRelays
+          );
+          postEvents.push(...batchEvents);
+        }
+      }
+
+      // Annotate posts with approval metadata where available
+      const annotatedPosts = postEvents.map((post) => {
+        const approval = approvalByPostId.get(post.id);
+        const annotated: any = { ...post };
+        if (approval) {
+          annotated.approved = true;
+          annotated.approvalEventId = approval.approvalId;
+          annotated.approvedBy = approval.approver;
+        } else {
+          annotated.approved = false;
+        }
+        return annotated as NostrEvent;
+      });
+
+      // Sort posts by creation date, newest first.
+      annotatedPosts.sort((a, b) => b.created_at - a.created_at);
+      resolve(annotatedPosts);
+    } catch (error) {
+      console.error("Failed to fetch community posts:", error);
+      reject(error);
+    }
+  });
+};
+
+export const fetchPendingPosts = async (
+  nostr: NostrManager,
+  community: Community,
+  limit: number = 20
+): Promise<NostrEvent[]> => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const { relays: userRelays } = getLocalStorageData();
+      const communityAddress = `${community.kind}:${community.pubkey}:${community.d}`;
+      const approvedPostEvents = await fetchCommunityPosts(
+        nostr,
+        community,
+        limit * 2
+      );
+      const approvedPostIds = new Set(approvedPostEvents.map((p) => p.id));
+
+      // Fetch post requests using 'requests' relays (or fallback to all)
+      const requestRelays = Array.from(
+        new Set([
+          ...community.relays.requests,
+          ...community.relays.all,
+          ...userRelays,
+        ])
+      );
+      if (requestRelays.length === 0) {
+        resolve([]);
+        return;
+      }
+      const postRequestFilter: Filter = {
+        kinds: [1111],
+        "#a": [communityAddress],
+        limit: limit,
+      };
+
+      const allPostRequests = await nostr.fetch(
+        [postRequestFilter],
+        {},
+        requestRelays
+      );
+
+      // Pending = requests that don't have an approval
+      const pendingPosts = allPostRequests.filter(
+        (post) => !approvedPostIds.has(post.id)
+      );
+      pendingPosts.sort((a, b) => b.created_at - a.created_at);
+      resolve(pendingPosts);
+    } catch (error) {
+      console.error("Failed to fetch pending posts:", error);
       reject(error);
     }
   });

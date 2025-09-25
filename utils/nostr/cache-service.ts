@@ -1,4 +1,9 @@
-import { NostrEvent, ItemType, NostrMessageEvent } from "../types/types";
+import {
+  NostrEvent,
+  ItemType,
+  NostrMessageEvent,
+  Community,
+} from "../types/types";
 import Dexie, { Table } from "dexie";
 
 export let db: ItemsFetchedFromRelays | null = null;
@@ -10,22 +15,29 @@ const inMemoryStorage = {
   profiles: new Map<string, any>(),
   chatMessages: new Map<string, NostrMessageEvent>(),
   lastFetchedTime: new Map<string, number>(),
+  communities: new Map<string, Community>(),
 };
 
 class ItemsFetchedFromRelays extends Dexie {
   public products!: Table<{ id: string; product: NostrEvent }>;
   public profiles!: Table<{ id: string; profile: Record<string, unknown> }>;
   public chatMessages!: Table<{ id: string; message: NostrMessageEvent }>;
+  public communities!: Table<{ id: string; community: Community }>;
   public lastFetchedTime!: Table<{ itemType: string; time: number }>;
 
   public constructor() {
     super("ItemsFetchedFromRelays");
-    this.version(2).stores({
-      products: "id, product",
-      profiles: "id, profile",
-      chatMessages: "id, message",
-      lastFetchedTime: "itemType, time",
-    });
+    this.version(32)
+      .stores({
+        products: "id, product",
+        profiles: "id, profile",
+        chatMessages: "id, message",
+        communities: "id, community",
+        lastFetchedTime: "itemType, time",
+      })
+      .upgrade((_tx) => {
+        // placeholder for future migration logic
+      });
   }
 }
 
@@ -153,6 +165,29 @@ export const addChatMessagesToCache = async (
   }
 };
 
+export const addCommunityToCache = async (
+  community: Community
+): Promise<void> => {
+  try {
+    if (indexedDBWorking && db) {
+      await db.communities.put({ id: community.id, community });
+    } else {
+      inMemoryStorage.communities.set(community.id, community);
+    }
+  } catch (error) {
+    console.error("Error adding community to cache:", error);
+  }
+};
+
+export const addCommunitiesToCache = async (
+  communities: Community[]
+): Promise<void> => {
+  for (const community of communities) {
+    await addCommunityToCache(community);
+  }
+  await updateLastFetchedTime("communities");
+};
+
 export const removeProductFromCache = async (
   productIds: string[]
 ): Promise<void> => {
@@ -212,6 +247,20 @@ export const fetchAllChatsFromCache = async (): Promise<
   } catch (error) {
     console.error("Error fetching all chats from cache:", error);
     return new Map();
+  }
+};
+
+export const fetchAllCommunitiesFromCache = async (): Promise<Community[]> => {
+  try {
+    if (indexedDBWorking && db) {
+      const communitiesFromCache = await db.communities.toArray();
+      return communitiesFromCache.map(({ community }) => community);
+    } else {
+      return Array.from(inMemoryStorage.communities.values());
+    }
+  } catch (error) {
+    console.error("Error fetching communities from cache:", error);
+    return [];
   }
 };
 
