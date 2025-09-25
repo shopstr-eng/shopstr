@@ -57,14 +57,18 @@ const mockProfileData = new Map([
 const renderWithProviders = (
   component: React.ReactElement,
   profileData = new Map(),
-  pubkey: string | null = mockUserPubkey
+  pubkey: string | undefined = mockUserPubkey
 ) => {
   const mockUpdateProfileData = jest.fn();
   render(
     <NostrContext.Provider value={{ nostr: {} as any }}>
       <SignerContext.Provider value={{ signer: {} as any, pubkey }}>
         <ProfileMapContext.Provider
-          value={{ profileData, updateProfileData: mockUpdateProfileData }}
+          value={{
+            profileData,
+            updateProfileData: mockUpdateProfileData,
+            isLoading: false,
+          }}
         >
           {component}
         </ProfileMapContext.Provider>
@@ -96,7 +100,7 @@ describe("UserProfileForm", () => {
   });
 
   test("does not fetch profile if userPubkey is missing", async () => {
-    renderWithProviders(<UserProfileForm />, new Map(), null);
+    renderWithProviders(<UserProfileForm />, new Map(), undefined);
     expect(await screen.findByLabelText("Display name")).toBeInTheDocument();
   });
 
@@ -221,13 +225,11 @@ describe("UserProfileForm", () => {
       expect(mockCreateNostrProfileEvent).toHaveBeenCalledWith(
         expect.any(Object),
         expect.any(Object),
-        mockUserPubkey,
         expect.stringContaining('"payment_preference":"lightning"')
       );
       expect(mockCreateNostrProfileEvent).toHaveBeenCalledWith(
         expect.any(Object),
         expect.any(Object),
-        mockUserPubkey,
         expect.stringContaining('"shopstr_donation":"5.5"')
       );
     });
