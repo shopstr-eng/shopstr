@@ -47,7 +47,8 @@ const CreateCommunityForm: React.FC<CreateCommunityFormProps> = ({
   }, [existingCommunity, setValue]);
 
   return (
-    <form onSubmit={handleSubmit(onSave)} className="space-y-4">
+    // disable native browser validation so react-hook-form controls errors consistently
+    <form onSubmit={handleSubmit(onSave)} className="space-y-4" noValidate>
       <Controller
         name="name"
         control={control}
@@ -58,6 +59,7 @@ const CreateCommunityForm: React.FC<CreateCommunityFormProps> = ({
             label="Community Name"
             isRequired
             errorMessage={fieldState.error?.message}
+            isInvalid={!!fieldState.error}
           />
         )}
       />
@@ -71,6 +73,7 @@ const CreateCommunityForm: React.FC<CreateCommunityFormProps> = ({
             label="Description"
             isRequired
             errorMessage={fieldState.error?.message}
+            isInvalid={!!fieldState.error}
           />
         )}
       />

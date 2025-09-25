@@ -8,14 +8,23 @@ const instanceMock = {
   _getPrivKey: jest.fn(),
 };
 const staticGetEncrypted = jest.fn();
-const constructorMock = jest.fn().mockImplementation((opts: { encryptedPrivKey?: string; passphrase?: string }, _ch: unknown) => {
-  Object.assign(instanceMock, {
-    encryptedPrivKey: opts.encryptedPrivKey,
-    passphrase: opts.passphrase,
-  });
-  return instanceMock;
-});
-(constructorMock as typeof constructorMock & { getEncryptedNSEC: jest.Mock }).getEncryptedNSEC = staticGetEncrypted;
+const constructorMock = jest
+  .fn()
+  .mockImplementation(
+    (
+      opts: { encryptedPrivKey?: string; passphrase?: string },
+      _ch: unknown
+    ) => {
+      Object.assign(instanceMock, {
+        encryptedPrivKey: opts.encryptedPrivKey,
+        passphrase: opts.passphrase,
+      });
+      return instanceMock;
+    }
+  );
+(
+  constructorMock as typeof constructorMock & { getEncryptedNSEC: jest.Mock }
+).getEncryptedNSEC = staticGetEncrypted;
 jest.mock("../signers/nostr-nsec-signer", () => ({
   NostrNSecSigner: constructorMock,
 }));
