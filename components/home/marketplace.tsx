@@ -126,7 +126,7 @@ function MarketplacePage({
     } else {
       setMerchantQuality("Don't trust, don't bother verifying");
     }
-  }, [reviewsContext, merchantReview]);
+  }, [focusedPubkey,reviewsContext, merchantReview]);
 
   useEffect(() => {
     setIsFetchingShop(true);
