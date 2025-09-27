@@ -55,7 +55,7 @@ const MessageFeed = ({ isInquiry = false }) => {
     return () => {
       router.events.off("routeChangeComplete", handleRouteChange);
     };
-  }, [router, framer]);
+  }, [router, framer, hookProps.tabs]);
 
   return (
     <div className="flex flex-1 flex-col">
