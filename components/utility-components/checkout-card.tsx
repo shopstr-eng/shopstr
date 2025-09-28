@@ -117,7 +117,7 @@ export default function CheckoutCard({
       );
       setVisibleImages(productData.images.slice(0, visibleCount));
     },
-    [productData.images]
+    [productData.images, setVisibleImages]
   );
 
   const containerRef = useRef<HTMLDivElement>(null);
