@@ -421,37 +421,56 @@ function Shopstr({ props }: { props: AppProps }) {
           localStorage.setItem("relays", JSON.stringify(allRelays));
         }
 
-        // Sequential fetch for critical data
-        const { relayList, readRelayList, writeRelayList } =
-          await fetchAllRelays(nostr!, signer!, allRelays, editRelaysContext);
+        // Sequential fetch for critical data with individual error handling
+        try {
+          const { relayList, readRelayList, writeRelayList } =
+            await fetchAllRelays(nostr!, signer!, allRelays, editRelaysContext);
 
-        if (relayList.length !== 0) {
-          localStorage.setItem("relays", JSON.stringify(relayList));
-          localStorage.setItem("readRelays", JSON.stringify(readRelayList));
-          localStorage.setItem("writeRelays", JSON.stringify(writeRelayList));
-          allRelays = [...relayList, ...readRelayList];
+          if (relayList.length !== 0) {
+            localStorage.setItem("relays", JSON.stringify(relayList));
+            localStorage.setItem("readRelays", JSON.stringify(readRelayList));
+            localStorage.setItem("writeRelays", JSON.stringify(writeRelayList));
+            allRelays = [...relayList, ...readRelayList];
+          }
+        } catch (error) {
+          console.error("Error fetching relays:", error);
+          editRelaysContext([], [], [], false);
         }
 
-        const { blossomServers } = await fetchAllBlossomServers(
-          nostr!,
-          signer!,
-          allRelays,
-          editBlossomContext
-        );
-
-        if (blossomServers.length != 0) {
-          localStorage.setItem(
-            "blossomServers",
-            JSON.stringify(blossomServers)
+        try {
+          const { blossomServers } = await fetchAllBlossomServers(
+            nostr!,
+            signer!,
+            allRelays,
+            editBlossomContext
           );
+
+          if (blossomServers.length != 0) {
+            localStorage.setItem(
+              "blossomServers",
+              JSON.stringify(blossomServers)
+            );
+          }
+        } catch (error) {
+          console.error("Error fetching blossom servers:", error);
+          editBlossomContext([], false);
         }
 
         // Fetch products and collect profile pubkeys
-        const { productEvents, profileSetFromProducts } = await fetchAllPosts(
-          nostr!,
-          allRelays,
-          editProductContext
-        );
+        let productEvents: NostrEvent[] = [];
+        let profileSetFromProducts = new Set<string>();
+        try {
+          const result = await fetchAllPosts(
+            nostr!,
+            allRelays,
+            editProductContext
+          );
+          productEvents = result.productEvents;
+          profileSetFromProducts = result.profileSetFromProducts;
+        } catch (error) {
+          console.error("Error fetching products:", error);
+          editProductContext([], false);
+        }
 
         // Handle profile fetching
         let pubkeysToFetchProfilesFor = [...profileSetFromProducts];
@@ -459,18 +478,23 @@ function Shopstr({ props }: { props: AppProps }) {
         const profileSetFromChats = new Set<string>();
 
         if (isLoggedIn) {
-          const { profileSetFromChats: newProfileSetFromChats } =
-            await fetchGiftWrappedChatsAndMessages(
-              nostr!,
-              signer!,
-              allRelays,
-              editChatContext,
-              userPubkey
-            );
+          try {
+            const { profileSetFromChats: newProfileSetFromChats } =
+              await fetchGiftWrappedChatsAndMessages(
+                nostr!,
+                signer!,
+                allRelays,
+                editChatContext,
+                userPubkey
+              );
 
-          newProfileSetFromChats.forEach((profile) =>
-            profileSetFromChats.add(profile)
-          );
+            newProfileSetFromChats.forEach((profile) =>
+              profileSetFromChats.add(profile)
+            );
+          } catch (error) {
+            console.error("Error fetching chats:", error);
+            editChatContext(new Map(), false);
+          }
         }
 
         if (userPubkey && profileSetFromChats.size != 0) {
@@ -486,52 +510,92 @@ function Shopstr({ props }: { props: AppProps }) {
           ];
         }
 
-        await fetchProfile(
-          nostr!,
-          allRelays,
-          pubkeysToFetchProfilesFor,
-          editProfileContext
-        );
+        try {
+          await fetchProfile(
+            nostr!,
+            allRelays,
+            pubkeysToFetchProfilesFor,
+            editProfileContext
+          );
+        } catch (error) {
+          console.error("Error fetching profiles:", error);
+          editProfileContext(new Map(), false);
+        }
 
-        await fetchShopProfile(
-          nostr!,
-          allRelays,
-          pubkeysToFetchProfilesFor,
-          editShopContext
-        );
+        try {
+          await fetchShopProfile(
+            nostr!,
+            allRelays,
+            pubkeysToFetchProfilesFor,
+            editShopContext
+          );
+        } catch (error) {
+          console.error("Error fetching shop profiles:", error);
+          editShopContext(new Map(), false);
+        }
 
-        await fetchReviews(
-          nostr!,
-          allRelays,
-          productEvents,
-          editReviewsContext
-        );
+        try {
+          await fetchReviews(
+            nostr!,
+            allRelays,
+            productEvents,
+            editReviewsContext
+          );
+        } catch (error) {
+          console.error("Error fetching reviews:", error);
+          editReviewsContext(new Map(), new Map(), false);
+        }
 
-        await fetchAllCommunities(nostr!, allRelays, editCommunityContext);
+        try {
+          await fetchAllCommunities(nostr!, allRelays, editCommunityContext);
+        } catch (error) {
+          console.error("Error fetching communities:", error);
+          editCommunityContext(new Map(), false);
+        }
 
         // Fetch wallet if logged in
         if (isLoggedIn) {
-          const { cashuMints, cashuProofs } = await fetchCashuWallet(
-            nostr!,
-            signer!,
-            allRelays,
-            editCashuWalletContext
-          );
+          try {
+            const { cashuMints, cashuProofs } = await fetchCashuWallet(
+              nostr!,
+              signer!,
+              allRelays,
+              editCashuWalletContext
+            );
 
-          if (cashuMints.length !== 0 && cashuProofs) {
-            localStorage.setItem("mints", JSON.stringify(cashuMints));
-            localStorage.setItem("tokens", JSON.stringify(cashuProofs));
+            if (cashuMints.length !== 0 && cashuProofs) {
+              localStorage.setItem("mints", JSON.stringify(cashuMints));
+              localStorage.setItem("tokens", JSON.stringify(cashuProofs));
+            }
+          } catch (error) {
+            console.error("Error fetching wallet:", error);
+            editCashuWalletContext([], [], [], false);
           }
         }
 
-        await fetchAllFollows(
-          nostr!,
-          allRelays,
-          editFollowsContext,
-          userPubkey
-        );
+        try {
+          await fetchAllFollows(
+            nostr!,
+            allRelays,
+            editFollowsContext,
+            userPubkey
+          );
+        } catch (error) {
+          console.error("Error fetching follows:", error);
+          editFollowsContext([], 0, false);
+        }
       } catch (error) {
-        console.error("Error fetching data:", error);
+        console.error("Critical error during app initialization:", error);
+        editProductContext([], false);
+        editReviewsContext(new Map(), new Map(), false);
+        editShopContext(new Map(), false);
+        editProfileContext(new Map(), false);
+        editChatContext(new Map(), false);
+        editFollowsContext([], 0, false);
+        editRelaysContext([], [], [], false);
+        editBlossomContext([], false);
+        editCashuWalletContext([], [], [], false);
+        editCommunityContext(new Map(), false);
       }
     }
 
