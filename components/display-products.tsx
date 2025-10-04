@@ -1,5 +1,6 @@
 import { useState, useEffect, useContext } from "react";
 import { nip19 } from "nostr-tools";
+import Link from "next/link";
 import { deleteEvent } from "@/utils/nostr/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
 import {
@@ -54,11 +55,29 @@ const DisplayProducts = ({
   const itemsPerPage = 42;
   const [filteredProducts, setFilteredProducts] = useState<ProductData[]>([]);
   const [totalPages, setTotalPages] = useState(1);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const router = useRouter();
 
   const { nostr } = useContext(NostrContext);
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
+
+  // Load saved page from session storage on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const storageKey = focusedPubkey
+        ? `marketplace-page-${focusedPubkey}`
+        : "marketplace-page-general";
+      const savedPage = sessionStorage.getItem(storageKey);
+      if (savedPage) {
+        const pageNum = parseInt(savedPage, 10);
+        if (!isNaN(pageNum) && pageNum > 0) {
+          setCurrentPage(pageNum);
+        }
+      }
+      setIsInitialized(true);
+    }
+  }, [focusedPubkey]);
 
   useEffect(() => {
     if (!productEventContext) return;
@@ -102,7 +121,7 @@ const DisplayProducts = ({
   }, [productEvents, focusedPubkey]);
 
   useEffect(() => {
-    if (!productEvents) return;
+    if (!productEvents || !isInitialized) return;
 
     const filtered = productEvents.filter((product) => {
       if (focusedPubkey && product.pubkey !== focusedPubkey) return false;
@@ -121,9 +140,33 @@ const DisplayProducts = ({
     });
 
     setFilteredProducts(filtered);
-    setTotalPages(Math.max(1, Math.ceil(filtered.length / itemsPerPage)));
+    const newTotalPages = Math.max(
+      1,
+      Math.ceil(filtered.length / itemsPerPage)
+    );
+    setTotalPages(newTotalPages);
 
-    setCurrentPage(1);
+    // Check if filter actually changed (not just from initialization)
+    const prevFiltersRef = `${selectedSearch}-${selectedLocation}-${Array.from(
+      selectedCategories
+    ).join(",")}`;
+    const currentFiltersRef = sessionStorage.getItem("last-filters-ref");
+
+    if (currentFiltersRef && currentFiltersRef !== prevFiltersRef) {
+      // Filters changed, reset to page 1
+      setCurrentPage(1);
+      if (typeof window !== "undefined") {
+        const storageKey = focusedPubkey
+          ? `marketplace-page-${focusedPubkey}`
+          : "marketplace-page-general";
+        sessionStorage.setItem(storageKey, "1");
+      }
+    } else if (currentPage > newTotalPages) {
+      // Current page exceeds total pages, go to last page
+      setCurrentPage(newTotalPages);
+    }
+
+    sessionStorage.setItem("last-filters-ref", prevFiltersRef);
 
     onFilteredProductsChange?.(filtered);
   }, [
@@ -132,6 +175,7 @@ const DisplayProducts = ({
     selectedLocation,
     selectedCategories,
     focusedPubkey,
+    isInitialized,
   ]);
 
   // Scroll effect only on page change
@@ -170,24 +214,33 @@ const DisplayProducts = ({
     setShowModal(!showModal);
   };
 
-  const onProductClick = (product: ProductData) => {
+  const getProductHref = (product: ProductData) => {
+    if (product.pubkey === userPubkey) {
+      return null; // Will show modal instead
+    }
+
+    const naddr = nip19.naddrEncode({
+      identifier: product.d as string,
+      pubkey: product.pubkey,
+      kind: 30402,
+    });
+
+    if (naddr) {
+      return `/listing/${naddr}`;
+    } else if (product.d !== undefined) {
+      return `/listing/${product.d}`;
+    } else {
+      return `/listing/${product.id}`;
+    }
+  };
+
+  const onProductClick = (product: ProductData, e?: React.MouseEvent) => {
     setFocusedProduct(product);
     if (product.pubkey === userPubkey) {
+      e?.preventDefault();
       setShowModal(true);
     } else {
       setShowModal(false);
-      const naddr = nip19.naddrEncode({
-        identifier: product.d as string,
-        pubkey: product.pubkey,
-        kind: 30402,
-      });
-      if (naddr) {
-        router.push(`/listing/${naddr}`);
-      } else if (product.d !== undefined) {
-        router.push(`/listing/${product.d}`);
-      } else {
-        router.push(`/listing/${product.id}`);
-      }
     }
   };
 
@@ -276,6 +329,13 @@ const DisplayProducts = ({
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
+    // Save to session storage
+    if (typeof window !== "undefined") {
+      const storageKey = focusedPubkey
+        ? `marketplace-page-${focusedPubkey}`
+        : "marketplace-page-general";
+      sessionStorage.setItem(storageKey, page.toString());
+    }
   };
 
   return (
@@ -298,6 +358,7 @@ const DisplayProducts = ({
                     key={productData.id + "-" + index}
                     productData={productData}
                     onProductClick={onProductClick}
+                    href={getProductHref(productData)}
                   />
                 )
               )}
