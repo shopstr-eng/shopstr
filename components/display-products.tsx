@@ -1,6 +1,5 @@
 import { useState, useEffect, useContext } from "react";
 import { nip19 } from "nostr-tools";
-import Link from "next/link";
 import { deleteEvent } from "@/utils/nostr/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
 import {
