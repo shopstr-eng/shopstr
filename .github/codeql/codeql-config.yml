@@ -1,0 +1,32 @@
+name: "Security and Quality CodeQL Configuration"
+
+disable-default-queries: false
+
+query-filters:
+  - exclude:
+      id: js/unused-local-variable
+
+queries:
+  - name: security-extended
+    uses: security-extended
+  - name: security-and-quality
+    uses: security-and-quality
+
+paths-ignore:
+  - "node_modules/**"
+  - "**/*.test.js"
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  - "**/*.spec.js"
+  - "**/*.spec.ts"
+  - "**/*.spec.tsx"
+  - "jest.config.*"
+  - "jest.setup.*"
+  - ".next/**"
+  - "coverage/**"
+
+paths:
+  - "components/**"
+  - "pages/**"
+  - "utils/**"
+  - "middleware.ts"
