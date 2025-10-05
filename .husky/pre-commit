@@ -1,0 +1,12 @@
+# Husky pre-commit hook
+echo "Running pre-commit checks..."
+
+# Type checking (runs on whole project for accuracy)
+echo "Type checking..."
+npm run type-check
+
+# Lint-staged for efficient parallel checks on staged files
+echo "Running lint-staged on staged files..."
+npm run pre-commit
+
+echo "Pre-commit checks passed!"
