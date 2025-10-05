@@ -51,7 +51,7 @@ const ShopProfilePage = () => {
       reset(mappedContent);
     }
     setIsFetchingShop(false);
-  }, [shopContext, userPubkey, userPubkey]);
+  }, [shopContext, userPubkey, reset]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
     setIsUploadingShopProfile(true);
