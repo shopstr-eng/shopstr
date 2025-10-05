@@ -1,0 +1,64 @@
+name: Greetings
+
+on:
+  issues:
+    types: [opened]
+  pull_request:
+    types: [opened]
+
+jobs:
+  greeting:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Welcome new contributors for issues
+        if: github.event_name == 'issues'
+        uses: actions/first-interaction@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-message: |
+            👋 Welcome to Shopstr! Thank you for opening your first issue.
+            
+            🛒⚡ We're excited to have you contribute to our global, permissionless Nostr marketplace for Bitcoin commerce.
+            
+            📋 **What happens next?**
+            - Our team will review your issue and provide feedback
+            - If it's a bug report, please ensure you've included steps to reproduce
+            - If it's a feature request, we'll discuss the proposal with the community
+            
+            📚 **Resources to help you:**
+            - Check out our [Contributing Guide](contributing.md) for development setup
+            - Join our community discussions for questions and help
+            - Review our [Code of Conduct] to ensure a welcoming environment
+            
+            🚀 We appreciate your contribution to building the future of decentralized Bitcoin commerce!
+
+      - name: Welcome new contributors for pull requests
+        if: github.event_name == 'pull_request'
+        uses: actions/first-interaction@v1
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-message: |
+            🎉 Congratulations on your first pull request to Shopstr!
+            
+            🛒⚡ Thank you for contributing to our global, permissionless Nostr marketplace for Bitcoin commerce.
+            
+            🔍 **What happens next?**
+            - Our automated checks will run to ensure code quality
+            - A maintainer will review your changes and provide feedback
+            - Make sure all tests pass and follow our coding standards
+            
+            ✅ **Before we merge:**
+            - [ ] All tests are passing
+            - [ ] Code follows our linting standards
+            - [ ] Changes are documented if needed
+            - [ ] Breaking changes are clearly marked
+            
+            📚 **Need help?**
+            - Check our [Contributing Guide](contributing.md) for best practices
+            - Join our community discussions for questions
+            - Review existing PRs for examples
+            
+            🚀 We're excited to see your contribution shape the future of decentralized commerce!
