@@ -1,0 +1,247 @@
+name: Auto Labeler
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issues:
+    types: [opened]
+
+jobs:
+  label-paths:
+    name: Label based on paths
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Apply path-based labels
+        uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          configuration-path: .github/labeler.yml
+
+  label-size-and-semantic:
+    name: Size and semantic labeling
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for merge conflicts
+        if: github.event_name == 'pull_request'
+        id: merge_conflict
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          if ! git merge-tree $(git merge-base HEAD origin/${{ github.base_ref }}) HEAD origin/${{ github.base_ref }} | grep -q "<<<<<<< "; then
+            echo "has_conflict=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_conflict=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Calculate PR size
+        if: github.event_name == 'pull_request'
+        id: pr-size
+        run: |
+          additions=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.number }}" | \
+            jq '.additions')
+          deletions=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ github.event.number }}" | \
+            jq '.deletions')
+          
+          total_changes=$((additions + deletions))
+          
+          if [ $total_changes -le 10 ]; then
+            echo "size=XS" >> $GITHUB_OUTPUT
+          elif [ $total_changes -le 30 ]; then
+            echo "size=S" >> $GITHUB_OUTPUT
+          elif [ $total_changes -le 100 ]; then
+            echo "size=M" >> $GITHUB_OUTPUT
+          elif [ $total_changes -le 500 ]; then
+            echo "size=L" >> $GITHUB_OUTPUT
+          else
+            echo "size=XL" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Apply size labels
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const size = '${{ steps.pr-size.outputs.size }}';
+            const sizes = ['XS', 'S', 'M', 'L', 'XL'];
+            
+            // Remove all existing size labels
+            const labels = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            for (const label of labels.data) {
+              if (sizes.includes(label.name.replace('size/', ''))) {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  name: label.name,
+                });
+              }
+            }
+            
+            // Add new size label
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: [`size/${size}`]
+            });
+
+      - name: Apply semantic labels
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const title = context.payload.pull_request?.title || context.payload.issue?.title || '';
+            const body = context.payload.pull_request?.body || context.payload.issue?.body || '';
+            const labels = [];
+            
+            // Breaking change detection
+            if (title.includes('BREAKING') || body.includes('BREAKING CHANGE') || title.includes('!:')) {
+              labels.push('breaking-change');
+            }
+            
+            // Feature detection
+            if (title.match(/^feat(\(.*\))?:/i) || title.toLowerCase().includes('feature')) {
+              labels.push('type/feature');
+            }
+            
+            // Bug fix detection
+            if (title.match(/^fix(\(.*\))?:/i) || title.toLowerCase().includes('fix') || title.toLowerCase().includes('bug')) {
+              labels.push('type/bug');
+            }
+            
+            // Documentation detection
+            if (title.match(/^docs(\(.*\))?:/i) || title.toLowerCase().includes('documentation')) {
+              labels.push('type/documentation');
+            }
+            
+            // Performance detection
+            if (title.match(/^perf(\(.*\))?:/i) || title.toLowerCase().includes('performance')) {
+              labels.push('type/performance');
+            }
+            
+            // Refactor detection
+            if (title.match(/^refactor(\(.*\))?:/i) || title.toLowerCase().includes('refactor')) {
+              labels.push('type/refactor');
+            }
+            
+            // Test detection
+            if (title.match(/^test(\(.*\))?:/i) || title.toLowerCase().includes('test')) {
+              labels.push('type/test');
+            }
+            
+            // Security detection
+            if (title.toLowerCase().includes('security') || title.toLowerCase().includes('vulnerability')) {
+              labels.push('type/security');
+            }
+            
+            // Dependencies detection
+            if (title.toLowerCase().includes('dep') || title.toLowerCase().includes('package')) {
+              labels.push('type/dependencies');
+            }
+            
+            // Chore detection
+            if (title.match(/^chore(\(.*\))?:/i) || title.toLowerCase().includes('chore')) {
+              labels.push('type/chore');
+            }
+            
+            if (labels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: labels
+              });
+            }
+
+      - name: Apply merge conflict label
+        if: github.event_name == 'pull_request' && steps.merge_conflict.outputs.has_conflict == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels: ['merge-conflict']
+            });
+
+      - name: Remove merge conflict label if resolved
+        if: github.event_name == 'pull_request' && steps.merge_conflict.outputs.has_conflict == 'false'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                name: 'merge-conflict'
+              });
+            } catch (error) {
+              // Label might not exist, which is fine
+            }
+
+      - name: Apply priority labels for issues
+        if: github.event_name == 'issues'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const title = context.payload.issue.title.toLowerCase();
+            const body = context.payload.issue.body?.toLowerCase() || '';
+            const labels = [];
+            
+            // High priority indicators
+            if (title.includes('critical') || title.includes('urgent') || title.includes('security') ||
+                body.includes('production') || body.includes('breaking')) {
+              labels.push('priority/high');
+            }
+            // Low priority indicators
+            else if (title.includes('nice to have') || title.includes('enhancement') ||
+                     title.includes('suggestion')) {
+              labels.push('priority/low');
+            }
+            // Default to medium priority
+            else {
+              labels.push('priority/medium');
+            }
+            
+            // Help wanted for community contributions
+            if (title.includes('help wanted') || body.includes('good first issue') ||
+                body.includes('community')) {
+              labels.push('help wanted');
+            }
+            
+            if (labels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: labels
+              });
+            }
