@@ -45,7 +45,7 @@ export class NostrManager {
   private readonly pool: SimplePool;
   private readonly params: NostrManagerParams;
   private readonly relays: Array<NostrRelay> = [];
-  private gcTimeout: any;
+  private gcTimeout: NodeJS.Timeout | null = null;
 
   constructor(relays: Array<string> = [], params?: NostrManagerParams) {
     const {
@@ -259,7 +259,9 @@ export class NostrManager {
   }
 
   public close() {
-    clearTimeout(this.gcTimeout);
+    if (this.gcTimeout !== null) {
+      clearTimeout(this.gcTimeout);
+    }
     for (const relay of this.relays) {
       for (const sub of [...relay.activeSubs]) {
         sub.close();

@@ -8,7 +8,7 @@ export type PromiseWithTimeoutCallback<T> = (
   resolve: (val: T) => void,
   reject: (err: Error) => void,
   abortSignal: AbortSignal
-) => any;
+) => void | Promise<void>;
 
 /**
  * Create a new promise that will be rejected after a timeout

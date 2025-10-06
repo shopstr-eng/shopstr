@@ -32,21 +32,23 @@ export default function Landing() {
     if (router.pathname === "/" && signerContext.isLoggedIn) {
       router.push("/marketplace");
     }
-  }, [router.pathname, signerContext]);
+  }, [router, signerContext]);
 
   useEffect(() => {
     const parsedProductsArray: ProductData[] = [];
     const products = productEventContext.productEvents;
-    products.forEach((product: NostrEvent) => {
-      const parsedProduct = parseTags(product) as ProductData;
-      if (
-        parsedProduct.images.length > 0 &&
-        parsedProduct.currency &&
-        !parsedProduct.contentWarning
-      ) {
-        parsedProductsArray.push(parsedProduct);
-      }
-    });
+    if (products) {
+      products.forEach((product: NostrEvent) => {
+        const parsedProduct = parseTags(product) as ProductData;
+        if (
+          parsedProduct.images.length > 0 &&
+          parsedProduct.currency &&
+          !parsedProduct.contentWarning
+        ) {
+          parsedProductsArray.push(parsedProduct);
+        }
+      });
+    }
     setParsedProducts(parsedProductsArray);
   }, [productEventContext.productEvents]);
 
