@@ -11,33 +11,37 @@ const useNavigation = () => {
   const [isWalletActive, setIsWalletActive] = useState(false);
   const [isMyListingsActive, setIsMyListingsActive] = useState(false);
   const [isProfileActive, setIsProfileActive] = useState(false);
+  const [isCommunitiesActive, setIsCommunitiesActive] = useState(false);
 
   useEffect(() => {
+    if (!pathname) return;
     setIsHomeActive(false);
     setIsMessagesActive(false);
     setIsWalletActive(false);
     setIsMyListingsActive(false);
     setIsProfileActive(false);
+    setIsCommunitiesActive(false);
 
-    switch (pathname) {
-      case "/marketplace":
-        setIsHomeActive(true);
-        break;
-      case "/orders":
-        setIsMessagesActive(true);
-        break;
-      case "/wallet":
-        setIsWalletActive(true);
-        break;
-      case "/my-listings":
-        setIsMyListingsActive(true);
-        break;
-      case "/settings":
-        setIsProfileActive(true);
-        break;
-      default:
-        // Handle any other cases here
-        break;
+    if (pathname.startsWith("/communities")) {
+      setIsCommunitiesActive(true);
+    } else {
+      switch (pathname) {
+        case "/marketplace":
+          setIsHomeActive(true);
+          break;
+        case "/orders":
+          setIsMessagesActive(true);
+          break;
+        case "/wallet":
+          setIsWalletActive(true);
+          break;
+        case "/my-listings":
+          setIsMyListingsActive(true);
+          break;
+        case "/settings":
+          setIsProfileActive(true);
+          break;
+      }
     }
   }, [pathname]);
 
@@ -47,6 +51,7 @@ const useNavigation = () => {
     isWalletActive,
     isMyListingsActive,
     isProfileActive,
+    isCommunitiesActive,
   };
 };
 

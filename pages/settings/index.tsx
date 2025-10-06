@@ -4,6 +4,7 @@ import {
   BuildingStorefrontIcon,
   Cog6ToothIcon,
   UserIcon,
+  UserGroupIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import { LogOut } from "@/utils/nostr/nostr-helper-functions";
@@ -52,6 +53,17 @@ const SettingsPage = () => {
               }}
             >
               User Profile
+            </ListboxItem>
+            <ListboxItem
+              key="community"
+              description="Create and manage your seller community"
+              classNames={listBoxClassnames}
+              startContent={<UserGroupIcon className={startIconClassnames} />}
+              onClick={() => {
+                router.push("/settings/community");
+              }}
+            >
+              Community Management
             </ListboxItem>
             <ListboxItem
               key="preferences"

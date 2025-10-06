@@ -26,6 +26,7 @@ A global, permissionless Nostr marketplace for Bitcoin commerce.
 - [x] NIP-60: Cashu Wallet
 - [ ] NIP-61: Nutzaps
 - [x] NIP-65: Relay List Metadata
+- [x] NIP-72: Moderated Communities
 - [x] NIP-85: Reviews
 - [x] NIP-89: Recommended Application Handlers
 - [x] NIP-99: Classified Listings

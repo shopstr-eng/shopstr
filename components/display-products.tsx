@@ -54,87 +54,29 @@ const DisplayProducts = ({
   const itemsPerPage = 42;
   const [filteredProducts, setFilteredProducts] = useState<ProductData[]>([]);
   const [totalPages, setTotalPages] = useState(1);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const router = useRouter();
 
   const { nostr } = useContext(NostrContext);
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
 
-  const productSatisfiesCategoryFilter = useCallback((productData: ProductData) => {
-    if (selectedCategories.size === 0) return true;
-    return Array.from(selectedCategories).some((selectedCategory) => {
-      const re = new RegExp(selectedCategory, "gi");
-      return productData?.categories?.some((category) => {
-        const match = category.match(re);
-        return match && match.length > 0;
-      });
-    });
-  }, [selectedCategories]);
-
-  const productSatisfieslocationFilter = useCallback((productData: ProductData) => {
-    return !selectedLocation || productData.location === selectedLocation;
-  }, [selectedLocation]);
-
-  const productSatisfiesSearchFilter = useCallback((productData: ProductData) => {
-    if (!selectedSearch) return true;
-    if (!productData.title) return false;
-
-    if (selectedSearch.includes("naddr")) {
-      try {
-        const parsedNaddr = nip19.decode(selectedSearch);
-        if (parsedNaddr.type === "naddr") {
-          return (
-            productData.d === parsedNaddr.data.identifier &&
-            productData.pubkey === parsedNaddr.data.pubkey
-          );
+  // Load saved page from session storage on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const storageKey = focusedPubkey
+        ? `marketplace-page-${focusedPubkey}`
+        : "marketplace-page-general";
+      const savedPage = sessionStorage.getItem(storageKey);
+      if (savedPage) {
+        const pageNum = parseInt(savedPage, 10);
+        if (!isNaN(pageNum) && pageNum > 0) {
+          setCurrentPage(pageNum);
         }
-        return false;
-      } catch (_) {
-        return false;
       }
+      setIsInitialized(true);
     }
-
-    if (selectedSearch.includes("npub")) {
-      try {
-        const parsedNpub = nip19.decode(selectedSearch);
-        if (parsedNpub.type === "npub") {
-          return parsedNpub.data === productData.pubkey;
-        }
-        return false;
-      } catch (_) {
-        return false;
-      }
-    }
-
-    try {
-      const re = new RegExp(selectedSearch, "gi");
-
-      const titleMatch = productData.title.match(re);
-      if (titleMatch && titleMatch.length > 0) return true;
-
-      if (productData.summary) {
-        const summaryMatch = productData.summary.match(re);
-        if (summaryMatch && summaryMatch.length > 0) return true;
-      }
-
-      const numericSearch = parseFloat(selectedSearch);
-      if (!isNaN(numericSearch) && productData.price === numericSearch) {
-        return true;
-      }
-
-      return false;
-    } catch (_) {
-      return false;
-    }
-  }, [selectedSearch]);
-
-  const productSatisfiesAllFilters = useCallback((productData: ProductData) => {
-    return (
-      productSatisfiesCategoryFilter(productData) &&
-      productSatisfieslocationFilter(productData) &&
-      productSatisfiesSearchFilter(productData)
-    );
-  }, [productSatisfiesCategoryFilter, productSatisfieslocationFilter, productSatisfiesSearchFilter]);
+  }, [focusedPubkey]);
 
   useEffect(() => {
     if (!productEventContext) return;
@@ -178,7 +120,7 @@ const DisplayProducts = ({
   }, [productEvents, focusedPubkey, setCategories]);
 
   useEffect(() => {
-    if (!productEvents) return;
+    if (!productEvents || !isInitialized) return;
 
     const filtered = productEvents.filter((product) => {
       if (focusedPubkey && product.pubkey !== focusedPubkey) return false;
@@ -197,9 +139,33 @@ const DisplayProducts = ({
     });
 
     setFilteredProducts(filtered);
-    setTotalPages(Math.max(1, Math.ceil(filtered.length / itemsPerPage)));
+    const newTotalPages = Math.max(
+      1,
+      Math.ceil(filtered.length / itemsPerPage)
+    );
+    setTotalPages(newTotalPages);
 
-    setCurrentPage(1);
+    // Check if filter actually changed (not just from initialization)
+    const prevFiltersRef = `${selectedSearch}-${selectedLocation}-${Array.from(
+      selectedCategories
+    ).join(",")}`;
+    const currentFiltersRef = sessionStorage.getItem("last-filters-ref");
+
+    if (currentFiltersRef && currentFiltersRef !== prevFiltersRef) {
+      // Filters changed, reset to page 1
+      setCurrentPage(1);
+      if (typeof window !== "undefined") {
+        const storageKey = focusedPubkey
+          ? `marketplace-page-${focusedPubkey}`
+          : "marketplace-page-general";
+        sessionStorage.setItem(storageKey, "1");
+      }
+    } else if (currentPage > newTotalPages) {
+      // Current page exceeds total pages, go to last page
+      setCurrentPage(newTotalPages);
+    }
+
+    sessionStorage.setItem("last-filters-ref", prevFiltersRef);
 
     onFilteredProductsChange?.(filtered);
   }, [
@@ -208,9 +174,7 @@ const DisplayProducts = ({
     selectedLocation,
     selectedCategories,
     focusedPubkey,
-    productSatisfiesAllFilters,
-    userPubkey,
-    onFilteredProductsChange,
+    isInitialized,
   ]);
 
   // Scroll effect only on page change
@@ -249,24 +213,33 @@ const DisplayProducts = ({
     setShowModal(!showModal);
   };
 
-  const onProductClick = (product: ProductData) => {
+  const getProductHref = (product: ProductData) => {
+    if (product.pubkey === userPubkey) {
+      return null; // Will show modal instead
+    }
+
+    const naddr = nip19.naddrEncode({
+      identifier: product.d as string,
+      pubkey: product.pubkey,
+      kind: 30402,
+    });
+
+    if (naddr) {
+      return `/listing/${naddr}`;
+    } else if (product.d !== undefined) {
+      return `/listing/${product.d}`;
+    } else {
+      return `/listing/${product.id}`;
+    }
+  };
+
+  const onProductClick = (product: ProductData, e?: React.MouseEvent) => {
     setFocusedProduct(product);
     if (product.pubkey === userPubkey) {
+      e?.preventDefault();
       setShowModal(true);
     } else {
       setShowModal(false);
-      const naddr = nip19.naddrEncode({
-        identifier: product.d as string,
-        pubkey: product.pubkey,
-        kind: 30402,
-      });
-      if (naddr) {
-        router.push(`/listing/${naddr}`);
-      } else if (product.d !== undefined) {
-        router.push(`/listing/${product.d}`);
-      } else {
-        router.push(`/listing/${product.id}`);
-      }
     }
   };
 
@@ -279,6 +252,13 @@ const DisplayProducts = ({
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
+    // Save to session storage
+    if (typeof window !== "undefined") {
+      const storageKey = focusedPubkey
+        ? `marketplace-page-${focusedPubkey}`
+        : "marketplace-page-general";
+      sessionStorage.setItem(storageKey, page.toString());
+    }
   };
 
   return (
@@ -301,6 +281,7 @@ const DisplayProducts = ({
                     key={productData.id + "-" + index}
                     productData={productData}
                     onProductClick={onProductClick}
+                    href={getProductHref(productData)}
                   />
                 )
               )}

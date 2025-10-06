@@ -54,6 +54,41 @@ export default function Faq() {
       ],
     },
     {
+      title: "Communities",
+      items: [
+        {
+          title: "What are Communities?",
+          content:
+            "Communities are public forums hosted by sellers to interact directly with their customers. Sellers can post announcements, updates, and news about their products, and any user can reply to these announcements to ask questions or give feedback.",
+        },
+        {
+          title: "Who can post in a community?",
+          content:
+            "Only the community creator and designated moderators (typically the seller) can create new top-level posts, which are called 'announcements'. This ensures the main feed stays on-topic with official updates.",
+        },
+        {
+          title: "Who can reply to announcements?",
+          content:
+            "Anyone can reply to an announcement. However, all replies must be approved by a moderator before they become publicly visible. This helps maintain a safe and constructive environment.",
+        },
+        {
+          title: "How do I create my own community?",
+          content:
+            "If you are a seller, you can create and manage your communities by going to 'Settings' -> 'Community Management'. From there, you can create new communities or edit your existing ones.",
+        },
+        {
+          title: "Can I create more than one community?",
+          content:
+            "Yes, sellers can create and manage multiple communities. You can find all of your communities under 'Settings' -> 'Community Management'.",
+        },
+        {
+          title: "How do I delete a community?",
+          content:
+            "You can delete a community you created from the 'Community Management' page in your settings. Please be aware that this action is permanent and cannot be undone.",
+        },
+      ],
+    },
+    {
       title: "Account & Privacy",
       items: [
         {
@@ -119,15 +154,12 @@ export default function Faq() {
             >
               {section.items.map((item, itemIndex) => (
                 <AccordionItem
-                  key={itemIndex}
-                  title={
-                    <span className="font-medium text-light-text dark:text-dark-text">
-                      {item.title}
-                    </span>
-                  }
+                  key={`${sectionIndex}-${itemIndex}`}
+                  title={item.title}
                   classNames={{
                     base: "group",
-                    title: "text-md",
+                    title:
+                      "text-md font-medium text-light-text dark:text-dark-text",
                     trigger:
                       "py-5 px-3 data-[hover=true]:bg-gray-50 dark:data-[hover=true]:bg-gray-900/50 transition-all rounded-lg",
                     content:
