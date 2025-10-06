@@ -105,7 +105,12 @@ const DisplayProducts = ({
       setProductEvents(parsedProductData);
       setIsProductLoading(false);
     }
-  }, [productEventContext, wotFilter, followsContext.followList, followsContext.isLoading]);
+  }, [
+    productEventContext,
+    wotFilter,
+    followsContext.followList,
+    followsContext.isLoading,
+  ]);
 
   useEffect(() => {
     if (focusedPubkey && setCategories) {
