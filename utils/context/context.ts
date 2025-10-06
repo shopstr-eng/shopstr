@@ -1,5 +1,6 @@
 import { createContext } from "react";
 import {
+  NostrEvent,
   NostrMessageEvent,
   ProfileData,
   ShopProfile,

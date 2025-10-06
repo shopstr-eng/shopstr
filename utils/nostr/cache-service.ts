@@ -3,6 +3,7 @@ import {
   ItemType,
   NostrMessageEvent,
   Community,
+  ProfileData,
 } from "../types/types";
 import Dexie, { Table } from "dexie";
 
