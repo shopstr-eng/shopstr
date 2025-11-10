@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
-import WalletSettingsPage from './wallet'; 
+import WalletSettingsPage from '../wallet'; 
 import { webln } from '@getalby/sdk';
 import { getLocalStorageData, saveNWCString } from '@/utils/nostr/nostr-helper-functions';
 
