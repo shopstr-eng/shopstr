@@ -17,6 +17,7 @@
     "@braintree/sanitize-url": "7.1.0",
     "@cashu/cashu-ts": "2.1.0",
     "@getalby/lightning-tools": "5.0.1",
+    "@getalby/sdk": "5.1.2",
     "@heroicons/react": "2.1.1",
     "@nextui-org/react": "2.2.9",
     "autoprefixer": "10.4.14",

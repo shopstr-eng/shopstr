@@ -121,7 +121,16 @@ export interface CombinedFormData {
 
 declare global {
   interface Window {
+    // For NIP-07 browser extensions
+    nostr: {
+      getPublicKey: () => Promise<string>;
+      signEvent: (event: any) => Promise<any>;
+      nip44: {
+        encrypt: (pubkey: string, plainText: string) => Promise<string>;
+        decrypt: (pubkey: string, cipherText: string) => Promise<string>;
+      };
+    };
+    // For WebLN (which Alby SDK also polyfills)
     webln: any;
-    nostr: any;
   }
 }
