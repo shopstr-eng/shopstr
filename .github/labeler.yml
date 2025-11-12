@@ -1,0 +1,189 @@
+# Configuration for the labeler GitHub Action
+# This file defines patterns to automatically label pull requests based on file paths and extensions
+
+# Core Application Areas
+area/components:
+  - components/**/*
+  - components/**/*.tsx
+  - components/**/*.ts
+
+area/pages:
+  - pages/**/*
+  - pages/**/*.tsx
+  - pages/**/*.ts
+
+area/utils:
+  - utils/**/*
+  - utils/**/*.ts
+  - utils/**/*.js
+
+area/middleware:
+  - middleware.ts
+  - middleware/**/*
+
+# Styling and Design
+area/styling:
+  - styles/**/*
+  - "**/*.css"
+  - "**/*.scss"
+  - "**/*.sass"
+  - tailwind.config.*
+  - postcss.config.*
+
+# Build and Configuration
+area/build:
+  - next.config.*
+  - package.json
+  - package-lock.json
+  - tsconfig.json
+  - jest.config.*
+  - jest.setup.*
+  - Dockerfile
+  - "*.config.*"
+
+# Testing
+area/testing:
+  - "**/__tests__/**"
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  - "**/*.test.js"
+  - "**/*.test.jsx"
+  - "**/*.spec.ts"
+  - "**/*.spec.tsx"
+  - "**/*.spec.js"
+  - "**/*.spec.jsx"
+
+# Documentation
+area/documentation:
+  - "*.md"
+  - "**/*.md"
+  - docs/**/*
+
+# API Routes
+area/api:
+  - pages/api/**/*
+
+# Public Assets
+area/assets:
+  - public/**/*
+
+# Specific Feature Areas
+area/wallet:
+  - "**/*wallet*"
+  - "**/*payment*"
+  - components/wallet/**/*
+  - pages/wallet/**/*
+  - utils/*wallet*
+
+area/messaging:
+  - "**/*message*"
+  - "**/*chat*"
+  - components/messages/**/*
+  - pages/messages/**/*
+  - utils/messages/**/*
+
+area/communities:
+  - "**/*communit*"
+  - components/communities/**/*
+  - pages/communities/**/*
+
+area/marketplace:
+  - "**/*marketplace*"
+  - "**/*listing*"
+  - "**/*product*"
+  - components/home/marketplace.tsx
+  - pages/marketplace/**/*
+  - pages/listing/**/*
+
+area/cart:
+  - "**/*cart*"
+  - "**/*invoice*"
+  - pages/cart/**/*
+  - components/*cart*
+  - components/*invoice*
+
+area/orders:
+  - "**/*order*"
+  - pages/orders/**/*
+
+area/my-listings:
+  - "**/*my-listing*"
+  - pages/my-listings/**/*
+  - components/my-listings/**/*
+
+area/settings:
+  - "**/*setting*"
+  - pages/settings/**/*
+  - components/settings/**/*
+
+area/auth:
+  - "**/*sign-in*"
+  - "**/*auth*"
+  - "**/*login*"
+  - components/sign-in/**/*
+  - pages/sign-in/**/*
+  - pages/onboarding/**/*
+
+# Package-specific labels (simulating core, esplora, level categories)
+core/frontend:
+  - components/**/*
+  - pages/**/*
+  - utils/**/*
+  - styles/**/*
+
+core/backend:
+  - pages/api/**/*
+  - middleware.ts
+  - utils/nostr/**/*
+
+core/nostr:
+  - utils/nostr/**/*
+  - "**/*nostr*"
+
+level/critical:
+  - middleware.ts
+  - next.config.*
+  - package.json
+  - pages/_app.tsx
+  - pages/_document.tsx
+
+level/high:
+  - pages/api/**/*
+  - utils/context/**/*
+  - components/nav-top.tsx
+
+level/medium:
+  - components/**/*
+  - pages/*
+  - utils/**/*
+
+level/low:
+  - public/**/*
+  - "**/*.test.*"
+  - "**/*.spec.*"
+
+# Dependencies and Infrastructure
+dependencies:
+  - package.json
+  - package-lock.json
+  - yarn.lock
+
+ci/cd:
+  - .github/workflows/**/*
+  - .github/**/*
+
+docker:
+  - Dockerfile
+  - docker-compose.*
+  - .dockerignore
+
+# Type definitions
+types:
+  - utils/types/**/*
+  - "**/*.d.ts"
+
+# Hooks and Context
+hooks:
+  - components/hooks/**/*
+  - "**/*hook*"
+  - utils/context/**/*
