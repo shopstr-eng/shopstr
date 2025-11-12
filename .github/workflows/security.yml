@@ -1,0 +1,400 @@
+name: Security Analysis
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run security checks daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  codeql-analysis:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'javascript', 'typescript' ]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          config-file: ./.github/codeql/codeql-config.yml
+          queries: security-extended,security-and-quality
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{matrix.language}}"
+
+  dependency-vulnerability-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run npm audit
+        id: npm-audit
+        run: |
+          echo "Running npm audit..."
+          if npm audit --audit-level=moderate --json > npm-audit-results.json; then
+            echo "npm_audit_status=success" >> $GITHUB_OUTPUT
+          else
+            echo "npm_audit_status=failure" >> $GITHUB_OUTPUT
+          fi
+          
+          # Parse results
+          if [ -f npm-audit-results.json ]; then
+            vulnerabilities=$(jq '.metadata.vulnerabilities.total' npm-audit-results.json)
+            echo "vulnerabilities_found=$vulnerabilities" >> $GITHUB_OUTPUT
+          else
+            echo "vulnerabilities_found=0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload npm audit results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-results
+          path: npm-audit-results.json
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Comment PR with vulnerability results
+        if: github.event_name == 'pull_request' && steps.npm-audit.outputs.vulnerabilities_found != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const vulnerabilities = '${{ steps.npm-audit.outputs.vulnerabilities_found }}';
+            const comment = `
+            ## 🔒 Security Scan Results
+            
+            **⚠️ npm audit found ${vulnerabilities} vulnerabilities**
+            
+            Please review the security report and address any critical or high-severity vulnerabilities before merging.
+            
+            You can run \`npm audit fix\` locally to automatically fix compatible issues.
+            
+            For more details, check the uploaded npm-audit-results artifact.
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  secret-scanning:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run GitLeaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: true
+
+      - name: Run TruffleHog OSS
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+          extra_args: --debug --only-verified
+
+  static-application-security-testing:
+    name: Static Application Security Testing (SAST)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint Security Plugin
+        run: |
+          npx eslint . \
+            --ext .js,.jsx,.ts,.tsx \
+            --config .eslintrc.security.js \
+            --format json \
+            --output-file eslint-security-results.json \
+            || true
+
+      - name: Setup Python for Semgrep
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Run Semgrep
+        run: |
+          python -m pip install semgrep
+          semgrep --config=auto --json --output=semgrep-results.json . || true
+
+      - name: Upload SAST results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sast-results
+          path: |
+            eslint-security-results.json
+            semgrep-results.json
+
+      - name: Process SAST results
+        if: always()
+        run: |
+          echo "## Security Analysis Results" >> security-summary.md
+          echo "" >> security-summary.md
+          
+          # Process ESLint results
+          if [ -f eslint-security-results.json ]; then
+            eslint_issues=$(jq 'length' eslint-security-results.json)
+            echo "### ESLint Security Issues: $eslint_issues" >> security-summary.md
+          fi
+          
+          # Process Semgrep results
+          if [ -f semgrep-results.json ]; then
+            semgrep_issues=$(jq '.results | length' semgrep-results.json)
+            echo "### Semgrep Security Issues: $semgrep_issues" >> security-summary.md
+          fi
+
+      - name: Upload security summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-summary
+          path: security-summary.md
+
+  license-compliance:
+    name: License Compliance Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install license checker
+        run: npm install -g license-checker
+
+      - name: Check licenses
+        run: |
+          echo "Checking licenses for all dependencies..."
+          license-checker --json --out license-report.json
+          
+          # Check for problematic licenses
+          problematic_licenses=$(license-checker --onlyAllow "MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;Unlicense;WTFPL" --excludePrivatePackages --json | jq 'keys | length')
+          
+          if [ "$problematic_licenses" -gt 0 ]; then
+            echo "⚠️ Found potentially problematic licenses"
+            license-checker --onlyAllow "MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;Unlicense;WTFPL" --excludePrivatePackages
+            echo "license_compliance=failed" >> $GITHUB_OUTPUT
+          else
+            echo "✅ All licenses are compliant"
+            echo "license_compliance=passed" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload license report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-report
+          path: license-report.json
+
+  security-policy-check:
+    name: Security Policy Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for SECURITY.md
+        run: |
+          if [ -f SECURITY.md ] || [ -f .github/SECURITY.md ]; then
+            echo "✅ Security policy found"
+          else
+            echo "⚠️ No security policy found. Consider adding SECURITY.md"
+            echo "Creating basic security policy template..."
+            mkdir -p .github
+            cat > .github/SECURITY.md << 'EOF'
+          # Security Policy
+          
+          ## Supported Versions
+          
+          | Version | Supported          |
+          | ------- | ------------------ |
+          | latest  | :white_check_mark: |
+          
+          ## Reporting a Vulnerability
+          
+          If you discover a security vulnerability in Shopstr, please report it by creating a new issue in our GitHub repository with the "security" label.
+          
+          **Please do not disclose security vulnerabilities publicly until they have been addressed.**
+          
+          ### What to include in your report:
+          
+          - Description of the vulnerability
+          - Steps to reproduce the issue
+          - Potential impact
+          - Suggested fix (if you have one)
+          
+          ### Response timeline:
+          
+          - We will acknowledge receipt within 48 hours
+          - We will provide a detailed response within 7 days
+          - We will work on a fix and coordinate disclosure
+          
+          Thank you for helping keep Shopstr secure!
+          EOF
+            echo "📝 Created basic security policy template at .github/SECURITY.md"
+          fi
+
+      - name: Check for security-related configurations
+        run: |
+          echo "Checking for security configurations..."
+          
+          # Check for security headers in Next.js config
+          if [ -f next.config.cjs ] || [ -f next.config.js ] || [ -f next.config.mjs ]; then
+            echo "✅ Next.js config found"
+            if grep -q "Content-Security-Policy\|X-Frame-Options\|X-Content-Type-Options" next.config.* 2>/dev/null; then
+              echo "✅ Security headers configured"
+            else
+              echo "⚠️ Consider adding security headers to Next.js configuration"
+            fi
+          fi
+          
+          # Check for environment variable validation
+          if grep -r "process.env" --include="*.ts" --include="*.js" --include="*.tsx" --include="*.jsx" . | grep -v node_modules | head -5; then
+            echo "⚠️ Found environment variable usage. Ensure proper validation."
+          fi
+
+  consolidate-results:
+    name: Consolidate Security Results
+    runs-on: ubuntu-latest
+    needs: [codeql-analysis, dependency-vulnerability-scan, secret-scanning, static-application-security-testing, license-compliance, security-policy-check]
+    if: always()
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create security report
+        run: |
+          echo "# 🔒 Security Analysis Report" > SECURITY_REPORT.md
+          echo "" >> SECURITY_REPORT.md
+          echo "Generated on: $(date)" >> SECURITY_REPORT.md
+          echo "" >> SECURITY_REPORT.md
+          
+          echo "## Summary" >> SECURITY_REPORT.md
+          echo "" >> SECURITY_REPORT.md
+          echo "| Check | Status |" >> SECURITY_REPORT.md
+          echo "|-------|--------|" >> SECURITY_REPORT.md
+          echo "| CodeQL Analysis | ${{ needs.codeql-analysis.result }} |" >> SECURITY_REPORT.md
+          echo "| Dependency Scan | ${{ needs.dependency-vulnerability-scan.result }} |" >> SECURITY_REPORT.md
+          echo "| Secret Scanning | ${{ needs.secret-scanning.result }} |" >> SECURITY_REPORT.md
+          echo "| SAST | ${{ needs.static-application-security-testing.result }} |" >> SECURITY_REPORT.md
+          echo "| License Compliance | ${{ needs.license-compliance.result }} |" >> SECURITY_REPORT.md
+          echo "| Policy Check | ${{ needs.security-policy-check.result }} |" >> SECURITY_REPORT.md
+          echo "" >> SECURITY_REPORT.md
+          
+          echo "## Recommendations" >> SECURITY_REPORT.md
+          echo "" >> SECURITY_REPORT.md
+          echo "- Review all security findings in the Security tab" >> SECURITY_REPORT.md
+          echo "- Address any high or critical vulnerabilities" >> SECURITY_REPORT.md
+          echo "- Ensure security policy is up to date" >> SECURITY_REPORT.md
+          echo "- Regular security training for team members" >> SECURITY_REPORT.md
+          echo "- Consider implementing additional security measures" >> SECURITY_REPORT.md
+
+      - name: Upload consolidated report
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-analysis-report
+          path: SECURITY_REPORT.md
+
+      - name: Comment on PR with security summary
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let report = '';
+            
+            try {
+              report = fs.readFileSync('SECURITY_REPORT.md', 'utf8');
+            } catch (error) {
+              report = '# Security Analysis Report\n\nSecurity analysis completed. Check the Security tab for detailed results.';
+            }
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: report
+            });
