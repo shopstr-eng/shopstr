@@ -1,0 +1,294 @@
+name: Release Management
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - prerelease
+      prerelease_type:
+        description: 'Prerelease type (only for prerelease)'
+        required: false
+        default: 'alpha'
+        type: choice
+        options:
+          - alpha
+          - beta
+          - rc
+
+env:
+  NODE_VERSION_MATRIX: '[18.x, 20.x, 22.x]'
+
+jobs:
+  test:
+    name: Test on Node.js ${{ matrix.node-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x, 22.x]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run type checking
+        run: npm run type-check
+
+      - name: Run linting
+        run: npm run lint
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build application
+        run: npm run build
+
+  version-and-changelog:
+    name: Version Bump and Changelog
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'workflow_dispatch'
+    outputs:
+      new_version: ${{ steps.version.outputs.new_version }}
+      changelog: ${{ steps.changelog.outputs.changelog }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Get current version
+        id: current_version
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
+      - name: Bump version
+        id: version
+        run: |
+          if [ "${{ github.event.inputs.release_type }}" = "prerelease" ]; then
+            new_version=$(npm version prerelease --preid=${{ github.event.inputs.prerelease_type }} --no-git-tag-version)
+          else
+            new_version=$(npm version ${{ github.event.inputs.release_type }} --no-git-tag-version)
+          fi
+          echo "new_version=${new_version}" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get the last tag
+          last_tag=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          
+          if [ -z "$last_tag" ]; then
+            # If no previous tag, get all commits
+            commits=$(git log --pretty=format:"* %s (%h)" --no-merges)
+          else
+            # Get commits since last tag
+            commits=$(git log ${last_tag}..HEAD --pretty=format:"* %s (%h)" --no-merges)
+          fi
+          
+          # Create changelog content
+          changelog="## Changes in ${{ steps.version.outputs.new_version }}
+
+          ### 🚀 Features
+          $(echo "$commits" | grep -E "^[*] (feat|feature)" || echo "No new features")
+
+          ### 🐛 Bug Fixes
+          $(echo "$commits" | grep -E "^[*] (fix|bugfix)" || echo "No bug fixes")
+
+          ### 📚 Documentation
+          $(echo "$commits" | grep -E "^[*] (docs|doc)" || echo "No documentation changes")
+
+          ### 🔧 Maintenance
+          $(echo "$commits" | grep -E "^[*] (chore|refactor|style|test)" || echo "No maintenance changes")
+
+          ### 📦 Dependencies
+          $(echo "$commits" | grep -E "^[*] (deps|bump|update)" || echo "No dependency updates")
+
+          ### Other Changes
+          $(echo "$commits" | grep -vE "^[*] (feat|feature|fix|bugfix|docs|doc|chore|refactor|style|test|deps|bump|update)" || echo "No other changes")
+          "
+          
+          # Save changelog to file and output
+          echo "$changelog" > CHANGELOG_TEMP.md
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$changelog" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Commit version bump
+        run: |
+          git add package.json package-lock.json
+          git commit -m "chore: bump version to ${{ steps.version.outputs.new_version }}"
+          git tag ${{ steps.version.outputs.new_version }}
+          git push origin main
+          git push origin ${{ steps.version.outputs.new_version }}
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [test, version-and-changelog]
+    if: always() && (needs.test.result == 'success') && (github.event_name == 'push' || needs.version-and-changelog.result == 'success')
+    outputs:
+      release_version: ${{ steps.release_info.outputs.version }}
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Create build artifacts
+        run: |
+          # Create a tarball of the built application
+          tar -czf shopstr-build.tar.gz .next/ public/ package.json package-lock.json
+          
+          # Create a source code tarball
+          git archive --format=tar.gz --prefix=shopstr-src/ HEAD > shopstr-source.tar.gz
+
+      - name: Get version and changelog
+        id: release_info
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            version=${GITHUB_REF#refs/tags/}
+            echo "version=${version}" >> $GITHUB_OUTPUT
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+            
+            # Generate changelog for tag-triggered release
+            last_tag=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+            if [ -z "$last_tag" ]; then
+              commits=$(git log --pretty=format:"* %s (%h)" --no-merges)
+            else
+              commits=$(git log ${last_tag}..HEAD --pretty=format:"* %s (%h)" --no-merges)
+            fi
+            
+            changelog="## Changes in ${version}
+            
+            ${commits}"
+            echo "changelog<<EOF" >> $GITHUB_OUTPUT
+            echo "$changelog" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ needs.version-and-changelog.outputs.new_version }}" >> $GITHUB_OUTPUT
+            echo "changelog=${{ needs.version-and-changelog.outputs.changelog }}" >> $GITHUB_OUTPUT
+            if [[ "${{ needs.version-and-changelog.outputs.new_version }}" == *"alpha"* ]] || [[ "${{ needs.version-and-changelog.outputs.new_version }}" == *"beta"* ]] || [[ "${{ needs.version-and-changelog.outputs.new_version }}" == *"rc"* ]]; then
+              echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            else
+              echo "is_prerelease=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.release_info.outputs.version }}
+          release_name: Release ${{ steps.release_info.outputs.version }}
+          body: ${{ steps.release_info.outputs.changelog }}
+          draft: false
+          prerelease: ${{ steps.release_info.outputs.is_prerelease }}
+
+      - name: Upload build artifacts to release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./shopstr-build.tar.gz
+          asset_name: shopstr-build-${{ steps.release_info.outputs.version }}.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload source artifacts to release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./shopstr-source.tar.gz
+          asset_name: shopstr-source-${{ steps.release_info.outputs.version }}.tar.gz
+          asset_content_type: application/gzip
+
+  publish-npm:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    needs: [test, create-release]
+    if: always() && (needs.test.result == 'success') && (needs.create-release.result == 'success') && !contains(github.ref, 'alpha') && !contains(github.ref, 'beta')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  notify:
+    name: Notify Release
+    runs-on: ubuntu-latest
+    needs: [create-release, publish-npm]
+    if: always() && (needs.create-release.result == 'success')
+    steps:
+      - name: Notify success
+        run: |
+          echo "🎉 Release ${{ needs.create-release.outputs.release_version || github.ref_name }} has been created successfully!"
+          echo "📦 Build artifacts have been attached to the release"
+          if [ "${{ needs.publish-npm.result }}" = "success" ]; then
+            echo "📮 Package has been published to npm"
+          fi
