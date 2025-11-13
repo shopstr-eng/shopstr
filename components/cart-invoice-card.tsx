@@ -138,7 +138,6 @@ export default function CartInvoiceCard({
 
   // NWC State
   const [nwcInfo, setNwcInfo] = useState<any | null>(null);
-  const [nwcCapabilities, setNwcCapabilities] = useState({ allSellersHaveLud16: false });
   const [isNwcLoading, setIsNwcLoading] = useState(false);
   const [failureText, setFailureText] = useState("");
 
@@ -232,10 +231,9 @@ export default function CartInvoiceCard({
   useEffect(() => {
     const loadNwcInfo = () => {
       const { nwcInfo: infoString } = getLocalStorageData();
-      let info = null;
       if (infoString) {
         try {
-          info = JSON.parse(infoString);
+          const info = JSON.parse(infoString);
           if (info && info.methods && info.methods.includes("pay_invoice")) {
             setNwcInfo(info);
           } else {
@@ -248,27 +246,9 @@ export default function CartInvoiceCard({
       } else {
         setNwcInfo(null);
       }
-      return info;
     };
 
-    const checkCapabilities = (info: any) => {
-      if (!info || !info.methods || products.length === 0) {
-        setNwcCapabilities({ allSellersHaveLud16: false });
-        return;
-      }
-
-      const sellerPubkeys = [...new Set(products.map(p => p.pubkey))];
-      const sellerProfiles = sellerPubkeys.map(pk => profileContext.profileData.get(pk));
-      const allSellersHaveLud16 = sellerProfiles.every(p => p?.content?.lud16);
-
-      setNwcCapabilities({
-        allSellersHaveLud16: allSellersHaveLud16
-      });
-    };
-
-    const info = loadNwcInfo();
-    checkCapabilities(info);
-
+    loadNwcInfo();
     window.addEventListener("storage", loadNwcInfo);
     return () => window.removeEventListener("storage", loadNwcInfo);
   }, [products, profileContext.profileData]);
@@ -684,19 +664,22 @@ export default function CartInvoiceCard({
   const handleNWCError = (error: any) => {
     console.error("NWC Payment failed:", error);
     let message = "Payment failed. Please try again.";
-    if (error && typeof error === 'object' && 'code' in error) {
+    if (error && typeof error === "object" && "code" in error) {
       switch (error.code) {
         case "INSUFFICIENT_BALANCE":
           message = "Payment failed: Insufficient balance in your wallet.";
           break;
         case "QUOTA_EXCEEDED":
-          message = "Payment failed: Your wallet's spending quota has been exceeded.";
+          message =
+            "Payment failed: Your wallet's spending quota has been exceeded.";
           break;
         case "PAYMENT_FAILED":
-          message = "The payment failed. Please check your wallet and try again.";
+          message =
+            "The payment failed. Please check your wallet and try again.";
           break;
         case "RATE_LIMITED":
-          message = "You are sending payments too quickly. Please wait a moment.";
+          message =
+            "You are sending payments too quickly. Please wait a moment.";
           break;
         default:
           message = error.message || "An unknown wallet error occurred.";
@@ -712,162 +695,24 @@ export default function CartInvoiceCard({
     setIsNwcLoading(true);
     let nwc: webln.NostrWebLNProvider | null = null;
 
-    const { nwcString } = getLocalStorageData();
-    if (!nwcString || !nwcInfo) {
-      setFailureText("NWC connection not found.");
-      setShowFailureModal(true);
-      setIsNwcLoading(false);
-      return;
-    }
-
     try {
       validatePaymentData(convertedPrice, data);
+
+      const wallet = new CashuWallet(new CashuMint(mints[0]!));
+      const { request: pr, quote: hash } =
+        await wallet.createMintQuote(convertedPrice);
+
+      const { nwcString } = getLocalStorageData();
+      if (!nwcString) throw new Error("NWC connection not found.");
 
       nwc = new webln.NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
       await nwc.enable();
 
-      const productsBySeller = products.reduce((acc, product) => {
-        if (!acc[product.pubkey]) {
-          acc[product.pubkey] = [];
-        }
-        acc[product.pubkey]!.push(product);
-        return acc;
-      }, {} as { [pubkey: string]: ProductData[] });
-
-      const invoices = [];
-      const donationLud16 = "shopstr@minibits.cash"; // The correct, hardcoded LUD-16
-      const donationLn = new LightningAddress(donationLud16);
-      try {
-        await donationLn.fetch();
-      } catch (e) {
-        throw new Error("Failed to fetch Shopstr donation address.");
+      const res = await nwc.sendPayment(pr);
+      if (!res?.preimage) {
+        throw new Error("NWC payment failed.");
       }
-
-      // 1. Build list of all invoices (sellers + donations)
-      for (const pubkey of Object.keys(productsBySeller)) {
-        const sellerProducts = productsBySeller[pubkey]!;
-        const sellerProfile = profileContext.profileData.get(pubkey);
-        const sellerLud16 = sellerProfile?.content?.lud16;
-
-        if (!sellerLud16) throw new Error(`Seller ${nip19.npubEncode(pubkey)} has no Lightning Address.`);
-        const sellerTotal = sellerProducts.reduce((sum, p) => sum + (totalCostsInSats[p.id] || 0), 0);
-        const donationPercentage = sellerProfile?.content?.shopstr_donation || 2.1;
-        const donationAmount = Math.ceil((sellerTotal * donationPercentage) / 100);
-        const sellerAmount = sellerTotal - donationAmount;
-
-        const ln = new LightningAddress(sellerLud16);
-        try {
-          await ln.fetch();
-        } catch(e) {
-          throw new Error(`Failed to fetch seller's Lightning Address: ${sellerLud16}`);
-        }
-
-        if (sellerAmount > 0) {
-          const sellerInvoice = await ln.requestInvoice({ satoshi: sellerAmount });
-          invoices.push({ id: pubkey, invoice: sellerInvoice.paymentRequest, amount: sellerAmount, type: 'seller' });
-        }
-        if (donationAmount > 0) {
-          const donationInvoice = await donationLn.requestInvoice({ satoshi: donationAmount });
-          invoices.push({ id: `donation_${pubkey}`, invoice: donationInvoice.paymentRequest, amount: donationAmount, type: 'donation' });
-        }
-      }
-
-      // 2. Pay invoices by looping
-      const responses: { id: string, preimage?: string }[] = [];
-      for (const inv of invoices) {
-        console.log(`Paying ${inv.type} invoice for ${inv.amount} sats...`);
-        const res = await nwc.sendPayment(inv.invoice);
-        if (!res?.preimage) {
-          // Handle partial failure: what if seller was paid but donation failed?
-          const sellerPaid = responses.some(r => r.id === inv.id.replace("donation_", ""));
-          if (inv.type === 'donation' && sellerPaid) {
-            console.warn("Seller payment succeeded but donation payment failed.");
-            // Continue processing the order, but log the failed donation
-            responses.push({ id: inv.id, preimage: "failed_donation" });
-          } else {
-            throw new Error(`Failed to pay ${inv.type} invoice for ${inv.id}.`);
-          }
-        } else {
-          responses.push({ id: inv.id, preimage: res.preimage });
-        }
-      }
-
-      // 3. Send confirmation messages
-      console.log("NWC Payments Successful");
-
-      const userPubkey = await signer?.getPubKey?.();
-      const orderKeys = await generateNewKeys();// Use one set of keys for the whole cart order
-      if (!orderKeys) throw new Error("Failed to generate message keys.");
-
-      for (const pubkey of Object.keys(productsBySeller)) {
-        const sellerProducts = productsBySeller[pubkey]!;
-        const orderId = uuidv4(); // One order ID for this seller's batch
-        const sellerPreimage = responses.find(r => r.id === pubkey)?.preimage || "N/A";
-
-        for (const product of sellerProducts) {
-          const productTotal = totalCostsInSats[product.id] || 0;
-
-          // --- Send Seller Payment Message ---
-          await sendPaymentAndContactMessageWithKeys(
-            pubkey,
-            `Payment received for ${product.title}.`,
-            product,
-            true, false, false, orderId, "lightning", "N/A", sellerPreimage, productTotal, quantities[product.id],
-            orderKeys
-          );
-
-          // --- Send Seller Shipping/Contact Messages ---
-          const productShippingType = shippingTypes[product.id];
-          const shouldUseShipping = formType === "shipping" || (formType === "combined" && (productShippingType !== "Free/Pickup" || (productShippingType === "Free/Pickup" && freePickupPreference === "shipping")));
-          const shouldUseContact = formType === "contact" || (formType === "combined" && (productShippingType === "N/A" || productShippingType === "Pickup" || (productShippingType === "Free/Pickup" && freePickupPreference === "contact")));
-
-          let productDetails = "";
-          if (product.selectedSize) productDetails += ` in size ${product.selectedSize}`;
-          if (product.selectedVolume) productDetails += ` and a ${product.selectedVolume}`;
-          const pickupLocation = data[`pickupLocation_${product.id}`];
-          if (pickupLocation) productDetails += ` (pickup at: ${pickupLocation})`;
-
-          if (data.additionalInfo) {
-            await sendPaymentAndContactMessageWithKeys(pubkey, `Additional customer information: ${data.additionalInfo}`, product, false, false, false, orderId, undefined, undefined, undefined, undefined, undefined, orderKeys);
-          }
-
-          if (shouldUseShipping && data.shippingName) {
-            let contactMessage = `Please ship the product${productDetails} to ${data.shippingName} at ${data.shippingAddress}`;
-            if (data.shippingUnitNo) contactMessage += ` ${data.shippingUnitNo}`;
-            contactMessage += `, ${data.shippingCity}, ${data.shippingPostalCode}, ${data.shippingState}, ${data.shippingCountry}.`;
-            await sendPaymentAndContactMessageWithKeys(pubkey, contactMessage, product, false, false, false, orderId, undefined, undefined, undefined, undefined, undefined, orderKeys);
-          } else if (shouldUseContact && data.contact) {
-            const contactMessage = `To finalize the sale of your ${product.title} listing${productDetails}, please contact ${data.contact} over ${data.contactType} using the following instructions: ${data.contactInstructions}`;
-            await sendPaymentAndContactMessageWithKeys(pubkey, contactMessage, product, false, false, false, orderId, undefined, undefined, undefined, undefined, undefined, orderKeys);
-          }
-
-          // --- Send Buyer Receipt ---
-          if (userPubkey) {
-            const receiptMessage = `Thank you for your purchase of ${product.title}${productDetails} from ${nip19.npubEncode(product.pubkey)}.`;
-            await sendPaymentAndContactMessageWithKeys(userPubkey, receiptMessage, product, false, true, false, orderId, undefined, undefined, undefined, undefined, undefined, orderKeys);
-          }
-        }
-      }
-
-      // --- Send Donation Confirmation (to Shopstr) ---
-      for (const res of responses.filter(r => r.id.startsWith("donation_"))) {
-        const donationAmount = invoices.find(i => i.id === res.id)?.amount || 0;
-        if (res.preimage !== "failed_donation") {
-          await sendPaymentAndContactMessageWithKeys(
-            "a37118a4888e02d28e8767c08caaf73b49abdac391ad7ff18a304891e416dc33", // Shopstr Pubkey
-            `NWC cart donation received: ${donationAmount} sats`,
-            products[0]!, // Just use first product for context
-            false, false, true, uuidv4(), "lightning", "N/A", res.preimage, donationAmount,
-            undefined,
-            orderKeys
-          );
-        }
-      }
-
-      // --- Finalize ---
-      localStorage.setItem("cart", JSON.stringify([]));
-      if (setCashuPaymentSent) setCashuPaymentSent(true); // Trigger success modal
-      setOrderConfirmed(true);
+      await invoiceHasBeenPaid(wallet, convertedPrice, hash, data);
     } catch (error: any) {
       handleNWCError(error);
     } finally {
@@ -875,7 +720,7 @@ export default function CartInvoiceCard({
       setIsNwcLoading(false);
     }
   };
-          
+
   const handleFiatPayment = async (convertedPrice: number, data: any) => {
     try {
       validatePaymentData(convertedPrice, data);
@@ -3058,7 +2903,7 @@ export default function CartInvoiceCard({
                   )}
 
                   {/* NWC Button */}
-                  {nwcInfo && nwcCapabilities.allSellersHaveLud16 && (
+                  {nwcInfo && (
                     <Button
                       className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
                         !isFormValid ? "cursor-not-allowed opacity-50" : ""
@@ -3070,9 +2915,7 @@ export default function CartInvoiceCard({
                           onOpen();
                           return;
                         }
-                        handleFormSubmit((data) =>
-                          onFormSubmit(data, "nwc")
-                        )();
+                        handleFormSubmit((data) => onFormSubmit(data, "nwc"))();
                       }}
                       startContent={<WalletIcon className="h-6 w-6" />}
                     >

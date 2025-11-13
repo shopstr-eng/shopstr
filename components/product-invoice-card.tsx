@@ -471,19 +471,22 @@ export default function ProductInvoiceCard({
   const handleNWCError = (error: any) => {
     console.error("NWC Payment failed:", error);
     let message = "Payment failed. Please try again.";
-    if (error && typeof error === 'object' && 'code' in error) {
+    if (error && typeof error === "object" && "code" in error) {
       switch (error.code) {
         case "INSUFFICIENT_BALANCE":
           message = "Payment failed: Insufficient balance in your wallet.";
           break;
         case "QUOTA_EXCEEDED":
-          message = "Payment failed: Your wallet's spending quota has been exceeded.";
+          message =
+            "Payment failed: Your wallet's spending quota has been exceeded.";
           break;
         case "PAYMENT_FAILED":
-          message = "The payment failed. Please check your wallet and try again.";
+          message =
+            "The payment failed. Please check your wallet and try again.";
           break;
         case "RATE_LIMITED":
-          message = "You are sending payments too quickly. Please wait a moment.";
+          message =
+            "You are sending payments too quickly. Please wait a moment.";
           break;
         default:
           message = error.message || "An unknown wallet error occurred.";
@@ -500,137 +503,59 @@ export default function ProductInvoiceCard({
     let nwc: webln.NostrWebLNProvider | null = null;
 
     try {
-      const sellerProfile = profileContext.profileData.get(productData.pubkey);
-      const sellerLud16 = sellerProfile?.content?.lud16;
-
-      if (!sellerLud16) {
-        throw new Error("Seller does not have a Lightning Address configured for NWC payment.");
-      }
-
-      // Validate form data first
-      if (
-        data.shippingName ||
-        data.shippingAddress
-      ) {
+      if (data.shippingName || data.shippingAddress) {
         validatePaymentData(convertedPrice, {
-          Name: data.shippingName || "", Address: data.shippingAddress || "", Unit: data.shippingUnitNo || "",
-          City: data.shippingCity || "", "Postal Code": data.shippingPostalCode || "",
-          "State/Province": data.shippingState || "", Country: data.shippingCountry || "", Required: data.additionalInfo || "",
+          Name: data.shippingName || "",
+          Address: data.shippingAddress || "",
+          Unit: data.shippingUnitNo || "",
+          City: data.shippingCity || "",
+          "Postal Code": data.shippingPostalCode || "",
+          "State/Province": data.shippingState || "",
+          Country: data.shippingCountry || "",
+          Required: data.additionalInfo || "",
         });
       } else if (data.contact || data.contactType) {
         validatePaymentData(convertedPrice, {
-          Contact: data.contact || "", "Contact Type": data.contactType || "",
-          Instructions: data.contactInstructions || "", Required: data.additionalInfo || "",
+          Contact: data.contact || "",
+          "Contact Type": data.contactType || "",
+          Instructions: data.contactInstructions || "",
+          Required: data.additionalInfo || "",
         });
       } else {
         validatePaymentData(convertedPrice);
       }
 
-      // --- Payment Splitting (Seller + Donation) ---
-      const donationPercentage = sellerProfile?.content?.shopstr_donation || 2.1;
-      const donationAmount = Math.ceil((convertedPrice * donationPercentage) / 100);
-      const sellerAmount = convertedPrice - donationAmount;
+      const wallet = new CashuWallet(new CashuMint(mints[0]!));
+      const { request: pr, quote: hash } =
+        await wallet.createMintQuote(convertedPrice);
 
-      // 1. Get Seller Invoice
-      console.log(`Requesting invoice for ${sellerAmount} sats from ${sellerLud16}`);
-      const ln = new LightningAddress(sellerLud16);
-      try {
-        await ln.fetch();
-      } catch (e) {
-        throw new Error(`Failed to fetch seller's Lightning Address: ${sellerLud16}`);
-      }
-      const sellerInvoice = await ln.requestInvoice({ satoshi: sellerAmount });
-      const sellerPR = sellerInvoice.paymentRequest;
-      if (!sellerPR) throw new Error("Failed to get invoice from seller.");
-
-      // 2. Get Donation Invoice
-      const donationLud16 = "shopstr@minibits.cash"; 
-      const donationLn = new LightningAddress(donationLud16);
-      try {
-        await donationLn.fetch();
-      } catch (e) {
-        throw new Error("Failed to fetch Shopstr donation address. Payment cancelled.");
-      }
-      const donationInvoice = await donationLn.requestInvoice({ satoshi: donationAmount });
-      const donationPR = donationInvoice.paymentRequest;
-      if (!donationPR) throw new Error("Failed to get invoice for donation.");
-
-      // 3. Get NWC Connection
       const { nwcString } = getLocalStorageData();
       if (!nwcString) throw new Error("NWC connection not found.");
 
       nwc = new webln.NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
       await nwc.enable();
 
-      // 4. Pay Invoices (Sequentially)
-      console.log("Paying seller invoice...");
-      const sellerRes = await nwc.sendPayment(sellerPR);
-      if (!sellerRes?.preimage) {
-        throw new Error("NWC payment to seller failed.");
+      const res = await nwc.sendPayment(pr);
+      if (!res?.preimage) {
+        throw new Error("NWC payment failed.");
       }
 
-      let donationRes;
-      try {
-        console.log("Paying donation invoice...");
-        donationRes = await nwc.sendPayment(donationPR);
-        if (!donationRes?.preimage) {
-          console.warn("Donation payment failed, but seller was paid. Continuing order.");
-        }
-      } catch (e) {
-        console.warn("Donation payment failed, but seller was paid. Continuing order.", e);
-      }
-
-      console.log("NWC Payment Successful", sellerRes.preimage);
-      const orderId = uuidv4();
-
-      // --- Send Seller Messages ---
-      await sendPaymentAndContactMessage(
-        productData.pubkey, 
-        `Payment received for ${productData.title}.`,
-        true, false, false, orderId, "lightning", sellerPR, sellerRes.preimage, sellerAmount
+      await invoiceHasBeenPaid(
+        wallet,
+        convertedPrice,
+        hash,
+        data.shippingName ? data.shippingName : undefined,
+        data.shippingAddress ? data.shippingAddress : undefined,
+        data.shippingUnitNo ? data.shippingUnitNo : undefined,
+        data.shippingCity ? data.shippingCity : undefined,
+        data.shippingPostalCode ? data.shippingPostalCode : undefined,
+        data.shippingState ? data.shippingState : undefined,
+        data.shippingCountry ? data.shippingCountry : undefined,
+        data.contact ? data.contact : undefined,
+        data.contactType ? data.contactType : undefined,
+        data.contactInstructions ? data.contactInstructions : undefined,
+        data.additionalInfo ? data.additionalInfo : undefined
       );
-
-      // --- Send Donation Message ---
-      if (donationRes?.preimage) {
-        await sendPaymentAndContactMessage(
-          "a37118a4888e02d28e8767c08caaf73b49abdac391ad7ff18a304891e416dc33", // Shopstr Pubkey
-          `NWC donation received: ${donationAmount} sats for ${productData.title}`,
-          false, false, true, orderId, "lightning", donationPR, donationRes.preimage, donationAmount
-        );
-      }
-
-      if (data.additionalInfo) {
-        await sendPaymentAndContactMessage(productData.pubkey, `Additional customer information: ${data.additionalInfo}`, false, false, false, orderId);
-      }
-
-      // --- Send Shipping/Contact Info ---
-      let productDetails = "";
-      if (selectedSize) productDetails += ` in size ${selectedSize}`;
-      if (selectedVolume) productDetails += ` and a ${selectedVolume}`;
-      if (selectedPickupLocation) productDetails += ` (pickup at: ${selectedPickupLocation})`;
-
-      if (formType === 'shipping') {
-        let contactMessage = `Please ship the product${productDetails} to ${data.shippingName} at ${data.shippingAddress}`;
-        if (data.shippingUnitNo) contactMessage += ` ${data.shippingUnitNo}`;
-        contactMessage += `, ${data.shippingCity}, ${data.shippingPostalCode}, ${data.shippingState}, ${data.shippingCountry}.`;
-        await sendPaymentAndContactMessage(productData.pubkey, contactMessage, false, false, false, orderId);
-      } else if (formType === 'contact') {
-        const contactMessage = `To finalize the sale of your ${productData.title} listing${productDetails}, please contact ${data.contact} over ${data.contactType} using the following instructions: ${data.contactInstructions}`;
-        await sendPaymentAndContactMessage(productData.pubkey, contactMessage, false, false, false, orderId);
-      }
-
-      // --- Send Buyer Receipt ---
-      if (userPubkey) {
-        const receiptMessage = `Thank you for your purchase of ${productData.title}${productDetails} from ${nip19.npubEncode(productData.pubkey)}.`;
-        await sendPaymentAndContactMessage(userPubkey, receiptMessage, false, true, false, orderId);
-      }
-
-      // --- Finalize ---
-      if (setInvoiceIsPaid) {
-        setInvoiceIsPaid(true);
-      }
-      setOrderConfirmed(true);
-
     } catch (error: any) {
       handleNWCError(error);
     } finally {
@@ -2599,7 +2524,7 @@ export default function ProductInvoiceCard({
                     </Button>
                   )}
                   {/* NWC Button */}
-                  {nwcInfo && nwcInfo.methods.includes("pay_invoice") && profileContext.profileData.get(productData.pubkey)?.content?.lud16 && (
+                  {nwcInfo && (
                     <Button
                       className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
                         !isFormValid ? "cursor-not-allowed opacity-50" : ""

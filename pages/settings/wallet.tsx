@@ -1,9 +1,23 @@
 import { useState, useEffect } from "react";
-import { Input, Button, Card, CardBody, CardHeader, Spinner } from "@nextui-org/react";
+import {
+  Input,
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  Spinner,
+} from "@nextui-org/react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
-import { getLocalStorageData, saveNWCString } from "@/utils/nostr/nostr-helper-functions";
+import {
+  getLocalStorageData,
+  saveNWCString,
+} from "@/utils/nostr/nostr-helper-functions";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import { CheckCircleIcon, ExclamationCircleIcon, WalletIcon } from "@heroicons/react/24/outline";
+import {
+  CheckCircleIcon,
+  ExclamationCircleIcon,
+  WalletIcon,
+} from "@heroicons/react/24/outline";
 import { webln } from "@getalby/sdk";
 import { formatWithCommas } from "@/components/utility-components/display-monetary-info";
 
@@ -18,7 +32,8 @@ const WalletSettingsPage = () => {
   // Load existing connection and info on mount
   useEffect(() => {
     const loadInfo = () => {
-      const { nwcString: savedString, nwcInfo: savedInfo } = getLocalStorageData();
+      const { nwcString: savedString, nwcInfo: savedInfo } =
+        getLocalStorageData();
       if (savedString) {
         setNwcString(savedString);
       }
@@ -44,7 +59,9 @@ const WalletSettingsPage = () => {
     if (!connectionString) return;
     let nwc: webln.NostrWebLNProvider | null = null;
     try {
-      nwc = new webln.NostrWebLNProvider({ nostrWalletConnectUrl: connectionString });
+      nwc = new webln.NostrWebLNProvider({
+        nostrWalletConnectUrl: connectionString,
+      });
       await nwc.enable();
       const balanceRes = await nwc.getBalance();
       setBalance(balanceRes.balance / 1000); // Convert msats to sats
@@ -66,7 +83,9 @@ const WalletSettingsPage = () => {
 
     try {
       if (!nwcString || !nwcString.startsWith("nostr+walletconnect://")) {
-        throw new Error("Invalid Nostr Wallet Connect string. It must start with 'nostr+walletconnect://'");
+        throw new Error(
+          "Invalid Nostr Wallet Connect string. It must start with 'nostr+walletconnect://'"
+        );
       }
 
       const url = new URL(nwcString);
@@ -74,7 +93,9 @@ const WalletSettingsPage = () => {
       const relay = url.searchParams.get("relay");
 
       if (!secret || secret.length !== 64) {
-        throw new Error("Invalid or missing 'secret' parameter (must be 64 hex chars).");
+        throw new Error(
+          "Invalid or missing 'secret' parameter (must be 64 hex chars)."
+        );
       }
       if (!relay) {
         throw new Error("Missing 'relay' parameter in the connection string.");
@@ -85,11 +106,13 @@ const WalletSettingsPage = () => {
       const info = await nwc.getInfo();
 
       if (!info.methods.includes("pay_invoice")) {
-        throw new Error("This wallet does not support the 'pay_invoice' method, which is required.");
+        throw new Error(
+          "This wallet does not support the 'pay_invoice' method, which is required."
+        );
       }
 
       // Save successful connection
-      saveNWCString(nwcString); 
+      saveNWCString(nwcString);
       localStorage.setItem("nwcInfo", JSON.stringify(info));
       setWalletInfo(info);
       setIsSaved(true);
@@ -100,8 +123,13 @@ const WalletSettingsPage = () => {
       }
     } catch (e: any) {
       console.error("Failed to validate or connect NWC wallet:", e);
-      setError(`Failed to connect: ${e.message || "Please check the connection string and wallet permissions."}`);
-      saveNWCString(""); 
+      setError(
+        `Failed to connect: ${
+          e.message ||
+          "Please check the connection string and wallet permissions."
+        }`
+      );
+      saveNWCString("");
       localStorage.removeItem("nwcInfo");
     } finally {
       setIsLoading(false);
@@ -116,7 +144,7 @@ const WalletSettingsPage = () => {
     setWalletInfo(null);
     setBalance(null);
     setError(null);
-    saveNWCString(""); 
+    saveNWCString("");
     localStorage.removeItem("nwcInfo");
   };
 
@@ -125,13 +153,15 @@ const WalletSettingsPage = () => {
       <div className="bg mx-auto h-screen w-full lg:w-1/2 lg:pl-4">
         <SettingsBreadCrumbs />
         <div className="p-4">
-          <h2 className="text-xl font-bold text-light-text dark:text-dark-text mb-4">
+          <h2 className="mb-4 text-xl font-bold text-light-text dark:text-dark-text">
             Wallet Connection (NIP-47)
           </h2>
-          <p className="text-sm text-light-text dark:text-dark-text mb-4">
-            Connect your wallet using a Nostr Wallet Connect (NIP-47) connection string (e.g., from Alby, Mutiny, or Umbrel). This allows Shopstr to request payments directly from your wallet.
+          <p className="mb-4 text-sm text-light-text dark:text-dark-text">
+            Connect your wallet using a Nostr Wallet Connect (NIP-47) connection
+            string (e.g., from Alby, Mutiny, or Umbrel). This allows Shopstr to
+            request payments directly from your wallet.
           </p>
-          
+
           <Input
             isClearable
             label="Nostr Wallet Connect String"
@@ -147,14 +177,14 @@ const WalletSettingsPage = () => {
 
           {error && (
             <div className="mb-4 flex items-center rounded border border-red-400 bg-red-100 p-3 text-red-700">
-              <ExclamationCircleIcon className="h-5 w-5 mr-2" />
+              <ExclamationCircleIcon className="mr-2 h-5 w-5" />
               <span className="text-sm">{error}</span>
             </div>
           )}
 
           {isSaved && !error && (
             <div className="mb-4 flex items-center rounded border border-green-400 bg-green-100 p-3 text-green-700">
-              <CheckCircleIcon className="h-5 w-5 mr-2" />
+              <CheckCircleIcon className="mr-2 h-5 w-5" />
               <span className="text-sm">Wallet connected successfully!</span>
             </div>
           )}
@@ -165,9 +195,13 @@ const WalletSettingsPage = () => {
               onClick={handleSave}
               isLoading={isLoading}
             >
-              {isLoading ? "Connecting..." : (isSaved ? "Saved!" : "Save Connection")}
+              {isLoading
+                ? "Connecting..."
+                : isSaved
+                  ? "Saved!"
+                  : "Save Connection"}
             </Button>
-            
+
             {walletInfo && (
               <Button
                 color="danger"
@@ -183,7 +217,7 @@ const WalletSettingsPage = () => {
           {walletInfo && (
             <Card className="mt-6 bg-light-fg dark:bg-dark-fg">
               <CardHeader>
-                <WalletIcon className="h-5 w-5 mr-2 text-light-text dark:text-dark-text" />
+                <WalletIcon className="mr-2 h-5 w-5 text-light-text dark:text-dark-text" />
                 <h3 className="font-bold text-light-text dark:text-dark-text">
                   Connected Wallet: {walletInfo.alias || "Unknown"}
                 </h3>
@@ -193,10 +227,14 @@ const WalletSettingsPage = () => {
                   <p className="text-light-text dark:text-dark-text">
                     Balance: {formatWithCommas(balance, "sats")}
                   </p>
+                ) : walletInfo.methods.includes("get_balance") ? (
+                  <Spinner size="sm" />
                 ) : (
-                  walletInfo.methods.includes("get_balance") ? <Spinner size="sm" /> : <p className="text-sm text-gray-500">Balance: Not available</p>
+                  <p className="text-sm text-gray-500">
+                    Balance: Not available
+                  </p>
                 )}
-                <p className="text-sm text-gray-500 mt-2">
+                <p className="mt-2 text-sm text-gray-500">
                   Supports: {walletInfo.methods.join(", ")}
                 </p>
               </CardBody>

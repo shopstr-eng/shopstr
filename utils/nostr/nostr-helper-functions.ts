@@ -618,10 +618,7 @@ export async function publishWalletEvent(
     const cashuWalletEvent: EventTemplate = {
       kind: 17375,
       tags: [],
-      content: await signer.encrypt(
-        userPubkey,
-        JSON.stringify(walletContent)
-      ),
+      content: await signer.encrypt(userPubkey, JSON.stringify(walletContent)),
       created_at: Math.floor(Date.now() / 1000),
     };
     const signedEvent = await finalizeAndSendNostrEvent(
