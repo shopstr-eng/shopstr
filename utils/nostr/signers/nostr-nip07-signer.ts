@@ -10,13 +10,13 @@ export class NostrNIP07Signer implements NostrSigner {
     this.checkExtension();
   }
 
-  public toJSON(): { [key: string]: any } {
+  public toJSON(): Record<string, unknown> {
     return {
       type: "nip07",
     };
   }
 
-  private checkExtension(): any {
+  private checkExtension(): void {
     if (!window?.nostr) throw new Error("Nostr extension not found");
     if (!window?.nostr?.nip44) {
       throw new Error(
@@ -26,7 +26,7 @@ export class NostrNIP07Signer implements NostrSigner {
   }
 
   public static fromJSON(
-    json: { [key: string]: any },
+    json: Record<string, unknown>,
     _challengeHandler: ChallengeHandler
   ): NostrNIP07Signer | undefined {
     if (json.type !== "nip07") return undefined;
@@ -38,19 +38,31 @@ export class NostrNIP07Signer implements NostrSigner {
   }
 
   public async getPubKey(): Promise<string> {
+    if (!window?.nostr) {
+      throw new Error("Nostr extension not found");
+    }
     const pubkey = await window.nostr.getPublicKey();
     return pubkey;
   }
 
   public async sign(event: NostrEventTemplate): Promise<NostrEvent> {
+    if (!window?.nostr) {
+      throw new Error("Nostr extension not found");
+    }
     return await window.nostr.signEvent(event);
   }
 
   public async encrypt(pubkey: string, plainText: string): Promise<string> {
+    if (!window?.nostr || !window.nostr.nip44) {
+      throw new Error("Nostr extension or NIP-44 is not available");
+    }
     return await window.nostr.nip44.encrypt(pubkey, plainText);
   }
 
   public async decrypt(pubkey: string, cipherText: string): Promise<string> {
+    if (!window?.nostr || !window.nostr.nip44) {
+      throw new Error("Nostr extension or NIP-44 is not available");
+    }
     return await window.nostr.nip44.decrypt(pubkey, cipherText);
   }
 

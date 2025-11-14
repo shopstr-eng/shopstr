@@ -3,6 +3,7 @@ import {
   ItemType,
   NostrMessageEvent,
   Community,
+  ProfileData,
 } from "../types/types";
 import Dexie, { Table } from "dexie";
 
@@ -12,7 +13,7 @@ let indexedDBWorking = false;
 // In-memory fallback storage
 const inMemoryStorage = {
   products: new Map<string, NostrEvent>(),
-  profiles: new Map<string, any>(),
+  profiles: new Map<string, ProfileData>(),
   chatMessages: new Map<string, NostrMessageEvent>(),
   lastFetchedTime: new Map<string, number>(),
   communities: new Map<string, Community>(),
@@ -20,7 +21,7 @@ const inMemoryStorage = {
 
 class ItemsFetchedFromRelays extends Dexie {
   public products!: Table<{ id: string; product: NostrEvent }>;
-  public profiles!: Table<{ id: string; profile: Record<string, unknown> }>;
+  public profiles!: Table<{ id: string; profile: ProfileData }>;
   public chatMessages!: Table<{ id: string; message: NostrMessageEvent }>;
   public communities!: Table<{ id: string; community: Community }>;
   public lastFetchedTime!: Table<{ itemType: string; time: number }>;
@@ -122,7 +123,7 @@ export const addProductsToCache = async (
 };
 
 export const addProfilesToCache = async (
-  profileMap: Map<string, any>
+  profileMap: Map<string, ProfileData>
 ): Promise<void> => {
   try {
     for (const [pubkey, profile] of profileMap.entries()) {
@@ -219,7 +220,7 @@ export const fetchAllProductsFromCache = async (): Promise<NostrEvent[]> => {
 };
 
 export const fetchProfileDataFromCache = async (): Promise<
-  Map<string, any>
+  Map<string, ProfileData>
 > => {
   try {
     if (indexedDBWorking && db) {

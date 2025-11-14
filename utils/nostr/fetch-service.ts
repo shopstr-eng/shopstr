@@ -10,6 +10,7 @@ import {
   fetchProfileDataFromCache,
   removeProductFromCache,
 } from "./cache-service";
+import { ProofEvent } from "../context/context";
 import {
   NostrEvent,
   NostrMessageEvent,
@@ -822,13 +823,13 @@ export const fetchCashuWallet = async (
   signer: NostrSigner | undefined,
   relays: string[],
   editCashuWalletContext: (
-    proofEvents: any[],
+    proofEvents: ProofEvent[],
     cashuMints: string[],
     cashuProofs: Proof[],
     isLoading: boolean
   ) => void
 ): Promise<{
-  proofEvents: any[];
+  proofEvents: ProofEvent[];
   cashuMints: string[];
   cashuProofs: Proof[];
 }> => {
@@ -848,7 +849,7 @@ export const fetchCashuWallet = async (
     try {
       const enc = new TextEncoder();
       let mostRecentWalletEvent: NostrEvent | null = null;
-      const proofEvents: any[] = [];
+      const proofEvents: ProofEvent[] = [];
       const cashuRelays: string[] = [];
       const cashuMints: string[] = [];
       const cashuMintSet: Set<string> = new Set();
@@ -956,12 +957,17 @@ export const fetchCashuWallet = async (
               cashuWalletEventContent?.mint &&
               cashuWalletEventContent?.proofs
             ) {
-              proofEvents.push({
-                id: event.id,
-                mint: cashuWalletEventContent.mint,
-                proofs: cashuWalletEventContent.proofs,
-                created_at: event.created_at,
-              });
+                proofEvents.push({
+                  id: event.id,
+                  mint: cashuWalletEventContent.mint,
+                  proofs: cashuWalletEventContent.proofs,
+                  created_at: event.created_at,
+                  kind: event.kind,
+                  tags: event.tags,
+                  content: event.content,
+                  pubkey: event.pubkey,
+                  sig: event.sig,
+                });
 
               // Add mint to our set if not already present
               if (!cashuMintSet.has(cashuWalletEventContent.mint)) {

@@ -105,7 +105,12 @@ const DisplayProducts = ({
       setProductEvents(parsedProductData);
       setIsProductLoading(false);
     }
-  }, [productEventContext, wotFilter]);
+  }, [
+    productEventContext,
+    wotFilter,
+    followsContext.followList,
+    followsContext.isLoading,
+  ]);
 
   useEffect(() => {
     if (focusedPubkey && setCategories) {
@@ -117,7 +122,7 @@ const DisplayProducts = ({
       });
       setCategories(productCategories);
     }
-  }, [productEvents, focusedPubkey]);
+  }, [productEvents, focusedPubkey, setCategories]);
 
   useEffect(() => {
     if (!productEvents || !isInitialized) return;
