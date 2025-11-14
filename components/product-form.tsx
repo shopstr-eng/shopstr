@@ -130,7 +130,7 @@ export default function ProductForm({
   useEffect(() => {
     setImages(oldValues?.images || []);
     setIsEdit(oldValues ? true : false);
-  }, [showModal]);
+  }, [showModal, oldValues]);
 
   const onSubmit = async (data: {
     [x: string]: string | Map<string, number> | string[];

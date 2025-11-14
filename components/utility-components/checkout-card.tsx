@@ -1,6 +1,12 @@
 /* eslint-disable @next/next/no-img-element */
 
-import React, { useContext, useEffect, useRef, useState } from "react";
+import React, {
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+} from "react";
 import { nip19 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
@@ -102,11 +108,17 @@ export default function CheckoutCard({
     return `${productData.summary.slice(0, SUMMARY_CHARACTER_LIMIT)}...`;
   };
 
-  const calculateVisibleImages = (containerHeight: number) => {
-    const imageHeight = containerHeight / 3;
-    const visibleCount = Math.max(3, Math.floor(containerHeight / imageHeight));
-    setVisibleImages(productData.images.slice(0, visibleCount));
-  };
+  const calculateVisibleImages = useCallback(
+    (containerHeight: number) => {
+      const imageHeight = containerHeight / 3;
+      const visibleCount = Math.max(
+        3,
+        Math.floor(containerHeight / imageHeight)
+      );
+      setVisibleImages(productData.images.slice(0, visibleCount));
+    },
+    [productData.images, setVisibleImages]
+  );
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -181,7 +193,7 @@ export default function CheckoutCard({
       };
     }
     return;
-  }, [selectedImage, isBeingPaid]);
+  }, [selectedImage, isBeingPaid, calculateVisibleImages]);
 
   useEffect(() => {
     setHasSizes(
