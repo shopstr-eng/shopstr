@@ -79,14 +79,14 @@ const SettingsPage = () => {
             </ListboxItem>
             <ListboxItem
               key="wallet"
-              description="Connect your Nostr Wallet (NIP-47)"
+              description="Connect your NIP-47 Nostr Wallet"
               classNames={listBoxClassnames}
               startContent={<BanknotesIcon className={startIconClassnames} />}
               onClick={() => {
                 router.push("/settings/wallet");
               }}
             >
-              Wallet Connection
+              Nostr Wallet Connect
             </ListboxItem>
           </ListboxSection>
           <ListboxSection title="Log out" classNames={listBoxSectionClassnames}>

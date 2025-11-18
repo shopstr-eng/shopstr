@@ -154,7 +154,7 @@ const WalletSettingsPage = () => {
         <SettingsBreadCrumbs />
         <div className="p-4">
           <h2 className="mb-4 text-xl font-bold text-light-text dark:text-dark-text">
-            Wallet Connection (NIP-47)
+            NWC Connection
           </h2>
           <p className="mb-4 text-sm text-light-text dark:text-dark-text">
             Connect your wallet using a Nostr Wallet Connect (NIP-47) connection

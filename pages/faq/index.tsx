@@ -24,7 +24,7 @@ export default function Faq() {
         {
           title: "What payment methods are accepted?",
           content:
-            "Shopstr supports Bitcoin payments through the Lightning Network, Cashu, and direct NIP-47 (Nostr Wallet Connect) connections. These methods facilitate fast, low-fee transactions while maintaining privacy.",
+            "Shopstr supports Bitcoin payments through the Lightning Network, Cashu, and Nostr Wallet Connect . These methods facilitate fast, low-fee transactions while maintaining privacy.",
         },
         {
           title: "How do I claim a Cashu payment?",
@@ -32,14 +32,14 @@ export default function Faq() {
             "You can instantly claim a received Cashu token to the Lightning address set on your Nostr profile by clicking the claim button then the redeem button when on the orders page. You can also receive the token directly into the integrated Cashu wallet and pay out to an external Lightning wallet at any time, or copy and paste the token into an external Cashu wallet (like Minibits, Coinos, cashu.me, etc.). Setting your profile payment preference to Lightning also automatically handles the claiming of tokens for you.",
         },
         {
-          title: "What is NIP-47 (Nostr Wallet Connect)?",
+          title: "What is Nostr Wallet Connect?",
           content:
             "Nostr Wallet Connect (NIP-47) is a secure protocol that lets you connect your personal Lightning wallet (like Alby or Umbrel) to Shopstr. When you check out, Shopstr will ask your wallet to pay the invoice directly, so you don't have to copy and paste. You can set this up in 'Settings' -> 'Wallet Connection'.",
         },
         {
           title: "Does Shopstr control my funds with NIP-47?",
           content:
-            "No. Shopstr never sees your private keys or has control of your funds. The NWC connection only gives Shopstr permission to *request* payments (specifically 'pay_invoice'). Depending on your wallet settings, you may need to approve each payment, or you can configure a spending budget that allows automatic payments up to a certain amount.",
+            "No. Shopstr never sees your private keys or has control of your funds. The NWC connection only gives Shopstr permission to request payments for purchases you initiate. Depending on your wallet settings, you may need to approve each payment, or you can configure a spending budget that allows automatic payments up to a certain amount.",
         },
       ],
     },

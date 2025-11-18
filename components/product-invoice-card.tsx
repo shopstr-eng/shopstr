@@ -178,12 +178,7 @@ export default function ProductInvoiceCard({
       if (infoString) {
         try {
           const info = JSON.parse(infoString);
-          // Check if wallet supports pay_invoice
-          if (info && info.methods && info.methods.includes("pay_invoice")) {
-            setNwcInfo(info);
-          } else {
-            setNwcInfo(null);
-          }
+          setNwcInfo(info);
         } catch (e) {
           console.error("Failed to parse NWC info", e);
           setNwcInfo(null);
@@ -535,10 +530,7 @@ export default function ProductInvoiceCard({
       nwc = new webln.NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
       await nwc.enable();
 
-      const res = await nwc.sendPayment(pr);
-      if (!res?.preimage) {
-        throw new Error("NWC payment failed.");
-      }
+      await nwc.sendPayment(pr);
 
       await invoiceHasBeenPaid(
         wallet,
@@ -2544,7 +2536,7 @@ export default function ProductInvoiceCard({
                       }}
                       startContent={<WalletIcon className="h-6 w-6" />}
                     >
-                      Pay with {nwcInfo.alias || "Wallet"}: {formattedTotalCost}
+                      Pay with {nwcInfo.alias || "NWC"}: {formattedTotalCost}
                     </Button>
                   )}
                 </div>
