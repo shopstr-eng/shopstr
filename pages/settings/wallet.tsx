@@ -105,12 +105,6 @@ const WalletSettingsPage = () => {
       await nwc.enable();
       const info = await nwc.getInfo();
 
-      if (!info.methods.includes("pay_invoice")) {
-        throw new Error(
-          "This wallet does not support the 'pay_invoice' method, which is required."
-        );
-      }
-
       // Save successful connection
       saveNWCString(nwcString);
       localStorage.setItem("nwcInfo", JSON.stringify(info));
@@ -118,7 +112,7 @@ const WalletSettingsPage = () => {
       setIsSaved(true);
 
       // Fetch balance if supported
-      if (info.methods.includes("get_balance")) {
+      if (info.methods && info.methods.includes("get_balance")) {
         await fetchBalance(nwcString);
       }
     } catch (e: any) {
