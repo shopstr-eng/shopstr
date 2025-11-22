@@ -288,7 +288,7 @@ export default function ProductInvoiceCard({
       decodedRandomPrivkeyForReceiver.data as Uint8Array,
       pubkeyToReceiveMessage
     );
-    await sendGiftWrappedMessageEvent(giftWrappedEvent);
+    await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent);
 
     if (isReceipt) {
       chatsContext.addNewlyCreatedMessageEvent(

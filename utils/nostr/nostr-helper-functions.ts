@@ -21,6 +21,7 @@ import { Proof } from "@cashu/cashu-ts";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { removeProductFromCache } from "@/utils/nostr/cache-service";
+import { cacheEvent, deleteCachedEventsByIds } from "@/utils/db/db-service";
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
@@ -51,11 +52,12 @@ export async function deleteEvent(
 ) {
   const deletionEvent = createNostrDeleteEvent(
     event_ids_to_delete,
-    "NIP-99 listing deletion request"
+    "Shopstr deletion request"
   );
 
   await finalizeAndSendNostrEvent(signer, nostr, deletionEvent);
   await removeProductFromCache(event_ids_to_delete);
+  await deleteCachedEventsByIds(event_ids_to_delete);
 }
 
 export function createNostrDeleteEvent(
@@ -129,7 +131,7 @@ export async function PostListing(
   isLoggedIn: boolean,
   nostr: NostrManager
 ) {
-  const { relays, writeRelays } = getLocalStorageData();
+  const { relays } = getLocalStorageData();
 
   if (!signer || !isLoggedIn) throw new Error("Login required");
   const userPubkey = await signer.getPubKey();
@@ -141,7 +143,7 @@ export async function PostListing(
   const created_at = Math.floor(Date.now() / 1000);
   const updatedValues = [...values, ["published_at", String(created_at)]];
 
-  const event = {
+  const event: EventTemplate = {
     created_at: created_at,
     kind: 30402,
     tags: updatedValues,
@@ -155,7 +157,7 @@ export async function PostListing(
       ? window.location.origin
       : "https://shopstr.store";
 
-  const handlerEvent = {
+  const handlerEvent: EventTemplate = {
     kind: 31990,
     tags: [
       ["d", handlerDTag],
@@ -167,7 +169,7 @@ export async function PostListing(
     created_at: Math.floor(Date.now() / 1000),
   };
 
-  const recEvent = {
+  const recEvent: EventTemplate = {
     kind: 31989,
     tags: [
       ["d", "30402"],
@@ -177,14 +179,9 @@ export async function PostListing(
     created_at: Math.floor(Date.now() / 1000),
   };
 
-  const signedEvent = await signer.sign(event);
-  const signedRecEvent = await signer.sign(recEvent);
-  const signedHandlerEvent = await signer.sign(handlerEvent);
-
-  const allWriteRelays = withBlastr([...writeRelays, ...relays]);
-  await nostr.publish(signedEvent, allWriteRelays);
-  await nostr.publish(signedRecEvent, allWriteRelays);
-  await nostr.publish(signedHandlerEvent, allWriteRelays);
+  const signedEvent = await finalizeAndSendNostrEvent(signer, nostr, event);
+  await finalizeAndSendNostrEvent(signer, nostr, recEvent);
+  await finalizeAndSendNostrEvent(signer, nostr, handlerEvent);
 
   return signedEvent;
 }
@@ -379,13 +376,21 @@ export async function constructMessageGiftWrap(
 }
 
 export async function sendGiftWrappedMessageEvent(
+  nostr: NostrManager,
   giftWrappedMessageEvent: NostrEvent
 ) {
   const { relays, writeRelays } = getLocalStorageData();
-  const pool = new SimplePool();
   const allWriteRelays = withBlastr([...writeRelays, ...relays]);
 
-  await Promise.any(pool.publish(allWriteRelays, giftWrappedMessageEvent));
+  await nostr.publish(giftWrappedMessageEvent, allWriteRelays);
+
+  // Cache the event to database
+  try {
+    await cacheEvent(giftWrappedMessageEvent);
+  } catch (dbError) {
+    console.error("Failed to cache gift wrapped event to database:", dbError);
+    // Don't throw - DB caching failure shouldn't break the publish flow
+  }
 }
 
 export async function publishReviewEvent(
@@ -395,21 +400,14 @@ export async function publishReviewEvent(
   eventTags: string[][]
 ) {
   try {
-    const { relays, writeRelays } = getLocalStorageData();
-    const allWriteRelays = withBlastr([...writeRelays, ...relays]);
-
-    const userPubkey = await signer?.getPubKey?.();
-
-    const reviewEvent = {
-      pubkey: userPubkey,
+    const reviewEvent: EventTemplate = {
       created_at: Math.floor(Date.now() / 1000),
       content: content,
       kind: 31555,
       tags: eventTags,
     };
 
-    const signedEvent = await signer.sign(reviewEvent);
-    await nostr.publish(signedEvent, allWriteRelays);
+    await finalizeAndSendNostrEvent(signer, nostr, reviewEvent);
   } catch (_) {
     return;
   }
@@ -478,9 +476,6 @@ export async function publishSavedForLaterEvent(
   quantity?: number
 ) {
   try {
-    const { relays, writeRelays } = getLocalStorageData();
-    const allWriteRelays = withBlastr([...writeRelays, ...relays]);
-
     let cartTags: string[][] = [];
 
     if (quantity && quantity < 0) {
@@ -506,17 +501,14 @@ export async function publishSavedForLaterEvent(
       productAddressTags
     );
 
-    const cartEvent = {
-      pubkey: userPubkey,
+    const cartEvent: EventTemplate = {
       created_at: Math.floor(Date.now() / 1000),
       content: encryptedContent,
       kind: 30405,
       tags: [],
     };
 
-    const signedEvent = await signer.sign(cartEvent);
-
-    await nostr.publish(signedEvent, allWriteRelays);
+    await finalizeAndSendNostrEvent(signer, nostr, cartEvent);
   } catch (_) {
     return;
   }
@@ -527,19 +519,18 @@ export async function publishWalletEvent(
   signer: NostrSigner
 ) {
   try {
-    const { mints, relays, writeRelays } = getLocalStorageData();
+    const { mints } = getLocalStorageData();
     const userPubkey = await signer.getPubKey();
 
     const mintTagsSet = new Set<string>();
 
     let walletMints = [];
 
-    const allWriteRelays = withBlastr([...relays, ...writeRelays]);
     mints.forEach((mint) => mintTagsSet.add(mint));
     walletMints = Array.from(mintTagsSet);
     const mintTags = walletMints.map((mint) => ["mint", mint]);
     const walletContent = [...mintTags];
-    const cashuWalletEvent = {
+    const cashuWalletEvent: EventTemplate = {
       kind: 17375,
       tags: [],
       content: await window.nostr.nip44.encrypt(
@@ -548,8 +539,7 @@ export async function publishWalletEvent(
       ),
       created_at: Math.floor(Date.now() / 1000),
     };
-    const signedEvent = await signer.sign(cashuWalletEvent);
-    await nostr.publish(signedEvent, allWriteRelays);
+    await finalizeAndSendNostrEvent(signer, nostr, cashuWalletEvent);
   } catch (_) {
     return;
   }
@@ -565,8 +555,6 @@ export async function publishProofEvent(
   deletedEventsArray?: string[]
 ) {
   try {
-    const { relays, writeRelays } = getLocalStorageData();
-    const allWriteRelays = withBlastr([...relays, ...writeRelays]);
     const userPubkey = await signer?.getPubKey?.();
 
     let signedEvent;
@@ -576,14 +564,17 @@ export async function publishProofEvent(
         proofs: proofs,
         ...(deletedEventsArray ? { del: deletedEventsArray } : {}),
       };
-      const cashuProofEvent = {
+      const cashuProofEvent: EventTemplate = {
         kind: 7375,
         tags: [],
         content: await signer!.encrypt(userPubkey, JSON.stringify(tokenArray)),
         created_at: Math.floor(Date.now() / 1000),
       };
-      signedEvent = await signer!.sign(cashuProofEvent);
-      await nostr.publish(signedEvent, allWriteRelays);
+      signedEvent = await finalizeAndSendNostrEvent(
+        signer!,
+        nostr,
+        cashuProofEvent
+      );
     }
     if (deletedEventsArray && deletedEventsArray.length > 0) {
       await deleteEvent(nostr!, signer!, deletedEventsArray);
@@ -629,14 +620,13 @@ export async function publishSpendingHistoryEvent(
       eventContent.push(["e", keptEventId, allWriteRelays[0]!, "created"]);
     }
 
-    const cashuSpendingHistoryEvent = {
+    const cashuSpendingHistoryEvent: EventTemplate = {
       kind: 7376,
       tags: [],
       content: await signer!.encrypt(userPubkey, JSON.stringify(eventContent)),
       created_at: Math.floor(Date.now() / 1000),
     };
-    const signedEvent = await signer!.sign(cashuSpendingHistoryEvent);
-    await nostr!.publish(signedEvent, allWriteRelays);
+    await finalizeAndSendNostrEvent(signer!, nostr!, cashuSpendingHistoryEvent);
   } catch (_) {
     return;
   }
@@ -799,6 +789,15 @@ export async function finalizeAndSendNostrEvent(
     const signedEvent = await signer.sign(eventTemplate);
     const allWriteRelays = withBlastr([...writeRelays, ...relays]);
     await nostr.publish(signedEvent, allWriteRelays);
+
+    // Cache the event to database
+    try {
+      await cacheEvent(signedEvent);
+    } catch (dbError) {
+      console.error("Failed to cache event to database:", dbError);
+      // Don't throw - DB caching failure shouldn't break the publish flow
+    }
+
     // return the signed event to caller so we know generated IDs
     return signedEvent;
   } catch (error) {

@@ -4,6 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "init-db": "node scripts/init-db.js",
     "dev": "next dev -p 5000",
     "build": "next build",
     "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
@@ -30,6 +31,7 @@
     "next-pwa": "5.6.0",
     "next-themes": "0.2.1",
     "nostr-tools": "2.7.1",
+    "pg": "8.11.5",
     "postcss": "8.4.31",
     "qrcode": "1.5.3",
     "react": "18.2.0",
@@ -47,6 +49,7 @@
     "@types/crypto-js": "4.2.2",
     "@types/jest": "29.5.14",
     "@types/node": "20.7.0",
+    "@types/pg": "8.11.4",
     "@types/qrcode": "1.5.5",
     "@types/react": "18.2.22",
     "@types/react-dom": "18.0.11",
