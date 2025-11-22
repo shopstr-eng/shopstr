@@ -6,7 +6,6 @@ import {
   getEventHash,
   nip19,
   nip44,
-  SimplePool,
 } from "nostr-tools";
 import { v4 as uuidv4 } from "uuid";
 import CryptoJS from "crypto-js";
@@ -21,7 +20,6 @@ import { Proof } from "@cashu/cashu-ts";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { removeProductFromCache } from "@/utils/nostr/cache-service";
-import { cacheEvent, deleteCachedEventsByIds } from "@/utils/db/db-service";
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
@@ -57,7 +55,12 @@ export async function deleteEvent(
 
   await finalizeAndSendNostrEvent(signer, nostr, deletionEvent);
   await removeProductFromCache(event_ids_to_delete);
-  await deleteCachedEventsByIds(event_ids_to_delete);
+  
+  // Only cache to database on server-side
+  if (typeof window === 'undefined') {
+    const { deleteCachedEventsByIds } = await import('@/utils/db/db-service');
+    await deleteCachedEventsByIds(event_ids_to_delete);
+  }
 }
 
 export function createNostrDeleteEvent(
@@ -384,12 +387,15 @@ export async function sendGiftWrappedMessageEvent(
 
   await nostr.publish(giftWrappedMessageEvent, allWriteRelays);
 
-  // Cache the event to database
-  try {
-    await cacheEvent(giftWrappedMessageEvent);
-  } catch (dbError) {
-    console.error("Failed to cache gift wrapped event to database:", dbError);
-    // Don't throw - DB caching failure shouldn't break the publish flow
+  // Cache the event to database - only on server-side
+  if (typeof window === 'undefined') {
+    try {
+      const { cacheEvent } = await import('@/utils/db/db-service');
+      await cacheEvent(giftWrappedMessageEvent);
+    } catch (dbError) {
+      console.error("Failed to cache gift wrapped event to database:", dbError);
+      // Don't throw - DB caching failure shouldn't break the publish flow
+    }
   }
 }
 
@@ -790,12 +796,15 @@ export async function finalizeAndSendNostrEvent(
     const allWriteRelays = withBlastr([...writeRelays, ...relays]);
     await nostr.publish(signedEvent, allWriteRelays);
 
-    // Cache the event to database
-    try {
-      await cacheEvent(signedEvent);
-    } catch (dbError) {
-      console.error("Failed to cache event to database:", dbError);
-      // Don't throw - DB caching failure shouldn't break the publish flow
+    // Cache the event to database - only on server-side
+    if (typeof window === 'undefined') {
+      try {
+        const { cacheEvent } = await import('@/utils/db/db-service');
+        await cacheEvent(signedEvent);
+      } catch (dbError) {
+        console.error("Failed to cache event to database:", dbError);
+        // Don't throw - DB caching failure shouldn't break the publish flow
+      }
     }
 
     // return the signed event to caller so we know generated IDs

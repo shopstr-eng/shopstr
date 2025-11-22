@@ -234,9 +234,9 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
         JSON.stringify(event.tags),
         event.content,
         event.sig,
-      ],
+      ] as any[],
     };
-    client.query(query);
+    await client.query(query);
   } catch (error) {
     console.error(`Failed to cache event ${event.id}:`, error);
   } finally {
@@ -287,9 +287,9 @@ export async function cacheEvents(events: NostrEvent[]): Promise<void> {
             JSON.stringify(event.tags),
             event.content,
             event.sig,
-          ],
+          ] as any[],
         };
-        client.query(query);
+        await client.query(query);
       }
     }
 

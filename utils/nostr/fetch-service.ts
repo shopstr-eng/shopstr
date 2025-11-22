@@ -10,7 +10,6 @@ import {
   fetchProfileDataFromCache,
   removeProductFromCache,
 } from "./cache-service";
-import { cacheEvents } from "@/utils/db/db-service";
 import {
   NostrEvent,
   NostrMessageEvent,
@@ -104,11 +103,14 @@ export const fetchAllPosts = async (
       editProductContext(productArrayFromRelay, false);
       removeProductFromCache(Array.from(deletedProductsInCacheSet));
 
-      // Cache fetched products to database
-      try {
-        await cacheEvents(productArrayFromRelay);
-      } catch (dbError) {
-        console.error("Failed to cache products to database:", dbError);
+      // Cache fetched products to database - only on server-side
+      if (typeof window === 'undefined') {
+        try {
+          const { cacheEvents } = await import('@/utils/db/db-service');
+          await cacheEvents(productArrayFromRelay);
+        } catch (dbError) {
+          console.error("Failed to cache products to database:", dbError);
+        }
       }
 
       resolve({
@@ -339,22 +341,25 @@ export const fetchProfile = async (
       }
       await addProfilesToCache(profileMap);
 
-      // Cache profiles to database
-      try {
-        const profileEvents = Array.from(profileMap.values())
-          .filter((p) => p !== null)
-          .map((p) => ({
-            id: p.pubkey + "_" + p.created_at, // Generate ID from pubkey and timestamp
-            pubkey: p.pubkey,
-            created_at: p.created_at,
-            kind: 0,
-            tags: [],
-            content: JSON.stringify(p.content),
-            sig: "",
-          }));
-        await cacheEvents(profileEvents);
-      } catch (dbError) {
-        console.error("Failed to cache profiles to database:", dbError);
+      // Cache profiles to database - only on server-side
+      if (typeof window === 'undefined') {
+        try {
+          const { cacheEvents } = await import('@/utils/db/db-service');
+          const profileEvents = Array.from(profileMap.values())
+            .filter((p) => p !== null)
+            .map((p) => ({
+              id: p.pubkey + "_" + p.created_at, // Generate ID from pubkey and timestamp
+              pubkey: p.pubkey,
+              created_at: p.created_at,
+              kind: 0,
+              tags: [],
+              content: JSON.stringify(p.content),
+              sig: "",
+            }));
+          await cacheEvents(profileEvents);
+        } catch (dbError) {
+          console.error("Failed to cache profiles to database:", dbError);
+        }
       }
 
       resolve({ profileMap });
@@ -486,13 +491,16 @@ export const fetchGiftWrappedChatsAndMessages = async (
         });
         editChatContext(chatsMap, false);
 
-        // Cache messages to database
-        try {
-          const allMessages: NostrMessageEvent[] = [];
-          chatsMap.forEach((messages) => allMessages.push(...messages));
-          await cacheEvents(allMessages);
-        } catch (dbError) {
-          console.error("Failed to cache messages to database:", dbError);
+        // Cache messages to database - only on server-side
+        if (typeof window === 'undefined') {
+          try {
+            const { cacheEvents } = await import('@/utils/db/db-service');
+            const allMessages: NostrMessageEvent[] = [];
+            chatsMap.forEach((messages) => allMessages.push(...messages));
+            await cacheEvents(allMessages);
+          } catch (dbError) {
+            console.error("Failed to cache messages to database:", dbError);
+          }
         }
 
         resolve({ profileSetFromChats: new Set(chatsMap.keys()) });
@@ -613,11 +621,14 @@ export const fetchReviews = async (
 
       editReviewsContext(merchantScoresMap, productReviewsMap, false);
 
-      // Cache reviews to database
-      try {
-        await cacheEvents(fetchedEvents);
-      } catch (dbError) {
-        console.error("Failed to cache reviews to database:", dbError);
+      // Cache reviews to database - only on server-side
+      if (typeof window === 'undefined') {
+        try {
+          const { cacheEvents } = await import('@/utils/db/db-service');
+          await cacheEvents(fetchedEvents);
+        } catch (dbError) {
+          console.error("Failed to cache reviews to database:", dbError);
+        }
       }
 
       resolve({ merchantScoresMap, productReviewsMap });
@@ -1212,11 +1223,14 @@ export const fetchAllCommunities = async (
       editCommunityContext(communityMap, false);
       await addCommunitiesToCache(parsedCommunities);
 
-      // Cache communities to database
-      try {
-        await cacheEvents(fetchedEvents);
-      } catch (dbError) {
-        console.error("Failed to cache communities to database:", dbError);
+      // Cache communities to database - only on server-side
+      if (typeof window === 'undefined') {
+        try {
+          const { cacheEvents } = await import('@/utils/db/db-service');
+          await cacheEvents(fetchedEvents);
+        } catch (dbError) {
+          console.error("Failed to cache communities to database:", dbError);
+        }
       }
 
       resolve(communityMap);
