@@ -80,6 +80,10 @@ export default function CheckoutCard({
 
   const hasVolumes = productData.volumes && productData.volumes.length > 0;
 
+  const isExpired = productData.expiration
+    ? Date.now() / 1000 > productData.expiration
+    : false;
+
   useEffect(() => {
     if (selectedVolume && productData.volumePrices) {
       const volumePrice = productData.volumePrices.get(selectedVolume);
@@ -428,7 +432,17 @@ export default function CheckoutCard({
                   </div>
                   <h2 className="mt-4 w-full text-left text-2xl font-bold text-light-text dark:text-dark-text">
                     {productData.title}
+                    {isExpired && (
+                      <Chip color="warning" variant="flat" className="ml-2">
+                        Outdated
+                      </Chip>
+                    )}
                   </h2>
+                  {productData.expiration && (
+                    <p className={`text-left text-sm mt-1 ${isExpired ? "text-red-500 font-medium" : "text-gray-500"}`}>
+                      {isExpired ? "Expired on: " : "Valid until: "} {new Date(productData.expiration * 1000).toLocaleDateString()}
+                    </p>
+                  )}
                   {productData.condition && (
                     <div className="text-left text-xs text-light-text dark:text-dark-text">
                       <span>Condition: {productData.condition}</span>
@@ -493,10 +507,12 @@ export default function CheckoutCard({
                                 ? "cursor-not-allowed opacity-50"
                                 : ""
                             }`}
+                            
                             onClick={toggleBuyNow}
                             disabled={
                               (hasSizes && !selectedSize) ||
-                              (hasVolumes && !selectedVolume)
+                              (hasVolumes && !selectedVolume) ||
+                              isExpired
                             }
                           >
                             Buy Now
@@ -513,7 +529,8 @@ export default function CheckoutCard({
                             disabled={
                               isAdded ||
                               (hasSizes && !selectedSize) ||
-                              (hasVolumes && !selectedVolume)
+                              (hasVolumes && !selectedVolume) ||
+                              isExpired
                             }
                           >
                             Add To Cart
