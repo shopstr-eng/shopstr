@@ -32,6 +32,7 @@ import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions"
 import { hashToCurve } from "@cashu/crypto/modules/common";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
+import { cacheEventsToDatabase } from "@/utils/db/db-client";
 
 function getUniqueProofs(proofs: Proof[]): Proof[] {
   const uniqueProofs = new Set<string>();
@@ -82,6 +83,14 @@ export const fetchAllPosts = async (
         console.error("No products found with filter: ", filter);
       }
 
+      // Cache valid product events to database
+      const validProductEvents = fetchedEvents.filter(e => e.id && e.sig && e.pubkey && e.kind === 30402);
+      if (validProductEvents.length > 0) {
+        cacheEventsToDatabase(validProductEvents).catch((error) =>
+          console.error("Failed to cache products to database:", error)
+        );
+      }
+
       for (const event of fetchedEvents) {
         if (!event || !event.id) continue;
 
@@ -103,14 +112,12 @@ export const fetchAllPosts = async (
       editProductContext(productArrayFromRelay, false);
       removeProductFromCache(Array.from(deletedProductsInCacheSet));
 
-      // Cache fetched products to database - only on server-side
-      if (typeof window === 'undefined') {
-        try {
-          const { cacheEvents } = await import('@/utils/db/db-service');
-          await cacheEvents(productArrayFromRelay);
-        } catch (dbError) {
-          console.error("Failed to cache products to database:", dbError);
-        }
+      // Cache fetched products to database via API (only valid events with signatures)
+      const validProducts = productArrayFromRelay.filter(e => e.id && e.sig && e.pubkey);
+      if (validProducts.length > 0) {
+        cacheEventsToDatabase(validProducts).catch((error) =>
+          console.error("Failed to cache products to database:", error)
+        );
       }
 
       resolve({
@@ -267,6 +274,15 @@ export const fetchShopProfile = async (
         });
 
         editShopContext(shopProfile, false);
+
+        // Cache shop profiles to database via API
+        const validShopEvents = shopEvents.filter(e => e.id && e.sig && e.pubkey && e.kind === 30019);
+        if (validShopEvents.length > 0) {
+          cacheEventsToDatabase(validShopEvents).catch((error) =>
+            console.error("Failed to cache shop profiles to database:", error)
+          );
+        }
+
         resolve({ shopProfileMap: shopProfile });
       } else {
         reject();
@@ -341,25 +357,12 @@ export const fetchProfile = async (
       }
       await addProfilesToCache(profileMap);
 
-      // Cache profiles to database - only on server-side
-      if (typeof window === 'undefined') {
-        try {
-          const { cacheEvents } = await import('@/utils/db/db-service');
-          const profileEvents = Array.from(profileMap.values())
-            .filter((p) => p !== null)
-            .map((p) => ({
-              id: p.pubkey + "_" + p.created_at, // Generate ID from pubkey and timestamp
-              pubkey: p.pubkey,
-              created_at: p.created_at,
-              kind: 0,
-              tags: [],
-              content: JSON.stringify(p.content),
-              sig: "",
-            }));
-          await cacheEvents(profileEvents);
-        } catch (dbError) {
-          console.error("Failed to cache profiles to database:", dbError);
-        }
+      // Cache profiles to database via API (reconstruct from fetched events)
+      const validProfileEvents = fetchedEvents.filter(e => e.id && e.sig && e.pubkey && e.kind === 0);
+      if (validProfileEvents.length > 0) {
+        cacheEventsToDatabase(validProfileEvents).catch((error) =>
+          console.error("Failed to cache profiles to database:", error)
+        );
       }
 
       resolve({ profileMap });
@@ -491,16 +494,12 @@ export const fetchGiftWrappedChatsAndMessages = async (
         });
         editChatContext(chatsMap, false);
 
-        // Cache messages to database - only on server-side
-        if (typeof window === 'undefined') {
-          try {
-            const { cacheEvents } = await import('@/utils/db/db-service');
-            const allMessages: NostrMessageEvent[] = [];
-            chatsMap.forEach((messages) => allMessages.push(...messages));
-            await cacheEvents(allMessages);
-          } catch (dbError) {
-            console.error("Failed to cache messages to database:", dbError);
-          }
+        // Cache messages to database via API (only valid messages with required fields)
+        const validMessages = fetchedEvents.filter(e => e.id && e.sig && e.pubkey && e.kind === 1059);
+        if (validMessages.length > 0) {
+          cacheEventsToDatabase(validMessages).catch((error) =>
+            console.error("Failed to cache messages to database:", error)
+          );
         }
 
         resolve({ profileSetFromChats: new Set(chatsMap.keys()) });
@@ -621,14 +620,12 @@ export const fetchReviews = async (
 
       editReviewsContext(merchantScoresMap, productReviewsMap, false);
 
-      // Cache reviews to database - only on server-side
-      if (typeof window === 'undefined') {
-        try {
-          const { cacheEvents } = await import('@/utils/db/db-service');
-          await cacheEvents(fetchedEvents);
-        } catch (dbError) {
-          console.error("Failed to cache reviews to database:", dbError);
-        }
+      // Cache reviews to database via API (only valid events)
+      const validReviews = fetchedEvents.filter(e => e.id && e.sig && e.pubkey && e.kind === 31555);
+      if (validReviews.length > 0) {
+        cacheEventsToDatabase(validReviews).catch((error) =>
+          console.error("Failed to cache reviews to database:", error)
+        );
       }
 
       resolve({ merchantScoresMap, productReviewsMap });
@@ -774,6 +771,15 @@ export const fetchAllRelays = async (
       };
 
       const fetchedEvents = await nostr.fetch([relayfilter], {}, relays);
+
+      // Cache relay config events to database
+      const validRelayEvents = fetchedEvents.filter(e => e.id && e.sig && e.pubkey && e.kind === 10002);
+      if (validRelayEvents.length > 0) {
+        cacheEventsToDatabase(validRelayEvents).catch((error) =>
+          console.error("Failed to cache relay config events to database:", error)
+        );
+      }
+
       for (const event of fetchedEvents) {
         const validRelays = event.tags.filter(
           (tag) => tag[0] === "r" && !tag[2]
@@ -851,6 +857,15 @@ export const fetchAllBlossomServers = async (
         {},
         relays
       );
+
+      // Cache blossom server config events to database
+      const validBlossomEvents = fetchedEvents.filter(e => e.id && e.sig && e.pubkey && e.kind === 10063);
+      if (validBlossomEvents.length > 0) {
+        cacheEventsToDatabase(validBlossomEvents).catch((error) =>
+          console.error("Failed to cache blossom config events to database:", error)
+        );
+      }
+
       for (const event of fetchedEvents) {
         const validBlossomServers = event.tags.filter(
           (tag) => tag[0] === "server"
@@ -923,6 +938,14 @@ export const fetchCashuWallet = async (
         relays
       );
 
+      // Cache wallet config events to database
+      const validWalletConfigEvents = hEvents.filter(e => e.id && e.sig && e.pubkey && (e.kind === 17375 || e.kind === 37375));
+      if (validWalletConfigEvents.length > 0) {
+        cacheEventsToDatabase(validWalletConfigEvents).catch((error) =>
+          console.error("Failed to cache wallet config events to database:", error)
+        );
+      }
+
       // Process wallet configuration events
       for (const event of hEvents) {
         try {
@@ -994,6 +1017,14 @@ export const fetchCashuWallet = async (
         {},
         effectiveRelays
       );
+
+      // Cache wallet proof events to database
+      const validWalletProofEvents = proofEvents_raw.filter(e => e.id && e.sig && e.pubkey && (e.kind === 7375 || e.kind === 7376));
+      if (validWalletProofEvents.length > 0) {
+        cacheEventsToDatabase(validWalletProofEvents).catch((error) =>
+          console.error("Failed to cache wallet proof events to database:", error)
+        );
+      }
 
       // Process proof and spending history events
       for (const event of proofEvents_raw) {
@@ -1223,14 +1254,12 @@ export const fetchAllCommunities = async (
       editCommunityContext(communityMap, false);
       await addCommunitiesToCache(parsedCommunities);
 
-      // Cache communities to database - only on server-side
-      if (typeof window === 'undefined') {
-        try {
-          const { cacheEvents } = await import('@/utils/db/db-service');
-          await cacheEvents(fetchedEvents);
-        } catch (dbError) {
-          console.error("Failed to cache communities to database:", dbError);
-        }
+      // Cache communities to database via API (only valid events)
+      const validCommunities = fetchedEvents.filter(e => e.id && e.sig && e.pubkey && e.kind === 34550);
+      if (validCommunities.length > 0) {
+        cacheEventsToDatabase(validCommunities).catch((error) =>
+          console.error("Failed to cache communities to database:", error)
+        );
       }
 
       resolve(communityMap);

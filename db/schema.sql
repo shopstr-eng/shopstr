@@ -1,4 +1,3 @@
-
 -- Nostr Event Caching Database Schema
 
 -- Products table (kind 30402 - listings)
@@ -111,18 +110,3 @@ CREATE TABLE IF NOT EXISTS config_events (
 
 CREATE INDEX IF NOT EXISTS idx_config_events_pubkey ON config_events(pubkey);
 CREATE INDEX IF NOT EXISTS idx_config_events_kind ON config_events(kind);
-
--- Handler/recommendation events (kind 31989, 31990)
-CREATE TABLE IF NOT EXISTS handler_events (
-    id TEXT PRIMARY KEY,
-    pubkey TEXT NOT NULL,
-    created_at BIGINT NOT NULL,
-    kind INTEGER NOT NULL,
-    tags JSONB NOT NULL,
-    content TEXT NOT NULL,
-    sig TEXT NOT NULL,
-    cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT handler_events_kind_check CHECK (kind IN (31989, 31990))
-);
-
-CREATE INDEX IF NOT EXISTS idx_handler_events_pubkey ON handler_events(pubkey);

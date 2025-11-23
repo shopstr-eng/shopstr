@@ -147,22 +147,6 @@ async function initializeTables(): Promise<void> {
       );
 
       CREATE INDEX IF NOT EXISTS idx_config_events_pubkey ON config_events(pubkey);
-      CREATE INDEX IF NOT EXISTS idx_config_events_kind ON config_events(kind);
-
-      -- Handler/recommendation events (kind 31989, 31990)
-      CREATE TABLE IF NOT EXISTS handler_events (
-          id TEXT PRIMARY KEY,
-          pubkey TEXT NOT NULL,
-          created_at BIGINT NOT NULL,
-          kind INTEGER NOT NULL,
-          tags JSONB NOT NULL,
-          content TEXT NOT NULL,
-          sig TEXT NOT NULL,
-          cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          CONSTRAINT handler_events_kind_check CHECK (kind IN (31989, 31990))
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_handler_events_pubkey ON handler_events(pubkey);
     `);
 
     tablesInitialized = true;
@@ -197,9 +181,6 @@ function getTableForKind(kind: number): string | null {
 
   // Config
   if ([10002, 10063, 30405].includes(kind)) return "config_events";
-
-  // Handlers
-  if ([31989, 31990].includes(kind)) return "handler_events";
 
   return null;
 }
@@ -315,7 +296,7 @@ export async function fetchCachedEvents(
   const table = getTableForKind(kind);
   if (!table) return [];
 
-  const dbPool = getDbPool();
+  const dbPool = getDbDbPool();
   const client = await dbPool.connect();
 
   try {
@@ -402,7 +383,6 @@ export async function deleteCachedEventsByIds(
     "wallet_events",
     "community_events",
     "config_events",
-    "handler_events",
   ];
 
   try {
