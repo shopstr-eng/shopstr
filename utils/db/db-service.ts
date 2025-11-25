@@ -3,6 +3,10 @@ import { NostrEvent } from "../types/types";
 
 let pool: Pool | null = null;
 let tablesInitialized = false;
+let initializingTables = false;
+
+// Queue for serializing cache operations
+let cacheQueue: Promise<void> = Promise.resolve();
 
 // Initialize the database connection pool
 export function getDbPool(): Pool {
@@ -16,15 +20,25 @@ export function getDbPool(): Pool {
     const poolUrl = databaseUrl.replace(".us-east-2", "-pooler.us-east-2");
     pool = new Pool({
       connectionString: poolUrl,
-      max: 10,
+      max: 10, // Increased pool size
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
+      connectionTimeoutMillis: 20000, // Increased timeout
+      allowExitOnIdle: true,
     });
 
-    // Auto-create tables on first connection
-    initializeTables().catch((error) => {
-      console.error("Failed to initialize database tables:", error);
+    // Handle pool errors
+    pool.on("error", (err) => {
+      console.error("Unexpected error on idle database client", err);
     });
+
+    // Auto-create tables on first connection (only once)
+    if (!tablesInitialized && !initializingTables) {
+      initializingTables = true;
+      initializeTables().catch((error) => {
+        console.error("Failed to initialize database tables:", error);
+        initializingTables = false;
+      });
+    }
   }
   return pool;
 }
@@ -34,9 +48,11 @@ async function initializeTables(): Promise<void> {
   if (tablesInitialized) return;
 
   const dbPool = getDbPool();
-  const client = await dbPool.connect();
+  let client;
 
   try {
+    client = await dbPool.connect();
+
     await client.query(`
       -- Products table (kind 30402 - listings)
       CREATE TABLE IF NOT EXISTS product_events (
@@ -150,12 +166,16 @@ async function initializeTables(): Promise<void> {
     `);
 
     tablesInitialized = true;
+    initializingTables = false;
     console.log("Database tables initialized successfully");
   } catch (error) {
     console.error("Failed to initialize tables:", error);
+    initializingTables = false;
     throw error;
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 }
 
@@ -185,6 +205,18 @@ function getTableForKind(kind: number): string | null {
   return null;
 }
 
+// Helper function to check if event kind should only keep latest per pubkey
+function shouldKeepOnlyLatest(kind: number): boolean {
+  // Wallet config (17375), wallet state (37375), relay list (10002), blossom servers (10063)
+  // User profile (0), shop profile (30019), community definition (34550)
+  return [17375, 37375, 10002, 10063, 0, 30019, 34550].includes(kind);
+}
+
+// Helper function to check if event is a review (needs special handling per product)
+function isReviewEvent(kind: number): boolean {
+  return kind === 31555;
+}
+
 // Cache a single event to the database
 export async function cacheEvent(event: NostrEvent): Promise<void> {
   const table = getTableForKind(event.kind);
@@ -194,41 +226,155 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
   }
 
   const dbPool = getDbPool();
-  const client = await dbPool.connect();
+  let client;
 
   try {
-    const query = {
-      text: `INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
-             ON CONFLICT (id) DO UPDATE SET
-               pubkey = EXCLUDED.pubkey,
-               created_at = EXCLUDED.created_at,
-               tags = EXCLUDED.tags,
-               content = EXCLUDED.content,
-               sig = EXCLUDED.sig,
-               cached_at = CURRENT_TIMESTAMP`,
-      values: [
-        event.id,
-        event.pubkey,
-        event.created_at,
-        event.kind,
-        JSON.stringify(event.tags),
-        event.content,
-        event.sig,
-      ] as any[],
-    };
-    await client.query(query);
+    client = await dbPool.connect();
+    // For events that should only keep the latest version per pubkey
+    if (shouldKeepOnlyLatest(event.kind)) {
+      await client.query("BEGIN");
+
+      // Delete older events from the same pubkey with the same kind
+      const deleteQuery = {
+        text: `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2`,
+        values: [event.pubkey, event.kind],
+      };
+      await client.query(deleteQuery);
+
+      // Insert the new event
+      const insertQuery = {
+        text: `INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        values: [
+          event.id,
+          event.pubkey,
+          event.created_at,
+          event.kind,
+          JSON.stringify(event.tags),
+          event.content,
+          event.sig,
+        ] as any[],
+      };
+      await client.query(insertQuery);
+
+      await client.query("COMMIT");
+    } else if (isReviewEvent(event.kind)) {
+      // For reviews, keep only the latest per pubkey per product
+      await client.query("BEGIN");
+
+      // Extract the product identifier from the 'd' tag (format: "30402:merchant_pubkey:product_d_tag")
+      const dTag = event.tags.find((tag) => tag[0] === "d")?.[1];
+
+      if (dTag) {
+        // Delete older reviews from the same pubkey for the same product
+        const deleteQuery = {
+          text: `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND tags::text LIKE $3`,
+          values: [event.pubkey, event.kind, `%"d","${dTag}"%`],
+        };
+        await client.query(deleteQuery);
+      }
+
+      // Insert the new review
+      const insertQuery = {
+        text: `INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        values: [
+          event.id,
+          event.pubkey,
+          event.created_at,
+          event.kind,
+          JSON.stringify(event.tags),
+          event.content,
+          event.sig,
+        ] as any[],
+      };
+      await client.query(insertQuery);
+
+      await client.query("COMMIT");
+    } else {
+      // For other events, use the normal upsert behavior
+      const query = {
+        text: `INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)
+               ON CONFLICT (id) DO UPDATE SET
+                 pubkey = EXCLUDED.pubkey,
+                 created_at = EXCLUDED.created_at,
+                 tags = EXCLUDED.tags,
+                 content = EXCLUDED.content,
+                 sig = EXCLUDED.sig,
+                 cached_at = CURRENT_TIMESTAMP`,
+        values: [
+          event.id,
+          event.pubkey,
+          event.created_at,
+          event.kind,
+          JSON.stringify(event.tags),
+          event.content,
+          event.sig,
+        ] as any[],
+      };
+      await client.query(query);
+    }
   } catch (error) {
+    if (client) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        console.error("Failed to rollback transaction:", rollbackError);
+      }
+    }
     console.error(`Failed to cache event ${event.id}:`, error);
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 }
 
-// Cache multiple events in a batch
+// Cache multiple events in a batch with retry logic for deadlocks
 export async function cacheEvents(events: NostrEvent[]): Promise<void> {
   if (events.length === 0) return;
 
+  // Queue the operation to prevent overwhelming the pool
+  return new Promise((resolve, reject) => {
+    cacheQueue = cacheQueue
+      .then(async () => {
+        const maxRetries = 3;
+        let attempt = 0;
+
+        while (attempt < maxRetries) {
+          try {
+            await cacheEventsTransaction(events);
+            resolve();
+            return;
+          } catch (error: any) {
+            const isDeadlock = error?.code === "40P01";
+            const isConnectionError =
+              error?.message?.includes("Connection terminated") ||
+              error?.message?.includes("Connection timeout");
+
+            if ((isDeadlock || isConnectionError) && attempt < maxRetries - 1) {
+              attempt++;
+              const delay = 100 * Math.pow(2, attempt);
+              console.log(
+                `Database error detected (${
+                  isDeadlock ? "deadlock" : "connection error"
+                }), retrying in ${delay}ms (attempt ${attempt}/${maxRetries})...`
+              );
+              await new Promise((res) => setTimeout(res, delay));
+            } else {
+              reject(error);
+              return;
+            }
+          }
+        }
+      })
+      .catch(reject);
+  });
+}
+
+// Internal function to perform the actual transaction
+async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
   const eventsByTable = new Map<string, NostrEvent[]>();
 
   // Group events by table
@@ -243,13 +389,117 @@ export async function cacheEvents(events: NostrEvent[]): Promise<void> {
   }
 
   const dbPool = getDbPool();
-  const client = await dbPool.connect();
+  let client;
 
   try {
+    client = await dbPool.connect();
     await client.query("BEGIN");
 
     for (const [table, tableEvents] of eventsByTable.entries()) {
-      for (const event of tableEvents) {
+      // Group events by type
+      const latestOnlyEvents = tableEvents.filter((e) =>
+        shouldKeepOnlyLatest(e.kind)
+      );
+      const reviewEvents = tableEvents.filter((e) => isReviewEvent(e.kind));
+      const regularEvents = tableEvents.filter(
+        (e) => !shouldKeepOnlyLatest(e.kind) && !isReviewEvent(e.kind)
+      );
+
+      // Handle latest-only events (per pubkey) - batch by pubkey+kind to reduce queries
+      const latestByPubkeyKind = new Map<string, NostrEvent>();
+      for (const event of latestOnlyEvents) {
+        const key = `${event.pubkey}:${event.kind}`;
+        const existing = latestByPubkeyKind.get(key);
+        if (!existing || event.created_at > existing.created_at) {
+          latestByPubkeyKind.set(key, event);
+        }
+      }
+
+      for (const event of latestByPubkeyKind.values()) {
+        // First, lock and delete old rows
+        await client.query(
+          `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND id != $3`,
+          [event.pubkey, event.kind, event.id]
+        );
+
+        // Then insert/update with ON CONFLICT
+        const upsertQuery = {
+          text: `
+            INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (id) DO UPDATE SET
+              pubkey = EXCLUDED.pubkey,
+              created_at = EXCLUDED.created_at,
+              tags = EXCLUDED.tags,
+              content = EXCLUDED.content,
+              sig = EXCLUDED.sig,
+              cached_at = CURRENT_TIMESTAMP
+          `,
+          values: [
+            event.id,
+            event.pubkey,
+            event.created_at,
+            event.kind,
+            JSON.stringify(event.tags),
+            event.content,
+            event.sig,
+          ] as any[],
+        };
+        await client.query(upsertQuery);
+      }
+
+      // Handle review events (latest per pubkey per product) - batch by pubkey+dtag
+      const latestReviewByPubkeyDtag = new Map<string, NostrEvent>();
+      for (const event of reviewEvents) {
+        const dTag = event.tags.find((tag) => tag[0] === "d")?.[1];
+        if (dTag) {
+          const key = `${event.pubkey}:${dTag}`;
+          const existing = latestReviewByPubkeyDtag.get(key);
+          if (!existing || event.created_at > existing.created_at) {
+            latestReviewByPubkeyDtag.set(key, event);
+          }
+        }
+      }
+
+      for (const event of latestReviewByPubkeyDtag.values()) {
+        const dTag = event.tags.find((tag) => tag[0] === "d")?.[1];
+
+        if (dTag) {
+          // First, lock and delete old rows
+          await client.query(
+            `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND tags::text LIKE $3 AND id != $4`,
+            [event.pubkey, event.kind, `%"d","${dTag}"%`, event.id]
+          );
+
+          // Then insert/update with ON CONFLICT
+          const upsertQuery = {
+            text: `
+              INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
+              VALUES ($1, $2, $3, $4, $5, $6, $7)
+              ON CONFLICT (id) DO UPDATE SET
+                pubkey = EXCLUDED.pubkey,
+                created_at = EXCLUDED.created_at,
+                tags = EXCLUDED.tags,
+                content = EXCLUDED.content,
+                sig = EXCLUDED.sig,
+                cached_at = CURRENT_TIMESTAMP
+            `,
+            values: [
+              event.id,
+              event.pubkey,
+              event.created_at,
+              event.kind,
+              JSON.stringify(event.tags),
+              event.content,
+              event.sig,
+            ] as any[],
+          };
+          await client.query(upsertQuery);
+        }
+      }
+
+      // Handle regular events with upsert
+      for (const event of regularEvents) {
         const query = {
           text: `INSERT INTO ${table} (id, pubkey, created_at, kind, tags, content, sig)
                  VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -276,10 +526,19 @@ export async function cacheEvents(events: NostrEvent[]): Promise<void> {
 
     await client.query("COMMIT");
   } catch (error) {
-    await client.query("ROLLBACK");
+    if (client) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        console.error("Failed to rollback transaction:", rollbackError);
+      }
+    }
     console.error("Failed to cache events batch:", error);
+    throw error;
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 }
 
@@ -296,10 +555,11 @@ export async function fetchCachedEvents(
   const table = getTableForKind(kind);
   if (!table) return [];
 
-  const dbPool = getDbDbPool();
-  const client = await dbPool.connect();
+  const dbPool = getDbPool();
+  let client;
 
   try {
+    client = await dbPool.connect();
     let query = `SELECT id, pubkey, created_at, kind, tags, content, sig FROM ${table} WHERE 1=1`;
     const params: any[] = [];
     let paramIndex = 1;
@@ -341,7 +601,9 @@ export async function fetchCachedEvents(
     console.error("Failed to fetch cached events:", error);
     return [];
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 }
 
@@ -354,14 +616,17 @@ export async function deleteCachedEvent(
   if (!table) return;
 
   const dbPool = getDbPool();
-  const client = await dbPool.connect();
+  let client;
 
   try {
+    client = await dbPool.connect();
     await client.query(`DELETE FROM ${table} WHERE id = $1`, [eventId]);
   } catch (error) {
     console.error(`Failed to delete cached event ${eventId}:`, error);
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 }
 
@@ -372,7 +637,7 @@ export async function deleteCachedEventsByIds(
   if (eventIds.length === 0) return;
 
   const dbPool = getDbPool();
-  const client = await dbPool.connect();
+  let client;
 
   // All tables that can store events
   const tables = [
@@ -386,6 +651,7 @@ export async function deleteCachedEventsByIds(
   ];
 
   try {
+    client = await dbPool.connect();
     await client.query("BEGIN");
 
     for (const table of tables) {
@@ -394,11 +660,122 @@ export async function deleteCachedEventsByIds(
 
     await client.query("COMMIT");
   } catch (error) {
-    await client.query("ROLLBACK");
+    if (client) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        console.error("Failed to rollback transaction:", rollbackError);
+      }
+    }
     console.error("Failed to delete cached events:", error);
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
+}
+
+// Fetch all products from database
+export async function fetchAllProductsFromDb(): Promise<NostrEvent[]> {
+  return fetchCachedEvents(30402);
+}
+
+// Fetch all reviews from database
+export async function fetchAllReviewsFromDb(): Promise<NostrEvent[]> {
+  return fetchCachedEvents(31555);
+}
+
+// Fetch all messages from database
+export async function fetchAllMessagesFromDb(
+  pubkey?: string
+): Promise<NostrEvent[]> {
+  return fetchCachedEvents(1059, { pubkey });
+}
+
+// Fetch all profiles from database (both user and shop profiles)
+export async function fetchAllProfilesFromDb(): Promise<NostrEvent[]> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const query = `SELECT id, pubkey, created_at, kind, tags, content, sig 
+                   FROM profile_events 
+                   ORDER BY created_at DESC`;
+
+    const result = await client.query(query);
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      pubkey: row.pubkey,
+      created_at: row.created_at,
+      kind: row.kind,
+      tags: row.tags,
+      content: row.content,
+      sig: row.sig,
+    }));
+  } catch (error) {
+    console.error("Failed to fetch profiles from database:", error);
+    return [];
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+}
+
+// Fetch wallet events from database
+export async function fetchAllWalletEventsFromDb(
+  pubkey: string
+): Promise<NostrEvent[]> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const query = `SELECT id, pubkey, created_at, kind, tags, content, sig 
+                   FROM wallet_events 
+                   WHERE pubkey = $1
+                   ORDER BY created_at DESC`;
+
+    const result = await client.query(query, [pubkey]);
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      pubkey: row.pubkey,
+      created_at: row.created_at,
+      kind: row.kind,
+      tags: row.tags,
+      content: row.content,
+      sig: row.sig,
+    }));
+  } catch (error) {
+    console.error("Failed to fetch wallet events from database:", error);
+    return [];
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+}
+
+// Fetch all communities from database
+export async function fetchAllCommunitiesFromDb(): Promise<NostrEvent[]> {
+  return fetchCachedEvents(34550);
+}
+
+// Fetch relay config events from database
+export async function fetchRelayConfigFromDb(
+  pubkey: string
+): Promise<NostrEvent[]> {
+  return fetchCachedEvents(10002, { pubkey });
+}
+
+// Fetch blossom server config from database
+export async function fetchBlossomConfigFromDb(
+  pubkey: string
+): Promise<NostrEvent[]> {
+  return fetchCachedEvents(10063, { pubkey });
 }
 
 // Close the database pool

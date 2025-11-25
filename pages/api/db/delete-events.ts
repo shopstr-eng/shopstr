@@ -1,4 +1,3 @@
-
 import type { NextApiRequest, NextApiResponse } from "next";
 import { deleteCachedEventsByIds } from "@/utils/db/db-service";
 

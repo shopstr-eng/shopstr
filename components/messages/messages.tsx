@@ -290,6 +290,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       addChatMessagesToCache([
         { ...giftWrappedMessageEvent, sig: "", read: true },
       ]);
+
       setIsSendingDMLoading(false);
     } catch (_) {
       setFailureText("Error sending inquiry.");

@@ -20,7 +20,10 @@ import { Proof } from "@cashu/cashu-ts";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { removeProductFromCache } from "@/utils/nostr/cache-service";
-import { cacheEventToDatabase, deleteEventsFromDatabase } from "@/utils/db/db-client";
+import {
+  cacheEventToDatabase,
+  deleteEventsFromDatabase,
+} from "@/utils/db/db-client";
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
@@ -56,7 +59,7 @@ export async function deleteEvent(
 
   await finalizeAndSendNostrEvent(signer, nostr, deletionEvent);
   await removeProductFromCache(event_ids_to_delete);
-  
+
   // Delete from database via API
   deleteEventsFromDatabase(event_ids_to_delete).catch((error) =>
     console.error("Failed to delete events from database:", error)
@@ -115,17 +118,26 @@ export function parseBunkerToken(token: string): BunkerTokenParams | null {
 export async function createNostrProfileEvent(
   nostr: NostrManager,
   signer: NostrSigner,
-  content: string
+  stringifiedContent: string
 ) {
-  const msg: EventTemplate = {
-    kind: 0,
-    content: content,
-    tags: [],
+  const profileContent: EventTemplate = {
     created_at: Math.floor(Date.now() / 1000),
+    content: stringifiedContent,
+    kind: 0,
+    tags: [],
   };
+  const signedEvent = await finalizeAndSendNostrEvent(
+    signer,
+    nostr,
+    profileContent
+  );
 
-  await finalizeAndSendNostrEvent(signer, nostr, msg);
-  return msg;
+  // Cache profile event to database
+  if (signedEvent) {
+    await cacheEventToDatabase(signedEvent).catch((error) =>
+      console.error("Failed to cache profile event to database:", error)
+    );
+  }
 }
 
 export async function PostListing(
@@ -192,17 +204,27 @@ export async function PostListing(
 export async function createNostrShopEvent(
   nostr: NostrManager,
   signer: NostrSigner,
-  content: string
+  stringifiedContent: string
 ) {
-  const msg: EventTemplate = {
-    kind: 30019, // NIP-15 - Stall Metadata
-    content: content,
-    tags: [],
+  const userPubkey = await signer?.getPubKey?.();
+  const shopContent: EventTemplate = {
     created_at: Math.floor(Date.now() / 1000),
+    content: stringifiedContent,
+    kind: 30019,
+    tags: [["d", userPubkey]],
   };
+  const signedEvent = await finalizeAndSendNostrEvent(
+    signer,
+    nostr,
+    shopContent
+  );
 
-  await finalizeAndSendNostrEvent(signer, nostr, msg);
-  return msg;
+  // Cache shop profile event to database
+  if (signedEvent) {
+    await cacheEventToDatabase(signedEvent).catch((error) =>
+      console.error("Failed to cache shop profile event to database:", error)
+    );
+  }
 }
 
 interface GiftWrappedMessageEvent {
@@ -386,6 +408,11 @@ export async function sendGiftWrappedMessageEvent(
   const allWriteRelays = withBlastr([...writeRelays, ...relays]);
 
   await nostr.publish(giftWrappedMessageEvent, allWriteRelays);
+
+  // Cache the gift-wrapped event to database
+  await cacheEventToDatabase(giftWrappedMessageEvent).catch((error) =>
+    console.error("Failed to cache gift-wrapped message to database:", error)
+  );
 }
 
 export async function publishReviewEvent(
@@ -401,10 +428,21 @@ export async function publishReviewEvent(
       kind: 31555,
       tags: eventTags,
     };
+    const signedEvent = await finalizeAndSendNostrEvent(
+      signer,
+      nostr,
+      reviewEvent
+    );
 
-    await finalizeAndSendNostrEvent(signer, nostr, reviewEvent);
-  } catch (_) {
-    return;
+    // Cache review event to database
+    if (signedEvent) {
+      await cacheEventToDatabase(signedEvent).catch((error) =>
+        console.error("Failed to cache review event to database:", error)
+      );
+    }
+  } catch (error) {
+    console.error(error);
+    throw error;
   }
 }
 export async function createNostrRelayEvent(
@@ -441,6 +479,32 @@ export async function createNostrRelayEvent(
   return relayEvent;
 }
 
+export async function publishRelayEvent(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  relays: string[]
+) {
+  const relayTags = relays.map((relay) => ["r", relay]);
+  const relayEvent: EventTemplate = {
+    kind: 10002,
+    tags: relayTags,
+    content: "",
+    created_at: Math.floor(Date.now() / 1000),
+  };
+  const signedEvent = await finalizeAndSendNostrEvent(
+    signer,
+    nostr,
+    relayEvent
+  );
+
+  // Cache relay list event to database
+  if (signedEvent) {
+    await cacheEventToDatabase(signedEvent).catch((error) =>
+      console.error("Failed to cache relay list event to database:", error)
+    );
+  }
+}
+
 export async function createBlossomServerEvent(
   nostr: NostrManager,
   signer: NostrSigner
@@ -459,6 +523,32 @@ export async function createBlossomServerEvent(
 
   await finalizeAndSendNostrEvent(signer, nostr, blossomServerEvent);
   return blossomServerEvent;
+}
+
+export async function publishBlossomServerEvent(
+  nostr: NostrManager,
+  signer: NostrSigner,
+  servers: string[]
+) {
+  const serverTags = servers.map((server) => ["server", server]);
+  const blossomEvent: EventTemplate = {
+    kind: 10063,
+    tags: serverTags,
+    content: "",
+    created_at: Math.floor(Date.now() / 1000),
+  };
+  const signedEvent = await finalizeAndSendNostrEvent(
+    signer,
+    nostr,
+    blossomEvent
+  );
+
+  // Cache blossom server event to database
+  if (signedEvent) {
+    await cacheEventToDatabase(signedEvent).catch((error) =>
+      console.error("Failed to cache blossom server event to database:", error)
+    );
+  }
 }
 
 export async function publishSavedForLaterEvent(
@@ -534,7 +624,18 @@ export async function publishWalletEvent(
       ),
       created_at: Math.floor(Date.now() / 1000),
     };
-    await finalizeAndSendNostrEvent(signer, nostr, cashuWalletEvent);
+    const signedEvent = await finalizeAndSendNostrEvent(
+      signer,
+      nostr,
+      cashuWalletEvent
+    );
+
+    // Cache wallet event to database
+    if (signedEvent) {
+      await cacheEventToDatabase(signedEvent).catch((error) =>
+        console.error("Failed to cache wallet event to database:", error)
+      );
+    }
   } catch (_) {
     return;
   }
@@ -673,7 +774,18 @@ export async function createOrUpdateCommunity(
     content: "",
   };
 
-  return await finalizeAndSendNostrEvent(signer, nostr, eventTemplate);
+  const signedEvent = await finalizeAndSendNostrEvent(
+    signer,
+    nostr,
+    eventTemplate
+  );
+  // Cache community event to database
+  if (signedEvent) {
+    await cacheEventToDatabase(signedEvent).catch((error) =>
+      console.error("Failed to cache community event to database:", error)
+    );
+  }
+  return signedEvent;
 }
 
 export async function createCommunityPost(
@@ -731,7 +843,18 @@ export async function createCommunityPost(
   };
 
   // returns signed event (so caller can know id)
-  return await finalizeAndSendNostrEvent(signer, nostr, eventTemplate);
+  const signedEvent = await finalizeAndSendNostrEvent(
+    signer,
+    nostr,
+    eventTemplate
+  );
+  // Cache community post event to database
+  if (signedEvent) {
+    await cacheEventToDatabase(signedEvent).catch((error) =>
+      console.error("Failed to cache community post event to database:", error)
+    );
+  }
+  return signedEvent;
 }
 
 export async function approveCommunityPost(
@@ -755,7 +878,21 @@ export async function approveCommunityPost(
   };
 
   // returns signed approval event (so caller can persist approval id)
-  return await finalizeAndSendNostrEvent(signer, nostr, eventTemplate);
+  const signedEvent = await finalizeAndSendNostrEvent(
+    signer,
+    nostr,
+    eventTemplate
+  );
+  // Cache community approval event to database
+  if (signedEvent) {
+    await cacheEventToDatabase(signedEvent).catch((error) =>
+      console.error(
+        "Failed to cache community approval event to database:",
+        error
+      )
+    );
+  }
+  return signedEvent;
 }
 
 // Moderator retract of approval -> publish deletion event (NIP-09, kind 5)
@@ -880,6 +1017,12 @@ export async function blossomUploadImages(
         },
       });
     }
+  }
+  // Cache blossom upload event to database
+  if (signedEvent) {
+    await cacheEventToDatabase(signedEvent).catch((error) =>
+      console.error("Failed to cache blossom upload event to database:", error)
+    );
   }
   return tags;
 }

@@ -68,6 +68,7 @@ import {
   CombinedFormData,
 } from "@/utils/types/types";
 import { Controller } from "react-hook-form";
+import { cacheEventToDatabase } from "@/utils/db/db-client";
 
 export default function CartInvoiceCard({
   products,
@@ -324,7 +325,7 @@ export default function CartInvoiceCard({
       return;
     }
 
-    await sendPaymentAndContactMessageWithKeys(
+    return await sendPaymentAndContactMessageWithKeys(
       pubkeyToReceiveMessage,
       message,
       product,
@@ -450,6 +451,7 @@ export default function CartInvoiceCard({
         { ...giftWrappedMessageEvent, sig: "", read: false },
       ]);
     }
+    return giftWrappedMessageEvent;
   };
 
   const validatePaymentData = (
@@ -697,8 +699,7 @@ export default function CartInvoiceCard({
             selectedFiatOption +
             " account for the payment.";
         }
-
-        await sendPaymentAndContactMessageWithKeys(
+        const paymentEvent = await sendPaymentAndContactMessageWithKeys(
           pubkey,
           paymentMessage,
           product,
@@ -715,6 +716,12 @@ export default function CartInvoiceCard({
             : 1,
           orderKeys
         );
+        // Cache payment message to database
+        if (paymentEvent) {
+          await cacheEventToDatabase(paymentEvent).catch((error) =>
+            console.error("Failed to cache payment message to database:", error)
+          );
+        }
 
         if (required && required !== "" && data.additionalInfo) {
           const additionalMessage =
@@ -1063,7 +1070,7 @@ export default function CartInvoiceCard({
               mintError.message.includes("issued")
             ) {
               // Quote was already processed, consider it successful
-              localStorage.setItem("cart", JSON.stringify([]));
+              localStorage.setItem("cart", JSON.JSON.stringify([]));
               setPaymentConfirmed(true);
               setQrCodeUrl(null);
               setFailureText(
@@ -1081,7 +1088,7 @@ export default function CartInvoiceCard({
           continue;
         } else if (quoteState.state === "ISSUED") {
           // Quote was already processed successfully
-          localStorage.setItem("cart", JSON.stringify([]));
+          localStorage.setItem("cart", JSON.JSON.stringify([]));
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           setFailureText(
@@ -1197,6 +1204,7 @@ export default function CartInvoiceCard({
         sellerProfile?.content?.payment_preference || "ecash";
       const lnurl = sellerProfile?.content?.lud16 || "";
 
+      // Step 1: Send payment message
       if (
         paymentPreference === "lightning" &&
         lnurl &&
@@ -1281,7 +1289,7 @@ export default function CartInvoiceCard({
                 lnurl +
                 ") for your sats.";
             }
-            await sendPaymentAndContactMessageWithKeys(
+            const paymentEvent = await sendPaymentAndContactMessageWithKeys(
               pubkey,
               paymentMessage,
               product,
@@ -1298,27 +1306,42 @@ export default function CartInvoiceCard({
                 : 1,
               orderKeys
             );
+            // Cache payment message to database
+            if (paymentEvent) {
+              await cacheEventToDatabase(paymentEvent).catch((error) =>
+                console.error(
+                  "Failed to cache payment message to database:",
+                  error
+                )
+              );
+            }
+
             if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
               const encodedChange = getEncodedToken({
                 mint: mints[0]!,
                 proofs: changeProofs,
               });
               const changeMessage = "Overpaid fee change: " + encodedChange;
-              await sendPaymentAndContactMessageWithKeys(
-                pubkey,
-                changeMessage,
-                product,
-                true,
-                false,
-                false,
-                orderId,
-                "ecash",
-                mints[0],
-                JSON.stringify(changeProofs),
-                changeAmount,
-                undefined,
-                orderKeys
-              );
+              try {
+                await sendPaymentAndContactMessageWithKeys(
+                  pubkey,
+                  changeMessage,
+                  product,
+                  true,
+                  false,
+                  false,
+                  orderId,
+                  "ecash",
+                  mints[0],
+                  JSON.stringify(changeProofs),
+                  changeAmount,
+                  undefined,
+                  orderKeys
+                );
+                await new Promise((resolve) => setTimeout(resolve, 500));
+              } catch (error) {
+                console.error("Failed to send change message:", error);
+              }
             }
           } else {
             const unusedProofs = [...keep, ...send, ...meltResponse.change];
@@ -1382,7 +1405,7 @@ export default function CartInvoiceCard({
                   " on Shopstr: " +
                   unusedToken;
               }
-              await sendPaymentAndContactMessageWithKeys(
+              const paymentEvent = await sendPaymentAndContactMessageWithKeys(
                 pubkey,
                 paymentMessage,
                 product,
@@ -1399,6 +1422,15 @@ export default function CartInvoiceCard({
                   : 1,
                 orderKeys
               );
+              // Cache payment message to database
+              if (paymentEvent) {
+                await cacheEventToDatabase(paymentEvent).catch((error) =>
+                  console.error(
+                    "Failed to cache payment message to database:",
+                    error
+                  )
+                );
+              }
             }
           }
         }
@@ -1452,7 +1484,7 @@ export default function CartInvoiceCard({
               " on Shopstr: " +
               sellerToken;
           }
-          await sendPaymentAndContactMessageWithKeys(
+          const paymentEvent = await sendPaymentAndContactMessageWithKeys(
             pubkey,
             paymentMessage,
             product,
@@ -1469,43 +1501,63 @@ export default function CartInvoiceCard({
               : 1,
             orderKeys
           );
+          // Cache payment message to database
+          if (paymentEvent) {
+            await cacheEventToDatabase(paymentEvent).catch((error) =>
+              console.error(
+                "Failed to cache payment message to database:",
+                error
+              )
+            );
+          }
         }
       }
 
-      let donationMessage = "";
+      // Step 2: Send donation message
       if (donationToken) {
-        donationMessage = "Sale donation: " + donationToken;
-        await sendPaymentAndContactMessage(
-          "a37118a4888e02d28e8767c08caaf73b49abdac391ad7ff18a304891e416dc33",
-          donationMessage,
-          product,
-          false,
-          false,
-          true
-        );
+        let donationMessage = "Sale donation: " + donationToken;
+        try {
+          await sendPaymentAndContactMessage(
+            "a37118a4888e02d28e8767c08caaf73b49abdac391ad7ff18a304891e416dc33",
+            donationMessage,
+            product,
+            false,
+            false,
+            true
+          );
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        } catch (error) {
+          console.error("Failed to send donation message:", error);
+        }
       }
 
+      // Step 3: Send additional info message
       if (required && required !== "" && data.additionalInfo) {
         const additionalMessage =
           "Additional customer information: " + data.additionalInfo;
-        await sendPaymentAndContactMessageWithKeys(
-          pubkey,
-          additionalMessage,
-          product,
-          false,
-          false,
-          false,
-          orderId,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          orderKeys
-        );
+        try {
+          await sendPaymentAndContactMessageWithKeys(
+            pubkey,
+            additionalMessage,
+            product,
+            false,
+            false,
+            false,
+            orderId,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            orderKeys
+          );
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        } catch (error) {
+          console.error("Failed to send additional info message:", error);
+        }
       }
 
-      // Handle shipping and contact information based on what was provided
+      // Step 4: Handle shipping and contact information
       const productShippingType = shippingTypes[product.id];
       const shouldUseShipping =
         formType === "shipping" ||
@@ -1614,6 +1666,7 @@ export default function CartInvoiceCard({
             undefined,
             orderKeys
           );
+
           if (userPubkey) {
             const receiptMessage =
               "Your order for " +
@@ -1728,6 +1781,7 @@ export default function CartInvoiceCard({
             undefined,
             orderKeys
           );
+
           if (userPubkey) {
             await sendPaymentAndContactMessageWithKeys(
               userPubkey,
@@ -1746,10 +1800,8 @@ export default function CartInvoiceCard({
             );
           }
         }
-      }
-
-      // Always send receipt message for successful payments
-      if (userPubkey) {
+      } else if (userPubkey) {
+        // Step 5: Always send final receipt message
         let productDetails = "";
         if (product.selectedSize) {
           productDetails += " in size " + product.selectedSize;
@@ -1798,6 +1850,11 @@ export default function CartInvoiceCard({
         );
       }
     }
+    if (setFiatOrderIsPlaced) {
+      setFiatOrderIsPlaced(true);
+    }
+    setFormType(null);
+    setOrderConfirmed(true);
   };
 
   const handleCopyInvoice = () => {
@@ -1895,7 +1952,7 @@ export default function CartInvoiceCard({
         price.toString(),
         deletedEventIds
       );
-      localStorage.setItem("cart", JSON.stringify([]));
+      localStorage.setItem("cart", JSON.JSON.stringify([]));
       setOrderConfirmed(true);
       if (setCashuPaymentSent) {
         setCashuPaymentSent(true);

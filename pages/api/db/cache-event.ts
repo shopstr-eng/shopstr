@@ -1,4 +1,3 @@
-
 import type { NextApiRequest, NextApiResponse } from "next";
 import { cacheEvent } from "@/utils/db/db-service";
 import { NostrEvent } from "@/utils/types/types";

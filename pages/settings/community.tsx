@@ -18,9 +18,12 @@ import { CommunityContext } from "@/utils/context/context";
 import {
   createOrUpdateCommunity,
   deleteEvent,
+  finalizeAndSendNostrEvent,
+  addCommunitiesToCache,
+  cacheEventToDatabase,
 } from "@/utils/nostr/nostr-helper-functions";
 import CreateCommunityForm from "@/components/communities/CreateCommunityForm";
-import { Community } from "@/utils/types/types";
+import { Community, NostrEvent } from "@/utils/types/types";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
 const CommunityManagementPage = () => {
@@ -52,10 +55,24 @@ const CommunityManagementPage = () => {
       return;
     }
     try {
-      await createOrUpdateCommunity(signer, nostr, {
+      const communityEvent = await createOrUpdateCommunity(signer, nostr, {
         ...data,
         moderators: [pubkey], // Add creator as a moderator
       });
+
+      const signedEvent = await finalizeAndSendNostrEvent(
+        signer!,
+        nostr!,
+        communityEvent
+      );
+      if (signedEvent) {
+        addCommunitiesToCache([signedEvent]);
+
+        // Cache community event to database
+        await cacheEventToDatabase(signedEvent).catch((error) =>
+          console.error("Failed to cache community event to database:", error)
+        );
+      }
       alert("Community saved! It may take a few moments to appear.");
       setCommunityToEdit(null);
     } catch (error) {

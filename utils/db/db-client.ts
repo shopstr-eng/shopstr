@@ -1,4 +1,3 @@
-
 import { NostrEvent } from "@/utils/types/types";
 
 export async function cacheEventToDatabase(event: NostrEvent): Promise<void> {
@@ -13,23 +12,32 @@ export async function cacheEventToDatabase(event: NostrEvent): Promise<void> {
   }
 }
 
-export async function cacheEventsToDatabase(events: NostrEvent[]): Promise<void> {
+export async function cacheEventsToDatabase(
+  events: NostrEvent[]
+): Promise<void> {
   if (events.length === 0) return;
-  
+
   try {
-    await fetch("/api/db/cache-events", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(events),
-    });
+    // Split into smaller batches to avoid payload size limits
+    const batchSize = 50;
+    for (let i = 0; i < events.length; i += batchSize) {
+      const batch = events.slice(i, i + batchSize);
+      await fetch("/api/db/cache-events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(batch),
+      });
+    }
   } catch (error) {
     console.error("Failed to cache events to database:", error);
   }
 }
 
-export async function deleteEventsFromDatabase(eventIds: string[]): Promise<void> {
+export async function deleteEventsFromDatabase(
+  eventIds: string[]
+): Promise<void> {
   if (eventIds.length === 0) return;
-  
+
   try {
     await fetch("/api/db/delete-events", {
       method: "POST",
