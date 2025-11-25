@@ -1533,7 +1533,7 @@ export default function CartInvoiceCard({
 
       // Step 2: Send donation message
       if (donationToken) {
-        let donationMessage = "Sale donation: " + donationToken;
+        const donationMessage = "Sale donation: " + donationToken;
         try {
           await sendPaymentAndContactMessage(
             "a37118a4888e02d28e8767c08caaf73b49abdac391ad7ff18a304891e416dc33",

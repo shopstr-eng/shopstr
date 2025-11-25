@@ -23,7 +23,7 @@ import {
   cacheEventToDatabase,
 } from "@/utils/nostr/nostr-helper-functions";
 import CreateCommunityForm from "@/components/communities/CreateCommunityForm";
-import { Community, NostrEvent } from "@/utils/types/types";
+import { Community } from "@/utils/types/types";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
 const CommunityManagementPage = () => {
