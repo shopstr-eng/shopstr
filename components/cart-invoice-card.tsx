@@ -716,11 +716,20 @@ export default function CartInvoiceCard({
             : 1,
           orderKeys
         );
-        // Cache payment message to database
+        // Cache payment message to database via API
         if (paymentEvent) {
-          await cacheEventToDatabase(paymentEvent).catch((error) =>
-            console.error("Failed to cache payment message to database:", error)
-          );
+          try {
+            const response = await fetch("/api/db/cache-event", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(paymentEvent),
+            });
+            if (!response.ok) {
+              console.error("Failed to cache payment message to database");
+            }
+          } catch (error) {
+            console.error("Failed to cache payment message to database:", error);
+          }
         }
 
         if (required && required !== "" && data.additionalInfo) {
@@ -1308,12 +1317,11 @@ export default function CartInvoiceCard({
             );
             // Cache payment message to database
             if (paymentEvent) {
-              await cacheEventToDatabase(paymentEvent).catch((error) =>
-                console.error(
-                  "Failed to cache payment message to database:",
-                  error
-                )
-              );
+              try {
+                await cacheEventToDatabase(paymentEvent);
+              } catch (error) {
+                console.error("Failed to cache payment message to database:", error);
+              }
             }
 
             if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
@@ -1424,12 +1432,11 @@ export default function CartInvoiceCard({
               );
               // Cache payment message to database
               if (paymentEvent) {
-                await cacheEventToDatabase(paymentEvent).catch((error) =>
-                  console.error(
-                    "Failed to cache payment message to database:",
-                    error
-                  )
-                );
+                try {
+                  await cacheEventToDatabase(paymentEvent);
+                } catch (error) {
+                  console.error("Failed to cache payment message to database:", error);
+                }
               }
             }
           }
@@ -1503,12 +1510,11 @@ export default function CartInvoiceCard({
           );
           // Cache payment message to database
           if (paymentEvent) {
-            await cacheEventToDatabase(paymentEvent).catch((error) =>
-              console.error(
-                "Failed to cache payment message to database:",
-                error
-              )
-            );
+            try {
+              await cacheEventToDatabase(paymentEvent);
+            } catch (error) {
+              console.error("Failed to cache payment message to database:", error);
+            }
           }
         }
       }

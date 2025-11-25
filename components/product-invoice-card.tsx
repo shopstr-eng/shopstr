@@ -1107,12 +1107,11 @@ export default function ProductInvoiceCard({
           );
           // Cache payment message to database
           if (paymentEvent) {
-            await cacheEventToDatabase(paymentEvent).catch((error) =>
-              console.error(
-                "Failed to cache payment message to database:",
-                error
-              )
-            );
+            try {
+              await cacheEventToDatabase(paymentEvent);
+            } catch (error) {
+              console.error("Failed to cache payment message to database:", error);
+            }
           }
 
           if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
@@ -1195,12 +1194,11 @@ export default function ProductInvoiceCard({
             );
             // Cache payment message to database
             if (paymentEvent) {
-              await cacheEventToDatabase(paymentEvent).catch((error) =>
-                console.error(
-                  "Failed to cache payment message to database:",
-                  error
-                )
-              );
+              try {
+                await cacheEventToDatabase(paymentEvent);
+              } catch (error) {
+                console.error("Failed to cache payment message to database:", error);
+              }
             }
           }
         }
@@ -1249,9 +1247,11 @@ export default function ProductInvoiceCard({
         );
         // Cache payment message to database
         if (paymentEvent) {
-          await cacheEventToDatabase(paymentEvent).catch((error) =>
-            console.error("Failed to cache payment message to database:", error)
-          );
+          try {
+            await cacheEventToDatabase(paymentEvent);
+          } catch (error) {
+            console.error("Failed to cache payment message to database:", error);
+          }
         }
       }
     }
