@@ -728,7 +728,10 @@ export default function CartInvoiceCard({
               console.error("Failed to cache payment message to database");
             }
           } catch (error) {
-            console.error("Failed to cache payment message to database:", error);
+            console.error(
+              "Failed to cache payment message to database:",
+              error
+            );
           }
         }
 
@@ -1320,7 +1323,10 @@ export default function CartInvoiceCard({
               try {
                 await cacheEventToDatabase(paymentEvent);
               } catch (error) {
-                console.error("Failed to cache payment message to database:", error);
+                console.error(
+                  "Failed to cache payment message to database:",
+                  error
+                );
               }
             }
 
@@ -1435,7 +1441,10 @@ export default function CartInvoiceCard({
                 try {
                   await cacheEventToDatabase(paymentEvent);
                 } catch (error) {
-                  console.error("Failed to cache payment message to database:", error);
+                  console.error(
+                    "Failed to cache payment message to database:",
+                    error
+                  );
                 }
               }
             }
@@ -1513,7 +1522,10 @@ export default function CartInvoiceCard({
             try {
               await cacheEventToDatabase(paymentEvent);
             } catch (error) {
-              console.error("Failed to cache payment message to database:", error);
+              console.error(
+                "Failed to cache payment message to database:",
+                error
+              );
             }
           }
         }

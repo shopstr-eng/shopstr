@@ -1,4 +1,3 @@
-
 import { NostrEvent } from "@/utils/types/types";
 
 export async function cacheEventToDatabase(event: NostrEvent): Promise<void> {
@@ -17,7 +16,9 @@ export async function cacheEventToDatabase(event: NostrEvent): Promise<void> {
   }
 }
 
-export async function cacheEventsToDatabase(events: NostrEvent[]): Promise<void> {
+export async function cacheEventsToDatabase(
+  events: NostrEvent[]
+): Promise<void> {
   try {
     const response = await fetch("/api/db/cache-events", {
       method: "POST",
