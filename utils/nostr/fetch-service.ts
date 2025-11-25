@@ -678,13 +678,13 @@ export const fetchReviews = async (
         const reviewsFromDb = await response.json();
 
         for (const event of reviewsFromDb) {
-          const addressTag = event.tags.find((tag) => tag[0] === "d")?.[1];
+          const addressTag = event.tags.find((tag: string[]) => tag[0] === "d")?.[1];
           if (!addressTag || !addresses.includes(addressTag)) continue;
 
           const [_, _kind, merchantPubkey, productDTag] = addressTag.split(":");
           if (!merchantPubkey || !productDTag) continue;
 
-          const ratingTags = event.tags.filter((tag) => tag[0] === "rating");
+          const ratingTags = event.tags.filter((tag: string[]) => tag[0] === "rating");
           const commentArray = ["comment", event.content];
           ratingTags.unshift(commentArray);
 
@@ -983,34 +983,34 @@ export const fetchAllRelays = async (
 
         for (const event of relayEventsFromDb) {
           const validRelays = event.tags.filter(
-            (tag) => tag[0] === "r" && !tag[2]
+            (tag: string[]) => tag[0] === "r" && !tag[2]
           );
           const validReadRelays = event.tags.filter(
-            (tag) => tag[0] === "r" && tag[2] === "read"
+            (tag: string[]) => tag[0] === "r" && tag[2] === "read"
           );
           const validWriteRelays = event.tags.filter(
-            (tag) => tag[0] === "r" && tag[2] === "write"
+            (tag: string[]) => tag[0] === "r" && tag[2] === "write"
           );
 
-          validRelays.forEach((tag) => relaySet.add(tag[1]!));
+          validRelays.forEach((tag: string[]) => relaySet.add(tag[1]!));
           relayList.push(
             ...validRelays
-              .map((tag) => tag[1]!)
-              .filter((tag) => tag !== undefined)
+              .map((tag: string[]) => tag[1]!)
+              .filter((tag: string[]) => tag !== undefined)
           );
 
-          validReadRelays.forEach((tag) => readRelaySet.add(tag[1]!));
+          validReadRelays.forEach((tag: string[]) => readRelaySet.add(tag[1]!));
           readRelayList.push(
             ...validReadRelays
-              .map((tag) => tag[1]!)
-              .filter((tag) => tag !== undefined)
+              .map((tag: string[]) => tag[1]!)
+              .filter((tag: string[]) => tag !== undefined)
           );
 
-          validWriteRelays.forEach((tag) => writeRelaySet.add(tag[1]!));
+          validWriteRelays.forEach((tag: string[]) => writeRelaySet.add(tag[1]!));
           writeRelayList.push(
             ...validWriteRelays
-              .map((tag) => tag[1]!)
-              .filter((tag) => tag !== undefined)
+              .map((tag: string[]) => tag[1]!)
+              .filter((tag: string[]) => tag !== undefined)
           );
         }
 
@@ -1118,13 +1118,13 @@ export const fetchAllBlossomServers = async (
 
         for (const event of blossomEventsFromDb) {
           const validBlossomServers = event.tags.filter(
-            (tag) => tag[0] === "server"
+            (tag: string[]) => tag[0] === "server"
           );
-          validBlossomServers.forEach((tag) => blossomSet.add(tag[1]!));
+          validBlossomServers.forEach((tag: string[]) => blossomSet.add(tag[1]!));
           blossomServers.push(
             ...validBlossomServers
-              .map((tag) => tag[1]!)
-              .filter((tag) => tag !== undefined)
+              .map((tag: string[]) => tag[1]!)
+              .filter((tag: string[]) => tag !== undefined)
           );
         }
 
@@ -1232,7 +1232,7 @@ export const fetchCashuWallet = async (
             const mints = event.tags.filter(
               (tag: string[]) => tag[0] === "mint"
             );
-            mints.forEach((tag) => {
+            mints.forEach((tag: string[]) => {
               if (tag[1] && !cashuMintSet.has(tag[1])) {
                 cashuMintSet.add(tag[1]);
                 cashuMints.push(tag[1]);

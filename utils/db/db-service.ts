@@ -237,7 +237,7 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
       // Delete older events from the same pubkey with the same kind
       const deleteQuery = {
         text: `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2`,
-        values: [event.pubkey, event.kind],
+        values: [event.pubkey, event.kind] as any[],
       };
       await client.query(deleteQuery);
 
@@ -269,7 +269,7 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
         // Delete older reviews from the same pubkey for the same product
         const deleteQuery = {
           text: `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND tags::text LIKE $3`,
-          values: [event.pubkey, event.kind, `%"d","${dTag}"%`],
+          values: [event.pubkey, event.kind, `%"d","${dTag}"%`] as any[],
         };
         await client.query(deleteQuery);
       }
@@ -419,7 +419,7 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
         // First, lock and delete old rows
         await client.query(
           `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND id != $3`,
-          [event.pubkey, event.kind, event.id]
+          [event.pubkey, event.kind, event.id] as any[]
         );
 
         // Then insert/update with ON CONFLICT
@@ -468,7 +468,7 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
           // First, lock and delete old rows
           await client.query(
             `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND tags::text LIKE $3 AND id != $4`,
-            [event.pubkey, event.kind, `%"d","${dTag}"%`, event.id]
+            [event.pubkey, event.kind, `%"d","${dTag}"%`, event.id] as any[]
           );
 
           // Then insert/update with ON CONFLICT

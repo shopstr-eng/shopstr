@@ -64,7 +64,6 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import { ShippingFormData, ContactFormData } from "@/utils/types/types";
 import { Controller } from "react-hook-form";
-import { cacheEventToDatabase } from "@/utils/db/db-client";
 
 export default function ProductInvoiceCard({
   productData,
@@ -304,7 +303,6 @@ export default function ProductInvoiceCard({
         { ...giftWrappedMessageEvent, sig: "", read: false },
       ]);
     }
-    return giftWrappedMessageEvent; // Return the event for caching
   };
 
   const validatePaymentData = (
@@ -1093,7 +1091,7 @@ export default function ProductInvoiceCard({
             " on Shopstr! Check your Lightning address (" +
             lnurl +
             ") for your sats.";
-          const paymentEvent = await sendPaymentAndContactMessage(
+          await sendPaymentAndContactMessage(
             productData.pubkey,
             paymentMessage,
             true,
@@ -1105,17 +1103,6 @@ export default function ProductInvoiceCard({
             invoice.preimage ? invoice.preimage : invoice.paymentHash,
             meltAmount
           );
-          // Cache payment message to database
-          if (paymentEvent) {
-            try {
-              await cacheEventToDatabase(paymentEvent);
-            } catch (error) {
-              console.error(
-                "Failed to cache payment message to database:",
-                error
-              );
-            }
-          }
 
           if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
             const encodedChange = getEncodedToken({
@@ -1183,7 +1170,7 @@ export default function ProductInvoiceCard({
               productDetails +
               " on Shopstr: " +
               unusedToken;
-            const paymentEvent = await sendPaymentAndContactMessage(
+            await sendPaymentAndContactMessage(
               productData.pubkey,
               paymentMessage,
               true,
@@ -1195,17 +1182,6 @@ export default function ProductInvoiceCard({
               JSON.stringify(unusedProofs),
               unusedAmount
             );
-            // Cache payment message to database
-            if (paymentEvent) {
-              try {
-                await cacheEventToDatabase(paymentEvent);
-              } catch (error) {
-                console.error(
-                  "Failed to cache payment message to database:",
-                  error
-                );
-              }
-            }
           }
         }
       }
@@ -1239,7 +1215,7 @@ export default function ProductInvoiceCard({
           productDetails +
           " on Shopstr: " +
           sellerToken;
-        const paymentEvent = await sendPaymentAndContactMessage(
+        await sendPaymentAndContactMessage(
           productData.pubkey,
           paymentMessage,
           true,
@@ -1251,17 +1227,6 @@ export default function ProductInvoiceCard({
           JSON.stringify(sellerProofs),
           sellerAmount
         );
-        // Cache payment message to database
-        if (paymentEvent) {
-          try {
-            await cacheEventToDatabase(paymentEvent);
-          } catch (error) {
-            console.error(
-              "Failed to cache payment message to database:",
-              error
-            );
-          }
-        }
       }
     }
 
