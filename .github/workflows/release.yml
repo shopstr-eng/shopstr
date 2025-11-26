@@ -63,6 +63,8 @@ jobs:
 
   version-and-changelog:
     name: Version Bump and Changelog
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     needs: test
     if: github.event_name == 'workflow_dispatch'
