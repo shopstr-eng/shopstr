@@ -12,6 +12,9 @@ export default async function handler(
 
   try {
     const events: NostrEvent[] = req.body;
+    if (!Array.isArray(events)) {
+      return res.status(400).json({ error: "Invalid request body: expected an array of events" });
+    }
 
     // Handle large batches by splitting them
     if (events.length > 100) {
