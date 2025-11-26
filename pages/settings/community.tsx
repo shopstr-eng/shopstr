@@ -58,11 +58,7 @@ const CommunityManagementPage = () => {
         moderators: [pubkey], // Add creator as a moderator
       });
 
-      await finalizeAndSendNostrEvent(
-        signer!,
-        nostr!,
-        communityEvent
-      );
+      await finalizeAndSendNostrEvent(signer!, nostr!, communityEvent);
       alert("Community saved! It may take a few moments to appear.");
       setCommunityToEdit(null);
     } catch (error) {

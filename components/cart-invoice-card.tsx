@@ -1637,7 +1637,7 @@ export default function CartInvoiceCard({
               "Your order for " +
               title +
               productDetails +
-              " was processed successfully. If applicable, you should be receiving delivery information from " +
+              " was processed successfully! If applicable, you should be receiving delivery information from " +
               nip19.npubEncode(product.pubkey) +
               " as soon as they review your order.";
             await sendPaymentAndContactMessageWithKeys(
@@ -1711,7 +1711,7 @@ export default function CartInvoiceCard({
               "Your order for " +
               title +
               productDetails +
-              " was processed successfully. If applicable, you should be receiving delivery information from " +
+              " was processed successfully! If applicable, you should be receiving delivery information from " +
               nip19.npubEncode(product.pubkey) +
               " as soon as they review your order.";
           } else {
@@ -1727,7 +1727,7 @@ export default function CartInvoiceCard({
             receiptMessage =
               "Your order for " +
               title +
-              " was processed successfully. If applicable, you should be receiving delivery information from " +
+              " was processed successfully! If applicable, you should be receiving delivery information from " +
               nip19.npubEncode(product.pubkey) +
               " as soon as they review your order.";
           }
@@ -1815,11 +1815,6 @@ export default function CartInvoiceCard({
         );
       }
     }
-    if (setFiatOrderIsPlaced) {
-      setFiatOrderIsPlaced(true);
-    }
-    setFormType(null);
-    setOrderConfirmed(true);
   };
 
   const handleCopyInvoice = () => {

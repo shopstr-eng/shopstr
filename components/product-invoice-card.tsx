@@ -624,7 +624,7 @@ export default function ProductInvoiceCard({
               "Your order for " +
               productData.title +
               productDetails +
-              " was processed successfully. If applicable, you should be receiving delivery information from " +
+              " was processed successfully! If applicable, you should be receiving delivery information from " +
               nip19.npubEncode(productData.pubkey) +
               " as soon as they review your order.";
             await sendPaymentAndContactMessage(
@@ -678,7 +678,7 @@ export default function ProductInvoiceCard({
               "Your order for " +
               productData.title +
               productDetails +
-              " was processed successfully. If applicable, you should be receiving delivery information from " +
+              " was processed successfully! If applicable, you should be receiving delivery information from " +
               nip19.npubEncode(productData.pubkey) +
               " as soon as they review your order.";
           } else {
@@ -694,7 +694,7 @@ export default function ProductInvoiceCard({
             receiptMessage =
               "Your order for " +
               productData.title +
-              " was processed successfully. If applicable, you should be receiving delivery information from " +
+              " was processed successfully! If applicable, you should be receiving delivery information from " +
               nip19.npubEncode(productData.pubkey) +
               " as soon as they review your order.";
           }
@@ -1351,7 +1351,7 @@ export default function ProductInvoiceCard({
             "Your order for " +
             productData.title +
             productDetails +
-            " was processed successfully. If applicable, you should be receiving delivery information from " +
+            " was processed successfully! If applicable, you should be receiving delivery information from " +
             nip19.npubEncode(productData.pubkey) +
             " as soon as they review your order.";
           await sendPaymentAndContactMessage(
@@ -1407,7 +1407,7 @@ export default function ProductInvoiceCard({
             "Your order for " +
             productData.title +
             productDetails +
-            " was processed successfully. If applicable, you should be receiving delivery information from " +
+            " was processed successfully! If applicable, you should be receiving delivery information from " +
             nip19.npubEncode(productData.pubkey) +
             " as soon as they review your order.";
         } else {
@@ -1423,7 +1423,7 @@ export default function ProductInvoiceCard({
           receiptMessage =
             "Your order for " +
             productData.title +
-            " was processed successfully. If applicable, you should be receiving delivery information from " +
+            " was processed successfully! If applicable, you should be receiving delivery information from " +
             nip19.npubEncode(productData.pubkey) +
             " as soon as they review your order.";
         }
