@@ -323,7 +323,7 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
         console.error("Failed to rollback transaction:", rollbackError);
       }
     }
-    console.error(`Failed to cache event ${event.id}:`, error);
+    console.error("Failed to cache event %s:", event.id, error);
   } finally {
     if (client) {
       client.release();
