@@ -156,6 +156,8 @@ jobs:
 
   create-release:
     name: Create GitHub Release
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     needs: [test, version-and-changelog]
     if: always() && (needs.test.result == 'success') && (github.event_name == 'push' || needs.version-and-changelog.result == 'success')
