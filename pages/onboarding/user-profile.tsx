@@ -9,7 +9,7 @@ const OnboardingUserProfile = () => {
   const router = useRouter();
 
   const handleNext = () => {
-    router.push("/onboarding/shop-profile");
+    router.push("/onboarding/wallet");
   };
 
   return (
