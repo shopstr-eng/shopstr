@@ -281,6 +281,7 @@ jobs:
 
   notify:
     name: Notify Release
+    permissions: {}
     runs-on: ubuntu-latest
     needs: [create-release, publish-npm]
     if: always() && (needs.create-release.result == 'success')
