@@ -21,7 +21,10 @@ import {
 } from "@/utils/nostr/cache-service";
 import { useKeyPress } from "@/utils/keypress-handler";
 import FailureModal from "../utility-components/failure-modal";
-import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import {
+  NostrContext,
+  SignerContext,
+} from "@/components/utility-components/nostr-context-provider";
 import SignInModal from "../sign-in/SignInModal";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
@@ -42,6 +45,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
   const [isChatsLoading, setIsChatsLoading] = useState(true);
   const [isSendingDMLoading, setIsSendingDMLoading] = useState(false);
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
+  const { nostr } = useContext(NostrContext);
 
   const [isClient, setIsClient] = useState(false);
 
@@ -273,8 +277,8 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         decodedRandomPrivkeyForReceiver.data as Uint8Array,
         currentChatPubkey
       );
-      await sendGiftWrappedMessageEvent(senderGiftWrappedEvent);
-      await sendGiftWrappedMessageEvent(receiverGiftWrappedEvent);
+      await sendGiftWrappedMessageEvent(nostr!, senderGiftWrappedEvent);
+      await sendGiftWrappedMessageEvent(nostr!, receiverGiftWrappedEvent);
       chatsContext.addNewlyCreatedMessageEvent(
         {
           ...giftWrappedMessageEvent,
@@ -286,6 +290,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       addChatMessagesToCache([
         { ...giftWrappedMessageEvent, sig: "", read: true },
       ]);
+
       setIsSendingDMLoading(false);
     } catch (_) {
       setFailureText("Error sending inquiry.");

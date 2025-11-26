@@ -288,7 +288,7 @@ export default function ProductInvoiceCard({
       decodedRandomPrivkeyForReceiver.data as Uint8Array,
       pubkeyToReceiveMessage
     );
-    await sendGiftWrappedMessageEvent(giftWrappedEvent);
+    await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent);
 
     if (isReceipt) {
       chatsContext.addNewlyCreatedMessageEvent(
@@ -618,18 +618,20 @@ export default function ProductInvoiceCard({
             false,
             orderId
           );
+
           if (userPubkey) {
             const receiptMessage =
               "Your order for " +
               productData.title +
-              " was processed successfully! If applicable, you should be receiving delivery information from " +
+              productDetails +
+              " was processed successfully. If applicable, you should be receiving delivery information from " +
               nip19.npubEncode(productData.pubkey) +
               " as soon as they review your order.";
             await sendPaymentAndContactMessage(
               userPubkey,
               receiptMessage,
               false,
-              true,
+              true, // isReceipt is true
               false,
               orderId
             );
@@ -676,7 +678,7 @@ export default function ProductInvoiceCard({
               "Your order for " +
               productData.title +
               productDetails +
-              " was processed successfully! If applicable, you should be receiving delivery information from " +
+              " was processed successfully. If applicable, you should be receiving delivery information from " +
               nip19.npubEncode(productData.pubkey) +
               " as soon as they review your order.";
           } else {
@@ -692,7 +694,7 @@ export default function ProductInvoiceCard({
             receiptMessage =
               "Your order for " +
               productData.title +
-              " was processed successfully! If applicable, you should be receiving delivery information from " +
+              " was processed successfully. If applicable, you should be receiving delivery information from " +
               nip19.npubEncode(productData.pubkey) +
               " as soon as they review your order.";
           }
@@ -704,12 +706,13 @@ export default function ProductInvoiceCard({
             false,
             orderId
           );
+
           if (userPubkey) {
             await sendPaymentAndContactMessage(
               userPubkey,
               receiptMessage,
               false,
-              true,
+              true, // isReceipt is true
               false,
               orderId
             );
@@ -746,7 +749,7 @@ export default function ProductInvoiceCard({
           userPubkey,
           receiptMessage,
           false,
-          true,
+          true, // isReceipt is true
           false,
           orderId
         );
@@ -1028,6 +1031,7 @@ export default function ProductInvoiceCard({
       sellerProfile?.content?.payment_preference || "ecash";
     const lnurl = sellerProfile?.content?.lud16 || "";
 
+    // Step 1: Send payment message
     if (
       paymentPreference === "lightning" &&
       lnurl &&
@@ -1099,24 +1103,30 @@ export default function ProductInvoiceCard({
             invoice.preimage ? invoice.preimage : invoice.paymentHash,
             meltAmount
           );
+
           if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
             const encodedChange = getEncodedToken({
               mint: mints[0]!,
               proofs: changeProofs,
             });
             const changeMessage = "Overpaid fee change: " + encodedChange;
-            await sendPaymentAndContactMessage(
-              productData.pubkey,
-              changeMessage,
-              true,
-              false,
-              false,
-              orderId,
-              "ecash",
-              mints[0],
-              JSON.stringify(changeProofs),
-              changeAmount
-            );
+            try {
+              await sendPaymentAndContactMessage(
+                productData.pubkey,
+                changeMessage,
+                true,
+                false,
+                false,
+                orderId,
+                "ecash",
+                mints[0],
+                JSON.stringify(changeProofs),
+                changeAmount
+              );
+              await new Promise((resolve) => setTimeout(resolve, 500));
+            } catch (error) {
+              console.error("Failed to send change message:", error);
+            }
           }
         } else {
           const unusedProofs = [...keep, ...send, ...meltResponse.change];
@@ -1219,32 +1229,44 @@ export default function ProductInvoiceCard({
         );
       }
     }
-    let donationMessage = "";
+
+    // Step 2: Send donation message
     if (donationToken) {
-      donationMessage = "Sale donation: " + donationToken;
-      await sendPaymentAndContactMessage(
-        "a37118a4888e02d28e8767c08caaf73b49abdac391ad7ff18a304891e416dc33",
-        donationMessage,
-        false,
-        false,
-        true
-      );
+      const donationMessage = "Sale donation: " + donationToken;
+      try {
+        await sendPaymentAndContactMessage(
+          "a37118a4888e02d28e8767c08caaf73b49abdac391ad7ff18a304891e416dc33",
+          donationMessage,
+          false,
+          false,
+          true
+        );
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      } catch (error) {
+        console.error("Failed to send donation message:", error);
+      }
     }
 
+    // Step 3: Send additional info message
     if (additionalInfo) {
       const additionalMessage =
         "Additional customer information: " + additionalInfo;
-      await sendPaymentAndContactMessage(
-        productData.pubkey,
-        additionalMessage,
-        false,
-        false,
-        false,
-        orderId
-      );
+      try {
+        await sendPaymentAndContactMessage(
+          productData.pubkey,
+          additionalMessage,
+          false,
+          false,
+          false,
+          orderId
+        );
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      } catch (error) {
+        console.error("Failed to send additional info message:", error);
+      }
     }
 
-    // Handle shipping and contact information based on what was provided
+    // Step 4: Handle shipping and contact information
     if (
       shippingName &&
       shippingAddress &&
@@ -1253,7 +1275,6 @@ export default function ProductInvoiceCard({
       shippingState &&
       shippingCountry
     ) {
-      // Shipping information provided
       if (
         productData.shippingType === "Added Cost" ||
         productData.shippingType === "Free" ||
@@ -1324,6 +1345,7 @@ export default function ProductInvoiceCard({
           false,
           orderId
         );
+
         if (userPubkey) {
           const receiptMessage =
             "Your order for " +
@@ -1336,14 +1358,13 @@ export default function ProductInvoiceCard({
             userPubkey,
             receiptMessage,
             false,
-            true,
+            true, // isReceipt is true
             false,
             orderId
           );
         }
       }
     } else if (contact && contactType && contactInstructions) {
-      // Contact information provided
       if (
         productData.shippingType === "N/A" ||
         productData.shippingType === "Pickup" ||
@@ -1414,21 +1435,20 @@ export default function ProductInvoiceCard({
           false,
           orderId
         );
+
         if (userPubkey) {
           await sendPaymentAndContactMessage(
             userPubkey,
             receiptMessage,
             false,
-            true,
+            true, // isReceipt is true
             false,
             orderId
           );
         }
       }
-    }
-
-    // Always send receipt message for successful payments
-    if (userPubkey) {
+    } else if (userPubkey) {
+      // Step 5: Always send final receipt message
       let productDetails = "";
       if (selectedSize) {
         productDetails += " in size " + selectedSize;
@@ -1459,7 +1479,7 @@ export default function ProductInvoiceCard({
         userPubkey,
         receiptMessage,
         false,
-        true,
+        true, // isReceipt is true
         false,
         orderId
       );
@@ -1621,49 +1641,49 @@ export default function ProductInvoiceCard({
 
     return (
       <div className="space-y-4">
-        {productData.shippingType === "Free/Pickup" ||
-        productData.shippingType === "Pickup" ? (
-          <Controller
-            name="pickupLocation"
-            control={formControl}
-            rules={{ required: "A pickup location is required." }}
-            render={({
-              field: { onChange, onBlur, value },
-              fieldState: { error },
-            }) => (
-              <Select
-                variant="bordered"
-                fullWidth={true}
-                label={
-                  <span>
-                    Pickup Location <span className="text-red-500">*</span>
-                  </span>
-                }
-                labelPlacement="inside"
-                placeholder="Select a pickup location"
-                isInvalid={!!error}
-                errorMessage={error?.message}
-                onChange={(e) => {
-                  onChange(e);
-                  setSelectedPickupLocation(e.target.value);
-                }}
-                onBlur={onBlur}
-                value={value || ""}
-              >
-                {productData.pickupLocations
-                  ? productData.pickupLocations.map((location) => (
-                      <SelectItem key={location} value={location}>
-                        {location}
-                      </SelectItem>
-                    ))
-                  : []}
-              </Select>
-            )}
-          />
-        ) : null}
-
         {formType === "contact" && (
           <>
+            {productData.pickupLocations &&
+              productData.pickupLocations.length > 0 && (
+                <Controller
+                  name="pickupLocation"
+                  control={formControl}
+                  rules={{ required: "A pickup location is required." }}
+                  render={({
+                    field: { onChange, onBlur, value },
+                    fieldState: { error },
+                  }) => (
+                    <Select
+                      variant="bordered"
+                      fullWidth={true}
+                      label={
+                        <span>
+                          Pickup Location{" "}
+                          <span className="text-red-500">*</span>
+                        </span>
+                      }
+                      labelPlacement="inside"
+                      placeholder="Select a pickup location"
+                      isInvalid={!!error}
+                      errorMessage={error?.message}
+                      onChange={(e) => {
+                        onChange(e);
+                        setSelectedPickupLocation(e.target.value);
+                      }}
+                      onBlur={onBlur}
+                      value={value || ""}
+                    >
+                      {productData.pickupLocations
+                        ? productData.pickupLocations.map((location) => (
+                            <SelectItem key={location} value={location}>
+                              {location}
+                            </SelectItem>
+                          ))
+                        : []}
+                    </Select>
+                  )}
+                />
+              )}
             <Controller
               name="Contact"
               control={formControl}

@@ -18,6 +18,7 @@ import { CommunityContext } from "@/utils/context/context";
 import {
   createOrUpdateCommunity,
   deleteEvent,
+  finalizeAndSendNostrEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import CreateCommunityForm from "@/components/communities/CreateCommunityForm";
 import { Community } from "@/utils/types/types";
@@ -52,10 +53,16 @@ const CommunityManagementPage = () => {
       return;
     }
     try {
-      await createOrUpdateCommunity(signer, nostr, {
+      const communityEvent = await createOrUpdateCommunity(signer, nostr, {
         ...data,
         moderators: [pubkey], // Add creator as a moderator
       });
+
+      await finalizeAndSendNostrEvent(
+        signer!,
+        nostr!,
+        communityEvent
+      );
       alert("Community saved! It may take a few moments to appear.");
       setCommunityToEdit(null);
     } catch (error) {

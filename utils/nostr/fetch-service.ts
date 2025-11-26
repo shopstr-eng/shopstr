@@ -32,6 +32,7 @@ import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions"
 import { hashToCurve } from "@cashu/crypto/modules/common";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
+import { cacheEventsToDatabase } from "@/utils/db/db-client";
 
 function getUniqueProofs(proofs: Proof[]): Proof[] {
   const uniqueProofs = new Set<string>();
@@ -59,13 +60,26 @@ export const fetchAllPosts = async (
 }> => {
   return new Promise(async function (resolve, reject) {
     try {
+      // First, load from database to immediately populate the UI
+      let productArrayFromDb: NostrEvent[] = [];
+      try {
+        const response = await fetch("/api/db/fetch-products");
+        if (response.ok) {
+          productArrayFromDb = await response.json();
+          if (productArrayFromDb.length > 0) {
+            editProductContext(productArrayFromDb, false);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch products from database: ", error);
+      }
+
       let deletedProductsInCacheSet: Set<any> = new Set(); // used to remove deleted items from cache
       try {
         const productArrayFromCache = await fetchAllProductsFromCache();
         deletedProductsInCacheSet = new Set(
           productArrayFromCache.map((product: NostrEvent) => product.id)
         );
-        editProductContext(productArrayFromCache, false);
       } catch (error) {
         console.error("Failed to fetch all listings from cache: ", error);
       }
@@ -80,6 +94,16 @@ export const fetchAllPosts = async (
       const fetchedEvents = await nostr.fetch([filter], {}, relays);
       if (!fetchedEvents.length) {
         console.error("No products found with filter: ", filter);
+      }
+
+      // Cache valid product events to database
+      const validProductEvents = fetchedEvents.filter(
+        (e) => e.id && e.sig && e.pubkey && e.kind === 30402
+      );
+      if (validProductEvents.length > 0) {
+        cacheEventsToDatabase(validProductEvents).catch((error) =>
+          console.error("Failed to cache products to database:", error)
+        );
       }
 
       for (const event of fetchedEvents) {
@@ -102,6 +126,16 @@ export const fetchAllPosts = async (
 
       editProductContext(productArrayFromRelay, false);
       removeProductFromCache(Array.from(deletedProductsInCacheSet));
+
+      // Cache fetched products to database via API (only valid events with signatures)
+      const validProducts = productArrayFromRelay.filter(
+        (e) => e.id && e.sig && e.pubkey
+      );
+      if (validProducts.length > 0) {
+        cacheEventsToDatabase(validProducts).catch((error) =>
+          console.error("Failed to cache products to database:", error)
+        );
+      }
 
       resolve({
         productEvents: productArrayFromRelay,
@@ -223,6 +257,52 @@ export const fetchShopProfile = async (
         return;
       }
 
+      // First load from database
+      try {
+        const response = await fetch("/api/db/fetch-profiles");
+        if (response.ok) {
+          const profilesFromDb = await response.json();
+          const shopProfilesFromDb = profilesFromDb.filter(
+            (e: NostrEvent) =>
+              e.kind === 30019 && pubkeyShopProfileToFetch.includes(e.pubkey)
+          );
+
+          if (shopProfilesFromDb.length > 0) {
+            shopProfilesFromDb.sort(
+              (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
+            );
+            const latestEventsMap: Map<string, NostrEvent> = new Map();
+            shopProfilesFromDb.forEach((event: NostrEvent) => {
+              if (!latestEventsMap.has(event.pubkey)) {
+                latestEventsMap.set(event.pubkey, event);
+              }
+            });
+
+            latestEventsMap.forEach((event, pubkey) => {
+              try {
+                const shopProfileSetting = {
+                  pubkey: event.pubkey,
+                  content: JSON.parse(event.content),
+                  created_at: event.created_at,
+                };
+                shopProfile.set(pubkey, shopProfileSetting);
+              } catch (error) {
+                console.error(
+                  `Failed to parse shop profile from DB for pubkey: ${pubkey}`,
+                  error
+                );
+              }
+            });
+
+            if (shopProfile.size > 0) {
+              editShopContext(shopProfile, false);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch shop profiles from database: ", error);
+      }
+
       const shopFilter: Filter = {
         kinds: [30019],
         authors: pubkeyShopProfileToFetch,
@@ -257,6 +337,17 @@ export const fetchShopProfile = async (
         });
 
         editShopContext(shopProfile, false);
+
+        // Cache shop profiles to database via API
+        const validShopEvents = shopEvents.filter(
+          (e) => e.id && e.sig && e.pubkey && e.kind === 30019
+        );
+        if (validShopEvents.length > 0) {
+          cacheEventsToDatabase(validShopEvents).catch((error) =>
+            console.error("Failed to cache shop profiles to database:", error)
+          );
+        }
+
         resolve({ shopProfileMap: shopProfile });
       } else {
         reject();
@@ -281,6 +372,45 @@ export const fetchProfile = async (
         editProfileContext(new Map(), false);
         resolve({ profileMap: new Map() });
         return;
+      }
+
+      // First load from database
+      try {
+        const response = await fetch("/api/db/fetch-profiles");
+        if (response.ok) {
+          const profilesFromDb = await response.json();
+          const profileMap = new Map<string, any>();
+          for (const event of profilesFromDb) {
+            if (pubkeyProfilesToFetch.includes(event.pubkey)) {
+              try {
+                const content = JSON.parse(event.content);
+                const profile = {
+                  pubkey: event.pubkey,
+                  created_at: event.created_at,
+                  content: content,
+                  nip05Verified: false,
+                };
+                if (content.nip05) {
+                  profile.nip05Verified = await verifyNip05Identifier(
+                    content.nip05,
+                    event.pubkey
+                  );
+                }
+                profileMap.set(event.pubkey, profile);
+              } catch (error) {
+                console.error(
+                  `Failed to parse profile from DB: ${event.pubkey}`,
+                  error
+                );
+              }
+            }
+          }
+          if (profileMap.size > 0) {
+            editProfileContext(profileMap, false);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch profiles from database: ", error);
       }
 
       try {
@@ -330,6 +460,17 @@ export const fetchProfile = async (
         }
       }
       await addProfilesToCache(profileMap);
+
+      // Cache profiles to database via API (reconstruct from fetched events)
+      const validProfileEvents = fetchedEvents.filter(
+        (e) => e.id && e.sig && e.pubkey && e.kind === 0
+      );
+      if (validProfileEvents.length > 0) {
+        cacheEventsToDatabase(validProfileEvents).catch((error) =>
+          console.error("Failed to cache profiles to database:", error)
+        );
+      }
+
       resolve({ profileMap });
     } catch (error) {
       reject(error);
@@ -353,8 +494,30 @@ export const fetchGiftWrappedChatsAndMessages = async (
       resolve({ profileSetFromChats: new Set() });
       return;
     } else {
+      // Load from database first
       const chatMessagesFromCache: Map<string, NostrMessageEvent> =
         await fetchChatMessagesFromCache();
+
+      try {
+        const response = await fetch(
+          `/api/db/fetch-messages?pubkey=${userPubkey}`
+        );
+        if (response.ok) {
+          const messagesFromDb = await response.json();
+          for (const event of messagesFromDb) {
+            if (!chatMessagesFromCache.has(event.id)) {
+              chatMessagesFromCache.set(event.id, {
+                ...event,
+                sig: event.sig || "",
+                read: true,
+              } as NostrMessageEvent);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch messages from database: ", error);
+      }
+
       try {
         const chatsMap = new Map();
 
@@ -458,6 +621,17 @@ export const fetchGiftWrappedChatsAndMessages = async (
           );
         });
         editChatContext(chatsMap, false);
+
+        // Cache messages to database via API (only valid messages with required fields)
+        const validMessages = fetchedEvents.filter(
+          (e) => e.id && e.sig && e.pubkey && e.kind === 1059
+        );
+        if (validMessages.length > 0) {
+          cacheEventsToDatabase(validMessages).catch((error) =>
+            console.error("Failed to cache messages to database:", error)
+          );
+        }
+
         resolve({ profileSetFromChats: new Set(chatsMap.keys()) });
       } catch (error) {
         reject(error);
@@ -491,16 +665,92 @@ export const fetchReviews = async (
         })
         .filter((address): address is string => address !== null);
 
-      const reviewsFilter: Filter = {
-        kinds: [31555],
-        "#d": addresses,
-      };
-
       const merchantScoresMap = new Map<string, number[]>();
       const productReviewsMap = new Map<
         string,
         Map<string, Map<string, string[][]>>
       >();
+
+      // First load from database
+      try {
+        const response = await fetch("/api/db/fetch-reviews");
+        if (!response.ok) throw new Error("Failed to fetch reviews");
+        const reviewsFromDb = await response.json();
+
+        for (const event of reviewsFromDb) {
+          const addressTag = event.tags.find((tag: string[]) => tag[0] === "d")?.[1];
+          if (!addressTag || !addresses.includes(addressTag)) continue;
+
+          const [_, _kind, merchantPubkey, productDTag] = addressTag.split(":");
+          if (!merchantPubkey || !productDTag) continue;
+
+          const ratingTags = event.tags.filter((tag: string[]) => tag[0] === "rating");
+          const commentArray = ["comment", event.content];
+          ratingTags.unshift(commentArray);
+
+          if (!merchantScoresMap.has(merchantPubkey)) {
+            merchantScoresMap.set(merchantPubkey, []);
+          }
+          merchantScoresMap
+            .get(merchantPubkey)!
+            .push(calculateWeightedScore(event.tags));
+
+          if (!productReviewsMap.has(merchantPubkey)) {
+            productReviewsMap.set(merchantPubkey, new Map());
+          }
+
+          const merchantProducts = productReviewsMap.get(merchantPubkey)!;
+          if (!merchantProducts.has(productDTag)) {
+            merchantProducts.set(productDTag, new Map());
+          }
+
+          const productReviews = merchantProducts.get(productDTag)!;
+          const createdAt = event.created_at;
+          const existingReview = productReviews.get(event.pubkey);
+
+          if (
+            !existingReview ||
+            createdAt >
+              Number(
+                existingReview.find((item) => item[0] === "created_at")?.[1]
+              )
+          ) {
+            const updatedReview = existingReview
+              ? existingReview.map((item) => {
+                  if (item[0] === "created_at") {
+                    return ["created_at", createdAt.toString()];
+                  }
+                  return item;
+                })
+              : [...ratingTags, ["created_at", createdAt.toString()]];
+
+            productReviews.set(event.pubkey, updatedReview);
+          }
+        }
+
+        if (merchantScoresMap.size > 0 || productReviewsMap.size > 0) {
+          productReviewsMap.forEach((merchantProducts, _) => {
+            merchantProducts.forEach((productReviews, _) => {
+              productReviews.forEach((review, reviewerPubkey) => {
+                const cleanedReview = review.filter(
+                  (item) => item[0] !== "created_at"
+                );
+                if (cleanedReview.length > 0) {
+                  productReviews.set(reviewerPubkey, cleanedReview);
+                }
+              });
+            });
+          });
+          editReviewsContext(merchantScoresMap, productReviewsMap, false);
+        }
+      } catch (error) {
+        console.error("Failed to fetch reviews from database: ", error);
+      }
+
+      const reviewsFilter: Filter = {
+        kinds: [31555],
+        "#d": addresses,
+      };
 
       const fetchedEvents = await nostr.fetch([reviewsFilter], {}, relays);
 
@@ -575,6 +825,17 @@ export const fetchReviews = async (
       });
 
       editReviewsContext(merchantScoresMap, productReviewsMap, false);
+
+      // Cache reviews to database via API (only valid events)
+      const validReviews = fetchedEvents.filter(
+        (e) => e.id && e.sig && e.pubkey && e.kind === 31555
+      );
+      if (validReviews.length > 0) {
+        cacheEventsToDatabase(validReviews).catch((error) =>
+          console.error("Failed to cache reviews to database:", error)
+        );
+      }
+
       resolve({ merchantScoresMap, productReviewsMap });
     } catch (error) {
       reject(error);
@@ -712,12 +973,74 @@ export const fetchAllRelays = async (
         return;
       }
 
+      // Load from database first
+      try {
+        const response = await fetch(
+          `/api/db/fetch-relays?pubkey=${userPubkey}`
+        );
+        if (!response.ok) throw new Error("Failed to fetch relay config");
+        const relayEventsFromDb = await response.json();
+
+        for (const event of relayEventsFromDb) {
+          const validRelays = event.tags.filter(
+            (tag: string[]) => tag[0] === "r" && !tag[2]
+          );
+          const validReadRelays = event.tags.filter(
+            (tag: string[]) => tag[0] === "r" && tag[2] === "read"
+          );
+          const validWriteRelays = event.tags.filter(
+            (tag: string[]) => tag[0] === "r" && tag[2] === "write"
+          );
+
+          validRelays.forEach((tag: string[]) => relaySet.add(tag[1]!));
+          relayList.push(
+            ...validRelays
+              .map((tag: string[]) => tag[1]!)
+              .filter((tag: string[]) => tag !== undefined)
+          );
+
+          validReadRelays.forEach((tag: string[]) => readRelaySet.add(tag[1]!));
+          readRelayList.push(
+            ...validReadRelays
+              .map((tag: string[]) => tag[1]!)
+              .filter((tag: string[]) => tag !== undefined)
+          );
+
+          validWriteRelays.forEach((tag: string[]) => writeRelaySet.add(tag[1]!));
+          writeRelayList.push(
+            ...validWriteRelays
+              .map((tag: string[]) => tag[1]!)
+              .filter((tag: string[]) => tag !== undefined)
+          );
+        }
+
+        if (relayList.length > 0) {
+          editRelaysContext(relayList, readRelayList, writeRelayList, false);
+        }
+      } catch (error) {
+        console.error("Failed to fetch relay config from database: ", error);
+      }
+
       const relayfilter: Filter = {
         kinds: [10002],
         authors: [userPubkey],
       };
 
       const fetchedEvents = await nostr.fetch([relayfilter], {}, relays);
+
+      // Cache relay config events to database
+      const validRelayEvents = fetchedEvents.filter(
+        (e) => e.id && e.sig && e.pubkey && e.kind === 10002
+      );
+      if (validRelayEvents.length > 0) {
+        cacheEventsToDatabase(validRelayEvents).catch((error) =>
+          console.error(
+            "Failed to cache relay config events to database:",
+            error
+          )
+        );
+      }
+
       for (const event of fetchedEvents) {
         const validRelays = event.tags.filter(
           (tag) => tag[0] === "r" && !tag[2]
@@ -785,6 +1108,33 @@ export const fetchAllBlossomServers = async (
         return;
       }
 
+      // Load from database first
+      try {
+        const response = await fetch(
+          `/api/db/fetch-blossom?pubkey=${userPubkey}`
+        );
+        if (!response.ok) throw new Error("Failed to fetch blossom config");
+        const blossomEventsFromDb = await response.json();
+
+        for (const event of blossomEventsFromDb) {
+          const validBlossomServers = event.tags.filter(
+            (tag: string[]) => tag[0] === "server"
+          );
+          validBlossomServers.forEach((tag: string[]) => blossomSet.add(tag[1]!));
+          blossomServers.push(
+            ...validBlossomServers
+              .map((tag: string[]) => tag[1]!)
+              .filter((tag: string[]) => tag !== undefined)
+          );
+        }
+
+        if (blossomServers.length > 0) {
+          editBlossomContext(blossomServers, false);
+        }
+      } catch (error) {
+        console.error("Failed to fetch blossom config from database: ", error);
+      }
+
       const blossomServerfilter: Filter = {
         kinds: [10063],
         authors: [userPubkey],
@@ -795,6 +1145,20 @@ export const fetchAllBlossomServers = async (
         {},
         relays
       );
+
+      // Cache blossom server config events to database
+      const validBlossomEvents = fetchedEvents.filter(
+        (e) => e.id && e.sig && e.pubkey && e.kind === 10063
+      );
+      if (validBlossomEvents.length > 0) {
+        cacheEventsToDatabase(validBlossomEvents).catch((error) =>
+          console.error(
+            "Failed to cache blossom config events to database:",
+            error
+          )
+        );
+      }
+
       for (const event of fetchedEvents) {
         const validBlossomServers = event.tags.filter(
           (tag) => tag[0] === "server"
@@ -855,6 +1219,97 @@ export const fetchCashuWallet = async (
       let cashuProofs: Proof[] = [...tokens]; // Start with existing tokens
       const incomingSpendingHistory: [][] = [];
 
+      // Load wallet events from database first
+      try {
+        const response = await fetch(
+          `/api/db/fetch-wallet?pubkey=${userPubkey}`
+        );
+        if (!response.ok) throw new Error("Failed to fetch wallet events");
+        const walletEventsFromDb = await response.json();
+
+        for (const event of walletEventsFromDb) {
+          if (event.kind === 17375) {
+            const mints = event.tags.filter(
+              (tag: string[]) => tag[0] === "mint"
+            );
+            mints.forEach((tag: string[]) => {
+              if (tag[1] && !cashuMintSet.has(tag[1])) {
+                cashuMintSet.add(tag[1]);
+                cashuMints.push(tag[1]);
+              }
+            });
+          } else if (event.kind === 37375) {
+            if (
+              !mostRecentWalletEvent ||
+              event.created_at > mostRecentWalletEvent.created_at
+            ) {
+              mostRecentWalletEvent = event;
+            }
+          } else if (event.kind === 7375 || event.kind === 7376) {
+            // Process proof and spending history from DB
+            try {
+              const eventContent = await signer!.decrypt(
+                userPubkey,
+                event.content
+              );
+              if (eventContent) {
+                const cashuWalletEventContent = JSON.parse(eventContent);
+                if (
+                  event.kind === 7375 &&
+                  cashuWalletEventContent?.mint &&
+                  cashuWalletEventContent?.proofs
+                ) {
+                  proofEvents.push({
+                    id: event.id,
+                    mint: cashuWalletEventContent.mint,
+                    proofs: cashuWalletEventContent.proofs,
+                    created_at: event.created_at,
+                  });
+                  if (!cashuMintSet.has(cashuWalletEventContent.mint)) {
+                    cashuMintSet.add(cashuWalletEventContent.mint);
+                    cashuMints.push(cashuWalletEventContent.mint);
+                  }
+                  cashuProofs = getUniqueProofs([
+                    ...cashuProofs,
+                    ...cashuWalletEventContent.proofs,
+                  ]);
+                } else if (event.kind === 7376 && cashuWalletEventContent) {
+                  incomingSpendingHistory.push(cashuWalletEventContent);
+                }
+              }
+            } catch (error) {
+              console.error(
+                `Failed to decrypt wallet event from DB ${event.id}:`,
+                error
+              );
+            }
+          }
+        }
+
+        if (mostRecentWalletEvent) {
+          const relayTags = mostRecentWalletEvent.tags.filter(
+            (tag: string[]) => tag[0] === "relay"
+          );
+          relayTags.forEach((tag) => {
+            if (tag[1] && !cashuRelays.includes(tag[1])) {
+              cashuRelays.push(tag[1]);
+            }
+          });
+
+          const mintTags = mostRecentWalletEvent.tags.filter(
+            (tag: string[]) => tag[0] === "mint"
+          );
+          mintTags.forEach((tag) => {
+            if (tag[1] && !cashuMintSet.has(tag[1])) {
+              cashuMintSet.add(tag[1]);
+              cashuMints.push(tag[1]);
+            }
+          });
+        }
+      } catch (error) {
+        console.error("Failed to fetch wallet events from database: ", error);
+      }
+
       // Fetch wallet configuration events (17375) and wallet state events (37375)
       const walletConfigFilter: Filter = {
         kinds: [17375, 37375],
@@ -866,6 +1321,20 @@ export const fetchCashuWallet = async (
         {},
         relays
       );
+
+      // Cache wallet config events to database
+      const validWalletConfigEvents = hEvents.filter(
+        (e) =>
+          e.id && e.sig && e.pubkey && (e.kind === 17375 || e.kind === 37375)
+      );
+      if (validWalletConfigEvents.length > 0) {
+        cacheEventsToDatabase(validWalletConfigEvents).catch((error) =>
+          console.error(
+            "Failed to cache wallet config events to database:",
+            error
+          )
+        );
+      }
 
       // Process wallet configuration events
       for (const event of hEvents) {
@@ -938,6 +1407,19 @@ export const fetchCashuWallet = async (
         {},
         effectiveRelays
       );
+
+      // Cache wallet proof events to database
+      const validWalletProofEvents = proofEvents_raw.filter(
+        (e) => e.id && e.sig && e.pubkey && (e.kind === 7375 || e.kind === 7376)
+      );
+      if (validWalletProofEvents.length > 0) {
+        cacheEventsToDatabase(validWalletProofEvents).catch((error) =>
+          console.error(
+            "Failed to cache wallet proof events to database:",
+            error
+          )
+        );
+      }
 
       // Process proof and spending history events
       for (const event of proofEvents_raw) {
@@ -1141,6 +1623,31 @@ export const fetchAllCommunities = async (
 ): Promise<Map<string, Community>> => {
   return new Promise(async (resolve, reject) => {
     try {
+      // First load from database
+      try {
+        const response = await fetch("/api/db/fetch-communities");
+        if (response.ok) {
+          const communitiesFromDb = await response.json();
+          if (communitiesFromDb.length > 0) {
+            const parsedCommunitiesFromDb: Community[] = [];
+            for (const event of communitiesFromDb) {
+              const community = parseCommunityEvent(event);
+              if (community) {
+                parsedCommunitiesFromDb.push(community);
+              }
+            }
+            if (parsedCommunitiesFromDb.length > 0) {
+              const communityMap = new Map(
+                parsedCommunitiesFromDb.map((c) => [c.id, c])
+              );
+              editCommunityContext(communityMap, false);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch communities from database: ", error);
+      }
+
       // Try to load from cache first
       const cachedCommunities = await fetchAllCommunitiesFromCache();
       if (cachedCommunities.length > 0) {
@@ -1166,6 +1673,17 @@ export const fetchAllCommunities = async (
       const communityMap = new Map(parsedCommunities.map((c) => [c.id, c]));
       editCommunityContext(communityMap, false);
       await addCommunitiesToCache(parsedCommunities);
+
+      // Cache communities to database via API (only valid events)
+      const validCommunities = fetchedEvents.filter(
+        (e) => e.id && e.sig && e.pubkey && e.kind === 34550
+      );
+      if (validCommunities.length > 0) {
+        cacheEventsToDatabase(validCommunities).catch((error) =>
+          console.error("Failed to cache communities to database:", error)
+        );
+      }
+
       resolve(communityMap);
     } catch (error) {
       reject(error);
