@@ -32,6 +32,8 @@ env:
 jobs:
   test:
     name: Test on Node.js ${{ matrix.node-version }}
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     strategy:
       matrix:
