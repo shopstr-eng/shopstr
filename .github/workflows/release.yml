@@ -254,6 +254,8 @@ jobs:
 
   publish-npm:
     name: Publish to npm
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     needs: [test, create-release]
     if: always() && (needs.test.result == 'success') && (needs.create-release.result == 'success') && !contains(github.ref, 'alpha') && !contains(github.ref, 'beta')
