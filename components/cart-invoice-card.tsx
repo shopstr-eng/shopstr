@@ -28,6 +28,7 @@ import {
   CheckIcon,
   ClipboardIcon,
   CurrencyDollarIcon,
+  WalletIcon,
 } from "@heroicons/react/24/outline";
 import { fiat } from "@getalby/lightning-tools";
 import {
@@ -52,6 +53,7 @@ import QRCode from "qrcode";
 import { v4 as uuidv4 } from "uuid";
 import { nip19 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
+import { webln } from "@getalby/sdk";
 import { formatWithCommas } from "./utility-components/display-monetary-info";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import SignInModal from "./sign-in/SignInModal";
@@ -133,6 +135,10 @@ export default function CartInvoiceCard({
   const [pendingPaymentData, setPendingPaymentData] = useState<any>(null);
 
   const [showFailureModal, setShowFailureModal] = useState(false);
+
+  // NWC State
+  const [nwcInfo, setNwcInfo] = useState<any | null>(null);
+  const [isNwcLoading, setIsNwcLoading] = useState(false);
   const [failureText, setFailureText] = useState("");
 
   const [isFormValid, setIsFormValid] = useState(false);
@@ -219,6 +225,28 @@ export default function CartInvoiceCard({
 
       setFiatPaymentOptions(commonFiatOptions);
     }
+  }, [products, profileContext.profileData]);
+
+  // Load NWC info and check cart for NWC compatibility
+  useEffect(() => {
+    const loadNwcInfo = () => {
+      const { nwcInfo: infoString } = getLocalStorageData();
+      if (infoString) {
+        try {
+          const info = JSON.parse(infoString);
+          setNwcInfo(info);
+        } catch (e) {
+          console.error("Failed to parse NWC info", e);
+          setNwcInfo(null);
+        }
+      } else {
+        setNwcInfo(null);
+      }
+    };
+
+    loadNwcInfo();
+    window.addEventListener("storage", loadNwcInfo);
+    return () => window.removeEventListener("storage", loadNwcInfo);
   }, [products, profileContext.profileData]);
 
   // Validate form completion
@@ -508,7 +536,7 @@ export default function CartInvoiceCard({
 
   const onFormSubmit = async (
     data: { [x: string]: string },
-    paymentType?: "fiat" | "lightning" | "cashu"
+    paymentType?: "fiat" | "lightning" | "cashu" | "nwc"
   ) => {
     try {
       let price = totalCost;
@@ -602,6 +630,8 @@ export default function CartInvoiceCard({
         return; // Important: exit early for fiat payments
       } else if (paymentType === "cashu") {
         await handleCashuPayment(price, paymentData);
+      } else if (paymentType === "nwc") {
+        await handleNWCPayment(price, paymentData);
       } else {
         await handleLightningPayment(price, paymentData);
       }
@@ -624,6 +654,63 @@ export default function CartInvoiceCard({
       if (hasMixedShippingWithFreePickup) {
         setShowFreePickupSelection(true);
       }
+    }
+  };
+
+  const handleNWCError = (error: any) => {
+    console.error("NWC Payment failed:", error);
+    let message = "Payment failed. Please try again.";
+    if (error && typeof error === "object" && "code" in error) {
+      switch (error.code) {
+        case "INSUFFICIENT_BALANCE":
+          message = "Payment failed: Insufficient balance in your wallet.";
+          break;
+        case "QUOTA_EXCEEDED":
+          message =
+            "Payment failed: Your wallet's spending quota has been exceeded.";
+          break;
+        case "PAYMENT_FAILED":
+          message =
+            "The payment failed. Please check your wallet and try again.";
+          break;
+        case "RATE_LIMITED":
+          message =
+            "You are sending payments too quickly. Please wait a moment.";
+          break;
+        default:
+          message = error.message || "An unknown wallet error occurred.";
+      }
+    } else if (error instanceof Error) {
+      message = error.message;
+    }
+    setFailureText(`NWC Error: ${message}`);
+    setShowFailureModal(true);
+  };
+
+  const handleNWCPayment = async (convertedPrice: number, data: any) => {
+    setIsNwcLoading(true);
+    let nwc: webln.NostrWebLNProvider | null = null;
+
+    try {
+      validatePaymentData(convertedPrice, data);
+
+      const wallet = new CashuWallet(new CashuMint(mints[0]!));
+      const { request: pr, quote: hash } =
+        await wallet.createMintQuote(convertedPrice);
+
+      const { nwcString } = getLocalStorageData();
+      if (!nwcString) throw new Error("NWC connection not found.");
+
+      nwc = new webln.NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
+      await nwc.enable();
+
+      await nwc.sendPayment(pr);
+      await invoiceHasBeenPaid(wallet, convertedPrice, hash, data);
+    } catch (error: any) {
+      handleNWCError(error);
+    } finally {
+      nwc?.close();
+      setIsNwcLoading(false);
     }
   };
 
@@ -2805,6 +2892,27 @@ export default function CartInvoiceCard({
                       startContent={<BanknotesIcon className="h-6 w-6" />}
                     >
                       Pay with Cashu: {formattedTotalCost}
+                    </Button>
+                  )}
+
+                  {/* NWC Button */}
+                  {nwcInfo && (
+                    <Button
+                      className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
+                        !isFormValid ? "cursor-not-allowed opacity-50" : ""
+                      }`}
+                      disabled={!isFormValid || isNwcLoading}
+                      isLoading={isNwcLoading}
+                      onClick={() => {
+                        if (!isLoggedIn) {
+                          onOpen();
+                          return;
+                        }
+                        handleFormSubmit((data) => onFormSubmit(data, "nwc"))();
+                      }}
+                      startContent={<WalletIcon className="h-6 w-6" />}
+                    >
+                      Pay with {nwcInfo.alias || "NWC"}: {formattedTotalCost}
                     </Button>
                   )}
                 </div>

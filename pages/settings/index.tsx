@@ -5,6 +5,7 @@ import {
   Cog6ToothIcon,
   UserIcon,
   UserGroupIcon,
+  BanknotesIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import { LogOut } from "@/utils/nostr/nostr-helper-functions";
@@ -75,6 +76,17 @@ const SettingsPage = () => {
               }}
             >
               Preferences
+            </ListboxItem>
+            <ListboxItem
+              key="wallet"
+              description="Connect your NIP-47 Nostr Wallet"
+              classNames={listBoxClassnames}
+              startContent={<BanknotesIcon className={startIconClassnames} />}
+              onClick={() => {
+                router.push("/settings/wallet");
+              }}
+            >
+              Nostr Wallet Connect
             </ListboxItem>
           </ListboxSection>
           <ListboxSection title="Log out" classNames={listBoxSectionClassnames}>
