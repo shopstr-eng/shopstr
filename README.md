@@ -16,7 +16,7 @@ A global, permissionless Nostr marketplace for Bitcoin commerce.
 - [x] NIP-36: Sensitive Content
 - [ ] NIP-42: Authentication of clients to relays
 - [x] NIP-46: Nostr Remote Signing
-- [ ] NIP-47: Wallet Connect
+- [x] NIP-47: Wallet Connect
 - [x] NIP-49: Private Key Encryption
 - [ ] NIP-50: Search Capability
 - [x] NIP-51: Lists
