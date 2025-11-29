@@ -110,6 +110,7 @@ export default function ProductForm({
           Status: oldValues.status ? oldValues.status : "",
           Required: oldValues.required ? oldValues.required : "",
           Restrictions: oldValues.restrictions ? oldValues.restrictions : "",
+          Expiration: oldValues.expiration ? new Date(oldValues.expiration * 1000).toISOString().slice(0, 16) : "",
         }
       : {
           Currency: "SAT",
@@ -217,6 +218,14 @@ export default function ProductForm({
 
     if (data["Restrictions"]) {
       tags.push(["restrictions", data["Restrictions"] as string]);
+    }
+
+    if (data["Expiration"]) {
+      const dateObj = new Date(data["Expiration"] as string);
+      if (!isNaN(dateObj.getTime())) {
+        const unixTime = Math.floor(dateObj.getTime() / 1000);
+        tags.push(["valid_until", unixTime.toString()]);
+      }
     }
 
     // Add pickup locations if they exist and shipping involves pickup
@@ -1323,6 +1332,42 @@ export default function ProductForm({
                   }}
                 />
               </>
+            )}
+
+            {showOptionalTags && (
+              <Controller
+                name="Expiration"
+                control={control}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => {
+                  const isErrored = error !== undefined;
+                  const errorMessage = error?.message || "";
+                  return (
+                    <div className="mt-4">
+                      <Input
+                        type="datetime-local"
+                        min={new Date().toISOString().slice(0, 16)}
+                        variant="bordered"
+                        label="Valid Until (Optional)"
+                        labelPlacement="inside"
+                        placeholder="Select a date to mark listing as stale"
+                        isInvalid={isErrored}
+                        errorMessage={errorMessage}
+                        onChange={onChange}
+                        onBlur={onBlur}
+                        value={value as string}
+                        className="text-light-text dark:text-dark-text"
+                      />
+                      <p className="text-tiny text-gray-500 mt-1">
+                        Listing will remain visible but marked as &quot;Outdated&quot; after this date.
+                        Leave empty if product has no expiration. Buyers won&apos;t be able to purchase after expiration.
+                      </p>
+                    </div>
+                  );
+                }}
+              />
             )}
 
             <div className="mx-4 my-2 flex items-center justify-center text-center">

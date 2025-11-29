@@ -33,6 +33,7 @@ export type ProductData = {
   required?: string;
   restrictions?: string;
   pickupLocations?: string[];
+  expiration?: number;
 };
 
 export const parseTags = (productEvent: NostrEvent) => {
@@ -162,6 +163,9 @@ export const parseTags = (productEvent: NostrEvent) => {
         if (parsedData.pickupLocations === undefined)
           parsedData.pickupLocations = [];
         parsedData.pickupLocations.push(values[0]!);
+        break;
+      case "valid_until":
+        parsedData.expiration = Number(values[0]);
         break;
       default:
         return;

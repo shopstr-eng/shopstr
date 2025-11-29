@@ -24,6 +24,10 @@ export default function ProductCard({
 
   const cardHoverStyle =
     "hover:shadow-purple-500/30 dark:hover:shadow-yellow-500/30 hover:scale-[1.01]";
+  
+  const isExpired = productData.expiration
+    ? Date.now() / 1000 > productData.expiration
+    : false;
 
   const content = (
     <div
@@ -45,6 +49,11 @@ export default function ProductCard({
             <h2 className="max-w-[70%] truncate text-xl font-semibold text-light-text dark:text-dark-text">
               {productData.title}
             </h2>
+            {isExpired && (
+              <Chip color="warning" size="sm" variant="flat" className="mr-2">
+                Outdated
+              </Chip>
+            )}
             {productData.status === "active" && (
               <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900 dark:text-green-300">
                 Active

@@ -191,6 +191,9 @@ function MarketplacePage({
           const productReviews = product.d
             ? productReviewMap.get(product.d)
             : undefined;
+          const isExpired = product.expiration
+            ? Date.now() / 1000 > product.expiration
+            : false;
 
           if (!productReviews || productReviews.size === 0) return null;
 
@@ -204,6 +207,11 @@ function MarketplacePage({
                   className="cursor-pointer hover:underline"
                 >
                   {product.title}
+                  {isExpired && (
+                    <Chip color="warning" size="sm" variant="flat" className="ml-2">
+                      Outdated
+                    </Chip>
+                  )}
                 </div>
               </h3>
               <div className="space-y-3">
