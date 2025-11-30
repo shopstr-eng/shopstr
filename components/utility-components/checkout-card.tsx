@@ -8,7 +8,7 @@ import { DisplayCheckoutCost } from "./display-monetary-info";
 import ProductInvoiceCard from "../product-invoice-card";
 import { useRouter } from "next/router";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import { Button, Chip, useDisclosure } from "@nextui-org/react";
+import { Button, Chip, Input, useDisclosure } from "@nextui-org/react";
 import { locationAvatar } from "./dropdowns/location-dropdown";
 import {
   FaceFrownIcon,
@@ -75,6 +75,9 @@ export default function CheckoutCard({
   const [cart, setCart] = useState<ProductData[]>([]);
   const [selectedVolume, setSelectedVolume] = useState<string>("");
   const [currentPrice, setCurrentPrice] = useState(productData.price);
+  const [discountCode, setDiscountCode] = useState("");
+  const [appliedDiscount, setAppliedDiscount] = useState<number>(0);
+  const [discountError, setDiscountError] = useState("");
 
   const reviewsContext = useContext(ReviewsContext);
 
@@ -293,6 +296,46 @@ export default function CheckoutCard({
     }
   };
 
+  const handleApplyDiscount = async () => {
+    if (!discountCode.trim()) {
+      setDiscountError("Please enter a discount code");
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `/api/db/discount-codes?validate=true&code=${encodeURIComponent(
+          discountCode
+        )}&pubkey=${productData.pubkey}`
+      );
+
+      if (!response.ok) {
+        setDiscountError("Failed to validate discount code");
+        return;
+      }
+
+      const result = await response.json();
+
+      if (result.valid && result.discount_percentage) {
+        setAppliedDiscount(result.discount_percentage);
+        setDiscountError("");
+      } else {
+        setDiscountError("Invalid or expired discount code");
+        setAppliedDiscount(0);
+      }
+    } catch (error) {
+      console.error("Failed to apply discount:", error);
+      setDiscountError("Failed to apply discount code");
+      setAppliedDiscount(0);
+    }
+  };
+
+  const handleRemoveDiscount = () => {
+    setDiscountCode("");
+    setAppliedDiscount(0);
+    setDiscountError("");
+  };
+
   const renderSizeGrid = () => {
     return (
       <div className="grid grid-cols-3 gap-2 py-1">
@@ -315,11 +358,21 @@ export default function CheckoutCard({
     );
   };
 
-  // Create updated product data with selected volume price
+  // Calculate discounted price
+  const discountedPrice =
+    appliedDiscount > 0
+      ? currentPrice * (1 - appliedDiscount / 100)
+      : currentPrice;
+
+  const discountedTotal = discountedPrice + (productData.shippingCost ?? 0);
+
+  // Create updated product data with selected volume price and discount
   const updatedProductData = {
     ...productData,
-    price: currentPrice,
-    totalCost: currentPrice + (productData.shippingCost ?? 0),
+    price: discountedPrice,
+    totalCost: discountedTotal,
+    originalPrice: currentPrice,
+    discountPercentage: appliedDiscount,
   };
 
   return (
@@ -439,8 +492,15 @@ export default function CheckoutCard({
                     )}
                   </h2>
                   {productData.expiration && (
-                    <p className={`text-left text-sm mt-1 ${isExpired ? "text-red-500 font-medium" : "text-gray-500"}`}>
-                      {isExpired ? "Expired on: " : "Valid until: "} {new Date(productData.expiration * 1000).toLocaleDateString()}
+                    <p
+                      className={`mt-1 text-left text-sm ${
+                        isExpired ? "font-medium text-red-500" : "text-gray-500"
+                      }`}
+                    >
+                      {isExpired ? "Expired on: " : "Valid until: "}{" "}
+                      {new Date(
+                        productData.expiration * 1000
+                      ).toLocaleDateString()}
                     </p>
                   )}
                   {productData.condition && (
@@ -482,6 +542,48 @@ export default function CheckoutCard({
                   <div className="mt-4">
                     <DisplayCheckoutCost monetaryInfo={updatedProductData} />
                   </div>
+
+                  {productData.pubkey !== userPubkey && (
+                    <div className="mt-4 space-y-2">
+                      <div className="flex gap-2">
+                        <Input
+                          label="Discount Code"
+                          placeholder="Enter code"
+                          value={discountCode}
+                          onChange={(e) =>
+                            setDiscountCode(e.target.value.toUpperCase())
+                          }
+                          className="flex-1 text-light-text dark:text-dark-text"
+                          disabled={appliedDiscount > 0}
+                          isInvalid={!!discountError}
+                          errorMessage={discountError}
+                        />
+                        {appliedDiscount > 0 ? (
+                          <Button
+                            color="warning"
+                            onClick={handleRemoveDiscount}
+                          >
+                            Remove
+                          </Button>
+                        ) : (
+                          <Button
+                            className={SHOPSTRBUTTONCLASSNAMES}
+                            onClick={handleApplyDiscount}
+                          >
+                            Apply
+                          </Button>
+                        )}
+                      </div>
+                      {appliedDiscount > 0 && (
+                        <p className="text-sm text-green-600 dark:text-green-400">
+                          {appliedDiscount}% discount applied! You save{" "}
+                          {currentPrice - discountedPrice}{" "}
+                          {productData.currency}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   <div className="pb-1">
                     <Chip
                       key={productData.location}
@@ -507,7 +609,6 @@ export default function CheckoutCard({
                                 ? "cursor-not-allowed opacity-50"
                                 : ""
                             }`}
-                            
                             onClick={toggleBuyNow}
                             disabled={
                               (hasSizes && !selectedSize) ||

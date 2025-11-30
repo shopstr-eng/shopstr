@@ -110,3 +110,17 @@ CREATE TABLE IF NOT EXISTS config_events (
 
 CREATE INDEX IF NOT EXISTS idx_config_events_pubkey ON config_events(pubkey);
 CREATE INDEX IF NOT EXISTS idx_config_events_kind ON config_events(kind);
+
+-- Discount codes table
+CREATE TABLE IF NOT EXISTS discount_codes (
+    id SERIAL PRIMARY KEY,
+    code TEXT NOT NULL,
+    pubkey TEXT NOT NULL,
+    discount_percentage DECIMAL(5,2) NOT NULL CHECK (discount_percentage > 0 AND discount_percentage <= 100),
+    expiration BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(code, pubkey)
+);
+
+CREATE INDEX IF NOT EXISTS idx_discount_codes_pubkey ON discount_codes(pubkey);
+CREATE INDEX IF NOT EXISTS idx_discount_codes_code ON discount_codes(code);

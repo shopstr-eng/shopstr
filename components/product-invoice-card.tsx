@@ -2339,13 +2339,47 @@ export default function ProductInvoiceCard({
                   <div className="text-sm font-medium">{productData.title}</div>
                   <div className="flex justify-between text-sm">
                     <span className="ml-2">Product cost:</span>
-                    <span>
+                    <span
+                      className={
+                        productData.discountPercentage &&
+                        productData.discountPercentage > 0
+                          ? "text-gray-500 line-through"
+                          : ""
+                      }
+                    >
                       {formatWithCommas(
-                        productData.price,
+                        productData.originalPrice || productData.price,
                         productData.currency
                       )}
                     </span>
                   </div>
+                  {productData.discountPercentage &&
+                    productData.discountPercentage > 0 && (
+                      <>
+                        <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
+                          <span className="ml-2">
+                            Discount ({productData.discountPercentage}%):
+                          </span>
+                          <span>
+                            -
+                            {formatWithCommas(
+                              (productData.originalPrice || productData.price) -
+                                productData.price,
+                              productData.currency
+                            )}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm font-medium">
+                          <span className="ml-2">Discounted price:</span>
+                          <span>
+                            {formatWithCommas(
+                              productData.price,
+                              productData.currency
+                            )}
+                          </span>
+                        </div>
+                      </>
+                    )}
                   {productData.shippingCost! > 0 && (
                     <div className="flex justify-between text-sm">
                       <span className="ml-2">Shipping cost:</span>

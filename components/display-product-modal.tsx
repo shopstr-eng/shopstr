@@ -123,12 +123,15 @@ export default function DisplayProductModal({
               <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
                 {productData.title}
                 {isExpired && (
-                  <Chip color="warning" variant="flat" className="ml-2">Outdated</Chip>
+                  <Chip color="warning" variant="flat" className="ml-2">
+                    Outdated
+                  </Chip>
                 )}
               </h2>
               {productData.expiration && (
                 <p className="text-sm text-gray-500">
-                  Valid until: {new Date(productData.expiration * 1000).toLocaleDateString()}
+                  Valid until:{" "}
+                  {new Date(productData.expiration * 1000).toLocaleDateString()}
                 </p>
               )}
               <div>

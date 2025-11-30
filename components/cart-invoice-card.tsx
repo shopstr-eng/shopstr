@@ -2442,39 +2442,74 @@ export default function CartInvoiceCard({
                     Cost Breakdown
                   </h4>
                   <div className="space-y-3">
-                    {products.map((product) => (
-                      <div
-                        key={product.id}
-                        className="space-y-2 border-l-2 border-gray-200 pl-3 dark:border-gray-600"
-                      >
-                        <div className="text-sm font-medium">
-                          {product.title}{" "}
-                          {quantities[product.id] &&
-                            quantities[product.id]! > 1 &&
-                            `(x${quantities[product.id]})`}
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="ml-2">Product cost:</span>
-                          <span>
-                            {formatWithCommas(
-                              (product.volumePrice !== undefined
-                                ? product.volumePrice
-                                : product.price) *
-                                (quantities[product.id] || 1),
-                              "sats"
-                            )}
-                          </span>
-                        </div>
-                        {product.shippingCost! > 0 && (
+                    {products.map((product) => {
+                      const discount = appliedDiscounts[product.pubkey] || 0;
+                      const basePrice =
+                        (product.volumePrice !== undefined
+                          ? product.volumePrice
+                          : product.price) * (quantities[product.id] || 1);
+                      const discountedPrice =
+                        discount > 0
+                          ? basePrice * (1 - discount / 100)
+                          : basePrice;
+
+                      return (
+                        <div
+                          key={product.id}
+                          className="space-y-2 border-l-2 border-gray-200 pl-3 dark:border-gray-600"
+                        >
+                          <div className="text-sm font-medium">
+                            {product.title}{" "}
+                            {quantities[product.id] &&
+                              quantities[product.id]! > 1 &&
+                              `(x${quantities[product.id]})`}
+                          </div>
                           <div className="flex justify-between text-sm">
-                            <span className="ml-2">Shipping cost:</span>
-                            <span>
-                              {formatWithCommas(product.shippingCost!, "sats")}
+                            <span className="ml-2">Product cost:</span>
+                            <span
+                              className={
+                                discount > 0 ? "text-gray-500 line-through" : ""
+                              }
+                            >
+                              {formatWithCommas(basePrice, "sats")}
                             </span>
                           </div>
-                        )}
-                      </div>
-                    ))}
+                          {discount > 0 && (
+                            <>
+                              <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
+                                <span className="ml-2">
+                                  Discount ({discount}%):
+                                </span>
+                                <span>
+                                  -
+                                  {formatWithCommas(
+                                    basePrice - discountedPrice,
+                                    "sats"
+                                  )}
+                                </span>
+                              </div>
+                              <div className="flex justify-between text-sm font-medium">
+                                <span className="ml-2">Discounted price:</span>
+                                <span>
+                                  {formatWithCommas(discountedPrice, "sats")}
+                                </span>
+                              </div>
+                            </>
+                          )}
+                          {product.shippingCost! > 0 && (
+                            <div className="flex justify-between text-sm">
+                              <span className="ml-2">Shipping cost:</span>
+                              <span>
+                                {formatWithCommas(
+                                  product.shippingCost!,
+                                  "sats"
+                                )}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                   <div className="flex justify-between border-t pt-2 font-semibold">
                     <span>Total:</span>
