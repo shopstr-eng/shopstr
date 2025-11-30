@@ -24,7 +24,7 @@ export default function ProductCard({
 
   const cardHoverStyle =
     "hover:shadow-purple-500/30 dark:hover:shadow-yellow-500/30 hover:scale-[1.01]";
-  
+
   const isExpired = productData.expiration
     ? Date.now() / 1000 > productData.expiration
     : false;

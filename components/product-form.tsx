@@ -110,7 +110,9 @@ export default function ProductForm({
           Status: oldValues.status ? oldValues.status : "",
           Required: oldValues.required ? oldValues.required : "",
           Restrictions: oldValues.restrictions ? oldValues.restrictions : "",
-          Expiration: oldValues.expiration ? new Date(oldValues.expiration * 1000).toISOString().slice(0, 16) : "",
+          Expiration: oldValues.expiration
+            ? new Date(oldValues.expiration * 1000).toISOString().slice(0, 16)
+            : "",
         }
       : {
           Currency: "SAT",
@@ -1360,9 +1362,11 @@ export default function ProductForm({
                         value={value as string}
                         className="text-light-text dark:text-dark-text"
                       />
-                      <p className="text-tiny text-gray-500 mt-1">
-                        Listing will remain visible but marked as &quot;Outdated&quot; after this date.
-                        Leave empty if product has no expiration. Buyers won&apos;t be able to purchase after expiration.
+                      <p className="mt-1 text-tiny text-gray-500">
+                        Listing will remain visible but marked as
+                        &quot;Outdated&quot; after this date. Leave empty if
+                        product has no expiration. Buyers won&apos;t be able to
+                        purchase after expiration.
                       </p>
                     </div>
                   );

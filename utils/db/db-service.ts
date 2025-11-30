@@ -163,6 +163,20 @@ async function initializeTables(): Promise<void> {
       );
 
       CREATE INDEX IF NOT EXISTS idx_config_events_pubkey ON config_events(pubkey);
+
+      -- Discount codes table
+      CREATE TABLE IF NOT EXISTS discount_codes (
+          id SERIAL PRIMARY KEY,
+          code TEXT NOT NULL,
+          pubkey TEXT NOT NULL,
+          discount_percentage DECIMAL(5,2) NOT NULL CHECK (discount_percentage > 0 AND discount_percentage <= 100),
+          expiration BIGINT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(code, pubkey)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_discount_codes_pubkey ON discount_codes(pubkey);
+      CREATE INDEX IF NOT EXISTS idx_discount_codes_code ON discount_codes(code);
     `);
 
     tablesInitialized = true;
@@ -776,6 +790,128 @@ export async function fetchBlossomConfigFromDb(
   pubkey: string
 ): Promise<NostrEvent[]> {
   return fetchCachedEvents(10063, { pubkey });
+}
+
+// Add discount code
+export async function addDiscountCode(
+  code: string,
+  pubkey: string,
+  discountPercentage: number,
+  expiration?: number
+): Promise<void> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const query = {
+      text: `INSERT INTO discount_codes (code, pubkey, discount_percentage, expiration)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (code, pubkey) DO UPDATE SET
+               discount_percentage = EXCLUDED.discount_percentage,
+               expiration = EXCLUDED.expiration`,
+      values: [code, pubkey, discountPercentage, expiration || null] as any[],
+    };
+    await client.query(query);
+  } catch (error) {
+    console.error("Failed to add discount code:", error);
+    throw error;
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+}
+
+// Get discount codes for a merchant
+export async function getDiscountCodesByPubkey(
+  pubkey: string
+): Promise<
+  Array<{
+    code: string;
+    discount_percentage: number;
+    expiration: number | null;
+  }>
+> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT code, discount_percentage, expiration FROM discount_codes WHERE pubkey = $1 ORDER BY created_at DESC`,
+      [pubkey]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error("Failed to fetch discount codes:", error);
+    return [];
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+}
+
+// Validate and get discount code
+export async function validateDiscountCode(
+  code: string,
+  pubkey: string
+): Promise<{ valid: boolean; discount_percentage?: number }> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT discount_percentage, expiration FROM discount_codes WHERE code = $1 AND pubkey = $2`,
+      [code, pubkey]
+    );
+
+    if (result.rows.length === 0) {
+      return { valid: false };
+    }
+
+    const { discount_percentage, expiration } = result.rows[0];
+
+    // Check if code is expired
+    if (expiration && Date.now() / 1000 > expiration) {
+      return { valid: false };
+    }
+
+    return { valid: true, discount_percentage };
+  } catch (error) {
+    console.error("Failed to validate discount code:", error);
+    return { valid: false };
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+}
+
+// Delete discount code
+export async function deleteDiscountCode(
+  code: string,
+  pubkey: string
+): Promise<void> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    await client.query(
+      `DELETE FROM discount_codes WHERE code = $1 AND pubkey = $2`,
+      [code, pubkey]
+    );
+  } catch (error) {
+    console.error("Failed to delete discount code:", error);
+    throw error;
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
 }
 
 // Close the database pool

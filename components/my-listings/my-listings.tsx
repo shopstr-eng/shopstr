@@ -12,6 +12,7 @@ import { ShopMapContext } from "@/utils/context/context";
 import { ShopProfile } from "../../utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import SideShopNav from "../home/side-shop-nav";
+import DiscountCodes from "./discount-codes";
 
 const MyListingsPage = () => {
   const { pubkey: usersPubkey } = useContext(SignerContext);
@@ -111,6 +112,15 @@ const MyListingsPage = () => {
         <Button
           className="w-full bg-transparent px-4 py-2 text-left text-sm text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
           onClick={() => {
+            setSelectedSection("Discount Codes");
+            setIsMobileMenuOpen(false);
+          }}
+        >
+          Discount Codes
+        </Button>
+        <Button
+          className="w-full bg-transparent px-4 py-2 text-left text-sm text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+          onClick={() => {
             setSelectedSection("About");
             setIsMobileMenuOpen(false);
           }}
@@ -171,6 +181,12 @@ const MyListingsPage = () => {
                   </Button>
                   <Button
                     className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                    onClick={() => setSelectedSection("Discount Codes")}
+                  >
+                    Discount Codes
+                  </Button>
+                  <Button
+                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
                     onClick={() => setSelectedSection("About")}
                   >
                     About
@@ -224,6 +240,12 @@ const MyListingsPage = () => {
                     onClick={() => setSelectedSection("Listings")}
                   >
                     Listings
+                  </Button>
+                  <Button
+                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                    onClick={() => setSelectedSection("Discount Codes")}
+                  >
+                    Discount Codes
                   </Button>
                   <Button
                     className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
@@ -304,6 +326,9 @@ const MyListingsPage = () => {
                 </Button>
               </div>
             </div>
+          )}
+          {usersPubkey && selectedSection === "Discount Codes" && (
+            <DiscountCodes />
           )}
         </div>
       </div>

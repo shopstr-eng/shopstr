@@ -208,7 +208,12 @@ function MarketplacePage({
                 >
                   {product.title}
                   {isExpired && (
-                    <Chip color="warning" size="sm" variant="flat" className="ml-2">
+                    <Chip
+                      color="warning"
+                      size="sm"
+                      variant="flat"
+                      className="ml-2"
+                    >
                       Outdated
                     </Chip>
                   )}

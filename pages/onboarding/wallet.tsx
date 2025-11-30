@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { useRouter } from "next/router";
 import { Card, CardBody, Button, Image, Input } from "@nextui-org/react";
-import { ArrowLongRightIcon, WalletIcon, ExclamationCircleIcon } from "@heroicons/react/24/outline";
+import {
+  ArrowLongRightIcon,
+  WalletIcon,
+  ExclamationCircleIcon,
+} from "@heroicons/react/24/outline";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { saveNWCString } from "@/utils/nostr/nostr-helper-functions";
 import { webln } from "@getalby/sdk";
@@ -23,7 +27,9 @@ const OnboardingWallet = () => {
 
     try {
       if (!nwcString || !nwcString.startsWith("nostr+walletconnect://")) {
-        throw new Error("Invalid connection string. Must start with 'nostr+walletconnect://'");
+        throw new Error(
+          "Invalid connection string. Must start with 'nostr+walletconnect://'"
+        );
       }
 
       nwc = new webln.NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
@@ -32,11 +38,13 @@ const OnboardingWallet = () => {
 
       saveNWCString(nwcString);
       localStorage.setItem("nwcInfo", JSON.stringify(info));
-      
+
       handleNext();
     } catch (e: any) {
       console.error("NWC Connection failed:", e);
-      setError(e.message || "Failed to connect. Please check your connection string.");
+      setError(
+        e.message || "Failed to connect. Please check your connection string."
+      );
     } finally {
       setIsLoading(false);
       if (nwc) {
@@ -67,7 +75,8 @@ const OnboardingWallet = () => {
                 Step 3: Connect Wallet
               </h2>
               <p className="text-light-text dark:text-dark-text">
-                Connect your NWC-enabled Lightning wallet to pay invoices seamlessly.
+                Connect your NWC-enabled Lightning wallet to pay invoices
+                seamlessly.
               </p>
             </div>
 
@@ -102,7 +111,7 @@ const OnboardingWallet = () => {
                 >
                   Connect & Continue
                 </Button>
-                
+
                 <Button
                   variant="light"
                   className="text-gray-500 dark:text-gray-400"

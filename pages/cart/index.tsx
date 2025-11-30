@@ -113,6 +113,16 @@ export default function Component() {
   const [cashuPaymentSent, setCashuPaymentSent] = useState(false);
   const [cashuPaymentFailed, setCashuPaymentFailed] = useState(false);
 
+  const [discountCodes, setDiscountCodes] = useState<{
+    [pubkey: string]: string;
+  }>({});
+  const [appliedDiscounts, setAppliedDiscounts] = useState<{
+    [pubkey: string]: number;
+  }>({});
+  const [discountErrors, setDiscountErrors] = useState<{
+    [pubkey: string]: string;
+  }>({});
+
   const router = useRouter();
 
   useEffect(() => {
@@ -148,23 +158,31 @@ export default function Component() {
           let productShipping = 0;
           let productTotal = 0;
           const subtotalSatPrice = await convertPriceToSats(product);
-          prices[product.id] = subtotalSatPrice;
+
+          // Apply discount if available
+          const discount = appliedDiscounts[product.pubkey] || 0;
+          const discountedPrice =
+            discount > 0
+              ? subtotalSatPrice * (1 - discount / 100)
+              : subtotalSatPrice;
+
+          prices[product.id] = discountedPrice;
           const shippingSatPrice = await convertShippingToSats(product);
           shipping[product.id] = shippingSatPrice;
-          const totalSatPrice = await convertTotalToSats(product);
+          const totalSatPrice = discountedPrice + shippingSatPrice;
           totals[product.pubkey] = totalSatPrice;
 
-          if (subtotalSatPrice !== null || shippingSatPrice !== null) {
+          if (discountedPrice !== null || shippingSatPrice !== null) {
             if (quantities[product.id]) {
-              productSubtotal = subtotalSatPrice * quantities[product.id]!;
+              productSubtotal = discountedPrice * quantities[product.id]!;
               productShipping = shippingSatPrice * quantities[product.id]!;
               productTotal = totalSatPrice * quantities[product.id]!;
               subtotalAmount += productSubtotal;
               totalCostAmount += productTotal;
             } else {
-              subtotalAmount += subtotalSatPrice;
+              subtotalAmount += discountedPrice;
               totalCostAmount += totalSatPrice;
-              productSubtotal = subtotalSatPrice;
+              productSubtotal = discountedPrice;
               productShipping = shippingSatPrice;
               productTotal = totalSatPrice;
             }
@@ -189,7 +207,7 @@ export default function Component() {
     };
 
     fetchSatPrices();
-  }, [products, quantities]);
+  }, [products, quantities, appliedDiscounts]);
 
   useEffect(() => {
     const shippingTypeMap: { [key: string]: ShippingOptionsType } = {};
@@ -233,6 +251,62 @@ export default function Component() {
       setProducts(updatedCart);
       localStorage.setItem("cart", JSON.stringify(updatedCart));
     }
+  };
+
+  const handleApplyDiscount = async (pubkey: string) => {
+    const code = discountCodes[pubkey];
+    if (!code?.trim()) {
+      setDiscountErrors({
+        ...discountErrors,
+        [pubkey]: "Please enter a discount code",
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `/api/db/discount-codes?validate=true&code=${encodeURIComponent(
+          code
+        )}&pubkey=${pubkey}`
+      );
+
+      if (!response.ok) {
+        setDiscountErrors({
+          ...discountErrors,
+          [pubkey]: "Failed to validate discount code",
+        });
+        return;
+      }
+
+      const result = await response.json();
+
+      if (result.valid && result.discount_percentage) {
+        setAppliedDiscounts({
+          ...appliedDiscounts,
+          [pubkey]: result.discount_percentage,
+        });
+        setDiscountErrors({ ...discountErrors, [pubkey]: "" });
+      } else {
+        setDiscountErrors({
+          ...discountErrors,
+          [pubkey]: "Invalid or expired discount code",
+        });
+        setAppliedDiscounts({ ...appliedDiscounts, [pubkey]: 0 });
+      }
+    } catch (error) {
+      console.error("Failed to apply discount:", error);
+      setDiscountErrors({
+        ...discountErrors,
+        [pubkey]: "Failed to apply discount code",
+      });
+      setAppliedDiscounts({ ...appliedDiscounts, [pubkey]: 0 });
+    }
+  };
+
+  const handleRemoveDiscount = (pubkey: string) => {
+    setDiscountCodes({ ...discountCodes, [pubkey]: "" });
+    setAppliedDiscounts({ ...appliedDiscounts, [pubkey]: 0 });
+    setDiscountErrors({ ...discountErrors, [pubkey]: "" });
   };
 
   const convertPriceToSats = async (product: ProductData): Promise<number> => {
