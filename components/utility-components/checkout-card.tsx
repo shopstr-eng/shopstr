@@ -819,6 +819,7 @@ export default function CheckoutCard({
               discountPercentage={
                 appliedDiscount > 0 ? appliedDiscount : undefined
               }
+              originalPrice={currentPrice}
             />
           </div>
         )}

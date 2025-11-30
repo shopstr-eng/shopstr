@@ -2441,7 +2441,7 @@ export default function CartInvoiceCard({
                                 discount > 0 ? "text-gray-500 line-through" : ""
                               }
                             >
-                              {formatWithCommas(basePrice, "sats")}
+                              {formatWithCommas(basePrice, product.currency)}
                             </span>
                           </div>
                           {discount > 0 && (
@@ -2457,14 +2457,17 @@ export default function CartInvoiceCard({
                                   -
                                   {formatWithCommas(
                                     basePrice - discountedPrice,
-                                    "sats"
+                                    product.currency
                                   )}
                                 </span>
                               </div>
                               <div className="flex justify-between text-sm font-medium">
                                 <span className="ml-2">Discounted price:</span>
                                 <span>
-                                  {formatWithCommas(discountedPrice, "sats")}
+                                  {formatWithCommas(
+                                    discountedPrice,
+                                    product.currency
+                                  )}
                                 </span>
                               </div>
                             </>
@@ -2475,7 +2478,7 @@ export default function CartInvoiceCard({
                               <span>
                                 {formatWithCommas(
                                   product.shippingCost!,
-                                  "sats"
+                                  product.currency
                                 )}
                               </span>
                             </div>
@@ -2647,7 +2650,7 @@ export default function CartInvoiceCard({
                               discount > 0 ? "text-gray-500 line-through" : ""
                             }
                           >
-                            {formatWithCommas(basePrice, "sats")}
+                            {formatWithCommas(basePrice, product.currency)}
                           </span>
                         </div>
                         {discount > 0 && (
@@ -2663,14 +2666,17 @@ export default function CartInvoiceCard({
                                 -
                                 {formatWithCommas(
                                   basePrice - discountedPrice,
-                                  "sats"
+                                  product.currency
                                 )}
                               </span>
                             </div>
                             <div className="flex justify-between text-sm font-medium">
                               <span className="ml-2">Discounted price:</span>
                               <span>
-                                {formatWithCommas(discountedPrice, "sats")}
+                                {formatWithCommas(
+                                  discountedPrice,
+                                  product.currency
+                                )}
                               </span>
                             </div>
                           </>
@@ -2679,7 +2685,10 @@ export default function CartInvoiceCard({
                           <div className="flex justify-between text-sm">
                             <span className="ml-2">Shipping cost:</span>
                             <span>
-                              {formatWithCommas(product.shippingCost!, "sats")}
+                              {formatWithCommas(
+                                product.shippingCost!,
+                                product.currency
+                              )}
                             </span>
                           </div>
                         )}

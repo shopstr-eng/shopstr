@@ -80,6 +80,7 @@ export default function ProductInvoiceCard({
   selectedVolume,
   discountCode,
   discountPercentage,
+  originalPrice,
 }: {
   productData: ProductData;
   setIsBeingPaid: (isBeingPaid: boolean) => void;
@@ -93,6 +94,7 @@ export default function ProductInvoiceCard({
   selectedVolume?: string;
   discountCode?: string;
   discountPercentage?: number;
+  originalPrice?: number;
 }) {
   const { mints, tokens, history } = getLocalStorageData();
   const {
@@ -2347,9 +2349,7 @@ export default function ProductInvoiceCard({
                         <span className="ml-2">Product cost:</span>
                         <span className="text-gray-500 line-through">
                           {formatWithCommas(
-                            productData.volumePrice !== undefined
-                              ? productData.volumePrice
-                              : productData.price,
+                            originalPrice || productData.price,
                             productData.currency
                           )}
                         </span>
@@ -2361,9 +2361,7 @@ export default function ProductInvoiceCard({
                         <span>
                           -
                           {formatWithCommas(
-                            ((productData.volumePrice !== undefined
-                              ? productData.volumePrice
-                              : productData.price) *
+                            ((originalPrice || productData.price) *
                               discountPercentage) /
                               100,
                             productData.currency
@@ -2374,10 +2372,7 @@ export default function ProductInvoiceCard({
                         <span className="ml-2">Discounted price:</span>
                         <span>
                           {formatWithCommas(
-                            (productData.volumePrice !== undefined
-                              ? productData.volumePrice
-                              : productData.price) *
-                              (1 - discountPercentage / 100),
+                            productData.price,
                             productData.currency
                           )}
                         </span>
@@ -2388,9 +2383,7 @@ export default function ProductInvoiceCard({
                       <span className="ml-2">Product cost:</span>
                       <span>
                         {formatWithCommas(
-                          productData.volumePrice !== undefined
-                            ? productData.volumePrice
-                            : productData.price,
+                          productData.price,
                           productData.currency
                         )}
                       </span>
