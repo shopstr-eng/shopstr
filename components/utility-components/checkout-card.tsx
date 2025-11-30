@@ -256,6 +256,17 @@ export default function CheckoutCard({
       updatedCart = [...cart, productToAdd];
       setCart(updatedCart);
       localStorage.setItem("cart", JSON.stringify(updatedCart));
+
+      // Store discount code if applied
+      if (appliedDiscount > 0 && discountCode) {
+        const storedDiscounts = localStorage.getItem("cartDiscounts");
+        const discounts = storedDiscounts ? JSON.parse(storedDiscounts) : {};
+        discounts[productData.pubkey] = {
+          code: discountCode,
+          percentage: appliedDiscount,
+        };
+        localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
+      }
     } else {
       onOpen();
     }
@@ -373,11 +384,15 @@ export default function CheckoutCard({
     totalCost: discountedTotal,
     originalPrice: currentPrice,
     discountPercentage: appliedDiscount,
+    volumePrice:
+      selectedVolume && productData.volumePrices
+        ? productData.volumePrices.get(selectedVolume)
+        : undefined,
   };
 
   return (
     <div className="flex w-full items-center justify-center bg-light-bg dark:bg-dark-bg">
-      <div className="flex flex-col">
+      <div className="mx-auto flex w-full flex-col">
         {!isBeingPaid ? (
           <>
             <div className="max-w-screen pt-4">
@@ -791,6 +806,7 @@ export default function CheckoutCard({
           <div className="flex flex-col items-center">
             <ProductInvoiceCard
               productData={updatedProductData}
+              setIsBeingPaid={setIsBeingPaid}
               setFiatOrderIsPlaced={setFiatOrderIsPlaced}
               setFiatOrderFailed={setFiatOrderFailed}
               setInvoiceIsPaid={setInvoiceIsPaid}
@@ -799,7 +815,10 @@ export default function CheckoutCard({
               setCashuPaymentFailed={setCashuPaymentFailed}
               selectedSize={selectedSize}
               selectedVolume={selectedVolume}
-              setIsBeingPaid={setIsBeingPaid}
+              discountCode={appliedDiscount > 0 ? discountCode : undefined}
+              discountPercentage={
+                appliedDiscount > 0 ? appliedDiscount : undefined
+              }
             />
           </div>
         )}

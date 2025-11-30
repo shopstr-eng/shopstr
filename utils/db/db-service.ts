@@ -824,9 +824,7 @@ export async function addDiscountCode(
 }
 
 // Get discount codes for a merchant
-export async function getDiscountCodesByPubkey(
-  pubkey: string
-): Promise<
+export async function getDiscountCodesByPubkey(pubkey: string): Promise<
   Array<{
     code: string;
     discount_percentage: number;

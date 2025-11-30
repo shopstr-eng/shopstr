@@ -30,7 +30,6 @@ import {
   CurrencyDollarIcon,
   WalletIcon,
 } from "@heroicons/react/24/outline";
-import { fiat } from "@getalby/lightning-tools";
 import {
   CashuMint,
   CashuWallet,
@@ -57,7 +56,6 @@ import { webln } from "@getalby/sdk";
 import { formatWithCommas } from "./utility-components/display-monetary-info";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import SignInModal from "./sign-in/SignInModal";
-import currencySelection from "../public/currencySelection.json";
 import FailureModal from "@/components/utility-components/failure-modal";
 import CountryDropdown from "./utility-components/dropdowns/country-dropdown";
 import {
@@ -77,6 +75,8 @@ export default function CartInvoiceCard({
   shippingTypes,
   totalCostsInSats,
   totalCost,
+  appliedDiscounts = {},
+  discountCodes = {},
   onBackToCart,
   setFiatOrderIsPlaced,
   setFiatOrderFailed,
@@ -90,6 +90,8 @@ export default function CartInvoiceCard({
   shippingTypes: { [key: string]: string };
   totalCostsInSats: { [key: string]: number };
   totalCost: number;
+  appliedDiscounts?: { [key: string]: number };
+  discountCodes?: { [key: string]: string };
   onBackToCart?: () => void;
   setFiatOrderIsPlaced?: (fiatOrderIsPlaced: boolean) => void;
   setFiatOrderFailed?: (fiatOrderFailed: boolean) => void;
@@ -539,40 +541,8 @@ export default function CartInvoiceCard({
     paymentType?: "fiat" | "lightning" | "cashu" | "nwc"
   ) => {
     try {
-      let price = totalCost;
-
-      // Convert to sats if needed
-      if (products.length > 0) {
-        const firstProduct = products[0];
-        if (
-          !currencySelection.hasOwnProperty(
-            firstProduct!.currency.toUpperCase()
-          )
-        ) {
-          throw new Error(
-            `${firstProduct!.currency} is not a supported currency.`
-          );
-        } else if (
-          currencySelection.hasOwnProperty(
-            firstProduct!.currency.toUpperCase()
-          ) &&
-          firstProduct!.currency.toLowerCase() !== "sats" &&
-          firstProduct!.currency.toLowerCase() !== "sat"
-        ) {
-          try {
-            const currencyData = {
-              amount: price,
-              currency: firstProduct!.currency,
-            };
-            const numSats = await fiat.getSatoshiValue(currencyData);
-            price = Math.round(numSats);
-          } catch (err) {
-            console.error("ERROR", err);
-          }
-        } else if (firstProduct!.currency.toLowerCase() === "btc") {
-          price = price * 100000000;
-        }
-      }
+      // totalCost is already in sats with discounts applied
+      const price = totalCost;
 
       if (price < 1) {
         throw new Error("Total price is less than 1 sat.");
@@ -2478,7 +2448,10 @@ export default function CartInvoiceCard({
                             <>
                               <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
                                 <span className="ml-2">
-                                  Discount ({discount}%):
+                                  {(discountCodes &&
+                                    discountCodes[product.pubkey]) ||
+                                    "Discount"}{" "}
+                                  ({discount}%):
                                 </span>
                                 <span>
                                   -
@@ -2645,38 +2618,74 @@ export default function CartInvoiceCard({
                   Cost Breakdown
                 </h4>
                 <div className="space-y-3">
-                  {products.map((product) => (
-                    <div
-                      key={product.id}
-                      className="space-y-2 border-l-2 border-gray-200 pl-3 dark:border-gray-600"
-                    >
-                      <div className="text-sm font-medium">
-                        {product.title}{" "}
-                        {quantities[product.id] &&
-                          quantities[product.id]! > 1 &&
-                          `(x${quantities[product.id]})`}
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="ml-2">Product cost:</span>
-                        <span>
-                          {formatWithCommas(
-                            (product.volumePrice !== undefined
-                              ? product.volumePrice
-                              : product.price) * (quantities[product.id] || 1),
-                            "sats"
-                          )}
-                        </span>
-                      </div>
-                      {product.shippingCost! > 0 && (
+                  {products.map((product) => {
+                    const discount = appliedDiscounts[product.pubkey] || 0;
+                    const basePrice =
+                      (product.volumePrice !== undefined
+                        ? product.volumePrice
+                        : product.price) * (quantities[product.id] || 1);
+                    const discountedPrice =
+                      discount > 0
+                        ? basePrice * (1 - discount / 100)
+                        : basePrice;
+
+                    return (
+                      <div
+                        key={product.id}
+                        className="space-y-2 border-l-2 border-gray-200 pl-3 dark:border-gray-600"
+                      >
+                        <div className="text-sm font-medium">
+                          {product.title}{" "}
+                          {quantities[product.id] &&
+                            quantities[product.id]! > 1 &&
+                            `(x${quantities[product.id]})`}
+                        </div>
                         <div className="flex justify-between text-sm">
-                          <span className="ml-2">Shipping cost:</span>
-                          <span>
-                            {formatWithCommas(product.shippingCost!, "sats")}
+                          <span className="ml-2">Product cost:</span>
+                          <span
+                            className={
+                              discount > 0 ? "text-gray-500 line-through" : ""
+                            }
+                          >
+                            {formatWithCommas(basePrice, "sats")}
                           </span>
                         </div>
-                      )}
-                    </div>
-                  ))}
+                        {discount > 0 && (
+                          <>
+                            <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
+                              <span className="ml-2">
+                                {(discountCodes &&
+                                  discountCodes[product.pubkey]) ||
+                                  "Discount"}{" "}
+                                ({discount}%):
+                              </span>
+                              <span>
+                                -
+                                {formatWithCommas(
+                                  basePrice - discountedPrice,
+                                  "sats"
+                                )}
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-sm font-medium">
+                              <span className="ml-2">Discounted price:</span>
+                              <span>
+                                {formatWithCommas(discountedPrice, "sats")}
+                              </span>
+                            </div>
+                          </>
+                        )}
+                        {product.shippingCost! > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="ml-2">Shipping cost:</span>
+                            <span>
+                              {formatWithCommas(product.shippingCost!, "sats")}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
                 <div className="flex justify-between border-t pt-2 font-semibold">
                   <span>Total:</span>

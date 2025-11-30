@@ -8,6 +8,7 @@ import {
   ModalContent,
   ModalHeader,
   ModalBody,
+  Input,
 } from "@nextui-org/react";
 import {
   PlusIcon,
@@ -123,6 +124,18 @@ export default function Component() {
     [pubkey: string]: string;
   }>({});
 
+  // Group products by seller pubkey
+  const productsBySeller = products.reduce(
+    (acc, product) => {
+      if (!acc[product.pubkey]) {
+        acc[product.pubkey] = [];
+      }
+      acc[product.pubkey]!.push(product);
+      return acc;
+    },
+    {} as { [pubkey: string]: ProductData[] }
+  );
+
   const router = useRouter();
 
   useEffect(() => {
@@ -141,50 +154,64 @@ export default function Component() {
           }
         }
       }
+
+      // Load saved discount codes
+      const storedDiscounts = localStorage.getItem("cartDiscounts");
+      if (storedDiscounts) {
+        const discounts = JSON.parse(storedDiscounts);
+        const codes: { [pubkey: string]: string } = {};
+        const applied: { [pubkey: string]: number } = {};
+
+        Object.entries(discounts).forEach(([pubkey, data]: [string, any]) => {
+          codes[pubkey] = data.code;
+          applied[pubkey] = data.percentage;
+        });
+
+        setDiscountCodes(codes);
+        setAppliedDiscounts(applied);
+      }
     }
   }, []);
 
   useEffect(() => {
     const fetchSatPrices = async () => {
       const prices: { [key: string]: number | null } = {};
-      const shipping: { [key: string]: number | null } = {};
+      const shipping: { [key: string]: number } = {};
       const totals: { [key: string]: number } = {};
       let subtotalAmount = 0;
       let totalCostAmount = 0;
 
       for (const product of products) {
         try {
+          const priceSats = await convertPriceToSats(product);
+          const shippingSatPrice = await convertShippingToSats(product);
+          const discount = appliedDiscounts[product.pubkey] || 0;
+          let discountedPrice = priceSats;
           let productSubtotal = 0;
           let productShipping = 0;
           let productTotal = 0;
-          const subtotalSatPrice = await convertPriceToSats(product);
 
-          // Apply discount if available
-          const discount = appliedDiscounts[product.pubkey] || 0;
-          const discountedPrice =
-            discount > 0
-              ? subtotalSatPrice * (1 - discount / 100)
-              : subtotalSatPrice;
-
-          prices[product.id] = discountedPrice;
-          const shippingSatPrice = await convertShippingToSats(product);
-          shipping[product.id] = shippingSatPrice;
-          const totalSatPrice = discountedPrice + shippingSatPrice;
-          totals[product.pubkey] = totalSatPrice;
+          if (discount > 0) {
+            discountedPrice = Math.ceil(priceSats * (1 - discount / 100));
+          }
 
           if (discountedPrice !== null || shippingSatPrice !== null) {
             if (quantities[product.id]) {
-              productSubtotal = discountedPrice * quantities[product.id]!;
-              productShipping = shippingSatPrice * quantities[product.id]!;
-              productTotal = totalSatPrice * quantities[product.id]!;
+              productSubtotal = Math.ceil(
+                discountedPrice * quantities[product.id]!
+              );
+              productShipping = Math.ceil(
+                shippingSatPrice * quantities[product.id]!
+              );
+              productTotal = productSubtotal + productShipping;
               subtotalAmount += productSubtotal;
               totalCostAmount += productTotal;
             } else {
-              subtotalAmount += discountedPrice;
-              totalCostAmount += totalSatPrice;
               productSubtotal = discountedPrice;
               productShipping = shippingSatPrice;
-              productTotal = totalSatPrice;
+              productTotal = discountedPrice + shippingSatPrice;
+              subtotalAmount += discountedPrice;
+              totalCostAmount += productTotal;
             }
             prices[product.id] = productSubtotal;
             shipping[product.id] = productShipping;
@@ -196,7 +223,7 @@ export default function Component() {
             error
           );
           prices[product.id] = null;
-          shipping[product.id] = null;
+          shipping[product.id] = 0;
         }
       }
 
@@ -286,6 +313,15 @@ export default function Component() {
           [pubkey]: result.discount_percentage,
         });
         setDiscountErrors({ ...discountErrors, [pubkey]: "" });
+
+        // Save to localStorage
+        const storedDiscounts = localStorage.getItem("cartDiscounts");
+        const discounts = storedDiscounts ? JSON.parse(storedDiscounts) : {};
+        discounts[pubkey] = {
+          code: code,
+          percentage: result.discount_percentage,
+        };
+        localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
       } else {
         setDiscountErrors({
           ...discountErrors,
@@ -307,6 +343,14 @@ export default function Component() {
     setDiscountCodes({ ...discountCodes, [pubkey]: "" });
     setAppliedDiscounts({ ...appliedDiscounts, [pubkey]: 0 });
     setDiscountErrors({ ...discountErrors, [pubkey]: "" });
+
+    // Remove from localStorage
+    const storedDiscounts = localStorage.getItem("cartDiscounts");
+    if (storedDiscounts) {
+      const discounts = JSON.parse(storedDiscounts);
+      delete discounts[pubkey];
+      localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
+    }
   };
 
   const convertPriceToSats = async (product: ProductData): Promise<number> => {
@@ -378,43 +422,6 @@ export default function Component() {
     return cost;
   };
 
-  const convertTotalToSats = async (product: ProductData): Promise<number> => {
-    // Use volumePrice if it exists, otherwise use default price
-    const basePrice =
-      product.volumePrice !== undefined ? product.volumePrice : product.price;
-    const shippingCost = product.shippingCost || 0;
-    const totalCost = basePrice + shippingCost;
-
-    if (
-      product.currency.toLowerCase() === "sats" ||
-      product.currency.toLowerCase() === "sat"
-    ) {
-      return totalCost;
-    }
-    let total = 0;
-    if (!currencySelection.hasOwnProperty(product.currency.toUpperCase())) {
-      throw new Error(`${product.currency} is not a supported currency.`);
-    } else if (
-      currencySelection.hasOwnProperty(product.currency.toUpperCase()) &&
-      product.currency.toLowerCase() !== "sats" &&
-      product.currency.toLowerCase() !== "sat"
-    ) {
-      try {
-        const currencyData = {
-          amount: totalCost,
-          currency: product.currency,
-        };
-        const numSats = await fiat.getSatoshiValue(currencyData);
-        total = Math.round(numSats);
-      } catch (err) {
-        console.error("ERROR", err);
-      }
-    } else if (product.currency.toLowerCase() === "btc") {
-      total = totalCost * 100000000;
-    }
-    return total;
-  };
-
   return (
     <>
       {!isBeingPaid ? (
@@ -427,78 +434,133 @@ export default function Component() {
             </div>
             {products.length > 0 ? (
               <>
-                <div className="space-y-4">
-                  {products.map((product) => (
-                    <div
-                      key={product.id}
-                      className="flex flex-col rounded-lg border border-gray-300 p-4 shadow-sm dark:border-gray-700 md:flex-row md:items-start md:justify-between"
-                    >
-                      <div className="flex w-full md:w-auto">
-                        <img
-                          src={product.images[0]}
-                          alt={product.title}
-                          className="mr-4 h-24 w-24 rounded-md object-cover"
-                        />
-                        <div className="flex-1">
-                          <div className="flex flex-col md:flex-row md:items-start md:justify-between md:gap-5">
-                            <h2 className="mb-2 text-lg md:mb-0">
-                              {product.title}
-                            </h2>
-                            <p className="text-lg font-bold">
-                              {satPrices[product.id] !== undefined
-                                ? satPrices[product.id] !== null
-                                  ? `${satPrices[product.id]} sats`
-                                  : "Price unavailable"
-                                : "Loading..."}
-                            </p>
-                          </div>
-                          {product.quantity && (
-                            <div className="mt-2">
-                              <p className="mb-2 text-sm text-green-600">
-                                {product.quantity} in stock
-                              </p>
-                              <QuantitySelector
-                                value={quantities[product.id] || 1}
-                                onDecrease={() =>
-                                  handleQuantityChange(
-                                    product.id,
-                                    (quantities[product.id] || 1) - 1
-                                  )
-                                }
-                                onIncrease={() =>
-                                  handleQuantityChange(
-                                    product.id,
-                                    (quantities[product.id] || 1) + 1
-                                  )
-                                }
-                                onChange={(newVal) =>
-                                  handleQuantityChange(product.id, newVal)
-                                }
-                                min={1}
-                                max={parseInt(String(product.quantity))}
+                <div className="space-y-6">
+                  {Object.entries(productsBySeller).map(
+                    ([sellerPubkey, sellerProducts]) => (
+                      <div key={sellerPubkey} className="space-y-4">
+                        {sellerProducts.map((product) => (
+                          <div
+                            key={product.id}
+                            className="flex flex-col rounded-lg border border-gray-300 p-4 shadow-sm dark:border-gray-700 md:flex-row md:items-start md:justify-between"
+                          >
+                            <div className="flex w-full md:w-auto">
+                              <img
+                                src={product.images[0]}
+                                alt={product.title}
+                                className="mr-4 h-24 w-24 rounded-md object-cover"
                               />
-                              {hasReachedMax[product.id] && (
-                                <p className="mt-1 text-xs text-red-500">
-                                  Maximum quantity reached
-                                </p>
-                              )}
+                              <div className="flex-1">
+                                <div className="flex flex-col md:flex-row md:items-start md:justify-between md:gap-5">
+                                  <h2 className="mb-2 text-lg md:mb-0">
+                                    {product.title}
+                                  </h2>
+                                  <p className="text-lg font-bold">
+                                    {satPrices[product.id] !== undefined
+                                      ? satPrices[product.id] !== null
+                                        ? `${satPrices[product.id]} sats`
+                                        : "Price unavailable"
+                                      : "Loading..."}
+                                  </p>
+                                </div>
+                                {product.quantity && (
+                                  <div className="mt-2">
+                                    <p className="mb-2 text-sm text-green-600">
+                                      {product.quantity} in stock
+                                    </p>
+                                    <QuantitySelector
+                                      value={quantities[product.id] || 1}
+                                      onDecrease={() =>
+                                        handleQuantityChange(
+                                          product.id,
+                                          (quantities[product.id] || 1) - 1
+                                        )
+                                      }
+                                      onIncrease={() =>
+                                        handleQuantityChange(
+                                          product.id,
+                                          (quantities[product.id] || 1) + 1
+                                        )
+                                      }
+                                      onChange={(newVal) =>
+                                        handleQuantityChange(product.id, newVal)
+                                      }
+                                      min={1}
+                                      max={parseInt(String(product.quantity))}
+                                    />
+                                    {hasReachedMax[product.id] && (
+                                      <p className="mt-1 text-xs text-red-500">
+                                        Maximum quantity reached
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
                             </div>
+                            <div className="mt-4 flex md:mt-0 md:items-center">
+                              <Button
+                                size="sm"
+                                color="danger"
+                                variant="light"
+                                className="ml-auto"
+                                onClick={() => handleRemoveFromCart(product.id)}
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+
+                        {/* Discount code section for this seller */}
+                        <div className="rounded-lg border border-gray-300 p-4 shadow-sm dark:border-gray-700">
+                          <h3 className="mb-3 font-semibold">
+                            Have a discount code from this seller?
+                          </h3>
+                          <div className="flex gap-2">
+                            <Input
+                              label="Discount Code"
+                              placeholder="Enter code"
+                              value={discountCodes[sellerPubkey] || ""}
+                              onChange={(e) =>
+                                setDiscountCodes({
+                                  ...discountCodes,
+                                  [sellerPubkey]: e.target.value.toUpperCase(),
+                                })
+                              }
+                              className="flex-1 text-light-text dark:text-dark-text"
+                              disabled={appliedDiscounts[sellerPubkey]! > 0}
+                              isInvalid={!!discountErrors[sellerPubkey]}
+                              errorMessage={discountErrors[sellerPubkey]}
+                            />
+                            {appliedDiscounts[sellerPubkey]! > 0 ? (
+                              <Button
+                                color="warning"
+                                onClick={() =>
+                                  handleRemoveDiscount(sellerPubkey)
+                                }
+                              >
+                                Remove
+                              </Button>
+                            ) : (
+                              <Button
+                                className={SHOPSTRBUTTONCLASSNAMES}
+                                onClick={() =>
+                                  handleApplyDiscount(sellerPubkey)
+                                }
+                              >
+                                Apply
+                              </Button>
+                            )}
+                          </div>
+                          {appliedDiscounts[sellerPubkey]! > 0 && (
+                            <p className="mt-2 text-sm text-green-600 dark:text-green-400">
+                              {appliedDiscounts[sellerPubkey]}% discount applied
+                              to all items from this seller!
+                            </p>
                           )}
                         </div>
                       </div>
-                      <div className="mt-4 flex md:mt-0 md:items-center">
-                        <Button
-                          size="sm"
-                          color="danger"
-                          variant="light"
-                          className="ml-auto"
-                          onClick={() => handleRemoveFromCart(product.id)}
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  )}
                 </div>
                 <div className="mt-6 flex flex-col items-end border-t border-gray-300 pt-4 dark:border-gray-700">
                   <p className="mb-4 text-xl font-bold">
@@ -546,6 +608,8 @@ export default function Component() {
                 shippingTypes={shippingTypes}
                 totalCostsInSats={totalCostsInSats}
                 totalCost={totalCost}
+                appliedDiscounts={appliedDiscounts}
+                discountCodes={discountCodes}
                 onBackToCart={toggleCheckout}
                 setFiatOrderIsPlaced={setFiatOrderIsPlaced}
                 setFiatOrderFailed={setFiatOrderFailed}
