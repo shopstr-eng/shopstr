@@ -84,7 +84,6 @@ export default function Component() {
     [key: string]: number;
   }>({});
   const [subtotal, setSubtotal] = useState<number>(0);
-  const [totalCost, setTotalCost] = useState<number>(0);
   const [shippingTypes, setShippingTypes] = useState<{
     [key: string]: ShippingOptionsType;
   }>({});
@@ -107,8 +106,6 @@ export default function Component() {
   }>(Object.fromEntries(products.map((product) => [product.id, false])));
   const [isBeingPaid, setIsBeingPaid] = useState(false);
 
-  const [fiatOrderIsPlaced, setFiatOrderIsPlaced] = useState(false);
-  const [fiatOrderFailed, setFiatOrderFailed] = useState(false);
   const [invoiceIsPaid, setInvoiceIsPaid] = useState(false);
   const [invoiceGenerationFailed, setInvoiceGenerationFailed] = useState(false);
   const [cashuPaymentSent, setCashuPaymentSent] = useState(false);
@@ -179,7 +176,6 @@ export default function Component() {
       const shipping: { [key: string]: number } = {};
       const totals: { [key: string]: number } = {};
       let subtotalAmount = 0;
-      let totalShippingAmount = 0;
 
       for (const product of products) {
         try {
@@ -203,12 +199,10 @@ export default function Component() {
                 shippingSatPrice * quantities[product.id]!
               );
               subtotalAmount += productSubtotal;
-              totalShippingAmount += productShipping;
             } else {
               productSubtotal = discountedPrice;
               productShipping = shippingSatPrice;
               subtotalAmount += discountedPrice;
-              totalShippingAmount += shippingSatPrice;
             }
             prices[product.id] = productSubtotal;
             shipping[product.id] = productShipping;
@@ -227,8 +221,6 @@ export default function Component() {
 
       setSatPrices(prices);
       setSubtotal(subtotalAmount);
-      // Total cost is just subtotal for now, shipping will be added based on selection
-      setTotalCost(subtotalAmount);
       setTotalCostsInSats(totals);
     };
 
@@ -610,8 +602,6 @@ export default function Component() {
                 appliedDiscounts={appliedDiscounts}
                 discountCodes={discountCodes}
                 onBackToCart={toggleCheckout}
-                setFiatOrderIsPlaced={setFiatOrderIsPlaced}
-                setFiatOrderFailed={setFiatOrderFailed}
                 setInvoiceIsPaid={setInvoiceIsPaid}
                 setInvoiceGenerationFailed={setInvoiceGenerationFailed}
                 setCashuPaymentSent={setCashuPaymentSent}
@@ -623,13 +613,12 @@ export default function Component() {
       )}
 
       {/* Success Modal */}
-      {fiatOrderIsPlaced || invoiceIsPaid || cashuPaymentSent ? (
+      {invoiceIsPaid || cashuPaymentSent ? (
         <>
           <Modal
             backdrop="blur"
-            isOpen={fiatOrderIsPlaced || invoiceIsPaid || cashuPaymentSent}
+            isOpen={invoiceIsPaid || cashuPaymentSent}
             onClose={() => {
-              setFiatOrderIsPlaced(false);
               setInvoiceIsPaid(false);
               setCashuPaymentSent(false);
               router.push("/orders");
@@ -722,41 +711,6 @@ export default function Component() {
               <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                 <div className="flex items-center justify-center">
                   You didn&apos;t have enough balance in your wallet to pay.
-                </div>
-              </ModalBody>
-            </ModalContent>
-          </Modal>
-        </>
-      ) : null}
-
-      {/* Fiat Order Failed Modal */}
-      {fiatOrderFailed ? (
-        <>
-          <Modal
-            backdrop="blur"
-            isOpen={fiatOrderFailed}
-            onClose={() => setFiatOrderFailed(false)}
-            classNames={{
-              body: "py-6 ",
-              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-              header: "border-b-[1px] border-[#292f46]",
-              footer: "border-t-[1px] border-[#292f46]",
-              closeButton: "hover:bg-black/5 active:bg-white/10",
-            }}
-            isDismissable={true}
-            scrollBehavior={"normal"}
-            placement={"center"}
-            size="2xl"
-          >
-            <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
-                <XCircleIcon className="h-6 w-6 text-red-500" />
-                <div className="ml-2">Order failed!</div>
-              </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
-                <div className="flex items-center justify-center">
-                  Your order information was not delivered to the seller. Please
-                  try again.
                 </div>
               </ModalBody>
             </ModalContent>

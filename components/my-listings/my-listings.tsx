@@ -327,9 +327,7 @@ const MyListingsPage = () => {
               </div>
             </div>
           )}
-          {usersPubkey && selectedSection === "Discounts" && (
-            <DiscountCodes />
-          )}
+          {usersPubkey && selectedSection === "Discounts" && <DiscountCodes />}
         </div>
       </div>
       <SignInModal isOpen={isOpen} onClose={onClose} />

@@ -370,14 +370,13 @@ export default function CheckoutCard({
   };
 
   // Calculate discounted price with proper rounding
-  const discountAmount = appliedDiscount > 0 
-    ? Math.ceil((currentPrice * appliedDiscount / 100) * 100) / 100 
-    : 0;
-  
-  const discountedPrice =
+  const discountAmount =
     appliedDiscount > 0
-      ? currentPrice - discountAmount
-      : currentPrice;
+      ? Math.ceil(((currentPrice * appliedDiscount) / 100) * 100) / 100
+      : 0;
+
+  const discountedPrice =
+    appliedDiscount > 0 ? currentPrice - discountAmount : currentPrice;
 
   const discountedTotal = discountedPrice + (productData.shippingCost ?? 0);
 
@@ -596,7 +595,7 @@ export default function CheckoutCard({
                       {appliedDiscount > 0 && (
                         <p className="text-sm text-green-600 dark:text-green-400">
                           {appliedDiscount}% discount applied! You save{" "}
-                          {(Math.ceil((discountAmount / 100) * 100) / 100)}{" "}
+                          {Math.ceil((discountAmount / 100) * 100) / 100}{" "}
                           {productData.currency}
                         </p>
                       )}
