@@ -74,7 +74,7 @@ export default function CartInvoiceCard({
   quantities,
   shippingTypes,
   totalCostsInSats,
-  totalCost,
+  subtotalCost,
   appliedDiscounts = {},
   discountCodes = {},
   onBackToCart,
@@ -89,7 +89,7 @@ export default function CartInvoiceCard({
   quantities: { [key: string]: number };
   shippingTypes: { [key: string]: string };
   totalCostsInSats: { [key: string]: number };
-  totalCost: number;
+  subtotalCost: number;
   appliedDiscounts?: { [key: string]: number };
   discountCodes?: { [key: string]: string };
   onBackToCart?: () => void;
@@ -151,6 +151,8 @@ export default function CartInvoiceCard({
   const [selectedPickupLocations, setSelectedPickupLocations] = useState<{
     [productId: string]: string;
   }>({});
+  
+  const [totalCost, setTotalCost] = useState<number>(subtotalCost);
 
   const {
     handleSubmit: handleFormSubmit,
@@ -616,13 +618,35 @@ export default function CartInvoiceCard({
 
     if (selectedOrderType === "shipping") {
       setFormType("shipping");
+      // Calculate total with shipping
+      let shippingTotal = 0;
+      products.forEach((product) => {
+        const shippingCost = product.shippingCost || 0;
+        const quantity = quantities[product.id] || 1;
+        shippingTotal += Math.ceil(shippingCost * quantity);
+      });
+      setTotalCost(subtotalCost + shippingTotal);
     } else if (selectedOrderType === "contact") {
       setFormType("contact");
+      // No shipping for contact/pickup
+      setTotalCost(subtotalCost);
     } else if (selectedOrderType === "combined") {
       setFormType("combined");
       // Show Free/Pickup preference selection if we have mixed shipping with Free/Pickup
       if (hasMixedShippingWithFreePickup) {
         setShowFreePickupSelection(true);
+      } else {
+        // Calculate shipping for combined non-Free/Pickup items
+        let shippingTotal = 0;
+        products.forEach((product) => {
+          const productShippingType = shippingTypes[product.id];
+          if (productShippingType === "Added Cost" || productShippingType === "Free") {
+            const shippingCost = product.shippingCost || 0;
+            const quantity = quantities[product.id] || 1;
+            shippingTotal += Math.ceil(shippingCost * quantity);
+          }
+        });
+        setTotalCost(subtotalCost + shippingTotal);
       }
     }
   };
@@ -2623,14 +2647,22 @@ export default function CartInvoiceCard({
                 <div className="space-y-3">
                   {products.map((product) => {
                     const discount = appliedDiscounts[product.pubkey] || 0;
-                    const basePrice =
+                    const originalPrice =
                       (product.volumePrice !== undefined
                         ? product.volumePrice
-                        : product.price) * (quantities[product.id] || 1);
+                        : product.price);
+                    const basePrice = originalPrice * (quantities[product.id] || 1);
                     const discountedPrice =
                       discount > 0
                         ? basePrice * (1 - discount / 100)
                         : basePrice;
+
+                    // Determine if shipping should be shown for this product
+                    const productShippingType = shippingTypes[product.id];
+                    const shouldShowShipping = formType === "shipping" ||
+                      (formType === "combined" && 
+                        ((productShippingType === "Added Cost" || productShippingType === "Free") ||
+                        (productShippingType === "Free/Pickup" && freePickupPreference === "shipping")));
 
                     return (
                       <div
@@ -2643,16 +2675,24 @@ export default function CartInvoiceCard({
                             quantities[product.id]! > 1 &&
                             `(x${quantities[product.id]})`}
                         </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="ml-2">Product cost:</span>
-                          <span
-                            className={
-                              discount > 0 ? "text-gray-500 line-through" : ""
-                            }
-                          >
-                            {formatWithCommas(basePrice, product.currency)}
+                        <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
+                          <span className="ml-2">Original price:</span>
+                          <span>
+                            {formatWithCommas(originalPrice, product.currency)}
                           </span>
                         </div>
+                        {quantities[product.id] && quantities[product.id]! > 1 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="ml-2">Base cost ({quantities[product.id]}x):</span>
+                            <span
+                              className={
+                                discount > 0 ? "text-gray-500 line-through" : ""
+                              }
+                            >
+                              {formatWithCommas(basePrice, product.currency)}
+                            </span>
+                          </div>
+                        )}
                         {discount > 0 && (
                           <>
                             <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
@@ -2681,12 +2721,12 @@ export default function CartInvoiceCard({
                             </div>
                           </>
                         )}
-                        {product.shippingCost! > 0 && (
+                        {shouldShowShipping && product.shippingCost! > 0 && (
                           <div className="flex justify-between text-sm">
                             <span className="ml-2">Shipping cost:</span>
                             <span>
                               {formatWithCommas(
-                                product.shippingCost!,
+                                product.shippingCost! * (quantities[product.id] || 1),
                                 product.currency
                               )}
                             </span>
@@ -2804,6 +2844,17 @@ export default function CartInvoiceCard({
                   onClick={() => {
                     setFreePickupPreference("shipping");
                     setShowFreePickupSelection(false);
+                    // Calculate total with all applicable shipping
+                    let shippingTotal = 0;
+                    products.forEach((product) => {
+                      const productShippingType = shippingTypes[product.id];
+                      if (productShippingType === "Added Cost" || productShippingType === "Free" || productShippingType === "Free/Pickup") {
+                        const shippingCost = product.shippingCost || 0;
+                        const quantity = quantities[product.id] || 1;
+                        shippingTotal += Math.ceil(shippingCost * quantity);
+                      }
+                    });
+                    setTotalCost(subtotalCost + shippingTotal);
                   }}
                   className={`w-full rounded-lg border p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-600 ${
                     freePickupPreference === "shipping"
@@ -2820,6 +2871,17 @@ export default function CartInvoiceCard({
                   onClick={() => {
                     setFreePickupPreference("contact");
                     setShowFreePickupSelection(false);
+                    // Calculate shipping for non-Free/Pickup items only
+                    let shippingTotal = 0;
+                    products.forEach((product) => {
+                      const productShippingType = shippingTypes[product.id];
+                      if (productShippingType === "Added Cost" || productShippingType === "Free") {
+                        const shippingCost = product.shippingCost || 0;
+                        const quantity = quantities[product.id] || 1;
+                        shippingTotal += Math.ceil(shippingCost * quantity);
+                      }
+                    });
+                    setTotalCost(subtotalCost + shippingTotal);
                   }}
                   className={`w-full rounded-lg border p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-600 ${
                     freePickupPreference === "contact"
