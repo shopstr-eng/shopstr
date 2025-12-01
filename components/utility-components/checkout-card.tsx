@@ -596,7 +596,7 @@ export default function CheckoutCard({
                       {appliedDiscount > 0 && (
                         <p className="text-sm text-green-600 dark:text-green-400">
                           {appliedDiscount}% discount applied! You save{" "}
-                          {discountAmount}{" "}
+                          {discountAmount.toFixed(2)}{" "}
                           {productData.currency}
                         </p>
                       )}

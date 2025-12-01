@@ -675,7 +675,7 @@ export default function CartInvoiceCard({
       await nwc.enable();
 
       await nwc.sendPayment(pr);
-      await invoiceHasBeenPaid(wallet, convertedPrice, hash, data);
+      await invoiceHasBeenPaid(wallet, totalCost, hash, data);
     } catch (error: any) {
       handleNWCError(error);
     } finally {
@@ -1069,7 +1069,7 @@ export default function CartInvoiceCard({
           console.error(e);
         }
       }
-      await invoiceHasBeenPaid(wallet, convertedPrice, hash, data);
+      await invoiceHasBeenPaid(wallet, totalCost, hash, data);
     } catch (error) {
       if (setInvoiceGenerationFailed) {
         setInvoiceGenerationFailed(true);
