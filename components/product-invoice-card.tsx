@@ -2361,9 +2361,8 @@ export default function ProductInvoiceCard({
                         <span>
                           -
                           {formatWithCommas(
-                            ((originalPrice || productData.price) *
-                              discountPercentage) /
-                              100,
+                            Math.ceil(((originalPrice || productData.price) *
+                              discountPercentage / 100) * 100) / 100,
                             productData.currency
                           )}
                         </span>
