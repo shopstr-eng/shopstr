@@ -112,11 +112,11 @@ const MyListingsPage = () => {
         <Button
           className="w-full bg-transparent px-4 py-2 text-left text-sm text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
           onClick={() => {
-            setSelectedSection("Discount Codes");
+            setSelectedSection("Discounts");
             setIsMobileMenuOpen(false);
           }}
         >
-          Discount Codes
+          Discounts
         </Button>
         <Button
           className="w-full bg-transparent px-4 py-2 text-left text-sm text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
@@ -181,9 +181,9 @@ const MyListingsPage = () => {
                   </Button>
                   <Button
                     className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                    onClick={() => setSelectedSection("Discount Codes")}
+                    onClick={() => setSelectedSection("Discounts")}
                   >
-                    Discount Codes
+                    Discounts
                   </Button>
                   <Button
                     className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
@@ -243,9 +243,9 @@ const MyListingsPage = () => {
                   </Button>
                   <Button
                     className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                    onClick={() => setSelectedSection("Discount Codes")}
+                    onClick={() => setSelectedSection("Discounts")}
                   >
-                    Discount Codes
+                    Discounts
                   </Button>
                   <Button
                     className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
@@ -327,7 +327,7 @@ const MyListingsPage = () => {
               </div>
             </div>
           )}
-          {usersPubkey && selectedSection === "Discount Codes" && (
+          {usersPubkey && selectedSection === "Discounts" && (
             <DiscountCodes />
           )}
         </div>
