@@ -5,7 +5,9 @@ import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/outline";
 import parseTags, {
   ProductData,
 } from "@/utils/parsers/product-parser-functions";
+import { parseZapsnagNote } from "@/utils/parsers/zapsnag-parser";
 import CheckoutCard from "../../components/utility-components/checkout-card";
+import ZapsnagButton from "../../components/ZapsnagButton";
 import { ProductContext } from "../../utils/context/context";
 import { Event, nip19 } from "nostr-tools";
 
@@ -14,6 +16,7 @@ const Listing = () => {
   const [productData, setProductData] = useState<ProductData | undefined>(
     undefined
   );
+  const [isZapsnag, setIsZapsnag] = useState(false);
   const [productIdString, setProductIdString] = useState("");
 
   const [fiatOrderIsPlaced, setFiatOrderIsPlaced] = useState(false);
@@ -60,7 +63,14 @@ const Listing = () => {
       );
 
       if (matchingEvent) {
-        const parsed = parseTags(matchingEvent);
+        let parsed;
+        if (matchingEvent.kind === 1) {
+          parsed = parseZapsnagNote(matchingEvent);
+          setIsZapsnag(true);
+        } else {
+          parsed = parseTags(matchingEvent);
+          setIsZapsnag(false);
+        }
         setProductData(parsed);
       }
     }
@@ -69,7 +79,18 @@ const Listing = () => {
   return (
     <>
       <div className="flex h-full min-h-screen flex-col bg-light-bg pt-20 dark:bg-dark-bg">
-        {productData && (
+        {productData && (isZapsnag ? (
+          <div className="w-full max-w-2xl mx-auto p-6">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-lg overflow-hidden">
+              <img src={productData.images[0]} className="w-full h-96 object-cover"/>
+              <div className="p-6">
+                <h1 className="text-2xl font-bold mb-2 text-light-text dark:text-dark-text">{productData.title}</h1>
+                <p className="text-gray-600 dark:text-gray-300 mb-6 whitespace-pre-wrap">{productData.summary}</p>
+                <ZapsnagButton product={productData} />
+              </div>
+            </div>
+          </div>
+        ) : (
           <CheckoutCard
             productData={productData}
             setFiatOrderIsPlaced={setFiatOrderIsPlaced}
@@ -79,7 +100,7 @@ const Listing = () => {
             setCashuPaymentSent={setCashuPaymentSent}
             setCashuPaymentFailed={setCashuPaymentFailed}
           />
-        )}
+        ))}
         {fiatOrderIsPlaced || invoiceIsPaid || cashuPaymentSent ? (
           <>
             <Modal

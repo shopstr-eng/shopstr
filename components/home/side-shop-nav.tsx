@@ -97,6 +97,14 @@ const SideShopNav = ({
     }
   };
 
+  const handleCreateFlashSale = () => {
+    if (usersPubkey) {
+      router.push("?addFlashSale");
+    } else {
+      onOpen();
+    }
+  };
+
   return (
     <>
       <div className="hidden w-[120px] flex-col items-center bg-light-bg px-6 py-8 dark:bg-dark-bg sm:flex md:w-[250px] md:items-start">
@@ -182,6 +190,12 @@ const SideShopNav = ({
               onClick={() => handleCreateNewListing()}
             >
               Add Listing
+            </Button>
+            <Button
+              className={`${SHOPSTRBUTTONCLASSNAMES} mt-2 w-full bg-gradient-to-tr from-blue-600 to-cyan-500`}
+              onClick={() => handleCreateFlashSale()}
+            >
+              ⚡ Flash Sale
             </Button>
             <Button
               className={`${SHOPSTRBUTTONCLASSNAMES} mt-2 w-full`}

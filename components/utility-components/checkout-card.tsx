@@ -23,6 +23,7 @@ import SignInModal from "../sign-in/SignInModal";
 import currencySelection from "../../public/currencySelection.json";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import VolumeSelector from "./volume-selector";
+import ZapsnagButton from "@/components/ZapsnagButton";
 
 const SUMMARY_CHARACTER_LIMIT = 100;
 
@@ -86,6 +87,8 @@ export default function CheckoutCard({
   const isExpired = productData.expiration
     ? Date.now() / 1000 > productData.expiration
     : false;
+
+  const isZapsnag = productData.d === "zapsnag" || productData.categories?.includes("zapsnag");
 
   useEffect(() => {
     if (selectedVolume && productData.volumePrices) {
@@ -561,6 +564,12 @@ export default function CheckoutCard({
                     <DisplayCheckoutCost monetaryInfo={updatedProductData} />
                   </div>
 
+                  {isZapsnag ? (
+                    <div className="mt-4">
+                      <ZapsnagButton product={productData} />
+                    </div>
+                  ) : (
+                  <>
                   {productData.pubkey !== userPubkey && (
                     <div className="mt-4 space-y-2">
                       <div className="flex gap-2">
@@ -674,6 +683,8 @@ export default function CheckoutCard({
                       </Button>
                     </div>
                   </div>
+                </>
+                )}
                   {productData.pubkey !== userPubkey && (
                     <span
                       onClick={() => {

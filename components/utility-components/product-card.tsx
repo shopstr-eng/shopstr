@@ -22,6 +22,8 @@ export default function ProductCard({
   const { pubkey: userPubkey } = useContext(SignerContext);
   if (!productData) return null;
 
+  const isZapsnag = productData.d === "zapsnag" || productData.categories?.includes("zapsnag");
+
   const cardHoverStyle =
     "hover:shadow-purple-500/30 dark:hover:shadow-yellow-500/30 hover:scale-[1.01]";
 
@@ -85,7 +87,15 @@ export default function ProductCard({
             >
               {productData.location}
             </Chip>
-            <CompactPriceDisplay monetaryInfo={productData} />
+            {!isZapsnag ? (
+              <CompactPriceDisplay monetaryInfo={productData} />
+            ) : (
+              <div className="flex items-center justify-center rounded-md bg-black/10 px-2 py-1 dark:bg-white/10">
+                <span className="text-sm font-bold text-shopstr-purple dark:text-shopstr-yellow">
+                  ⚡ {productData.price} {productData.currency}
+                </span>
+              </div>
+            )}
           </div>
         )}
       </div>
