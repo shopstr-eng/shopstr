@@ -73,14 +73,6 @@ const MyListingsPage = () => {
     }
   };
 
-  const handleCreateFlashSale = () => {
-    if (usersPubkey) {
-      router.push("?addFlashSale");
-    } else {
-      onOpen();
-    }
-  };
-
   const handleEditShop = () => {
     if (usersPubkey) {
       router.push("settings/shop-profile");
@@ -221,12 +213,6 @@ const MyListingsPage = () => {
                   Add Listing
                 </Button>
                 <Button
-                  className={`${SHOPSTRBUTTONCLASSNAMES} bg-gradient-to-tr from-blue-600 to-cyan-500`}
-                  onClick={() => handleCreateFlashSale()}
-                >
-                  ⚡ Flash Sale
-                </Button>
-                <Button
                   className={`${SHOPSTRBUTTONCLASSNAMES}`}
                   onClick={() => handleEditShop()}
                 >
@@ -287,12 +273,6 @@ const MyListingsPage = () => {
                   onClick={() => handleCreateNewListing()}
                 >
                   Add Listing
-                </Button>
-                <Button
-                  className={`${SHOPSTRBUTTONCLASSNAMES} bg-gradient-to-tr from-blue-600 to-cyan-500`}
-                  onClick={() => handleCreateFlashSale()}
-                >
-                  ⚡ Flash Sale
                 </Button>
                 <Button
                   className={`${SHOPSTRBUTTONCLASSNAMES}`}

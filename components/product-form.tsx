@@ -16,6 +16,7 @@ import {
   SelectSection,
   Chip,
   Image,
+  Switch,
 } from "@nextui-org/react";
 import {
   ChevronLeftIcon,
@@ -34,6 +35,7 @@ import {
 import {
   PostListing,
   getLocalStorageData,
+  finalizeAndSendNostrEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import LocationDropdown from "./utility-components/dropdowns/location-dropdown";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
@@ -76,6 +78,7 @@ export default function ProductForm({
   const [isPostingOrUpdatingProduct, setIsPostingOrUpdatingProduct] =
     useState(false);
   const [showOptionalTags, setShowOptionalTags] = useState(false);
+  const [isFlashSale, setIsFlashSale] = useState(false);
   const productEventContext = useContext(ProductContext);
   const profileContext = useContext(ProfileMapContext);
   const {
@@ -133,6 +136,7 @@ export default function ProductForm({
   useEffect(() => {
     setImages(oldValues?.images || []);
     setIsEdit(oldValues ? true : false);
+    setIsFlashSale(false);
   }, [showModal]);
 
   const onSubmit = async (data: {
@@ -245,6 +249,27 @@ export default function ProductForm({
     }
 
     const newListing = await PostListing(tags, signer!, isLoggedIn!, nostr!);
+
+    //Handle Flash Sale (Zapsnag) Publication
+    if (isFlashSale) {
+      try {
+        const finalContent = `${data["Description"]}\n\nPrice: ${data["Price"]} ${data["Currency"]}\n\n#zapsnag\n${images[0] || ""}`;
+        const flashSaleEvent = {
+          kind: 1,
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [
+            ["t", "zapsnag"],
+            ["t", "shopstr-zapsnag"], 
+            ["d", "zapsnag"]
+          ],
+          content: finalContent
+        };
+        if (images[0]) flashSaleEvent.tags.push(["image", images[0]]);
+        await finalizeAndSendNostrEvent(signer!, nostr!, flashSaleEvent);
+      } catch (e) {
+        console.error("Failed to publish flash sale note", e);
+      }
+    }
 
     if (isEdit) {
       if (handleDelete && oldValues?.id) {
@@ -886,6 +911,21 @@ export default function ProductForm({
                   <span className="ml-2">{showOptionalTags ? "↑" : "↓"}</span>
                 </div>
               </Button>
+            </div>
+
+            {/* --- Flash Sale Toggle --- */}
+            <div className="mt-4 flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+              <div className="flex flex-col">
+                <span className="text-sm font-semibold text-light-text dark:text-dark-text">Post as Flash Sale</span>
+                <span className="text-tiny text-gray-500">Also publish to social feed as a Zapsnag (Kind 1)</span>
+              </div>
+              <Switch
+                isSelected={isFlashSale}
+                onValueChange={setIsFlashSale}
+                classNames={{
+                  wrapper: "group-data-[selected=true]:bg-shopstr-purple dark:group-data-[selected=true]:bg-shopstr-yellow",
+                }}
+              />
             </div>
 
             {showOptionalTags && (
