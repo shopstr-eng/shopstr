@@ -917,7 +917,7 @@ export default function ProductForm({
             <div className="mt-4 flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-700">
               <div className="flex flex-col">
                 <span className="text-sm font-semibold text-light-text dark:text-dark-text">Post as Flash Sale</span>
-                <span className="text-tiny text-gray-500">Also publish to social feed as a Zapsnag (Kind 1)</span>
+                <span className="text-tiny text-gray-500">Also broadcast to Global Feed (Nostr)</span>
               </div>
               <Switch
                 isSelected={isFlashSale}

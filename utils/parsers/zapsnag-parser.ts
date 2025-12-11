@@ -19,7 +19,7 @@ export const parseZapsnagNote = (event: NostrEvent): ProductData => {
     }
   }
 
-  const imageRegex = /(https?:\/\/.*\.(?:png|jpg|jpeg|gif|webp))/i;
+  const imageRegex = /(https?:\/\/[^\s]+\.(?:png|jpg|jpeg|gif|webp))/i;
   const imageMatch = content.match(imageRegex);
   let image = imageMatch ? imageMatch[0] : `https://robohash.org/${event.id}`;
 
