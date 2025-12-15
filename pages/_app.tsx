@@ -61,6 +61,8 @@ import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
+import { retryFailedRelayPublishes } from "@/utils/nostr/retry-service";
+import { NostrManager } from "@/utils/nostr/nostr-manager";
 
 function Shopstr({ props }: { props: AppProps }) {
   const { Component, pageProps } = props;
@@ -583,6 +585,15 @@ function Shopstr({ props }: { props: AppProps }) {
         } catch (error) {
           console.error("Error fetching follows:", error);
           editFollowsContext([], 0, false);
+        }
+
+        // After all fetching operations complete, retry failed relay publishes
+        try {
+          const { relays, writeRelays } = getLocalStorageData();
+          const retryNostr = new NostrManager([...relays, ...writeRelays]);
+          await retryFailedRelayPublishes(retryNostr);
+        } catch (error) {
+          console.error("Failed to retry relay publishes:", error);
         }
       } catch (error) {
         console.error("Critical error during app initialization:", error);

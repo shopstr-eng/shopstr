@@ -49,3 +49,50 @@ export async function deleteEventsFromDatabase(
     console.error("Failed to delete events from database:", error);
   }
 }
+
+export async function trackFailedRelayPublish(
+  eventId: string,
+  relays: string[]
+): Promise<void> {
+  try {
+    await fetch("/api/db/track-failed-publish", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventId, relays }),
+    });
+  } catch (error) {
+    console.error("Failed to track failed relay publish:", error);
+  }
+}
+
+export async function getFailedRelayPublishes(): Promise<
+  Array<{
+    eventId: string;
+    relays: string[];
+    event: NostrEvent;
+    retryCount: number;
+  }>
+> {
+  try {
+    const response = await fetch("/api/db/get-failed-publishes");
+    if (!response.ok) {
+      throw new Error("Failed to fetch failed relay publishes");
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Failed to get failed relay publishes:", error);
+    return [];
+  }
+}
+
+export async function clearFailedRelayPublish(eventId: string): Promise<void> {
+  try {
+    await fetch("/api/db/clear-failed-publish", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventId }),
+    });
+  } catch (error) {
+    console.error("Failed to clear failed relay publish:", error);
+  }
+}
