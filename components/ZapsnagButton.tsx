@@ -14,6 +14,8 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
+  const [soldCount, setSoldCount] = useState(0);
+  const [isCheckingInventory, setIsCheckingInventory] = useState(true);
   
   const [shippingInfo, setShippingInfo] = useState({ 
       name: "", 
@@ -41,6 +43,28 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
         }
     }
   }, []);
+
+  useEffect(() => {
+    const checkInventory = async () => {
+        if (!nostrManager || !product.id) return;
+        
+        if (!product.quantity || product.quantity <= 0) {
+            setIsCheckingInventory(false);
+            return;
+        }
+
+        try {
+            const filter = { kinds: [9735], "#e": [product.id] };
+            const zaps = await nostrManager.fetch([filter]);
+            setSoldCount(zaps.length);
+        } catch (e) {
+            console.error("Failed to check inventory", e);
+        } finally {
+            setIsCheckingInventory(false);
+        }
+    };
+    checkInventory();
+  }, [nostrManager, product.id, product.quantity]);
 
   const handleBuy = async () => {
     let originalWebLN: any;
@@ -158,15 +182,24 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
   };
 
   const isValid = shippingInfo.name && shippingInfo.address && shippingInfo.city && shippingInfo.zip && shippingInfo.country;
+  
+  // Inventory Logic
+  const hasQuantityLimit = product.quantity && product.quantity > 0;
+  const isSoldOut = hasQuantityLimit ? soldCount >= product.quantity! : false;
+  const remaining = hasQuantityLimit ? (product.quantity! - soldCount) : null;
 
   return (
     <>
       <Button 
-        className={`${SHOPSTRBUTTONCLASSNAMES} w-full font-bold text-lg`} 
+        className={`${SHOPSTRBUTTONCLASSNAMES} w-full font-bold text-lg disabled:opacity-50`} 
         onClick={onOpen}
-        startContent={<BoltIcon className="h-6 w-6" />}
+        startContent={!isSoldOut ? <BoltIcon className="h-6 w-6" /> : null}
+        isDisabled={isSoldOut || isCheckingInventory}
       >
-        Zap to Buy ({product.price} sats)
+        {isCheckingInventory ? "Checking Stock..." : 
+         isSoldOut ? "Sold Out" : 
+         remaining !== null ? `Zap to Buy (${remaining} left)` :
+         `Zap to Buy (${product.price} sats)`}
       </Button>
 
       <Modal isOpen={isOpen} onClose={onClose} size="2xl">

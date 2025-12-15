@@ -136,8 +136,14 @@ export default function ProductForm({
   useEffect(() => {
     setImages(oldValues?.images || []);
     setIsEdit(oldValues ? true : false);
-    setIsFlashSale(false);
-  }, [showModal]);
+    if (showModal && !oldValues && signerPubKey) {
+      const profile = profileContext.profileData.get(signerPubKey);
+      const hasLightning = !!(profile?.content?.lud16 || profile?.content?.lnurl);
+      setIsFlashSale(hasLightning);
+    } else {
+      setIsFlashSale(false);
+    }
+  }, [showModal,signerPubKey,profileContext]);
 
   const onSubmit = async (data: {
     [x: string]: string | Map<string, number> | string[];
@@ -264,6 +270,10 @@ export default function ProductForm({
           ],
           content: finalContent
         };
+
+        if (data["Quantity"]) {
+          flashSaleEvent.tags.push(["quantity", data["Quantity"].toString()]);
+        }
         if (images[0]) flashSaleEvent.tags.push(["image", images[0]]);
         await finalizeAndSendNostrEvent(signer!, nostr!, flashSaleEvent);
       } catch (e) {
