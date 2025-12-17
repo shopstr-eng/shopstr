@@ -90,7 +90,7 @@ export const fetchAllPosts = async (
 
       const zapsnagFilter: Filter = {
         kinds: [1],
-        "#t": ["shopstr-zapsnag"]
+        "#t": ["shopstr-zapsnag", "zapsnag"]
       };
 
       const productArrayFromRelay: NostrEvent[] = [];

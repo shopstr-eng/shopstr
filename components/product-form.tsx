@@ -910,18 +910,6 @@ export default function ProductForm({
                 );
               }}
             />
-            <div className="w-full max-w-xs">
-              <Button
-                className="mb-2 mt-4 w-full justify-start rounded-md pl-2 text-shopstr-purple-light dark:text-shopstr-yellow-light"
-                variant="light"
-                onClick={() => setShowOptionalTags(!showOptionalTags)}
-              >
-                <div className="flex items-center py-2">
-                  <span>Additional options</span>
-                  <span className="ml-2">{showOptionalTags ? "↑" : "↓"}</span>
-                </div>
-              </Button>
-            </div>
 
             {/* --- Flash Sale Toggle --- */}
             <div className="mt-4 flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-700">
@@ -936,6 +924,19 @@ export default function ProductForm({
                   wrapper: "group-data-[selected=true]:bg-shopstr-purple dark:group-data-[selected=true]:bg-shopstr-yellow",
                 }}
               />
+            </div>
+
+            <div className="w-full max-w-xs">
+              <Button
+                className="mb-2 mt-4 w-full justify-start rounded-md pl-2 text-shopstr-purple-light dark:text-shopstr-yellow-light"
+                variant="light"
+                onClick={() => setShowOptionalTags(!showOptionalTags)}
+              >
+                <div className="flex items-center py-2">
+                  <span>Additional options</span>
+                  <span className="ml-2">{showOptionalTags ? "↑" : "↓"}</span>
+                </div>
+              </Button>
             </div>
 
             {showOptionalTags && (
