@@ -175,13 +175,21 @@ function MarketplacePage({
     }
   };
 
-  const handleTitleClick = (productId: string, productPubkey: string) => {
-    const naddr = nip19.naddrEncode({
-      identifier: productId,
-      pubkey: productPubkey,
-      kind: 30402,
-    });
-    router.push(`/listing/${naddr}`);
+  const handleTitleClick = (product: ProductData) => {
+    if (product.d === "zapsnag" || product.categories?.includes("zapsnag")) {
+      router.push(`/listing/${product.id}`);
+      return;
+    }
+    try {
+      const naddr = nip19.naddrEncode({
+        identifier: product.d!,
+        pubkey: product.pubkey,
+        kind: 30402,
+      });
+      router.push(`/listing/${naddr}`);
+    } catch {
+      router.push(`/listing/${product.id}`);
+    }
   };
 
   const renderProductScores = () => {
@@ -201,9 +209,7 @@ function MarketplacePage({
             <div key={product.id} className="mt-4 p-4 pt-4">
               <h3 className="mb-3 text-lg font-semibold text-light-text dark:text-dark-text">
                 <div
-                  onClick={() =>
-                    handleTitleClick(product.d as string, product.pubkey)
-                  }
+                  onClick={() => handleTitleClick(product)}
                   className="cursor-pointer hover:underline"
                 >
                   {product.title}

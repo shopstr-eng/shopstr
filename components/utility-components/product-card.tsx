@@ -1,6 +1,9 @@
 import React, { useContext } from "react";
 import { Chip } from "@nextui-org/react";
 import Link from "next/link";
+import { ArrowTopRightOnSquareIcon } from "@heroicons/react/24/outline";
+import { nip19 } from "nostr-tools";
+import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
 import { locationAvatar } from "./dropdowns/location-dropdown";
 import ImageCarousel from "./image-carousel";
 import CompactPriceDisplay from "./display-monetary-info";
@@ -22,12 +25,31 @@ export default function ProductCard({
   const { pubkey: userPubkey } = useContext(SignerContext);
   if (!productData) return null;
 
+  const isZapsnag = productData.d === "zapsnag" || productData.categories?.includes("zapsnag");
+
   const cardHoverStyle =
     "hover:shadow-purple-500/30 dark:hover:shadow-yellow-500/30 hover:scale-[1.01]";
 
   const isExpired = productData.expiration
     ? Date.now() / 1000 > productData.expiration
     : false;
+
+  const handleNjumpClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const { relays } = getLocalStorageData();
+      const targetRelays = relays.length > 0 ? relays.slice(0, 3) : ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net"];
+      const nevent = nip19.neventEncode({
+        id: productData.id,
+        author: productData.pubkey,
+        relays: targetRelays
+      });
+      window.open(`https://njump.me/${nevent}`, "_blank");
+    } catch (err) {
+      console.error("Failed to generate njump link", err);
+    }
+  };
 
   const content = (
     <div
@@ -49,6 +71,17 @@ export default function ProductCard({
             <h2 className="max-w-[70%] truncate text-xl font-semibold text-light-text dark:text-dark-text">
               {productData.title}
             </h2>
+            {isZapsnag && productData.pubkey === userPubkey && (
+              <button
+                onClick={handleNjumpClick}
+                className="ml-2 inline-flex items-center text-xs text-purple-600 hover:text-purple-800 dark:text-yellow-500 dark:hover:text-yellow-700 underline"
+                title="Track Sales on Nostr"
+                aria-label="Open Flash Sale in Nostr client"
+              >
+                <span>View on Nostr</span>
+                <ArrowTopRightOnSquareIcon className="h-4 w-4 ml-1" />
+              </button>
+            )}
             {isExpired && (
               <Chip color="warning" size="sm" variant="flat" className="mr-2">
                 Outdated
@@ -85,7 +118,15 @@ export default function ProductCard({
             >
               {productData.location}
             </Chip>
-            <CompactPriceDisplay monetaryInfo={productData} />
+            {!isZapsnag ? (
+              <CompactPriceDisplay monetaryInfo={productData} />
+            ) : (
+              <div className="flex items-center justify-center rounded-md bg-black/10 px-2 py-1 dark:bg-white/10">
+                <span className="text-sm font-bold text-shopstr-purple dark:text-shopstr-yellow">
+                  ⚡ {productData.price} {productData.currency}
+                </span>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -88,17 +88,22 @@ export const fetchAllPosts = async (
         kinds: [30402],
       };
 
+      const zapsnagFilter: Filter = {
+        kinds: [1],
+        "#t": ["shopstr-zapsnag", "zapsnag"]
+      };
+
       const productArrayFromRelay: NostrEvent[] = [];
       const profileSetFromProducts: Set<string> = new Set();
 
-      const fetchedEvents = await nostr.fetch([filter], {}, relays);
+      const fetchedEvents = await nostr.fetch([filter, zapsnagFilter], {}, relays);
       if (!fetchedEvents.length) {
         console.error("No products found with filter: ", filter);
       }
 
       // Cache valid product events to database
       const validProductEvents = fetchedEvents.filter(
-        (e) => e.id && e.sig && e.pubkey && e.kind === 30402
+        (e) => e.id && e.sig && e.pubkey && (e.kind === 30402 || e.kind === 1)
       );
       if (validProductEvents.length > 0) {
         cacheEventsToDatabase(validProductEvents).catch((error) =>
@@ -584,7 +589,8 @@ export const fetchGiftWrappedChatsAndMessages = async (
             subject !== "order-info" &&
             subject !== "payment-change" &&
             subject !== "order-receipt" &&
-            subject !== "shipping-info"
+            subject !== "shipping-info" &&
+            subject !== "zapsnag-order"
           ) {
             continue;
           }

@@ -16,6 +16,7 @@ import { useRouter } from "next/router";
 import parseTags, {
   ProductData,
 } from "@/utils/parsers/product-parser-functions";
+import { parseZapsnagNote } from "@/utils/parsers/zapsnag-parser";
 import {
   NostrContext,
   SignerContext,
@@ -93,12 +94,22 @@ const DisplayProducts = ({
           if (!followsContext.isLoading && followsContext.followList) {
             const followList = followsContext.followList;
             if (followList.length > 0 && followList.includes(event.pubkey)) {
-              const parsedData = parseTags(event);
+              let parsedData;
+              if (event.kind === 1) {
+                parsedData = parseZapsnagNote(event);
+              } else {
+                parsedData = parseTags(event);
+              }
               if (parsedData) parsedProductData.push(parsedData);
             }
           }
         } else {
-          const parsedData = parseTags(event);
+          let parsedData;
+          if (event.kind === 1) {
+            parsedData = parseZapsnagNote(event);
+          } else {
+            parsedData = parseTags(event);
+          }
           if (parsedData) parsedProductData.push(parsedData);
         }
       });
@@ -216,6 +227,10 @@ const DisplayProducts = ({
   const getProductHref = (product: ProductData) => {
     if (product.pubkey === userPubkey) {
       return null; // Will show modal instead
+    }
+
+    if (product.d === "zapsnag" || product.categories?.includes("zapsnag")) {
+      return `/listing/${product.id}`;
     }
 
     const naddr = nip19.naddrEncode({
