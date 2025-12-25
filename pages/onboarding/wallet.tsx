@@ -8,7 +8,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { saveNWCString } from "@/utils/nostr/nostr-helper-functions";
-import { webln } from "@getalby/sdk";
+import { NostrWebLNProvider } from "@getalby/sdk";
 
 const OnboardingWallet = () => {
   const router = useRouter();
@@ -23,7 +23,7 @@ const OnboardingWallet = () => {
   const handleConnect = async () => {
     setIsLoading(true);
     setError(null);
-    let nwc: webln.NostrWebLNProvider | null = null;
+    let nwc: NostrWebLNProvider | null = null;
 
     try {
       if (!nwcString || !nwcString.startsWith("nostr+walletconnect://")) {
@@ -32,7 +32,7 @@ const OnboardingWallet = () => {
         );
       }
 
-      nwc = new webln.NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
+      nwc = new NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
       await nwc.enable();
       const info = await nwc.getInfo();
 
