@@ -26,6 +26,12 @@ import {
 } from "@/utils/db/db-client";
 import { newPromiseWithTimeout } from "@/utils/timeout";
 
+export const ORDER_MESSAGE_TYPES = {
+  REQUEST: "zapsnag_order_request",
+  OFFER: "hodl_invoice_offer",
+  FAILED: "order_failed"
+} as const;
+
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
 }

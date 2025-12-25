@@ -46,13 +46,13 @@ import {
   getLocalStorageData,
   publishProofEvent,
   generateKeys,
+  ORDER_MESSAGE_TYPES,
 } from "@/utils/nostr/nostr-helper-functions";
 import { addChatMessagesToCache } from "@/utils/nostr/cache-service";
 import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
 import { v4 as uuidv4 } from "uuid";
 import { nip19 } from "nostr-tools";
-import { webln } from "@getalby/sdk";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { formatWithCommas } from "./utility-components/display-monetary-info";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
@@ -66,6 +66,8 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import { ShippingFormData, ContactFormData } from "@/utils/types/types";
 import { Controller } from "react-hook-form";
+import { NWCClient } from "@getalby/sdk";
+import { generateSecretKey, getPublicKey } from "nostr-tools";
 
 export default function ProductInvoiceCard({
   productData,
@@ -506,7 +508,7 @@ export default function ProductInvoiceCard({
 
   const handleNWCPayment = async (convertedPrice: number, data: any) => {
     setIsNwcLoading(true);
-    let nwc: webln.NostrWebLNProvider | null = null;
+    if (!nostr) throw new Error("Nostr not connected");
 
     try {
       if (data.shippingName || data.shippingAddress) {
@@ -531,38 +533,77 @@ export default function ProductInvoiceCard({
         validatePaymentData(convertedPrice);
       }
 
-      const wallet = new CashuWallet(new CashuMint(mints[0]!));
-      const { request: pr, quote: hash } =
-        await wallet.createMintQuote(convertedPrice);
-
       const { nwcString } = getLocalStorageData();
       if (!nwcString) throw new Error("NWC connection not found.");
 
-      nwc = new webln.NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
-      await nwc.enable();
+      const stockCheck = await fetch("/api/inventory/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productIds: [productData.id] })
+      }).then(r => r.json());
+      if (!stockCheck.available) throw new Error("Item out of stock.");
 
-      await nwc.sendPayment(pr);
+      const orderId = uuidv4();
+      const ephemeralPrivBytes = generateSecretKey();
+      const ephemeralPubHex = getPublicKey(ephemeralPrivBytes);
+      const shippingInfo = {
+        name: data.shippingName,
+        address: data.shippingAddress,
+        city: data.shippingCity,
+        zip: data.shippingPostalCode,
+        country: data.shippingCountry,
+        contact: data.contact
+      };
 
-      await invoiceHasBeenPaid(
-        wallet,
-        convertedPrice,
-        hash,
-        data.shippingName ? data.shippingName : undefined,
-        data.shippingAddress ? data.shippingAddress : undefined,
-        data.shippingUnitNo ? data.shippingUnitNo : undefined,
-        data.shippingCity ? data.shippingCity : undefined,
-        data.shippingPostalCode ? data.shippingPostalCode : undefined,
-        data.shippingState ? data.shippingState : undefined,
-        data.shippingCountry ? data.shippingCountry : undefined,
-        data.contact ? data.contact : undefined,
-        data.contactType ? data.contactType : undefined,
-        data.contactInstructions ? data.contactInstructions : undefined,
-        data.additionalInfo ? data.additionalInfo : undefined
+      const shippingMessage = JSON.stringify({
+        type: ORDER_MESSAGE_TYPES.REQUEST,
+        orderId: orderId,
+        items: [productData.id],
+        shipping: shippingInfo,
+        requestType: "hodl_invoice"
+      });
+
+      const giftWrap = await constructGiftWrappedEvent(
+        userPubkey!, productData.pubkey, shippingMessage, "zapsnag-order", { isOrder: true, orderId: orderId }
       );
+      const seal = await constructMessageSeal(signer!, giftWrap, userPubkey!, productData.pubkey);
+      const finalEvent = await constructMessageGiftWrap(seal, ephemeralPubHex, ephemeralPrivBytes, productData.pubkey);
+      await sendGiftWrappedMessageEvent(nostr!, finalEvent);
+
+      let invoiceFound = false;
+      const maxRetries = 60;
+      const startTime = Math.floor(Date.now() / 1000);
+
+      for (let i = 0; i < maxRetries; i++) {
+        const filter = { kinds: [1059], '#p': [userPubkey!], authors: [productData.pubkey], since: startTime };
+        const events = await nostr.fetch([filter]);
+        for (const event of events) {
+          try {
+            const decrypted = await signer!.decrypt(event.pubkey, event.content);
+            const offer = JSON.parse(decrypted);
+            if (offer.type === ORDER_MESSAGE_TYPES.OFFER && offer.order_id === orderId) {
+              const nwcClient = new NWCClient({ nostrWalletConnectUrl: nwcString });
+              await nwcClient.payInvoice({ invoice: offer.invoice });
+              invoiceFound = true;
+              break;
+            }
+          } catch (e) { /* ignore */ }
+        }
+        if (invoiceFound) break;
+        await new Promise(r => setTimeout(r, 1000));
+      }
+
+      if (invoiceFound) {
+        setPaymentConfirmed(true);
+        if (setInvoiceIsPaid) setInvoiceIsPaid(true);
+        setOrderConfirmed(true);
+      } else {
+        throw new Error("Seller did not respond.");
+      }
+        
     } catch (error: any) {
       handleNWCError(error);
     } finally {
-      nwc?.close();
       setIsNwcLoading(false);
     }
   };

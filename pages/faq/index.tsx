@@ -37,6 +37,11 @@ export default function Faq() {
             "Nostr Wallet Connect (NIP-47) is a secure protocol that lets you connect your personal Lightning wallet (like Alby or Umbrel) to Shopstr. When you check out, Shopstr will ask your wallet to pay the invoice directly, so you don't have to copy and paste. You can set this up in 'Settings' -> 'Wallet Connection'.",
         },
         {
+          title: "What is the Shop Bot Private Key?",
+          content:
+            "The Shop Bot Private Key (your Nostr 'nsec') is required if you want to enable automated order handling. This allows our secure server-side worker to automatically reserve inventory and settle HODL invoices for you, even when you aren't actively using the app. This key is AES-encrypted before being stored and is only used for order-related automation.",
+        },
+        {
           title: "Does Shopstr control my funds with NIP-47?",
           content:
             "No. Shopstr never sees your private keys or has control of your funds. The NWC connection only gives Shopstr permission to request payments for purchases you initiate. Depending on your wallet settings, you may need to approve each payment, or you can configure a spending budget that allows automatic payments up to a certain amount.",

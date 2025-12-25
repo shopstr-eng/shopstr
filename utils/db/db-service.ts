@@ -177,6 +177,46 @@ async function initializeTables(): Promise<void> {
 
       CREATE INDEX IF NOT EXISTS idx_discount_codes_pubkey ON discount_codes(pubkey);
       CREATE INDEX IF NOT EXISTS idx_discount_codes_code ON discount_codes(code);
+
+      CREATE TABLE IF NOT EXISTS hodl_invoices (
+        payment_hash TEXT PRIMARY KEY,
+        preimage TEXT NOT NULL,
+        order_id TEXT NOT NULL,
+        pubkey TEXT NOT NULL,
+        amount BIGINT NOT NULL,
+        status TEXT DEFAULT 'pending',
+        created_at BIGINT NOT NULL,
+        product_id TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_hodl_invoices_pubkey ON hodl_invoices(pubkey);
+      CREATE INDEX IF NOT EXISTS idx_hodl_invoices_order_id ON hodl_invoices(order_id);
+
+      -- Inventory Reservations table: The physical stock lock
+      CREATE TABLE IF NOT EXISTS inventory_reservations (
+        product_id TEXT NOT NULL,
+        payment_hash TEXT NOT NULL,
+        reserved_at BIGINT NOT NULL,
+        expires_at BIGINT NOT NULL,
+        PRIMARY KEY (product_id, payment_hash)
+      );
+      CREATE INDEX IF NOT EXISTS idx_inventory_reservations_expires ON inventory_reservations(expires_at);
+
+      -- Seller Cloud Configs (Secure storage for Multi-Tenant Bot)
+      CREATE TABLE IF NOT EXISTS seller_cloud_configs (
+        pubkey TEXT PRIMARY KEY,
+        encrypted_nwc_string TEXT NOT NULL,
+        encrypted_priv_key TEXT NOT NULL,
+        status TEXT DEFAULT 'active',
+        last_active BIGINT
+      );
+
+      -- Failed Settlements Queue (For Retry Logic) 
+      CREATE TABLE IF NOT EXISTS failed_settlements (
+        payment_hash TEXT PRIMARY KEY,   
+        preimage TEXT NOT NULL,
+        retry_count INTEGER DEFAULT 0,
+        next_retry_at BIGINT NOT NULL
+      );
     `);
 
     tablesInitialized = true;
@@ -918,4 +958,152 @@ export async function closeDbPool(): Promise<void> {
     await pool.end();
     pool = null;
   }
+}
+
+// --- HODL & INVENTORY FUNCTIONS ---
+export async function reserveInventory(productIds: string[], paymentHash: string, ttlSeconds = 3600): Promise<boolean> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    await client.query("BEGIN");
+
+    for (const productId of productIds) {
+      const productRes = await client.query(
+        `SELECT tags FROM product_events WHERE id = $1 FOR UPDATE`,
+        [productId]
+      );
+
+      if (productRes.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return false;
+      }
+
+      const tags = productRes.rows[0].tags;
+      const quantityTag = tags.find((t: any[]) => t[0] === 'quantity');
+      const maxQuantity = quantityTag ? parseInt(quantityTag[1]) : 0;
+
+      if (maxQuantity <= 0) {
+        await client.query("ROLLBACK");
+        return false;
+      }
+
+      const countRes = await client.query(
+        `SELECT COUNT(*) FROM inventory_reservations WHERE product_id = $1`,
+        [productId]
+      );
+      const currentReserved = parseInt(countRes.rows[0].count);
+
+      if (currentReserved >= maxQuantity) {
+        await client.query("ROLLBACK");
+        return false; 
+      }
+
+      const expiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
+      await client.query(
+        `INSERT INTO inventory_reservations (product_id, payment_hash, reserved_at, expires_at)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT DO NOTHING`,
+        [productId, paymentHash, Math.floor(Date.now() / 1000), expiresAt] as any[]
+      );
+    }
+    
+    await client.query("COMMIT");
+    return true;
+  } catch (e) {
+    if (client) await client.query("ROLLBACK");
+    console.error("Inventory reservation failed", e);
+    return false;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function saveHodlInvoiceToDb(invoice: {
+  paymentHash: string;
+  preimage: string;
+  orderId: string;
+  pubkey: string;
+  amount: number;
+  productId?: string;
+}): Promise<void> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    await client.query(
+      `INSERT INTO hodl_invoices (payment_hash, preimage, order_id, pubkey, amount, created_at, product_id, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')`,
+      [invoice.paymentHash, invoice.preimage, invoice.orderId, invoice.pubkey, invoice.amount, Math.floor(Date.now() / 1000), invoice.productId] as any[]
+    );
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function getPreimageFromDb(paymentHash: string): Promise<string | null> {
+    const dbPool = getDbPool();
+    const res = await dbPool.query(
+        `SELECT preimage FROM hodl_invoices WHERE payment_hash = $1`,
+        [paymentHash]
+    );
+    return res.rows[0]?.preimage || null;
+}
+
+export async function releaseExpiredReservations(): Promise<void> {
+    const dbPool = getDbPool();
+    const now = Math.floor(Date.now() / 1000);
+    await dbPool.query(
+        `DELETE FROM inventory_reservations WHERE expires_at < $1`,
+        [now]
+    );
+}
+
+// --- SELLER CLOUD CONFIGS ---
+
+export async function saveMerchantConnection(
+  pubkey: string, 
+  encryptedNwc: string, 
+  encryptedPrivKey: string
+): Promise<void> {
+  const dbPool = getDbPool();
+  await dbPool.query(
+    `INSERT INTO seller_cloud_configs (pubkey, encrypted_nwc_string, encrypted_priv_key, status, last_active)
+     VALUES ($1, $2, $3, 'active', $4)
+     ON CONFLICT (pubkey) DO UPDATE SET 
+     encrypted_nwc_string = EXCLUDED.encrypted_nwc_string,
+     encrypted_priv_key = EXCLUDED.encrypted_priv_key,
+     last_active = EXCLUDED.last_active`,
+    [pubkey, encryptedNwc, encryptedPrivKey, Math.floor(Date.now() / 1000)] as any[]
+  );
+}
+
+export async function getActiveSellerConfigs(): Promise<any[]> {
+    const dbPool = getDbPool();
+    const res = await dbPool.query(
+        `SELECT pubkey, encrypted_nwc_string, encrypted_priv_key FROM seller_cloud_configs WHERE status = 'active'`
+    );
+    return res.rows;
+}
+
+export async function deleteReservation(paymentHash: string): Promise<void> {
+  const dbPool = getDbPool();
+  try {
+    await dbPool.query(
+      `DELETE FROM inventory_reservations WHERE payment_hash = $1`,
+      [paymentHash]
+    );
+  } catch (e) {
+    console.error("Failed to delete reservation", e);
+  }
+}
+
+export async function queueFailedSettlement(paymentHash: string, preimage: string): Promise<void> {
+  const dbPool = getDbPool();
+  const nextRetry = Math.floor(Date.now() / 1000) + 300; 
+  await dbPool.query(
+    `INSERT INTO failed_settlements (payment_hash, preimage, next_retry_at) VALUES ($1, $2, $3)
+    ON CONFLICT (payment_hash) DO UPDATE SET retry_count = failed_settlements.retry_count + 1, next_retry_at = $3`,
+   [paymentHash, preimage, nextRetry] as any[]
+  );
 }
