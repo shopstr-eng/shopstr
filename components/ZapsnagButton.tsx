@@ -69,7 +69,15 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       
       if (nwcString) {
           const nwcClient = new NWCClient({ nostrWalletConnectUrl: nwcString });
-          await nwcClient.payInvoice({ invoice });
+          try {
+            const payPromise = nwcClient.payInvoice({ invoice });
+            await Promise.race([
+              payPromise,
+              new Promise((_, reject) => setTimeout(() => reject(new Error("TIMEOUT")), 3000))
+            ]);
+          } catch (e: any) {
+            if (e.message !== "TIMEOUT" && !e.message.includes("timeout")) throw e;
+          }
       } else if (typeof (window as any).webln !== "undefined") {
           await (window as any).webln.enable();
           await (window as any).webln.sendPayment(invoice);
@@ -77,6 +85,8 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
           alert("No wallet connected. Please setup NWC or an Extension.");
           return;
       }
+
+      fetch("/api/settlement/run", { method: "POST" }).catch(console.error);
       
       localStorage.setItem("shopstr_shipping_info", JSON.stringify(shippingInfo));
       alert("Funds Locked! Seller has received your order and reserved inventory. Shipping soon.");

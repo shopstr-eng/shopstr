@@ -93,7 +93,7 @@ export default function CartInvoiceCard({
   setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
 }) {
   const { mints, tokens, history } = getLocalStorageData();
-  const { isLoggedIn, signer } = useContext(SignerContext);
+  const { isLoggedIn, signer, pubkey: userPubkey } = useContext(SignerContext);
 
   // Check if there are tokens available for Cashu payment
   const hasTokensAvailable = tokens && tokens.length > 0;
@@ -203,6 +203,135 @@ export default function CartInvoiceCard({
     window.addEventListener("storage", loadNwcInfo);
     return () => window.removeEventListener("storage", loadNwcInfo);
   }, [products, profileContext.profileData]);
+
+  useEffect(() => {
+    const checkPendingCart = async () => {
+      const pending = localStorage.getItem("pending_cart_order");
+      if (!pending) return;
+
+      try {
+        const orderState = JSON.parse(pending);
+        if (Date.now() - orderState.timestamp > 600000) {
+          localStorage.removeItem("pending_cart_order");
+          return;
+        }
+
+        if (orderState.status === 'processing') {
+          setIsNwcLoading(true);
+          const lockedSet = new Set<string>(orderState.lockedMerchants || []);
+          const paidSet = new Set<string>(orderState.paidMerchants || []);
+          const merchantPubkeys = orderState.merchantPubkeys || [];
+          await waitForCartResponses(orderState.orderId, orderState.startTime, merchantPubkeys, lockedSet, paidSet);
+        }
+      } catch (e) {
+        console.error("Failed to recover cart order", e);
+      }
+    };
+
+    if (nostr) checkPendingCart();
+  }, [nostr]);
+
+  const waitForCartResponses = async (
+    orderId: string,
+    startTime: number,
+    merchantPubkeys: string[],
+    initialLockedSet: Set<string>,
+    initialPaidSet: Set<string>
+  ) => {
+    const { nwcString } = getLocalStorageData();
+    if (!nwcString) { setIsNwcLoading(false); return; }
+
+    const nwcClient = new NWCClient({ nostrWalletConnectUrl: nwcString });
+    const lockedMerchants = new Set(initialLockedSet);
+    const paidMerchants = new Set(initialPaidSet);
+    const maxRetries = 60;
+    for (let i = 0; i < maxRetries; i++) {
+      const filter = {
+        kinds: [1059],
+        '#p': [userPubkey!],
+        since: startTime
+      };
+      const events = await nostr!.fetch([filter]);
+
+      for (const event of events) {
+        try {
+          if (paidMerchants.has(event.pubkey)) continue;
+
+          const decrypted = await signer!.decrypt(event.pubkey, event.content);
+          const offer = JSON.parse(decrypted);
+
+          if (offer.type === ORDER_MESSAGE_TYPES.OFFER && offer.order_id === orderId) {
+            if (!lockedMerchants.has(event.pubkey)) {
+              try {
+                const payPromise = nwcClient.payInvoice({ invoice: offer.invoice });
+                await Promise.race([
+                  payPromise,
+                  new Promise((_, reject) => setTimeout(() => reject(new Error("TIMEOUT")), 3000))
+                ]);
+              } catch (e: any) {
+                if (e.message !== "TIMEOUT" && !e.message.includes("timeout")) {
+                  console.error(`Payment failed for ${event.pubkey}`, e);
+                  continue;
+                }
+              }
+              lockedMerchants.add(event.pubkey);
+              updateCartStorage(orderId, startTime, merchantPubkeys, lockedMerchants, paidMerchants);
+            }
+
+            await monitorCartItemSettlement(nwcClient, offer.payment_hash);
+
+            paidMerchants.add(event.pubkey);
+            updateCartStorage(orderId, startTime, merchantPubkeys, lockedMerchants, paidMerchants);
+          }
+        } catch (e) { /* ignore */ }
+      }
+
+      if (paidMerchants.size >= merchantPubkeys.length) break;
+      await new Promise(r => setTimeout(r, 1000));
+    }
+
+    finalizeCartOrder(paidMerchants.size, merchantPubkeys.length);
+  };
+
+  const monitorCartItemSettlement = async (client: NWCClient, hash: string) => {
+    fetch("/api/settlement/run", { method: "POST" }).catch(console.error);
+    let attempts = 0;
+    while (attempts < 60) {
+      try {
+        const tx = await client.lookupInvoice({ payment_hash: hash });
+        if (tx.preimage || (tx as any).state === 'settled' || (tx as any).state === 'SETTLED') return;
+      } catch(e) { /* ignore */ }
+      await new Promise(r => setTimeout(r, 1000));
+      attempts++;
+    }
+  };
+
+  const updateCartStorage = (orderId: string, startTime: number, merchantPubkeys: string[], locked: Set<string>, paid: Set<string>) => {
+    localStorage.setItem("pending_cart_order", JSON.stringify({
+      status: 'processing', orderId, timestamp: Date.now(), startTime, merchantPubkeys,
+      lockedMerchants: Array.from(locked), paidMerchants: Array.from(paid)
+    }));
+  };
+
+  const finalizeCartOrder = (paidCount: number, totalCount: number) => {
+    localStorage.removeItem("pending_cart_order");
+    setIsNwcLoading(false);
+
+    if (paidCount === totalCount) {
+      localStorage.setItem("cart", JSON.stringify([]));
+      setPaymentConfirmed(true);
+      if (setInvoiceIsPaid) setInvoiceIsPaid(true);
+      setOrderConfirmed(true);
+    } else if (paidCount > 0) {
+      localStorage.setItem("cart", JSON.stringify([]));
+      setPaymentConfirmed(true);
+      setFailureText(`Order Partially Completed! Paid ${paidCount} of ${totalCount} merchants.`);
+      setShowFailureModal(true);
+    } else {
+      throw new Error("Merchants did not respond in time.");
+    }
+  };
+
 
   // Validate form completion
   useEffect(() => {
@@ -654,7 +783,6 @@ export default function CartInvoiceCard({
         merchantGroups[p.pubkey]!.push(p.id);
       });
 
-      const nwcClient = new NWCClient({ nostrWalletConnectUrl: nwcString });
       const shippingInfo = {
         name: data.shippingName,
         address: data.shippingAddress,
@@ -665,6 +793,13 @@ export default function CartInvoiceCard({
       };
 
       const orderId = uuidv4();
+
+      const startTime = Math.floor(Date.now() / 1000);
+      const merchantPubkeys = Object.keys(merchantGroups);
+      localStorage.setItem("pending_cart_order", JSON.stringify({
+        status: 'processing', orderId, timestamp: Date.now(), startTime, merchantPubkeys,
+        lockedMerchants: [], paidMerchants: []
+      }));
 
       for (const merchantPubkey of Object.keys(merchantGroups)) {
         const ephemeralPrivBytes = generateSecretKey();
@@ -691,57 +826,14 @@ export default function CartInvoiceCard({
         await sendGiftWrappedMessageEvent(nostr!, finalEvent);
       }
 
-      let invoicesPaid = 0;
-      const paidMerchants = new Set<string>();
-      const maxRetries = 60;
-      const startTime = Math.floor(Date.now() / 1000);
-
-      for (let i = 0; i < maxRetries; i++) {
-        const filter = {
-          kinds: [1059],
-          '#p': [userPubkey!],
-          since: startTime
-        };
-        const events = await nostr!.fetch([filter]);
-
-        for (const event of events) {
-          try {
-            const decrypted = await signer!.decrypt(event.pubkey, event.content);
-            const offer = JSON.parse(decrypted);
-
-            if (offer.type === ORDER_MESSAGE_TYPES.OFFER && offer.order_id === orderId && !paidMerchants.has(event.pubkey)) {
-              await nwcClient.payInvoice({ invoice: offer.invoice });
-              paidMerchants.add(event.pubkey);
-              invoicesPaid++;
-            }
-          } catch (e) { /* ignore */ }
-        }
-
-        if (paidMerchants.size >= Object.keys(merchantGroups).length) break;
-        await new Promise(r => setTimeout(r, 1000));
-      }
-
-      const totalMerchants = Object.keys(merchantGroups).length;
-
-      if (invoicesPaid === totalMerchants) {
-        localStorage.setItem("cart", JSON.stringify([]));
-        setPaymentConfirmed(true);
-        if (setInvoiceIsPaid) setInvoiceIsPaid(true);
-        setOrderConfirmed(true);
-      } else if (invoicesPaid > 0) {
-        // Partial Success Handling
-        localStorage.setItem("cart", JSON.stringify([]));
-        setPaymentConfirmed(true);
-        setFailureText(`Order Partially Completed! Paid ${invoicesPaid} of ${totalMerchants} merchants. Check your DMs for details.`);
-        setShowFailureModal(true);
-      } else {
-        throw new Error("Merchants did not respond in time.");
-      }
+      // Start the reusable waiting loop
+      await waitForCartResponses(orderId, startTime, merchantPubkeys, new Set(), new Set());
 
     } catch (error: any) {
       handleNWCError(error);
+      localStorage.removeItem("pending_cart_order");
     } finally {
-      setIsNwcLoading(false);
+      // Loading state handled in finalizeCartOrder
     }
   };
 
