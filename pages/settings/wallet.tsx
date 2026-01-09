@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import {
   Input,
   Button,
@@ -18,18 +18,21 @@ import {
   ExclamationCircleIcon,
   WalletIcon,
 } from "@heroicons/react/24/outline";
-import { webln } from "@getalby/sdk";
+import { NostrWebLNProvider } from "@getalby/sdk";
 import { formatWithCommas } from "@/components/utility-components/display-monetary-info";
+import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 
 const WalletSettingsPage = () => {
   const [nwcString, setNwcString] = useState("");
+  const [tempBotKey, setTempBotKey] = useState("");
   const [walletInfo, setWalletInfo] = useState<any>(null);
   const [balance, setBalance] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(false);
+  
+  const { pubkey } = useContext(SignerContext);
 
-  // Load existing connection and info on mount
   useEffect(() => {
     const loadInfo = () => {
       const { nwcString: savedString, nwcInfo: savedInfo } =
@@ -57,24 +60,24 @@ const WalletSettingsPage = () => {
 
   const fetchBalance = async (connectionString: string | null) => {
     if (!connectionString) return;
-    let nwc: webln.NostrWebLNProvider | null = null;
+    let nwc: NostrWebLNProvider | null = null;
     try {
-      nwc = new webln.NostrWebLNProvider({
+      nwc = new NostrWebLNProvider({
         nostrWalletConnectUrl: connectionString,
       });
       await nwc.enable();
       const balanceRes = await nwc.getBalance();
-      setBalance(balanceRes.balance / 1000); // Convert msats to sats
+      setBalance(balanceRes.balance / 1000); 
     } catch (e) {
       console.error("Failed to fetch balance", e);
-      setBalance(null); // Clear balance on error
+      setBalance(null); 
     } finally {
       nwc?.close();
     }
   };
 
   const handleSave = async () => {
-    let nwc: webln.NostrWebLNProvider | null = null;
+    let nwc: NostrWebLNProvider | null = null;
     setIsLoading(true);
     setError(null);
     setIsSaved(false);
@@ -101,7 +104,7 @@ const WalletSettingsPage = () => {
         throw new Error("Missing 'relay' parameter in the connection string.");
       }
 
-      nwc = new webln.NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
+      nwc = new NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
       await nwc.enable();
       const info = await nwc.getInfo();
 
@@ -111,7 +114,19 @@ const WalletSettingsPage = () => {
       setWalletInfo(info);
       setIsSaved(true);
 
-      // Fetch balance if supported
+      if (pubkey && tempBotKey) {
+          await fetch("/api/merchant/save-connection", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ 
+                  pubkey, 
+                  nwcString, 
+                  privKey: tempBotKey
+              })
+          });
+          setTempBotKey(""); 
+      }
+
       if (info.methods && info.methods.includes("get_balance")) {
         await fetchBalance(nwcString);
       }
@@ -167,6 +182,17 @@ const WalletSettingsPage = () => {
               label: "text-light-text dark:text-dark-text",
               input: "text-light-text dark:text-dark-text",
             }}
+          />
+
+          {/* NEW INPUT FIELD FOR AUTOMATION KEY */}
+          <Input
+            type="password"
+            label="Shop Bot Private Key (nsec)"
+            placeholder="nsec1..."
+            value={tempBotKey}
+            onValueChange={setTempBotKey}
+            description="Required for automated order handling. This key stays on your server."
+            className="mb-4"
           />
 
           {error && (
