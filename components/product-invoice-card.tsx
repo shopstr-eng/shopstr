@@ -262,23 +262,18 @@ export default function ProductInvoiceCard({
     const { nwcString } = getLocalStorageData();
     if (!nwcString) { setIsNwcLoading(false); return; }
     const nwcClient = new NWCClient({ nostrWalletConnectUrl: nwcString });
-    let invoiceFound = false;
-    const maxRetries = 60;
-
-    for (let i = 0; i < maxRetries; i++) {
-      const filter = { kinds: [1059], '#p': [userPubkey!], authors: [productData.pubkey], since: startTime };
-      const events = await nostr!.fetch([filter]);
-
-      for (const event of events) {
+    const filter = { kinds: [1059], '#p': [userPubkey!], authors: [productData.pubkey], since: startTime };
+    const sub = await nostr!.subscribe([filter], {
+      onevent: async (event) => {
         try {
           const decrypted = await signer!.decrypt(event.pubkey, event.content);
           const offer = JSON.parse(decrypted);
 
           if (offer.type === ORDER_MESSAGE_TYPES.OFFER && offer.order_id === orderId) {
+            sub.close();
             // PAY (Lock funds)
             await nwcClient.payInvoice({ invoice: offer.invoice });
 
-            invoiceFound = true;
             setEscrowState('locked');
             const paymentHash = offer.payment_hash;
 
@@ -288,21 +283,21 @@ export default function ProductInvoiceCard({
 
             // Start Robust Monitoring
             await monitorSettlement(paymentHash);
-            break;
           }
-        } catch (e) { /* ignore */ }
+        } catch (e) { /* ignore unrelated events */ }
       }
-      if (invoiceFound) break;
-      await new Promise(r => setTimeout(r, 1000));
-    }
+    });
 
-    if (!invoiceFound) {
-      localStorage.removeItem(`pending_order_${productData.id}`);
-      setFailureText("Seller did not respond in time.");
-      setShowFailureModal(true);
-      setIsNwcLoading(false);
-    }
-  };
+    setTimeout(() => {
+      if (escrowState !== 'locked') {
+        sub.close();
+        localStorage.removeItem(`pending_order_${productData.id}`);
+        setFailureText("Seller did not respond in time.");
+        setShowFailureModal(true);
+        setIsNwcLoading(false);
+      }
+    }, 60000);
+  }
 
   useEffect(() => {
     const fetchKeys = async () => {

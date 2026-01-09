@@ -150,50 +150,42 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
 
       setStatus("Waiting for Seller Invoice...");
       
-      let invoiceFound = false;
-      const maxRetries = 60; // 60 seconds wait time
       const startTime = Math.floor(Date.now() / 1000);
-      
-      for (let i = 0; i < maxRetries; i++) {
-          const filter = {
-             kinds: [1059], 
-             '#p': [userPubkey], 
-             authors: [product.pubkey],
-             since: startTime
-          };
-          
-          const events = await nostrManager!.fetch([filter]);
-          
-          for (const event of events) {
-              try {
-                  const decrypted = await signer.decrypt(event.pubkey, event.content);
-                  const offer = JSON.parse(decrypted);
-                  
-                  if (offer.type === "hodl_invoice_offer" && offer.order_id === orderId) {
-                      setStatus("Paying HODL Invoice...");
-                      await payWithNWC(offer.invoice);
-                      invoiceFound = true;
-                      break;
-                  }
-                  if (offer.type === "order_failed" && offer.order_id === orderId) {
-                      alert(`Order Failed: ${offer.message || offer.reason}`);
-                      onClose();
-                      return;
-                  }
-              } catch (e) {
-                  // Ignore decryption errors for unrelated messages
-              }
-          }
-          
-          if (invoiceFound) break;
-          await new Promise(r => setTimeout(r, 1000));
-      }
 
-      if (!invoiceFound) {
-          alert("Seller did not respond in time. Please check your messages later.");
+      const filter = {
+        kinds: [1059],
+        '#p': [userPubkey],
+        authors: [product.pubkey],
+        since: startTime
+      };
+
+      const sub = await nostrManager!.subscribe([filter], {
+        onevent: async (event) => {
+          try {
+            const decrypted = await signer.decrypt(event.pubkey, event.content);
+            const offer = JSON.parse(decrypted);
+
+            if (offer.type === "hodl_invoice_offer" && offer.order_id === orderId) {
+              sub.close();
+              setStatus("Paying HODL Invoice...");
+              await payWithNWC(offer.invoice);
+            }
+            if (offer.type === "order_failed" && offer.order_id === orderId) {
+              sub.close();
+              alert(`Order Failed: ${offer.message || offer.reason}`);
+              onClose();
+            }
+          } catch (e) { }
+        }
+      });
+
+      setTimeout(() => {
+        sub.close();
+        if (status === "Waiting for Seller Invoice...") {
+          alert("Seller did not respond in time.");
           onClose();
-          return;
-      }
+        }
+      }, 60000);
 
     } catch (e: any) {
       console.error(e);

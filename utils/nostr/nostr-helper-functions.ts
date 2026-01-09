@@ -407,12 +407,33 @@ export async function constructMessageGiftWrap(
   return signedEvent;
 }
 
+async function getRecipientReadRelays(nostr: NostrManager, pubkey: string): Promise<string[]> {
+  try {
+    const events = await nostr.fetch([{ kinds: [10002], authors: [pubkey] }]);
+    if (events.length > 0) {
+      const event = events.reduce((a, b) => (a.created_at > b.created_at ? a : b));
+      // Filter for 'read' or unmarked relays
+      return event.tags
+        .filter(t => t[0] === 'r' && t[1] && (t.length === 2 || t[2] === 'read'))
+        .map(t => t[1] as string);
+    }
+  } catch (e) {
+    console.warn("Failed to fetch recipient relays", e);
+  }
+  return [];
+}
+
 export async function sendGiftWrappedMessageEvent(
   nostr: NostrManager,
   giftWrappedMessageEvent: NostrEvent
 ) {
   const { relays, writeRelays } = getLocalStorageData();
-  const allWriteRelays = withBlastr([...writeRelays, ...relays]);
+
+  // Get recipient from tags to find their read relays
+  const pTag = giftWrappedMessageEvent.tags.find(t => t[0] === 'p');
+  const recipientRelays = (pTag && pTag[1]) ? await getRecipientReadRelays(nostr, pTag[1]) : [];
+
+  const allRelays = withBlastr([...new Set([...writeRelays, ...relays, ...recipientRelays])]);
 
   // Cache the gift-wrapped event to database first and wait for confirmation
   await cacheEventToDatabase(giftWrappedMessageEvent);
@@ -422,7 +443,7 @@ export async function sendGiftWrappedMessageEvent(
     await newPromiseWithTimeout(
       async (resolve, reject) => {
         try {
-          await nostr.publish(giftWrappedMessageEvent, allWriteRelays);
+          await nostr.publish(giftWrappedMessageEvent, allRelays);
           resolve(undefined);
         } catch (err) {
           reject(err as Error);
@@ -439,7 +460,7 @@ export async function sendGiftWrappedMessageEvent(
     const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
     await trackFailedRelayPublish(
       giftWrappedMessageEvent.id,
-      allWriteRelays
+      allRelays
     ).catch(console.error);
   }
 }

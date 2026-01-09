@@ -244,36 +244,20 @@ export default function CartInvoiceCard({
     const nwcClient = new NWCClient({ nostrWalletConnectUrl: nwcString });
     const lockedMerchants = new Set(initialLockedSet);
     const paidMerchants = new Set(initialPaidSet);
-    const maxRetries = 60;
-    for (let i = 0; i < maxRetries; i++) {
-      const filter = {
-        kinds: [1059],
-        '#p': [userPubkey!],
-        since: startTime
-      };
-      const events = await nostr!.fetch([filter]);
+    const filter = { kinds: [1059], '#p': [userPubkey!], since: startTime };
 
-      for (const event of events) {
+    const sub = await nostr!.subscribe([filter], {
+      onevent: async (event) => {
         try {
-          if (paidMerchants.has(event.pubkey)) continue;
+          if (paidMerchants.has(event.pubkey)) return;
 
           const decrypted = await signer!.decrypt(event.pubkey, event.content);
           const offer = JSON.parse(decrypted);
 
           if (offer.type === ORDER_MESSAGE_TYPES.OFFER && offer.order_id === orderId) {
             if (!lockedMerchants.has(event.pubkey)) {
-              try {
-                const payPromise = nwcClient.payInvoice({ invoice: offer.invoice });
-                await Promise.race([
-                  payPromise,
-                  new Promise((_, reject) => setTimeout(() => reject(new Error("TIMEOUT")), 3000))
-                ]);
-              } catch (e: any) {
-                if (e.message !== "TIMEOUT" && !e.message.includes("timeout")) {
-                  console.error(`Payment failed for ${event.pubkey}`, e);
-                  continue;
-                }
-              }
+              // Pay immediately
+              await nwcClient.payInvoice({ invoice: offer.invoice });
               lockedMerchants.add(event.pubkey);
               updateCartStorage(orderId, startTime, merchantPubkeys, lockedMerchants, paidMerchants);
             }
@@ -282,15 +266,22 @@ export default function CartInvoiceCard({
 
             paidMerchants.add(event.pubkey);
             updateCartStorage(orderId, startTime, merchantPubkeys, lockedMerchants, paidMerchants);
+
+            if (paidMerchants.size >= merchantPubkeys.length) {
+              sub.close();
+              finalizeCartOrder(paidMerchants.size, merchantPubkeys.length);
+            }
           }
         } catch (e) { /* ignore */ }
       }
+    });
 
-      if (paidMerchants.size >= merchantPubkeys.length) break;
-      await new Promise(r => setTimeout(r, 1000));
-    }
-
-    finalizeCartOrder(paidMerchants.size, merchantPubkeys.length);
+    setTimeout(() => {
+      sub.close();
+      if (paidMerchants.size < merchantPubkeys.length) {
+        finalizeCartOrder(paidMerchants.size, merchantPubkeys.length);
+      }
+    }, 60000);
   };
 
   const monitorCartItemSettlement = async (client: NWCClient, hash: string) => {

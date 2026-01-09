@@ -52,7 +52,7 @@ export class HodlSettlementService {
 
   private async checkDmsForOrders() {
       const db = getDbPool();
-      let client;
+      const client = await db.connect();
       
       try {
           const filter = {
@@ -61,10 +61,10 @@ export class HodlSettlementService {
               since: Math.floor(Date.now() / 1000) - 600 
           };
           
-          const events = await this.nostr.fetch([filter]);
-          client = await db.connect(); 
-          
-          for (const event of events) {
+          // USE SUBSCRIBE + EOSE instead of simple fetch for better sync
+          await new Promise<void>(async (resolve) => {
+            const sub = await this.nostr.subscribe([filter], {
+             onevent: async (event) => {
               try {
                   const decrypted = await this.signer.decrypt(event.pubkey, event.content);
                   const request = JSON.parse(decrypted);
@@ -73,14 +73,14 @@ export class HodlSettlementService {
                       const existing = await client.query(`SELECT 1 FROM hodl_invoices WHERE order_id = $1`, [request.orderId]);
                       if (existing.rows.length > 0) {
                           console.log(`Duplicate order request ignored: ${request.orderId}`);
-                          continue;
+                          return;
                       }
 
                       console.log(`📦 Processing Order: ${request.orderId}`);
                       const items = Array.isArray(request.items) ? request.items : [request.item];
                       const { total, valid } = await this.calculateOrderTotal(items);
 
-                      if (!valid) continue;
+                      if (!valid) return;
                       
                       await this.createHodlOffer(
                           request.orderId, 
@@ -89,10 +89,18 @@ export class HodlSettlementService {
                           event.pubkey 
                       );
                   }
-              } catch (e) {
-                  // Ignore non-order DMs
-              }
-          }
+              } catch (e) { /* ignore */ }
+             },
+             oneose: () => {
+                 sub.close();
+                 resolve();
+             }
+            });
+            
+            // Failsafe timeout
+            setTimeout(() => { sub.close(); resolve(); }, 10000);
+          });
+
       } finally {
           if (client) client.release();
       }
