@@ -85,8 +85,6 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
           alert("No wallet connected. Please setup NWC or an Extension.");
           return;
       }
-
-      fetch("/api/settlement/run", { method: "POST" }).catch(console.error);
       
       localStorage.setItem("shopstr_shipping_info", JSON.stringify(shippingInfo));
       alert("Funds Locked! Seller has received your order and reserved inventory. Shipping soon.");

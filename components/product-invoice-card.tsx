@@ -207,8 +207,6 @@ export default function ProductInvoiceCard({
 
     const nwcClient = new NWCClient({ nostrWalletConnectUrl: nwcString });
 
-    fetch("/api/settlement/run", { method: "POST" }).catch(console.error);
-
     let attempts = 0;
 
     while (true) {

@@ -285,7 +285,6 @@ export default function CartInvoiceCard({
   };
 
   const monitorCartItemSettlement = async (client: NWCClient, hash: string) => {
-    fetch("/api/settlement/run", { method: "POST" }).catch(console.error);
     let attempts = 0;
     while (attempts < 60) {
       try {

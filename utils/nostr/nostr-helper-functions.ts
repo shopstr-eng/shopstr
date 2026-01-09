@@ -417,6 +417,18 @@ async function getRecipientReadRelays(nostr: NostrManager, pubkey: string): Prom
         .filter(t => t[0] === 'r' && t[1] && (t.length === 2 || t[2] === 'read'))
         .map(t => t[1] as string);
     }
+
+    // 2. Fallback: Check Kind 0 (Profile) for legacy relays
+    const profiles = await nostr.fetch([{ kinds: [0], authors: [pubkey] }]);
+    if (profiles.length > 0) {
+      const profile = profiles.reduce((a, b) => (a.created_at > b.created_at ? a : b));
+      try {
+        const content = JSON.parse(profile.content);
+        if (content.relays) {
+          return Object.keys(content.relays).filter(r => content.relays[r].read);
+        }
+      } catch (e) { /* ignore parse error */ }
+    }
   } catch (e) {
     console.warn("Failed to fetch recipient relays", e);
   }
@@ -436,7 +448,11 @@ export async function sendGiftWrappedMessageEvent(
   const allRelays = withBlastr([...new Set([...writeRelays, ...relays, ...recipientRelays])]);
 
   // Cache the gift-wrapped event to database first and wait for confirmation
-  await cacheEventToDatabase(giftWrappedMessageEvent);
+  try {
+    await cacheEventToDatabase(giftWrappedMessageEvent);
+  } catch (e) {
+    console.warn("Non-fatal: Failed to cache event locally", e);
+  }
 
   // After DB confirmation, attempt to publish to relays with timeout
   try {
