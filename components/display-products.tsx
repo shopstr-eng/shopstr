@@ -100,7 +100,10 @@ const DisplayProducts = ({
               } else {
                 parsedData = parseTags(event);
               }
-              if (parsedData) parsedProductData.push(parsedData);
+              if (parsedData) {
+                parsedData.rawEvent = event;
+                parsedProductData.push(parsedData);
+              }
             }
           }
         } else {

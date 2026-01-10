@@ -90,13 +90,17 @@ export const fetchAllPosts = async (
 
       const zapsnagFilter: Filter = {
         kinds: [1],
-        "#t": ["shopstr-zapsnag", "zapsnag"]
+        "#t": ["shopstr-zapsnag", "zapsnag"],
       };
 
       const productArrayFromRelay: NostrEvent[] = [];
       const profileSetFromProducts: Set<string> = new Set();
 
-      const fetchedEvents = await nostr.fetch([filter, zapsnagFilter], {}, relays);
+      const fetchedEvents = await nostr.fetch(
+        [filter, zapsnagFilter],
+        {},
+        relays
+      );
       if (!fetchedEvents.length) {
         console.error("No products found with filter: ", filter);
       }

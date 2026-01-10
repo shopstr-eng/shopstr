@@ -97,8 +97,7 @@ const ChatMessage = ({
         orderData = parsed;
       }
     }
-  } catch (e) {
-  }
+  } catch (e) {}
 
   const handleCopyToken = (token: string) => {
     navigator.clipboard.writeText(token);
@@ -172,7 +171,7 @@ const ChatMessage = ({
             </>
           ) : orderData ? (
             <div className="flex flex-col gap-2 border-l-4 border-shopstr-purple pl-3 dark:border-shopstr-yellow">
-              <span className="font-bold text-sm uppercase opacity-70">
+              <span className="text-sm font-bold uppercase opacity-70">
                 ⚡ Zapsnag Order
               </span>
               <div className="font-semibold">{orderData.shipping.name}</div>
@@ -182,7 +181,7 @@ const ChatMessage = ({
                 {orderData.shipping.zip}
               </div>
               <div className="text-sm">{orderData.shipping.country}</div>
-              <div className="text-xs opacity-50 mt-1">
+              <div className="mt-1 text-xs opacity-50">
                 Order ID: {orderData.orderId.slice(0, 8)}...
               </div>
             </div>

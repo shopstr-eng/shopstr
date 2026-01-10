@@ -88,7 +88,8 @@ export default function CheckoutCard({
     ? Date.now() / 1000 > productData.expiration
     : false;
 
-  const isZapsnag = productData.d === "zapsnag" || productData.categories?.includes("zapsnag");
+  const isZapsnag =
+    productData.d === "zapsnag" || productData.categories?.includes("zapsnag");
 
   useEffect(() => {
     if (selectedVolume && productData.volumePrices) {
@@ -569,122 +570,122 @@ export default function CheckoutCard({
                       <ZapsnagButton product={productData} />
                     </div>
                   ) : (
-                  <>
-                  {productData.pubkey !== userPubkey && (
-                    <div className="mt-4 space-y-2">
-                      <div className="flex gap-2">
-                        <Input
-                          label="Discount Code"
-                          placeholder="Enter code"
-                          value={discountCode}
-                          onChange={(e) =>
-                            setDiscountCode(e.target.value.toUpperCase())
-                          }
-                          className="flex-1 text-light-text dark:text-dark-text"
-                          disabled={appliedDiscount > 0}
-                          isInvalid={!!discountError}
-                          errorMessage={discountError}
-                        />
-                        {appliedDiscount > 0 ? (
-                          <Button
-                            color="warning"
-                            onClick={handleRemoveDiscount}
-                          >
-                            Remove
-                          </Button>
-                        ) : (
-                          <Button
-                            className={SHOPSTRBUTTONCLASSNAMES}
-                            onClick={handleApplyDiscount}
-                          >
-                            Apply
-                          </Button>
-                        )}
-                      </div>
-                      {appliedDiscount > 0 && (
-                        <p className="text-sm text-green-600 dark:text-green-400">
-                          {appliedDiscount}% discount applied! You save{" "}
-                          {Math.ceil((discountAmount / 100) * 100) / 100}{" "}
-                          {productData.currency}
-                        </p>
+                    <>
+                      {productData.pubkey !== userPubkey && (
+                        <div className="mt-4 space-y-2">
+                          <div className="flex gap-2">
+                            <Input
+                              label="Discount Code"
+                              placeholder="Enter code"
+                              value={discountCode}
+                              onChange={(e) =>
+                                setDiscountCode(e.target.value.toUpperCase())
+                              }
+                              className="flex-1 text-light-text dark:text-dark-text"
+                              disabled={appliedDiscount > 0}
+                              isInvalid={!!discountError}
+                              errorMessage={discountError}
+                            />
+                            {appliedDiscount > 0 ? (
+                              <Button
+                                color="warning"
+                                onClick={handleRemoveDiscount}
+                              >
+                                Remove
+                              </Button>
+                            ) : (
+                              <Button
+                                className={SHOPSTRBUTTONCLASSNAMES}
+                                onClick={handleApplyDiscount}
+                              >
+                                Apply
+                              </Button>
+                            )}
+                          </div>
+                          {appliedDiscount > 0 && (
+                            <p className="text-sm text-green-600 dark:text-green-400">
+                              {appliedDiscount}% discount applied! You save{" "}
+                              {Math.ceil((discountAmount / 100) * 100) / 100}{" "}
+                              {productData.currency}
+                            </p>
+                          )}
+                        </div>
                       )}
-                    </div>
-                  )}
 
-                  <div className="pb-1">
-                    <Chip
-                      key={productData.location}
-                      startContent={locationAvatar(productData.location)}
-                      className="min-h-fit max-w-full"
-                      classNames={{
-                        base: "h-auto py-1",
-                        content: "whitespace-normal break-words text-wrap",
-                      }}
-                    >
-                      {productData.location}
-                    </Chip>
-                  </div>
-                  {renderSizeGrid()}
-                  <div className="flex w-full flex-col gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {productData.status !== "sold" ? (
-                        <>
+                      <div className="pb-1">
+                        <Chip
+                          key={productData.location}
+                          startContent={locationAvatar(productData.location)}
+                          className="min-h-fit max-w-full"
+                          classNames={{
+                            base: "h-auto py-1",
+                            content: "whitespace-normal break-words text-wrap",
+                          }}
+                        >
+                          {productData.location}
+                        </Chip>
+                      </div>
+                      {renderSizeGrid()}
+                      <div className="flex w-full flex-col gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {productData.status !== "sold" ? (
+                            <>
+                              <Button
+                                className={`min-w-fit bg-gradient-to-tr from-purple-700 via-purple-500 to-purple-700 text-dark-text shadow-lg dark:from-yellow-700 dark:via-yellow-500 dark:to-yellow-700 dark:text-light-text ${
+                                  (hasSizes && !selectedSize) ||
+                                  (hasVolumes && !selectedVolume)
+                                    ? "cursor-not-allowed opacity-50"
+                                    : ""
+                                }`}
+                                onClick={toggleBuyNow}
+                                disabled={
+                                  (hasSizes && !selectedSize) ||
+                                  (hasVolumes && !selectedVolume) ||
+                                  isExpired
+                                }
+                              >
+                                Buy Now
+                              </Button>
+                              <Button
+                                className={`${SHOPSTRBUTTONCLASSNAMES} ${
+                                  isAdded ||
+                                  (hasSizes && !selectedSize) ||
+                                  (hasVolumes && !selectedVolume)
+                                    ? "cursor-not-allowed opacity-50"
+                                    : ""
+                                }`}
+                                onClick={handleAddToCart}
+                                disabled={
+                                  isAdded ||
+                                  (hasSizes && !selectedSize) ||
+                                  (hasVolumes && !selectedVolume) ||
+                                  isExpired
+                                }
+                              >
+                                Add To Cart
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button
+                                className={`${SHOPSTRBUTTONCLASSNAMES} cursor-not-allowed opacity-50`}
+                                disabled
+                              >
+                                Sold Out
+                              </Button>
+                            </>
+                          )}
                           <Button
-                            className={`min-w-fit bg-gradient-to-tr from-purple-700 via-purple-500 to-purple-700 text-dark-text shadow-lg dark:from-yellow-700 dark:via-yellow-500 dark:to-yellow-700 dark:text-light-text ${
-                              (hasSizes && !selectedSize) ||
-                              (hasVolumes && !selectedVolume)
-                                ? "cursor-not-allowed opacity-50"
-                                : ""
-                            }`}
-                            onClick={toggleBuyNow}
-                            disabled={
-                              (hasSizes && !selectedSize) ||
-                              (hasVolumes && !selectedVolume) ||
-                              isExpired
-                            }
+                            type="submit"
+                            className={SHOPSTRBUTTONCLASSNAMES}
+                            onClick={handleShare}
                           >
-                            Buy Now
+                            Share
                           </Button>
-                          <Button
-                            className={`${SHOPSTRBUTTONCLASSNAMES} ${
-                              isAdded ||
-                              (hasSizes && !selectedSize) ||
-                              (hasVolumes && !selectedVolume)
-                                ? "cursor-not-allowed opacity-50"
-                                : ""
-                            }`}
-                            onClick={handleAddToCart}
-                            disabled={
-                              isAdded ||
-                              (hasSizes && !selectedSize) ||
-                              (hasVolumes && !selectedVolume) ||
-                              isExpired
-                            }
-                          >
-                            Add To Cart
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          <Button
-                            className={`${SHOPSTRBUTTONCLASSNAMES} cursor-not-allowed opacity-50`}
-                            disabled
-                          >
-                            Sold Out
-                          </Button>
-                        </>
-                      )}
-                      <Button
-                        type="submit"
-                        className={SHOPSTRBUTTONCLASSNAMES}
-                        onClick={handleShare}
-                      >
-                        Share
-                      </Button>
-                    </div>
-                  </div>
-                </>
-                )}
+                        </div>
+                      </div>
+                    </>
+                  )}
                   {productData.pubkey !== userPubkey && (
                     <span
                       onClick={() => {
