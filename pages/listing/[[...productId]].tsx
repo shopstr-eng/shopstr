@@ -168,6 +168,7 @@ const Listing = () => {
               setInvoiceGenerationFailed={setInvoiceGenerationFailed}
               setCashuPaymentSent={setCashuPaymentSent}
               setCashuPaymentFailed={setCashuPaymentFailed}
+              rawEvent={rawEvent}
             />
           ))}
         {fiatOrderIsPlaced || invoiceIsPaid || cashuPaymentSent ? (

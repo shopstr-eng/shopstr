@@ -293,6 +293,7 @@ export const fetchShopProfile = async (
                   pubkey: event.pubkey,
                   content: JSON.parse(event.content),
                   created_at: event.created_at,
+                  event: event,
                 };
                 shopProfile.set(pubkey, shopProfileSetting);
               } catch (error) {
@@ -335,6 +336,7 @@ export const fetchShopProfile = async (
               pubkey: event.pubkey,
               content: JSON.parse(event.content),
               created_at: event.created_at,
+              event: event,
             };
             shopProfile.set(pubkey, shopProfileSetting);
           } catch (error) {
