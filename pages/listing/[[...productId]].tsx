@@ -1,7 +1,21 @@
 import React, { useState, useEffect, useContext } from "react";
 import { useRouter } from "next/router";
-import { Modal, ModalContent, ModalHeader, ModalBody } from "@nextui-org/react";
-import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/outline";
+import {
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  Dropdown,
+  DropdownTrigger,
+  DropdownMenu,
+  DropdownItem,
+  Button,
+} from "@nextui-org/react";
+import {
+  CheckCircleIcon,
+  XCircleIcon,
+  EllipsisVerticalIcon,
+} from "@heroicons/react/24/outline";
 import parseTags, {
   ProductData,
 } from "@/utils/parsers/product-parser-functions";
@@ -10,6 +24,10 @@ import CheckoutCard from "../../components/utility-components/checkout-card";
 import ZapsnagButton from "../../components/ZapsnagButton";
 import { ProductContext } from "../../utils/context/context";
 import { Event, nip19 } from "nostr-tools";
+import {
+  RawEventModal,
+  EventIdModal,
+} from "../../components/utility-components/modals/event-modals";
 
 const Listing = () => {
   const router = useRouter();
@@ -18,6 +36,9 @@ const Listing = () => {
   );
   const [isZapsnag, setIsZapsnag] = useState(false);
   const [productIdString, setProductIdString] = useState("");
+  const [rawEvent, setRawEvent] = useState<Event | undefined>(undefined);
+  const [showRawEventModal, setShowRawEventModal] = useState(false);
+  const [showEventIdModal, setShowEventIdModal] = useState(false);
 
   const [fiatOrderIsPlaced, setFiatOrderIsPlaced] = useState(false);
   const [fiatOrderFailed, setFiatOrderFailed] = useState(false);
@@ -63,6 +84,7 @@ const Listing = () => {
       );
 
       if (matchingEvent) {
+        setRawEvent(matchingEvent);
         let parsed;
         if (matchingEvent.kind === 1) {
           parsed = parseZapsnagNote(matchingEvent);
@@ -79,28 +101,76 @@ const Listing = () => {
   return (
     <>
       <div className="flex h-full min-h-screen flex-col bg-light-bg pt-20 dark:bg-dark-bg">
-        {productData && (isZapsnag ? (
-          <div className="w-full max-w-2xl mx-auto p-6">
-            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-lg overflow-hidden">
-              <img src={productData.images[0]} className="w-full h-96 object-cover"/>
-              <div className="p-6">
-                <h1 className="text-2xl font-bold mb-2 text-light-text dark:text-dark-text">{productData.title}</h1>
-                <p className="text-gray-600 dark:text-gray-300 mb-6 whitespace-pre-wrap">{productData.summary}</p>
-                <ZapsnagButton product={productData} />
+        {productData &&
+          (isZapsnag ? (
+            <div className="mx-auto w-full max-w-2xl p-6">
+              <div className="overflow-hidden rounded-xl bg-white shadow-lg dark:bg-neutral-900">
+                <img
+                  src={productData.images[0]}
+                  className="h-96 w-full object-cover"
+                />
+                <div className="p-6">
+                  <div className="mb-2 flex items-start justify-between">
+                    <h1 className="text-2xl font-bold text-light-text dark:text-dark-text">
+                      {productData.title}
+                    </h1>
+                    {rawEvent && (
+                      <Dropdown>
+                        <DropdownTrigger>
+                          <Button isIconOnly variant="light" size="sm">
+                            <EllipsisVerticalIcon className="h-6 w-6 text-gray-500" />
+                          </Button>
+                        </DropdownTrigger>
+                        <DropdownMenu aria-label="Event Actions">
+                          <DropdownItem
+                            key="view-raw"
+                            onPress={() => setShowRawEventModal(true)}
+                          >
+                            View Raw Event
+                          </DropdownItem>
+                          <DropdownItem
+                            key="view-id"
+                            onPress={() => setShowEventIdModal(true)}
+                          >
+                            View Event ID
+                          </DropdownItem>
+                        </DropdownMenu>
+                      </Dropdown>
+                    )}
+                  </div>
+                  <p className="mb-6 whitespace-pre-wrap text-gray-600 dark:text-gray-300">
+                    {productData.summary}
+                  </p>
+                  <ZapsnagButton product={productData} />
+                </div>
               </div>
+
+              {/* Raw Event Modal */}
+              <RawEventModal
+                isOpen={showRawEventModal}
+                onClose={() => setShowRawEventModal(false)}
+                rawEvent={rawEvent}
+              />
+
+              {/* Event ID Modal */}
+              <EventIdModal
+                isOpen={showEventIdModal}
+                onClose={() => setShowEventIdModal(false)}
+                rawEvent={rawEvent}
+              />
             </div>
-          </div>
-        ) : (
-          <CheckoutCard
-            productData={productData}
-            setFiatOrderIsPlaced={setFiatOrderIsPlaced}
-            setFiatOrderFailed={setFiatOrderFailed}
-            setInvoiceIsPaid={setInvoiceIsPaid}
-            setInvoiceGenerationFailed={setInvoiceGenerationFailed}
-            setCashuPaymentSent={setCashuPaymentSent}
-            setCashuPaymentFailed={setCashuPaymentFailed}
-          />
-        ))}
+          ) : (
+            <CheckoutCard
+              productData={productData}
+              setFiatOrderIsPlaced={setFiatOrderIsPlaced}
+              setFiatOrderFailed={setFiatOrderFailed}
+              setInvoiceIsPaid={setInvoiceIsPaid}
+              setInvoiceGenerationFailed={setInvoiceGenerationFailed}
+              setCashuPaymentSent={setCashuPaymentSent}
+              setCashuPaymentFailed={setCashuPaymentFailed}
+              rawEvent={rawEvent}
+            />
+          ))}
         {fiatOrderIsPlaced || invoiceIsPaid || cashuPaymentSent ? (
           <>
             <Modal

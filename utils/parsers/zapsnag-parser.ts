@@ -4,18 +4,19 @@ import { ProductData } from "./product-parser-functions";
 export const parseZapsnagNote = (event: NostrEvent): ProductData => {
   const content = event.content;
 
-  const priceRegex = /(?:price|cost|⚡)\s*[:=-]?\s*(\d+[\d,]*)\s*(sats?|satoshis?|usd|eur)?/i;
+  const priceRegex =
+    /(?:price|cost|⚡)\s*[:=-]?\s*(\d+[\d,]*)\s*(sats?|satoshis?|usd|eur)?/i;
   const match = content.match(priceRegex);
-  
+
   let price = 0;
   let currency = "sats";
 
   if (match && match[1]) {
-    price = parseInt(match[1].replace(/,/g, ''));
+    price = parseInt(match[1].replace(/,/g, ""));
     if (match[2]) {
-        const curr = match[2].toLowerCase();
-        if (curr.includes("usd")) currency = "USD";
-        else if (curr.includes("eur")) currency = "EUR";
+      const curr = match[2].toLowerCase();
+      if (curr.includes("usd")) currency = "USD";
+      else if (curr.includes("eur")) currency = "EUR";
     }
   }
 
@@ -27,14 +28,17 @@ export const parseZapsnagNote = (event: NostrEvent): ProductData => {
     image = `https://robohash.org/${event.id}`;
   }
 
-  let cleanContent = content
-      .replace(priceRegex, "")
-      .replace(/#zapsnag/gi, "")
-      .replace(imageRegex, "")
-      .trim();
-      
-  const title = cleanContent.length > 0 
-      ? (cleanContent.length > 50 ? cleanContent.substring(0, 50) + "..." : cleanContent)
+  const cleanContent = content
+    .replace(priceRegex, "")
+    .replace(/#zapsnag/gi, "")
+    .replace(imageRegex, "")
+    .trim();
+
+  const title =
+    cleanContent.length > 0
+      ? cleanContent.length > 50
+        ? cleanContent.substring(0, 50) + "..."
+        : cleanContent
       : "Flash Sale Item";
 
   return {
@@ -50,8 +54,9 @@ export const parseZapsnagNote = (event: NostrEvent): ProductData => {
     price: price,
     currency: currency,
     totalCost: price,
-    shippingType: "Free", 
-    d: "zapsnag", 
-    status: "active"
+    shippingType: "Free",
+    d: "zapsnag",
+    status: "active",
+    rawEvent: event,
   };
 };

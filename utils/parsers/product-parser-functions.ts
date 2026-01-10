@@ -34,6 +34,7 @@ export type ProductData = {
   restrictions?: string;
   pickupLocations?: string[];
   expiration?: number;
+  rawEvent?: NostrEvent;
 };
 
 export const parseTags = (productEvent: NostrEvent) => {
@@ -50,6 +51,7 @@ export const parseTags = (productEvent: NostrEvent) => {
     price: 0,
     currency: "",
     totalCost: 0,
+    rawEvent: productEvent,
   };
   parsedData.pubkey = productEvent.pubkey;
   parsedData.id = productEvent.id;

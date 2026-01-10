@@ -59,6 +59,7 @@ export interface ShopProfile {
     merchants: string[];
   };
   created_at: number;
+  event?: NostrEvent;
 }
 
 export interface ProfileData {

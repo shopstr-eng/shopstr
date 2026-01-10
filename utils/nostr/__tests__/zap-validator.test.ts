@@ -9,7 +9,7 @@ const mockNostrManager = {
 describe("validateZapReceipt", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.useFakeTimers(); 
+    jest.useFakeTimers();
   });
 
   afterEach(() => {
@@ -20,7 +20,7 @@ describe("validateZapReceipt", () => {
     mockFetch.mockResolvedValue([{ id: "zap-receipt" }]);
 
     const promise = validateZapReceipt(mockNostrManager, "item-123", 1000);
-    
+
     const result = await promise;
 
     expect(result).toBe(true);
@@ -29,13 +29,13 @@ describe("validateZapReceipt", () => {
 
   it("retries and returns true if receipt is found on the 3rd try", async () => {
     mockFetch
-      .mockResolvedValueOnce([]) 
-      .mockResolvedValueOnce([]) 
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ id: "zap-receipt" }]);
 
     const promise = validateZapReceipt(mockNostrManager, "item-123", 1000);
 
-    await jest.advanceTimersByTimeAsync(3000); 
+    await jest.advanceTimersByTimeAsync(3000);
 
     const result = await promise;
 
