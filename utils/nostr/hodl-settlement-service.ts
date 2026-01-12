@@ -6,7 +6,7 @@ import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { nip19 } from "nostr-tools";
 import { decryptForServer } from "@/utils/encryption";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
-import { randomBytes } from "crypto"; 
+import { randomBytes, createHash } from "crypto";
 
 interface Nip47Transaction {
   type: string;
@@ -126,8 +126,7 @@ export class HodlSettlementService {
   private async createHodlOffer(orderId: string, productIds: string[], amount: number, buyerPubkey: string) {
     const preimageBytes = randomBytes(32);
     const preimage = preimageBytes.toString('hex');
-    const hashBuffer = await crypto.subtle.digest('SHA-256', new Uint8Array(preimageBytes));
-    const paymentHash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+    const paymentHash = createHash('sha256').update(preimage, 'hex').digest('hex');
 
     const isReserved = await reserveInventory(productIds, paymentHash);
     

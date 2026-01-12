@@ -448,11 +448,9 @@ export async function sendGiftWrappedMessageEvent(
   const allRelays = withBlastr([...new Set([...writeRelays, ...relays, ...recipientRelays])]);
 
   // Cache the gift-wrapped event to database first and wait for confirmation
-  try {
-    await cacheEventToDatabase(giftWrappedMessageEvent);
-  } catch (e) {
-    console.warn("Non-fatal: Failed to cache event locally", e);
-  }
+  cacheEventToDatabase(giftWrappedMessageEvent).catch(e =>
+    console.warn("Non-fatal: Failed to cache event locally", e)
+  );
 
   // After DB confirmation, attempt to publish to relays with timeout
   try {

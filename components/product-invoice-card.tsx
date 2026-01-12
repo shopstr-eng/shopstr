@@ -665,12 +665,18 @@ export default function ProductInvoiceCard({
       const { nwcString } = getLocalStorageData();
       if (!nwcString) throw new Error("NWC connection not found.");
 
-      const stockCheck = await fetch("/api/inventory/check", {
+      const stockResponse = await fetch("/api/inventory/check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ productIds: [productData.id] })
-      }).then(r => r.json());
-      if (!stockCheck.available) throw new Error("Item out of stock.");
+      });
+
+      if (!stockResponse.ok) {
+        const text = await stockResponse.text();
+        throw new Error(`Inventory Check Failed: ${stockResponse.status} ${text.slice(0, 50)}...`);
+      }
+      const stockCheck = await stockResponse.json();
+      if (!stockCheck.available) throw new Error("items are out of stock.");
 
       const orderId = uuidv4();
       const startTime = Math.floor(Date.now() / 1000);
