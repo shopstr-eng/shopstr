@@ -1,14 +1,12 @@
 import React, { useState, useContext, useEffect } from "react";
 import { Button, Modal, ModalContent, ModalHeader, ModalBody, Input, useDisclosure } from "@nextui-org/react";
 import { BoltIcon } from "@heroicons/react/24/outline";
-import { LightningAddress } from "@getalby/lightning-tools";
-import { webln } from "@getalby/sdk";
+import { NostrWebLNProvider, NWCClient } from "@getalby/sdk";
 import { NostrContext, SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { getLocalStorageData, constructGiftWrappedEvent, constructMessageSeal, constructMessageGiftWrap, sendGiftWrappedMessageEvent } from "@/utils/nostr/nostr-helper-functions";
 import { generateSecretKey, getPublicKey } from "nostr-tools";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
-import { validateZapReceipt } from "@/utils/nostr/zap-validator";
 
 export default function ZapsnagButton({ product }: { product: ProductData }) {
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -66,6 +64,33 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
     checkInventory();
   }, [nostrManager, product.id, product.quantity]);
 
+  const payWithNWC = async (invoice: string) => {
+      const { nwcString } = getLocalStorageData();
+      
+      if (nwcString) {
+          const nwcClient = new NWCClient({ nostrWalletConnectUrl: nwcString });
+          try {
+            const payPromise = nwcClient.payInvoice({ invoice });
+            await Promise.race([
+              payPromise,
+              new Promise((_, reject) => setTimeout(() => reject(new Error("TIMEOUT")), 3000))
+            ]);
+          } catch (e: any) {
+            if (e.message !== "TIMEOUT" && !e.message.includes("timeout")) throw e;
+          }
+      } else if (typeof (window as any).webln !== "undefined") {
+          await (window as any).webln.enable();
+          await (window as any).webln.sendPayment(invoice);
+      } else {
+          alert("No wallet connected. Please setup NWC or an Extension.");
+          return;
+      }
+      
+      localStorage.setItem("shopstr_shipping_info", JSON.stringify(shippingInfo));
+      alert("Funds Locked! Seller has received your order and reserved inventory. Shipping soon.");
+      onClose();
+  }
+
   const handleBuy = async () => {
     let originalWebLN: any;
     if (!signer || !isLoggedIn || !userPubkey) {
@@ -79,32 +104,12 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
     }
 
     setLoading(true);
-    setStatus("Finding seller address...");
+    setStatus("Initializing...");
     try {
-      const profileFilter = { kinds: [0], authors: [product.pubkey] };
-      const events = (await nostrManager?.fetch([profileFilter])) || [];
-      let lud16 = "";
-      
-      if (events.length > 0) {
-        const kind0 = events.sort((a,b) => b.created_at - a.created_at)[0];
-        if (kind0) {
-            try {
-                const content = JSON.parse(kind0.content || "{}");
-                lud16 = content.lud16 || content.lnurl || "";
-            } catch (e) {
-                console.warn("Failed to parse seller profile", e);
-            }
-        }
-      }
-
-      if (!lud16) {
-        throw new Error("Seller has not set up a Lightning Address (LUD16).");
-      }
-
       originalWebLN = (window as any).webln;
       const { nwcString } = getLocalStorageData();
       if (nwcString) {
-        const nwcProvider = new webln.NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
+        const nwcProvider = new NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
         await nwcProvider.enable();
         (window as any).webln = nwcProvider; 
       } else if (typeof (window as any).webln !== "undefined") {
@@ -114,15 +119,18 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       }
 
       setStatus("Encrypting shipping info...");
+      
+      const orderId = crypto.randomUUID();
+
       const ephemeralPrivBytes = generateSecretKey();
       const ephemeralPubHex = getPublicKey(ephemeralPrivBytes);
       
-      const orderId = crypto.randomUUID();
       const shippingMessage = JSON.stringify({
-        type: "zapsnag_order",
+        type: "zapsnag_order_request", 
         orderId: orderId,
         item: product.id,
-        shipping: shippingInfo
+        shipping: shippingInfo,
+        requestType: "hodl_invoice"
       });
 
       const giftWrap = await constructGiftWrappedEvent(
@@ -138,36 +146,51 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       
       await sendGiftWrappedMessageEvent(nostrManager!, finalEvent);
 
-      setStatus("Paying via Lightning...");
-      const ln = new LightningAddress(lud16); 
-      await ln.fetch();
+      // Wake up the bot immediately so it sees the DM
+      fetch("/api/settlement/trigger", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ merchantPubkey: product.pubkey })
+      }).catch(console.error);
 
-      const { relays: userRelays } = getLocalStorageData();
-      const targetRelays = userRelays.length > 0 ? userRelays : ["wss://relay.damus.io", "wss://nos.lol"];
+      setStatus("Waiting for Seller Invoice...");
       
-      const zapArgs = {
-        satoshi: product.price,
-        comment: `Order #${orderId}`,
-        e: product.id,
-        relays: targetRelays
+      const startTime = Math.floor(Date.now() / 1000);
+
+      const filter = {
+        kinds: [1059],
+        '#p': [userPubkey],
+        authors: [product.pubkey],
+        since: startTime
       };
 
-      const startTime = Math.floor(Date.now() / 1000);
-      const response = await ln.zap(zapArgs);
-      
-      if (response.preimage) {
-         localStorage.setItem("shopstr_shipping_info", JSON.stringify(shippingInfo));
+      const sub = await nostrManager!.subscribe([filter], {
+        onevent: async (event) => {
+          try {
+            const decrypted = await signer.decrypt(event.pubkey, event.content);
+            const offer = JSON.parse(decrypted);
 
-         setStatus("Verifying receipt...");
-         const receiptFound = await validateZapReceipt(nostrManager!, product.id, startTime);
-         
-         if (receiptFound) {
-           alert("Order Placed & Verified! Preimage: " + response.preimage.substring(0, 8) + "...");
-         } else {
-             alert("Payment sent (Preimage received), but receipt not found on relay yet. Order is likely successful.");
-         }
-         onClose();
-      }
+            if (offer.type === "hodl_invoice_offer" && offer.order_id === orderId) {
+              sub.close();
+              setStatus("Paying HODL Invoice...");
+              await payWithNWC(offer.invoice);
+            }
+            if (offer.type === "order_failed" && offer.order_id === orderId) {
+              sub.close();
+              alert(`Order Failed: ${offer.message || offer.reason}`);
+              onClose();
+            }
+          } catch (e) { }
+        }
+      });
+
+      setTimeout(() => {
+        sub.close();
+        if (status === "Waiting for Seller Invoice...") {
+          alert("Seller did not respond in time.");
+          onClose();
+        }
+      }, 60000);
 
     } catch (e: any) {
       console.error(e);

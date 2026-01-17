@@ -46,13 +46,13 @@ import {
   getLocalStorageData,
   publishProofEvent,
   generateKeys,
+  ORDER_MESSAGE_TYPES,
 } from "@/utils/nostr/nostr-helper-functions";
 import { addChatMessagesToCache } from "@/utils/nostr/cache-service";
 import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
 import { v4 as uuidv4 } from "uuid";
 import { nip19 } from "nostr-tools";
-import { webln } from "@getalby/sdk";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { formatWithCommas } from "./utility-components/display-monetary-info";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
@@ -66,6 +66,8 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import { ShippingFormData, ContactFormData } from "@/utils/types/types";
 import { Controller } from "react-hook-form";
+import { NWCClient } from "@getalby/sdk";
+import { generateSecretKey, getPublicKey } from "nostr-tools";
 
 export default function ProductInvoiceCard({
   productData,
@@ -165,6 +167,135 @@ export default function ProductInvoiceCard({
   const appliedDiscount = discountPercentage || 0;
   const currentPrice =
     originalPrice !== undefined ? originalPrice : productData.price;
+
+  const [escrowState, setEscrowState] = useState<'idle' | 'processing' | 'locked' | 'settled' | 'failed'>('idle');
+
+  useEffect(() => {
+    const recoverState = async () => {
+      const pending = localStorage.getItem(`pending_order_${productData.id}`);
+      if (!pending) return;
+
+      try {
+        const state = JSON.parse(pending);
+        const timeElapsed = Date.now() - state.timestamp;
+
+        if (timeElapsed > 86400000) {
+          localStorage.removeItem(`pending_order_${productData.id}`);
+          return;
+        }
+
+        if (state.status === 'processing') {
+          setIsNwcLoading(true);
+          await waitForSellerOffer(state.orderId, state.startTime);
+        }
+
+        if (state.status === 'locked' && state.paymentHash) {
+          setIsNwcLoading(true);
+          setEscrowState('locked');
+          await monitorSettlement(state.paymentHash);
+        }
+      } catch (e) {
+        console.error("Recovery failed", e);
+      }
+    };
+    if (nostr) recoverState();
+  }, [nostr, productData.id]);
+
+  const monitorSettlement = async (paymentHash: string) => {
+    const { nwcString } = getLocalStorageData();
+    if (!nwcString) return;
+
+    const nwcClient = new NWCClient({ nostrWalletConnectUrl: nwcString });
+
+    let attempts = 0;
+
+    while (true) {
+      try {
+        const tx = await nwcClient.lookupInvoice({ payment_hash: paymentHash });
+
+        if (tx.preimage || (tx as any).state === 'settled' || (tx as any).state === 'SETTLED') {
+          completeOrder();
+          return;
+        }
+
+        if ((tx as any).state === 'failed' || (tx as any).state === 'cancelled' || (tx as any).state === 'CANCELED') {
+          localStorage.removeItem(`pending_order_${productData.id}`);
+          setEscrowState('failed');
+          setFailureText("Seller cancelled the order. Your wallet will return your funds shortly.");
+          setShowFailureModal(true);
+          setIsNwcLoading(false);
+          return;
+        }
+
+        const pending = localStorage.getItem(`pending_order_${productData.id}`);
+        if (pending) {
+          const state = JSON.parse(pending);
+          if (Date.now() - state.timestamp > 86400000) {
+            setFailureText("Order monitoring timed out (24h). Please check your wallet history.");
+            setShowFailureModal(true);
+            setIsNwcLoading(false);
+            return;
+          }
+        }
+      } catch (e) {
+        // Network error, ignore and keep retry
+      }
+
+      attempts++;
+      const delay = attempts < 60 ? 1000 : 10000;
+      await new Promise(r => setTimeout(r, delay));
+    }
+  };
+
+  const completeOrder = () => {
+    localStorage.removeItem(`pending_order_${productData.id}`);
+    setEscrowState('settled');
+    setPaymentConfirmed(true);
+    if (setInvoiceIsPaid) setInvoiceIsPaid(true);
+    setOrderConfirmed(true);
+    setIsNwcLoading(false);
+  };
+
+  const waitForSellerOffer = async (orderId: string, startTime: number) => {
+    const { nwcString } = getLocalStorageData();
+    if (!nwcString) { setIsNwcLoading(false); return; }
+    const nwcClient = new NWCClient({ nostrWalletConnectUrl: nwcString });
+    const filter = { kinds: [1059], '#p': [userPubkey!], authors: [productData.pubkey], since: startTime };
+    const sub = await nostr!.subscribe([filter], {
+      onevent: async (event) => {
+        try {
+          const decrypted = await signer!.decrypt(event.pubkey, event.content);
+          const offer = JSON.parse(decrypted);
+
+          if (offer.type === ORDER_MESSAGE_TYPES.OFFER && offer.order_id === orderId) {
+            sub.close();
+            // PAY (Lock funds)
+            await nwcClient.payInvoice({ invoice: offer.invoice });
+
+            setEscrowState('locked');
+            const paymentHash = offer.payment_hash;
+
+            localStorage.setItem(`pending_order_${productData.id}`, JSON.stringify({
+              status: 'locked', orderId, timestamp: Date.now(), paymentHash
+            }));
+
+            // Start Robust Monitoring
+            await monitorSettlement(paymentHash);
+          }
+        } catch (e) { /* ignore unrelated events */ }
+      }
+    });
+
+    setTimeout(() => {
+      if (escrowState !== 'locked') {
+        sub.close();
+        localStorage.removeItem(`pending_order_${productData.id}`);
+        setFailureText("Seller did not respond in time.");
+        setShowFailureModal(true);
+        setIsNwcLoading(false);
+      }
+    }, 60000);
+  }
 
   useEffect(() => {
     const fetchKeys = async () => {
@@ -506,7 +637,7 @@ export default function ProductInvoiceCard({
 
   const handleNWCPayment = async (convertedPrice: number, data: any) => {
     setIsNwcLoading(true);
-    let nwc: webln.NostrWebLNProvider | null = null;
+    if (!nostr) throw new Error("Nostr not connected");
 
     try {
       if (data.shippingName || data.shippingAddress) {
@@ -531,41 +662,129 @@ export default function ProductInvoiceCard({
         validatePaymentData(convertedPrice);
       }
 
-      const wallet = new CashuWallet(new CashuMint(mints[0]!));
-      const { request: pr, quote: hash } =
-        await wallet.createMintQuote(convertedPrice);
-
       const { nwcString } = getLocalStorageData();
       if (!nwcString) throw new Error("NWC connection not found.");
 
-      nwc = new webln.NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
-      await nwc.enable();
+      const stockResponse = await fetch("/api/inventory/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productIds: [productData.id] })
+      });
 
-      await nwc.sendPayment(pr);
+      if (!stockResponse.ok) {
+        const text = await stockResponse.text();
+        throw new Error(`Inventory Check Failed: ${stockResponse.status} ${text.slice(0, 50)}...`);
+      }
+      const stockCheck = await stockResponse.json();
+      if (!stockCheck.available) throw new Error("items are out of stock.");
 
-      await invoiceHasBeenPaid(
-        wallet,
-        convertedPrice,
-        hash,
-        data.shippingName ? data.shippingName : undefined,
-        data.shippingAddress ? data.shippingAddress : undefined,
-        data.shippingUnitNo ? data.shippingUnitNo : undefined,
-        data.shippingCity ? data.shippingCity : undefined,
-        data.shippingPostalCode ? data.shippingPostalCode : undefined,
-        data.shippingState ? data.shippingState : undefined,
-        data.shippingCountry ? data.shippingCountry : undefined,
-        data.contact ? data.contact : undefined,
-        data.contactType ? data.contactType : undefined,
-        data.contactInstructions ? data.contactInstructions : undefined,
-        data.additionalInfo ? data.additionalInfo : undefined
+      const orderId = uuidv4();
+      const startTime = Math.floor(Date.now() / 1000);
+
+      localStorage.setItem(`pending_order_${productData.id}`, JSON.stringify({
+        status: 'processing', orderId, timestamp: Date.now(), startTime
+      }));
+
+      const ephemeralPrivBytes = generateSecretKey();
+      const ephemeralPubHex = getPublicKey(ephemeralPrivBytes);
+      const shippingInfo = {
+        name: data.shippingName,
+        address: data.shippingAddress,
+        city: data.shippingCity,
+        zip: data.shippingPostalCode,
+        country: data.shippingCountry,
+        contact: data.contact
+      };
+
+      const shippingMessage = JSON.stringify({
+        type: ORDER_MESSAGE_TYPES.REQUEST,
+        orderId: orderId,
+        items: [productData.id],
+        shipping: shippingInfo,
+        requestType: "hodl_invoice"
+      });
+
+      const giftWrap = await constructGiftWrappedEvent(
+        userPubkey!, productData.pubkey, shippingMessage, "zapsnag-order", { isOrder: true, orderId: orderId }
       );
+      const seal = await constructMessageSeal(signer!, giftWrap, userPubkey!, productData.pubkey);
+      const finalEvent = await constructMessageGiftWrap(seal, ephemeralPubHex, ephemeralPrivBytes, productData.pubkey);
+      await sendGiftWrappedMessageEvent(nostr!, finalEvent);
+
+      // Wake up the seller's bot immediately
+      fetch("/api/settlement/trigger", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ merchantPubkey: productData.pubkey })
+      }).catch(console.error);
+
+      let invoiceFound = false;
+      const maxRetries = 60;
+
+      for (let i = 0; i < maxRetries; i++) {
+        const filter = { kinds: [1059], '#p': [userPubkey!], authors: [productData.pubkey], since: startTime };
+        const events = await nostr.fetch([filter]);
+        for (const event of events) {
+          try {
+            const decrypted = await signer!.decrypt(event.pubkey, event.content);
+            const offer = JSON.parse(decrypted);
+            if (offer.type === ORDER_MESSAGE_TYPES.OFFER && offer.order_id === orderId) {
+              const nwcClient = new NWCClient({ nostrWalletConnectUrl: nwcString });
+
+              // PAY (Lock funds)
+              try {
+                const payPromise = nwcClient.payInvoice({ invoice: offer.invoice });
+                await Promise.race([
+                  payPromise,
+                  new Promise((_, reject) => setTimeout(() => reject(new Error("TIMEOUT")), 3000))
+                ]);
+              } catch (e: any) {
+                if (e.message !== "TIMEOUT" && !e.message.includes("timeout")) throw e;
+              }
+
+              invoiceFound = true;
+              setEscrowState('locked');
+              const paymentHash = offer.payment_hash; 
+              localStorage.setItem(`pending_order_${productData.id}`, JSON.stringify({
+                status: 'locked', orderId, timestamp: Date.now(), paymentHash
+              }));
+              await monitorSettlement(paymentHash);
+              break;
+            }
+          } catch (e) { /* ignore */ }
+        }
+        if (invoiceFound) break;
+        await new Promise(r => setTimeout(r, 1000));
+      }
+
+      if (!invoiceFound) {
+        throw new Error("Seller did not respond.");
+      }
+        
     } catch (error: any) {
       handleNWCError(error);
+      if (escrowState !== 'locked') {
+        localStorage.removeItem(`pending_order_${productData.id}`);
+      }
     } finally {
-      nwc?.close();
-      setIsNwcLoading(false);
+      // Loading handled in completeOrder or error block
     }
   };
+
+  if (escrowState === 'locked') {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+        <div className="bg-white p-8 rounded-lg text-center shadow-xl">
+          <h2 className="text-xl font-bold mb-2">⚡ Funds Locked in Escrow</h2>
+          <p className="mb-4 text-gray-600">Waiting for seller to confirm inventory...</p>
+          <div className="animate-spin h-8 w-8 border-4 border-purple-500 rounded-full border-t-transparent mx-auto mb-4"></div>
+          <p className="text-xs text-gray-500 max-w-xs mx-auto">
+            Your funds are safe. The Lightning network will automatically return them after 24 hours if the seller does not claim them.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   const handleFiatPayment = async (convertedPrice: number, data: any) => {
     try {

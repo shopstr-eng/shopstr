@@ -40,14 +40,15 @@ import {
   generateKeys,
   getLocalStorageData,
   publishProofEvent,
+  ORDER_MESSAGE_TYPES,
 } from "@/utils/nostr/nostr-helper-functions";
 import { addChatMessagesToCache } from "@/utils/nostr/cache-service";
 import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
 import { v4 as uuidv4 } from "uuid";
-import { nip19 } from "nostr-tools";
+import { nip19, generateSecretKey, getPublicKey } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
-import { webln } from "@getalby/sdk";
+import { NWCClient } from "@getalby/sdk";
 import { formatWithCommas } from "./utility-components/display-monetary-info";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import SignInModal from "./sign-in/SignInModal";
@@ -92,7 +93,7 @@ export default function CartInvoiceCard({
   setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
 }) {
   const { mints, tokens, history } = getLocalStorageData();
-  const { isLoggedIn, signer } = useContext(SignerContext);
+  const { isLoggedIn, signer, pubkey: userPubkey } = useContext(SignerContext);
 
   // Check if there are tokens available for Cashu payment
   const hasTokensAvailable = tokens && tokens.length > 0;
@@ -202,6 +203,125 @@ export default function CartInvoiceCard({
     window.addEventListener("storage", loadNwcInfo);
     return () => window.removeEventListener("storage", loadNwcInfo);
   }, [products, profileContext.profileData]);
+
+  useEffect(() => {
+    const checkPendingCart = async () => {
+      const pending = localStorage.getItem("pending_cart_order");
+      if (!pending) return;
+
+      try {
+        const orderState = JSON.parse(pending);
+        if (Date.now() - orderState.timestamp > 600000) {
+          localStorage.removeItem("pending_cart_order");
+          return;
+        }
+
+        if (orderState.status === 'processing') {
+          setIsNwcLoading(true);
+          const lockedSet = new Set<string>(orderState.lockedMerchants || []);
+          const paidSet = new Set<string>(orderState.paidMerchants || []);
+          const merchantPubkeys = orderState.merchantPubkeys || [];
+          await waitForCartResponses(orderState.orderId, orderState.startTime, merchantPubkeys, lockedSet, paidSet);
+        }
+      } catch (e) {
+        console.error("Failed to recover cart order", e);
+      }
+    };
+
+    if (nostr) checkPendingCart();
+  }, [nostr]);
+
+  const waitForCartResponses = async (
+    orderId: string,
+    startTime: number,
+    merchantPubkeys: string[],
+    initialLockedSet: Set<string>,
+    initialPaidSet: Set<string>
+  ) => {
+    const { nwcString } = getLocalStorageData();
+    if (!nwcString) { setIsNwcLoading(false); return; }
+
+    const nwcClient = new NWCClient({ nostrWalletConnectUrl: nwcString });
+    const lockedMerchants = new Set(initialLockedSet);
+    const paidMerchants = new Set(initialPaidSet);
+    const filter = { kinds: [1059], '#p': [userPubkey!], since: startTime };
+
+    const sub = await nostr!.subscribe([filter], {
+      onevent: async (event) => {
+        try {
+          if (paidMerchants.has(event.pubkey)) return;
+
+          const decrypted = await signer!.decrypt(event.pubkey, event.content);
+          const offer = JSON.parse(decrypted);
+
+          if (offer.type === ORDER_MESSAGE_TYPES.OFFER && offer.order_id === orderId) {
+            if (!lockedMerchants.has(event.pubkey)) {
+              // Pay immediately
+              await nwcClient.payInvoice({ invoice: offer.invoice });
+              lockedMerchants.add(event.pubkey);
+              updateCartStorage(orderId, startTime, merchantPubkeys, lockedMerchants, paidMerchants);
+            }
+
+            await monitorCartItemSettlement(nwcClient, offer.payment_hash);
+
+            paidMerchants.add(event.pubkey);
+            updateCartStorage(orderId, startTime, merchantPubkeys, lockedMerchants, paidMerchants);
+
+            if (paidMerchants.size >= merchantPubkeys.length) {
+              sub.close();
+              finalizeCartOrder(paidMerchants.size, merchantPubkeys.length);
+            }
+          }
+        } catch (e) { /* ignore */ }
+      }
+    });
+
+    setTimeout(() => {
+      sub.close();
+      if (paidMerchants.size < merchantPubkeys.length) {
+        finalizeCartOrder(paidMerchants.size, merchantPubkeys.length);
+      }
+    }, 60000);
+  };
+
+  const monitorCartItemSettlement = async (client: NWCClient, hash: string) => {
+    let attempts = 0;
+    while (attempts < 60) {
+      try {
+        const tx = await client.lookupInvoice({ payment_hash: hash });
+        if (tx.preimage || (tx as any).state === 'settled' || (tx as any).state === 'SETTLED') return;
+      } catch(e) { /* ignore */ }
+      await new Promise(r => setTimeout(r, 1000));
+      attempts++;
+    }
+  };
+
+  const updateCartStorage = (orderId: string, startTime: number, merchantPubkeys: string[], locked: Set<string>, paid: Set<string>) => {
+    localStorage.setItem("pending_cart_order", JSON.stringify({
+      status: 'processing', orderId, timestamp: Date.now(), startTime, merchantPubkeys,
+      lockedMerchants: Array.from(locked), paidMerchants: Array.from(paid)
+    }));
+  };
+
+  const finalizeCartOrder = (paidCount: number, totalCount: number) => {
+    localStorage.removeItem("pending_cart_order");
+    setIsNwcLoading(false);
+
+    if (paidCount === totalCount) {
+      localStorage.setItem("cart", JSON.stringify([]));
+      setPaymentConfirmed(true);
+      if (setInvoiceIsPaid) setInvoiceIsPaid(true);
+      setOrderConfirmed(true);
+    } else if (paidCount > 0) {
+      localStorage.setItem("cart", JSON.stringify([]));
+      setPaymentConfirmed(true);
+      setFailureText(`Order Partially Completed! Paid ${paidCount} of ${totalCount} merchants.`);
+      setShowFailureModal(true);
+    } else {
+      throw new Error("Merchants did not respond in time.");
+    }
+  };
+
 
   // Validate form completion
   useEffect(() => {
@@ -626,28 +746,98 @@ export default function CartInvoiceCard({
 
   const handleNWCPayment = async (convertedPrice: number, data: any) => {
     setIsNwcLoading(true);
-    let nwc: webln.NostrWebLNProvider | null = null;
 
     try {
       validatePaymentData(convertedPrice, data);
 
-      const wallet = new CashuWallet(new CashuMint(mints[0]!));
-      const { request: pr, quote: hash } =
-        await wallet.createMintQuote(convertedPrice);
+      const userPubkey = await signer?.getPubKey();
+      if (!userPubkey) throw new Error("User not logged in");
 
       const { nwcString } = getLocalStorageData();
       if (!nwcString) throw new Error("NWC connection not found.");
 
-      nwc = new webln.NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
-      await nwc.enable();
+      const productIds = products.map(p => p.id);
+      const stockResponse = await fetch("/api/inventory/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productIds })
+      });
 
-      await nwc.sendPayment(pr);
-      await invoiceHasBeenPaid(wallet, totalCost, hash, data);
+      if (!stockResponse.ok) {
+        const text = await stockResponse.text();
+        throw new Error(`Inventory Check Failed: ${stockResponse.status} ${text.slice(0, 50)}...`);
+      }
+      const stockCheck = await stockResponse.json();
+
+      if (!stockCheck.available) {
+        throw new Error("One or more items are out of stock.");
+      }
+      
+
+      const merchantGroups: { [pubkey: string]: string[] } = {};
+      products.forEach(p => {
+        if (!merchantGroups[p.pubkey]) merchantGroups[p.pubkey] = [];
+        merchantGroups[p.pubkey]!.push(p.id);
+      });
+
+      const shippingInfo = {
+        name: data.shippingName,
+        address: data.shippingAddress,
+        city: data.shippingCity,
+        zip: data.shippingPostalCode,
+        country: data.shippingCountry,
+        contact: data.contact
+      };
+
+      const orderId = uuidv4();
+
+      const startTime = Math.floor(Date.now() / 1000);
+      const merchantPubkeys = Object.keys(merchantGroups);
+      localStorage.setItem("pending_cart_order", JSON.stringify({
+        status: 'processing', orderId, timestamp: Date.now(), startTime, merchantPubkeys,
+        lockedMerchants: [], paidMerchants: []
+      }));
+
+      for (const merchantPubkey of Object.keys(merchantGroups)) {
+        const ephemeralPrivBytes = generateSecretKey();
+        const ephemeralPubHex = getPublicKey(ephemeralPrivBytes);
+        const items = merchantGroups[merchantPubkey];
+        const requestMessage = JSON.stringify({
+          type: ORDER_MESSAGE_TYPES.REQUEST,
+          orderId: orderId,
+          items: items,
+          shipping: shippingInfo,
+          requestType: "hodl_invoice"
+        });
+
+        const giftWrap = await constructGiftWrappedEvent(
+          userPubkey!,
+          merchantPubkey,
+          requestMessage,
+          "zapsnag-order",
+          { isOrder: true, orderId: orderId }
+        );
+
+        const seal = await constructMessageSeal(signer!, giftWrap, userPubkey!, merchantPubkey);
+        const finalEvent = await constructMessageGiftWrap(seal, ephemeralPubHex, ephemeralPrivBytes, merchantPubkey);
+        await sendGiftWrappedMessageEvent(nostr!, finalEvent);
+
+        // Wake up this specific merchant's bot
+        fetch("/api/settlement/trigger", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ merchantPubkey })
+        }).catch(console.error);
+      }
+
+      // Start the reusable waiting loop
+      await waitForCartResponses(orderId, startTime, merchantPubkeys, new Set(), new Set());
+
     } catch (error: any) {
       handleNWCError(error);
+      localStorage.removeItem("pending_cart_order");
     } finally {
-      nwc?.close();
-      setIsNwcLoading(false);
+      // Loading state handled in finalizeCartOrder
     }
   };
 
