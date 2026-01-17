@@ -146,6 +146,13 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
       
       await sendGiftWrappedMessageEvent(nostrManager!, finalEvent);
 
+      // Wake up the bot immediately so it sees the DM
+      fetch("/api/settlement/trigger", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ merchantPubkey: product.pubkey })
+      }).catch(console.error);
+
       setStatus("Waiting for Seller Invoice...");
       
       const startTime = Math.floor(Date.now() / 1000);

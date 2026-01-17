@@ -711,6 +711,13 @@ export default function ProductInvoiceCard({
       const finalEvent = await constructMessageGiftWrap(seal, ephemeralPubHex, ephemeralPrivBytes, productData.pubkey);
       await sendGiftWrappedMessageEvent(nostr!, finalEvent);
 
+      // Wake up the seller's bot immediately
+      fetch("/api/settlement/trigger", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ merchantPubkey: productData.pubkey })
+      }).catch(console.error);
+
       let invoiceFound = false;
       const maxRetries = 60;
 

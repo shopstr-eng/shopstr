@@ -821,6 +821,13 @@ export default function CartInvoiceCard({
         const seal = await constructMessageSeal(signer!, giftWrap, userPubkey!, merchantPubkey);
         const finalEvent = await constructMessageGiftWrap(seal, ephemeralPubHex, ephemeralPrivBytes, merchantPubkey);
         await sendGiftWrappedMessageEvent(nostr!, finalEvent);
+
+        // Wake up this specific merchant's bot
+        fetch("/api/settlement/trigger", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ merchantPubkey })
+        }).catch(console.error);
       }
 
       // Start the reusable waiting loop

@@ -58,7 +58,7 @@ export class HodlSettlementService {
           const filter = {
               kinds: [1059], 
               '#p': [this.sellerPubkey],
-              since: Math.floor(Date.now() / 1000) - 600 
+              since: Math.floor(Date.now() / 1000) - 3600
           };
           
           // USE SUBSCRIBE + EOSE instead of simple fetch for better sync
