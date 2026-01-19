@@ -8,7 +8,7 @@ export async function validateZapReceipt(
   const filter = {
     kinds: [9735],
     "#e": [productId],
-    since: minTimestamp
+    since: minTimestamp,
   };
 
   const maxRetries = 5;

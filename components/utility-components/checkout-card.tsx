@@ -1,20 +1,30 @@
 /* eslint-disable @next/next/no-img-element */
 
 import React, { useContext, useEffect, useRef, useState } from "react";
-import { nip19 } from "nostr-tools";
+import { Event, nip19 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { DisplayCheckoutCost } from "./display-monetary-info";
 import ProductInvoiceCard from "../product-invoice-card";
 import { useRouter } from "next/router";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import { Button, Chip, Input, useDisclosure } from "@nextui-org/react";
+import {
+  Button,
+  Chip,
+  Input,
+  useDisclosure,
+  Dropdown,
+  DropdownTrigger,
+  DropdownMenu,
+  DropdownItem,
+} from "@nextui-org/react";
 import { locationAvatar } from "./dropdowns/location-dropdown";
 import {
   FaceFrownIcon,
   FaceSmileIcon,
   ArrowLongDownIcon,
   ArrowLongUpIcon,
+  EllipsisVerticalIcon,
 } from "@heroicons/react/24/outline";
 import { ReviewsContext } from "@/utils/context/context";
 import FailureModal from "../utility-components/failure-modal";
@@ -24,6 +34,7 @@ import currencySelection from "../../public/currencySelection.json";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import VolumeSelector from "./volume-selector";
 import ZapsnagButton from "@/components/ZapsnagButton";
+import { RawEventModal, EventIdModal } from "./modals/event-modals";
 
 const SUMMARY_CHARACTER_LIMIT = 100;
 
@@ -36,6 +47,7 @@ export default function CheckoutCard({
   setCashuPaymentSent,
   setCashuPaymentFailed,
   uniqueKey,
+  rawEvent,
 }: {
   productData: ProductData;
   setFiatOrderIsPlaced?: (fiatOrderIsPlaced: boolean) => void;
@@ -45,9 +57,12 @@ export default function CheckoutCard({
   setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
   setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
   uniqueKey?: string;
+  rawEvent?: Event;
 }) {
   const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const [showRawEventModal, setShowRawEventModal] = useState(false);
+  const [showEventIdModal, setShowEventIdModal] = useState(false);
 
   const router = useRouter();
 
@@ -88,7 +103,8 @@ export default function CheckoutCard({
     ? Date.now() / 1000 > productData.expiration
     : false;
 
-  const isZapsnag = productData.d === "zapsnag" || productData.categories?.includes("zapsnag");
+  const isZapsnag =
+    productData.d === "zapsnag" || productData.categories?.includes("zapsnag");
 
   useEffect(() => {
     if (selectedVolume && productData.volumePrices) {
@@ -504,14 +520,44 @@ export default function CheckoutCard({
                       )}
                     </div>
                   </div>
-                  <h2 className="mt-4 w-full text-left text-2xl font-bold text-light-text dark:text-dark-text">
-                    {productData.title}
-                    {isExpired && (
-                      <Chip color="warning" variant="flat" className="ml-2">
-                        Outdated
-                      </Chip>
+                  <div className="mt-4 flex w-full items-start justify-between">
+                    <h2 className="text-left text-2xl font-bold text-light-text dark:text-dark-text">
+                      {productData.title}
+                      {isExpired && (
+                        <Chip color="warning" variant="flat" className="ml-2">
+                          Outdated
+                        </Chip>
+                      )}
+                    </h2>
+                    {rawEvent && (
+                      <Dropdown>
+                        <DropdownTrigger>
+                          <Button
+                            isIconOnly
+                            variant="light"
+                            size="sm"
+                            className="min-w-8 h-8"
+                          >
+                            <EllipsisVerticalIcon className="h-6 w-6 text-gray-500" />
+                          </Button>
+                        </DropdownTrigger>
+                        <DropdownMenu aria-label="Event Actions">
+                          <DropdownItem
+                            key="view-raw"
+                            onPress={() => setShowRawEventModal(true)}
+                          >
+                            View Raw Event
+                          </DropdownItem>
+                          <DropdownItem
+                            key="view-id"
+                            onPress={() => setShowEventIdModal(true)}
+                          >
+                            View Event ID
+                          </DropdownItem>
+                        </DropdownMenu>
+                      </Dropdown>
                     )}
-                  </h2>
+                  </div>
                   {productData.expiration && (
                     <p
                       className={`mt-1 text-left text-sm ${
@@ -569,122 +615,122 @@ export default function CheckoutCard({
                       <ZapsnagButton product={productData} />
                     </div>
                   ) : (
-                  <>
-                  {productData.pubkey !== userPubkey && (
-                    <div className="mt-4 space-y-2">
-                      <div className="flex gap-2">
-                        <Input
-                          label="Discount Code"
-                          placeholder="Enter code"
-                          value={discountCode}
-                          onChange={(e) =>
-                            setDiscountCode(e.target.value.toUpperCase())
-                          }
-                          className="flex-1 text-light-text dark:text-dark-text"
-                          disabled={appliedDiscount > 0}
-                          isInvalid={!!discountError}
-                          errorMessage={discountError}
-                        />
-                        {appliedDiscount > 0 ? (
-                          <Button
-                            color="warning"
-                            onClick={handleRemoveDiscount}
-                          >
-                            Remove
-                          </Button>
-                        ) : (
-                          <Button
-                            className={SHOPSTRBUTTONCLASSNAMES}
-                            onClick={handleApplyDiscount}
-                          >
-                            Apply
-                          </Button>
-                        )}
-                      </div>
-                      {appliedDiscount > 0 && (
-                        <p className="text-sm text-green-600 dark:text-green-400">
-                          {appliedDiscount}% discount applied! You save{" "}
-                          {Math.ceil((discountAmount / 100) * 100) / 100}{" "}
-                          {productData.currency}
-                        </p>
+                    <>
+                      {productData.pubkey !== userPubkey && (
+                        <div className="mt-4 space-y-2">
+                          <div className="flex gap-2">
+                            <Input
+                              label="Discount Code"
+                              placeholder="Enter code"
+                              value={discountCode}
+                              onChange={(e) =>
+                                setDiscountCode(e.target.value.toUpperCase())
+                              }
+                              className="flex-1 text-light-text dark:text-dark-text"
+                              disabled={appliedDiscount > 0}
+                              isInvalid={!!discountError}
+                              errorMessage={discountError}
+                            />
+                            {appliedDiscount > 0 ? (
+                              <Button
+                                color="warning"
+                                onClick={handleRemoveDiscount}
+                              >
+                                Remove
+                              </Button>
+                            ) : (
+                              <Button
+                                className={SHOPSTRBUTTONCLASSNAMES}
+                                onClick={handleApplyDiscount}
+                              >
+                                Apply
+                              </Button>
+                            )}
+                          </div>
+                          {appliedDiscount > 0 && (
+                            <p className="text-sm text-green-600 dark:text-green-400">
+                              {appliedDiscount}% discount applied! You save{" "}
+                              {Math.ceil((discountAmount / 100) * 100) / 100}{" "}
+                              {productData.currency}
+                            </p>
+                          )}
+                        </div>
                       )}
-                    </div>
-                  )}
 
-                  <div className="pb-1">
-                    <Chip
-                      key={productData.location}
-                      startContent={locationAvatar(productData.location)}
-                      className="min-h-fit max-w-full"
-                      classNames={{
-                        base: "h-auto py-1",
-                        content: "whitespace-normal break-words text-wrap",
-                      }}
-                    >
-                      {productData.location}
-                    </Chip>
-                  </div>
-                  {renderSizeGrid()}
-                  <div className="flex w-full flex-col gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {productData.status !== "sold" ? (
-                        <>
+                      <div className="pb-1">
+                        <Chip
+                          key={productData.location}
+                          startContent={locationAvatar(productData.location)}
+                          className="min-h-fit max-w-full"
+                          classNames={{
+                            base: "h-auto py-1",
+                            content: "whitespace-normal break-words text-wrap",
+                          }}
+                        >
+                          {productData.location}
+                        </Chip>
+                      </div>
+                      {renderSizeGrid()}
+                      <div className="flex w-full flex-col gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {productData.status !== "sold" ? (
+                            <>
+                              <Button
+                                className={`min-w-fit bg-gradient-to-tr from-purple-700 via-purple-500 to-purple-700 text-dark-text shadow-lg dark:from-yellow-700 dark:via-yellow-500 dark:to-yellow-700 dark:text-light-text ${
+                                  (hasSizes && !selectedSize) ||
+                                  (hasVolumes && !selectedVolume)
+                                    ? "cursor-not-allowed opacity-50"
+                                    : ""
+                                }`}
+                                onClick={toggleBuyNow}
+                                disabled={
+                                  (hasSizes && !selectedSize) ||
+                                  (hasVolumes && !selectedVolume) ||
+                                  isExpired
+                                }
+                              >
+                                Buy Now
+                              </Button>
+                              <Button
+                                className={`${SHOPSTRBUTTONCLASSNAMES} ${
+                                  isAdded ||
+                                  (hasSizes && !selectedSize) ||
+                                  (hasVolumes && !selectedVolume)
+                                    ? "cursor-not-allowed opacity-50"
+                                    : ""
+                                }`}
+                                onClick={handleAddToCart}
+                                disabled={
+                                  isAdded ||
+                                  (hasSizes && !selectedSize) ||
+                                  (hasVolumes && !selectedVolume) ||
+                                  isExpired
+                                }
+                              >
+                                Add To Cart
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button
+                                className={`${SHOPSTRBUTTONCLASSNAMES} cursor-not-allowed opacity-50`}
+                                disabled
+                              >
+                                Sold Out
+                              </Button>
+                            </>
+                          )}
                           <Button
-                            className={`min-w-fit bg-gradient-to-tr from-purple-700 via-purple-500 to-purple-700 text-dark-text shadow-lg dark:from-yellow-700 dark:via-yellow-500 dark:to-yellow-700 dark:text-light-text ${
-                              (hasSizes && !selectedSize) ||
-                              (hasVolumes && !selectedVolume)
-                                ? "cursor-not-allowed opacity-50"
-                                : ""
-                            }`}
-                            onClick={toggleBuyNow}
-                            disabled={
-                              (hasSizes && !selectedSize) ||
-                              (hasVolumes && !selectedVolume) ||
-                              isExpired
-                            }
+                            type="submit"
+                            className={SHOPSTRBUTTONCLASSNAMES}
+                            onClick={handleShare}
                           >
-                            Buy Now
+                            Share
                           </Button>
-                          <Button
-                            className={`${SHOPSTRBUTTONCLASSNAMES} ${
-                              isAdded ||
-                              (hasSizes && !selectedSize) ||
-                              (hasVolumes && !selectedVolume)
-                                ? "cursor-not-allowed opacity-50"
-                                : ""
-                            }`}
-                            onClick={handleAddToCart}
-                            disabled={
-                              isAdded ||
-                              (hasSizes && !selectedSize) ||
-                              (hasVolumes && !selectedVolume) ||
-                              isExpired
-                            }
-                          >
-                            Add To Cart
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          <Button
-                            className={`${SHOPSTRBUTTONCLASSNAMES} cursor-not-allowed opacity-50`}
-                            disabled
-                          >
-                            Sold Out
-                          </Button>
-                        </>
-                      )}
-                      <Button
-                        type="submit"
-                        className={SHOPSTRBUTTONCLASSNAMES}
-                        onClick={handleShare}
-                      >
-                        Share
-                      </Button>
-                    </div>
-                  </div>
-                </>
-                )}
+                        </div>
+                      </div>
+                    </>
+                  )}
                   {productData.pubkey !== userPubkey && (
                     <span
                       onClick={() => {
@@ -847,6 +893,16 @@ export default function CheckoutCard({
           bodyText="Listing URL copied to clipboard!"
           isOpen={showSuccessModal}
           onClose={() => setShowSuccessModal(false)}
+        />
+        <RawEventModal
+          isOpen={showRawEventModal}
+          onClose={() => setShowRawEventModal(false)}
+          rawEvent={rawEvent}
+        />
+        <EventIdModal
+          isOpen={showEventIdModal}
+          onClose={() => setShowEventIdModal(false)}
+          rawEvent={rawEvent}
         />
       </div>
     </div>
