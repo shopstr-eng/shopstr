@@ -119,6 +119,24 @@ export interface CombinedFormData {
   Required?: string;
 }
 
+export interface HodlInvoice {
+  paymentHash: string;
+  preimage?: string; 
+  orderId: string;
+  pubkey: string;
+  amount: number;
+  status: "pending" | "locked" | "settled" | "cancelled";
+  createdAt: number;
+  productId?: string;
+}
+
+export interface InventoryReservation {
+  productId: string;
+  paymentHash: string;
+  reservedAt: number;
+  expiresAt: number;
+}
+
 declare global {
   interface Window {
     // For NIP-07 browser extensions
