@@ -7,14 +7,19 @@ import {
   SelectSection,
   Input,
   useDisclosure,
+  Dropdown,
+  DropdownTrigger,
+  DropdownMenu,
+  DropdownItem,
 } from "@nextui-org/react";
 import {
   FaceFrownIcon,
   FaceSmileIcon,
   PlusIcon,
+  EllipsisVerticalIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
-import { nip19 } from "nostr-tools";
+import { nip19, Event } from "nostr-tools";
 import React, { useContext, useEffect, useState, useRef } from "react";
 import {
   ReviewsContext,
@@ -31,6 +36,10 @@ import SignInModal from "../sign-in/SignInModal";
 import ShopstrSwitch from "../utility-components/shopstr-switch";
 import { ShopProfile } from "../../utils/types/types";
 import SideShopNav from "./side-shop-nav";
+import {
+  RawEventModal,
+  EventIdModal,
+} from "../utility-components/modals/event-modals";
 
 function MarketplacePage({
   focusedPubkey,
@@ -64,6 +73,9 @@ function MarketplacePage({
   const [shopBannerURL, setShopBannerURL] = useState("");
   const [shopAbout, setShopAbout] = useState("");
   const [isFetchingShop, setIsFetchingShop] = useState(false);
+  const [rawEvent, setRawEvent] = useState<Event | undefined>(undefined);
+  const [showRawEventModal, setShowRawEventModal] = useState(false);
+  const [showEventIdModal, setShowEventIdModal] = useState(false);
 
   const [isFetchingFollows, setIsFetchingFollows] = useState(false);
 
@@ -140,6 +152,7 @@ function MarketplacePage({
       if (shopProfile) {
         setShopBannerURL(shopProfile.content.ui.banner);
         setShopAbout(shopProfile.content.about);
+        setRawEvent(shopProfile.event);
       }
     }
     setIsFetchingShop(false);
@@ -356,6 +369,33 @@ function MarketplacePage({
               >
                 Message
               </Button>
+              {rawEvent && (
+                <Dropdown>
+                  <DropdownTrigger>
+                    <Button
+                      isIconOnly
+                      variant="light"
+                      className="text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                    >
+                      <EllipsisVerticalIcon className="h-6 w-6" />
+                    </Button>
+                  </DropdownTrigger>
+                  <DropdownMenu aria-label="Event Actions">
+                    <DropdownItem
+                      key="view-raw"
+                      onPress={() => setShowRawEventModal(true)}
+                    >
+                      View Raw Event
+                    </DropdownItem>
+                    <DropdownItem
+                      key="view-id"
+                      onPress={() => setShowEventIdModal(true)}
+                    >
+                      View Event ID
+                    </DropdownItem>
+                  </DropdownMenu>
+                </Dropdown>
+              )}
             </div>
           </div>
         ) : (
@@ -510,6 +550,16 @@ function MarketplacePage({
           </Button>
         )}
       <SignInModal isOpen={isOpen} onClose={onClose} />
+      <RawEventModal
+        isOpen={showRawEventModal}
+        onClose={() => setShowRawEventModal(false)}
+        rawEvent={rawEvent}
+      />
+      <EventIdModal
+        isOpen={showEventIdModal}
+        onClose={() => setShowEventIdModal(false)}
+        rawEvent={rawEvent}
+      />
     </div>
   );
 }

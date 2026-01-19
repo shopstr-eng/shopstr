@@ -86,11 +86,13 @@ npm run dev
 This application requires a PostgreSQL database. You can run it locally using Docker Compose:
 
 1. Start PostgreSQL:
+
    ```bash
    docker-compose up -d
    ```
 
 2. Create a `.env` file in the root directory with the following:
+
    ```
    DATABASE_URL=postgresql://shopstr:shopstr@localhost:5432/shopstr
    ```
@@ -98,6 +100,7 @@ This application requires a PostgreSQL database. You can run it locally using Do
 3. The database tables will be automatically created on first connection.
 
 4. To stop the database:
+
    ```bash
    docker-compose down
    ```
@@ -106,7 +109,6 @@ This application requires a PostgreSQL database. You can run it locally using Do
    ```bash
    docker-compose down -v
    ```
-
 
 The application will be available at `http://localhost:3000`
 

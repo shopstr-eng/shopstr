@@ -28,7 +28,7 @@ export const parseZapsnagNote = (event: NostrEvent): ProductData => {
     image = `https://robohash.org/${event.id}`;
   }
 
-  let cleanContent = content
+  const cleanContent = content
     .replace(priceRegex, "")
     .replace(/#zapsnag/gi, "")
     .replace(imageRegex, "")
@@ -57,5 +57,6 @@ export const parseZapsnagNote = (event: NostrEvent): ProductData => {
     shippingType: "Free",
     d: "zapsnag",
     status: "active",
+    rawEvent: event,
   };
 };

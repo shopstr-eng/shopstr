@@ -1,20 +1,30 @@
 /* eslint-disable @next/next/no-img-element */
 
 import React, { useContext, useEffect, useRef, useState } from "react";
-import { nip19 } from "nostr-tools";
+import { Event, nip19 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { DisplayCheckoutCost } from "./display-monetary-info";
 import ProductInvoiceCard from "../product-invoice-card";
 import { useRouter } from "next/router";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import { Button, Chip, Input, useDisclosure } from "@nextui-org/react";
+import {
+  Button,
+  Chip,
+  Input,
+  useDisclosure,
+  Dropdown,
+  DropdownTrigger,
+  DropdownMenu,
+  DropdownItem,
+} from "@nextui-org/react";
 import { locationAvatar } from "./dropdowns/location-dropdown";
 import {
   FaceFrownIcon,
   FaceSmileIcon,
   ArrowLongDownIcon,
   ArrowLongUpIcon,
+  EllipsisVerticalIcon,
 } from "@heroicons/react/24/outline";
 import { ReviewsContext } from "@/utils/context/context";
 import FailureModal from "../utility-components/failure-modal";
@@ -24,6 +34,7 @@ import currencySelection from "../../public/currencySelection.json";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import VolumeSelector from "./volume-selector";
 import ZapsnagButton from "@/components/ZapsnagButton";
+import { RawEventModal, EventIdModal } from "./modals/event-modals";
 
 const SUMMARY_CHARACTER_LIMIT = 100;
 
@@ -36,6 +47,7 @@ export default function CheckoutCard({
   setCashuPaymentSent,
   setCashuPaymentFailed,
   uniqueKey,
+  rawEvent,
 }: {
   productData: ProductData;
   setFiatOrderIsPlaced?: (fiatOrderIsPlaced: boolean) => void;
@@ -45,9 +57,12 @@ export default function CheckoutCard({
   setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
   setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
   uniqueKey?: string;
+  rawEvent?: Event;
 }) {
   const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const [showRawEventModal, setShowRawEventModal] = useState(false);
+  const [showEventIdModal, setShowEventIdModal] = useState(false);
 
   const router = useRouter();
 
@@ -505,14 +520,44 @@ export default function CheckoutCard({
                       )}
                     </div>
                   </div>
-                  <h2 className="mt-4 w-full text-left text-2xl font-bold text-light-text dark:text-dark-text">
-                    {productData.title}
-                    {isExpired && (
-                      <Chip color="warning" variant="flat" className="ml-2">
-                        Outdated
-                      </Chip>
+                  <div className="mt-4 flex w-full items-start justify-between">
+                    <h2 className="text-left text-2xl font-bold text-light-text dark:text-dark-text">
+                      {productData.title}
+                      {isExpired && (
+                        <Chip color="warning" variant="flat" className="ml-2">
+                          Outdated
+                        </Chip>
+                      )}
+                    </h2>
+                    {rawEvent && (
+                      <Dropdown>
+                        <DropdownTrigger>
+                          <Button
+                            isIconOnly
+                            variant="light"
+                            size="sm"
+                            className="min-w-8 h-8"
+                          >
+                            <EllipsisVerticalIcon className="h-6 w-6 text-gray-500" />
+                          </Button>
+                        </DropdownTrigger>
+                        <DropdownMenu aria-label="Event Actions">
+                          <DropdownItem
+                            key="view-raw"
+                            onPress={() => setShowRawEventModal(true)}
+                          >
+                            View Raw Event
+                          </DropdownItem>
+                          <DropdownItem
+                            key="view-id"
+                            onPress={() => setShowEventIdModal(true)}
+                          >
+                            View Event ID
+                          </DropdownItem>
+                        </DropdownMenu>
+                      </Dropdown>
                     )}
-                  </h2>
+                  </div>
                   {productData.expiration && (
                     <p
                       className={`mt-1 text-left text-sm ${
@@ -848,6 +893,16 @@ export default function CheckoutCard({
           bodyText="Listing URL copied to clipboard!"
           isOpen={showSuccessModal}
           onClose={() => setShowSuccessModal(false)}
+        />
+        <RawEventModal
+          isOpen={showRawEventModal}
+          onClose={() => setShowRawEventModal(false)}
+          rawEvent={rawEvent}
+        />
+        <EventIdModal
+          isOpen={showEventIdModal}
+          onClose={() => setShowEventIdModal(false)}
+          rawEvent={rawEvent}
         />
       </div>
     </div>
