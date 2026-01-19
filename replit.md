@@ -2,7 +2,7 @@
 
 ## Overview
 
-Shopstr is a global, permissionless marketplace built on the Nostr protocol, enabling Bitcoin commerce through decentralized communication and censorship-resistant transactions. The platform leverages Nostr's event-based architecture to create, manage, and trade products while supporting multiple payment methods including Lightning Network, Cashu ecash, and fiat currencies. Built with Next.js 14, the application provides a Progressive Web App (PWA) experience with client-side state management and local caching via IndexedDB.
+Shopstr is a global, permissionless marketplace built on the Nostr protocol, enabling Bitcoin commerce through decentralized communication and censorship-resistant transactions. The platform leverages Nostr's event-based architecture to create, manage, and trade products while supporting multiple payment methods including Lightning Network, Cashu ecash, and fiat currencies. Built with Next.js 14, the application provides a Progressive Web App (PWA) experience with client-side state management and serverside caching via PostgreSQL.
 
 ## User Preferences
 
@@ -36,7 +36,6 @@ Preferred communication style: Simple, everyday language.
 
 **Client-Side Data Persistence**
 
-- Dexie.js wrapper over IndexedDB for offline-first data storage
 - Local storage for user preferences and authentication tokens
 - Service worker for asset caching and offline functionality
 
@@ -142,8 +141,7 @@ Preferred communication style: Simple, everyday language.
 
 **Database & Storage**
 
-- Dexie 3.2.4: IndexedDB wrapper for client-side database operations
-- dexie-react-hooks 1.1.7: React integration for reactive queries
+- pg 8.11.5: Server-side caching and database operations
 
 **UI & Styling**
 

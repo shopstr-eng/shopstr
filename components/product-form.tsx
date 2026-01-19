@@ -40,7 +40,6 @@ import {
 import LocationDropdown from "./utility-components/dropdowns/location-dropdown";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 import { ProductContext, ProfileMapContext } from "../utils/context/context";
-import { addProductToCache } from "@/utils/nostr/cache-service";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { buildSrcSet } from "@/utils/images";
 import { FileUploaderButton } from "./utility-components/file-uploader";
@@ -138,12 +137,14 @@ export default function ProductForm({
     setIsEdit(oldValues ? true : false);
     if (showModal && !oldValues && signerPubKey) {
       const profile = profileContext.profileData.get(signerPubKey);
-      const hasLightning = !!(profile?.content?.lud16 || profile?.content?.lnurl);
+      const hasLightning = !!(
+        profile?.content?.lud16 || profile?.content?.lnurl
+      );
       setIsFlashSale(hasLightning);
     } else {
       setIsFlashSale(false);
     }
-  }, [showModal,signerPubKey,profileContext]);
+  }, [showModal, signerPubKey, profileContext]);
 
   const onSubmit = async (data: {
     [x: string]: string | Map<string, number> | string[];
@@ -259,16 +260,18 @@ export default function ProductForm({
     //Handle Flash Sale (Zapsnag) Publication
     if (isFlashSale) {
       try {
-        const finalContent = `${data["Description"]}\n\nPrice: ${data["Price"]} ${data["Currency"]}\n\n#zapsnag\n${images[0] || ""}`;
+        const finalContent = `${data["Description"]}\n\nPrice: ${
+          data["Price"]
+        } ${data["Currency"]}\n\n#zapsnag\n${images[0] || ""}`;
         const flashSaleEvent = {
           kind: 1,
           created_at: Math.floor(Date.now() / 1000),
           tags: [
             ["t", "zapsnag"],
-            ["t", "shopstr-zapsnag"], 
-            ["d", "zapsnag"]
+            ["t", "shopstr-zapsnag"],
+            ["d", "zapsnag"],
           ],
-          content: finalContent
+          content: finalContent,
         };
 
         if (data["Quantity"]) {
@@ -289,7 +292,6 @@ export default function ProductForm({
 
     clear();
     productEventContext.addNewlyCreatedProductEvent(newListing);
-    addProductToCache(newListing);
     setIsPostingOrUpdatingProduct(false);
     if (onSubmitCallback) {
       onSubmitCallback();
@@ -914,14 +916,19 @@ export default function ProductForm({
             {/* --- Flash Sale Toggle --- */}
             <div className="mt-4 flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-700">
               <div className="flex flex-col">
-                <span className="text-sm font-semibold text-light-text dark:text-dark-text">Post as Flash Sale</span>
-                <span className="text-tiny text-gray-500">Also broadcast to Global Feed (Nostr)</span>
+                <span className="text-sm font-semibold text-light-text dark:text-dark-text">
+                  Post as Flash Sale
+                </span>
+                <span className="text-tiny text-gray-500">
+                  Also broadcast to Global Feed (Nostr)
+                </span>
               </div>
               <Switch
                 isSelected={isFlashSale}
                 onValueChange={setIsFlashSale}
                 classNames={{
-                  wrapper: "group-data-[selected=true]:bg-shopstr-purple dark:group-data-[selected=true]:bg-shopstr-yellow",
+                  wrapper:
+                    "group-data-[selected=true]:bg-shopstr-purple dark:group-data-[selected=true]:bg-shopstr-yellow",
                 }}
               />
             </div>

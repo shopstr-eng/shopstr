@@ -25,7 +25,8 @@ export default function ProductCard({
   const { pubkey: userPubkey } = useContext(SignerContext);
   if (!productData) return null;
 
-  const isZapsnag = productData.d === "zapsnag" || productData.categories?.includes("zapsnag");
+  const isZapsnag =
+    productData.d === "zapsnag" || productData.categories?.includes("zapsnag");
 
   const cardHoverStyle =
     "hover:shadow-purple-500/30 dark:hover:shadow-yellow-500/30 hover:scale-[1.01]";
@@ -39,11 +40,14 @@ export default function ProductCard({
     e.stopPropagation();
     try {
       const { relays } = getLocalStorageData();
-      const targetRelays = relays.length > 0 ? relays.slice(0, 3) : ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net"];
+      const targetRelays =
+        relays.length > 0
+          ? relays.slice(0, 3)
+          : ["wss://relay.damus.io", "wss://nos.lol", "wss://relay.primal.net"];
       const nevent = nip19.neventEncode({
         id: productData.id,
         author: productData.pubkey,
-        relays: targetRelays
+        relays: targetRelays,
       });
       window.open(`https://njump.me/${nevent}`, "_blank");
     } catch (err) {
@@ -74,12 +78,12 @@ export default function ProductCard({
             {isZapsnag && productData.pubkey === userPubkey && (
               <button
                 onClick={handleNjumpClick}
-                className="ml-2 inline-flex items-center text-xs text-purple-600 hover:text-purple-800 dark:text-yellow-500 dark:hover:text-yellow-700 underline"
+                className="ml-2 inline-flex items-center text-xs text-purple-600 underline hover:text-purple-800 dark:text-yellow-500 dark:hover:text-yellow-700"
                 title="Track Sales on Nostr"
                 aria-label="Open Flash Sale in Nostr client"
               >
                 <span>View on Nostr</span>
-                <ArrowTopRightOnSquareIcon className="h-4 w-4 ml-1" />
+                <ArrowTopRightOnSquareIcon className="ml-1 h-4 w-4" />
               </button>
             )}
             {isExpired && (

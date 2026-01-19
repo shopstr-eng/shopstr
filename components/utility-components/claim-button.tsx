@@ -24,7 +24,6 @@ import {
   constructMessageGiftWrap,
   sendGiftWrappedMessageEvent,
 } from "@/utils/nostr/nostr-helper-functions";
-import { addChatMessagesToCache } from "@/utils/nostr/cache-service";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { LightningAddress } from "@getalby/lightning-tools";
 import { nip19 } from "nostr-tools";
@@ -91,45 +90,55 @@ export default function ClaimButton({ token }: { token: string }) {
   }, []);
 
   useEffect(() => {
-    const decodedToken = getDecodedToken(token);
-    const mint = decodedToken.mint;
-    setTokenMint(mint);
-    const proofs = decodedToken.proofs;
-    setProofs(proofs);
-    const newWallet = new CashuWallet(new CashuMint(mint));
-    setWallet(newWallet);
-    const totalAmount =
-      Array.isArray(proofs) && proofs.length > 0
-        ? proofs.reduce((acc, current: Proof) => acc + current.amount, 0)
-        : 0;
+    try {
+      const decodedToken = getDecodedToken(token);
+      const mint = decodedToken.mint;
+      setTokenMint(mint);
+      const proofs = decodedToken.proofs;
+      setProofs(proofs);
+      const newWallet = new CashuWallet(new CashuMint(mint));
+      setWallet(newWallet);
+      const totalAmount =
+        Array.isArray(proofs) && proofs.length > 0
+          ? proofs.reduce((acc, current: Proof) => acc + current.amount, 0)
+          : 0;
 
-    setTokenAmount(totalAmount);
-    setFormattedTokenAmount(formatWithCommas(totalAmount, "sats"));
+      setTokenAmount(totalAmount);
+      setFormattedTokenAmount(formatWithCommas(totalAmount, "sats"));
+    } catch (error) {
+      console.error("Error decoding token:", error);
+      setIsInvalidToken(true);
+    }
   }, [token]);
 
-  useEffect(() => {
-    setIsRedeemed(false);
-    const checkProofsSpent = async () => {
-      try {
-        if (proofs.length > 0) {
-          const proofsStates = await wallet?.checkProofsStates(proofs);
-          if (proofsStates) {
-            const spentYs = new Set(
-              proofsStates
-                .filter((state) => state.state === "SPENT")
-                .map((state) => state.Y)
-            );
-            if (spentYs.size > 0) {
-              setIsRedeemed(true);
-            }
+  const checkProofsSpent = async () => {
+    try {
+      if (proofs.length > 0 && wallet) {
+        const proofsStates = await wallet.checkProofsStates(proofs);
+        if (proofsStates) {
+          const spentYs = new Set(
+            proofsStates
+              .filter((state) => state.state === "SPENT")
+              .map((state) => state.Y)
+          );
+          if (spentYs.size > 0) {
+            setIsRedeemed(true);
+            return true;
           }
         }
-      } catch (error) {
-        console.error(error);
       }
-    };
-    checkProofsSpent();
-  }, [proofs, wallet]);
+    } catch (error) {
+      console.error("Error checking proof states:", error);
+    }
+    return false;
+  };
+
+  const handleClaimButtonClick = async () => {
+    const alreadySpent = await checkProofsSpent();
+    if (!alreadySpent) {
+      setOpenClaimTypeModal(true);
+    }
+  };
 
   useEffect(() => {
     const sellerProfileMap = profileContext.profileData;
@@ -293,9 +302,6 @@ export default function ClaimButton({ token }: { token: string }) {
               },
               true
             );
-            addChatMessagesToCache([
-              { ...giftWrappedMessageEvent, sig: "", read: false },
-            ]);
           }
           setIsPaid(true);
           setOpenRedemptionModal(true);
@@ -322,9 +328,13 @@ export default function ClaimButton({ token }: { token: string }) {
   return (
     <div>
       <Button
-        className={buttonClassName + " mt-2 w-[20%]"}
-        onClick={() => setOpenClaimTypeModal(true)}
-        isDisabled={isRedeemed}
+        className={
+          isRedeemed || isInvalidToken
+            ? "mt-2 min-w-fit cursor-not-allowed bg-gray-400 text-gray-600 opacity-60"
+            : buttonClassName + " mt-2 min-w-fit"
+        }
+        onClick={handleClaimButtonClick}
+        isDisabled={isRedeemed || isInvalidToken}
       >
         {isRedeeming ? (
           <>
@@ -334,6 +344,8 @@ export default function ClaimButton({ token }: { token: string }) {
               <Spinner size={"sm"} color="secondary" />
             )}
           </>
+        ) : isInvalidToken ? (
+          <>Invalid Token</>
         ) : isRedeemed ? (
           <>Claimed: {formattedTokenAmount}</>
         ) : (
@@ -480,39 +492,6 @@ export default function ClaimButton({ token }: { token: string }) {
                 <div className="flex items-center justify-center">
                   The token you are trying to claim is already in your Shopstr
                   wallet.
-                </div>
-              </ModalBody>
-            </ModalContent>
-          </Modal>
-        </>
-      ) : null}
-      {isInvalidToken ? (
-        <>
-          <Modal
-            backdrop="blur"
-            isOpen={isInvalidToken}
-            onClose={() => setIsInvalidToken(false)}
-            // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
-            classNames={{
-              body: "py-6 ",
-              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-              header: "border-b-[1px] border-[#292f46]",
-              footer: "border-t-[1px] border-[#292f46]",
-              closeButton: "hover:bg-black/5 active:bg-white/10",
-            }}
-            isDismissable={true}
-            scrollBehavior={"normal"}
-            placement={"center"}
-            size="2xl"
-          >
-            <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
-                <XCircleIcon className="h-6 w-6 text-red-500" />
-                <div className="ml-2">Invalid token!</div>
-              </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
-                <div className="flex items-center justify-center">
-                  The token you are trying to claim is not a valid Cashu string.
                 </div>
               </ModalBody>
             </ModalContent>

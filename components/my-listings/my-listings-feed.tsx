@@ -34,7 +34,6 @@ const MyListingsFeed = () => {
         showModal={showModal}
         handleModalToggle={handleProductModalToggle}
       />
-
     </div>
   );
 };
