@@ -180,6 +180,20 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### Pickup Location Selection and Address Tag for Orders (January 24, 2026)
+
+- Added pickup location dropdown in ProductInvoiceCard for contact orders when product has pickup shipping options (Pickup, Free/Pickup, Added Cost/Pickup) and pickupLocations array defined
+- Added pickup location selection to CartInvoiceCard for multi-product cart orders, with product title displayed next to each dropdown for clarity
+- Payment buttons disabled until pickup location is selected when required
+- Added "pickup" tag to Nostr order messages via constructGiftWrappedEvent function
+- Updated sendPaymentAndContactMessage in both ProductInvoiceCard and CartInvoiceCard to include pickup parameter
+- Pickup tags are applied per-product, only to order messages corresponding to that specific product (not all products in cart)
+- Added "Pickup Location" column to orders dashboard with proper tag parsing and display
+- Pickup location state resets when form type changes to prevent stale selections
+- Fixed "address" tag to be properly included in all order message types (payment, receipt, and info) when shipping information is provided
+- Both ProductInvoiceCard and CartInvoiceCard now construct address tag early and pass it to all relevant message calls
+- CartInvoiceCard handles both form field naming conventions (shippingName/shippingAddress and Name/Address)
+
 ### Order Status Persistence (January 23, 2026)
 
 - Added `order_status` and `order_id` columns to `message_events` table for efficient order status tracking

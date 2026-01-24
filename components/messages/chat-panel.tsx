@@ -155,7 +155,7 @@ const ChatPanel = ({
       );
 
       // Get shipping info from the most recent shipping message
-      let shippingInfo = {
+      const shippingInfo = {
         tracking: "",
         carrier: "",
         eta: 0,

@@ -258,6 +258,7 @@ export async function constructGiftWrappedEvent(
     isOrder?: boolean;
     contact?: string;
     address?: string;
+    pickup?: string;
     buyerPubkey?: string;
   } = {}
 ): Promise<GiftWrappedMessageEvent> {
@@ -280,6 +281,7 @@ export async function constructGiftWrappedEvent(
     isOrder,
     contact,
     address,
+    pickup,
     buyerPubkey,
   } = options;
 
@@ -311,6 +313,7 @@ export async function constructGiftWrappedEvent(
     if (eta) tags.push(["eta", eta.toString()]);
     if (contact) tags.push(["contact", contact]);
     if (address) tags.push(["address", address]);
+    if (pickup) tags.push(["pickup", pickup]);
 
     // Handle product information for orders
     if (productData || productAddress) {

@@ -117,8 +117,6 @@ export default function CartInvoiceCard({
   >(null);
   const [showOrderTypeSelection, setShowOrderTypeSelection] = useState(true);
 
-  const userPubkey = signer ? signer.getPubKey?.() : null;
-
   const sendInquiryDM = async (sellerPubkey: string, productTitle: string) => {
     if (!signer || !nostr) return;
 
@@ -331,7 +329,8 @@ export default function CartInvoiceCard({
     messageAmount?: number,
     productQuantity?: number,
     contact?: string,
-    address?: string
+    address?: string,
+    pickup?: string
   ) => {
     const newKeys = await generateNewKeys();
     if (!newKeys) {
@@ -355,7 +354,8 @@ export default function CartInvoiceCard({
       productQuantity,
       newKeys,
       contact,
-      address
+      address,
+      pickup
     );
   };
 
@@ -379,7 +379,8 @@ export default function CartInvoiceCard({
       receiverNsec: string;
     },
     contact?: string,
-    address?: string
+    address?: string,
+    pickup?: string
   ) => {
     if (!keys) {
       setFailureText("Message keys are required!");
@@ -413,7 +414,9 @@ export default function CartInvoiceCard({
         paymentType,
         paymentReference,
         contact,
+        address,
         buyerPubkey,
+        pickup,
       };
     } else if (isReceipt) {
       messageSubject = "order-receipt";
@@ -427,7 +430,9 @@ export default function CartInvoiceCard({
         paymentType,
         paymentReference,
         paymentProof,
+        address,
         buyerPubkey,
+        pickup,
       };
     } else if (isDonation) {
       messageSubject = "donation";
@@ -443,6 +448,7 @@ export default function CartInvoiceCard({
         contact,
         address,
         buyerPubkey,
+        pickup,
       };
     }
 
@@ -850,6 +856,20 @@ export default function CartInvoiceCard({
     const userPubkey = await signer?.getPubKey?.();
     const userNPub = userPubkey ? nip19.npubEncode(userPubkey) : undefined;
     let remainingProofs = proofs;
+
+    // Construct address tag early so it can be passed to all messages
+    // Handle both form field naming conventions
+    const hasShippingInfo = data.shippingName || data.Name;
+    const shippingAddressTag = hasShippingInfo
+      ? data.shippingName
+        ? data.shippingUnitNo
+          ? `${data.shippingName}, ${data.shippingAddress}, ${data.shippingUnitNo}, ${data.shippingCity}, ${data.shippingState}, ${data.shippingPostalCode}, ${data.shippingCountry}`
+          : `${data.shippingName}, ${data.shippingAddress}, ${data.shippingCity}, ${data.shippingState}, ${data.shippingPostalCode}, ${data.shippingCountry}`
+        : data.Unit
+          ? `${data.Name}, ${data.Address}, ${data.Unit}, ${data.City}, ${data["State/Province"]}, ${data["Postal Code"]}, ${data.Country}`
+          : `${data.Name}, ${data.Address}, ${data.City}, ${data["State/Province"]}, ${data["Postal Code"]}, ${data.Country}`
+      : undefined;
+
     for (const product of products) {
       const title = product.title;
       const pubkey = product.pubkey;
@@ -865,7 +885,6 @@ export default function CartInvoiceCard({
       );
       const sellerAmount = tokenAmount! - donationAmount;
       let sellerProofs: Proof[] = [];
-      let encodedToken = ""; // Initialize encodedToken
 
       let shippingData = data; // Assume data contains shipping info
       if (formType === "shipping") {
@@ -914,16 +933,17 @@ export default function CartInvoiceCard({
 
       // Construct order-info message with address tag
       const orderInfoMessage = await constructMessageGiftWrap(
-        pubkey,
+        pubkey as any,
         "", // Placeholder for seal
-        orderKeys.receiverNsec // Placeholder for keypair
+        orderKeys.receiverNsec as any, // Placeholder for keypair
+        pubkey // Recipient pubkey
       );
-      const orderInfoTags = [
+      const orderInfoTags: string[][] = [
         ["type", "1"],
         ["subject", "order-info"],
         ["order", orderId],
         ["item", product.id],
-        ["shipping", shippingTypes[product.id]], // Assuming shippingId can be derived from shippingTypes
+        ["shipping", shippingTypes[product.id] || ""], // Assuming shippingId can be derived from shippingTypes
       ];
       if (addressString) {
         orderInfoTags.push(["address", addressString]);
@@ -954,9 +974,10 @@ export default function CartInvoiceCard({
 
         // Construct payment message with cashu token tag
         paymentMessageText = await constructMessageGiftWrap(
-          pubkey,
+          pubkey as any,
           "", // Placeholder for seal
-          orderKeys.receiverNsec // Placeholder for keypair
+          orderKeys.receiverNsec as any, // Placeholder for keypair
+          pubkey // Recipient pubkey
         );
         paymentTags = [
           ["type", "2"],
@@ -1071,6 +1092,9 @@ export default function CartInvoiceCard({
                 lnurl +
                 ") for your sats.";
             }
+            const pickupLocationForLightning =
+              selectedPickupLocations[product.id] ||
+              data[`pickupLocation_${product.id}`];
             await sendPaymentAndContactMessageWithKeys(
               pubkey,
               paymentMessage,
@@ -1086,7 +1110,10 @@ export default function CartInvoiceCard({
               quantities[product.id] && quantities[product.id]! > 1
                 ? quantities[product.id]
                 : 1,
-              orderKeys
+              orderKeys,
+              undefined,
+              shippingAddressTag,
+              pickupLocationForLightning || undefined
             );
 
             if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
@@ -1193,7 +1220,10 @@ export default function CartInvoiceCard({
                 quantities[product.id] && quantities[product.id]! > 1
                   ? quantities[product.id]
                   : 1,
-                orderKeys
+                orderKeys,
+                undefined,
+                shippingAddressTag,
+                pickupLocation || undefined
               );
             }
           }
@@ -1263,7 +1293,10 @@ export default function CartInvoiceCard({
             quantities[product.id] && quantities[product.id]! > 1
               ? quantities[product.id]
               : 1,
-            orderKeys
+            orderKeys,
+            undefined,
+            shippingAddressTag,
+            pickupLocation || undefined
           );
         }
       }
@@ -1424,7 +1457,8 @@ export default function CartInvoiceCard({
             undefined,
             orderKeys,
             undefined,
-            addressTagForShipping
+            addressTagForShipping,
+            pickupLocation || undefined
           );
 
           if (userPubkey) {
@@ -1448,7 +1482,10 @@ export default function CartInvoiceCard({
               undefined,
               undefined,
               undefined,
-              orderKeys
+              orderKeys,
+              undefined,
+              shippingAddressTag,
+              pickupLocation || undefined
             );
           }
         }
@@ -1504,7 +1541,10 @@ export default function CartInvoiceCard({
             undefined,
             undefined,
             undefined,
-            orderKeys
+            orderKeys,
+            undefined,
+            shippingAddressTag,
+            pickupLocation || undefined
           );
         }
       } else if (userPubkey) {
@@ -1553,7 +1593,10 @@ export default function CartInvoiceCard({
           undefined,
           undefined,
           undefined,
-          orderKeys
+          orderKeys,
+          undefined,
+          shippingAddressTag,
+          pickupLocation || undefined
         );
       }
     }
@@ -1891,9 +1934,8 @@ export default function CartInvoiceCard({
 
         {/* Pickup location selectors for products with pickup locations */}
         {productsWithPickupLocations.length > 0 &&
-          (formType === "contact" ||
-            (formType === "combined" &&
-              freePickupPreference === "contact")) && (
+          formType === "combined" &&
+          freePickupPreference === "contact" && (
             <div className="space-y-4">
               <h4 className="font-medium text-gray-700 dark:text-gray-300">
                 Select Pickup Locations

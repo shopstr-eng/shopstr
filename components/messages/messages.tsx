@@ -160,7 +160,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       const chatPubkey = entry[0] as string;
       const chat = entry[1] as NostrMessageEvent[];
       const decryptedChat: NostrMessageEvent[] = [];
-      let unreadCount = 0;
+      const unreadCount = 0;
 
       for (const messageEvent of chat) {
         let plainText;

@@ -197,6 +197,13 @@ export default function ProductInvoiceCard({
     string | null
   >(null);
 
+  // Check if product requires pickup location selection (pickup-type shipping with pickup locations defined)
+  const requiresPickupLocation =
+    (productData.shippingType === "Pickup" ||
+      productData.shippingType === "Free/Pickup") &&
+    productData.pickupLocations &&
+    productData.pickupLocations.length > 0;
+
   // Extract discount and current price from props
   const appliedDiscount = discountPercentage || 0;
   const currentPrice =
@@ -260,11 +267,22 @@ export default function ProductInvoiceCard({
         (!productData.required || watchedValues.Required?.trim())
       );
     } else if (formType === "contact") {
-      isValid = true;
+      // For contact orders, check if pickup location is required and selected
+      if (requiresPickupLocation) {
+        isValid = !!selectedPickupLocation;
+      } else {
+        isValid = true;
+      }
     }
 
     setIsFormValid(isValid);
-  }, [watchedValues, formType, productData.required]);
+  }, [
+    watchedValues,
+    formType,
+    productData.required,
+    requiresPickupLocation,
+    selectedPickupLocation,
+  ]);
 
   const sendPaymentAndContactMessage = async (
     pubkeyToReceiveMessage: string,
@@ -278,7 +296,8 @@ export default function ProductInvoiceCard({
     paymentProof?: string,
     messageAmount?: number,
     contact?: string,
-    address?: string
+    address?: string,
+    pickup?: string
   ) => {
     const decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
     const decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
@@ -304,6 +323,8 @@ export default function ProductInvoiceCard({
         paymentType,
         paymentReference,
         contact,
+        address,
+        pickup,
         buyerPubkey,
       };
     } else if (isReceipt) {
@@ -322,6 +343,8 @@ export default function ProductInvoiceCard({
         paymentType,
         paymentReference,
         paymentProof,
+        address,
+        pickup,
         buyerPubkey,
       };
     } else if (isDonation) {
@@ -341,6 +364,7 @@ export default function ProductInvoiceCard({
         quantity: 1,
         contact,
         address,
+        pickup,
         buyerPubkey,
       };
     }
@@ -498,12 +522,14 @@ export default function ProductInvoiceCard({
 
   const handleOrderTypeSelection = (selectedOrderType: string) => {
     setShowOrderTypeSelection(false);
+    setSelectedPickupLocation(null); // Reset pickup location when form type changes
 
     if (selectedOrderType === "shipping") {
       setFormType("shipping");
     } else if (selectedOrderType === "contact") {
       setFormType("contact");
-      setIsFormValid(true);
+      // For contact orders, only set valid if no pickup location is required
+      setIsFormValid(!requiresPickupLocation);
     }
   };
 
@@ -634,6 +660,14 @@ export default function ProductInvoiceCard({
       const required = productData.required;
       const orderId = uuidv4();
 
+      // Construct address tag early so it can be passed to all messages
+      const addressTag =
+        data.shippingName && data.shippingAddress
+          ? data.shippingUnitNo
+            ? `${data.shippingName}, ${data.shippingAddress}, ${data.shippingUnitNo}, ${data.shippingCity}, ${data.shippingState}, ${data.shippingPostalCode}, ${data.shippingCountry}`
+            : `${data.shippingName}, ${data.shippingAddress}, ${data.shippingCity}, ${data.shippingState}, ${data.shippingPostalCode}, ${data.shippingCountry}`
+          : undefined;
+
       let productDetails = "";
       if (selectedSize) {
         productDetails += " in a size " + selectedSize;
@@ -675,7 +709,12 @@ export default function ProductInvoiceCard({
         selectedFiatOption.toLowerCase() === "cash"
           ? "in-person"
           : (fiatPaymentOptions as any)[selectedFiatOption] ||
-              selectedFiatOption
+              selectedFiatOption,
+        undefined,
+        undefined,
+        undefined,
+        addressTag,
+        selectedPickupLocation || undefined
       );
 
       if (required && required !== "") {
@@ -814,7 +853,11 @@ export default function ProductInvoiceCard({
               orderId,
               selectedFiatOption.toLowerCase(),
               fiatReference,
-              fiatProof
+              fiatProof,
+              undefined,
+              undefined,
+              addressTag,
+              selectedPickupLocation || undefined
             );
           }
         } else if (
@@ -869,7 +912,11 @@ export default function ProductInvoiceCard({
               orderId,
               selectedFiatOption.toLowerCase(),
               fiatReference,
-              fiatProof
+              fiatProof,
+              undefined,
+              undefined,
+              undefined,
+              selectedPickupLocation || undefined
             );
           }
         }
@@ -918,7 +965,11 @@ export default function ProductInvoiceCard({
           orderId,
           selectedFiatOption.toLowerCase(),
           fiatReference,
-          fiatProof
+          fiatProof,
+          undefined,
+          undefined,
+          addressTag,
+          selectedPickupLocation || undefined
         );
       }
       if (setFiatOrderIsPlaced) {
@@ -1153,23 +1204,6 @@ export default function ProductInvoiceCard({
     const donationAmount = Math.ceil((totalPrice * donationPercentage) / 100);
     const sellerAmount = totalPrice - donationAmount;
     let sellerProofs: Proof[] = [];
-    let encodedToken: string | undefined;
-    let shippingId = ""; // Initialize shippingId
-
-    // Construct the address string if shipping data is available
-    let addressString = "";
-    if (
-      shippingName &&
-      shippingAddress &&
-      shippingCity &&
-      shippingPostalCode &&
-      shippingState &&
-      shippingCountry
-    ) {
-      addressString = `${shippingName}, ${shippingAddress}${
-        shippingUnitNo ? `, ${shippingUnitNo}` : ""
-      }, ${shippingCity}, ${shippingState}, ${shippingPostalCode}, ${shippingCountry}`;
-    }
 
     if (sellerAmount > 0) {
       const { keep, send } = await wallet.send(sellerAmount, remainingProofs, {
@@ -1273,7 +1307,10 @@ export default function ProductInvoiceCard({
             "lightning",
             lnurl,
             undefined,
-            meltAmount
+            meltAmount,
+            undefined,
+            undefined,
+            selectedPickupLocation || undefined
           );
 
           if (changeAmount >= 1 && changeProofs && changeProofs.length > 0) {
@@ -1352,7 +1389,10 @@ export default function ProductInvoiceCard({
               "ecash",
               unusedToken,
               undefined,
-              unusedAmount
+              unusedAmount,
+              undefined,
+              undefined,
+              selectedPickupLocation || undefined
             );
           }
         }
@@ -1397,7 +1437,10 @@ export default function ProductInvoiceCard({
           "ecash",
           sellerToken,
           undefined,
-          sellerAmount
+          sellerAmount,
+          undefined,
+          undefined,
+          selectedPickupLocation || undefined
         );
       }
     }
@@ -1544,7 +1587,11 @@ export default function ProductInvoiceCard({
             orderId,
             "ecash",
             mints[0]!,
-            sellerToken
+            sellerToken,
+            undefined,
+            undefined,
+            addressTagForShipping,
+            selectedPickupLocation || undefined
           );
         }
       }
@@ -1591,7 +1638,11 @@ export default function ProductInvoiceCard({
           orderId,
           "ecash",
           mints[0]!,
-          sellerToken
+          sellerToken,
+          undefined,
+          undefined,
+          undefined,
+          selectedPickupLocation || undefined
         );
       }
     } else if (userPubkey) {
@@ -1631,7 +1682,11 @@ export default function ProductInvoiceCard({
         orderId,
         "ecash",
         mints[0]!,
-        sellerToken
+        sellerToken,
+        undefined,
+        undefined,
+        undefined,
+        selectedPickupLocation || undefined
       );
     }
   };
@@ -1733,26 +1788,6 @@ export default function ProductInvoiceCard({
         ]),
       ];
 
-      const shippingData = data.shippingName ? data : {}; // Use data if shipping fields exist, otherwise empty object
-
-      const addressString = shippingData.shippingName
-        ? `${shippingData.shippingName}, ${shippingData.shippingAddress}${
-            shippingData.shippingUnitNo
-              ? `, ${shippingData.shippingUnitNo}`
-              : ""
-          }, ${shippingData.shippingCity}, ${shippingData.shippingState}, ${
-            shippingData.shippingPostalCode
-          }, ${shippingData.shippingCountry}`
-        : "";
-
-      let encodedToken = "";
-      if (send.length > 0) {
-        encodedToken = getEncodedToken({
-          mint: mints[0]!,
-          proofs: send,
-        });
-      }
-
       await sendTokens(
         wallet,
         send,
@@ -1823,6 +1858,30 @@ export default function ProductInvoiceCard({
     if (!formType) return null;
 
     if (formType === "contact") {
+      // For contact orders, show pickup location selection if required
+      if (requiresPickupLocation) {
+        return (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold">Select Pickup Location</h3>
+            <Select
+              label="Pickup Location"
+              placeholder="Choose a pickup location"
+              className="max-w-full"
+              selectedKeys={
+                selectedPickupLocation ? [selectedPickupLocation] : []
+              }
+              onChange={(e) => setSelectedPickupLocation(e.target.value)}
+              isRequired
+            >
+              {(productData.pickupLocations || []).map((location) => (
+                <SelectItem key={location} value={location}>
+                  {location}
+                </SelectItem>
+              ))}
+            </Select>
+          </div>
+        );
+      }
       return null;
     }
 

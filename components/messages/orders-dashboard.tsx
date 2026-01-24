@@ -76,6 +76,7 @@ interface OrderData {
   status: string;
   messageEvent: NostrMessageEvent;
   address?: string;
+  pickupLocation?: string;
   paymentToken?: string;
   paymentMethod?: string;
   productTitle?: string;
@@ -327,6 +328,7 @@ const OrdersDashboard = () => {
             const status = tagsMap.get("status") || "pending";
             const buyerPubkey = tagsMap.get("b") || "";
             const address = tagsMap.get("address");
+            const pickupLocation = tagsMap.get("pickup");
 
             const paymentTagArray = messageEvent.tags.find(
               (tag) => tag[0] === "payment"
@@ -357,9 +359,9 @@ const OrdersDashboard = () => {
             }
             if (productAddress && productContext?.productEvents) {
               const productEvent = productContext.productEvents.find(
-                (event) => {
+                (event: any) => {
                   const eventAddress = `30402:${event.pubkey}:${event.tags.find(
-                    (tag) => tag[0] === "d"
+                    (tag: any) => tag[0] === "d"
                   )?.[1]}`;
                   return productAddress.includes(eventAddress);
                 }
@@ -438,6 +440,7 @@ const OrdersDashboard = () => {
               status,
               messageEvent,
               address,
+              pickupLocation,
               paymentToken,
               paymentMethod,
               productTitle,
@@ -685,9 +688,9 @@ const OrdersDashboard = () => {
   const handleProductClick = (productAddress: string) => {
     if (!productContext?.productEvents) return;
 
-    const productEvent = productContext.productEvents.find((event) => {
+    const productEvent = productContext.productEvents.find((event: any) => {
       const eventAddress = `30402:${event.pubkey}:${event.tags.find(
-        (tag) => tag[0] === "d"
+        (tag: any) => tag[0] === "d"
       )?.[1]}`;
       return productAddress.includes(eventAddress);
     });
@@ -1032,6 +1035,9 @@ const OrdersDashboard = () => {
                     Address
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                    Pickup Location
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
                     Payment
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
@@ -1043,7 +1049,7 @@ const OrdersDashboard = () => {
                 {orders.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={9}
+                      colSpan={10}
                       className="px-6 py-4 text-center text-gray-500 dark:text-gray-400"
                     >
                       No orders yet
@@ -1162,6 +1168,14 @@ const OrdersDashboard = () => {
                             title={order.address || "N/A"}
                           >
                             {order.address || "N/A"}
+                          </div>
+                        </td>
+                        <td className="max-w-xs px-4 py-4 text-sm text-light-text dark:text-dark-text">
+                          <div
+                            className="truncate"
+                            title={order.pickupLocation || "N/A"}
+                          >
+                            {order.pickupLocation || "N/A"}
                           </div>
                         </td>
                         <td className="px-4 py-4 text-sm">
