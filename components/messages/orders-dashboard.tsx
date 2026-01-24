@@ -952,7 +952,7 @@ const OrdersDashboard = () => {
   }
 
   return (
-    <div className="w-full min-w-0 bg-light-bg px-2 py-4 dark:bg-dark-bg sm:px-4 sm:py-6">
+    <div className="max-w-[98vw] min-w-0 bg-light-bg px-4 py-4 dark:bg-dark-bg sm:py-6">
       <div className="mx-auto w-full min-w-0 max-w-full">
         <h1 className="mb-6 text-3xl font-bold text-light-text dark:text-dark-text">
           Orders Dashboard
@@ -1005,7 +1005,7 @@ const OrdersDashboard = () => {
           </div>
         )}
 
-        <div className="relative w-full overflow-hidden rounded-lg shadow-md">
+        <div className="w-full overflow-hidden rounded-lg shadow-md">
           <div className="max-h-[70vh] overflow-x-auto">
             <table className="min-w-full text-left text-sm text-gray-500 dark:text-gray-400">
               <thead className="border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900">
@@ -1025,16 +1025,16 @@ const OrdersDashboard = () => {
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
                     Status
                   </th>
-                  <th className="hidden px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400 md:table-cell">
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
                     Date
                   </th>
-                  <th className="hidden px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400 lg:table-cell">
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
                     Address
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
                     Payment
                   </th>
-                  <th className="hidden px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400 sm:table-cell">
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
                     Product
                   </th>
                 </tr>
@@ -1151,12 +1151,12 @@ const OrdersDashboard = () => {
                             )}
                           </div>
                         </td>
-                        <td className="hidden whitespace-nowrap px-4 py-4 text-sm text-light-text dark:text-dark-text md:table-cell">
+                        <td className="whitespace-nowrap px-4 py-4 text-sm text-light-text dark:text-dark-text">
                           {new Date(
                             order.timestamp * 1000
                           ).toLocaleDateString()}
                         </td>
-                        <td className="hidden max-w-xs px-4 py-4 text-sm text-light-text dark:text-dark-text lg:table-cell">
+                        <td className="max-w-xs px-4 py-4 text-sm text-light-text dark:text-dark-text">
                           <div
                             className="truncate"
                             title={order.address || "N/A"}
@@ -1177,7 +1177,7 @@ const OrdersDashboard = () => {
                             </span>
                           )}
                         </td>
-                        <td className="hidden px-4 py-4 text-sm text-light-text dark:text-dark-text sm:table-cell">
+                        <td className="px-4 py-4 text-sm text-light-text dark:text-dark-text">
                           {order.productAddress ? (
                             <button
                               onClick={() =>
