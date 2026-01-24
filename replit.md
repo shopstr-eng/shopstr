@@ -180,6 +180,22 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### Order Status Persistence (January 23, 2026)
+
+- Added `order_status` and `order_id` columns to `message_events` table for efficient order status tracking
+- Created API endpoints for updating and retrieving order statuses (`/api/db/update-order-status`, `/api/db/get-order-statuses`)
+- Orders dashboard now loads cached statuses from database first, then updates from parsed messages
+- Status priority system prevents status downgrades (canceled > completed > shipped > confirmed > pending)
+- Status persisted to database only when parsed status has higher priority than cached
+
+### Unread/Read Indicator System (January 23, 2026)
+
+- Added `is_read` column to `message_events` table for tracking read status
+- Navbar displays styled unread count badge (purple in light mode, yellow in dark mode)
+- New order indicators in orders dashboard with colored borders during current session
+- Messages automatically marked as read when orders page opens
+- Database migration handles existing deployments
+
 ### Deployment Configuration (October 4, 2025)
 
 - Added health check endpoint at `/api/health` for Cloud Run deployment monitoring

@@ -154,6 +154,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
         {
           isOrder: true,
           orderId: orderId,
+          buyerPubkey: userPubkey,
         }
       );
 

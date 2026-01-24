@@ -491,7 +491,7 @@ export const fetchGiftWrappedChatsAndMessages = async (
               chatMessagesFromCache.set(event.id, {
                 ...event,
                 sig: event.sig || "",
-                read: true,
+                read: event.is_read === true,
               } as NostrMessageEvent);
             }
           }

@@ -95,11 +95,16 @@ async function initializeTables(): Promise<void> {
           content TEXT NOT NULL,
           sig TEXT NOT NULL,
           cached_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          is_read BOOLEAN DEFAULT FALSE,
+          order_status TEXT DEFAULT NULL,
+          order_id TEXT DEFAULT NULL,
           CONSTRAINT message_events_kind_check CHECK (kind = 1059)
       );
 
       CREATE INDEX IF NOT EXISTS idx_message_events_pubkey ON message_events(pubkey);
       CREATE INDEX IF NOT EXISTS idx_message_events_created_at ON message_events(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_message_events_is_read ON message_events(is_read);
+      CREATE INDEX IF NOT EXISTS idx_message_events_order_id ON message_events(order_id);
 
       -- Profile events (kind 0 - user profile, kind 30019 - shop profile)
       CREATE TABLE IF NOT EXISTS profile_events (
@@ -177,6 +182,35 @@ async function initializeTables(): Promise<void> {
 
       CREATE INDEX IF NOT EXISTS idx_discount_codes_pubkey ON discount_codes(pubkey);
       CREATE INDEX IF NOT EXISTS idx_discount_codes_code ON discount_codes(code);
+    `);
+
+    // Migration: Add is_read, order_status, order_id columns to existing message_events tables
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'message_events' AND column_name = 'is_read'
+        ) THEN
+          ALTER TABLE message_events ADD COLUMN is_read BOOLEAN DEFAULT FALSE;
+          CREATE INDEX IF NOT EXISTS idx_message_events_is_read ON message_events(is_read);
+        END IF;
+        
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'message_events' AND column_name = 'order_status'
+        ) THEN
+          ALTER TABLE message_events ADD COLUMN order_status TEXT DEFAULT NULL;
+        END IF;
+        
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'message_events' AND column_name = 'order_id'
+        ) THEN
+          ALTER TABLE message_events ADD COLUMN order_id TEXT DEFAULT NULL;
+          CREATE INDEX IF NOT EXISTS idx_message_events_order_id ON message_events(order_id);
+        END IF;
+      END $$;
     `);
 
     tablesInitialized = true;
@@ -699,11 +733,161 @@ export async function fetchAllReviewsFromDb(): Promise<NostrEvent[]> {
   return fetchCachedEvents(31555);
 }
 
-// Fetch all messages from database
+// Fetch all messages from database with read status
 export async function fetchAllMessagesFromDb(
   pubkey?: string
-): Promise<NostrEvent[]> {
-  return fetchCachedEvents(1059, { pubkey });
+): Promise<(NostrEvent & { is_read: boolean })[]> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    let query = `SELECT id, pubkey, created_at, kind, tags, content, sig, COALESCE(is_read, FALSE) as is_read 
+                 FROM message_events WHERE 1=1`;
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (pubkey) {
+      query += ` AND pubkey = $${paramIndex++}`;
+      params.push(pubkey);
+    }
+
+    query += " ORDER BY created_at DESC";
+
+    const result = await client.query(query, params);
+
+    return result.rows.map((row) => ({
+      id: row.id,
+      pubkey: row.pubkey,
+      created_at: row.created_at,
+      kind: row.kind,
+      tags: row.tags,
+      content: row.content,
+      sig: row.sig,
+      is_read: row.is_read,
+    }));
+  } catch (error) {
+    console.error("Failed to fetch messages from database:", error);
+    return [];
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+}
+
+// Mark messages as read in database
+export async function markMessagesAsRead(messageIds: string[]): Promise<void> {
+  if (messageIds.length === 0) return;
+
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    await client.query(
+      `UPDATE message_events SET is_read = TRUE WHERE id = ANY($1)`,
+      [messageIds]
+    );
+  } catch (error) {
+    console.error("Failed to mark messages as read:", error);
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+}
+
+// Get unread message count for a user
+export async function getUnreadMessageCount(pubkey: string): Promise<number> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT COUNT(*) FROM message_events WHERE pubkey = $1 AND (is_read = FALSE OR is_read IS NULL)`,
+      [pubkey]
+    );
+    return parseInt(result.rows[0].count, 10);
+  } catch (error) {
+    console.error("Failed to get unread message count:", error);
+    return 0;
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+}
+
+// Update order status in database
+export async function updateOrderStatus(
+  orderId: string,
+  status: string,
+  messageId?: string
+): Promise<void> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+
+    if (messageId) {
+      await client.query(
+        `UPDATE message_events SET order_status = $1, order_id = $2 WHERE id = $3`,
+        [status, orderId, messageId]
+      );
+    }
+
+    await client.query(
+      `UPDATE message_events SET order_status = $1 WHERE order_id = $2`,
+      [status, orderId]
+    );
+  } catch (error) {
+    console.error("Failed to update order status:", error);
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+}
+
+// Get order statuses from database
+export async function getOrderStatuses(
+  orderIds: string[]
+): Promise<Record<string, string>> {
+  if (orderIds.length === 0) return {};
+
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+
+    const result = await client.query(
+      `SELECT DISTINCT ON (order_id) order_id, order_status 
+       FROM message_events 
+       WHERE order_id = ANY($1) AND order_status IS NOT NULL
+       ORDER BY order_id, created_at DESC`,
+      [orderIds]
+    );
+
+    const statuses: Record<string, string> = {};
+    for (const row of result.rows) {
+      if (row.order_id && row.order_status) {
+        statuses[row.order_id] = row.order_status;
+      }
+    }
+
+    return statuses;
+  } catch (error) {
+    console.error("Failed to get order statuses:", error);
+    return {};
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
 }
 
 // Fetch all profiles from database (both user and shop profiles)

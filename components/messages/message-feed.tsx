@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useTabs } from "@/components/hooks/use-tabs";
 import { Framer } from "@/components/framer";
 import Messages from "./messages";
-import SalesDashboard from "./sales-dashboard";
+import OrdersDashboard from "./orders-dashboard";
 import { useRouter } from "next/router";
 
 const MessageFeed = ({ isInquiry = false }) => {
@@ -15,7 +15,7 @@ const MessageFeed = ({ isInquiry = false }) => {
     tabs: [
       {
         label: "Orders",
-        children: <SalesDashboard />,
+        children: <OrdersDashboard />,
         id: "orders",
       },
       {

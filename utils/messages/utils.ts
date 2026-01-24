@@ -51,7 +51,7 @@ export const countNumberOfUnreadMessagesFromChatsContext = async (
   for (const entry of chatsMap) {
     const chat = entry[1] as NostrMessageEvent[];
     chat.forEach((messageEvent: NostrMessageEvent) => {
-      if (chatsMap.get(messageEvent.id)?.read === false) {
+      if (messageEvent.read !== true) {
         numberOfUnread++;
       }
     });

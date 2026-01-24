@@ -43,6 +43,8 @@ import {
 } from "@/components/utility-components/nostr-context-provider";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
+import { fiat } from "@getalby/lightning-tools";
+import currencySelection from "@/public/currencySelection.json";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -82,16 +84,19 @@ interface OrderData {
   paymentProof?: string;
   subject?: string;
   reviewRating?: number;
+  isSale?: boolean;
+  currency?: string;
 }
 
-const SalesDashboard = () => {
+const OrdersDashboard = () => {
   const chatsContext = useContext(ChatsContext);
   const productContext = useContext(ProductContext);
   const [orders, setOrders] = useState<OrderData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [totalOrders, setTotalOrders] = useState(0);
-  const [totalGMV, setTotalGMV] = useState(0);
-  const [averageOrderSize, setAverageOrderSize] = useState(0);
+  const [cachedStatuses, setCachedStatuses] = useState<Record<string, string>>(
+    {}
+  );
   const [selectedProduct, setSelectedProduct] = useState<ProductData | null>(
     null
   );
@@ -119,6 +124,13 @@ const SalesDashboard = () => {
       ["delivery", 0],
       ["communication", 0],
     ])
+  );
+
+  const [displayCurrency, setDisplayCurrency] = useState<"sats" | "USD">(
+    "sats"
+  );
+  const [currencyRates, setCurrencyRates] = useState<Record<string, number>>(
+    {}
   );
 
   const {
@@ -166,6 +178,117 @@ const SalesDashboard = () => {
   }, []);
 
   useEffect(() => {
+    const fetchCurrencyRates = async () => {
+      const currenciesToFetch = [
+        "USD",
+        "EUR",
+        "GBP",
+        "CAD",
+        "AUD",
+        "JPY",
+        "CNY",
+        "INR",
+        "CHF",
+        "MXN",
+        "BRL",
+        "KRW",
+        "SGD",
+        "HKD",
+        "NOK",
+        "SEK",
+        "DKK",
+        "NZD",
+        "ZAR",
+        "RUB",
+        "PLN",
+        "THB",
+        "PHP",
+        "IDR",
+        "MYR",
+        "CZK",
+        "ILS",
+        "CLP",
+        "ARS",
+        "COP",
+        "PEN",
+        "VND",
+      ];
+
+      const ratePromises = currenciesToFetch.map(async (currency) => {
+        try {
+          const sats = await fiat.getSatoshiValue({ amount: 1, currency });
+          return { currency: currency.toLowerCase(), rate: sats };
+        } catch (err) {
+          console.error(`Failed to fetch rate for ${currency}:`, err);
+          return { currency: currency.toLowerCase(), rate: 0 };
+        }
+      });
+
+      const results = await Promise.all(ratePromises);
+      const rates: Record<string, number> = {};
+      for (const { currency, rate } of results) {
+        if (rate > 0) {
+          rates[currency] = rate;
+        }
+      }
+
+      setCurrencyRates(rates);
+    };
+    fetchCurrencyRates();
+  }, []);
+
+  useEffect(() => {
+    if (!chatsContext || chatsContext.isLoading) return;
+    chatsContext.markAllMessagesAsRead();
+  }, [chatsContext?.isLoading]);
+
+  useEffect(() => {
+    async function loadCachedStatuses() {
+      if (!chatsContext || chatsContext.isLoading) return;
+
+      const orderIds: string[] = [];
+      for (const entry of chatsContext.chatsMap) {
+        const chat = entry[1] as NostrMessageEvent[];
+        for (const messageEvent of chat) {
+          const tagsMap = new Map(
+            messageEvent.tags.map((tag: string[]) => [tag[0], tag[1]])
+          );
+          const subject = tagsMap.get("subject") || "";
+          if (
+            subject === "order-receipt" ||
+            subject === "payment-confirmation" ||
+            subject === "shipping-info" ||
+            subject === "order-completed"
+          ) {
+            const orderId = tagsMap.get("order") || messageEvent.id;
+            if (orderId && !orderIds.includes(orderId)) {
+              orderIds.push(orderId);
+            }
+          }
+        }
+      }
+
+      if (orderIds.length > 0) {
+        try {
+          const response = await fetch("/api/db/get-order-statuses", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ orderIds }),
+          });
+          if (response.ok) {
+            const data = await response.json();
+            setCachedStatuses(data.statuses || {});
+          }
+        } catch (err) {
+          console.error("Failed to load cached statuses:", err);
+        }
+      }
+    }
+
+    loadCachedStatuses();
+  }, [chatsContext?.isLoading, chatsContext?.chatsMap]);
+
+  useEffect(() => {
     async function loadOrders() {
       if (!chatsContext || chatsContext.isLoading) {
         return;
@@ -202,7 +325,7 @@ const SalesDashboard = () => {
             const amountStr = tagsMap.get("amount") || "0";
             const amount = parseFloat(amountStr);
             const status = tagsMap.get("status") || "pending";
-            const buyerPubkey = entry[0] as string;
+            const buyerPubkey = tagsMap.get("b") || "";
             const address = tagsMap.get("address");
 
             const paymentTagArray = messageEvent.tags.find(
@@ -223,6 +346,15 @@ const SalesDashboard = () => {
             const paymentProof = paymentProofValue;
 
             let productTitle = "Unknown Product";
+            let isSale = false;
+            let productCurrency = "sats";
+            let productPrice = 0;
+            const addressParts = productAddress.split(":");
+            const merchantPubkey =
+              addressParts.length >= 2 ? addressParts[1] : null;
+            if (merchantPubkey && merchantPubkey === userPubkey) {
+              isSale = true;
+            }
             if (productAddress && productContext?.productEvents) {
               const productEvent = productContext.productEvents.find(
                 (event) => {
@@ -235,8 +367,11 @@ const SalesDashboard = () => {
               if (productEvent) {
                 const productData = parseTags(productEvent);
                 productTitle = productData?.title || "Unknown Product";
+                productCurrency = productData?.currency || "sats";
+                productPrice = productData?.price || 0;
               }
             }
+            const finalAmount = amount > 0 ? amount : productPrice * quantity;
 
             let paymentMethod = "Not specified";
             if (paymentType) {
@@ -298,7 +433,7 @@ const SalesDashboard = () => {
               orderId,
               buyerPubkey,
               productAddress,
-              amount,
+              amount: finalAmount,
               timestamp: messageEvent.created_at,
               status,
               messageEvent,
@@ -310,6 +445,8 @@ const SalesDashboard = () => {
               paymentTag,
               paymentProof,
               subject,
+              isSale,
+              currency: productCurrency,
             });
           }
         }
@@ -321,9 +458,28 @@ const SalesDashboard = () => {
         const existing = consolidatedOrdersMap.get(order.orderId);
 
         if (!existing) {
-          consolidatedOrdersMap.set(order.orderId, order);
+          const cachedStatus = cachedStatuses[order.orderId];
+          const statusPriorityInit: Record<string, number> = {
+            canceled: 5,
+            completed: 4,
+            shipped: 3,
+            confirmed: 2,
+            pending: 1,
+          };
+          const cachedPriority = cachedStatus
+            ? statusPriorityInit[cachedStatus] || 0
+            : 0;
+          const orderPriority = statusPriorityInit[order.status] || 0;
+          consolidatedOrdersMap.set(order.orderId, {
+            ...order,
+            status:
+              cachedPriority > orderPriority && cachedStatus
+                ? cachedStatus
+                : order.status,
+          });
         } else {
           const statusPriority: Record<string, number> = {
+            canceled: 5,
             completed: 4,
             shipped: 3,
             confirmed: 2,
@@ -331,11 +487,23 @@ const SalesDashboard = () => {
           };
           const existingPriority = statusPriority[existing.status] || 0;
           const newPriority = statusPriority[order.status] || 0;
+          const cachedStatus = cachedStatuses[order.orderId];
+          const cachedPriority = cachedStatus
+            ? statusPriority[cachedStatus] || 0
+            : 0;
+
+          let finalStatus =
+            newPriority > existingPriority ? order.status : existing.status;
+          if (
+            cachedStatus &&
+            cachedPriority > (statusPriority[finalStatus] || 0)
+          ) {
+            finalStatus = cachedStatus;
+          }
 
           consolidatedOrdersMap.set(order.orderId, {
             ...existing,
-            status:
-              newPriority > existingPriority ? order.status : existing.status,
+            status: finalStatus,
             address: order.address || existing.address,
             paymentToken: order.paymentToken || existing.paymentToken,
             paymentMethod:
@@ -360,6 +528,8 @@ const SalesDashboard = () => {
               order.timestamp > existing.timestamp
                 ? order.messageEvent
                 : existing.messageEvent,
+            isSale: order.isSale ?? existing.isSale,
+            currency: order.currency || existing.currency,
           });
         }
       }
@@ -367,32 +537,117 @@ const SalesDashboard = () => {
       const consolidatedOrders = Array.from(consolidatedOrdersMap.values());
       consolidatedOrders.sort((a, b) => b.timestamp - a.timestamp);
 
-      const total = consolidatedOrders.length;
-      const gmv = consolidatedOrders.reduce(
-        (sum, order) => sum + order.amount,
-        0
-      );
-      const avg = total > 0 ? gmv / total : 0;
-
       setOrders(consolidatedOrders);
-      setTotalOrders(total);
-      setTotalGMV(gmv);
-      setAverageOrderSize(avg);
+      setTotalOrders(consolidatedOrders.length);
       setIsLoading(false);
+
+      const statusPriorityForPersist: Record<string, number> = {
+        canceled: 5,
+        completed: 4,
+        shipped: 3,
+        confirmed: 2,
+        pending: 1,
+      };
+      for (const order of consolidatedOrders) {
+        if (order.status && order.orderId) {
+          const currentPriority = statusPriorityForPersist[order.status] || 0;
+          const cachedStatusValue = cachedStatuses[order.orderId];
+          const cachedPriority = cachedStatusValue
+            ? statusPriorityForPersist[cachedStatusValue] || 0
+            : 0;
+          if (currentPriority > cachedPriority) {
+            fetch("/api/db/update-order-status", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                orderId: order.orderId,
+                status: order.status,
+                messageId: order.messageEvent?.id,
+              }),
+            }).catch((err) =>
+              console.error("Failed to save order status:", err)
+            );
+          }
+        }
+      }
     }
 
     loadOrders();
-  }, [chatsContext, productContext]);
+  }, [chatsContext, productContext, cachedStatuses]);
+
+  const convertToSats = (amount: number, currency: string): number => {
+    const curr = currency?.toLowerCase() || "sats";
+    if (curr === "sats" || curr === "sat" || curr === "satoshi") return amount;
+    if (curr === "btc") return Math.round(amount * 100000000);
+
+    const upperCurrency = currency.toUpperCase();
+    if (!currencySelection.hasOwnProperty(upperCurrency)) {
+      return amount;
+    }
+
+    const rate = currencyRates[curr];
+    if (rate && rate > 0) {
+      return Math.round(amount * rate);
+    }
+    return amount;
+  };
+
+  const convertToUSD = (amount: number, currency: string): number => {
+    const usdRate = currencyRates["usd"];
+    if (!usdRate || usdRate === 0) return amount;
+
+    const curr = currency?.toLowerCase() || "sats";
+    if (curr === "usd") return amount;
+    if (curr === "sats" || curr === "sat" || curr === "satoshi") {
+      return amount / usdRate;
+    }
+    if (curr === "btc") return (amount * 100000000) / usdRate;
+
+    const upperCurrency = currency.toUpperCase();
+    if (!currencySelection.hasOwnProperty(upperCurrency)) {
+      return amount;
+    }
+
+    const currRate = currencyRates[curr];
+    if (currRate && currRate > 0) {
+      const sats = amount * currRate;
+      return sats / usdRate;
+    }
+    return amount;
+  };
+
+  const getConvertedAmount = (amount: number, currency: string): number => {
+    if (displayCurrency === "sats") {
+      return convertToSats(amount, currency);
+    } else {
+      return convertToUSD(amount, currency);
+    }
+  };
+
+  const getDisplayedGMV = (): number => {
+    return orders.reduce((sum, order) => {
+      return sum + getConvertedAmount(order.amount, order.currency || "sats");
+    }, 0);
+  };
+
+  const getDisplayedAverage = (): number => {
+    const gmv = getDisplayedGMV();
+    return orders.length > 0 ? gmv / orders.length : 0;
+  };
 
   const getChartData = () => {
-    const ordersByDate: { [key: string]: number } = {};
+    const valueByDate: { [key: string]: number } = {};
 
     orders.forEach((order) => {
       const date = new Date(order.timestamp * 1000).toLocaleDateString();
-      ordersByDate[date] = (ordersByDate[date] || 0) + 1;
+      const convertedAmount = getConvertedAmount(
+        order.amount,
+        order.currency || "sats"
+      );
+      valueByDate[date] = (valueByDate[date] || 0) + convertedAmount;
     });
 
-    const sortedDates = Object.keys(ordersByDate).sort(
+    const sortedDates = Object.keys(valueByDate).sort(
       (a, b) => new Date(a).getTime() - new Date(b).getTime()
     );
 
@@ -400,8 +655,8 @@ const SalesDashboard = () => {
       labels: sortedDates,
       datasets: [
         {
-          label: "Orders",
-          data: sortedDates.map((date) => ordersByDate[date]),
+          label: displayCurrency === "sats" ? "Satoshi Value" : "USD Value",
+          data: sortedDates.map((date) => valueByDate[date]),
           borderColor: "rgb(147, 51, 234)",
           backgroundColor: "rgba(147, 51, 234, 0.5)",
           tension: 0.3,
@@ -419,7 +674,10 @@ const SalesDashboard = () => {
       },
       title: {
         display: true,
-        text: "Order Volume Over Time",
+        text:
+          displayCurrency === "sats"
+            ? "Total Satoshi Value Over Time"
+            : "Total USD Value Over Time",
       },
     },
   };
@@ -517,6 +775,7 @@ const SalesDashboard = () => {
           tracking: trackingNumber,
           carrier: shippingCarrier,
           eta: futureTimestamp,
+          buyerPubkey: selectedOrder.buyerPubkey,
         }
       );
 
@@ -544,6 +803,18 @@ const SalesDashboard = () => {
             ? { ...order, status: "shipped" }
             : order
         )
+      );
+
+      // Persist status to database
+      fetch("/api/db/update-order-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: selectedOrder.orderId,
+          status: "shipped",
+        }),
+      }).catch((err) =>
+        console.error("Failed to persist shipped status:", err)
       );
 
       handleCloseShippingModal();
@@ -684,7 +955,7 @@ const SalesDashboard = () => {
     <div className="w-full min-w-0 bg-light-bg px-2 py-4 dark:bg-dark-bg sm:px-4 sm:py-6">
       <div className="mx-auto w-full min-w-0 max-w-full">
         <h1 className="mb-6 text-3xl font-bold text-light-text dark:text-dark-text">
-          Sales Dashboard
+          Orders Dashboard
         </h1>
 
         <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
@@ -702,7 +973,12 @@ const SalesDashboard = () => {
               Total GMV
             </h3>
             <p className="text-3xl font-bold text-light-text dark:text-dark-text">
-              {totalGMV.toLocaleString()} sats
+              {displayCurrency === "sats"
+                ? `${getDisplayedGMV().toLocaleString()} sats`
+                : `$${getDisplayedGMV().toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}`}
             </p>
           </div>
 
@@ -711,7 +987,12 @@ const SalesDashboard = () => {
               Average Order Size
             </h3>
             <p className="text-3xl font-bold text-light-text dark:text-dark-text">
-              {averageOrderSize.toFixed(0)} sats
+              {displayCurrency === "sats"
+                ? `${getDisplayedAverage().toFixed(0)} sats`
+                : `$${getDisplayedAverage().toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}`}
             </p>
           </div>
         </div>
@@ -724,16 +1005,19 @@ const SalesDashboard = () => {
           </div>
         )}
 
-        <div className="relative overflow-x-auto rounded-lg shadow-md">
-          <div className="max-h-[70vh]">
-            <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400">
+        <div className="relative w-full overflow-hidden rounded-lg shadow-md">
+          <div className="max-h-[70vh] overflow-x-auto">
+            <table className="min-w-full text-left text-sm text-gray-500 dark:text-gray-400">
               <thead className="border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
                     Order ID
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
-                    Buyer
+                    Type
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                    Buyer/Seller
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
                     Amount
@@ -759,113 +1043,188 @@ const SalesDashboard = () => {
                 {orders.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={9}
                       className="px-6 py-4 text-center text-gray-500 dark:text-gray-400"
                     >
                       No orders yet
                     </td>
                   </tr>
                 ) : (
-                  orders.map((order) => (
-                    <tr
-                      key={order.orderId}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-700"
-                    >
-                      <td className="whitespace-nowrap px-4 py-4 text-sm text-light-text dark:text-dark-text">
-                        <div className="flex flex-col gap-1">
-                          <span>{order.orderId.substring(0, 8)}...</span>
-                          {order.reviewRating !== undefined ? (
-                            <span className="text-xs text-shopstr-purple-light underline dark:text-shopstr-yellow-light">
-                              Rating: {order.reviewRating.toFixed(1)}
-                            </span>
-                          ) : canShowReviewButton(order) ? (
-                            <button
-                              onClick={() => handleOpenReviewModal(order)}
-                              className="cursor-pointer text-left text-xs text-shopstr-purple-light underline hover:text-shopstr-purple dark:text-shopstr-yellow-light dark:hover:text-shopstr-yellow"
-                            >
-                              Leave Review
-                            </button>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 text-sm">
-                        <ProfileWithDropdown
-                          pubkey={order.buyerPubkey}
-                          dropDownKeys={[]}
-                          nameClassname="block"
-                        />
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-4 text-sm text-light-text dark:text-dark-text">
-                        {order.amount.toLocaleString()} sats
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-4 text-sm">
-                        <div className="flex flex-col gap-1">
+                  orders.map((order) => {
+                    const isNewOrder = chatsContext.newOrderIds.has(
+                      order.messageEvent.id
+                    );
+                    return (
+                      <tr
+                        key={order.orderId}
+                        className={`hover:bg-gray-50 dark:hover:bg-gray-700 ${
+                          isNewOrder
+                            ? "border-l-4 border-l-shopstr-purple dark:border-l-shopstr-yellow"
+                            : ""
+                        }`}
+                      >
+                        <td className="whitespace-nowrap px-4 py-4 text-sm text-light-text dark:text-dark-text">
+                          <div className="flex flex-col gap-1">
+                            <span>{order.orderId.substring(0, 8)}...</span>
+                            {order.reviewRating !== undefined ? (
+                              <span className="text-xs text-shopstr-purple-light underline dark:text-shopstr-yellow-light">
+                                Rating: {order.reviewRating.toFixed(1)}
+                              </span>
+                            ) : canShowReviewButton(order) ? (
+                              <button
+                                onClick={() => handleOpenReviewModal(order)}
+                                className="cursor-pointer text-left text-xs text-shopstr-purple-light underline hover:text-shopstr-purple dark:text-shopstr-yellow-light dark:hover:text-shopstr-yellow"
+                              >
+                                Leave Review
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-4 text-sm">
                           <span
                             className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
-                              order.status === "completed"
-                                ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
-                                : order.status === "shipped"
-                                  ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                                  : order.status === "pending"
-                                    ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-                                    : "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
+                              order.isSale
+                                ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
+                                : "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
                             }`}
                           >
-                            {order.status}
+                            {order.isSale ? "Sale" : "Purchase"}
                           </span>
-                          {order.status === "pending" && (
-                            <button
-                              onClick={() => handleOpenShippingModal(order)}
-                              className="cursor-pointer text-left text-xs text-shopstr-purple-light underline hover:text-shopstr-purple dark:text-shopstr-yellow-light dark:hover:text-shopstr-yellow"
+                        </td>
+                        <td className="px-4 py-4 text-sm">
+                          {(() => {
+                            const displayPubkey = order.isSale
+                              ? order.buyerPubkey
+                              : order.productAddress.split(":")[1] ||
+                                order.buyerPubkey;
+                            return displayPubkey ? (
+                              <ProfileWithDropdown
+                                pubkey={displayPubkey}
+                                dropDownKeys={["shop", "inquiry", "copy_npub"]}
+                                nameClassname="block"
+                              />
+                            ) : (
+                              <span className="text-gray-500 dark:text-gray-400">
+                                Not available
+                              </span>
+                            );
+                          })()}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-4 text-sm text-light-text dark:text-dark-text">
+                          {order.amount > 0
+                            ? displayCurrency === "sats"
+                              ? `${getConvertedAmount(
+                                  order.amount,
+                                  order.currency || "sats"
+                                ).toLocaleString()} sats`
+                              : `$${getConvertedAmount(
+                                  order.amount,
+                                  order.currency || "sats"
+                                ).toLocaleString(undefined, {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}`
+                            : "N/A"}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-4 text-sm">
+                          <div className="flex flex-col gap-1">
+                            <span
+                              className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
+                                order.status === "completed"
+                                  ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                                  : order.status === "shipped"
+                                    ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                                    : order.status === "pending"
+                                      ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+                                      : "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200"
+                              }`}
                             >
-                              Send Shipping Update
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                      <td className="hidden whitespace-nowrap px-4 py-4 text-sm text-light-text dark:text-dark-text md:table-cell">
-                        {new Date(order.timestamp * 1000).toLocaleDateString()}
-                      </td>
-                      <td className="hidden max-w-xs px-4 py-4 text-sm text-light-text dark:text-dark-text lg:table-cell">
-                        <div
-                          className="truncate"
-                          title={order.address || "N/A"}
-                        >
-                          {order.address || "N/A"}
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 text-sm">
-                        {order.subject === "order-receipt" ? (
-                          <span className="text-green-600 dark:text-green-400">
-                            Payment Sent
-                          </span>
-                        ) : order.paymentToken ? (
-                          <ClaimButton token={order.paymentToken} />
-                        ) : (
-                          <span className="text-gray-600 dark:text-gray-400">
-                            {order.paymentMethod}
-                          </span>
-                        )}
-                      </td>
-                      <td className="hidden px-4 py-4 text-sm text-light-text dark:text-dark-text sm:table-cell">
-                        {order.productAddress ? (
-                          <button
-                            onClick={() =>
-                              handleProductClick(order.productAddress)
-                            }
-                            className="cursor-pointer text-left underline hover:text-purple-600 dark:hover:text-purple-400"
+                              {order.status}
+                            </span>
+                            {order.status === "pending" && (
+                              <button
+                                onClick={() => handleOpenShippingModal(order)}
+                                className="cursor-pointer text-left text-xs text-shopstr-purple-light underline hover:text-shopstr-purple dark:text-shopstr-yellow-light dark:hover:text-shopstr-yellow"
+                              >
+                                Send Shipping Update
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                        <td className="hidden whitespace-nowrap px-4 py-4 text-sm text-light-text dark:text-dark-text md:table-cell">
+                          {new Date(
+                            order.timestamp * 1000
+                          ).toLocaleDateString()}
+                        </td>
+                        <td className="hidden max-w-xs px-4 py-4 text-sm text-light-text dark:text-dark-text lg:table-cell">
+                          <div
+                            className="truncate"
+                            title={order.address || "N/A"}
                           >
-                            {order.productTitle} x {order.quantity || 1}
-                          </button>
-                        ) : (
-                          "N/A"
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                            {order.address || "N/A"}
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 text-sm">
+                          {order.subject === "order-receipt" ? (
+                            <span className="text-green-600 dark:text-green-400">
+                              Payment Sent
+                            </span>
+                          ) : order.paymentToken ? (
+                            <ClaimButton token={order.paymentToken} />
+                          ) : (
+                            <span className="text-gray-600 dark:text-gray-400">
+                              {order.paymentMethod}
+                            </span>
+                          )}
+                        </td>
+                        <td className="hidden px-4 py-4 text-sm text-light-text dark:text-dark-text sm:table-cell">
+                          {order.productAddress ? (
+                            <button
+                              onClick={() =>
+                                handleProductClick(order.productAddress)
+                              }
+                              className="cursor-pointer text-left underline hover:text-purple-600 dark:hover:text-purple-400"
+                            >
+                              {order.productTitle} x {order.quantity || 1}
+                            </button>
+                          ) : (
+                            "N/A"
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-center justify-end gap-3">
+          <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+            Currency Displayed:
+          </span>
+          <div className="inline-flex rounded-lg bg-gray-100 p-1 dark:bg-gray-700">
+            <button
+              onClick={() => setDisplayCurrency("sats")}
+              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+                displayCurrency === "sats"
+                  ? "bg-purple-600 text-white shadow-sm"
+                  : "text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
+              }`}
+            >
+              sats
+            </button>
+            <button
+              onClick={() => setDisplayCurrency("USD")}
+              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+                displayCurrency === "USD"
+                  ? "bg-purple-600 text-white shadow-sm"
+                  : "text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
+              }`}
+            >
+              USD
+            </button>
           </div>
         </div>
       </div>
@@ -1165,4 +1524,4 @@ const SalesDashboard = () => {
   );
 };
 
-export default SalesDashboard;
+export default OrdersDashboard;

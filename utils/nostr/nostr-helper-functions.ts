@@ -258,6 +258,7 @@ export async function constructGiftWrappedEvent(
     isOrder?: boolean;
     contact?: string;
     address?: string;
+    buyerPubkey?: string;
   } = {}
 ): Promise<GiftWrappedMessageEvent> {
   const { relays } = getLocalStorageData();
@@ -279,6 +280,7 @@ export async function constructGiftWrappedEvent(
     isOrder,
     contact,
     address,
+    buyerPubkey,
   } = options;
 
   const tags = [
@@ -290,6 +292,7 @@ export async function constructGiftWrappedEvent(
   if (isOrder) {
     tags.push(["order", orderId ? orderId : uuidv4()]);
 
+    if (buyerPubkey) tags.push(["b", buyerPubkey]);
     if (type) tags.push(["type", type.toString()]);
     if (orderAmount) tags.push(["amount", orderAmount.toString()]);
     // Add payment tag with format: ["payment", paymentType, paymentReference, paymentProof?]

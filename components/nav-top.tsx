@@ -131,7 +131,12 @@ const TopNav = ({
         className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
         onClick={() => handleRoute("/orders")}
       >
-        Orders {unreadMsgCount > 0 && `(${unreadMsgCount})`}
+        Orders
+        {unreadMsgCount > 0 && (
+          <span className="min-w-5 ml-1 inline-flex h-5 items-center justify-center rounded-full bg-shopstr-purple px-1.5 text-xs font-bold text-white dark:bg-shopstr-yellow dark:text-dark-bg">
+            {unreadMsgCount}
+          </span>
+        )}
       </Button>
       <Button
         className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
@@ -149,7 +154,12 @@ const TopNav = ({
         className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
         onClick={() => handleRoute("/cart")}
       >
-        Cart {cartQuantity > 0 && `(${cartQuantity})`}
+        Cart
+        {cartQuantity > 0 && (
+          <span className="min-w-5 ml-1 inline-flex h-5 items-center justify-center rounded-full bg-shopstr-purple px-1.5 text-xs font-bold text-white dark:bg-shopstr-yellow dark:text-dark-bg">
+            {cartQuantity}
+          </span>
+        )}
       </Button>
     </div>
   );
@@ -229,7 +239,12 @@ const TopNav = ({
             className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
             onClick={() => handleRoute("/orders")}
           >
-            Orders {unreadMsgCount > 0 && `(${unreadMsgCount})`}
+            Orders
+            {unreadMsgCount > 0 && (
+              <span className="min-w-5 ml-1 inline-flex h-5 items-center justify-center rounded-full bg-shopstr-purple px-1.5 text-xs font-bold text-white dark:bg-shopstr-yellow dark:text-dark-bg">
+                {unreadMsgCount}
+              </span>
+            )}
           </Button>
           |
           <Button
@@ -250,7 +265,12 @@ const TopNav = ({
             className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
             onClick={() => handleRoute("/cart")}
           >
-            Cart {cartQuantity > 0 && `(${cartQuantity})`}
+            Cart
+            {cartQuantity > 0 && (
+              <span className="min-w-5 ml-1 inline-flex h-5 items-center justify-center rounded-full bg-shopstr-purple px-1.5 text-xs font-bold text-white dark:bg-shopstr-yellow dark:text-dark-bg">
+                {cartQuantity}
+              </span>
+            )}
           </Button>
           |
           {signedIn ? (

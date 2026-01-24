@@ -285,6 +285,8 @@ export default function ProductInvoiceCard({
     const decodedRandomPubkeyForReceiver = nip19.decode(randomNpubForReceiver);
     const decodedRandomPrivkeyForReceiver = nip19.decode(randomNsecForReceiver);
 
+    const buyerPubkey = await signer?.getPubKey?.();
+
     let messageSubject = "";
     let messageOptions: any = {};
     if (isPayment) {
@@ -302,12 +304,14 @@ export default function ProductInvoiceCard({
         paymentType,
         paymentReference,
         contact,
+        buyerPubkey,
       };
     } else if (isReceipt) {
       messageSubject = "order-receipt";
       messageOptions = {
         isOrder: true,
         type: 4,
+        orderAmount: messageAmount ? messageAmount : productData.totalCost,
         orderId,
         productData: {
           ...productData,
@@ -318,6 +322,7 @@ export default function ProductInvoiceCard({
         paymentType,
         paymentReference,
         paymentProof,
+        buyerPubkey,
       };
     } else if (isDonation) {
       messageSubject = "donation";
@@ -326,7 +331,7 @@ export default function ProductInvoiceCard({
       messageOptions = {
         isOrder: true,
         type: 1,
-        orderAmount: messageAmount ? messageAmount : undefined,
+        orderAmount: messageAmount ? messageAmount : productData.totalCost,
         orderId,
         productData: {
           ...productData,
@@ -336,6 +341,7 @@ export default function ProductInvoiceCard({
         quantity: 1,
         contact,
         address,
+        buyerPubkey,
       };
     }
 
