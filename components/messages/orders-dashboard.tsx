@@ -957,9 +957,38 @@ const OrdersDashboard = () => {
   return (
     <div className="min-w-0 max-w-[98vw] bg-light-bg px-4 py-4 dark:bg-dark-bg sm:py-6">
       <div className="mx-auto w-full min-w-0 max-w-full">
-        <h1 className="mb-6 text-3xl font-bold text-light-text dark:text-dark-text">
-          Orders Dashboard
-        </h1>
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+          <h1 className="text-3xl font-bold text-light-text dark:text-dark-text">
+            Orders Dashboard
+          </h1>
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+              Currency Displayed:
+            </span>
+            <div className="inline-flex rounded-lg bg-gray-100 p-1 dark:bg-gray-700">
+              <button
+                onClick={() => setDisplayCurrency("sats")}
+                className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+                  displayCurrency === "sats"
+                    ? "bg-purple-600 text-white shadow-sm"
+                    : "text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
+                }`}
+              >
+                sats
+              </button>
+              <button
+                onClick={() => setDisplayCurrency("USD")}
+                className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
+                  displayCurrency === "USD"
+                    ? "bg-purple-600 text-white shadow-sm"
+                    : "text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
+                }`}
+              >
+                USD
+              </button>
+            </div>
+          </div>
+        </div>
 
         <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
           <div className="rounded-lg bg-white p-6 shadow-md dark:bg-gray-800">
@@ -1211,34 +1240,6 @@ const OrdersDashboard = () => {
                 )}
               </tbody>
             </table>
-          </div>
-        </div>
-
-        <div className="mt-4 flex items-center justify-end gap-3">
-          <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
-            Currency Displayed:
-          </span>
-          <div className="inline-flex rounded-lg bg-gray-100 p-1 dark:bg-gray-700">
-            <button
-              onClick={() => setDisplayCurrency("sats")}
-              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-                displayCurrency === "sats"
-                  ? "bg-purple-600 text-white shadow-sm"
-                  : "text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
-              }`}
-            >
-              sats
-            </button>
-            <button
-              onClick={() => setDisplayCurrency("USD")}
-              className={`rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-                displayCurrency === "USD"
-                  ? "bg-purple-600 text-white shadow-sm"
-                  : "text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
-              }`}
-            >
-              USD
-            </button>
           </div>
         </div>
       </div>
