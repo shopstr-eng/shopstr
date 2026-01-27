@@ -87,6 +87,8 @@ interface OrderData {
   reviewRating?: number;
   isSale?: boolean;
   currency?: string;
+  donationAmount?: number;
+  donationPercentage?: number;
 }
 
 const OrdersDashboard = () => {
@@ -330,6 +332,18 @@ const OrdersDashboard = () => {
             const address = tagsMap.get("address");
             const pickupLocation = tagsMap.get("pickup");
 
+            const donationTagArray = messageEvent.tags.find(
+              (tag) => tag[0] === "donation_amount"
+            );
+            const donationAmount =
+              donationTagArray && donationTagArray[1]
+                ? parseFloat(donationTagArray[1])
+                : undefined;
+            const donationPercentage =
+              donationTagArray && donationTagArray[2]
+                ? parseFloat(donationTagArray[2])
+                : undefined;
+
             const paymentTagArray = messageEvent.tags.find(
               (tag) => tag[0] === "payment"
             );
@@ -450,6 +464,8 @@ const OrdersDashboard = () => {
               subject,
               isSale,
               currency: productCurrency,
+              donationAmount,
+              donationPercentage,
             });
           }
         }
@@ -533,6 +549,9 @@ const OrdersDashboard = () => {
                 : existing.messageEvent,
             isSale: order.isSale ?? existing.isSale,
             currency: order.currency || existing.currency,
+            donationAmount: order.donationAmount ?? existing.donationAmount,
+            donationPercentage:
+              order.donationPercentage ?? existing.donationPercentage,
           });
         }
       }
@@ -1072,13 +1091,16 @@ const OrdersDashboard = () => {
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
                     Product
                   </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                    Donation Amount
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                 {orders.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={10}
+                      colSpan={11}
                       className="px-6 py-4 text-center text-gray-500 dark:text-gray-400"
                     >
                       No orders yet
@@ -1233,6 +1255,31 @@ const OrdersDashboard = () => {
                           ) : (
                             "N/A"
                           )}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-4 text-sm text-light-text dark:text-dark-text">
+                          {order.donationAmount !== undefined &&
+                          order.donationAmount > 0
+                            ? displayCurrency === "sats"
+                              ? `${getConvertedAmount(
+                                  order.donationAmount,
+                                  order.currency || "sats"
+                                ).toLocaleString()} sats${
+                                  order.donationPercentage !== undefined
+                                    ? ` (${order.donationPercentage}%)`
+                                    : ""
+                                }`
+                              : `$${getConvertedAmount(
+                                  order.donationAmount,
+                                  order.currency || "sats"
+                                ).toLocaleString(undefined, {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}${
+                                  order.donationPercentage !== undefined
+                                    ? ` (${order.donationPercentage}%)`
+                                    : ""
+                                }`
+                            : "N/A"}
                         </td>
                       </tr>
                     );

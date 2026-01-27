@@ -297,7 +297,9 @@ export default function ProductInvoiceCard({
     messageAmount?: number,
     contact?: string,
     address?: string,
-    pickup?: string
+    pickup?: string,
+    donationAmountValue?: number,
+    donationPercentageValue?: number
   ) => {
     const decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
     const decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
@@ -326,6 +328,8 @@ export default function ProductInvoiceCard({
         address,
         pickup,
         buyerPubkey,
+        donationAmount: donationAmountValue,
+        donationPercentage: donationPercentageValue,
       };
     } else if (isReceipt) {
       messageSubject = "order-receipt";
@@ -346,6 +350,8 @@ export default function ProductInvoiceCard({
         address,
         pickup,
         buyerPubkey,
+        donationAmount: donationAmountValue,
+        donationPercentage: donationPercentageValue,
       };
     } else if (isDonation) {
       messageSubject = "donation";
@@ -366,6 +372,8 @@ export default function ProductInvoiceCard({
         address,
         pickup,
         buyerPubkey,
+        donationAmount: donationAmountValue,
+        donationPercentage: donationPercentageValue,
       };
     }
 
@@ -1392,7 +1400,9 @@ export default function ProductInvoiceCard({
               unusedAmount,
               undefined,
               undefined,
-              selectedPickupLocation || undefined
+              selectedPickupLocation || undefined,
+              donationAmount,
+              donationPercentage
             );
           }
         }
@@ -1440,7 +1450,9 @@ export default function ProductInvoiceCard({
           sellerAmount,
           undefined,
           undefined,
-          selectedPickupLocation || undefined
+          selectedPickupLocation || undefined,
+          donationAmount,
+          donationPercentage
         );
       }
     }
@@ -1473,7 +1485,16 @@ export default function ProductInvoiceCard({
           false,
           false,
           false,
-          orderId
+          orderId,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          donationAmount,
+          donationPercentage
         );
         await new Promise((resolve) => setTimeout(resolve, 500));
       } catch (error) {
@@ -1567,7 +1588,10 @@ export default function ProductInvoiceCard({
           undefined,
           undefined,
           undefined,
-          addressTagForShipping
+          addressTagForShipping,
+          undefined,
+          donationAmount,
+          donationPercentage
         );
 
         if (userPubkey) {
@@ -1591,7 +1615,9 @@ export default function ProductInvoiceCard({
             undefined,
             undefined,
             addressTagForShipping,
-            selectedPickupLocation || undefined
+            selectedPickupLocation || undefined,
+            donationAmount,
+            donationPercentage
           );
         }
       }
@@ -1642,7 +1668,9 @@ export default function ProductInvoiceCard({
           undefined,
           undefined,
           undefined,
-          selectedPickupLocation || undefined
+          selectedPickupLocation || undefined,
+          donationAmount,
+          donationPercentage
         );
       }
     } else if (userPubkey) {
@@ -1686,7 +1714,9 @@ export default function ProductInvoiceCard({
         undefined,
         undefined,
         undefined,
-        selectedPickupLocation || undefined
+        selectedPickupLocation || undefined,
+        donationAmount,
+        donationPercentage
       );
     }
   };

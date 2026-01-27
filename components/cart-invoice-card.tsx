@@ -330,7 +330,9 @@ export default function CartInvoiceCard({
     productQuantity?: number,
     contact?: string,
     address?: string,
-    pickup?: string
+    pickup?: string,
+    donationAmountValue?: number,
+    donationPercentageValue?: number
   ) => {
     const newKeys = await generateNewKeys();
     if (!newKeys) {
@@ -355,7 +357,9 @@ export default function CartInvoiceCard({
       newKeys,
       contact,
       address,
-      pickup
+      pickup,
+      donationAmountValue,
+      donationPercentageValue
     );
   };
 
@@ -380,7 +384,9 @@ export default function CartInvoiceCard({
     },
     contact?: string,
     address?: string,
-    pickup?: string
+    pickup?: string,
+    donationAmountValue?: number,
+    donationPercentageValue?: number
   ) => {
     if (!keys) {
       setFailureText("Message keys are required!");
@@ -417,6 +423,8 @@ export default function CartInvoiceCard({
         address,
         buyerPubkey,
         pickup,
+        donationAmount: donationAmountValue,
+        donationPercentage: donationPercentageValue,
       };
     } else if (isReceipt) {
       messageSubject = "order-receipt";
@@ -433,6 +441,8 @@ export default function CartInvoiceCard({
         address,
         buyerPubkey,
         pickup,
+        donationAmount: donationAmountValue,
+        donationPercentage: donationPercentageValue,
       };
     } else if (isDonation) {
       messageSubject = "donation";
@@ -449,6 +459,8 @@ export default function CartInvoiceCard({
         address,
         buyerPubkey,
         pickup,
+        donationAmount: donationAmountValue,
+        donationPercentage: donationPercentageValue,
       };
     }
 
@@ -951,6 +963,13 @@ export default function CartInvoiceCard({
       if (tokenAmount) {
         orderInfoTags.push(["amount", tokenAmount.toString()]);
       }
+      if (donationAmount > 0) {
+        orderInfoTags.push([
+          "donation_amount",
+          donationAmount.toString(),
+          donationPercentage.toString(),
+        ]);
+      }
       orderInfoMessage.tags = orderInfoTags;
 
       // Construct payment message with cashu token tag
@@ -987,6 +1006,13 @@ export default function CartInvoiceCard({
         ];
         if (sellerAmount) {
           paymentTags.push(["amount", sellerAmount.toString()]);
+        }
+        if (donationAmount > 0) {
+          paymentTags.push([
+            "donation_amount",
+            donationAmount.toString(),
+            donationPercentage.toString(),
+          ]);
         }
         paymentMessageText.tags = paymentTags;
       }
@@ -1337,7 +1363,12 @@ export default function CartInvoiceCard({
             undefined,
             undefined,
             undefined,
-            orderKeys
+            orderKeys,
+            undefined,
+            undefined,
+            undefined,
+            donationAmount,
+            donationPercentage
           );
           await new Promise((resolve) => setTimeout(resolve, 500));
         } catch (error) {
@@ -1458,7 +1489,9 @@ export default function CartInvoiceCard({
             orderKeys,
             undefined,
             addressTagForShipping,
-            pickupLocation || undefined
+            pickupLocation || undefined,
+            donationAmount,
+            donationPercentage
           );
 
           if (userPubkey) {
@@ -1485,7 +1518,9 @@ export default function CartInvoiceCard({
               orderKeys,
               undefined,
               shippingAddressTag,
-              pickupLocation || undefined
+              pickupLocation || undefined,
+              donationAmount,
+              donationPercentage
             );
           }
         }
@@ -1544,7 +1579,9 @@ export default function CartInvoiceCard({
             orderKeys,
             undefined,
             shippingAddressTag,
-            pickupLocation || undefined
+            pickupLocation || undefined,
+            donationAmount,
+            donationPercentage
           );
         }
       } else if (userPubkey) {
@@ -1596,7 +1633,9 @@ export default function CartInvoiceCard({
           orderKeys,
           undefined,
           shippingAddressTag,
-          pickupLocation || undefined
+          pickupLocation || undefined,
+          donationAmount,
+          donationPercentage
         );
       }
     }
