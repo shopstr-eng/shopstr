@@ -189,10 +189,16 @@ function Shopstr({ props }: { props: AppProps }) {
 
   const [chatsMap, setChatMap] = useState(new Map());
   const [isChatLoading, setIsChatLoading] = useState(true);
+  const [newOrderIds, setNewOrderIds] = useState<Set<string>>(new Set());
+
   const addNewlyCreatedMessageEvent = useCallback(
     async (messageEvent: NostrMessageEvent, sent?: boolean) => {
       const pubkey = await signer?.getPubKey();
       const newChatsMap = new Map(chatsMap);
+      const eventWithReadStatus = {
+        ...messageEvent,
+        read: sent ? true : false,
+      };
       let chatArray;
       if (messageEvent.pubkey === pubkey) {
         const recipientPubkey = messageEvent.tags.find(
@@ -201,18 +207,18 @@ function Shopstr({ props }: { props: AppProps }) {
         if (recipientPubkey) {
           chatArray = newChatsMap.get(recipientPubkey) || [];
           if (sent) {
-            chatArray.push(messageEvent);
+            chatArray.push(eventWithReadStatus);
           } else {
-            chatArray = [messageEvent, ...chatArray];
+            chatArray = [eventWithReadStatus, ...chatArray];
           }
           newChatsMap.set(recipientPubkey, chatArray);
         }
       } else {
         chatArray = newChatsMap.get(messageEvent.pubkey) || [];
         if (sent) {
-          chatArray.push(messageEvent);
+          chatArray.push(eventWithReadStatus);
         } else {
-          chatArray = [messageEvent, ...chatArray];
+          chatArray = [eventWithReadStatus, ...chatArray];
         }
         newChatsMap.set(messageEvent.pubkey, chatArray);
       }
@@ -221,6 +227,46 @@ function Shopstr({ props }: { props: AppProps }) {
     },
     [chatsMap, signer]
   );
+
+  const markAllMessagesAsRead = useCallback(async (): Promise<string[]> => {
+    const unreadMessageIds: string[] = [];
+
+    for (const [_, messages] of chatsMap) {
+      for (const message of messages as NostrMessageEvent[]) {
+        if (!message.read) {
+          unreadMessageIds.push(message.id);
+        }
+      }
+    }
+
+    if (unreadMessageIds.length > 0) {
+      try {
+        await fetch("/api/db/mark-messages-read", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messageIds: unreadMessageIds }),
+        });
+
+        setNewOrderIds(new Set(unreadMessageIds));
+
+        const newChatsMap = new Map(chatsMap);
+        for (const [pubkey, messages] of newChatsMap) {
+          const updatedMessages = (messages as NostrMessageEvent[]).map(
+            (msg) => ({
+              ...msg,
+              read: true,
+            })
+          );
+          newChatsMap.set(pubkey, updatedMessages);
+        }
+        setChatMap(newChatsMap);
+      } catch (error) {
+        console.error("Failed to mark messages as read:", error);
+      }
+    }
+
+    return unreadMessageIds;
+  }, [chatsMap]);
 
   const [followsContext, setFollowsContext] = useState<FollowsContextInterface>(
     {
@@ -652,6 +698,8 @@ function Shopstr({ props }: { props: AppProps }) {
                               isLoading: isChatLoading,
                               addNewlyCreatedMessageEvent:
                                 addNewlyCreatedMessageEvent,
+                              markAllMessagesAsRead: markAllMessagesAsRead,
+                              newOrderIds: newOrderIds,
                             } as ChatsContextInterface
                           }
                         >

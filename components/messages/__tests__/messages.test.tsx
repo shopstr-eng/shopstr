@@ -11,7 +11,6 @@ import Messages from "../messages";
 import { ChatsContext } from "../../../utils/context/context";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import * as nostrHelper from "@/utils/nostr/nostr-helper-functions";
-import * as cacheService from "@/utils/nostr/cache-service";
 import * as keypressHandler from "@/utils/keypress-handler";
 import { useRouter } from "next/router";
 
@@ -82,11 +81,9 @@ jest.mock("nostr-tools", () => ({
 }));
 
 jest.mock("@/utils/nostr/nostr-helper-functions");
-jest.mock("@/utils/nostr/cache-service");
 jest.mock("@/utils/keypress-handler");
 
 const mockNostrHelper = nostrHelper as jest.Mocked<typeof nostrHelper>;
-const mockCacheService = cacheService as jest.Mocked<typeof cacheService>;
 const mockUseKeyPress = keypressHandler.useKeyPress as jest.Mock;
 
 Object.defineProperty(window, "location", {
@@ -143,11 +140,6 @@ describe("Messages Component", () => {
     ],
   ]);
 
-  const mockCache = new Map([
-    ["msg1", { id: "msg1", read: true }],
-    ["msg2", { id: "msg2", read: false }],
-  ]);
-
   beforeEach(() => {
     jest.clearAllMocks();
 
@@ -169,9 +161,6 @@ describe("Messages Component", () => {
       push: jest.fn(),
     };
     (useRouter as jest.Mock).mockReturnValue(mockRouter);
-
-    mockCacheService.fetchChatMessagesFromCache.mockResolvedValue(mockCache);
-    mockCacheService.addChatMessagesToCache.mockImplementation(jest.fn());
 
     mockNostrHelper.generateKeys.mockResolvedValue({
       nsec: "testnsec",
@@ -250,28 +239,6 @@ describe("Messages Component", () => {
       expect(
         screen.getByTestId("chat-button-new_chat_npub-decrypted")
       ).toBeInTheDocument();
-    });
-  });
-
-  it("should enter a chat and mark messages as read when a ChatButton is clicked", async () => {
-    mockChatsContextValue.isLoading = false;
-    mockChatsContextValue.chatsMap = mockChatsMap;
-    renderComponent();
-    await waitFor(() => {
-      expect(
-        screen.getByTestId(`chat-button-${mockChatPubkey1}`)
-      ).toBeInTheDocument();
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByTestId(`chat-button-${mockChatPubkey1}`));
-    });
-    await waitFor(() => {
-      const updatedMessages = mockChatsMap
-        .get(mockChatPubkey1)!
-        .map((m) => ({ ...m, read: true }));
-      expect(mockCacheService.addChatMessagesToCache).toHaveBeenCalledWith(
-        updatedMessages
-      );
     });
   });
 

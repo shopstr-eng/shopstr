@@ -2,7 +2,7 @@
 
 ## Overview
 
-Shopstr is a global, permissionless marketplace built on the Nostr protocol, enabling Bitcoin commerce through decentralized communication and censorship-resistant transactions. The platform leverages Nostr's event-based architecture to create, manage, and trade products while supporting multiple payment methods including Lightning Network, Cashu ecash, and fiat currencies. Built with Next.js 14, the application provides a Progressive Web App (PWA) experience with client-side state management and local caching via IndexedDB.
+Shopstr is a global, permissionless marketplace built on the Nostr protocol, enabling Bitcoin commerce through decentralized communication and censorship-resistant transactions. The platform leverages Nostr's event-based architecture to create, manage, and trade products while supporting multiple payment methods including Lightning Network, Cashu ecash, and fiat currencies. Built with Next.js 14, the application provides a Progressive Web App (PWA) experience with client-side state management and serverside caching via PostgreSQL.
 
 ## User Preferences
 
@@ -36,7 +36,6 @@ Preferred communication style: Simple, everyday language.
 
 **Client-Side Data Persistence**
 
-- Dexie.js wrapper over IndexedDB for offline-first data storage
 - Local storage for user preferences and authentication tokens
 - Service worker for asset caching and offline functionality
 
@@ -142,8 +141,7 @@ Preferred communication style: Simple, everyday language.
 
 **Database & Storage**
 
-- Dexie 3.2.4: IndexedDB wrapper for client-side database operations
-- dexie-react-hooks 1.1.7: React integration for reactive queries
+- pg 8.11.5: Server-side caching and database operations
 
 **UI & Styling**
 
@@ -181,6 +179,36 @@ Preferred communication style: Simple, everyday language.
 - Fallback to traditional image hosting when Blossom unavailable
 
 ## Recent Changes
+
+### Pickup Location Selection and Address Tag for Orders (January 24, 2026)
+
+- Added pickup location dropdown in ProductInvoiceCard for contact orders when product has pickup shipping options (Pickup, Free/Pickup, Added Cost/Pickup) and pickupLocations array defined
+- Added pickup location selection to CartInvoiceCard for multi-product cart orders, with product title displayed next to each dropdown for clarity
+- Payment buttons disabled until pickup location is selected when required
+- Added "pickup" tag to Nostr order messages via constructGiftWrappedEvent function
+- Updated sendPaymentAndContactMessage in both ProductInvoiceCard and CartInvoiceCard to include pickup parameter
+- Pickup tags are applied per-product, only to order messages corresponding to that specific product (not all products in cart)
+- Added "Pickup Location" column to orders dashboard with proper tag parsing and display
+- Pickup location state resets when form type changes to prevent stale selections
+- Fixed "address" tag to be properly included in all order message types (payment, receipt, and info) when shipping information is provided
+- Both ProductInvoiceCard and CartInvoiceCard now construct address tag early and pass it to all relevant message calls
+- CartInvoiceCard handles both form field naming conventions (shippingName/shippingAddress and Name/Address)
+
+### Order Status Persistence (January 23, 2026)
+
+- Added `order_status` and `order_id` columns to `message_events` table for efficient order status tracking
+- Created API endpoints for updating and retrieving order statuses (`/api/db/update-order-status`, `/api/db/get-order-statuses`)
+- Orders dashboard now loads cached statuses from database first, then updates from parsed messages
+- Status priority system prevents status downgrades (canceled > completed > shipped > confirmed > pending)
+- Status persisted to database only when parsed status has higher priority than cached
+
+### Unread/Read Indicator System (January 23, 2026)
+
+- Added `is_read` column to `message_events` table for tracking read status
+- Navbar displays styled unread count badge (purple in light mode, yellow in dark mode)
+- New order indicators in orders dashboard with colored borders during current session
+- Messages automatically marked as read when orders page opens
+- Database migration handles existing deployments
 
 ### Deployment Configuration (October 4, 2025)
 

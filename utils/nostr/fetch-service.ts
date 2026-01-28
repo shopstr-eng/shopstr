@@ -1,16 +1,5 @@
 import { Filter } from "nostr-tools";
 import {
-  addChatMessageToCache,
-  addCommunitiesToCache,
-  addProductToCache,
-  addProfilesToCache,
-  fetchAllProductsFromCache,
-  fetchAllCommunitiesFromCache,
-  fetchChatMessagesFromCache,
-  fetchProfileDataFromCache,
-  removeProductFromCache,
-} from "./cache-service";
-import {
   NostrEvent,
   NostrMessageEvent,
   ShopProfile,
@@ -75,14 +64,6 @@ export const fetchAllPosts = async (
       }
 
       let deletedProductsInCacheSet: Set<any> = new Set(); // used to remove deleted items from cache
-      try {
-        const productArrayFromCache = await fetchAllProductsFromCache();
-        deletedProductsInCacheSet = new Set(
-          productArrayFromCache.map((product: NostrEvent) => product.id)
-        );
-      } catch (error) {
-        console.error("Failed to fetch all listings from cache: ", error);
-      }
 
       const filter: Filter = {
         kinds: [30402],
@@ -126,7 +107,6 @@ export const fetchAllPosts = async (
           ) {
             deletedProductsInCacheSet.delete(event.id);
           }
-          await addProductToCache(event);
           profileSetFromProducts.add(event.pubkey);
         } catch (error) {
           console.error("Failed to process product:", event.id, error);
@@ -134,7 +114,6 @@ export const fetchAllPosts = async (
       }
 
       editProductContext(productArrayFromRelay, false);
-      removeProductFromCache(Array.from(deletedProductsInCacheSet));
 
       // Cache fetched products to database via API (only valid events with signatures)
       const validProducts = productArrayFromRelay.filter(
@@ -424,12 +403,6 @@ export const fetchProfile = async (
         console.error("Failed to fetch profiles from database: ", error);
       }
 
-      try {
-        const profileData = await fetchProfileDataFromCache();
-        editProfileContext(profileData, false);
-      } catch (error) {
-        console.error("Failed to fetch profiles from cache: ", error);
-      }
       const subParams: { kinds: number[]; authors?: string[] } = {
         kinds: [0],
         authors: Array.from(pubkeyProfilesToFetch),
@@ -470,7 +443,6 @@ export const fetchProfile = async (
           }
         }
       }
-      await addProfilesToCache(profileMap);
 
       // Cache profiles to database via API (reconstruct from fetched events)
       const validProfileEvents = fetchedEvents.filter(
@@ -506,8 +478,7 @@ export const fetchGiftWrappedChatsAndMessages = async (
       return;
     } else {
       // Load from database first
-      const chatMessagesFromCache: Map<string, NostrMessageEvent> =
-        await fetchChatMessagesFromCache();
+      const chatMessagesFromCache = new Map<string, NostrMessageEvent>();
 
       try {
         const response = await fetch(
@@ -520,7 +491,7 @@ export const fetchGiftWrappedChatsAndMessages = async (
               chatMessagesFromCache.set(event.id, {
                 ...event,
                 sig: event.sig || "",
-                read: true,
+                read: event.is_read === true,
               } as NostrMessageEvent);
             }
           }
@@ -615,9 +586,6 @@ export const fetchGiftWrappedChatsAndMessages = async (
           let chatMessage = chatMessagesFromCache.get(messageEvent.id);
           if (!chatMessage) {
             chatMessage = { ...messageEvent, sig: "", read: false }; // false because the user received it and it wasn't in the cache
-            if (chatMessage) {
-              await addChatMessageToCache(chatMessage);
-            }
           }
           if (senderPubkey === userPubkey && chatMessage) {
             addToChatsMap(recipientPubkey, chatMessage);
@@ -1668,13 +1636,6 @@ export const fetchAllCommunities = async (
         console.error("Failed to fetch communities from database: ", error);
       }
 
-      // Try to load from cache first
-      const cachedCommunities = await fetchAllCommunitiesFromCache();
-      if (cachedCommunities.length > 0) {
-        const communityMap = new Map(cachedCommunities.map((c) => [c.id, c]));
-        editCommunityContext(communityMap, false);
-      }
-
       const filter: Filter = {
         kinds: [34550],
         "#t": ["shopstr"],
@@ -1692,7 +1653,6 @@ export const fetchAllCommunities = async (
 
       const communityMap = new Map(parsedCommunities.map((c) => [c.id, c]));
       editCommunityContext(communityMap, false);
-      await addCommunitiesToCache(parsedCommunities);
 
       // Cache communities to database via API (only valid events)
       const validCommunities = fetchedEvents.filter(

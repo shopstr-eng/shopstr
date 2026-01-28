@@ -141,6 +141,94 @@ const ChatPanel = ({
     setShowShippingModal(!showShippingModal);
   };
 
+  const handleMarkAsCompleted = async () => {
+    try {
+      if (!signer || !nostr || !buyerPubkey) return;
+
+      const decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
+      const decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
+      const decodedRandomPubkeyForReceiver = nip19.decode(
+        randomNpubForReceiver
+      );
+      const decodedRandomPrivkeyForReceiver = nip19.decode(
+        randomNsecForReceiver
+      );
+
+      // Get shipping info from the most recent shipping message
+      const shippingInfo = {
+        tracking: "",
+        carrier: "",
+        eta: 0,
+      };
+
+      // Find the most recent shipping-info message
+      const shippingMessage = messages
+        .slice()
+        .reverse()
+        .find((msg) => {
+          const subject = msg.tags.find((tag) => tag[0] === "subject")?.[1];
+          return subject === "shipping-info";
+        });
+
+      if (shippingMessage) {
+        const trackingTag = shippingMessage.tags.find(
+          (tag) => tag[0] === "tracking"
+        );
+        const carrierTag = shippingMessage.tags.find(
+          (tag) => tag[0] === "carrier"
+        );
+        const etaTag = shippingMessage.tags.find((tag) => tag[0] === "eta");
+
+        if (trackingTag) shippingInfo.tracking = trackingTag[1] || "";
+        if (carrierTag) shippingInfo.carrier = carrierTag[1] || "";
+        if (etaTag) shippingInfo.eta = parseInt(etaTag[1] || "0");
+      }
+
+      const message =
+        "Your order from " +
+        userNPub +
+        " has been completed." +
+        (shippingInfo.tracking ? " Tracking: " + shippingInfo.tracking : "") +
+        (shippingInfo.carrier ? " Carrier: " + shippingInfo.carrier : "");
+
+      const giftWrappedMessageEvent = await constructGiftWrappedEvent(
+        decodedRandomPubkeyForSender.data as string,
+        buyerPubkey,
+        message,
+        "order-completed",
+        {
+          productAddress,
+          type: 3,
+          status: "completed",
+          isOrder: true,
+          orderId,
+          ...(shippingInfo.tracking && { tracking: shippingInfo.tracking }),
+          ...(shippingInfo.carrier && { carrier: shippingInfo.carrier }),
+          ...(shippingInfo.eta && { eta: shippingInfo.eta }),
+        }
+      );
+
+      const sealedEvent = await constructMessageSeal(
+        signer,
+        giftWrappedMessageEvent,
+        decodedRandomPubkeyForSender.data as string,
+        buyerPubkey,
+        decodedRandomPrivkeyForSender.data as Uint8Array
+      );
+
+      const giftWrappedEvent = await constructMessageGiftWrap(
+        sealedEvent,
+        decodedRandomPubkeyForReceiver.data as string,
+        decodedRandomPrivkeyForReceiver.data as Uint8Array,
+        buyerPubkey
+      );
+
+      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent);
+    } catch (error) {
+      console.error("Error marking order as completed:", error);
+    }
+  };
+
   const handleToggleReviewModal = () => {
     reviewReset();
     setShowReviewModal(!showReviewModal);
@@ -190,13 +278,13 @@ const ChatPanel = ({
         "shipping-info",
         {
           productAddress,
-          type: 5,
+          type: 4, // Shipping update type
           status: "shipped",
           isOrder: true,
           orderId,
           tracking: trackingNumber,
           carrier: shippingCarrier,
-          eta: futureTimestamp, // Using the calculated future timestamp
+          eta: futureTimestamp,
         }
       );
       const sealedEvent = await constructMessageSeal(
@@ -353,6 +441,12 @@ const ChatPanel = ({
               onClick={handleToggleShippingModal}
             >
               Send Shipping Info
+            </Button>
+            <Button
+              className={SHOPSTRBUTTONCLASSNAMES}
+              onClick={handleMarkAsCompleted}
+            >
+              Mark as Completed
             </Button>
           </div>
           <Modal

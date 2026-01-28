@@ -151,7 +151,11 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
         product.pubkey,
         shippingMessage,
         "zapsnag-order",
-        { isOrder: true, orderId: orderId }
+        {
+          isOrder: true,
+          orderId: orderId,
+          buyerPubkey: userPubkey,
+        }
       );
 
       const seal = await constructMessageSeal(

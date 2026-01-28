@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useTabs } from "@/components/hooks/use-tabs";
 import { Framer } from "@/components/framer";
 import Messages from "./messages";
+import OrdersDashboard from "./orders-dashboard";
 import { useRouter } from "next/router";
 
 const MessageFeed = ({ isInquiry = false }) => {
@@ -14,7 +15,7 @@ const MessageFeed = ({ isInquiry = false }) => {
     tabs: [
       {
         label: "Orders",
-        children: <Messages isPayment={true} />,
+        children: <OrdersDashboard />,
         id: "orders",
       },
       {
@@ -58,14 +59,16 @@ const MessageFeed = ({ isInquiry = false }) => {
   }, [router, framer]);
 
   return (
-    <div className="flex flex-1 flex-col">
+    <div className="flex w-full min-w-0 flex-1 flex-col">
       <div className="sticky inset-x-0 top-0 z-30 flex w-full translate-y-0 flex-col border-0 backdrop-blur-xl transition-all md:translate-y-0">
-        <div className="flex w-full flex-row items-center justify-around">
-          <Framer.Tabs {...framer.tabProps} />
+        <div className="w-full overflow-x-auto">
+          <div className="flex flex-row items-center justify-center px-4">
+            <Framer.Tabs {...framer.tabProps} />
+          </div>
         </div>
       </div>
 
-      <div className="flex h-[90vh] w-full flex-col bg-light-bg pt-4 dark:bg-dark-bg">
+      <div className="flex w-full min-w-0 flex-1 flex-col overflow-x-auto bg-light-bg pt-4 dark:bg-dark-bg">
         {showSpinner ? null : framer.selectedTab!.children}
       </div>
     </div>

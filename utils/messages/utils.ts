@@ -1,4 +1,3 @@
-import { fetchChatMessagesFromCache } from "@/utils/nostr/cache-service";
 import { ChatsMap } from "../context/context";
 import { NostrMessageEvent } from "../types/types";
 
@@ -48,16 +47,38 @@ export const timeSinceMessageDisplayText = (
 export const countNumberOfUnreadMessagesFromChatsContext = async (
   chatsMap: ChatsMap
 ) => {
-  const chatMessagesFromCache: Map<string, NostrMessageEvent> =
-    await fetchChatMessagesFromCache();
   let numberOfUnread = 0;
   for (const entry of chatsMap) {
     const chat = entry[1] as NostrMessageEvent[];
     chat.forEach((messageEvent: NostrMessageEvent) => {
-      if (chatMessagesFromCache.get(messageEvent.id)?.read === false) {
+      if (messageEvent.read !== true) {
         numberOfUnread++;
       }
     });
   }
   return numberOfUnread;
+};
+
+export const constructTags = (
+  subject: string,
+  productAddress: string,
+  additionalData: { [key: string]: any }
+) => {
+  const tags: string[][] = [
+    ["subject", subject],
+    ["a", productAddress],
+  ];
+
+  for (const [key, value] of Object.entries(additionalData)) {
+    if (value !== undefined && value !== null && value !== "") {
+      // Handle payment tag specially to ensure it's properly formatted
+      if (key === "payment" || key === "paymentProof") {
+        tags.push([key, String(value)]);
+      } else {
+        tags.push([key, String(value)]);
+      }
+    }
+  }
+
+  return tags;
 };

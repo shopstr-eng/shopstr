@@ -19,7 +19,6 @@ import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { Proof } from "@cashu/cashu-ts";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
-import { removeProductFromCache } from "@/utils/nostr/cache-service";
 import {
   cacheEventToDatabase,
   deleteEventsFromDatabase,
@@ -59,7 +58,6 @@ export async function deleteEvent(
   );
 
   await finalizeAndSendNostrEvent(signer, nostr, deletionEvent);
-  await removeProductFromCache(event_ids_to_delete);
 
   // Delete from database via API
   deleteEventsFromDatabase(event_ids_to_delete).catch((error) =>
@@ -258,6 +256,12 @@ export async function constructGiftWrappedEvent(
     carrier?: string;
     eta?: number;
     isOrder?: boolean;
+    contact?: string;
+    address?: string;
+    pickup?: string;
+    buyerPubkey?: string;
+    donationAmount?: number;
+    donationPercentage?: number;
   } = {}
 ): Promise<GiftWrappedMessageEvent> {
   const { relays } = getLocalStorageData();
@@ -277,6 +281,12 @@ export async function constructGiftWrappedEvent(
     carrier,
     eta,
     isOrder,
+    contact,
+    address,
+    pickup,
+    buyerPubkey,
+    donationAmount,
+    donationPercentage,
   } = options;
 
   const tags = [
@@ -288,14 +298,37 @@ export async function constructGiftWrappedEvent(
   if (isOrder) {
     tags.push(["order", orderId ? orderId : uuidv4()]);
 
+    if (buyerPubkey) tags.push(["b", buyerPubkey]);
     if (type) tags.push(["type", type.toString()]);
     if (orderAmount) tags.push(["amount", orderAmount.toString()]);
-    if (paymentType && paymentReference && paymentProof)
-      tags.push(["payment", paymentType, paymentReference, paymentProof]);
+    // Add payment tag with format: ["payment", paymentType, paymentReference, paymentProof?]
+    // For order-payment: ["payment", type, destination/token]
+    // For order-receipt: ["payment", type, reference, proof]
+    if (paymentType && paymentReference) {
+      if (paymentProof) {
+        tags.push(["payment", paymentType, paymentReference, paymentProof]);
+      } else {
+        tags.push(["payment", paymentType, paymentReference]);
+      }
+    }
     if (status) tags.push(["status", status]);
     if (tracking) tags.push(["tracking", tracking]);
     if (carrier) tags.push(["carrier", carrier]);
     if (eta) tags.push(["eta", eta.toString()]);
+    if (contact) tags.push(["contact", contact]);
+    if (address) tags.push(["address", address]);
+    if (pickup) tags.push(["pickup", pickup]);
+    if (
+      donationAmount &&
+      donationAmount > 0 &&
+      donationPercentage !== undefined
+    ) {
+      tags.push([
+        "donation_amount",
+        donationAmount.toString(),
+        donationPercentage.toString(),
+      ]);
+    }
 
     // Handle product information for orders
     if (productData || productAddress) {
