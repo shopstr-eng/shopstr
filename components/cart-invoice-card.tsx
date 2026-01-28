@@ -126,33 +126,74 @@ export default function CartInvoiceCard({
 
       const inquiryMessage = `I just placed an order for your ${productTitle} listing on Shopstr! Please check your Shopstr DMs for any related order information.`;
 
-      const giftWrappedMessageEvent = await constructGiftWrappedEvent(
+      const { nsec: nsecForSellerReceiver, npub: npubForSellerReceiver } =
+        await generateKeys();
+      const decodedRandomPubkeyForSellerReceiver = nip19.decode(
+        npubForSellerReceiver
+      );
+      const decodedRandomPrivkeyForSellerReceiver = nip19.decode(
+        nsecForSellerReceiver
+      );
+      const { nsec: nsecForBuyerReceiver, npub: npubForBuyerReceiver } =
+        await generateKeys();
+      const decodedRandomPubkeyForBuyerReceiver =
+        nip19.decode(npubForBuyerReceiver);
+      const decodedRandomPrivkeyForBuyerReceiver =
+        nip19.decode(nsecForBuyerReceiver);
+
+      // Send to seller
+      const giftWrappedMessageEventForSeller = await constructGiftWrappedEvent(
         actualUserPubkey,
         sellerPubkey,
         inquiryMessage,
         "listing-inquiry"
       );
+      // Also send a copy to the buyer
+      const giftWrappedMessageEventForBuyer = await constructGiftWrappedEvent(
+        actualUserPubkey,
+        actualUserPubkey,
+        inquiryMessage,
+        "listing-inquiry"
+      );
 
-      const sealedEvent = await constructMessageSeal(
+      const sealedEventForSeller = await constructMessageSeal(
         signer,
-        giftWrappedMessageEvent,
+        giftWrappedMessageEventForSeller,
         actualUserPubkey,
         sellerPubkey
       );
-
-      const { nsec: nsecForReceiver, npub: npubForReceiver } =
-        await generateKeys();
-      const decodedRandomPubkeyForReceiver = nip19.decode(npubForReceiver);
-      const decodedRandomPrivkeyForReceiver = nip19.decode(nsecForReceiver);
-
-      const giftWrappedEvent = await constructMessageGiftWrap(
-        sealedEvent,
-        decodedRandomPubkeyForReceiver.data as string,
-        decodedRandomPrivkeyForReceiver.data as Uint8Array,
-        sellerPubkey
+      const sealedEventForBuyer = await constructMessageSeal(
+        signer,
+        giftWrappedMessageEventForBuyer,
+        actualUserPubkey,
+        actualUserPubkey
       );
 
-      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent);
+      const giftWrappedEventForSeller = await constructMessageGiftWrap(
+        sealedEventForSeller,
+        decodedRandomPubkeyForSellerReceiver.data as string,
+        decodedRandomPrivkeyForSellerReceiver.data as Uint8Array,
+        sellerPubkey
+      );
+      const giftWrappedEventForBuyer = await constructMessageGiftWrap(
+        sealedEventForBuyer,
+        decodedRandomPubkeyForBuyerReceiver.data as string,
+        decodedRandomPrivkeyForBuyerReceiver.data as Uint8Array,
+        actualUserPubkey
+      );
+
+      await sendGiftWrappedMessageEvent(nostr, giftWrappedEventForSeller);
+      await sendGiftWrappedMessageEvent(nostr, giftWrappedEventForBuyer);
+
+      // Add to local context for immediate UI feedback
+      chatsContext.addNewlyCreatedMessageEvent(
+        {
+          ...giftWrappedMessageEventForBuyer,
+          sig: "",
+          read: false,
+        },
+        true
+      );
     } catch (error) {
       console.error("Failed to send inquiry DM:", error);
     }
