@@ -24,6 +24,8 @@ import {
   deleteEventsFromDatabase,
 } from "@/utils/db/db-client";
 import { newPromiseWithTimeout } from "@/utils/timeout";
+import { BLOSSOM_SERVER } from "@/constants/blossom";
+// Adding Blossom_server for extra checks!
 
 function containsRelay(relays: string[], relay: string): boolean {
   return relays.some((r) => r.includes(relay));
@@ -1010,99 +1012,111 @@ export async function finalizeAndSendNostrEvent(
   }
 }
 
-export type BlossomUploadResponse = {
-  url: string;
-  sha256: string;
-  size: number;
-  type?: string;
-};
 
 export async function blossomUploadImages(
-  image: File,
+  input: File | string,
   signer: NostrSigner,
-  servers: Request["url"][]
+  servers: string[]
 ) {
-  if (!image.type.includes("image"))
-    throw new Error("Only images are supported");
+   /* ---------------------- CASE 2: File upload via Blossom ------------------ */
+  if (!(input instanceof File)) {
+    throw new Error("Invalid image input");
+  }
 
-  const arrayBuffer = await image.arrayBuffer();
-  const wordArray = CryptoJS.lib.WordArray.create(arrayBuffer);
-  const hash = CryptoJS.SHA256(wordArray).toString(CryptoJS.enc.Hex);
+  const base64 = await fileToBase64(input);
+  const buffer = Buffer.from(base64.split(",")[1], "base64");
 
-  const event = {
-    kind: 24242,
-    content: `Upload ${image.name}`,
-    created_at: Math.floor(Date.now() / 1000),
-    tags: [
-      ["t", "upload"],
-      ["x", hash],
-      ["size", image.size.toString()],
-      [
-        "expiration",
-        Math.floor((Date.now() + 24 * 60 * 60 * 1000) / 1000).toString(),
+  // Generate a secret key for signing the auth event
+  const sk = generateSecretKey();
+
+  const authEvent = finalizeEvent(
+    {
+      kind: 22242,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [
+        ["t", "upload"],
+        ["name", input.name],
+        ["size", input.size.toString()],
+        ["type", input.type],
       ],
-    ],
-  };
+      content: "",
+    },
+    sk
+  );
 
-  const signedEvent = await signer!.sign(event);
+  const authorization = `Nostr ${btoa(JSON.stringify(authEvent))}`;
 
-  const authorization = `Nostr ${CryptoJS.enc.Base64.stringify(
-    CryptoJS.enc.Utf8.parse(JSON.stringify(signedEvent))
-  )}`;
+  /* ----------------------------- upload step ------------------------------ */
+  const uploadRes = await fetch(`${BLOSSOM_SERVER}/upload`, {
+    method: "POST",
+    headers: {
+      Authorization: authorization,
+      "Content-Type": input.type,
+    },
+    body: buffer,
+  });
 
-  let tags: string[][] = [];
-  let responseUrl: string = "";
-  for (let i = 0; i < servers.length; i++) {
-    const server = servers[i];
-    if (i == 0) {
-      const url = new URL("/upload", server);
-
-      const response = await fetch(url, {
-        method: "PUT",
-        body: image,
-        headers: {
-          authorization,
-          "content-type": image.type,
-        },
-      }).then((res) => res.json());
-
-      responseUrl = response.url;
-
-      tags = [
-        ["url", responseUrl],
-        ["x", response.sha256],
-        ["ox", response.sha256],
-        ["size", response.size.toString()],
-      ];
-
-      if (response.type) {
-        tags.push(["m", response.type]);
-      }
-    } else {
-      const url = new URL("/mirror", server);
-
-      await fetch(url, {
-        method: "PUT",
-        body: JSON.stringify({
-          url: responseUrl,
-        }),
-        headers: {
-          authorization,
-          "content-type": image.type,
-        },
-      });
-    }
+  if (!uploadRes.ok) {
+    throw new Error("Image upload failed");
   }
-  // Cache blossom upload event to database
-  if (signedEvent) {
-    await cacheEventToDatabase(signedEvent).catch((error) =>
-      console.error("Failed to cache blossom upload event to database:", error)
-    );
+
+  const uploadData = await uploadRes.json();
+  const imageUrl = uploadData?.url;
+
+  if (!imageUrl) {
+    throw new Error("No image URL returned from Blossom");
   }
-  return tags;
+
+  /* ----------------------------- mirror step ------------------------------ */
+  const origin =
+    typeof window !== "undefined"
+      ? window.location.origin
+      : "https://shopstr.store";
+
+  await fetch(`${BLOSSOM_SERVER}/mirror`, {
+    method: "POST",
+    headers: {
+      Authorization: authorization,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      url: imageUrl,
+      origin,
+    }),
+  });
+
+  return [
+    ["url", imageUrl],
+    ["m", "image"],
+  ];
 }
 
 /***** HELPER FUNCTIONS *****/
+
+
+/**
+ * Checks if a string is a valid image URL.
+ */
+function isValidImageUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return /\.(png|jpe?g|gif|webp|svg)$/i.test(url.pathname);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Converts a File object to a Base64 string.
+ */
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 // function to validate public and private keys
 export function validateNPubKey(publicKey: string) {
