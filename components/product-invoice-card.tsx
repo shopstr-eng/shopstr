@@ -142,7 +142,7 @@ export default function ProductInvoiceCard({
         userPubkey,
         sellerPubkey,
         inquiryMessage,
-        "inquiry"
+        "listing-inquiry"
       );
 
       const sealedEvent = await constructMessageSeal(
