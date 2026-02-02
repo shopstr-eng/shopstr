@@ -466,6 +466,8 @@ export default function CartInvoiceCard({
         pickup,
         donationAmount: donationAmountValue,
         donationPercentage: donationPercentageValue,
+        selectedSize: product.selectedSize,
+        selectedVolume: product.selectedVolume,
       };
     } else if (isReceipt) {
       messageSubject = "order-receipt";
@@ -484,6 +486,8 @@ export default function CartInvoiceCard({
         pickup,
         donationAmount: donationAmountValue,
         donationPercentage: donationPercentageValue,
+        selectedSize: product.selectedSize,
+        selectedVolume: product.selectedVolume,
       };
     } else if (isDonation) {
       messageSubject = "donation";
@@ -502,6 +506,8 @@ export default function CartInvoiceCard({
         pickup,
         donationAmount: donationAmountValue,
         donationPercentage: donationPercentageValue,
+        selectedSize: product.selectedSize,
+        selectedVolume: product.selectedVolume,
       };
     }
 

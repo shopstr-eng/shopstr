@@ -180,6 +180,16 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### Size and Volume Options for Orders (February 2, 2026)
+
+- Added "size" and "volume" tags to Nostr order messages via constructGiftWrappedEvent function
+- Updated sendPaymentAndContactMessageWithKeys in CartInvoiceCard to pass product.selectedSize and product.selectedVolume in messageOptions for payment, receipt, and order-info messages
+- Updated sendPaymentAndContactMessage in ProductInvoiceCard to pass selectedSize and selectedVolume at top level of messageOptions for all order message types
+- Added "Order Specs" column to orders dashboard combining size and volume into formatted display
+- Display format: "Size: S, Volume: 1 gal" when both present, individual values when only one, "N/A" when neither
+- Updated OrderData interface to include selectedSize and selectedVolume fields
+- Size and volume values are extracted from message tags and consolidated across related order messages
+
 ### Pickup Location Selection and Address Tag for Orders (January 24, 2026)
 
 - Added pickup location dropdown in ProductInvoiceCard for contact orders when product has pickup shipping options (Pickup, Free/Pickup, Added Cost/Pickup) and pickupLocations array defined

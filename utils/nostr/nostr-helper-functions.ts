@@ -262,6 +262,8 @@ export async function constructGiftWrappedEvent(
     buyerPubkey?: string;
     donationAmount?: number;
     donationPercentage?: number;
+    selectedSize?: string;
+    selectedVolume?: string;
   } = {}
 ): Promise<GiftWrappedMessageEvent> {
   const { relays } = getLocalStorageData();
@@ -287,6 +289,8 @@ export async function constructGiftWrappedEvent(
     buyerPubkey,
     donationAmount,
     donationPercentage,
+    selectedSize,
+    selectedVolume,
   } = options;
 
   const tags = [
@@ -318,6 +322,8 @@ export async function constructGiftWrappedEvent(
     if (contact) tags.push(["contact", contact]);
     if (address) tags.push(["address", address]);
     if (pickup) tags.push(["pickup", pickup]);
+    if (selectedSize) tags.push(["size", selectedSize]);
+    if (selectedVolume) tags.push(["volume", selectedVolume]);
     if (
       donationAmount &&
       donationAmount > 0 &&

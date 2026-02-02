@@ -77,6 +77,8 @@ interface OrderData {
   messageEvent: NostrMessageEvent;
   address?: string;
   pickupLocation?: string;
+  selectedSize?: string;
+  selectedVolume?: string;
   paymentToken?: string;
   paymentMethod?: string;
   productTitle?: string;
@@ -331,6 +333,8 @@ const OrdersDashboard = () => {
             const buyerPubkey = tagsMap.get("b") || "";
             const address = tagsMap.get("address");
             const pickupLocation = tagsMap.get("pickup");
+            const selectedSize = tagsMap.get("size");
+            const selectedVolume = tagsMap.get("volume");
 
             const donationTagArray = messageEvent.tags.find(
               (tag) => tag[0] === "donation_amount"
@@ -455,6 +459,8 @@ const OrdersDashboard = () => {
               messageEvent,
               address,
               pickupLocation,
+              selectedSize,
+              selectedVolume,
               paymentToken,
               paymentMethod,
               productTitle,
@@ -524,6 +530,9 @@ const OrdersDashboard = () => {
             ...existing,
             status: finalStatus,
             address: order.address || existing.address,
+            pickupLocation: order.pickupLocation || existing.pickupLocation,
+            selectedSize: order.selectedSize || existing.selectedSize,
+            selectedVolume: order.selectedVolume || existing.selectedVolume,
             paymentToken: order.paymentToken || existing.paymentToken,
             paymentMethod:
               order.paymentMethod !== "Not specified"
@@ -1086,6 +1095,9 @@ const OrdersDashboard = () => {
                     Pickup Location
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
+                    Order Specs
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
                     Payment
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-600 dark:text-gray-400">
@@ -1100,7 +1112,7 @@ const OrdersDashboard = () => {
                 {orders.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={11}
+                      colSpan={13}
                       className="px-6 py-4 text-center text-gray-500 dark:text-gray-400"
                     >
                       No orders yet
@@ -1228,6 +1240,16 @@ const OrdersDashboard = () => {
                           >
                             {order.pickupLocation || "N/A"}
                           </div>
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-4 text-sm text-light-text dark:text-dark-text">
+                          {(() => {
+                            const specs = [];
+                            if (order.selectedSize)
+                              specs.push(`Size: ${order.selectedSize}`);
+                            if (order.selectedVolume)
+                              specs.push(`Volume: ${order.selectedVolume}`);
+                            return specs.length > 0 ? specs.join(", ") : "N/A";
+                          })()}
                         </td>
                         <td className="px-4 py-4 text-sm">
                           {order.subject === "order-receipt" ? (
