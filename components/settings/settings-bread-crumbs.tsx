@@ -8,6 +8,7 @@ const pathMap: { [key: string]: string } = {
   preferences: "Preferences",
   "shop-profile": "Shop Profile",
   community: "Community Management",
+  nwc: "Nostr Wallet Connect",
 };
 
 export const SettingsBreadCrumbs = () => {
