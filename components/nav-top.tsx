@@ -17,8 +17,15 @@ const TopNav = ({
   setFocusedPubkey: (value: string) => void;
   setSelectedSection: (value: string) => void;
 }) => {
-  const { isHomeActive, isProfileActive, isCommunitiesActive } =
-    useNavigation();
+  const {
+    isHomeActive,
+    isProfileActive,
+    isCommunitiesActive,
+    isMessagesActive,
+    isWalletActive,
+    isMyListingsActive,
+    isCartActive,
+  } = useNavigation();
   const router = useRouter();
 
   const chatsContext = useContext(ChatsContext);
@@ -166,8 +173,8 @@ const TopNav = ({
 
   return (
     <div className="fixed top-0 z-50 w-full border-b border-zinc-200 bg-light-fg shadow-lg dark:border-zinc-800 dark:bg-dark-fg">
-      <div className="flex items-center justify-between py-2 pr-4">
-        <div className="flex items-center">
+      <div className="flex items-center py-2 pr-4">
+        <div className="flex flex-shrink-0 items-center">
           <Button
             onClick={handleHomeClick}
             className={`flex items-center bg-transparent text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text`}
@@ -188,7 +195,7 @@ const TopNav = ({
             </span>
           </Button>
         </div>
-        <div className="flex flex-row items-center md:hidden">
+        <div className="ml-auto flex flex-row items-center md:hidden">
           <Button
             className="bg-transparent"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -198,45 +205,51 @@ const TopNav = ({
           {signedIn ? (
             <ProfileWithDropdown
               pubkey={userPubkey!}
-              baseClassname="w-full dark:hover:shopstr-yellow-light rounded-3xl hover:scale-105 hover:bg-light-bg hover:shadow-lg dark:hover:bg-dark-bg"
+              baseClassname="flex-shrink-0 dark:hover:shopstr-yellow-light rounded-3xl hover:scale-105 hover:bg-light-bg hover:shadow-lg dark:hover:bg-dark-bg"
               dropDownKeys={[
                 "shop_profile",
                 "user_profile",
                 "settings",
                 "logout",
               ]}
-              nameClassname="md:block"
+              nameClassname="hidden"
             />
           ) : (
             <Button
               onClick={onOpen}
-              className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+              className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
             >
               Sign In
             </Button>
           )}
         </div>
-        <div className="hidden items-center font-bold text-light-text dark:text-dark-text md:flex">
+        <div className="hidden flex-1 items-center justify-evenly text-light-text dark:text-dark-text md:flex">
           <Button
-            className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+            className={`bg-transparent hover:text-purple-700 dark:hover:text-accent-dark-text ${
+              isHomeActive
+                ? "font-bold text-shopstr-purple dark:text-shopstr-yellow"
+                : "text-light-text dark:text-dark-text"
+            }`}
             onClick={handleHomeClick}
           >
             Marketplace
           </Button>
-          |
           <Button
-            className={`bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
+            className={`bg-transparent hover:text-purple-700 dark:hover:text-accent-dark-text ${
               isCommunitiesActive
                 ? "font-bold text-shopstr-purple dark:text-shopstr-yellow"
-                : ""
+                : "text-light-text dark:text-dark-text"
             }`}
             onClick={() => router.push("/communities")}
           >
             Communities
           </Button>
-          |
           <Button
-            className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+            className={`bg-transparent hover:text-purple-700 dark:hover:text-accent-dark-text ${
+              isMessagesActive
+                ? "font-bold text-shopstr-purple dark:text-shopstr-yellow"
+                : "text-light-text dark:text-dark-text"
+            }`}
             onClick={() => handleRoute("/orders")}
           >
             Orders
@@ -246,23 +259,32 @@ const TopNav = ({
               </span>
             )}
           </Button>
-          |
           <Button
-            className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+            className={`bg-transparent hover:text-purple-700 dark:hover:text-accent-dark-text ${
+              isWalletActive
+                ? "font-bold text-shopstr-purple dark:text-shopstr-yellow"
+                : "text-light-text dark:text-dark-text"
+            }`}
             onClick={() => handleRoute("/wallet")}
           >
             Wallet
           </Button>
-          |
           <Button
-            className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+            className={`bg-transparent hover:text-purple-700 dark:hover:text-accent-dark-text ${
+              isMyListingsActive
+                ? "font-bold text-shopstr-purple dark:text-shopstr-yellow"
+                : "text-light-text dark:text-dark-text"
+            }`}
             onClick={() => handleRoute("/my-listings")}
           >
             My Listings
           </Button>
-          |
           <Button
-            className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+            className={`bg-transparent hover:text-purple-700 dark:hover:text-accent-dark-text ${
+              isCartActive
+                ? "font-bold text-shopstr-purple dark:text-shopstr-yellow"
+                : "text-light-text dark:text-dark-text"
+            }`}
             onClick={() => handleRoute("/cart")}
           >
             Cart
@@ -272,34 +294,31 @@ const TopNav = ({
               </span>
             )}
           </Button>
-          |
+        </div>
+        <div className="hidden flex-shrink-0 items-center md:flex">
           {signedIn ? (
-            <>
-              <ProfileWithDropdown
-                pubkey={userPubkey!}
-                baseClassname="justify-start dark:hover:shopstr-yellow-light pl-4 rounded-3xl py-2 hover:scale-105 hover:bg-light-bg hover:shadow-lg dark:hover:bg-dark-bg"
-                dropDownKeys={[
-                  "shop_profile",
-                  "user_profile",
-                  "settings",
-                  "logout",
-                ]}
-                nameClassname="md:block"
-              />
-            </>
+            <ProfileWithDropdown
+              pubkey={userPubkey!}
+              baseClassname="justify-start dark:hover:shopstr-yellow-light pl-2 rounded-3xl py-2 hover:scale-105 hover:bg-light-bg hover:shadow-lg dark:hover:bg-dark-bg"
+              dropDownKeys={[
+                "shop_profile",
+                "user_profile",
+                "settings",
+                "logout",
+              ]}
+              nameClassname="lg:block"
+            />
           ) : (
-            <>
-              <Button
-                onClick={onOpen}
-                className={`bg-transparent text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text ${
-                  isProfileActive
-                    ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
-                    : ""
-                }`}
-              >
-                Sign In
-              </Button>
-            </>
+            <Button
+              onClick={onOpen}
+              className={`bg-transparent duration-200 hover:text-purple-700 dark:hover:text-accent-dark-text ${
+                isProfileActive
+                  ? "font-bold text-shopstr-purple dark:text-shopstr-yellow"
+                  : "text-light-text dark:text-dark-text"
+              }`}
+            >
+              Sign In
+            </Button>
           )}
         </div>
       </div>
