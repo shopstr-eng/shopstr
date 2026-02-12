@@ -235,7 +235,7 @@ export default function SignInModal({
                   >
                     Extension Sign-in
                   </Button>
-                  <div className="text-center text-xs font-mono text-zinc-600">
+                  <div className="text-center font-mono text-xs text-zinc-600">
                     ------ or ------
                   </div>
                   <div className="flex flex-col ">
@@ -295,7 +295,7 @@ export default function SignInModal({
                       </div>
                     </div>
                   </div>
-                  <div className="text-center text-xs font-mono text-zinc-600">
+                  <div className="text-center font-mono text-xs text-zinc-600">
                     ------ or ------
                   </div>
                 </div>

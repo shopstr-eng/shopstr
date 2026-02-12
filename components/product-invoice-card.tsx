@@ -1944,9 +1944,11 @@ export default function ProductInvoiceCard({
               placeholder="Choose a pickup location"
               className="max-w-full"
               classNames={{
-                trigger: "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 data-[focus=true]:border-yellow-400 rounded-xl min-h-[56px]",
+                trigger:
+                  "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 data-[focus=true]:border-yellow-400 rounded-xl min-h-[56px]",
                 value: "text-white text-base",
-                popoverContent: "bg-[#161616] border border-zinc-800 rounded-xl p-1",
+                popoverContent:
+                  "bg-[#161616] border border-zinc-800 rounded-xl p-1",
               }}
               selectedKeys={
                 selectedPickupLocation ? [selectedPickupLocation] : []
@@ -1955,7 +1957,11 @@ export default function ProductInvoiceCard({
               isRequired
             >
               {(productData.pickupLocations || []).map((location) => (
-                <SelectItem key={location} value={location} className="text-zinc-300 data-[hover=true]:bg-zinc-800 data-[hover=true]:text-white rounded-lg">
+                <SelectItem
+                  key={location}
+                  value={location}
+                  className="rounded-lg text-zinc-300 data-[hover=true]:bg-zinc-800 data-[hover=true]:text-white"
+                >
                   {location}
                 </SelectItem>
               ))}
@@ -1995,7 +2001,8 @@ export default function ProductInvoiceCard({
                   labelPlacement="inside"
                   classNames={{
                     input: "text-white text-base",
-                    inputWrapper: "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400",
+                    inputWrapper:
+                      "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400",
                   }}
                   isInvalid={!!error}
                   errorMessage={error?.message}
@@ -2031,7 +2038,8 @@ export default function ProductInvoiceCard({
                   labelPlacement="inside"
                   classNames={{
                     input: "text-white text-base",
-                    inputWrapper: "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400",
+                    inputWrapper:
+                      "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400",
                   }}
                   isInvalid={!!error}
                   errorMessage={error?.message}
@@ -2062,7 +2070,8 @@ export default function ProductInvoiceCard({
                   labelPlacement="inside"
                   classNames={{
                     input: "text-white text-base",
-                    inputWrapper: "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400",
+                    inputWrapper:
+                      "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400",
                   }}
                   isInvalid={!!error}
                   errorMessage={error?.message}
@@ -2098,7 +2107,8 @@ export default function ProductInvoiceCard({
                   labelPlacement="inside"
                   classNames={{
                     input: "text-white text-base",
-                    inputWrapper: "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400",
+                    inputWrapper:
+                      "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400",
                   }}
                   isInvalid={!!error}
                   errorMessage={error?.message}
@@ -2128,7 +2138,8 @@ export default function ProductInvoiceCard({
                   labelPlacement="inside"
                   classNames={{
                     input: "text-white text-base",
-                    inputWrapper: "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400",
+                    inputWrapper:
+                      "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400",
                   }}
                   isInvalid={!!error}
                   errorMessage={error?.message}
@@ -2164,7 +2175,8 @@ export default function ProductInvoiceCard({
                   labelPlacement="inside"
                   classNames={{
                     input: "text-white text-base",
-                    inputWrapper: "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400",
+                    inputWrapper:
+                      "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400",
                   }}
                   isInvalid={!!error}
                   errorMessage={error?.message}
@@ -2193,7 +2205,8 @@ export default function ProductInvoiceCard({
                   }
                   labelPlacement="inside"
                   classNames={{
-                    trigger: "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 data-[focus=true]:border-yellow-400 text-white min-h-[56px]",
+                    trigger:
+                      "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 data-[focus=true]:border-yellow-400 text-white min-h-[56px]",
                     value: "text-white text-base",
                     popoverContent: "bg-[#161616] border border-zinc-800",
                   }}
@@ -2229,7 +2242,8 @@ export default function ProductInvoiceCard({
                 labelPlacement="inside"
                 classNames={{
                   input: "text-white text-base",
-                  inputWrapper: "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400",
+                  inputWrapper:
+                    "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400",
                 }}
                 isInvalid={!!error}
                 errorMessage={error?.message}
@@ -2249,9 +2263,11 @@ export default function ProductInvoiceCard({
       <div className="flex min-h-screen w-full bg-[#111] text-white">
         <div className="mx-auto flex w-full max-w-7xl flex-col lg:flex-row">
           {/* Left Side - Product Summary - maintain same width */}
-          <div className="w-full border-b lg:border-b-0 lg:border-r border-zinc-800 bg-[#161616] p-4 md:p-6 lg:w-1/2">
+          <div className="w-full border-b border-zinc-800 bg-[#161616] p-4 md:p-6 lg:w-1/2 lg:border-b-0 lg:border-r">
             <div className="sticky top-6">
-              <h2 className="mb-6 text-2xl font-black uppercase tracking-tighter text-white">Order Summary</h2>
+              <h2 className="mb-6 text-2xl font-black uppercase tracking-tighter text-white">
+                Order Summary
+              </h2>
 
               <div className="mb-6">
                 <Image
@@ -2276,9 +2292,7 @@ export default function ProductInvoiceCard({
                   </p>
                 )}
 
-                <p className="mb-1 font-medium text-zinc-400">
-                  Quantity: 1
-                </p>
+                <p className="mb-1 font-medium text-zinc-400">Quantity: 1</p>
               </div>
 
               <div className="border-t border-zinc-700 pt-4">
@@ -2287,152 +2301,154 @@ export default function ProductInvoiceCard({
                     Cost Breakdown
                   </h4>
                   <div className="space-y-2 border-l-2 border-zinc-700 pl-3">
-                    <div className="text-sm font-bold text-white">{productData.title}</div>
+                    <div className="text-sm font-bold text-white">
                       {productData.title}
                     </div>
-                    {appliedDiscount > 0 ? (
-                      <>
-                        <div className="flex justify-between text-sm text-zinc-400">
-                          <span className="ml-2">Product cost:</span>
-                          <span className="text-zinc-500 line-through">
-                            {formatWithCommas(
-                              currentPrice,
-                              productData.currency
-                            )}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-sm font-bold text-green-400">
-                          <span className="ml-2">
-                            {discountCode || "Discount"} ({appliedDiscount}%):
-                          </span>
-                          <span>
-                            -
-                            {formatWithCommas(
-                              discountAmount,
-                              productData.currency
-                            )}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-sm font-bold text-white">
-                          <span className="ml-2">Discounted price:</span>
-                          <span>
-                            {formatWithCommas(
-                              discountedPrice,
-                              productData.currency
-                            )}
-                          </span>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex justify-between text-sm text-zinc-300">
+                    {productData.title}
+                  </div>
+                  {appliedDiscount > 0 ? (
+                    <>
+                      <div className="flex justify-between text-sm text-zinc-400">
                         <span className="ml-2">Product cost:</span>
-                        <span>
+                        <span className="text-zinc-500 line-through">
                           {formatWithCommas(currentPrice, productData.currency)}
                         </span>
                       </div>
-                    )}
-                    {formType === "shipping" &&
-                      productData.shippingCost! > 0 && (
-                        <div className="flex justify-between text-sm">
-                          <span className="ml-2">Shipping cost:</span>
-                          <span>
-                            {formatWithCommas(
-                              productData.shippingCost!,
-                              productData.currency
-                            )}
-                          </span>
-                        </div>
-                      )}
-                  </div>
-                  <div className="flex justify-between border-t border-zinc-700 pt-2 text-lg font-black uppercase text-yellow-400">
-                    <span>Total:</span>
-                    <span>
-                      {formatWithCommas(discountedTotal, productData.currency)}
-                    </span>
-                  </div>
+                      <div className="flex justify-between text-sm font-bold text-green-400">
+                        <span className="ml-2">
+                          {discountCode || "Discount"} ({appliedDiscount}%):
+                        </span>
+                        <span>
+                          -
+                          {formatWithCommas(
+                            discountAmount,
+                            productData.currency
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm font-bold text-white">
+                        <span className="ml-2">Discounted price:</span>
+                        <span>
+                          {formatWithCommas(
+                            discountedPrice,
+                            productData.currency
+                          )}
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex justify-between text-sm text-zinc-300">
+                      <span className="ml-2">Product cost:</span>
+                      <span>
+                        {formatWithCommas(currentPrice, productData.currency)}
+                      </span>
+                    </div>
+                  )}
+                  {formType === "shipping" && productData.shippingCost! > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="ml-2">Shipping cost:</span>
+                      <span>
+                        {formatWithCommas(
+                          productData.shippingCost!,
+                          productData.currency
+                        )}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-between border-t border-zinc-700 pt-2 text-lg font-black uppercase text-yellow-400">
+                  <span>Total:</span>
+                  <span>
+                    {formatWithCommas(discountedTotal, productData.currency)}
+                  </span>
                 </div>
               </div>
-
-              <button
-                onClick={() => setIsBeingPaid(false)}
-                className="mt-4 text-sm font-bold uppercase tracking-wider text-zinc-500 hover:text-white"
-              >
-                ← Back to product
-              </button>
             </div>
-          </div>
 
-          {/* Divider */}
-          <div className="hidden"></div>
-
-          {/* Right Side - Lightning Invoice - maintain consistent width */}
-          <div className="w-full bg-[#111] p-6 lg:w-1/2">
-            <Card className="w-full border border-zinc-800 bg-[#161616]">
-              <CardHeader className="flex justify-center border-b border-zinc-800 pb-4">
-                <span className="text-xl font-black uppercase tracking-tighter text-white">Lightning Invoice</span>
-              </CardHeader>
-              <CardBody className="flex flex-col items-center">
-                {!paymentConfirmed ? (
-                  <div className="flex flex-col items-center justify-center">
-                    {qrCodeUrl ? (
-                      <>
-                        <h3 className="mt-3 mb-4 text-center text-lg font-bold text-white">
-                          Don&apos;t refresh or close the page until the payment
-                          has been confirmed!
-                        </h3>
-                        <Image
-                          alt="Lightning invoice"
-                          className="rounded-xl bg-white p-2 object-cover"
-                          src={qrCodeUrl}
-                        />
-                        <div className="flex items-center justify-center">
-                          <p className="mt-4 text-center font-mono text-zinc-400">
-                            {invoice.length > 30
-                              ? `${invoice.substring(
-                                  0,
-                                  10
-                                )}...${invoice.substring(
-                                  invoice.length - 10,
-                                  invoice.length
-                                )}`
-                              : invoice}
-                          </p>
-                          <ClipboardIcon
-                            onClick={handleCopyInvoice}
-                            className={`ml-2 mt-4 h-5 w-5 cursor-pointer text-zinc-400 hover:text-white ${
-                              copiedToClipboard ? "hidden" : ""
-                            }`}
-                          />
-                          <CheckIcon
-                            className={`ml-2 mt-4 h-5 w-5 text-green-500 ${
-                              copiedToClipboard ? "" : "hidden"
-                            }`}
-                          />
-                        </div>
-                      </>
-                    ) : (
-                      <div>
-                        <p className="animate-pulse text-zinc-500">Waiting for lightning invoice...</p>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center">
-                    <h3 className="mt-3 text-center text-lg font-bold text-white">
-                      Payment confirmed!
-                    </h3>
-                    <Image
-                      alt="Payment Confirmed"
-                      className="object-cover"
-                      src="../payment-confirmed.gif"
-                      width={350}
-                    />
-                  </div>
-                )}
-              </CardBody>
-            </Card>
+            <button
+              onClick={() => setIsBeingPaid(false)}
+              className="mt-4 text-sm font-bold uppercase tracking-wider text-zinc-500 hover:text-white"
+            >
+              ← Back to product
+            </button>
           </div>
         </div>
+
+        {/* Divider */}
+        <div className="hidden"></div>
+
+        {/* Right Side - Lightning Invoice - maintain consistent width */}
+        <div className="w-full bg-[#111] p-6 lg:w-1/2">
+          <Card className="w-full border border-zinc-800 bg-[#161616]">
+            <CardHeader className="flex justify-center border-b border-zinc-800 pb-4">
+              <span className="text-xl font-black uppercase tracking-tighter text-white">
+                Lightning Invoice
+              </span>
+            </CardHeader>
+            <CardBody className="flex flex-col items-center">
+              {!paymentConfirmed ? (
+                <div className="flex flex-col items-center justify-center">
+                  {qrCodeUrl ? (
+                    <>
+                      <h3 className="mb-4 mt-3 text-center text-lg font-bold text-white">
+                        Don&apos;t refresh or close the page until the payment
+                        has been confirmed!
+                      </h3>
+                      <Image
+                        alt="Lightning invoice"
+                        className="rounded-xl bg-white object-cover p-2"
+                        src={qrCodeUrl}
+                      />
+                      <div className="flex items-center justify-center">
+                        <p className="mt-4 text-center font-mono text-zinc-400">
+                          {invoice.length > 30
+                            ? `${invoice.substring(
+                                0,
+                                10
+                              )}...${invoice.substring(
+                                invoice.length - 10,
+                                invoice.length
+                              )}`
+                            : invoice}
+                        </p>
+                        <ClipboardIcon
+                          onClick={handleCopyInvoice}
+                          className={`ml-2 mt-4 h-5 w-5 cursor-pointer text-zinc-400 hover:text-white ${
+                            copiedToClipboard ? "hidden" : ""
+                          }`}
+                        />
+                        <CheckIcon
+                          className={`ml-2 mt-4 h-5 w-5 text-green-500 ${
+                            copiedToClipboard ? "" : "hidden"
+                          }`}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <div>
+                      <p className="animate-pulse text-zinc-500">
+                        Waiting for lightning invoice...
+                      </p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center">
+                  <h3 className="mt-3 text-center text-lg font-bold text-white">
+                    Payment confirmed!
+                  </h3>
+                  <Image
+                    alt="Payment Confirmed"
+                    className="object-cover"
+                    src="../payment-confirmed.gif"
+                    width={350}
+                  />
+                </div>
+              )}
+            </CardBody>
+          </Card>
+        </div>
+      </div>
     );
   }
 
@@ -2442,7 +2458,9 @@ export default function ProductInvoiceCard({
         {/* Left Side - Product Summary */}
         <div className="w-full border-r border-zinc-800 bg-[#161616] p-6 lg:w-1/2">
           <div className="sticky top-6">
-            <h2 className="mb-6 text-xl md:text-2xl font-black uppercase tracking-tighter text-white">Order Summary</h2>
+            <h2 className="mb-6 text-xl font-black uppercase tracking-tighter text-white md:text-2xl">
+              Order Summary
+            </h2>
 
             <div className="mb-6">
               <Image
@@ -2467,9 +2485,7 @@ export default function ProductInvoiceCard({
                 </p>
               )}
 
-              <p className="mb-1 font-medium text-zinc-400">
-                Quantity: 1
-              </p>
+              <p className="mb-1 font-medium text-zinc-400">Quantity: 1</p>
             </div>
 
             <div className="border-t border-zinc-700 pt-4">
@@ -2478,7 +2494,9 @@ export default function ProductInvoiceCard({
                   Cost Breakdown
                 </h4>
                 <div className="space-y-2 border-l-2 border-zinc-700 pl-3">
-                  <div className="text-sm font-bold text-white">{productData.title}</div>
+                  <div className="text-sm font-bold text-white">
+                    {productData.title}
+                  </div>
                   {appliedDiscount > 0 ? (
                     <>
                       <div className="flex justify-between text-sm text-zinc-400">
@@ -2555,7 +2573,9 @@ export default function ProductInvoiceCard({
           {/* Order Type Selection */}
           {showOrderTypeSelection && (
             <>
-              <h2 className="mb-6 text-xl md:text-2xl font-black uppercase tracking-tighter text-white">Select Order Type</h2>
+              <h2 className="mb-6 text-xl font-black uppercase tracking-tighter text-white md:text-2xl">
+                Select Order Type
+              </h2>
               <div className="space-y-4">
                 {productData.shippingType === "Free/Pickup" ? (
                   <>
@@ -2563,7 +2583,9 @@ export default function ProductInvoiceCard({
                       onClick={() => handleOrderTypeSelection("shipping")}
                       className="w-full rounded-xl border border-zinc-800 bg-[#161616] p-4 text-left transition-colors hover:border-yellow-400 hover:bg-zinc-900"
                     >
-                      <div className="font-bold uppercase tracking-wide text-white">Free shipping</div>
+                      <div className="font-bold uppercase tracking-wide text-white">
+                        Free shipping
+                      </div>
                       <div className="text-sm font-medium text-zinc-500">
                         Get it shipped to your address
                       </div>
@@ -2572,7 +2594,9 @@ export default function ProductInvoiceCard({
                       onClick={() => handleOrderTypeSelection("contact")}
                       className="w-full rounded-xl border border-zinc-800 bg-[#161616] p-4 text-left transition-colors hover:border-yellow-400 hover:bg-zinc-900"
                     >
-                      <div className="font-bold uppercase tracking-wide text-white">Pickup</div>
+                      <div className="font-bold uppercase tracking-wide text-white">
+                        Pickup
+                      </div>
                       <div className="text-sm font-medium text-zinc-500">
                         Arrange pickup with seller
                       </div>
@@ -2596,7 +2620,9 @@ export default function ProductInvoiceCard({
                     onClick={() => handleOrderTypeSelection("contact")}
                     className="w-full rounded-xl border border-zinc-800 bg-[#161616] p-4 text-left transition-colors hover:border-yellow-400 hover:bg-zinc-900"
                   >
-                    <div className="font-bold uppercase tracking-wide text-white">Online order</div>
+                    <div className="font-bold uppercase tracking-wide text-white">
+                      Online order
+                    </div>
                     <div className="text-sm font-medium text-zinc-500">
                       Digital or pickup delivery
                     </div>
@@ -2610,12 +2636,14 @@ export default function ProductInvoiceCard({
           {formType && (
             <>
               {formType === "shipping" && (
-                <h2 className="mb-6 text-xl md:text-2xl font-black uppercase tracking-tighter text-white">
+                <h2 className="mb-6 text-xl font-black uppercase tracking-tighter text-white md:text-2xl">
                   Shipping Information
                 </h2>
               )}
               {formType === "contact" && (
-                <h2 className="mb-6 text-xl md:text-2xl font-black uppercase tracking-tighter text-white">Payment Method</h2>
+                <h2 className="mb-6 text-xl font-black uppercase tracking-tighter text-white md:text-2xl">
+                  Payment Method
+                </h2>
               )}
 
               <form
@@ -2626,7 +2654,9 @@ export default function ProductInvoiceCard({
 
                 <div
                   className={`space-y-4 ${
-                    formType === "shipping" ? "border-t border-zinc-800 pt-6" : ""
+                    formType === "shipping"
+                      ? "border-t border-zinc-800 pt-6"
+                      : ""
                   }`}
                 >
                   {formType === "shipping" && (
@@ -2637,7 +2667,9 @@ export default function ProductInvoiceCard({
 
                   {Object.keys(fiatPaymentOptions).length > 0 && (
                     <Button
-                      className={`${NEO_BTN} h-14 w-full text-sm font-black tracking-widest ${!isFormValid ? "cursor-not-allowed opacity-50" : ""}`}
+                      className={`${NEO_BTN} h-14 w-full text-sm font-black tracking-widest ${
+                        !isFormValid ? "cursor-not-allowed opacity-50" : ""
+                      }`}
                       disabled={!isFormValid}
                       onClick={() => {
                         if (!isLoggedIn) {
@@ -2655,7 +2687,9 @@ export default function ProductInvoiceCard({
                   )}
 
                   <Button
-                    className={`${NEO_BTN} h-14 w-full text-sm font-black tracking-widest ${!isFormValid ? "cursor-not-allowed opacity-50" : ""}`}
+                    className={`${NEO_BTN} h-14 w-full text-sm font-black tracking-widest ${
+                      !isFormValid ? "cursor-not-allowed opacity-50" : ""
+                    }`}
                     disabled={!isFormValid}
                     onClick={() => {
                       if (!isLoggedIn) {
@@ -2673,7 +2707,9 @@ export default function ProductInvoiceCard({
 
                   {hasTokensAvailable && (
                     <Button
-                      className={`${NEO_BTN} h-14 w-full text-sm font-black tracking-widest ${!isFormValid ? "cursor-not-allowed opacity-50" : ""}`}
+                      className={`${NEO_BTN} h-14 w-full text-sm font-black tracking-widest ${
+                        !isFormValid ? "cursor-not-allowed opacity-50" : ""
+                      }`}
                       disabled={!isFormValid}
                       onClick={() => {
                         if (!isLoggedIn) {
@@ -2692,7 +2728,9 @@ export default function ProductInvoiceCard({
                   {/* NWC Button */}
                   {nwcInfo && (
                     <Button
-                      className={`${NEO_BTN} h-14 w-full text-sm font-black tracking-widest ${!isFormValid ? "cursor-not-allowed opacity-50" : ""}`}
+                      className={`${NEO_BTN} h-14 w-full text-sm font-black tracking-widest ${
+                        !isFormValid ? "cursor-not-allowed opacity-50" : ""
+                      }`}
                       disabled={!isFormValid || isNwcLoading}
                       isLoading={isNwcLoading}
                       onClick={() => {
@@ -2795,10 +2833,7 @@ export default function ProductInvoiceCard({
                     onChange={(e) => setFiatPaymentConfirmed(e.target.checked)}
                     className="h-4 w-4 rounded border-zinc-600 bg-zinc-800 text-yellow-400 focus:ring-yellow-400"
                   />
-                  <label
-                    htmlFor="paymentConfirmed"
-                    className="text-zinc-300"
-                  >
+                  <label htmlFor="paymentConfirmed" className="text-zinc-300">
                     I have sent the payment
                   </label>
                 </div>
@@ -2817,7 +2852,9 @@ export default function ProductInvoiceCard({
                   }
                 }}
                 disabled={!fiatPaymentConfirmed}
-                className={`${NEO_BTN} h-12 w-full text-sm font-black tracking-widest ${!fiatPaymentConfirmed ? "cursor-not-allowed opacity-50" : ""}`}
+                className={`${NEO_BTN} h-12 w-full text-sm font-black tracking-widest ${
+                  !fiatPaymentConfirmed ? "cursor-not-allowed opacity-50" : ""
+                }`}
               >
                 {selectedFiatOption === "cash"
                   ? "Confirm Order"
@@ -2831,7 +2868,7 @@ export default function ProductInvoiceCard({
                   setPendingPaymentData(null); // Clear stored data
                 }}
                 variant="bordered"
-                className="w-full text-zinc-400 hover:text-white border-zinc-700 hover:border-zinc-500 font-bold uppercase"
+                className="w-full border-zinc-700 font-bold uppercase text-zinc-400 hover:border-zinc-500 hover:text-white"
               >
                 Cancel
               </Button>
@@ -2868,7 +2905,8 @@ export default function ProductInvoiceCard({
                 className="max-w-xs"
                 variant="bordered"
                 classNames={{
-                  trigger: "bg-[#161616] border-zinc-700 text-white min-h-[56px]",
+                  trigger:
+                    "bg-[#161616] border-zinc-700 text-white min-h-[56px]",
                   value: "text-white text-base",
                   popoverContent: "bg-[#161616] border border-zinc-800 p-1",
                 }}
@@ -2884,7 +2922,7 @@ export default function ProductInvoiceCard({
                     <SelectItem
                       key={option}
                       value={option}
-                      className="text-white hover:bg-zinc-800 rounded-lg"
+                      className="rounded-lg text-white hover:bg-zinc-800"
                     >
                       {option}
                     </SelectItem>

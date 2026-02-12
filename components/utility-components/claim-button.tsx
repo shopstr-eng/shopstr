@@ -65,7 +65,6 @@ export default function ClaimButton({ token }: { token: string }) {
 
   const { mints, tokens, history } = getLocalStorageData();
 
-
   const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
   const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
   const [randomNpubForReceiver, setRandomNpubForReceiver] =
@@ -358,9 +357,9 @@ export default function ClaimButton({ token }: { token: string }) {
               Would you like to claim the token directly to your Shopstr wallet,
               or to your Lightning address?
             </div>
-            <div className="flex w-full flex-col sm:flex-row justify-center items-center gap-4">
+            <div className="flex w-full flex-col items-center justify-center gap-4 sm:flex-row">
               <Button
-                className="h-14 w-full sm:w-[48%] rounded-xl border border-zinc-700 bg-[#111] text-xs font-bold uppercase tracking-wider text-white hover:border-yellow-400 transition-colors"
+                className="h-14 w-full rounded-xl border border-zinc-700 bg-[#111] text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-yellow-400 sm:w-[48%]"
                 onClick={() => handleClaimType("receive")}
                 startContent={
                   <ArrowDownTrayIcon className="h-6 w-6 text-yellow-400" />
@@ -369,11 +368,9 @@ export default function ClaimButton({ token }: { token: string }) {
                 Receive
               </Button>
               <Button
-                className="h-14 w-full sm:w-[48%] rounded-xl border border-zinc-700 bg-[#111] text-xs font-bold uppercase tracking-wider text-white hover:border-yellow-400 transition-colors"
+                className="h-14 w-full rounded-xl border border-zinc-700 bg-[#111] text-xs font-bold uppercase tracking-wider text-white transition-colors hover:border-yellow-400 sm:w-[48%]"
                 onClick={() => handleClaimType("redeem")}
-                startContent={
-                  <BoltIcon className="h-6 w-6 text-yellow-400" />
-                }
+                startContent={<BoltIcon className="h-6 w-6 text-yellow-400" />}
               >
                 Redeem
               </Button>
@@ -404,7 +401,7 @@ export default function ClaimButton({ token }: { token: string }) {
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">No valid Lightning address found!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-zinc-300 font-medium">
+              <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
                 <div className="flex items-center justify-center">
                   Check your Shopstr wallet for your sats.
                 </div>
@@ -436,7 +433,7 @@ export default function ClaimButton({ token }: { token: string }) {
                 <CheckCircleIcon className="h-6 w-6 text-green-500" />
                 <div className="ml-2">Token successfully claimed!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-zinc-300 font-medium">
+              <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
                 <div className="flex items-center justify-center">
                   Check your Shopstr wallet for your sats.
                 </div>
@@ -468,7 +465,7 @@ export default function ClaimButton({ token }: { token: string }) {
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Duplicate token!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-zinc-300 font-medium">
+              <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
                 <div className="flex items-center justify-center">
                   The token you are trying to claim is already in your Shopstr
                   wallet.
@@ -501,7 +498,7 @@ export default function ClaimButton({ token }: { token: string }) {
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Spent token!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-zinc-300 font-medium">
+              <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
                 <div className="flex items-center justify-center">
                   The token you are trying to claim has already been redeemed.
                 </div>
@@ -533,7 +530,7 @@ export default function ClaimButton({ token }: { token: string }) {
                 <CheckCircleIcon className="h-6 w-6 text-green-500" />
                 <div className="ml-2">Token successfully redeemed!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-zinc-300 font-medium">
+              <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
                 <div className="flex items-center justify-center">
                   Check your Lightning address ({lnurl}) for your sats.
                 </div>
@@ -564,7 +561,7 @@ export default function ClaimButton({ token }: { token: string }) {
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Token redemption failed!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-zinc-300 font-medium">
+              <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
                 <div className="flex items-center justify-center">
                   You are attempting to redeem a token that has already been
                   redeemed, is too small/large, or for which there were no

@@ -3,7 +3,9 @@ import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 export default function Faq() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>(
+    {}
+  );
 
   const faqSections = [
     {
@@ -159,7 +161,7 @@ export default function Faq() {
     .filter((section) => section.items.length > 0);
 
   return (
-    <div className="min-h-screen bg-[#050505] pt-32 pb-20 text-white">
+    <div className="min-h-screen bg-[#050505] pb-20 pt-32 text-white">
       <div className="container mx-auto max-w-3xl px-4">
         {/* Header */}
         <div className="mb-16 flex flex-col items-center text-center">
@@ -180,7 +182,7 @@ export default function Faq() {
               <path d="M12 17h.01" />
             </svg>
           </div>
-          <h1 className="mb-4 text-3xl md:text-5xl font-black uppercase tracking-tight lg:text-6xl">
+          <h1 className="mb-4 text-3xl font-black uppercase tracking-tight md:text-5xl lg:text-6xl">
             How can we <span className="text-shopstr-yellow">help?</span>
           </h1>
           <p className="mb-10 max-w-lg text-lg text-gray-400">
@@ -208,7 +210,7 @@ export default function Faq() {
             </div>
             <input
               type="text"
-              className="w-full rounded-xl border border-white/10 bg-[#111] py-4 pl-12 pr-4 text-white text-base placeholder-gray-600 transition-colors focus:border-white/20 focus:outline-none"
+              className="w-full rounded-xl border border-white/10 bg-[#111] py-4 pl-12 pr-4 text-base text-white placeholder-gray-600 transition-colors focus:border-white/20 focus:outline-none"
               placeholder="Search for answers..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -224,11 +226,11 @@ export default function Faq() {
               <div className="relative flex items-center justify-center py-10">
                 <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-white/10"></div>
                 <div className="relative rounded-full border border-white/5 p-1">
-                  <div className="rounded-full border border-white/10 bg-[#111] px-6 py-2 md:px-10 md:py-3 text-center">
-                    <span className="text-lg md:text-2xl font-black uppercase tracking-tight text-white">
+                  <div className="rounded-full border border-white/10 bg-[#111] px-6 py-2 text-center md:px-10 md:py-3">
+                    <span className="text-lg font-black uppercase tracking-tight text-white md:text-2xl">
                       {section.title}
                     </span>
-                 </div>
+                  </div>
                 </div>
               </div>
 
@@ -251,7 +253,7 @@ export default function Faq() {
                           {item.title}
                         </span>
                         <div
-                          className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 transition-transform duration-200 ${
+                          className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 duration-200 transition-transform ${
                             isOpen ? "rotate-180" : ""
                           }`}
                         >
@@ -302,7 +304,7 @@ export default function Faq() {
               href="https://njump.me/npub15dc33fyg3cpd9r58vlqge2hh8dy6hkkrjxkhluv2xpyfreqkmsesesyv6e"
               target="_blank"
               rel="noopener noreferrer"
-              className={`${NEO_BTN} flex items-center justify-center min-w-[160px] py-3 px-6`}
+              className={`${NEO_BTN} flex min-w-[160px] items-center justify-center px-6 py-3`}
             >
               Contact Support
             </a>

@@ -65,7 +65,7 @@ export default function Landing() {
             height={40}
             alt="Shopstr"
           />
-          <span className="text-xl font-black tracking-tighter text-white hidden sm:block">
+          <span className="hidden text-xl font-black tracking-tighter text-white sm:block">
             SHOPSTR
           </span>
         </div>
@@ -115,7 +115,7 @@ export default function Landing() {
         <div className="mb-8 inline-block rounded-full border border-yellow-400/30 bg-yellow-400/5 px-6 py-2 text-xs font-bold uppercase tracking-[0.2em] text-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.1)]">
           The Future of Commerce
         </div>
-        <h1 className="mb-6 text-5xl md:text-7xl lg:text-9xl font-black uppercase tracking-tighter text-white [text-shadow:4px_4px_0px_#45320b] md:[text-shadow:6px_6px_0px_#45320b]">
+        <h1 className="mb-6 text-5xl font-black uppercase tracking-tighter text-white [text-shadow:4px_4px_0px_#45320b] md:text-7xl md:[text-shadow:6px_6px_0px_#45320b] lg:text-9xl">
           Shopstr
         </h1>
         <p className="mb-12 max-w-2xl text-xl font-medium text-zinc-400 md:text-2xl">
@@ -142,7 +142,7 @@ export default function Landing() {
             Start Shopping
           </Button>
           <Button
-            className={`${NEO_BTN} h-14 px-8 text-sm bg-transparent text-white border-white hover:bg-white hover:text-black`}
+            className={`${NEO_BTN} h-14 border-white bg-transparent px-8 text-sm text-white hover:bg-white hover:text-black`}
             onClick={() =>
               window.open("https://github.com/shopstr-eng/shopstr", "_blank")
             }
@@ -159,7 +159,7 @@ export default function Landing() {
           <h2 className="text-3xl font-black text-white md:text-5xl">
             Why Choose Shopstr?
           </h2>
-          <div className="mt-4 mx-auto h-1.5 w-24 bg-yellow-400 rounded-full"></div>
+          <div className="mx-auto mt-4 h-1.5 w-24 rounded-full bg-yellow-400"></div>
         </div>
 
         <div className="grid gap-6 md:grid-cols-3">
@@ -338,7 +338,7 @@ export default function Landing() {
                   width={500}
                   height={300}
                   alt="Step 1"
-                  className="w-full h-auto rounded-xl opacity-80"
+                  className="h-auto w-full rounded-xl opacity-80"
                 />
               </div>
             </div>
@@ -366,7 +366,7 @@ export default function Landing() {
                   width={500}
                   height={300}
                   alt="Step 2"
-                  className="w-full h-auto rounded-xl opacity-80"
+                  className="h-auto w-full rounded-xl opacity-80"
                 />
               </div>
             </div>
@@ -394,7 +394,7 @@ export default function Landing() {
                   alt="Step 3"
                   width={500}
                   height={300}
-                  className="w-full h-auto rounded-xl opacity-80"
+                  className="h-auto w-full rounded-xl opacity-80"
                 />
               </div>
             </div>
@@ -422,7 +422,7 @@ export default function Landing() {
                   alt="Step 4"
                   width={500}
                   height={300}
-                  className="w-full h-auto rounded-xl opacity-80"
+                  className="h-auto w-full rounded-xl opacity-80"
                 />
               </div>
             </div>
@@ -462,7 +462,7 @@ export default function Landing() {
               </span>
             </div>
 
-            <div className="flex flex-wrap justify-center gap-6 md:gap-8 text-xs font-bold uppercase tracking-wider text-zinc-500">
+            <div className="flex flex-wrap justify-center gap-6 text-xs font-bold uppercase tracking-wider text-zinc-500 md:gap-8">
               <Link href="/faq" className="hover:text-white">
                 FAQ
               </Link>

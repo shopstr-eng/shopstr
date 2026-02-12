@@ -192,9 +192,7 @@ const PayButton = () => {
       <Button
         className={`${NEO_BTN} w-full py-6 text-sm font-black tracking-widest`}
         onClick={() => setShowPayModal(!showPayModal)}
-        startContent={
-          <BoltIcon className="h-5 w-5 stroke-2" />
-        }
+        startContent={<BoltIcon className="h-5 w-5 stroke-2" />}
       >
         Pay
       </Button>

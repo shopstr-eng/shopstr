@@ -75,7 +75,7 @@ const SingleCommunityPage = () => {
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-shopstr-purple/20 via-[#111]/80 to-[#111]"></div>
 
           {/* Centered Logo */}
-          <div className="absolute left-1/2 top-12 md:top-24 z-10 flex h-24 w-24 md:h-32 md:w-32 -translate-x-1/2 items-center justify-center rounded-3xl border-[6px] border-[#111] bg-[#1a1a1a] shadow-2xl">
+          <div className="absolute left-1/2 top-12 z-10 flex h-24 w-24 -translate-x-1/2 items-center justify-center rounded-3xl border-[6px] border-[#111] bg-[#1a1a1a] shadow-2xl md:top-24 md:h-32 md:w-32">
             <img
               src={sanitizeUrl(community.image)}
               alt={community.name}
@@ -84,11 +84,11 @@ const SingleCommunityPage = () => {
           </div>
 
           {/* Info */}
-          <div className="px-6 md:px-8 pb-10 pt-40 md:pt-60 text-center">
-            <h1 className="mb-2 text-2xl md:text-4xl font-black uppercase tracking-tighter text-white">
+          <div className="px-6 pb-10 pt-40 text-center md:px-8 md:pt-60">
+            <h1 className="mb-2 text-2xl font-black uppercase tracking-tighter text-white md:text-4xl">
               {community.name}
             </h1>
-            <p className="mx-auto max-w-2xl text-base md:text-lg text-gray-400 leading-relaxed">
+            <p className="mx-auto max-w-2xl text-base leading-relaxed text-gray-400 md:text-lg">
               {community.description}
             </p>
           </div>
@@ -96,7 +96,7 @@ const SingleCommunityPage = () => {
 
         {/* Feed Section Header */}
         <div className="mb-6 flex items-center justify-between border-b-2 border-shopstr-yellow/50 pb-2">
-          <h2 className="text-lg md:text-xl font-black uppercase text-white">
+          <h2 className="text-lg font-black uppercase text-white md:text-xl">
             Discussion
           </h2>
           <div className="flex gap-2">

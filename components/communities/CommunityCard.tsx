@@ -22,7 +22,7 @@ const CommunityCard: React.FC<CommunityCardProps> = ({ community }) => {
   };
 
   return (
-    <div className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#111] transition-transform duration-300 hover:-translate-y-1 hover:shadow-xl">
+    <div className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#111] duration-300 transition-transform hover:-translate-y-1 hover:shadow-xl">
       {/* Grey Banner Header */}
       <div className="relative h-32 w-full overflow-hidden bg-[#18181b]">
         <div className="absolute inset-0 bg-gradient-to-bl from-shopstr-purple/40 via-[#18181b] to-shopstr-yellow/10 opacity-80"></div>
@@ -44,7 +44,7 @@ const CommunityCard: React.FC<CommunityCardProps> = ({ community }) => {
         <span className="mb-3 w-fit rounded bg-white/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
           Community
         </span>
-        <h4 className="mb-3 text-xl font-bold text-white line-clamp-1">
+        <h4 className="mb-3 line-clamp-1 text-xl font-bold text-white">
           {community.name}
         </h4>
         <p className="mb-6 line-clamp-3 text-sm text-gray-400">
@@ -52,7 +52,7 @@ const CommunityCard: React.FC<CommunityCardProps> = ({ community }) => {
         </p>
         <button
           onClick={handleVisit}
-          className="mt-auto flex w-full items-center justify-center gap-2 rounded-xl border-2 border-transparent bg-yellow-400 py-3 text-xs font-black uppercase tracking-widest text-black shadow-[2px_2px_0px_0px_#ffffff] transition-all hover:bg-yellow-500 hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
+          className="mt-auto flex w-full items-center justify-center gap-2 rounded-xl border-2 border-transparent bg-yellow-400 py-3 text-xs font-black uppercase tracking-widest text-black shadow-[2px_2px_0px_0px_#ffffff] transition-all hover:translate-x-[1px] hover:translate-y-[1px] hover:bg-yellow-500 hover:shadow-none active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
         >
           Visit <ArrowLongRightIcon className="h-4 w-4" />
         </button>

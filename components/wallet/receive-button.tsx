@@ -132,9 +132,7 @@ const ReceiveButton = () => {
         <Button
           className={`${NEO_BTN} w-full py-6 text-sm font-black tracking-widest`}
           onClick={() => setShowReceiveModal(!showReceiveModal)}
-          startContent={
-            <ArrowDownTrayIcon className="h-5 w-5 stroke-2" />
-          }
+          startContent={<ArrowDownTrayIcon className="h-5 w-5 stroke-2" />}
         >
           Receive
         </Button>

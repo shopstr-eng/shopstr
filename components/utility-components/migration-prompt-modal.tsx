@@ -101,7 +101,8 @@ export default function MigrationPromptModal({
               placeholder="Enter your passphrase..."
               variant="bordered"
               classNames={{
-                label: "text-zinc-500 font-bold uppercase tracking-wider text-xs",
+                label:
+                  "text-zinc-500 font-bold uppercase tracking-wider text-xs",
                 input: "text-white text-base md:text-sm", // Prevents iOS auto-zoom
                 inputWrapper:
                   "bg-[#111] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
@@ -116,9 +117,9 @@ export default function MigrationPromptModal({
             />
           </div>
 
-          <div className="flex flex-col sm:flex-row justify-end gap-3 sm:space-x-4">
+          <div className="flex flex-col justify-end gap-3 sm:flex-row sm:space-x-4">
             <Button
-              className="h-12 sm:h-10 font-bold uppercase tracking-wider text-zinc-500 hover:text-white order-2 sm:order-1"
+              className="order-2 h-12 font-bold uppercase tracking-wider text-zinc-500 hover:text-white sm:order-1 sm:h-10"
               variant="light"
               onClick={() => {
                 resetModal();
@@ -128,7 +129,7 @@ export default function MigrationPromptModal({
               Later
             </Button>
             <Button
-              className={`${NEO_BTN} h-12 sm:h-10 px-6 text-xs order-1 sm:order-2`}
+              className={`${NEO_BTN} order-1 h-12 px-6 text-xs sm:order-2 sm:h-10`}
               onClick={handleMigration}
               isLoading={isLoading}
               isDisabled={!passphrase || isLoading}

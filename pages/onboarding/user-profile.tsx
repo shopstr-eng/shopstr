@@ -33,7 +33,7 @@ const OnboardingUserProfile = () => {
             />
             <h1 className="text-3xl font-bold text-white">Shopstr</h1>
           </div>
-          <h2 className="mb-4 text-center text-3xl md:text-4xl font-black text-white">
+          <h2 className="mb-4 text-center text-3xl font-black text-white md:text-4xl">
             Setup Your Profile
           </h2>
           <p className="text-center text-gray-400">
@@ -61,9 +61,9 @@ const OnboardingUserProfile = () => {
           >
             Skip for now
           </button>
-          <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="flex w-full items-center gap-3 sm:w-auto">
             <Button
-              className={`${NEO_BTN} w-full sm:w-auto px-8 py-6 text-sm`}
+              className={`${NEO_BTN} w-full px-8 py-6 text-sm sm:w-auto`}
               onClick={handleNext}
             >
               Next <ArrowLongRightIcon className="h-5 w-5" />

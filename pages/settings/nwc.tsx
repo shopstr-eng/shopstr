@@ -216,7 +216,7 @@ const NWCSettingsPage = () => {
 
             {walletInfo && (
               <Button
-                className={`${NEO_BTN} ml-4 h-12 px-6 text-sm bg-red-500 text-white hover:bg-red-400`}
+                className={`${NEO_BTN} ml-4 h-12 bg-red-500 px-6 text-sm text-white hover:bg-red-400`}
                 onClick={handleRemove}
               >
                 Disconnect Wallet
@@ -234,7 +234,7 @@ const NWCSettingsPage = () => {
               </CardHeader>
               <CardBody>
                 {balance !== null ? (
-                  <p className="text-zinc-300 font-medium">
+                  <p className="font-medium text-zinc-300">
                     Balance: {formatWithCommas(balance, "sats")}
                   </p>
                 ) : walletInfo.methods.includes("get_balance") ? (

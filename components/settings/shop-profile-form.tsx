@@ -94,41 +94,41 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
 
   return (
     <>
-      <div className="mb-16 md:mb-20 h-32 md:h-48 rounded-2xl bg-[#161616] border border-zinc-800 overflow-visible">
-        <div className="relative flex h-32 md:h-48 items-center justify-center rounded-2xl bg-[#111] overflow-hidden">
+      <div className="mb-16 h-32 overflow-visible rounded-2xl border border-zinc-800 bg-[#161616] md:mb-20 md:h-48">
+        <div className="relative flex h-32 items-center justify-center overflow-hidden rounded-2xl bg-[#111] md:h-48">
           {watchBanner && (
             <Image
               alt={"Shop banner image"}
               src={watchBanner}
-              className="h-32 md:h-48 w-full rounded-2xl object-cover"
+              className="h-32 w-full rounded-2xl object-cover md:h-48"
             />
           )}
           <FileUploaderButton
-            className={`${NEO_BTN} absolute bottom-2 right-2 md:bottom-4 md:right-4 z-20 h-8 md:h-10 px-3 md:px-4 text-[10px] md:text-xs`}
+            className={`${NEO_BTN} absolute bottom-2 right-2 z-20 h-8 px-3 text-[10px] md:bottom-4 md:right-4 md:h-10 md:px-4 md:text-xs`}
             imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
           >
             Upload Banner
           </FileUploaderButton>
         </div>
         <div className="flex items-center justify-center">
-          <div className="relative z-50 mt-[-2.5rem] md:mt-[-3.5rem] h-20 w-20 md:h-28 md:w-28">
-            <div className="border-4 border-[#111] rounded-full">
+          <div className="relative z-50 mt-[-2.5rem] h-20 w-20 md:mt-[-3.5rem] md:h-28 md:w-28">
+            <div className="rounded-full border-4 border-[#111]">
               <FileUploaderButton
                 isIconOnly={true}
-                className={`${NEO_BTN} absolute bottom-0 right-0 z-[60] h-8 w-8 md:h-10 md:w-10 min-w-0 rounded-full border-white p-0 shadow-lg`}
+                className={`${NEO_BTN} absolute bottom-0 right-0 z-[60] h-8 w-8 min-w-0 rounded-full border-white p-0 shadow-lg md:h-10 md:w-10`}
                 imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
               />
               {watchPicture ? (
                 <Image
                   src={watchPicture}
                   alt="shop logo"
-                  className="rounded-full h-18 w-18 md:h-24 md:w-24 object-cover"
+                  className="h-18 w-18 rounded-full object-cover md:h-24 md:w-24"
                 />
               ) : (
                 <Image
                   src={defaultImage}
                   alt="shop logo"
-                  className="rounded-full h-18 w-18 md:h-24 md:w-24 object-cover"
+                  className="h-18 w-18 rounded-full object-cover md:h-24 md:w-24"
                 />
               )}
             </div>
@@ -156,7 +156,8 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
               <Input
                 className="pb-6"
                 classNames={{
-                  label: "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                  label:
+                    "text-zinc-400 font-bold uppercase tracking-wider text-sm",
                   input: "text-white",
                   inputWrapper:
                     "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
@@ -195,7 +196,8 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
               <Textarea
                 className="pb-8"
                 classNames={{
-                  label: "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                  label:
+                    "text-zinc-400 font-bold uppercase tracking-wider text-sm",
                   input: "text-white",
                   inputWrapper:
                     "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400",

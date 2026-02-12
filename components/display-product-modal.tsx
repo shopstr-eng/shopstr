@@ -111,7 +111,8 @@ export default function DisplayProductModal({
           backdrop: "bg-black/80 backdrop-blur-sm",
           header: "border-b border-zinc-200 dark:border-[#27272a] py-4",
           footer: "border-t border-zinc-200 dark:border-[#27272a] py-4",
-          closeButton: "hover:bg-zinc-100 dark:hover:bg-zinc-800 active:bg-zinc-200 dark:active:bg-zinc-700 text-zinc-500",
+          closeButton:
+            "hover:bg-zinc-100 dark:hover:bg-zinc-800 active:bg-zinc-200 dark:active:bg-zinc-700 text-zinc-500",
         }}
         isDismissable={false}
         scrollBehavior={"outside"}
@@ -119,11 +120,16 @@ export default function DisplayProductModal({
       >
         <ModalContent>
           <ModalHeader className="flex flex-col text-light-text dark:text-dark-text">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
-              <h2 className="text-xl md:text-2xl font-black uppercase tracking-tighter text-light-text dark:text-dark-text">
+            <div className="flex flex-col justify-between gap-2 md:flex-row md:items-center">
+              <h2 className="text-xl font-black uppercase tracking-tighter text-light-text dark:text-dark-text md:text-2xl">
                 {productData.title}
                 {isExpired && (
-                  <Chip color="warning" variant="flat" className="ml-2" size="sm">
+                  <Chip
+                    color="warning"
+                    variant="flat"
+                    className="ml-2"
+                    size="sm"
+                  >
                     Outdated
                   </Chip>
                 )}
@@ -131,7 +137,10 @@ export default function DisplayProductModal({
               <div className="flex items-center gap-3">
                 {productData.expiration && (
                   <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">
-                    Expires: {new Date(productData.expiration * 1000).toLocaleDateString()}
+                    Expires:{" "}
+                    {new Date(
+                      productData.expiration * 1000
+                    ).toLocaleDateString()}
                   </p>
                 )}
                 {productData.status === "active" && (
@@ -260,7 +269,7 @@ export default function DisplayProductModal({
           </ModalBody>
 
           <ModalFooter>
-            <div className="grid w-full grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <Button
                 type="submit"
                 className={`${NEO_BTN} w-full`}

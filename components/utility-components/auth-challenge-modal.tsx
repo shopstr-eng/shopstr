@@ -70,7 +70,7 @@ export default function AuthChallengeModal({
           Waiting for confirmation
         </ModalHeader>
         <ModalBody>
-          <div className="text-zinc-300 break-words">
+          <div className="break-words text-zinc-300">
             {challengeUrl
               ? "Please confirm this action on your remote signer"
               : challenge}

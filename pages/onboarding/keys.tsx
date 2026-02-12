@@ -131,7 +131,7 @@ const Keys = () => {
                   className="group flex cursor-pointer items-center justify-between rounded-xl border border-white/10 bg-[#111] px-4 py-3 transition-colors hover:border-white/20"
                   onClick={handleCopyPubkey}
                 >
-                  <span className="truncate pr-4 font-mono text-gray-400 flex-1 min-w-0">
+                  <span className="min-w-0 flex-1 truncate pr-4 font-mono text-gray-400">
                     {npub}
                   </span>
                   <Square2StackIcon className="h-5 w-5 flex-shrink-0 text-gray-500 transition-colors group-hover:text-white" />
@@ -146,7 +146,7 @@ const Keys = () => {
               {privateKey && (
                 <div className="group relative flex items-center rounded-xl border border-white/10 bg-[#111] px-4 py-3 transition-colors hover:border-white/20">
                   <div
-                    className="mr-auto flex-1 min-w-0 cursor-pointer truncate font-mono text-gray-400"
+                    className="mr-auto min-w-0 flex-1 cursor-pointer truncate font-mono text-gray-400"
                     onClick={() =>
                       setViewState(viewState === "shown" ? "hidden" : "shown")
                     }
@@ -170,7 +170,7 @@ const Keys = () => {
               </label>
               <input
                 type="password"
-                className="w-full rounded-xl border border-white/10 bg-[#111] px-4 py-3 font-mono text-white text-base placeholder-gray-600 transition-colors focus:border-white/30 focus:outline-none"
+                className="w-full rounded-xl border border-white/10 bg-[#111] px-4 py-3 font-mono text-base text-white placeholder-gray-600 transition-colors focus:border-white/30 focus:outline-none"
                 value={passphrase}
                 placeholder="Enter a passphrase of your choice..."
                 onChange={(e) => setPassphrase(e.target.value)}

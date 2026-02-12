@@ -67,7 +67,7 @@ export default function ProductCard({
 
   const content = (
     <div
-      className="flex h-full flex-col cursor-pointer"
+      className="flex h-full cursor-pointer flex-col"
       onClick={(e) => {
         onProductClick && onProductClick(productData, e);
       }}
@@ -79,7 +79,7 @@ export default function ProductCard({
           showThumbs={false}
         />
         {/* Overlay Badges */}
-        <div className="absolute top-3 right-3 z-10 flex gap-2">
+        <div className="absolute right-3 top-3 z-10 flex gap-2">
           {isExpired && (
             <Chip color="warning" size="sm" variant="solid">
               Outdated
@@ -135,7 +135,7 @@ export default function ProductCard({
                   }}
                 >
                   <DropdownTrigger>
-                    <button className="-mt-1 -mr-2 p-2 text-zinc-500 hover:text-white">
+                    <button className="-mr-2 -mt-1 p-2 text-zinc-500 hover:text-white">
                       <EllipsisVerticalIcon className="h-6 w-6" />
                     </button>
                   </DropdownTrigger>
@@ -178,7 +178,7 @@ export default function ProductCard({
                 </div>
               )}
 
-              <div className="ml-auto flex min-w-fit shrink-0 items-center whitespace-nowrap rounded-lg bg-[#27272a] border border-zinc-700 px-3 py-2 text-xs font-bold text-white shadow-sm">
+              <div className="ml-auto flex min-w-fit shrink-0 items-center whitespace-nowrap rounded-lg border border-zinc-700 bg-[#27272a] px-3 py-2 text-xs font-bold text-white shadow-sm">
                 {!isZapsnag ? (
                   <CompactPriceDisplay monetaryInfo={productData} />
                 ) : (
@@ -196,7 +196,7 @@ export default function ProductCard({
 
   return (
     <div
-      className={`group relative mx-auto w-full max-w-[320px] rounded-2xl border border-zinc-800 bg-[#18181b] transition-all duration-300 hover:-translate-y-1 hover:border-4 hover:border-white hover:shadow-2xl`}
+      className={`group relative mx-auto w-full max-w-[320px] rounded-2xl border border-zinc-800 bg-[#18181b] duration-300 transition-all hover:-translate-y-1 hover:border-4 hover:border-white hover:shadow-2xl`}
     >
       <div className="h-full w-full overflow-hidden rounded-2xl">
         {href ? (

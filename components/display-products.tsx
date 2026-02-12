@@ -358,7 +358,7 @@ const DisplayProducts = ({
 
   return (
     <>
-      <div className="w-full px-2 md:pl-4 md:px-0">
+      <div className="w-full px-2 md:px-0 md:pl-4">
         {!isMyListings &&
         (profileMapContext.isLoading ||
           productEventContext.isLoading ||
@@ -369,7 +369,7 @@ const DisplayProducts = ({
         ) : null}
         {filteredProducts.length > 0 ? (
           <>
-            <div className="grid w-full grid-cols-[repeat(auto-fill,minmax(280px,1fr))] md:grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-hidden">
+            <div className="grid w-full grid-cols-[repeat(auto-fill,minmax(280px,1fr))] justify-items-center gap-4 overflow-hidden md:grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">
               {getCurrentPageProducts().map(
                 (productData: ProductData, index) => (
                   <ProductCard
@@ -383,7 +383,7 @@ const DisplayProducts = ({
             </div>
 
             {totalPages > 1 && (
-              <div className="mt-12 mb-8 flex justify-center overflow-x-auto pb-2">
+              <div className="mb-8 mt-12 flex justify-center overflow-x-auto pb-2">
                 <Pagination
                   total={totalPages}
                   page={currentPage}
@@ -428,7 +428,7 @@ const DisplayProducts = ({
           !isProductsLoading &&
           !productEvents.some((product) => product.pubkey === userPubkey) && (
             <div className="flex h-[60vh] flex-col items-center justify-center">
-              <div className="flex w-full max-w-2xl flex-col items-center justify-center rounded-[32px] border border-zinc-800 bg-[#18181b] p-6 md:p-12 text-center shadow-2xl">
+              <div className="flex w-full max-w-2xl flex-col items-center justify-center rounded-[32px] border border-zinc-800 bg-[#18181b] p-6 text-center shadow-2xl md:p-12">
                 <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-3xl bg-zinc-800/50">
                   <CubeIcon className="h-12 w-12 text-zinc-400" />
                 </div>

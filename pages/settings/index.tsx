@@ -95,9 +95,7 @@ const SettingsPage = () => {
                 title: "text-red-500 font-bold uppercase tracking-wide",
               }}
               startContent={
-                <ArrowRightStartOnRectangleIcon
-                  className="h-6 w-6 text-red-500"
-                />
+                <ArrowRightStartOnRectangleIcon className="h-6 w-6 text-red-500" />
               }
               onClick={() => {
                 LogOut();

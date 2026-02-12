@@ -96,7 +96,7 @@ const CreateCommunityForm: React.FC<CreateCommunityFormProps> = ({
         )}
       />
       <div className="flex flex-col gap-2">
-        <label className="text-xs font-black tracking-widest text-zinc-400 uppercase">
+        <label className="text-xs font-black uppercase tracking-widest text-zinc-400">
           Community Image
         </label>
         {watchImage && (
@@ -125,7 +125,7 @@ const CreateCommunityForm: React.FC<CreateCommunityFormProps> = ({
           <Button
             variant="light"
             onClick={onCancel}
-            className="h-14 w-full rounded-xl border border-zinc-700 text-zinc-400 font-bold uppercase tracking-wider hover:border-white hover:text-white sm:w-auto sm:px-8"
+            className="h-14 w-full rounded-xl border border-zinc-700 font-bold uppercase tracking-wider text-zinc-400 hover:border-white hover:text-white sm:w-auto sm:px-8"
           >
             Cancel
           </Button>

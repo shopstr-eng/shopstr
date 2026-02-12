@@ -260,7 +260,7 @@ export const FileUploaderButton = ({
         onDrop={handleDrop}
         className={`relative w-full duration-300 transition-all ${
           isPlaceholder
-            ? "flex h-full min-h-[180px] md:min-h-[250px] items-center justify-center rounded-2xl border-2 border-dashed border-zinc-700 bg-[#111] p-4 md:p-6 hover:border-yellow-400 hover:bg-[#161616]"
+            ? "flex h-full min-h-[180px] items-center justify-center rounded-2xl border-2 border-dashed border-zinc-700 bg-[#111] p-4 hover:border-yellow-400 hover:bg-[#161616] md:min-h-[250px] md:p-6"
             : !isDragging && "border-2 border-dashed border-transparent"
         }`}
       >
@@ -278,12 +278,12 @@ export const FileUploaderButton = ({
               animate={{ scale: [1, 1.1, 1] }}
               transition={{ duration: 0.8, repeat: Infinity }}
             >
-              <PhotoIcon className="mb-4 h-12 w-12 md:h-16 md:w-16 text-yellow-400" />
+              <PhotoIcon className="mb-4 h-12 w-12 text-yellow-400 md:h-16 md:w-16" />
             </motion.div>
-            <p className="text-lg md:text-xl font-black uppercase tracking-wider text-white text-center px-4">
+            <p className="px-4 text-center text-lg font-black uppercase tracking-wider text-white md:text-xl">
               {isDragging ? "DROP TO UPLOAD" : "TAP OR DRAG TO UPLOAD"}
             </p>
-            <p className="mt-2 text-center text-[10px] md:text-xs font-bold uppercase tracking-wider text-zinc-500">
+            <p className="mt-2 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500 md:text-xs">
               {isPlaceholder && !isDragging
                 ? "Supports JPEG, PNG, WebP"
                 : "Release to start upload"}
@@ -300,7 +300,7 @@ export const FileUploaderButton = ({
             disabled={disabled || loading}
             className={`${
               isProductUpload && "w-full"
-            } ${className} transition-all font-bold uppercase tracking-wider h-12 md:h-14`}
+            } ${className} h-12 font-bold uppercase tracking-wider transition-all md:h-14`}
             startContent={
               <motion.div
                 animate={loading ? {} : { scale: [1, 1.05, 1] }}

@@ -107,7 +107,7 @@ const Listing = () => {
               <div className="overflow-hidden rounded-xl border border-zinc-800 bg-[#161616]">
                 <img
                   src={productData.images[0]}
-                  className="h-64 md:h-96 w-full object-cover"
+                  className="h-64 w-full object-cover md:h-96"
                 />
                 <div className="p-6">
                   <div className="mb-2 flex items-start justify-between">
@@ -209,7 +209,7 @@ const Listing = () => {
                   <CheckCircleIcon className="h-6 w-6 text-green-500" />
                   <div className="ml-2">Order successful!</div>
                 </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden text-zinc-300 font-medium">
+                <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
                   <div className="flex items-center justify-center">
                     The seller will receive a message with your order details.
                   </div>
@@ -241,7 +241,7 @@ const Listing = () => {
                   <XCircleIcon className="h-6 w-6 text-red-500" />
                   <div className="ml-2">Invoice generation failed!</div>
                 </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden text-zinc-300 font-medium">
+                <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
                   <div className="flex items-center justify-center">
                     The price and/or currency set for this listing was invalid.
                   </div>
@@ -273,7 +273,7 @@ const Listing = () => {
                   <XCircleIcon className="h-6 w-6 text-red-500" />
                   <div className="ml-2">Purchase failed!</div>
                 </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden text-zinc-300 font-medium">
+                <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
                   <div className="flex items-center justify-center">
                     You didn&apos;t have enough balance in your wallet to pay.
                   </div>
@@ -305,7 +305,7 @@ const Listing = () => {
                   <XCircleIcon className="h-6 w-6 text-red-500" />
                   <div className="ml-2">Order failed!</div>
                 </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden text-zinc-300 font-medium">
+                <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
                   <div className="flex items-center justify-center">
                     Your order information was not delivered to the seller.
                     Please try again.

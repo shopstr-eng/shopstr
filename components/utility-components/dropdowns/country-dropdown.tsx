@@ -17,10 +17,7 @@ const CountryDropdown = ({ _value, ...props }: { [x: string]: any }) => {
       >
         {locations.countries.map((country) => {
           return (
-            <SelectItem
-              key={country.country}
-              value={country.country}
-            >
+            <SelectItem key={country.country} value={country.country}>
               {country.country}
             </SelectItem>
           );
@@ -31,12 +28,12 @@ const CountryDropdown = ({ _value, ...props }: { [x: string]: any }) => {
   }, []);
 
   return (
-    <Select 
-      {...props} 
+    <Select
+      {...props}
       className="mt-2 text-light-text dark:text-dark-text"
       classNames={{
         trigger: "h-12",
-        value: "text-base", 
+        value: "text-base",
       }}
     >
       {countryOptions}

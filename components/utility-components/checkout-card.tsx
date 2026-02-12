@@ -375,8 +375,8 @@ export default function CheckoutCard({
               key={size}
               className={`rounded-lg border p-2 text-sm font-bold uppercase tracking-wider ${
                 selectedSize === size
-                  ? "bg-yellow-400 text-black border-yellow-400"
-                  : "bg-[#161616] text-zinc-400 border-zinc-700 hover:border-zinc-500 hover:text-white"
+                  ? "border-yellow-400 bg-yellow-400 text-black"
+                  : "border-zinc-700 bg-[#161616] text-zinc-400 hover:border-zinc-500 hover:text-white"
               }`}
               onClick={() => setSelectedSize(size)}
             >
@@ -419,12 +419,12 @@ export default function CheckoutCard({
           <>
             <div className="max-w-screen pt-4">
               <div
-                className="max-w-screen mx-3 my-3 flex flex-col md:flex-row whitespace-normal break-words gap-6"
+                className="max-w-screen mx-3 my-3 flex flex-col gap-6 whitespace-normal break-words md:flex-row"
                 key={uniqueKey}
               >
                 <div className="w-full md:w-1/2">
                   <div className="flex w-full flex-row">
-                    <div className="hidden md:flex w-1/4 flex-col pr-4">
+                    <div className="hidden w-1/4 flex-col pr-4 md:flex">
                       <div
                         ref={containerRef}
                         className="flex-1 overflow-hidden"
@@ -470,13 +470,13 @@ export default function CheckoutCard({
                       <img
                         src={selectedImage}
                         alt="Selected product image"
-                        className="w-full rounded-2xl object-cover border border-zinc-800 shadow-2xl"
+                        className="w-full rounded-2xl border border-zinc-800 object-cover shadow-2xl"
                         style={{ aspectRatio: "1 / 1" }}
                       />
                     </div>
                   </div>
                 </div>
-                <div className="w-full md:w-1/2 px-1 md:px-3">
+                <div className="w-full px-1 md:w-1/2 md:px-3">
                   <div className="flex w-full flex-col gap-4">
                     <div className="flex flex-wrap items-center gap-4">
                       <ProfileWithDropdown
@@ -532,7 +532,8 @@ export default function CheckoutCard({
                     {rawEvent && (
                       <Dropdown
                         classNames={{
-                          content: "bg-[#161616] border border-zinc-800 rounded-xl",
+                          content:
+                            "bg-[#161616] border border-zinc-800 rounded-xl",
                         }}
                       >
                         <DropdownTrigger>
@@ -627,7 +628,9 @@ export default function CheckoutCard({
                     <>
                       {productData.pubkey !== userPubkey && (
                         <div className="mt-4 space-y-2">
-                          <p className="text-zinc-500 font-bold uppercase tracking-wider text-xs">DISCOUNT CODE</p>
+                          <p className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+                            DISCOUNT CODE
+                          </p>
                           <div className="flex items-start gap-2">
                             <Input
                               placeholder="Enter code"
@@ -691,7 +694,7 @@ export default function CheckoutCard({
                           {productData.status !== "sold" ? (
                             <>
                               <Button
-                                className={`${NEO_BTN} flex-1 md:flex-none min-w-[140px] h-14 px-8 text-lg font-black tracking-widest ${
+                                className={`${NEO_BTN} h-14 min-w-[140px] flex-1 px-8 text-lg font-black tracking-widest md:flex-none ${
                                   (hasSizes && !selectedSize) ||
                                   (hasVolumes && !selectedVolume)
                                     ? "cursor-not-allowed opacity-50"
@@ -707,7 +710,7 @@ export default function CheckoutCard({
                                 Buy Now
                               </Button>
                               <Button
-                                className={`h-14 flex-1 md:flex-none min-w-[140px] rounded-xl border-2 border-zinc-700 bg-[#161616] px-6 text-sm font-bold uppercase tracking-wider text-zinc-300 hover:border-zinc-500 hover:text-white ${
+                                className={`h-14 min-w-[140px] flex-1 rounded-xl border-2 border-zinc-700 bg-[#161616] px-6 text-sm font-bold uppercase tracking-wider text-zinc-300 hover:border-zinc-500 hover:text-white md:flex-none ${
                                   isAdded ||
                                   (hasSizes && !selectedSize) ||
                                   (hasVolumes && !selectedVolume)
@@ -737,7 +740,7 @@ export default function CheckoutCard({
                           )}
                           <Button
                             type="submit"
-                            className="h-14 w-full md:w-auto rounded-xl border-2 border-zinc-700 bg-[#161616] px-6 text-sm font-bold uppercase tracking-wider text-zinc-300 hover:border-zinc-500 hover:text-white"
+                            className="h-14 w-full rounded-xl border-2 border-zinc-700 bg-[#161616] px-6 text-sm font-bold uppercase tracking-wider text-zinc-300 hover:border-zinc-500 hover:text-white md:w-auto"
                             onClick={handleShare}
                           >
                             Share
@@ -809,10 +812,10 @@ export default function CheckoutCard({
                                       return (
                                         <Chip
                                           key={index}
-                                          className={`border font-bold uppercase tracking-wider text-xs ${
+                                          className={`border text-xs font-bold uppercase tracking-wider ${
                                             value === "1"
-                                              ? "bg-green-900/20 text-green-400 border-green-900"
-                                              : "bg-red-900/20 text-red-400 border-red-900"
+                                              ? "border-green-900 bg-green-900/20 text-green-400"
+                                              : "border-red-900 bg-red-900/20 text-red-400"
                                           }`}
                                         >
                                           {`overall: ${
@@ -825,10 +828,10 @@ export default function CheckoutCard({
                                       return (
                                         <Chip
                                           key={index}
-                                          className={`border font-bold uppercase tracking-wider text-xs ${
+                                          className={`border text-xs font-bold uppercase tracking-wider ${
                                             value === "1"
-                                              ? "bg-green-900/20 text-green-400 border-green-900"
-                                              : "bg-red-900/20 text-red-400 border-red-900"
+                                              ? "border-green-900 bg-green-900/20 text-green-400"
+                                              : "border-red-900 bg-red-900/20 text-red-400"
                                           }`}
                                         >
                                           {`${category}: ${
@@ -846,7 +849,7 @@ export default function CheckoutCard({
                                   return (
                                     <p
                                       key={index}
-                                      className="italic text-zinc-300 mt-2 text-sm"
+                                      className="mt-2 text-sm italic text-zinc-300"
                                     >
                                       &ldquo;{value}&rdquo;
                                     </p>

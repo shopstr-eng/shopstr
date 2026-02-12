@@ -47,11 +47,11 @@ export function DisplayCheckoutCost({
 
   return (
     <div className="flex flex-col gap-0.5">
-      <p className="text-xl md:text-2xl font-black tracking-tight text-white">
+      <p className="text-xl font-black tracking-tight text-white md:text-2xl">
         {formattedPrice}
       </p>
       {shippingType && (
-        <p className="mb-2 text-xs md:text-sm font-bold uppercase tracking-wider text-zinc-500">
+        <p className="mb-2 text-xs font-bold uppercase tracking-wider text-zinc-500 md:text-sm">
           Shipping: {shippingType}
         </p>
       )}

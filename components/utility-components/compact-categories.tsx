@@ -13,7 +13,7 @@ const CompactCategories = ({ categories }: { categories: string[] }) => {
     return (
       <Chip
         key={index}
-        className="rounded-lg border border-zinc-700 bg-[#161616] text-[10px] font-bold uppercase tracking-wider text-zinc-300 py-1"
+        className="rounded-lg border border-zinc-700 bg-[#161616] py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-300"
         size="sm"
       >
         {category}
@@ -60,7 +60,7 @@ const CompactCategories = ({ categories }: { categories: string[] }) => {
           }}
         >
           <div
-            className="z-0 w-fit cursor-pointer active:scale-95 transition-transform"
+            className="z-0 w-fit cursor-pointer transition-transform active:scale-95"
             onClick={() => {
               setIsOpen(!isOpen);
             }}

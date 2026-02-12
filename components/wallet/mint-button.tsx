@@ -238,9 +238,7 @@ const MintButton = () => {
       <Button
         className={`${NEO_BTN} w-full py-6 text-sm font-black tracking-widest`}
         onClick={() => setShowMintModal(!showMintModal)}
-        startContent={
-          <BanknotesIcon className="h-5 w-5 stroke-2" />
-        }
+        startContent={<BanknotesIcon className="h-5 w-5 stroke-2" />}
       >
         Mint
       </Button>
@@ -325,11 +323,11 @@ const MintButton = () => {
                           <>
                             <Image
                               alt="Lightning invoice"
-                              className="object-cover w-full max-w-[250px] mx-auto"
+                              className="mx-auto w-full max-w-[250px] object-cover"
                               src={qrCodeUrl}
                             />
-                            <div className="flex items-center justify-center mt-2 px-2">
-                              <p className="text-center text-xs break-all">
+                            <div className="mt-2 flex items-center justify-center px-2">
+                              <p className="break-all text-center text-xs">
                                 {invoice.length > 30
                                   ? `${invoice.substring(
                                       0,

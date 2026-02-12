@@ -83,7 +83,7 @@ export default function PassphraseChallengeModal({
             labelPlacement="outside"
             classNames={{
               label: "text-zinc-500 font-bold uppercase tracking-wider text-xs",
-              input: "text-white text-base", 
+              input: "text-white text-base",
               inputWrapper:
                 "bg-[#111] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
             }}
@@ -99,7 +99,7 @@ export default function PassphraseChallengeModal({
               type="checkbox"
               checked={remindToggled}
               onChange={() => setRemindToggled(!remindToggled)}
-              className="h-4 w-4 rounded border-zinc-700 bg-zinc-900 text-yellow-400 focus:ring-yellow-400 accent-yellow-400"
+              className="h-4 w-4 rounded border-zinc-700 bg-zinc-900 text-yellow-400 accent-yellow-400 focus:ring-yellow-400"
             />
             <label className="text-sm font-bold text-zinc-400">
               Remember passphrase for this session
@@ -120,7 +120,11 @@ export default function PassphraseChallengeModal({
             Cancel
           </Button>
 
-          <Button className={`${NEO_BTN} h-10 px-6 text-xs`} type="submit" onClick={onSubmit}>
+          <Button
+            className={`${NEO_BTN} h-10 px-6 text-xs`}
+            type="submit"
+            onClick={onSubmit}
+          >
             Submit
           </Button>
         </ModalFooter>

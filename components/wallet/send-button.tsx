@@ -181,9 +181,7 @@ const SendButton = () => {
       <Button
         className={`${NEO_BTN} w-full py-6 text-sm font-black tracking-widest`}
         onClick={() => setShowSendModal(!showSendModal)}
-        startContent={
-          <ArrowUpTrayIcon className="h-5 w-5 stroke-2" />
-        }
+        startContent={<ArrowUpTrayIcon className="h-5 w-5 stroke-2" />}
       >
         Send
       </Button>
@@ -288,8 +286,8 @@ const SendButton = () => {
                   <Divider />
                   <CardBody className="flex flex-col items-center">
                     {newToken ? (
-                      <div className="flex flex-col items-center justify-center w-full">
-                        <p className="whitespace-break-spaces break-all text-xs text-center px-2">
+                      <div className="flex w-full flex-col items-center justify-center">
+                        <p className="whitespace-break-spaces break-all px-2 text-center text-xs">
                           {newToken}
                         </p>
                         <ClipboardIcon

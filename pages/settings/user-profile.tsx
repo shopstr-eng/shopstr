@@ -128,7 +128,7 @@ const UserProfilePage = () => {
             <ShopstrSpinner />
           ) : (
             <>
-              <div className="mb-20 h-40 rounded-2xl border border-zinc-800 bg-[#161616] overflow-visible">
+              <div className="mb-20 h-40 overflow-visible rounded-2xl border border-zinc-800 bg-[#161616]">
                 <div className="relative flex h-40 items-center justify-center rounded-2xl bg-[#111]">
                   {watchBanner && (
                     <Image
@@ -146,10 +146,10 @@ const UserProfilePage = () => {
                 </div>
                 <div className="flex items-center justify-center">
                   <div className="relative z-50 mt-[-3rem] h-28 w-28">
-                    <div className="border-4 border-[#111] rounded-full">
+                    <div className="rounded-full border-4 border-[#111]">
                       <FileUploaderButton
                         isIconOnly
-                        className={`${NEO_BTN} absolute bottom-0 right-0 z-20 h-10 w-10 min-w-10 rounded-full p-0 border-white`}
+                        className={`${NEO_BTN} min-w-10 absolute bottom-0 right-0 z-20 h-10 w-10 rounded-full border-white p-0`}
                         imgCallbackOnUpload={(imgUrl) =>
                           setValue("picture", imgUrl)
                         }
@@ -158,13 +158,13 @@ const UserProfilePage = () => {
                         <Image
                           src={watchPicture}
                           alt="user profile picture"
-                          className="rounded-full h-24 w-24 object-cover"
+                          className="h-24 w-24 rounded-full object-cover"
                         />
                       ) : (
                         <Image
                           src={defaultImage}
                           alt="user profile picture"
-                          className="rounded-full h-24 w-24 object-cover"
+                          className="h-24 w-24 rounded-full object-cover"
                         />
                       )}
                     </div>
@@ -173,7 +173,7 @@ const UserProfilePage = () => {
               </div>
 
               <div
-                className="mx-auto mb-4 flex w-full max-2xl cursor-pointer flex-row items-center justify-center rounded-xl border-2 border-zinc-800 bg-[#161616] p-3 transition-all hover:border-yellow-400"
+                className="max-2xl mx-auto mb-4 flex w-full cursor-pointer flex-row items-center justify-center rounded-xl border-2 border-zinc-800 bg-[#161616] p-3 transition-all hover:border-yellow-400"
                 onClick={() => {
                   navigator.clipboard.writeText(userNPub!);
                   setIsNPubCopied(true);
@@ -183,7 +183,7 @@ const UserProfilePage = () => {
                 }}
               >
                 <span
-                  className="lg:text-md break-all pr-3 text-[0.60rem] font-mono font-bold text-zinc-400 sm:text-xs md:text-sm"
+                  className="lg:text-md break-all pr-3 font-mono text-[0.60rem] font-bold text-zinc-400 sm:text-xs md:text-sm"
                   suppressHydrationWarning
                 >
                   {userNPub!}
@@ -206,7 +206,7 @@ const UserProfilePage = () => {
               {userNSec ? (
                 <div className="mx-auto mb-12 flex w-full max-w-2xl cursor-pointer flex-row items-center justify-center rounded-xl border-2 border-zinc-800 bg-[#161616] p-3">
                   <span
-                    className="lg:text-md break-all pr-3 text-[0.60rem] font-mono font-bold text-zinc-400 sm:text-xs md:text-sm"
+                    className="lg:text-md break-all pr-3 font-mono text-[0.60rem] font-bold text-zinc-400 sm:text-xs md:text-sm"
                     suppressHydrationWarning
                   >
                     {viewState === "shown"
@@ -515,7 +515,7 @@ const UserProfilePage = () => {
                 />
 
                 <div className="pb-8">
-                  <label className="mb-4 block text-zinc-400 font-bold uppercase tracking-wider text-sm">
+                  <label className="mb-4 block text-sm font-bold uppercase tracking-wider text-zinc-400">
                     Fiat payment options
                   </label>
                   <div className="space-y-4">
@@ -546,7 +546,7 @@ const UserProfilePage = () => {
                     ].map((option) => (
                       <div
                         key={option.key}
-                        className="flex items-center space-x-4 bg-[#1a1a1a] p-3 rounded-xl border border-zinc-800"
+                        className="flex items-center space-x-4 rounded-xl border border-zinc-800 bg-[#1a1a1a] p-3"
                       >
                         <input
                           type="checkbox"
@@ -578,7 +578,7 @@ const UserProfilePage = () => {
                         />
                         <label
                           htmlFor={option.key}
-                          className="text-white font-bold"
+                          className="font-bold text-white"
                         >
                           {option.label}
                         </label>

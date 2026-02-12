@@ -246,7 +246,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
   return (
     <>
       <Button
-        className={`${NEO_BTN} w-full h-14 text-lg font-black tracking-widest`}
+        className={`${NEO_BTN} h-14 w-full text-lg font-black tracking-widest`}
         onClick={onOpen}
         startContent={!isSoldOut ? <BoltIcon className="h-6 w-6" /> : null}
         isDisabled={isSoldOut || isCheckingInventory}
@@ -273,7 +273,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
         }}
       >
         <ModalContent>
-          <ModalHeader className="text-xl md:text-2xl font-black uppercase italic tracking-tighter text-white">
+          <ModalHeader className="text-xl font-black uppercase italic tracking-tighter text-white md:text-2xl">
             ⚡ Zapsnag: {product.title}
           </ModalHeader>
           <ModalBody>
@@ -338,7 +338,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
                 }}
               />
 
-              <div className="flex flex-col sm:flex-row gap-4 sm:gap-2">
+              <div className="flex flex-col gap-4 sm:flex-row sm:gap-2">
                 <Input
                   label="CITY"
                   labelPlacement="outside"
@@ -378,7 +378,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
                 />
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-4 sm:gap-2">
+              <div className="flex flex-col gap-4 sm:flex-row sm:gap-2">
                 <Input
                   label="POSTAL / ZIP CODE"
                   labelPlacement="outside"
@@ -431,7 +431,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
 
             <Button
               isLoading={loading}
-              className={`${NEO_BTN} w-full h-14 text-lg font-black tracking-widest`}
+              className={`${NEO_BTN} h-14 w-full text-lg font-black tracking-widest`}
               onClick={handleBuy}
               isDisabled={!isValid || loading}
             >

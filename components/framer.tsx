@@ -57,7 +57,7 @@ const Tabs = ({
   return (
     <nav
       ref={navRef}
-      className="relative z-0 flex w-full flex-shrink-0 items-center justify-start md:justify-center border-b border-zinc-800 bg-[#111] overflow-x-auto no-scrollbar"
+      className="no-scrollbar relative z-0 flex w-full flex-shrink-0 items-center justify-start overflow-x-auto border-b border-zinc-800 bg-[#111] md:justify-center"
     >
       {tabs.map((item, i) => {
         const isActive = selectedTabIndex === i;
@@ -66,9 +66,9 @@ const Tabs = ({
           <button
             key={i}
             className={classNames(
-              "relative z-20 flex h-10 w-full min-w-fit cursor-pointer select-none items-center justify-center bg-transparent px-6 py-8 text-xs md:text-sm uppercase tracking-widest duration-200 transition-colors hover:bg-white/5 whitespace-nowrap",
+              "relative z-20 flex h-10 w-full min-w-fit cursor-pointer select-none items-center justify-center whitespace-nowrap bg-transparent px-6 py-8 text-xs uppercase tracking-widest duration-200 transition-colors hover:bg-white/5 md:text-sm",
               {
-                "text-zinc-500 font-bold hover:text-zinc-300": !isActive,
+                "font-bold text-zinc-500 hover:text-zinc-300": !isActive,
                 "font-black text-white": isActive,
               }
             )}

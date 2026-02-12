@@ -41,11 +41,11 @@ export const RawEventModal = ({
           <Snippet
             symbol=""
             codeString={JSON.stringify(rawEvent, null, 2)}
-            className="w-full items-start bg-transparent p-4 text-zinc-300 overflow-hidden"
+            className="w-full items-start overflow-hidden bg-transparent p-4 text-zinc-300"
             hideCopyButton={false}
           >
-            <div className="max-h-[50vh] md:max-h-[60vh] w-full overflow-y-auto pr-2">
-              <pre className="whitespace-pre-wrap break-all font-mono text-[10px] md:text-xs text-green-400">
+            <div className="max-h-[50vh] w-full overflow-y-auto pr-2 md:max-h-[60vh]">
+              <pre className="whitespace-pre-wrap break-all font-mono text-[10px] text-green-400 md:text-xs">
                 {JSON.stringify(rawEvent, null, 2)}
               </pre>
             </div>
@@ -93,7 +93,7 @@ export const EventIdModal = ({
               <Snippet
                 symbol=""
                 codeString={rawEvent?.id}
-                className="w-full rounded-xl border border-zinc-800 bg-[#111] text-zinc-300 py-3"
+                className="w-full rounded-xl border border-zinc-800 bg-[#111] py-3 text-zinc-300"
                 classNames={{ pre: "font-mono" }}
               >
                 <span className="whitespace-normal break-all font-mono text-xs md:text-sm">
@@ -110,7 +110,7 @@ export const EventIdModal = ({
                 <Snippet
                   symbol=""
                   codeString={nip19.noteEncode(rawEvent.id)}
-                  className="w-full rounded-xl border border-zinc-800 bg-[#111] text-zinc-300 py-3"
+                  className="w-full rounded-xl border border-zinc-800 bg-[#111] py-3 text-zinc-300"
                   classNames={{ pre: "font-mono" }}
                 >
                   <span className="whitespace-normal break-all font-mono text-xs md:text-sm">

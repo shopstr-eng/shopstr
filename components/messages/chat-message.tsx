@@ -171,7 +171,9 @@ const ChatMessage = ({
             </>
           ) : orderData ? (
             <div
-              className={`flex flex-col gap-2 border-l-4 pl-3 ${isUserMessage ? "border-black/20" : "border-yellow-400"}`}
+              className={`flex flex-col gap-2 border-l-4 pl-3 ${
+                isUserMessage ? "border-black/20" : "border-yellow-400"
+              }`}
             >
               <span className="text-xs font-black uppercase tracking-wider opacity-70">
                 ⚡ Zapsnag Order

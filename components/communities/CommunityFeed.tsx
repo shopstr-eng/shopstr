@@ -14,12 +14,7 @@ import {
   fetchCommunityPosts,
   fetchPendingPosts,
 } from "@/utils/nostr/fetch-service";
-import {
-  Button,
-  Textarea,
-  Spinner,
-  Chip,
-} from "@nextui-org/react";
+import { Button, Textarea, Spinner, Chip } from "@nextui-org/react";
 import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 import {
   createCommunityPost,

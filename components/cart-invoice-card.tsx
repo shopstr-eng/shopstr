@@ -2111,9 +2111,11 @@ export default function CartInvoiceCard({
       <div className="flex min-h-screen w-full bg-[#111] text-white">
         <div className="mx-auto flex w-full flex-col lg:flex-row">
           {/* Order Summary - Full width on mobile, half on desktop */}
-          <div className="w-full border-b lg:border-b-0 lg:border-r border-zinc-800 bg-[#161616] p-6 lg:w-1/2">
+          <div className="w-full border-b border-zinc-800 bg-[#161616] p-6 lg:w-1/2 lg:border-b-0 lg:border-r">
             <div className="sticky top-6">
-              <h2 className="mb-6 text-2xl font-black uppercase tracking-tighter text-white">Order Summary</h2>
+              <h2 className="mb-6 text-2xl font-black uppercase tracking-tighter text-white">
+                Order Summary
+              </h2>
 
               <div className="mb-6 space-y-4">
                 {products.map((product) => (
@@ -2249,20 +2251,22 @@ export default function CartInvoiceCard({
           <div className="w-full bg-[#111] p-6 lg:w-1/2">
             <Card className="w-full border border-zinc-800 bg-[#161616]">
               <CardHeader className="flex justify-center border-b border-zinc-800 pb-4">
-                <span className="text-xl font-black uppercase tracking-tighter text-white">Lightning Invoice</span>
+                <span className="text-xl font-black uppercase tracking-tighter text-white">
+                  Lightning Invoice
+                </span>
               </CardHeader>
               <CardBody className="flex flex-col items-center">
                 {!paymentConfirmed ? (
                   <div className="flex flex-col items-center justify-center">
                     {qrCodeUrl ? (
                       <>
-                        <h3 className="mt-3 mb-4 text-center text-lg font-bold text-white">
+                        <h3 className="mb-4 mt-3 text-center text-lg font-bold text-white">
                           Don&apos;t refresh or close the page until the payment
                           has been confirmed!
                         </h3>
                         <Image
                           alt="Lightning invoice"
-                          className="rounded-xl bg-white p-2 object-cover"
+                          className="rounded-xl bg-white object-cover p-2"
                           src={qrCodeUrl}
                         />
                         <div className="flex items-center justify-center">
@@ -2292,7 +2296,9 @@ export default function CartInvoiceCard({
                       </>
                     ) : (
                       <div>
-                        <p className="animate-pulse text-zinc-500">Waiting for lightning invoice...</p>
+                        <p className="animate-pulse text-zinc-500">
+                          Waiting for lightning invoice...
+                        </p>
                       </div>
                     )}
                   </div>
@@ -2321,9 +2327,11 @@ export default function CartInvoiceCard({
     <div className="flex min-h-screen w-full bg-[#111] text-white">
       <div className="mx-auto flex w-full flex-col lg:flex-row">
         {/* Order Summary - Full width on mobile, half on desktop */}
-        <div className="w-full border-b lg:border-b-0 lg:border-r border-zinc-800 bg-[#161616] p-6 lg:w-1/2">
+        <div className="w-full border-b border-zinc-800 bg-[#161616] p-6 lg:w-1/2 lg:border-b-0 lg:border-r">
           <div className="sticky top-6">
-            <h2 className="mb-6 text-2xl font-black uppercase tracking-tighter text-white">Order Summary</h2>
+            <h2 className="mb-6 text-2xl font-black uppercase tracking-tighter text-white">
+              Order Summary
+            </h2>
 
             <div className="mb-6 space-y-4">
               {products.map((product) => (
@@ -2486,7 +2494,9 @@ export default function CartInvoiceCard({
           {/* Order Type Selection */}
           {showOrderTypeSelection && (
             <>
-              <h2 className="mb-6 text-2xl font-black uppercase tracking-tighter text-white">Select Order Type</h2>
+              <h2 className="mb-6 text-2xl font-black uppercase tracking-tighter text-white">
+                Select Order Type
+              </h2>
               <div className="space-y-4">
                 {/* Check if we have mixed shipping types or all products are Free/Pickup */}
                 {uniqueShippingTypes.length > 1 ? (
@@ -2496,7 +2506,9 @@ export default function CartInvoiceCard({
                       onClick={() => handleOrderTypeSelection("combined")}
                       className="w-full rounded-xl border border-zinc-800 bg-[#161616] p-4 text-left transition-colors hover:border-yellow-400 hover:bg-zinc-900"
                     >
-                      <div className="font-bold uppercase tracking-wide text-white">Mixed delivery</div>
+                      <div className="font-bold uppercase tracking-wide text-white">
+                        Mixed delivery
+                      </div>
                       <div className="text-sm font-medium text-zinc-500">
                         {hasFreePickupProducts
                           ? "Products require different delivery methods (includes flexible shipping/pickup options)"
@@ -2512,7 +2524,9 @@ export default function CartInvoiceCard({
                       onClick={() => handleOrderTypeSelection("shipping")}
                       className="w-full rounded-xl border border-zinc-800 bg-[#161616] p-4 text-left transition-colors hover:border-yellow-400 hover:bg-zinc-900"
                     >
-                      <div className="font-bold uppercase tracking-wide text-white">Free shipping</div>
+                      <div className="font-bold uppercase tracking-wide text-white">
+                        Free shipping
+                      </div>
                       <div className="text-sm font-medium text-zinc-500">
                         Get products shipped to your address
                       </div>
@@ -2521,7 +2535,9 @@ export default function CartInvoiceCard({
                       onClick={() => handleOrderTypeSelection("contact")}
                       className="w-full rounded-xl border border-zinc-800 bg-[#161616] p-4 text-left transition-colors hover:border-yellow-400 hover:bg-zinc-900"
                     >
-                      <div className="font-bold uppercase tracking-wide text-white">Pickup</div>
+                      <div className="font-bold uppercase tracking-wide text-white">
+                        Pickup
+                      </div>
                       <div className="text-sm font-medium text-zinc-500">
                         Arrange pickup with seller
                       </div>
@@ -2545,7 +2561,9 @@ export default function CartInvoiceCard({
                     onClick={() => handleOrderTypeSelection("contact")}
                     className="w-full rounded-xl border border-zinc-800 bg-[#161616] p-4 text-left transition-colors hover:border-yellow-400 hover:bg-zinc-900"
                   >
-                    <div className="font-bold uppercase tracking-wide text-white">Online order</div>
+                    <div className="font-bold uppercase tracking-wide text-white">
+                      Online order
+                    </div>
                     <div className="text-sm font-medium text-zinc-500">
                       Digital or pickup delivery
                     </div>
@@ -2592,7 +2610,9 @@ export default function CartInvoiceCard({
                       : "border-zinc-800 bg-[#161616]"
                   }`}
                 >
-                  <div className="font-bold uppercase tracking-wide text-white">Free shipping</div>
+                  <div className="font-bold uppercase tracking-wide text-white">
+                    Free shipping
+                  </div>
                   <div className="text-sm font-medium text-zinc-500">
                     Use free shipping for products that offer it
                   </div>
@@ -2622,7 +2642,9 @@ export default function CartInvoiceCard({
                       : "border-zinc-800 bg-[#161616]"
                   }`}
                 >
-                  <div className="font-bold uppercase tracking-wide text-white">Pickup</div>
+                  <div className="font-bold uppercase tracking-wide text-white">
+                    Pickup
+                  </div>
                   <div className="text-sm font-medium text-zinc-500">
                     Arrange pickup for products that offer it
                   </div>
@@ -2638,16 +2660,21 @@ export default function CartInvoiceCard({
                     </h3>
                     {productsWithPickupLocations.map((product) => (
                       <div key={product.id} className="space-y-2">
-                        <h4 className="font-bold text-white">{product.title}</h4>
+                        <h4 className="font-bold text-white">
+                          {product.title}
+                        </h4>
                         <Select
                           variant="bordered"
                           label="PICKUP LOCATION"
                           labelPlacement="outside"
                           classNames={{
-                            label: "text-zinc-500 font-bold uppercase tracking-wider text-xs",
-                            trigger: "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 data-[focus=true]:border-yellow-400 rounded-xl min-h-[56px]",
+                            label:
+                              "text-zinc-500 font-bold uppercase tracking-wider text-xs",
+                            trigger:
+                              "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 data-[focus=true]:border-yellow-400 rounded-xl min-h-[56px]",
                             value: "text-white font-bold text-base",
-                            popoverContent: "bg-[#161616] border border-zinc-800 rounded-xl p-1",
+                            popoverContent:
+                              "bg-[#161616] border border-zinc-800 rounded-xl p-1",
                           }}
                           placeholder="Choose a pickup location"
                           value={selectedPickupLocations[product.id] || ""}
@@ -2659,7 +2686,11 @@ export default function CartInvoiceCard({
                           }}
                         >
                           {(product.pickupLocations || []).map((location) => (
-                            <SelectItem key={location} value={location} className="text-zinc-300 data-[hover=true]:bg-zinc-800 data-[hover=true]:text-white rounded-lg">
+                            <SelectItem
+                              key={location}
+                              value={location}
+                              className="rounded-lg text-zinc-300 data-[hover=true]:bg-zinc-800 data-[hover=true]:text-white"
+                            >
                               {location}
                             </SelectItem>
                           ))}
@@ -2680,7 +2711,9 @@ export default function CartInvoiceCard({
                 </h2>
               )}
               {formType === "contact" && (
-                <h2 className="mb-6 text-2xl font-black uppercase tracking-tighter text-white">Payment Method</h2>
+                <h2 className="mb-6 text-2xl font-black uppercase tracking-tighter text-white">
+                  Payment Method
+                </h2>
               )}
               {formType === "combined" && (
                 <h2 className="mb-6 text-2xl font-black uppercase tracking-tighter text-white">
@@ -2696,7 +2729,9 @@ export default function CartInvoiceCard({
 
                 <div
                   className={`space-y-4 ${
-                    formType !== "contact" ? "border-t border-zinc-800 pt-6" : ""
+                    formType !== "contact"
+                      ? "border-t border-zinc-800 pt-6"
+                      : ""
                   }`}
                 >
                   {formType !== "contact" && (
@@ -2706,7 +2741,9 @@ export default function CartInvoiceCard({
                   )}
 
                   <Button
-                    className={`${NEO_BTN} h-14 w-full text-sm font-black tracking-widest ${!isFormValid ? "cursor-not-allowed opacity-50" : ""}`}
+                    className={`${NEO_BTN} h-14 w-full text-sm font-black tracking-widest ${
+                      !isFormValid ? "cursor-not-allowed opacity-50" : ""
+                    }`}
                     disabled={!isFormValid}
                     onClick={() => {
                       if (!isLoggedIn) {
@@ -2724,7 +2761,9 @@ export default function CartInvoiceCard({
 
                   {hasTokensAvailable && (
                     <Button
-                      className={`${NEO_BTN} h-14 w-full text-sm font-black tracking-widest ${!isFormValid ? "cursor-not-allowed opacity-50" : ""}`}
+                      className={`${NEO_BTN} h-14 w-full text-sm font-black tracking-widest ${
+                        !isFormValid ? "cursor-not-allowed opacity-50" : ""
+                      }`}
                       disabled={!isFormValid}
                       onClick={() => {
                         if (!isLoggedIn) {
@@ -2744,7 +2783,9 @@ export default function CartInvoiceCard({
                   {/* NWC Button */}
                   {nwcInfo && (
                     <Button
-                      className={`${NEO_BTN} h-14 w-full text-sm font-black tracking-widest ${!isFormValid ? "cursor-not-allowed opacity-50" : ""}`}
+                      className={`${NEO_BTN} h-14 w-full text-sm font-black tracking-widest ${
+                        !isFormValid ? "cursor-not-allowed opacity-50" : ""
+                      }`}
                       disabled={!isFormValid || isNwcLoading}
                       isLoading={isNwcLoading}
                       onClick={() => {

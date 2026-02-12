@@ -33,7 +33,7 @@ export default function FailureModal({
             <CheckCircleIcon className="h-6 w-6 text-green-500" />
             <div className="ml-2">Success</div>
           </ModalHeader>
-          <ModalBody className="flex flex-col overflow-hidden text-zinc-300 font-medium">
+          <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
             <div className="flex items-center justify-center">{bodyText}</div>
           </ModalBody>
         </ModalContent>

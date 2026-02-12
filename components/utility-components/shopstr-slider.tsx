@@ -6,7 +6,6 @@ import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
 import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 const ShopstrSlider = () => {
-
   const followsContext = useContext(FollowsContext);
 
   const [wot, setWot] = useState(getLocalStorageData().wot);

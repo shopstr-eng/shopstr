@@ -30,7 +30,7 @@ const ChatButton = ({
   return (
     <div
       key={pubkeyOfChat}
-      className={`mx-3 mt-3 mb-2 flex cursor-pointer items-center gap-4 rounded-xl border px-3 py-3 transition-all hover:border-zinc-500 ${
+      className={`mx-3 mb-2 mt-3 flex cursor-pointer items-center gap-4 rounded-xl border px-3 py-3 transition-all hover:border-zinc-500 ${
         pubkeyOfChat === openedChatPubkey
           ? "border-yellow-400 bg-[#27272a]"
           : "border-zinc-800 bg-[#111]"

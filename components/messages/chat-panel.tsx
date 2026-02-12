@@ -346,7 +346,7 @@ const ChatPanel = ({
 
   if (!currentChatPubkey)
     return (
-      <div className="absolute z-20 hidden h-[85vh] w-full flex-col overflow-clip border border-l-0 border-zinc-800 bg-[#161616] px-2 md:relative md:flex rounded-r-2xl">
+      <div className="absolute z-20 hidden h-[85vh] w-full flex-col overflow-clip rounded-r-2xl border border-l-0 border-zinc-800 bg-[#161616] px-2 md:relative md:flex">
         <div className="mt-10 flex flex-grow items-center justify-center py-10">
           <div className="w-full max-w-xl rounded-2xl border border-zinc-800 bg-[#111] p-10 text-center shadow-xl">
             <ChatBubbleLeftIcon className="mx-auto mb-5 h-20 w-20 text-zinc-600" />
@@ -723,7 +723,9 @@ const ChatPanel = ({
                             })
                           }
                         />
-                        <span className="text-zinc-300">Good Communication</span>
+                        <span className="text-zinc-300">
+                          Good Communication
+                        </span>
                       </label>
                     </div>
 

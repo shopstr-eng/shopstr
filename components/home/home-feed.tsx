@@ -21,7 +21,6 @@ const HomeFeed = ({
   selectedSection: string;
   setSelectedSection: (value: string) => void;
 }) => {
-
   const [shopBannerURL, setShopBannerURL] = useState("");
 
   const shopMapContext = useContext(ShopMapContext);

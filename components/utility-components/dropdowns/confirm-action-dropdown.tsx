@@ -40,7 +40,7 @@ export default function ConfirmActionDropdown({
         >
           <DropdownItem
             key="delete"
-            className="text-danger data-[hover=true]:bg-red-500/10 data-[hover=true]:text-red-500 rounded-lg"
+            className="rounded-lg text-danger data-[hover=true]:bg-red-500/10 data-[hover=true]:text-red-500"
             color="danger"
             onPress={onConfirm}
           >

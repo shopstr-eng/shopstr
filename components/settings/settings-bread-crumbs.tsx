@@ -39,7 +39,8 @@ export const SettingsBreadCrumbs = () => {
               onClick={() => router.push(fullPath)}
               classNames={{
                 item: itemClassName,
-                separator: "text-yellow-400 text-xl md:text-3xl font-black mx-1 md:mx-2",
+                separator:
+                  "text-yellow-400 text-xl md:text-3xl font-black mx-1 md:mx-2",
               }}
             >
               {pathMap[p]}
@@ -47,7 +48,7 @@ export const SettingsBreadCrumbs = () => {
           );
         })}
       </Breadcrumbs>
-      <Divider className="mb-6 bg-zinc-800 h-[2px]" />
+      <Divider className="mb-6 h-[2px] bg-zinc-800" />
     </>
   );
 };

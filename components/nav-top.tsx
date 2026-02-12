@@ -114,21 +114,21 @@ const TopNav = ({
   };
 
   const MobileMenu = () => (
-    <div className="absolute left-0 top-full w-full max-h-[calc(100vh-70px)] overflow-y-auto border-b border-zinc-800 bg-[#161616] shadow-xl flex flex-col p-2">
+    <div className="absolute left-0 top-full flex max-h-[calc(100vh-70px)] w-full flex-col overflow-y-auto border-b border-zinc-800 bg-[#161616] p-2 shadow-xl">
       <Button
-        className="w-full h-14 justify-start px-6 bg-transparent font-bold uppercase text-zinc-400 hover:text-white"
+        className="h-14 w-full justify-start bg-transparent px-6 font-bold uppercase text-zinc-400 hover:text-white"
         onClick={handleHomeClick}
       >
         Marketplace
       </Button>
       <Button
-        className="w-full h-14 justify-start px-6 bg-transparent font-bold uppercase text-zinc-400 hover:text-white"
+        className="h-14 w-full justify-start bg-transparent px-6 font-bold uppercase text-zinc-400 hover:text-white"
         onClick={() => router.push("/communities")}
       >
         Communities
       </Button>
       <Button
-        className="w-full h-14 justify-start px-6 bg-transparent font-bold uppercase text-zinc-400 hover:text-white"
+        className="h-14 w-full justify-start bg-transparent px-6 font-bold uppercase text-zinc-400 hover:text-white"
         onClick={() => handleRoute("/orders")}
       >
         Orders
@@ -139,19 +139,19 @@ const TopNav = ({
         )}
       </Button>
       <Button
-        className="w-full h-14 justify-start px-6 bg-transparent font-bold uppercase text-zinc-400 hover:text-white"
+        className="h-14 w-full justify-start bg-transparent px-6 font-bold uppercase text-zinc-400 hover:text-white"
         onClick={() => handleRoute("/wallet")}
       >
         Wallet
       </Button>
       <Button
-        className="w-full h-14 justify-start px-6 bg-transparent font-bold uppercase text-zinc-400 hover:text-white"
+        className="h-14 w-full justify-start bg-transparent px-6 font-bold uppercase text-zinc-400 hover:text-white"
         onClick={() => handleRoute("/my-listings")}
       >
         My Listings
       </Button>
       <Button
-        className="w-full h-14 justify-start px-6 bg-transparent font-bold uppercase text-zinc-400 hover:text-white"
+        className="h-14 w-full justify-start bg-transparent px-6 font-bold uppercase text-zinc-400 hover:text-white"
         onClick={() => handleRoute("/cart")}
       >
         Cart

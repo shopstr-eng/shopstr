@@ -71,28 +71,28 @@ export default function ImageCarousel({
       renderArrowPrev={(onClickHandler, hasPrev, label) =>
         hasPrev && (
           <button
-            className={`${NEO_BTN} absolute left-2 md:left-4 top-1/2 z-10 flex h-8 w-8 md:h-10 md:w-10 -translate-y-1/2 items-center justify-center rounded-lg p-0`}
+            className={`${NEO_BTN} absolute left-2 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg p-0 md:left-4 md:h-10 md:w-10`}
             onClick={(e) => {
               onClickHandler();
               e.stopPropagation();
             }}
             title={label}
           >
-            <ChevronLeftIcon className="h-5 w-5 md:h-6 md:w-6 text-black" />
+            <ChevronLeftIcon className="h-5 w-5 text-black md:h-6 md:w-6" />
           </button>
         )
       }
       renderArrowNext={(onClickHandler, hasNext, label) =>
         hasNext && (
           <button
-            className={`${NEO_BTN} absolute right-2 md:right-4 top-1/2 z-10 flex h-8 w-8 md:h-10 md:w-10 -translate-y-1/2 items-center justify-center rounded-lg p-0`}
+            className={`${NEO_BTN} absolute right-2 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg p-0 md:right-4 md:h-10 md:w-10`}
             onClick={(e) => {
               onClickHandler();
               e.stopPropagation();
             }}
             title={label}
           >
-            <ChevronRightIcon className="h-5 w-5 md:h-6 md:w-6 text-black" />
+            <ChevronRightIcon className="h-5 w-5 text-black md:h-6 md:w-6" />
           </button>
         )
       }
@@ -104,7 +104,7 @@ export default function ImageCarousel({
             key={index}
             className={
               isSelected
-                ? `${base} bg-yellow-400 border-white`
+                ? `${base} border-white bg-yellow-400`
                 : `${base} bg-zinc-700 hover:bg-zinc-500`
             }
             onClick={(e) => {

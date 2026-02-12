@@ -333,7 +333,8 @@ const PreferencesPage = () => {
                 base: "bg-[#161616] border border-zinc-800 rounded-2xl",
                 body: "py-8",
                 backdrop: "bg-black/80 backdrop-blur-sm",
-                header: "border-b border-zinc-800 text-white font-bold uppercase",
+                header:
+                  "border-b border-zinc-800 text-white font-bold uppercase",
                 footer: "border-t border-zinc-800",
                 closeButton: "hover:bg-white/10 text-white",
               }}
@@ -397,17 +398,14 @@ const PreferencesPage = () => {
 
                   <ModalFooter>
                     <Button
-                      className="text-red-500 font-bold uppercase tracking-wider bg-transparent hover:bg-red-500/10"
+                      className="bg-transparent font-bold uppercase tracking-wider text-red-500 hover:bg-red-500/10"
                       variant="light"
                       onClick={handleToggleMintModal}
                     >
                       Cancel
                     </Button>
 
-                    <Button
-                      className={`${NEO_BTN} h-10`}
-                      type="submit"
-                    >
+                    <Button className={`${NEO_BTN} h-10`} type="submit">
                       Change Mint
                     </Button>
                   </ModalFooter>
@@ -454,7 +452,7 @@ const PreferencesPage = () => {
             </Button>
             {relaysAreChanged && (
               <Button
-                className={`${NEO_BTN} h-12 px-6 text-sm bg-zinc-800 text-white hover:bg-zinc-700 border-zinc-600`}
+                className={`${NEO_BTN} h-12 border-zinc-600 bg-zinc-800 px-6 text-sm text-white hover:bg-zinc-700`}
                 onClick={() => publishRelays()}
               >
                 Save
@@ -533,17 +531,14 @@ const PreferencesPage = () => {
 
                 <ModalFooter>
                   <Button
-                    className="text-red-500 font-bold uppercase tracking-wider bg-transparent hover:bg-red-500/10"
+                    className="bg-transparent font-bold uppercase tracking-wider text-red-500 hover:bg-red-500/10"
                     variant="light"
                     onClick={() => handleToggleRelayModal("")}
                   >
                     Cancel
                   </Button>
 
-                  <Button
-                    className={`${NEO_BTN} h-10`}
-                    type="submit"
-                  >
+                  <Button className={`${NEO_BTN} h-10`} type="submit">
                     Add Relay
                   </Button>
                 </ModalFooter>
@@ -590,7 +585,7 @@ const PreferencesPage = () => {
             {relaysAreChanged && (
               <div className="flex h-fit flex-row justify-between px-3 py-[15px]">
                 <Button
-                  className={`${NEO_BTN} h-12 px-6 text-sm bg-zinc-800 text-white hover:bg-zinc-700 border-zinc-600`}
+                  className={`${NEO_BTN} h-12 border-zinc-600 bg-zinc-800 px-6 text-sm text-white hover:bg-zinc-700`}
                   onClick={() => publishRelays()}
                 >
                   Save
@@ -670,17 +665,14 @@ const PreferencesPage = () => {
 
                 <ModalFooter>
                   <Button
-                    className="text-red-500 font-bold uppercase tracking-wider bg-transparent hover:bg-red-500/10"
+                    className="bg-transparent font-bold uppercase tracking-wider text-red-500 hover:bg-red-500/10"
                     variant="light"
                     onClick={() => handleToggleRelayModal("")}
                   >
                     Cancel
                   </Button>
 
-                  <Button
-                    className={`${NEO_BTN} h-10`}
-                    type="submit"
-                  >
+                  <Button className={`${NEO_BTN} h-10`} type="submit">
                     Add Relay
                   </Button>
                 </ModalFooter>
@@ -727,7 +719,7 @@ const PreferencesPage = () => {
             {relaysAreChanged && (
               <div className="flex h-fit flex-row justify-between px-3 py-[15px]">
                 <Button
-                  className={`${NEO_BTN} h-12 px-6 text-sm bg-zinc-800 text-white hover:bg-zinc-700 border-zinc-600`}
+                  className={`${NEO_BTN} h-12 border-zinc-600 bg-zinc-800 px-6 text-sm text-white hover:bg-zinc-700`}
                   onClick={() => publishRelays()}
                 >
                   Save
@@ -807,17 +799,14 @@ const PreferencesPage = () => {
 
                 <ModalFooter>
                   <Button
-                    className="text-red-500 font-bold uppercase tracking-wider bg-transparent hover:bg-red-500/10"
+                    className="bg-transparent font-bold uppercase tracking-wider text-red-500 hover:bg-red-500/10"
                     variant="light"
                     onClick={() => handleToggleRelayModal("")}
                   >
                     Cancel
                   </Button>
 
-                  <Button
-                    className={`${NEO_BTN} h-10`}
-                    type="submit"
-                  >
+                  <Button className={`${NEO_BTN} h-10`} type="submit">
                     Add Relay
                   </Button>
                 </ModalFooter>
@@ -873,7 +862,7 @@ const PreferencesPage = () => {
             {blossomServersAreChanged && (
               <div className="flex h-fit flex-row justify-between px-3 py-[15px]">
                 <Button
-                  className={`${NEO_BTN} h-12 px-6 text-sm bg-zinc-800 text-white hover:bg-zinc-700 border-zinc-600`}
+                  className={`${NEO_BTN} h-12 border-zinc-600 bg-zinc-800 px-6 text-sm text-white hover:bg-zinc-700`}
                   onClick={() => publishBlossomServers()}
                 >
                   Save
@@ -953,17 +942,14 @@ const PreferencesPage = () => {
 
                 <ModalFooter>
                   <Button
-                    className="text-red-500 font-bold uppercase tracking-wider bg-transparent hover:bg-red-500/10"
+                    className="bg-transparent font-bold uppercase tracking-wider text-red-500 hover:bg-red-500/10"
                     variant="light"
                     onClick={() => handleToggleBlossomServerModal()}
                   >
                     Cancel
                   </Button>
 
-                  <Button
-                    className={`${NEO_BTN} h-10`}
-                    type="submit"
-                  >
+                  <Button className={`${NEO_BTN} h-10`} type="submit">
                     Add Server
                   </Button>
                 </ModalFooter>
@@ -971,7 +957,7 @@ const PreferencesPage = () => {
             </ModalContent>
           </Modal>
 
-          <span className="mt-8 mb-4 flex text-2xl font-black uppercase tracking-tighter text-white">
+          <span className="mb-4 mt-8 flex text-2xl font-black uppercase tracking-tighter text-white">
             Web of Trust
           </span>
 

@@ -102,12 +102,15 @@ function Shopstr({ props }: { props: AppProps }) {
     }
   );
 
-  const productContextValue = useMemo(() => ({
-    productEvents: productContext.productEvents,
-    isLoading: productContext.isLoading,
-    addNewlyCreatedProductEvent: productContext.addNewlyCreatedProductEvent,
-    removeDeletedProductEvent: productContext.removeDeletedProductEvent
-  }), [productContext.productEvents, productContext.isLoading]);
+  const productContextValue = useMemo(
+    () => ({
+      productEvents: productContext.productEvents,
+      isLoading: productContext.isLoading,
+      addNewlyCreatedProductEvent: productContext.addNewlyCreatedProductEvent,
+      removeDeletedProductEvent: productContext.removeDeletedProductEvent,
+    }),
+    [productContext.productEvents, productContext.isLoading]
+  );
 
   const [reviewsContext, setReviewsContext] = useState<ReviewsContextInterface>(
     {
@@ -452,7 +455,7 @@ function Shopstr({ props }: { props: AppProps }) {
         addNewlyCreatedMessageEvent: addNewlyCreatedMessageEvent,
         markAllMessagesAsRead: markAllMessagesAsRead,
         newOrderIds: newOrderIds,
-      } as ChatsContextInterface),
+      }) as ChatsContextInterface,
     [
       chatsMap,
       isChatLoading,
@@ -723,8 +726,8 @@ function Shopstr({ props }: { props: AppProps }) {
                               setSelectedSection={setSelectedSection}
                             />
                           )}
-                          <div className="flex min-h-screen flex-col w-full">
-                            <main className="flex-1 w-full max-w-[100vw] overflow-x-hidden">
+                          <div className="flex min-h-screen w-full flex-col">
+                            <main className="w-full max-w-[100vw] flex-1 overflow-x-hidden">
                               <Component
                                 {...pageProps}
                                 focusedPubkey={focusedPubkey}

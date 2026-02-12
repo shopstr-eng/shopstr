@@ -52,13 +52,13 @@ const Transactions = () => {
         <table className="w-full text-left text-sm text-gray-400">
           <thead className="bg-[#1a1a1a] text-xs font-bold uppercase tracking-widest text-gray-500">
             <tr>
-              <th scope="col" className="px-3 md:px-6 pt-5 pb-3">
+              <th scope="col" className="px-3 pb-3 pt-5 md:px-6">
                 Type
               </th>
-              <th scope="col" className="px-3 md:px-6 pt-5 pb-3">
+              <th scope="col" className="px-3 pb-3 pt-5 md:px-6">
                 Amount
               </th>
-              <th scope="col" className="px-3 md:px-6 pt-5 pb-3 text-right">
+              <th scope="col" className="px-3 pb-3 pt-5 text-right md:px-6">
                 Date
               </th>
             </tr>
@@ -69,7 +69,7 @@ const Transactions = () => {
                 key={index}
                 className="border-b border-white/5 bg-transparent transition-colors hover:bg-white/5"
               >
-                <td className="px-3 md:px-6 py-4">
+                <td className="px-3 py-4 md:px-6">
                   <div className="flex items-center">
                     {transaction.type === 1 ? (
                       <ArrowDownTrayIcon className="mr-2 h-5 w-5 text-green-500" />
@@ -84,10 +84,10 @@ const Transactions = () => {
                     ) : null}
                   </div>
                 </td>
-                <td className="px-3 md:px-6 py-4 font-mono font-bold text-white whitespace-nowrap">
+                <td className="whitespace-nowrap px-3 py-4 font-mono font-bold text-white md:px-6">
                   {transaction.amount} sats
                 </td>
-                <td className="px-3 md:px-6 py-4 text-right font-mono text-[10px] md:text-xs leading-tight">
+                <td className="px-3 py-4 text-right font-mono text-[10px] leading-tight md:px-6 md:text-xs">
                   {formatDate(transaction.date)}
                 </td>
               </tr>

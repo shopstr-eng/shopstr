@@ -55,7 +55,7 @@ const CommunityManagementPage = () => {
     try {
       const communityEvent = await createOrUpdateCommunity(signer, nostr, {
         ...data,
-        moderators: [pubkey], 
+        moderators: [pubkey],
       });
 
       await finalizeAndSendNostrEvent(signer!, nostr!, communityEvent);
@@ -134,10 +134,7 @@ const CommunityManagementPage = () => {
             </CardHeader>
             <CardBody>
               {isLoading && myCommunities.length === 0 ? (
-                <Spinner
-                  color="warning"
-                  label="Loading your communities..."
-                />
+                <Spinner color="warning" label="Loading your communities..." />
               ) : myCommunities.length > 0 ? (
                 <div className="space-y-2">
                   {myCommunities.map((community) => (
@@ -145,7 +142,7 @@ const CommunityManagementPage = () => {
                       key={community.id}
                       className="flex items-center justify-between rounded-xl border border-zinc-800 bg-[#111] p-4 transition-all hover:border-zinc-600"
                     >
-                      <span className="font-bold text-white uppercase tracking-tight">
+                      <span className="font-bold uppercase tracking-tight text-white">
                         {community.name}
                       </span>
                       <div className="flex gap-2">
@@ -156,7 +153,7 @@ const CommunityManagementPage = () => {
                           Edit
                         </Button>
                         <Button
-                          className={`${NEO_BTN} h-8 text-xs bg-red-500 text-white hover:bg-red-400`}
+                          className={`${NEO_BTN} h-8 bg-red-500 text-xs text-white hover:bg-red-400`}
                           onClick={() => handleDelete(community.id)}
                         >
                           Delete
@@ -166,7 +163,7 @@ const CommunityManagementPage = () => {
                   ))}
                 </div>
               ) : (
-                <p className="text-center text-zinc-500 italic">
+                <p className="text-center italic text-zinc-500">
                   You haven&apos;t created any communities yet.
                 </p>
               )}

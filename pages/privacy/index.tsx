@@ -1,7 +1,9 @@
 import React, { useState } from "react";
 
 export default function PrivacyPolicy() {
-  const [expandedItems, setExpandedItems] = useState<Record<number, boolean>>({});
+  const [expandedItems, setExpandedItems] = useState<Record<number, boolean>>(
+    {}
+  );
 
   const policyContent = [
     {
@@ -61,11 +63,11 @@ export default function PrivacyPolicy() {
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] pt-32 pb-20 text-white">
+    <div className="min-h-screen bg-[#050505] pb-20 pt-32 text-white">
       <div className="container mx-auto max-w-3xl px-4">
         {/* Header */}
         <div className="mb-16 flex flex-col items-center text-center">
-          <h1 className="mb-6 text-3xl md:text-5xl font-black uppercase tracking-tight lg:text-6xl">
+          <h1 className="mb-6 text-3xl font-black uppercase tracking-tight md:text-5xl lg:text-6xl">
             Privacy Policy
           </h1>
           <p className="mb-8 text-lg text-gray-400">
@@ -98,7 +100,7 @@ export default function PrivacyPolicy() {
                     {item.title}
                   </span>
                   <div
-                    className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 transition-transform duration-200 ${
+                    className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 duration-200 transition-transform ${
                       isOpen ? "rotate-180" : ""
                     }`}
                   >
@@ -119,7 +121,7 @@ export default function PrivacyPolicy() {
                   </div>
                 </button>
                 {isOpen && (
-                  <div className="border-t border-white/5 px-6 pb-6 pt-4 text-gray-400 leading-relaxed">
+                  <div className="border-t border-white/5 px-6 pb-6 pt-4 leading-relaxed text-gray-400">
                     {item.content}
                   </div>
                 )}

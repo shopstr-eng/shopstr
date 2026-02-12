@@ -60,7 +60,7 @@ function QuantitySelector({
         }}
         min={min}
         max={max}
-        className="w-12 bg-transparent text-center font-bold text-white text-base outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        className="w-12 bg-transparent text-center text-base font-bold text-white outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />
       <button
         onClick={onIncrease}
@@ -567,7 +567,7 @@ export default function Component() {
                     {products.length === 1 ? "item" : "items"}): {subtotal} sats
                   </p>
                   <Button
-                    className={`${NEO_BTN} w-full h-14 text-lg font-black tracking-widest md:w-1/2`}
+                    className={`${NEO_BTN} h-14 w-full text-lg font-black tracking-widest md:w-1/2`}
                     onClick={toggleCheckout}
                     size="lg"
                   >
@@ -648,7 +648,7 @@ export default function Component() {
                 <CheckCircleIcon className="h-6 w-6 text-green-500" />
                 <div className="ml-2">Order successful!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-zinc-300 font-medium">
+              <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
                 <div className="flex items-center justify-center">
                   The seller will receive a message with your order details.
                 </div>
@@ -682,7 +682,7 @@ export default function Component() {
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Invoice generation failed!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-zinc-300 font-medium">
+              <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
                 <div className="flex items-center justify-center">
                   The price and/or currency set for this listing was invalid.
                 </div>
@@ -716,7 +716,7 @@ export default function Component() {
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Purchase failed!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-zinc-300 font-medium">
+              <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
                 <div className="flex items-center justify-center">
                   You didn&apos;t have enough balance in your wallet to pay.
                 </div>

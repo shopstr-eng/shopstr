@@ -1,11 +1,5 @@
 import React, { useContext, useEffect, useState } from "react";
-import {
-  Button,
-  Input,
-  Card,
-  CardBody,
-  Chip,
-} from "@nextui-org/react";
+import { Button, Input, Card, CardBody, Chip } from "@nextui-org/react";
 import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 import { TrashIcon } from "@heroicons/react/24/outline";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";

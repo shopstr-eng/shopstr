@@ -90,41 +90,41 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
 
   return (
     <>
-      <div className="mb-16 md:mb-20 h-32 md:h-40 rounded-2xl bg-[#161616] border border-zinc-800 overflow-visible">
-        <div className="relative flex h-32 md:h-40 items-center justify-center rounded-2xl bg-[#111] overflow-hidden">
+      <div className="mb-16 h-32 overflow-visible rounded-2xl border border-zinc-800 bg-[#161616] md:mb-20 md:h-40">
+        <div className="relative flex h-32 items-center justify-center overflow-hidden rounded-2xl bg-[#111] md:h-40">
           {watchBanner && (
             <Image
               alt={"User banner image"}
               src={watchBanner}
-              className="h-32 md:h-40 w-full rounded-2xl object-cover"
+              className="h-32 w-full rounded-2xl object-cover md:h-40"
             />
           )}
           <FileUploaderButton
-            className={`${NEO_BTN} absolute bottom-2 right-2 md:bottom-4 md:right-4 z-20 h-8 md:h-10 px-3 md:px-4 text-[10px] md:text-xs`}
+            className={`${NEO_BTN} absolute bottom-2 right-2 z-20 h-8 px-3 text-[10px] md:bottom-4 md:right-4 md:h-10 md:px-4 md:text-xs`}
             imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
           >
             Upload Banner
           </FileUploaderButton>
         </div>
         <div className="flex items-center justify-center">
-          <div className="relative z-50 mt-[-2.5rem] md:mt-[-3rem] h-20 w-20 md:h-28 md:w-28">
-            <div className="border-4 border-[#111] rounded-full">
+          <div className="relative z-50 mt-[-2.5rem] h-20 w-20 md:mt-[-3rem] md:h-28 md:w-28">
+            <div className="rounded-full border-4 border-[#111]">
               <FileUploaderButton
                 isIconOnly
-                className={`${NEO_BTN} absolute bottom-0 right-0 z-[60] h-8 w-8 md:h-10 md:w-10 min-w-0 rounded-full border-white p-0 shadow-lg`}
+                className={`${NEO_BTN} absolute bottom-0 right-0 z-[60] h-8 w-8 min-w-0 rounded-full border-white p-0 shadow-lg md:h-10 md:w-10`}
                 imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
               />
               {watchPicture ? (
                 <Image
                   src={watchPicture}
                   alt="user profile picture"
-                  className="rounded-full h-18 w-18 md:h-24 md:w-24 object-cover"
+                  className="h-18 w-18 rounded-full object-cover md:h-24 md:w-24"
                 />
               ) : (
                 <Image
                   src={defaultImage}
                   alt="user profile picture"
-                  className="rounded-full h-18 w-18 md:h-24 md:w-24 object-cover"
+                  className="h-18 w-18 rounded-full object-cover md:h-24 md:w-24"
                 />
               )}
             </div>
@@ -146,9 +146,11 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               <Input
                 className="pb-6"
                 classNames={{
-                  label: "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                  label:
+                    "text-zinc-400 font-bold uppercase tracking-wider text-sm",
                   input: "text-white",
-                  inputWrapper: "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
+                  inputWrapper:
+                    "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -178,9 +180,11 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               <Input
                 className="pb-6"
                 classNames={{
-                  label: "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                  label:
+                    "text-zinc-400 font-bold uppercase tracking-wider text-sm",
                   input: "text-white",
-                  inputWrapper: "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
+                  inputWrapper:
+                    "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -210,9 +214,11 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               <Textarea
                 className="pb-6"
                 classNames={{
-                  label: "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                  label:
+                    "text-zinc-400 font-bold uppercase tracking-wider text-sm",
                   input: "text-white",
-                  inputWrapper: "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400",
+                  inputWrapper:
+                    "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -242,9 +248,11 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               <Input
                 className="pb-6"
                 classNames={{
-                  label: "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                  label:
+                    "text-zinc-400 font-bold uppercase tracking-wider text-sm",
                   input: "text-white",
-                  inputWrapper: "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
+                  inputWrapper:
+                    "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -274,9 +282,11 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               <Input
                 className="pb-6"
                 classNames={{
-                  label: "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                  label:
+                    "text-zinc-400 font-bold uppercase tracking-wider text-sm",
                   input: "text-white",
-                  inputWrapper: "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
+                  inputWrapper:
+                    "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -306,9 +316,11 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               <Input
                 className="pb-6"
                 classNames={{
-                  label: "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                  label:
+                    "text-zinc-400 font-bold uppercase tracking-wider text-sm",
                   input: "text-white",
-                  inputWrapper: "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
+                  inputWrapper:
+                    "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -332,8 +344,10 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             <Select
               className="pb-8"
               classNames={{
-                label: "text-zinc-400 font-bold uppercase tracking-wider text-sm",
-                trigger: "border-zinc-700 bg-[#111] hover:border-zinc-500 data-[focus=true]:border-yellow-400 h-12",
+                label:
+                  "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                trigger:
+                  "border-zinc-700 bg-[#111] hover:border-zinc-500 data-[focus=true]:border-yellow-400 h-12",
                 value: "text-white",
               }}
               variant="bordered"
@@ -344,11 +358,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               onChange={(e) => onChange(e.target.value)}
               onBlur={onBlur}
             >
-              <SelectItem
-                key="ecash"
-                value="ecash"
-                className="text-zinc-800"
-              >
+              <SelectItem key="ecash" value="ecash" className="text-zinc-800">
                 Cashu (Bitcoin)
               </SelectItem>
               <SelectItem
@@ -358,11 +368,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               >
                 Lightning (Bitcoin)
               </SelectItem>
-              <SelectItem
-                key="fiat"
-                value="fiat"
-                className="text-zinc-800"
-              >
+              <SelectItem key="fiat" value="fiat" className="text-zinc-800">
                 Local Currency (Fiat)
               </SelectItem>
             </Select>
@@ -370,7 +376,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
         />
 
         <div className="pb-8">
-          <label className="mb-4 block text-zinc-400 font-bold uppercase tracking-wider text-sm">
+          <label className="mb-4 block text-sm font-bold uppercase tracking-wider text-zinc-400">
             Fiat payment options (for sellers)
           </label>
           <div className="space-y-4">
@@ -383,7 +389,10 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               { key: "googlepay", label: "Google Pay", requiresUsername: true },
               { key: "paypal", label: "PayPal", requiresUsername: true },
             ].map((option) => (
-              <div key={option.key} className="flex flex-wrap items-center gap-3 bg-[#1a1a1a] p-3 rounded-xl border border-zinc-800">
+              <div
+                key={option.key}
+                className="flex flex-wrap items-center gap-3 rounded-xl border border-zinc-800 bg-[#1a1a1a] p-3"
+              >
                 <input
                   type="checkbox"
                   id={option.key}
@@ -412,10 +421,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
                   }}
                   className="h-5 w-5 rounded border-zinc-700 bg-zinc-900 text-yellow-400 focus:ring-yellow-400"
                 />
-                <label
-                  htmlFor={option.key}
-                  className="text-white font-bold"
-                >
+                <label htmlFor={option.key} className="font-bold text-white">
                   {option.label}
                 </label>
                 {option.requiresUsername &&
@@ -457,9 +463,11 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               step={0.1}
               className="pb-10"
               classNames={{
-                label: "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                label:
+                  "text-zinc-400 font-bold uppercase tracking-wider text-sm",
                 input: "text-white font-mono",
-                inputWrapper: "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
+                inputWrapper:
+                  "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
               }}
               variant="bordered"
               fullWidth

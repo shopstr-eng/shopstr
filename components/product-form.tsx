@@ -406,7 +406,7 @@ export default function ProductForm({
                       hasPrev && (
                         <button
                           type="button"
-                          className={`left-4 z-10 absolute top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white hover:bg-black/80`}
+                          className={`absolute left-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white hover:bg-black/80`}
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -422,7 +422,7 @@ export default function ProductForm({
                       hasNext && (
                         <button
                           type="button"
-                          className={`right-4 z-10 absolute top-1/2 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white hover:bg-black/80`}
+                          className={`absolute right-4 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/50 p-2 text-white hover:bg-black/80`}
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
@@ -483,7 +483,7 @@ export default function ProductForm({
             {imageError && <div className="text-red-600">{imageError}</div>}
             <FileUploaderButton
               isProductUpload={true}
-              className={`${NEO_BTN} w-full h-12 text-sm`}
+              className={`${NEO_BTN} h-12 w-full text-sm`}
               imgCallbackOnUpload={(imgUrl) => {
                 if (imgUrl && imgUrl.length > 0) {
                   setImageError(null);
@@ -879,7 +879,7 @@ export default function ProductForm({
                             <Chip
                               key={item.key}
                               size="sm"
-                              className="bg-zinc-800 text-white border border-zinc-600"
+                              className="border border-zinc-600 bg-zinc-800 text-white"
                             >
                               {item.key
                                 ? (item.key as string)
@@ -903,23 +903,23 @@ export default function ProductForm({
             />
 
             {/* --- Flash Sale Toggle --- */}
-              <div className="mt-4 flex items-center justify-between rounded-xl border border-zinc-800 bg-[#27272a]/30 p-4">
-                <div className="flex flex-col">
-                  <span className="text-sm font-bold text-white">
-                    Post as Flash Sale
-                  </span>
-                  <span className="text-xs text-zinc-500">
-                    Also broadcast to Global Feed (Nostr)
-                  </span>
-                </div>
-                <Switch
-                  isSelected={isFlashSale}
-                  onValueChange={setIsFlashSale}
-                  classNames={{
-                    wrapper: "group-data-[selected=true]:bg-yellow-400",
-                  }}
-                />
+            <div className="mt-4 flex items-center justify-between rounded-xl border border-zinc-800 bg-[#27272a]/30 p-4">
+              <div className="flex flex-col">
+                <span className="text-sm font-bold text-white">
+                  Post as Flash Sale
+                </span>
+                <span className="text-xs text-zinc-500">
+                  Also broadcast to Global Feed (Nostr)
+                </span>
               </div>
+              <Switch
+                isSelected={isFlashSale}
+                onValueChange={setIsFlashSale}
+                classNames={{
+                  wrapper: "group-data-[selected=true]:bg-yellow-400",
+                }}
+              />
+            </div>
 
             {/* Additional Options Toggle */}
             <div className="mt-6">
@@ -1385,7 +1385,7 @@ export default function ProductForm({
                           inputWrapper:
                             "bg-[#27272a] border border-zinc-700 hover:border-zinc-600 data-[hover=true]:border-zinc-600 group-data-[focus=true]:border-yellow-400 group-data-[focus=true]:bg-[#27272a] rounded-xl h-14 mt-4",
                           input:
-                           "text-white font-medium placeholder:text-zinc-500 text-base",
+                            "text-white font-medium placeholder:text-zinc-500 text-base",
                           label: "hidden",
                         }}
                         placeholder="US shipping only, signature required, no P.O. box delivery, etc."

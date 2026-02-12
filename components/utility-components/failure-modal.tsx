@@ -33,8 +33,10 @@ export default function FailureModal({
             <XCircleIcon className="h-6 w-6 text-red-500" />
             <div className="ml-2">Error</div>
           </ModalHeader>
-          <ModalBody className="flex flex-col overflow-hidden text-zinc-300 font-medium pb-8">
-            <div className="flex items-center justify-center text-center break-words">{bodyText}</div>
+          <ModalBody className="flex flex-col overflow-hidden pb-8 font-medium text-zinc-300">
+            <div className="flex items-center justify-center break-words text-center">
+              {bodyText}
+            </div>
           </ModalBody>
         </ModalContent>
       </Modal>

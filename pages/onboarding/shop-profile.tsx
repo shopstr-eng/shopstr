@@ -33,7 +33,7 @@ const OnboardingShopProfile = () => {
             />
             <h1 className="text-3xl font-bold text-white">Shopstr</h1>
           </div>
-          <h2 className="mb-4 text-center text-3xl md:text-4xl font-black text-white">
+          <h2 className="mb-4 text-center text-3xl font-black text-white md:text-4xl">
             Setup Your Shop
           </h2>
           <p className="text-center text-gray-400">
@@ -44,9 +44,9 @@ const OnboardingShopProfile = () => {
 
         <ShopProfileForm isOnboarding={true} />
 
-        <div className="mt-6 flex justify-center w-full">
+        <div className="mt-6 flex w-full justify-center">
           <Button
-            className={`${NEO_BTN} w-full md:w-auto px-12 py-6 text-lg font-black tracking-widest`}
+            className={`${NEO_BTN} w-full px-12 py-6 text-lg font-black tracking-widest md:w-auto`}
             onClick={handleFinish}
           >
             Finish <ArrowRightStartOnRectangleIcon className="h-6 w-6" />

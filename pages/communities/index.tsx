@@ -15,7 +15,7 @@ const CommunitiesDiscoveryPage = () => {
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQuery(searchQuery);
-    }, 300); 
+    }, 300);
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
@@ -54,7 +54,7 @@ const CommunitiesDiscoveryPage = () => {
               <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border-2 border-shopstr-yellow text-shopstr-yellow">
                 <UserGroupIcon className="h-8 w-8" />
               </div>
-              <h1 className="mb-8 text-center text-4xl md:text-6xl font-black uppercase tracking-tighter text-white">
+              <h1 className="mb-8 text-center text-4xl font-black uppercase tracking-tighter text-white md:text-6xl">
                 Discover{" "}
                 <span className="text-shopstr-yellow">Communities</span>
               </h1>
@@ -70,7 +70,8 @@ const CommunitiesDiscoveryPage = () => {
                   base: "max-w-xl w-full",
                   inputWrapper:
                     "h-14 bg-[#111] border border-white/10 rounded-xl data-[hover=true]:bg-[#1a1a1a] group-data-[focus=true]:bg-[#1a1a1a]",
-                  input: "text-white placeholder:text-gray-500 text-base md:text-lg",  
+                  input:
+                    "text-white placeholder:text-gray-500 text-base md:text-lg",
                   clearButton: "text-gray-400",
                 }}
                 startContent={
@@ -83,13 +84,13 @@ const CommunitiesDiscoveryPage = () => {
             {/* --- User's Pinned Communities (Conditional) --- */}
             {myCommunities.length > 0 && (
               <div className="mb-12">
-                <div className="mb-6 flex items-center justify-center md:justify-start gap-2">
+                <div className="mb-6 flex items-center justify-center gap-2 md:justify-start">
                   <h2 className="text-xl font-bold uppercase text-white">
                     My Community
                   </h2>
                   <span className="text-xl">📌</span>
                 </div>
-                <div className="flex flex-wrap justify-center md:justify-start gap-6">
+                <div className="flex flex-wrap justify-center gap-6 md:justify-start">
                   {myCommunities.map((community) => (
                     <CommunityCard key={community.id} community={community} />
                   ))}
@@ -98,7 +99,7 @@ const CommunitiesDiscoveryPage = () => {
             )}
 
             {/* --- Grid of Other Communities --- */}
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 auto-rows-fr">
+            <div className="grid auto-rows-fr grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {filteredOtherCommunities.map((community) => (
                 <CommunityCard key={community.id} community={community} />
               ))}

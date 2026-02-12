@@ -91,7 +91,7 @@ const ShopProfilePage = () => {
             <ShopstrSpinner />
           ) : (
             <>
-              <div className="mb-20 h-40 rounded-2xl border border-zinc-800 bg-[#161616] overflow-visible">
+              <div className="mb-20 h-40 overflow-visible rounded-2xl border border-zinc-800 bg-[#161616]">
                 <div className="relative flex h-40 items-center justify-center rounded-2xl bg-[#111]">
                   {watchBanner && (
                     <Image
@@ -109,10 +109,10 @@ const ShopProfilePage = () => {
                 </div>
                 <div className="flex items-center justify-center">
                   <div className="relative z-50 mt-[-3rem] h-28 w-28">
-                    <div className="border-4 border-[#111] rounded-full">
+                    <div className="rounded-full border-4 border-[#111]">
                       <FileUploaderButton
                         isIconOnly={true}
-                        className={`${NEO_BTN} absolute bottom-0 right-0 z-20 h-10 w-10 min-w-10 rounded-full p-0 border-white`}
+                        className={`${NEO_BTN} min-w-10 absolute bottom-0 right-0 z-20 h-10 w-10 rounded-full border-white p-0`}
                         imgCallbackOnUpload={(imgUrl) =>
                           setValue("picture", imgUrl)
                         }
@@ -121,13 +121,13 @@ const ShopProfilePage = () => {
                         <Image
                           src={watchPicture}
                           alt="shop logo"
-                          className="rounded-full h-24 w-24 object-cover"
+                          className="h-24 w-24 rounded-full object-cover"
                         />
                       ) : (
                         <Image
                           src={defaultImage}
                           alt="shop logo"
-                          className="rounded-full h-24 w-24 object-cover"
+                          className="h-24 w-24 rounded-full object-cover"
                         />
                       )}
                     </div>
@@ -157,9 +157,11 @@ const ShopProfilePage = () => {
                       <Input
                         className="pb-6"
                         classNames={{
-                          label: "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                          label:
+                            "text-zinc-400 font-bold uppercase tracking-wider text-sm",
                           input: "text-white",
-                          inputWrapper: "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
+                          inputWrapper:
+                            "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
                         }}
                         variant="bordered"
                         fullWidth={true}
@@ -197,9 +199,11 @@ const ShopProfilePage = () => {
                       <Textarea
                         className="pb-8"
                         classNames={{
-                          label: "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                          label:
+                            "text-zinc-400 font-bold uppercase tracking-wider text-sm",
                           input: "text-white",
-                          inputWrapper: "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400",
+                          inputWrapper:
+                            "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400",
                         }}
                         variant="bordered"
                         fullWidth={true}

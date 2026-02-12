@@ -1,10 +1,7 @@
 import { useState } from "react";
 import { useRouter } from "next/router";
 import { Button, Image } from "@nextui-org/react";
-import {
-  WalletIcon,
-  ExclamationCircleIcon,
-} from "@heroicons/react/24/outline";
+import { WalletIcon, ExclamationCircleIcon } from "@heroicons/react/24/outline";
 import { saveNWCString } from "@/utils/nostr/nostr-helper-functions";
 import { webln } from "@getalby/sdk";
 import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
@@ -73,7 +70,7 @@ const OnboardingWallet = () => {
             />
             <h1 className="text-3xl font-bold text-white">Shopstr</h1>
           </div>
-          <h2 className="mb-4 text-center text-3xl md:text-4xl font-black text-white">
+          <h2 className="mb-4 text-center text-3xl font-black text-white md:text-4xl">
             Connect Wallet
           </h2>
           <p className="text-center text-gray-400">
@@ -93,7 +90,7 @@ const OnboardingWallet = () => {
               </div>
               <input
                 type="text"
-                className="w-full rounded-xl border border-white/10 bg-[#111] py-4 pl-12 pr-4 text-white text-base placeholder-gray-600 transition-colors focus:border-white/30 focus:outline-none"
+                className="w-full rounded-xl border border-white/10 bg-[#111] py-4 pl-12 pr-4 text-base text-white placeholder-gray-600 transition-colors focus:border-white/30 focus:outline-none"
                 placeholder="nostr+walletconnect://..."
                 value={nwcString}
                 onChange={(e) => setNwcString(e.target.value)}
@@ -116,7 +113,7 @@ const OnboardingWallet = () => {
               Skip for now
             </button>
             <Button
-              className={`${NEO_BTN} w-full sm:w-auto px-8 py-6 text-sm`}
+              className={`${NEO_BTN} w-full px-8 py-6 text-sm sm:w-auto`}
               onClick={handleConnect}
               isLoading={isLoading}
               isDisabled={!nwcString}
