@@ -3,27 +3,12 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 33, 33, 33;
-  --background-start-rgb: 232, 232, 232;
-  --background-end-rgb: 232, 232, 232;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 232, 232, 232;
-    --background-start-rgb: 33, 33, 33;
-    --background-end-rgb: 33, 33, 33;
-  }
+  color-scheme: dark;
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  color: white;
+  background: #111111;
 }
 
 /* Chrome, Edge, and Safari */
@@ -37,8 +22,8 @@ body {
 
 *::-webkit-scrollbar-thumb {
   border-radius: 2px;
-  border: 1px solid;
-  background-color: #686868;
+  border: 1px solid #27272a;
+  background-color: #3f3f46;
 }
 
 html {

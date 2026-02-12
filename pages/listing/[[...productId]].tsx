@@ -100,25 +100,35 @@ const Listing = () => {
 
   return (
     <>
-      <div className="flex h-full min-h-screen flex-col bg-light-bg pt-20 dark:bg-dark-bg">
+      <div className="flex h-full min-h-screen flex-col bg-[#111] pt-20">
         {productData &&
           (isZapsnag ? (
-            <div className="mx-auto w-full max-w-2xl p-6">
-              <div className="overflow-hidden rounded-xl bg-white shadow-lg dark:bg-neutral-900">
+            <div className="mx-auto w-full max-w-2xl p-4 md:p-6">
+              <div className="overflow-hidden rounded-xl border border-zinc-800 bg-[#161616]">
                 <img
                   src={productData.images[0]}
-                  className="h-96 w-full object-cover"
+                  className="h-64 w-full object-cover md:h-96"
                 />
                 <div className="p-6">
                   <div className="mb-2 flex items-start justify-between">
-                    <h1 className="text-2xl font-bold text-light-text dark:text-dark-text">
+                    <h1 className="text-2xl font-black uppercase tracking-tighter text-white">
                       {productData.title}
                     </h1>
                     {rawEvent && (
-                      <Dropdown>
+                      <Dropdown
+                        classNames={{
+                          content:
+                            "bg-[#161616] border border-zinc-800 rounded-xl",
+                        }}
+                      >
                         <DropdownTrigger>
-                          <Button isIconOnly variant="light" size="sm">
-                            <EllipsisVerticalIcon className="h-6 w-6 text-gray-500" />
+                          <Button
+                            isIconOnly
+                            variant="light"
+                            size="sm"
+                            className="text-zinc-400 hover:text-white"
+                          >
+                            <EllipsisVerticalIcon className="h-6 w-6" />
                           </Button>
                         </DropdownTrigger>
                         <DropdownMenu aria-label="Event Actions">
@@ -138,7 +148,7 @@ const Listing = () => {
                       </Dropdown>
                     )}
                   </div>
-                  <p className="mb-6 whitespace-pre-wrap text-gray-600 dark:text-gray-300">
+                  <p className="mb-6 whitespace-pre-wrap text-zinc-400">
                     {productData.summary}
                   </p>
                   <ZapsnagButton product={productData} />
@@ -182,25 +192,24 @@ const Listing = () => {
                 setCashuPaymentSent(false);
                 router.push("/orders");
               }}
-              // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
               classNames={{
-                body: "py-6 ",
-                backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-                header: "border-b-[1px] border-[#292f46]",
-                footer: "border-t-[1px] border-[#292f46]",
-                closeButton: "hover:bg-black/5 active:bg-white/10",
+                base: "bg-[#161616] border border-zinc-800 rounded-2xl",
+                body: "py-8",
+                backdrop: "bg-black/80 backdrop-blur-sm",
+                header: "border-b border-zinc-800 text-white",
+                closeButton: "hover:bg-white/10 text-white",
               }}
               isDismissable={true}
               scrollBehavior={"normal"}
               placement={"center"}
-              size="2xl"
+              size="md"
             >
               <ModalContent>
-                <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <ModalHeader className="flex items-center justify-center font-black uppercase tracking-tighter">
                   <CheckCircleIcon className="h-6 w-6 text-green-500" />
                   <div className="ml-2">Order successful!</div>
                 </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
                   <div className="flex items-center justify-center">
                     The seller will receive a message with your order details.
                   </div>
@@ -215,25 +224,24 @@ const Listing = () => {
               backdrop="blur"
               isOpen={invoiceGenerationFailed}
               onClose={() => setInvoiceGenerationFailed(false)}
-              // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
               classNames={{
-                body: "py-6 ",
-                backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-                header: "border-b-[1px] border-[#292f46]",
-                footer: "border-t-[1px] border-[#292f46]",
-                closeButton: "hover:bg-black/5 active:bg-white/10",
+                base: "bg-[#161616] border border-zinc-800 rounded-2xl",
+                body: "py-8",
+                backdrop: "bg-black/80 backdrop-blur-sm",
+                header: "border-b border-zinc-800 text-white",
+                closeButton: "hover:bg-white/10 text-white",
               }}
               isDismissable={true}
               scrollBehavior={"normal"}
               placement={"center"}
-              size="2xl"
+              size="md"
             >
               <ModalContent>
-                <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <ModalHeader className="flex items-center justify-center font-black uppercase tracking-tighter">
                   <XCircleIcon className="h-6 w-6 text-red-500" />
                   <div className="ml-2">Invoice generation failed!</div>
                 </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
                   <div className="flex items-center justify-center">
                     The price and/or currency set for this listing was invalid.
                   </div>
@@ -248,25 +256,24 @@ const Listing = () => {
               backdrop="blur"
               isOpen={cashuPaymentFailed}
               onClose={() => setCashuPaymentFailed(false)}
-              // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
               classNames={{
-                body: "py-6 ",
-                backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-                header: "border-b-[1px] border-[#292f46]",
-                footer: "border-t-[1px] border-[#292f46]",
-                closeButton: "hover:bg-black/5 active:bg-white/10",
+                base: "bg-[#161616] border border-zinc-800 rounded-2xl",
+                body: "py-8",
+                backdrop: "bg-black/80 backdrop-blur-sm",
+                header: "border-b border-zinc-800 text-white",
+                closeButton: "hover:bg-white/10 text-white",
               }}
               isDismissable={true}
               scrollBehavior={"normal"}
               placement={"center"}
-              size="2xl"
+              size="md"
             >
               <ModalContent>
-                <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <ModalHeader className="flex items-center justify-center font-black uppercase tracking-tighter">
                   <XCircleIcon className="h-6 w-6 text-red-500" />
                   <div className="ml-2">Purchase failed!</div>
                 </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
                   <div className="flex items-center justify-center">
                     You didn&apos;t have enough balance in your wallet to pay.
                   </div>
@@ -281,25 +288,24 @@ const Listing = () => {
               backdrop="blur"
               isOpen={fiatOrderFailed}
               onClose={() => setFiatOrderFailed(false)}
-              // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
               classNames={{
-                body: "py-6 ",
-                backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-                header: "border-b-[1px] border-[#292f46]",
-                footer: "border-t-[1px] border-[#292f46]",
-                closeButton: "hover:bg-black/5 active:bg-white/10",
+                base: "bg-[#161616] border border-zinc-800 rounded-2xl",
+                body: "py-8",
+                backdrop: "bg-black/80 backdrop-blur-sm",
+                header: "border-b border-zinc-800 text-white",
+                closeButton: "hover:bg-white/10 text-white",
               }}
               isDismissable={true}
               scrollBehavior={"normal"}
               placement={"center"}
-              size="2xl"
+              size="md"
             >
               <ModalContent>
-                <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                <ModalHeader className="flex items-center justify-center font-black uppercase tracking-tighter">
                   <XCircleIcon className="h-6 w-6 text-red-500" />
                   <div className="ml-2">Order failed!</div>
                 </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
                   <div className="flex items-center justify-center">
                     Your order information was not delivered to the seller.
                     Please try again.

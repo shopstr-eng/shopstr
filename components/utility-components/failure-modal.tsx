@@ -16,26 +16,27 @@ export default function FailureModal({
         backdrop="blur"
         isOpen={isOpen}
         onClose={onClose}
-        // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
         classNames={{
-          body: "py-6 ",
-          backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-          header: "border-b-[1px] border-[#292f46]",
-          footer: "border-t-[1px] border-[#292f46]",
-          closeButton: "hover:bg-black/5 active:bg-white/10",
+          base: "bg-[#161616] border border-zinc-800 rounded-2xl",
+          body: "py-8",
+          backdrop: "bg-black/80 backdrop-blur-sm",
+          header: "border-b border-zinc-800 text-white",
+          closeButton: "hover:bg-white/10 text-white",
         }}
         isDismissable={true}
         scrollBehavior={"normal"}
         placement={"center"}
-        size="2xl"
+        size="md"
       >
         <ModalContent>
-          <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+          <ModalHeader className="flex items-center justify-center font-black uppercase tracking-tighter">
             <XCircleIcon className="h-6 w-6 text-red-500" />
             <div className="ml-2">Error</div>
           </ModalHeader>
-          <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
-            <div className="flex items-center justify-center">{bodyText}</div>
+          <ModalBody className="flex flex-col overflow-hidden pb-8 font-medium text-zinc-300">
+            <div className="flex items-center justify-center break-words text-center">
+              {bodyText}
+            </div>
           </ModalBody>
         </ModalContent>
       </Modal>

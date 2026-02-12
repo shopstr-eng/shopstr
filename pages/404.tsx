@@ -3,43 +3,45 @@ import { Button } from "@nextui-org/react";
 import { ArrowLongLeftIcon } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import Link from "next/link";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 export default function Custom404() {
   const router = useRouter();
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-light-bg px-4 dark:bg-dark-bg">
-      <div className="mb-8 text-center">
-        <h1 className="mb-2 text-9xl font-bold text-shopstr-purple dark:text-shopstr-yellow">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-[#050505] px-4">
+      <div className="w-full max-w-2xl rounded-3xl border border-white/10 bg-[#111] p-6 text-center shadow-2xl md:px-8 md:py-16">
+        <h1 className="mb-2 text-6xl font-black text-shopstr-yellow md:text-9xl">
           404
         </h1>
-        <h2 className="mb-6 text-2xl font-medium text-light-text dark:text-dark-text md:text-3xl">
+        <h2 className="mb-6 text-2xl font-bold uppercase tracking-widest text-white md:text-3xl">
           Page Not Found
         </h2>
-        <p className="mb-8 text-light-text dark:text-dark-text">
-          The page you&apos;re looking for doesn&apos;t exist or has been moved.
+        <p className="mb-12 text-lg text-gray-400">
+          We can&apos;t seem to find the page you&apos;re looking for. It looks
+          like the link is broken or the page has been removed.
         </p>
-        <div className="flex flex-col items-center justify-center space-y-4 sm:flex-row sm:space-x-4 sm:space-y-0">
+        <div className="flex flex-col items-center justify-center gap-4 sm:flex-row sm:flex-wrap">
           <Button
-            className={SHOPSTRBUTTONCLASSNAMES}
+            className={`${NEO_BTN} min-w-[140px] px-6 py-3 text-xs font-black tracking-widest`}
             onClick={() => router.back()}
-            startContent={<ArrowLongLeftIcon className="h-5 w-5" />}
+            startContent={<ArrowLongLeftIcon className="h-5 w-5 stroke-2" />}
           >
             Go back
           </Button>
           <Link href="/" passHref>
-            <Button className={SHOPSTRBUTTONCLASSNAMES}>
-              View landing page
+            <Button
+              className={`${NEO_BTN} min-w-[140px] border-white bg-[#222] px-6 py-3 text-xs font-black tracking-widest text-white hover:bg-[#333]`}
+            >
+              Home
             </Button>
           </Link>
           <Link href="/marketplace" passHref>
-            <Button className={SHOPSTRBUTTONCLASSNAMES}>
-              View marketplace
+            <Button
+              className={`${NEO_BTN} min-w-[140px] border-white bg-[#222] px-6 py-3 text-xs font-black tracking-widest text-white hover:bg-[#333]`}
+            >
+              Marketplace
             </Button>
-          </Link>
-          <Link href="/orders" passHref>
-            <Button className={SHOPSTRBUTTONCLASSNAMES}>View orders</Button>
           </Link>
         </div>
       </div>

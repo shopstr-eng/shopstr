@@ -11,7 +11,6 @@ import {
 } from "@nextui-org/react";
 import { ProfileMapContext } from "@/utils/context/context";
 import { FiatOptionsType } from "@/utils/types/types";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   SignerContext,
   NostrContext,
@@ -19,6 +18,7 @@ import {
 import { createNostrProfileEvent } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 interface UserProfileFormProps {
   isOnboarding?: boolean;
@@ -90,41 +90,41 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
 
   return (
     <>
-      <div className="mb-20 h-40 rounded-lg bg-light-fg dark:bg-dark-fg">
-        <div className="relative flex h-40 items-center justify-center rounded-lg bg-shopstr-purple-light dark:bg-dark-fg">
+      <div className="mb-16 h-32 overflow-visible rounded-2xl border border-zinc-800 bg-[#161616] md:mb-20 md:h-40">
+        <div className="relative flex h-32 items-center justify-center overflow-hidden rounded-2xl bg-[#111] md:h-40">
           {watchBanner && (
             <Image
               alt={"User banner image"}
               src={watchBanner}
-              className="h-40 w-full rounded-lg object-cover object-fill"
+              className="h-32 w-full rounded-2xl object-cover md:h-40"
             />
           )}
           <FileUploaderButton
-            className={`absolute bottom-5 right-5 z-20 border-2 border-white bg-shopstr-purple shadow-md ${SHOPSTRBUTTONCLASSNAMES}`}
+            className={`${NEO_BTN} absolute bottom-2 right-2 z-20 h-8 px-3 text-[10px] md:bottom-4 md:right-4 md:h-10 md:px-4 md:text-xs`}
             imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
           >
             Upload Banner
           </FileUploaderButton>
         </div>
         <div className="flex items-center justify-center">
-          <div className="relative z-20 mt-[-3rem] h-24 w-24">
-            <div className="">
+          <div className="relative z-50 mt-[-2.5rem] h-20 w-20 md:mt-[-3rem] md:h-28 md:w-28">
+            <div className="rounded-full border-4 border-[#111]">
               <FileUploaderButton
                 isIconOnly
-                className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
+                className={`${NEO_BTN} absolute bottom-0 right-0 z-[60] h-8 w-8 min-w-0 rounded-full border-white p-0 shadow-lg md:h-10 md:w-10`}
                 imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
               />
               {watchPicture ? (
                 <Image
                   src={watchPicture}
                   alt="user profile picture"
-                  className="rounded-full"
+                  className="h-18 w-18 rounded-full object-cover md:h-24 md:w-24"
                 />
               ) : (
                 <Image
                   src={defaultImage}
                   alt="user profile picture"
-                  className="rounded-full"
+                  className="h-18 w-18 rounded-full object-cover md:h-24 md:w-24"
                 />
               )}
             </div>
@@ -144,9 +144,13 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
-                className="pb-4 text-light-text dark:text-dark-text"
+                className="pb-6"
                 classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
+                  label:
+                    "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                  input: "text-white",
+                  inputWrapper:
+                    "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -174,9 +178,13 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
-                className="pb-4 text-light-text dark:text-dark-text"
+                className="pb-6"
                 classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
+                  label:
+                    "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                  input: "text-white",
+                  inputWrapper:
+                    "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -204,9 +212,13 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Textarea
-                className="pb-4 text-light-text dark:text-dark-text"
+                className="pb-6"
                 classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
+                  label:
+                    "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                  input: "text-white",
+                  inputWrapper:
+                    "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -234,9 +246,13 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
-                className="pb-4 text-light-text dark:text-dark-text"
+                className="pb-6"
                 classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
+                  label:
+                    "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                  input: "text-white",
+                  inputWrapper:
+                    "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -264,9 +280,13 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
-                className="pb-4 text-light-text dark:text-dark-text"
+                className="pb-6"
                 classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
+                  label:
+                    "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                  input: "text-white",
+                  inputWrapper:
+                    "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -294,9 +314,13 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
-                className="pb-4 text-light-text dark:text-dark-text"
+                className="pb-6"
                 classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
+                  label:
+                    "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                  input: "text-white",
+                  inputWrapper:
+                    "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -318,9 +342,13 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
           control={control}
           render={({ field: { onChange, onBlur, value } }) => (
             <Select
-              className="pb-4 text-light-text dark:text-dark-text"
+              className="pb-8"
               classNames={{
-                label: "text-light-text dark:text-dark-text text-lg",
+                label:
+                  "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                trigger:
+                  "border-zinc-700 bg-[#111] hover:border-zinc-500 data-[focus=true]:border-yellow-400 h-12",
+                value: "text-white",
               }}
               variant="bordered"
               fullWidth={true}
@@ -330,33 +358,25 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               onChange={(e) => onChange(e.target.value)}
               onBlur={onBlur}
             >
-              <SelectItem
-                key="ecash"
-                value="ecash"
-                className="text-light-text dark:text-dark-text"
-              >
+              <SelectItem key="ecash" value="ecash" className="text-zinc-800">
                 Cashu (Bitcoin)
               </SelectItem>
               <SelectItem
                 key="lightning"
                 value="lightning"
-                className="text-light-text dark:text-dark-text"
+                className="text-zinc-800"
               >
                 Lightning (Bitcoin)
               </SelectItem>
-              <SelectItem
-                key="fiat"
-                value="fiat"
-                className="text-light-text dark:text-dark-text"
-              >
+              <SelectItem key="fiat" value="fiat" className="text-zinc-800">
                 Local Currency (Fiat)
               </SelectItem>
             </Select>
           )}
         />
 
-        <div className="pb-4">
-          <label className="mb-2 block text-lg text-light-text dark:text-dark-text">
+        <div className="pb-8">
+          <label className="mb-4 block text-sm font-bold uppercase tracking-wider text-zinc-400">
             Fiat payment options (for sellers)
           </label>
           <div className="space-y-4">
@@ -369,7 +389,10 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               { key: "googlepay", label: "Google Pay", requiresUsername: true },
               { key: "paypal", label: "PayPal", requiresUsername: true },
             ].map((option) => (
-              <div key={option.key} className="flex items-center space-x-4">
+              <div
+                key={option.key}
+                className="flex flex-wrap items-center gap-3 rounded-xl border border-zinc-800 bg-[#1a1a1a] p-3"
+              >
                 <input
                   type="checkbox"
                   id={option.key}
@@ -396,12 +419,9 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
                       setValue("fiat_options", rest);
                     }
                   }}
-                  className="h-4 w-4 rounded border-gray-300 text-shopstr-purple focus:ring-shopstr-purple"
+                  className="h-5 w-5 rounded border-zinc-700 bg-zinc-900 text-yellow-400 focus:ring-yellow-400"
                 />
-                <label
-                  htmlFor={option.key}
-                  className="text-light-text dark:text-dark-text"
-                >
+                <label htmlFor={option.key} className="font-bold text-white">
                   {option.label}
                 </label>
                 {option.requiresUsername &&
@@ -419,7 +439,11 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
                           [option.key]: e.target.value,
                         });
                       }}
-                      className="flex-1 text-light-text dark:text-dark-text"
+                      classNames={{
+                        input: "text-white text-xs",
+                        inputWrapper: "border-zinc-700 bg-[#111] h-8",
+                      }}
+                      className="flex-1"
                       variant="bordered"
                     />
                   )}
@@ -437,9 +461,13 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               min={0}
               max={100}
               step={0.1}
-              className="pb-4 text-light-text dark:text-dark-text"
+              className="pb-10"
               classNames={{
-                label: "text-light-text dark:text-dark-text text-lg",
+                label:
+                  "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                input: "text-white font-mono",
+                inputWrapper:
+                  "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
               }}
               variant="bordered"
               fullWidth
@@ -453,7 +481,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
         />
 
         <Button
-          className={`mb-10 w-full ${SHOPSTRBUTTONCLASSNAMES}`}
+          className={`${NEO_BTN} mb-10 h-14 w-full text-sm shadow-[4px_4px_0px_0px_#ffffff]`}
           type="submit"
           onKeyDown={(e) => {
             if (e.key === "Enter") {

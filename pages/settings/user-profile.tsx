@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useContext, useMemo } from "react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { ProfileMapContext } from "@/utils/context/context";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, SubmitHandler } from "react-hook-form";
 import {
   Button,
   Textarea,
@@ -17,7 +17,6 @@ import {
   EyeIcon,
 } from "@heroicons/react/24/outline";
 import { FiatOptionsType } from "@/utils/types/types";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   SignerContext,
   NostrContext,
@@ -26,6 +25,21 @@ import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
 import { createNostrProfileEvent } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
+
+interface UserProfileFormData {
+  banner: string;
+  picture: string;
+  display_name: string;
+  name: string;
+  nip05: string;
+  about: string;
+  website: string;
+  lud16: string;
+  payment_preference: string;
+  fiat_options: FiatOptionsType;
+  shopstr_donation: number;
+}
 
 const UserProfilePage = () => {
   const { nostr } = useContext(NostrContext);
@@ -42,21 +56,22 @@ const UserProfilePage = () => {
   const [viewState, setViewState] = useState<"shown" | "hidden">("hidden");
 
   const profileContext = useContext(ProfileMapContext);
-  const { handleSubmit, control, reset, watch, setValue } = useForm({
-    defaultValues: {
-      banner: "",
-      picture: "",
-      display_name: "",
-      name: "",
-      nip05: "", // Nostr address
-      about: "",
-      website: "",
-      lud16: "", // Lightning address
-      payment_preference: "ecash",
-      fiat_options: {} as FiatOptionsType,
-      shopstr_donation: 2.1,
-    },
-  });
+  const { handleSubmit, control, reset, watch, setValue } =
+    useForm<UserProfileFormData>({
+      defaultValues: {
+        banner: "",
+        picture: "",
+        display_name: "",
+        name: "",
+        nip05: "", // Nostr address
+        about: "",
+        website: "",
+        lud16: "", // Lightning address
+        payment_preference: "ecash",
+        fiat_options: {} as FiatOptionsType,
+        shopstr_donation: 2.1,
+      },
+    });
 
   const watchBanner = watch("banner");
   const watchPicture = watch("picture");
@@ -89,13 +104,13 @@ const UserProfilePage = () => {
     }
   }, [profileContext, userPubkey, signer, reset]);
 
-  const onSubmit = async (data: { [x: string]: string }) => {
+  const onSubmit: SubmitHandler<UserProfileFormData> = async (data) => {
     if (!userPubkey) throw new Error("pubkey is undefined");
     setIsUploadingProfile(true);
     await createNostrProfileEvent(nostr!, signer!, JSON.stringify(data));
     profileContext.updateProfileData({
       pubkey: userPubkey!,
-      content: data,
+      content: data as any, // Cast purely for the context update if types slightly mismatch there
       created_at: 0,
     });
     setIsUploadingProfile(false);
@@ -103,35 +118,38 @@ const UserProfilePage = () => {
 
   return (
     <>
-      <div className="flex min-h-screen flex-col bg-light-bg pt-24 dark:bg-dark-bg md:pb-20">
-        <div className="mx-auto h-full w-full px-4 lg:w-1/2">
+      <div className="relative flex min-h-screen flex-col bg-[#111] pt-24 selection:bg-yellow-400 selection:text-black md:pb-20">
+        {/* Background Grid Pattern */}
+        <div className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]"></div>
+
+        <div className="relative z-10 mx-auto h-full w-full px-4 lg:w-1/2">
           <SettingsBreadCrumbs />
           {isFetchingProfile ? (
             <ShopstrSpinner />
           ) : (
             <>
-              <div className="mb-20 h-40 rounded-lg bg-light-fg dark:bg-dark-fg">
-                <div className="relative flex h-40 items-center justify-center rounded-lg bg-shopstr-purple-light dark:bg-dark-fg">
+              <div className="mb-20 h-40 overflow-visible rounded-2xl border border-zinc-800 bg-[#161616]">
+                <div className="relative flex h-40 items-center justify-center rounded-2xl bg-[#111]">
                   {watchBanner && (
                     <Image
                       alt={"User banner image"}
                       src={watchBanner}
-                      className="h-40 w-full rounded-lg object-cover object-fill"
+                      className="h-40 w-full rounded-2xl object-cover"
                     />
                   )}
                   <FileUploaderButton
-                    className={`absolute bottom-5 right-5 z-20 border-2 border-white bg-shopstr-purple shadow-md ${SHOPSTRBUTTONCLASSNAMES}`}
+                    className={`${NEO_BTN} absolute bottom-4 right-4 z-20 h-10 px-4 text-xs`}
                     imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
                   >
                     Upload Banner
                   </FileUploaderButton>
                 </div>
                 <div className="flex items-center justify-center">
-                  <div className="relative z-20 mt-[-3rem] h-24 w-24">
-                    <div className="">
+                  <div className="relative z-50 mt-[-3rem] h-28 w-28">
+                    <div className="rounded-full border-4 border-[#111]">
                       <FileUploaderButton
                         isIconOnly
-                        className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
+                        className={`${NEO_BTN} min-w-10 absolute bottom-0 right-0 z-20 h-10 w-10 rounded-full border-white p-0`}
                         imgCallbackOnUpload={(imgUrl) =>
                           setValue("picture", imgUrl)
                         }
@@ -140,13 +158,13 @@ const UserProfilePage = () => {
                         <Image
                           src={watchPicture}
                           alt="user profile picture"
-                          className="rounded-full"
+                          className="h-24 w-24 rounded-full object-cover"
                         />
                       ) : (
                         <Image
                           src={defaultImage}
                           alt="user profile picture"
-                          className="rounded-full"
+                          className="h-24 w-24 rounded-full object-cover"
                         />
                       )}
                     </div>
@@ -155,7 +173,7 @@ const UserProfilePage = () => {
               </div>
 
               <div
-                className="mx-auto mb-2 flex w-full max-w-2xl cursor-pointer flex-row items-center justify-center rounded-lg border-2 border-light-fg p-2 hover:opacity-60 dark:border-dark-fg"
+                className="max-2xl mx-auto mb-4 flex w-full cursor-pointer flex-row items-center justify-center rounded-xl border-2 border-zinc-800 bg-[#161616] p-3 transition-all hover:border-yellow-400"
                 onClick={() => {
                   navigator.clipboard.writeText(userNPub!);
                   setIsNPubCopied(true);
@@ -165,30 +183,30 @@ const UserProfilePage = () => {
                 }}
               >
                 <span
-                  className="lg:text-md break-all pr-2 text-[0.50rem] font-bold text-light-text dark:text-dark-text sm:text-xs md:text-sm"
+                  className="lg:text-md break-all pr-3 font-mono text-[0.60rem] font-bold text-zinc-400 sm:text-xs md:text-sm"
                   suppressHydrationWarning
                 >
                   {userNPub!}
                 </span>
                 {isNPubCopied ? (
                   <CheckIcon
-                    width={15}
-                    height={15}
-                    className="flex-shrink-0 text-light-text dark:text-dark-text"
+                    width={18}
+                    height={18}
+                    className="flex-shrink-0 text-green-500"
                   />
                 ) : (
                   <ClipboardIcon
-                    width={15}
-                    height={15}
-                    className="flex-shrink-0 text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
+                    width={18}
+                    height={18}
+                    className="flex-shrink-0 text-zinc-500 hover:text-yellow-400"
                   />
                 )}
               </div>
 
               {userNSec ? (
-                <div className="mx-auto mb-12 flex w-full max-w-2xl cursor-pointer flex-row items-center justify-center rounded-lg border-2 border-light-fg p-2 dark:border-dark-fg">
+                <div className="mx-auto mb-12 flex w-full max-w-2xl cursor-pointer flex-row items-center justify-center rounded-xl border-2 border-zinc-800 bg-[#161616] p-3">
                   <span
-                    className="lg:text-md break-all pr-2 text-[0.50rem] font-bold text-light-text dark:text-dark-text sm:text-xs md:text-sm"
+                    className="lg:text-md break-all pr-3 font-mono text-[0.60rem] font-bold text-zinc-400 sm:text-xs md:text-sm"
                     suppressHydrationWarning
                   >
                     {viewState === "shown"
@@ -197,15 +215,15 @@ const UserProfilePage = () => {
                   </span>
                   {isNSecCopied ? (
                     <CheckIcon
-                      width={15}
-                      height={15}
-                      className="flex-shrink-0 text-light-text dark:text-dark-text"
+                      width={18}
+                      height={18}
+                      className="flex-shrink-0 text-green-500"
                     />
                   ) : (
                     <ClipboardIcon
-                      width={15}
-                      height={15}
-                      className="flex-shrink-0 text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
+                      width={18}
+                      height={18}
+                      className="flex-shrink-0 text-zinc-500 hover:text-yellow-400"
                       onClick={() => {
                         navigator.clipboard.writeText(userNSec);
                         setIsNSecCopied(true);
@@ -217,14 +235,14 @@ const UserProfilePage = () => {
                   )}
                   {viewState === "shown" ? (
                     <EyeSlashIcon
-                      className="h-6 w-6 flex-shrink-0 px-1 text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
+                      className="h-6 w-6 flex-shrink-0 px-2 text-zinc-500 hover:text-white"
                       onClick={() => {
                         setViewState("hidden");
                       }}
                     />
                   ) : (
                     <EyeIcon
-                      className="h-6 w-6 flex-shrink-0 px-1 text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-yellow-700"
+                      className="h-6 w-6 flex-shrink-0 px-2 text-zinc-500 hover:text-white"
                       onClick={() => {
                         setViewState("shown");
                       }}
@@ -235,7 +253,7 @@ const UserProfilePage = () => {
                 <div className="mb-12" />
               )}
 
-              <form onSubmit={handleSubmit(onSubmit as any)}>
+              <form onSubmit={handleSubmit(onSubmit)}>
                 <Controller
                   name="display_name"
                   control={control}
@@ -249,9 +267,13 @@ const UserProfilePage = () => {
                       : "";
                     return (
                       <Input
-                        className="pb-4 text-light-text dark:text-dark-text"
+                        className="pb-6"
                         classNames={{
-                          label: "text-light-text dark:text-dark-text text-lg",
+                          label:
+                            "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                          input: "text-white",
+                          inputWrapper:
+                            "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
                         }}
                         variant="bordered"
                         fullWidth={true}
@@ -260,9 +282,8 @@ const UserProfilePage = () => {
                         isInvalid={isErrored}
                         errorMessage={errorMessage}
                         placeholder="Add your display name . . ."
-                        // controller props
-                        onChange={onChange} // send value to hook form
-                        onBlur={onBlur} // notify when input is touched/blur
+                        onChange={onChange}
+                        onBlur={onBlur}
                         value={value}
                       />
                     );
@@ -282,9 +303,13 @@ const UserProfilePage = () => {
                       : "";
                     return (
                       <Input
-                        className="pb-4 text-light-text dark:text-dark-text"
+                        className="pb-6"
                         classNames={{
-                          label: "text-light-text dark:text-dark-text text-lg",
+                          label:
+                            "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                          input: "text-white",
+                          inputWrapper:
+                            "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
                         }}
                         variant="bordered"
                         fullWidth={true}
@@ -293,9 +318,8 @@ const UserProfilePage = () => {
                         isInvalid={isErrored}
                         errorMessage={errorMessage}
                         placeholder="Add your username . . ."
-                        // controller props
-                        onChange={onChange} // send value to hook form
-                        onBlur={onBlur} // notify when input is touched/blur
+                        onChange={onChange}
+                        onBlur={onBlur}
                         value={value}
                       />
                     );
@@ -315,9 +339,13 @@ const UserProfilePage = () => {
                       : "";
                     return (
                       <Textarea
-                        className="pb-4 text-light-text dark:text-dark-text"
+                        className="pb-6"
                         classNames={{
-                          label: "text-light-text dark:text-dark-text text-lg",
+                          label:
+                            "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                          input: "text-white",
+                          inputWrapper:
+                            "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400",
                         }}
                         variant="bordered"
                         fullWidth={true}
@@ -326,9 +354,8 @@ const UserProfilePage = () => {
                         errorMessage={errorMessage}
                         label="About"
                         labelPlacement="outside"
-                        // controller props
-                        onChange={onChange} // send value to hook form
-                        onBlur={onBlur} // notify when input is touched/blur
+                        onChange={onChange}
+                        onBlur={onBlur}
                         value={value}
                       />
                     );
@@ -348,9 +375,13 @@ const UserProfilePage = () => {
                       : "";
                     return (
                       <Input
-                        className="pb-4 text-light-text dark:text-dark-text"
+                        className="pb-6"
                         classNames={{
-                          label: "text-light-text dark:text-dark-text text-lg",
+                          label:
+                            "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                          input: "text-white",
+                          inputWrapper:
+                            "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
                         }}
                         variant="bordered"
                         fullWidth={true}
@@ -359,9 +390,8 @@ const UserProfilePage = () => {
                         isInvalid={isErrored}
                         errorMessage={errorMessage}
                         placeholder="Add your website URL . . ."
-                        // controller props
-                        onChange={onChange} // send value to hook form
-                        onBlur={onBlur} // notify when input is touched/blur
+                        onChange={onChange}
+                        onBlur={onBlur}
                         value={value}
                       />
                     );
@@ -380,9 +410,13 @@ const UserProfilePage = () => {
                       : "";
                     return (
                       <Input
-                        className="pb-4 text-light-text dark:text-dark-text"
+                        className="pb-6"
                         classNames={{
-                          label: "text-light-text dark:text-dark-text text-lg",
+                          label:
+                            "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                          input: "text-white",
+                          inputWrapper:
+                            "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
                         }}
                         variant="bordered"
                         fullWidth={true}
@@ -391,9 +425,8 @@ const UserProfilePage = () => {
                         isInvalid={isErrored}
                         errorMessage={errorMessage}
                         placeholder="Add your NIP-05 address . . ."
-                        // controller props
-                        onChange={onChange} // send value to hook form
-                        onBlur={onBlur} // notify when input is touched/blur
+                        onChange={onChange}
+                        onBlur={onBlur}
                         value={value}
                       />
                     );
@@ -413,9 +446,13 @@ const UserProfilePage = () => {
                       : "";
                     return (
                       <Input
-                        className="pb-4 text-light-text dark:text-dark-text"
+                        className="pb-6"
                         classNames={{
-                          label: "text-light-text dark:text-dark-text text-lg",
+                          label:
+                            "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                          input: "text-white",
+                          inputWrapper:
+                            "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
                         }}
                         variant="bordered"
                         fullWidth={true}
@@ -424,9 +461,8 @@ const UserProfilePage = () => {
                         isInvalid={isErrored}
                         errorMessage={errorMessage}
                         placeholder="Add your Lightning address . . ."
-                        // controller props
-                        onChange={onChange} // send value to hook form
-                        onBlur={onBlur} // notify when input is touched/blur
+                        onChange={onChange}
+                        onBlur={onBlur}
                         value={value}
                       />
                     );
@@ -437,9 +473,13 @@ const UserProfilePage = () => {
                   control={control}
                   render={({ field: { onChange, onBlur, value } }) => (
                     <Select
-                      className="pb-4 text-light-text dark:text-dark-text"
+                      className="pb-8"
                       classNames={{
-                        label: "text-light-text dark:text-dark-text text-lg",
+                        label:
+                          "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                        trigger:
+                          "border-zinc-700 bg-[#111] hover:border-zinc-500 data-[focus=true]:border-yellow-400 h-12",
+                        value: "text-white",
                       }}
                       variant="bordered"
                       fullWidth={true}
@@ -452,21 +492,21 @@ const UserProfilePage = () => {
                       <SelectItem
                         key="ecash"
                         value="ecash"
-                        className="text-light-text dark:text-dark-text"
+                        className="text-zinc-800"
                       >
                         Cashu (Bitcoin)
                       </SelectItem>
                       <SelectItem
                         key="lightning"
                         value="lightning"
-                        className="text-light-text dark:text-dark-text"
+                        className="text-zinc-800"
                       >
                         Lightning (Bitcoin)
                       </SelectItem>
                       <SelectItem
                         key="fiat"
                         value="fiat"
-                        className="text-light-text dark:text-dark-text"
+                        className="text-zinc-800"
                       >
                         Local Currency (Fiat)
                       </SelectItem>
@@ -474,8 +514,8 @@ const UserProfilePage = () => {
                   )}
                 />
 
-                <div className="pb-4">
-                  <label className="mb-2 block text-lg text-light-text dark:text-dark-text">
+                <div className="pb-8">
+                  <label className="mb-4 block text-sm font-bold uppercase tracking-wider text-zinc-400">
                     Fiat payment options
                   </label>
                   <div className="space-y-4">
@@ -506,7 +546,7 @@ const UserProfilePage = () => {
                     ].map((option) => (
                       <div
                         key={option.key}
-                        className="flex items-center space-x-4"
+                        className="flex items-center space-x-4 rounded-xl border border-zinc-800 bg-[#1a1a1a] p-3"
                       >
                         <input
                           type="checkbox"
@@ -534,11 +574,11 @@ const UserProfilePage = () => {
                               setValue("fiat_options", rest);
                             }
                           }}
-                          className="h-4 w-4 rounded border-gray-300 text-shopstr-purple focus:ring-shopstr-purple"
+                          className="h-5 w-5 rounded border-zinc-700 bg-zinc-900 text-yellow-400 focus:ring-yellow-400"
                         />
                         <label
                           htmlFor={option.key}
-                          className="text-light-text dark:text-dark-text"
+                          className="font-bold text-white"
                         >
                           {option.label}
                         </label>
@@ -558,7 +598,11 @@ const UserProfilePage = () => {
                                   [option.key]: e.target.value,
                                 });
                               }}
-                              className="flex-1 text-light-text dark:text-dark-text"
+                              classNames={{
+                                input: "text-white text-xs",
+                                inputWrapper: "border-zinc-700 bg-[#111] h-8",
+                              }}
+                              className="flex-1"
                               variant="bordered"
                             />
                           )}
@@ -576,9 +620,13 @@ const UserProfilePage = () => {
                       min={0}
                       max={100}
                       step={0.1}
-                      className="pb-4 text-light-text dark:text-dark-text"
+                      className="pb-10"
                       classNames={{
-                        label: "text-light-text dark:text-dark-text text-lg",
+                        label:
+                          "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                        input: "text-white font-mono",
+                        inputWrapper:
+                          "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
                       }}
                       variant="bordered"
                       fullWidth
@@ -592,12 +640,12 @@ const UserProfilePage = () => {
                 />
 
                 <Button
-                  className={`mb-10 w-full ${SHOPSTRBUTTONCLASSNAMES}`}
+                  className={`${NEO_BTN} mb-10 h-14 w-full text-sm font-black tracking-widest`}
                   type="submit"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
-                      e.preventDefault(); // Prevent default to avoid submitting the form again
-                      handleSubmit(onSubmit as any)(); // Programmatic submit
+                      e.preventDefault();
+                      handleSubmit(onSubmit)();
                     }
                   }}
                   isDisabled={isUploadingProfile}

@@ -7,11 +7,11 @@ import useNavigation from "@/components/hooks/use-navigation";
 
 import { ShopMapContext } from "@/utils/context/context";
 import { Button, useDisclosure } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { useRouter } from "next/router";
 import SignInModal from "../sign-in/SignInModal";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { ShopProfile } from "../../utils/types/types";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 const SideShopNav = ({
   focusedPubkey,
@@ -99,14 +99,16 @@ const SideShopNav = ({
 
   return (
     <>
-      <div className="hidden w-[120px] flex-col items-center bg-light-bg px-6 py-8 dark:bg-dark-bg sm:flex md:w-[250px] md:items-start">
+      <div className="hidden w-[250px] flex-col items-start border-r border-zinc-800 bg-[#161616] px-6 py-8 md:flex">
         {!isEditingShop ? (
           <>
             <Button
               onClick={() => setSelectedCategories(new Set<string>([]))}
-              className="flex w-full flex-row justify-start bg-transparent py-8 text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+              className="flex w-full flex-row justify-start bg-transparent py-8 text-zinc-400 duration-200 hover:text-yellow-400"
             >
-              <span className="hidden pt-2 text-2xl md:flex">All listings</span>
+              <span className="hidden pt-2 text-xl font-bold uppercase tracking-wide md:flex">
+                All listings
+              </span>
             </Button>
             {Object.keys(talliedCategories).length > 0 && (
               <>
@@ -116,33 +118,29 @@ const SideShopNav = ({
                     onClick={() =>
                       setSelectedCategories(new Set<string>([category]))
                     }
-                    className="flex w-full flex-row justify-start bg-transparent py-2 text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                    className="flex w-full flex-row justify-start bg-transparent py-2 text-zinc-400 duration-200 hover:text-yellow-400"
                   >
-                    <span className="text-xl">{`- ${category} (${count})`}</span>
+                    <span className="text-lg font-medium">{`- ${category} (${count})`}</span>
                   </Button>
                 ))}
               </>
             )}
             <Button
               onClick={() => handleSendMessage(focusedPubkey)}
-              className={`${SHOPSTRBUTTONCLASSNAMES} flex flex-row items-center py-7 ${
-                isMessagesActive
-                  ? "text-shopstr-purple-light dark:text-shopstr-yellow-light"
-                  : ""
+              className={`${NEO_BTN} mt-4 flex h-12 w-full flex-row items-center justify-center px-4 ${
+                isMessagesActive ? "border-white" : ""
               }`}
             >
-              <span
-                className={`hidden text-2xl md:flex ${
-                  isMessagesActive ? "font-bold" : ""
-                }`}
-              >
+              <span className="hidden text-sm font-bold uppercase tracking-wider md:flex">
                 Message seller
               </span>
             </Button>
             {shopAbout && (
-              <div className="flex w-full flex-col justify-start bg-transparent py-8 text-light-text dark:text-dark-text">
-                <h2 className="pb-2 text-2xl font-bold">About</h2>
-                <p className="text-base">{shopAbout}</p>
+              <div className="flex w-full flex-col justify-start bg-transparent py-8 text-white">
+                <h2 className="pb-2 text-xl font-black uppercase tracking-wide text-zinc-500">
+                  About
+                </h2>
+                <p className="text-sm text-zinc-300">{shopAbout}</p>
               </div>
             )}
           </>
@@ -152,9 +150,9 @@ const SideShopNav = ({
               <>
                 <Button
                   onClick={() => setSelectedCategories(new Set<string>([]))}
-                  className="flex w-full flex-row justify-start bg-transparent py-8 text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                  className="flex w-full flex-row justify-start bg-transparent py-8 text-zinc-400 duration-200 hover:text-yellow-400"
                 >
-                  <span className="hidden pt-2 text-2xl md:flex">
+                  <span className="hidden pt-2 text-xl font-bold uppercase tracking-wide md:flex">
                     All listings
                   </span>
                 </Button>
@@ -167,9 +165,9 @@ const SideShopNav = ({
                           onClick={() =>
                             setSelectedCategories(new Set<string>([category]))
                           }
-                          className="flex w-full flex-row justify-start bg-transparent py-2 text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                          className="flex w-full flex-row justify-start bg-transparent py-2 text-zinc-400 duration-200 hover:text-yellow-400"
                         >
-                          <span className="text-xl">{`- ${category} (${count})`}</span>
+                          <span className="text-lg font-medium">{`- ${category} (${count})`}</span>
                         </Button>
                       )
                     )}
@@ -178,21 +176,23 @@ const SideShopNav = ({
               </>
             )}
             <Button
-              className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
+              className={`${NEO_BTN} mt-4 h-12 w-full text-sm`}
               onClick={() => handleCreateNewListing()}
             >
               Add Listing
             </Button>
             <Button
-              className={`${SHOPSTRBUTTONCLASSNAMES} mt-2 w-full`}
+              className="mt-4 h-12 w-full rounded-xl border border-zinc-600 bg-transparent text-sm font-bold uppercase tracking-wider text-white hover:border-white hover:bg-zinc-800"
               onClick={() => router.push("settings/shop-profile")}
             >
               Edit Shop
             </Button>
             {shopAbout && (
-              <div className="flex w-full flex-col justify-start bg-transparent py-8 text-light-text dark:text-dark-text">
-                <h2 className="pb-2 text-2xl font-bold">About</h2>
-                <p className="text-base">{shopAbout}</p>
+              <div className="flex w-full flex-col justify-start bg-transparent py-8 text-white">
+                <h2 className="pb-2 text-xl font-black uppercase tracking-wide text-zinc-500">
+                  About
+                </h2>
+                <p className="text-sm text-zinc-300">{shopAbout}</p>
               </div>
             )}
           </>

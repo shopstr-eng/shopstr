@@ -20,7 +20,7 @@ import {
   Image,
   Input,
 } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 import {
   getLocalStorageData,
   publishProofEvent,
@@ -236,11 +236,9 @@ const MintButton = () => {
   return (
     <div>
       <Button
-        className={SHOPSTRBUTTONCLASSNAMES + " m-2"}
+        className={`${NEO_BTN} w-full py-6 text-sm font-black tracking-widest`}
         onClick={() => setShowMintModal(!showMintModal)}
-        startContent={
-          <BanknotesIcon className="h-6 w-6 hover:text-yellow-500 dark:hover:text-purple-500" />
-        }
+        startContent={<BanknotesIcon className="h-5 w-5 stroke-2" />}
       >
         Mint
       </Button>
@@ -251,13 +249,12 @@ const MintButton = () => {
         classNames={{
           body: "py-6",
           backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-          // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
           header: "border-b-[1px] border-[#292f46]",
           footer: "border-t-[1px] border-[#292f46]",
           closeButton: "hover:bg-black/5 active:bg-white/10",
         }}
         scrollBehavior={"outside"}
-        size="2xl"
+        size="md"
       >
         <ModalContent>
           <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
@@ -288,6 +285,7 @@ const MintButton = () => {
                   return (
                     <Input
                       className="text-light-text dark:text-dark-text"
+                      classNames={{ input: "text-base" }} // Prevents iOS auto-zoom
                       autoFocus
                       variant="bordered"
                       fullWidth={true}
@@ -295,9 +293,8 @@ const MintButton = () => {
                       labelPlacement="inside"
                       isInvalid={isErrored}
                       errorMessage={errorMessage}
-                      // controller props
-                      onChange={onChange} // send value to hook form
-                      onBlur={onBlur} // notify when input is touched/blur
+                      onChange={onChange}
+                      onBlur={onBlur}
                       value={value}
                     />
                   );
@@ -314,7 +311,7 @@ const MintButton = () => {
                 </div>
               )}
               {showInvoiceCard && (
-                <Card className="mt-3 max-w-[700px]">
+                <Card className="mt-3 w-full">
                   <CardHeader className="flex justify-center gap-3">
                     <span className="text-xl font-bold">Lightning Invoice</span>
                   </CardHeader>
@@ -326,11 +323,11 @@ const MintButton = () => {
                           <>
                             <Image
                               alt="Lightning invoice"
-                              className="object-cover"
+                              className="mx-auto w-full max-w-[250px] object-cover"
                               src={qrCodeUrl}
                             />
-                            <div className="flex items-center justify-center">
-                              <p className="text-center">
+                            <div className="mt-2 flex items-center justify-center px-2">
+                              <p className="break-all text-center text-xs">
                                 {invoice.length > 30
                                   ? `${invoice.substring(
                                       0,
@@ -362,14 +359,14 @@ const MintButton = () => {
                       </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center">
-                        <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
+                        <h3 className="mt-3 text-center text-lg font-black uppercase tracking-tighter text-green-500">
                           Payment confirmed!
                         </h3>
                         <Image
                           alt="Payment Confirmed"
                           className="object-cover"
                           src="../../payment-confirmed.gif"
-                          width={350}
+                          width={250}
                         />
                       </div>
                     )}
@@ -387,7 +384,7 @@ const MintButton = () => {
                 Cancel
               </Button>
 
-              <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+              <Button className={NEO_BTN} type="submit">
                 Mint
               </Button>
             </ModalFooter>

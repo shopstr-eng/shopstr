@@ -8,7 +8,6 @@ import {
   Input,
   InputProps,
 } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   setLocalStorageDataOnSignIn,
   validateNSecKey,
@@ -21,6 +20,8 @@ import FailureModal from "../../components/utility-components/failure-modal";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
+
 export default function SignInModal({
   isOpen,
   onClose,
@@ -175,13 +176,13 @@ export default function SignInModal({
           setPassphrase("");
           onClose();
         }}
-        // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
         classNames={{
-          body: "py-6 ",
-          backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-          header: "border-b-[1px] border-[#292f46]",
-          footer: "border-t-[1px] border-[#292f46]",
-          closeButton: "hover:bg-black/5 active:bg-white/10",
+          base: "bg-[#161616] border border-zinc-800",
+          body: "py-8 text-zinc-300",
+          backdrop: "bg-black/80 backdrop-blur-sm",
+          header: "border-b border-zinc-800",
+          footer: "border-t border-zinc-800",
+          closeButton: "hover:bg-white/10 active:bg-white/20 text-white",
         }}
         isDismissable={true}
         scrollBehavior={"normal"}
@@ -189,19 +190,24 @@ export default function SignInModal({
         size="2xl"
       >
         <ModalContent>
-          <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+          <ModalBody className="flex flex-col overflow-hidden">
             <div className="flex flex-row">
-              <div className="hidden basis-1/2 flex-col md:flex">
-                <div className="mr-3">
+              <div className="hidden flex-col justify-between border-r border-zinc-800 pr-6 md:flex md:basis-1/2">
+                <div className="mb-4">
                   <Image src="signup.png" alt="sign up"></Image>
                 </div>
-                <div className="mt-10 flex">
+                <div className="flex flex-col gap-4 rounded-xl bg-[#111] p-4">
                   <div>
-                    <p>New to Nostr?</p>
-                    <p> Sign up to get started!</p>
+                    <p className="text-lg font-bold text-white">
+                      New to Nostr?
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      {" "}
+                      Sign up to get started!
+                    </p>
                   </div>
                   <Button
-                    className={"ml-10 self-center"}
+                    className="h-10 rounded-lg border border-zinc-600 bg-transparent text-sm font-bold uppercase tracking-wider text-white hover:border-white hover:bg-zinc-800"
                     onClick={handleGenerateKeys}
                   >
                     Sign Up
@@ -209,9 +215,9 @@ export default function SignInModal({
                 </div>
               </div>
 
-              <div className="flex w-full grow basis-1/2 flex-col">
+              <div className="flex w-full flex-col pl-0 md:basis-1/2 md:pl-6">
                 <div className="space-y-2">
-                  <div className="flex items-center justify-center">
+                  <div className="mb-6 flex items-center justify-center gap-3">
                     <Image
                       alt="Shopstr logo"
                       height={50}
@@ -219,16 +225,20 @@ export default function SignInModal({
                       src="/shopstr-2000x2000.png"
                       width={50}
                     />
-                    <div>Shopstr</div>
+                    <div className="text-2xl font-black uppercase tracking-tighter text-white">
+                      Shopstr
+                    </div>
                   </div>
                   <Button
-                    className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
+                    className={`${NEO_BTN} h-12 w-full text-sm`}
                     onClick={startExtensionLogin}
                   >
                     Extension Sign-in
                   </Button>
-                  <div className="text-center">------ or ------</div>
-                  <div className="flex flex-col	">
+                  <div className="text-center font-mono text-xs text-zinc-600">
+                    ------ or ------
+                  </div>
+                  <div className="flex flex-col ">
                     <div className="">
                       <Button
                         data-testid="bunker-open-btn"
@@ -236,7 +246,7 @@ export default function SignInModal({
                           setShowNsecSignIn(false);
                           setShowBunkerSignIn(true);
                         }}
-                        className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
+                        className={`${NEO_BTN} h-12 w-full text-sm ${
                           showBunkerSignIn ? "hidden" : ""
                         }`}
                       >
@@ -244,14 +254,22 @@ export default function SignInModal({
                       </Button>
                     </div>
                     <div
-                      className={`mb-4 flex flex-col justify-between space-y-4 ${
+                      className={`mb-4 flex flex-col justify-between space-y-4 rounded-xl border border-dashed border-zinc-700 bg-[#111] p-4 ${
                         showBunkerSignIn ? "" : "hidden"
                       }`}
                     >
                       <div>
-                        <label>Bunker Token:</label>
+                        <label className="mb-1 block text-xs font-bold uppercase text-zinc-500">
+                          Bunker Token:
+                        </label>
                         <Input
                           color={validBunkerToken}
+                          variant="bordered"
+                          classNames={{
+                            input: "text-white text-base md:text-sm",
+                            inputWrapper:
+                              "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400",
+                          }}
                           width="100%"
                           size="lg"
                           value={bunkerToken}
@@ -262,9 +280,9 @@ export default function SignInModal({
                       <div>
                         <Button
                           data-testid="bunker-submit-btn"
-                          className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
+                          className={`${NEO_BTN} h-10 w-full text-xs shadow-sm`}
                           onClick={startBunkerLogin}
-                          isDisabled={validBunkerToken != "success"} // Disable the button only if both key strings are invalid or the button has already been clicked
+                          isDisabled={validBunkerToken != "success"}
                         >
                           {isBunkerConnecting ? (
                             <div className="flex items-center justify-center">
@@ -277,9 +295,11 @@ export default function SignInModal({
                       </div>
                     </div>
                   </div>
-                  <div className="text-center">------ or ------</div>
+                  <div className="text-center font-mono text-xs text-zinc-600">
+                    ------ or ------
+                  </div>
                 </div>
-                <div className="flex flex-col	">
+                <div className="flex flex-col ">
                   <div className="">
                     <Button
                       data-testid="nsec-open-btn"
@@ -287,7 +307,7 @@ export default function SignInModal({
                         setShowBunkerSignIn(false);
                         setShowNsecSignIn(true);
                       }}
-                      className={`mt-2 w-full ${
+                      className={`${NEO_BTN} mt-2 h-12 w-full text-sm ${
                         showNsecSignIn ? "hidden" : ""
                       }`}
                     >
@@ -295,14 +315,22 @@ export default function SignInModal({
                     </Button>
                   </div>
                   <div
-                    className={`mb-4 flex flex-col justify-between space-y-4 ${
+                    className={`mb-4 flex flex-col justify-between space-y-4 rounded-xl border border-dashed border-zinc-700 bg-[#111] p-4 ${
                       showNsecSignIn ? "" : "hidden"
                     }`}
                   >
                     <div>
-                      <label>Private Key:</label>
+                      <label className="mb-1 block text-xs font-bold uppercase text-zinc-500">
+                        Private Key:
+                      </label>
                       <Input
                         color={validPrivateKey}
+                        variant="bordered"
+                        classNames={{
+                          input: "text-white text-base md:text-sm",
+                          inputWrapper:
+                            "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400",
+                        }}
                         type="password"
                         width="100%"
                         size="lg"
@@ -312,12 +340,18 @@ export default function SignInModal({
                       />
                     </div>
                     <div>
-                      <label>
+                      <label className="mb-1 block text-xs font-bold uppercase text-zinc-500">
                         Encryption Passphrase:
                         <span className="text-red-500">*</span>
                       </label>
                       <Input
                         type="password"
+                        variant="bordered"
+                        classNames={{
+                          input: "text-white text-base md:text-sm",
+                          inputWrapper:
+                            "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400",
+                        }}
                         width="100%"
                         size="lg"
                         value={passphrase}
@@ -332,26 +366,31 @@ export default function SignInModal({
                     <div>
                       <Button
                         data-testid="nsec-submit-btn"
-                        className={`${SHOPSTRBUTTONCLASSNAMES} w-full`}
+                        className={`${NEO_BTN} h-10 w-full text-xs shadow-sm`}
                         onClick={handleSignIn}
-                        isDisabled={validPrivateKey != "success"} // Disable the button only if both key strings are invalid or the button has already been clicked
+                        isDisabled={validPrivateKey != "success"}
                       >
                         nsec Sign-in
                       </Button>
                     </div>
                   </div>
                 </div>
-                <div className="sd:flex flex-col md:hidden">
-                  <div className="mt-2">
+                <div className="flex flex-col md:hidden">
+                  <div className="mt-6 flex justify-center">
                     <Image src="signup.png" alt="sign up"></Image>
                   </div>
-                  <div className="ml-5 mt-2 flex">
+                  <div className="mt-4 flex flex-col items-center gap-3 rounded-xl border border-zinc-800 bg-[#111] p-4 text-center">
                     <div>
-                      <p>New to Nostr?</p>
-                      <p> Sign up to get started!</p>
+                      <p className="text-lg font-bold text-white">
+                        New to Nostr?
+                      </p>
+                      <p className="text-xs text-zinc-500">
+                        {" "}
+                        Sign up to get started!
+                      </p>
                     </div>
                     <Button
-                      className={"ml-10 self-center"}
+                      className="h-10 w-full rounded-lg border border-zinc-600 bg-transparent text-sm font-bold uppercase tracking-wider text-white hover:border-white hover:bg-zinc-800"
                       onClick={handleGenerateKeys}
                     >
                       Sign Up

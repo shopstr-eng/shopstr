@@ -5,7 +5,6 @@ import {
   DropdownTrigger,
   DropdownMenu,
   DropdownItem,
-  Button,
 } from "@nextui-org/react";
 import Link from "next/link";
 import {
@@ -42,9 +41,6 @@ export default function ProductCard({
   const isZapsnag =
     productData.d === "zapsnag" || productData.categories?.includes("zapsnag");
 
-  const cardHoverStyle =
-    "hover:shadow-purple-500/30 dark:hover:shadow-yellow-500/30 hover:scale-[1.01]";
-
   const isExpired = productData.expiration
     ? Date.now() / 1000 > productData.expiration
     : false;
@@ -71,71 +67,79 @@ export default function ProductCard({
 
   const content = (
     <div
-      className="cursor-pointer"
+      className="flex h-full cursor-pointer flex-col"
       onClick={(e) => {
         onProductClick && onProductClick(productData, e);
       }}
     >
-      <div>
+      <div className="relative w-full">
         <ImageCarousel
           images={productData.images}
           classname="w-full h-[300px] rounded-t-2xl"
           showThumbs={false}
         />
+        {/* Overlay Badges */}
+        <div className="absolute right-3 top-3 z-10 flex gap-2">
+          {isExpired && (
+            <Chip color="warning" size="sm" variant="solid">
+              Outdated
+            </Chip>
+          )}
+          {productData.status === "active" && (
+            <Chip
+              size="sm"
+              classNames={{
+                base: "bg-green-500/90 border border-green-400 shadow-sm",
+                content:
+                  "text-white font-bold uppercase text-[10px] tracking-wider",
+              }}
+            >
+              Active
+            </Chip>
+          )}
+          {productData.status === "sold" && (
+            <Chip
+              size="sm"
+              classNames={{
+                base: "bg-red-500/90 border border-red-400 shadow-sm",
+                content:
+                  "text-white font-bold uppercase text-[10px] tracking-wider",
+              }}
+            >
+              Sold
+            </Chip>
+          )}
+        </div>
       </div>
-      <div className="flex flex-col p-4">
+
+      <div className="flex flex-1 flex-col p-4">
         {router.pathname !== "/" && (
-          <div className="mb-2 flex items-center justify-between">
-            <div className="flex max-w-[80%] items-center gap-2">
-              <h2 className="truncate text-xl font-semibold text-light-text dark:text-dark-text">
+          <>
+            <div className="mb-3 flex items-start justify-between gap-2">
+              <h2 className="line-clamp-1 text-lg font-bold text-white transition-colors group-hover:text-yellow-400">
                 {productData.title}
               </h2>
               {isZapsnag && productData.pubkey === userPubkey && (
                 <button
                   onClick={handleNjumpClick}
-                  className="inline-flex flex-shrink-0 items-center text-xs text-purple-600 underline hover:text-purple-800 dark:text-yellow-500 dark:hover:text-yellow-700"
+                  className="text-zinc-400 hover:text-white"
                   title="Track Sales on Nostr"
-                  aria-label="Open Flash Sale in Nostr client"
                 >
-                  <span>View on Nostr</span>
                   <ArrowTopRightOnSquareIcon className="ml-1 h-4 w-4" />
                 </button>
               )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              {isExpired && (
-                <Chip color="warning" size="sm" variant="flat">
-                  Outdated
-                </Chip>
-              )}
-              {productData.status === "active" && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900 dark:text-green-300">
-                  Active
-                </span>
-              )}
-              {productData.status === "sold" && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900 dark:text-red-300">
-                  Sold
-                </span>
-              )}
               {productData.rawEvent && (
-                <Dropdown>
+                <Dropdown
+                  classNames={{
+                    content: "bg-[#161616] border border-zinc-800 rounded-xl",
+                  }}
+                >
                   <DropdownTrigger>
-                    <Button
-                      isIconOnly
-                      variant="light"
-                      size="sm"
-                      className="min-w-8 h-8"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                      }}
-                    >
-                      <EllipsisVerticalIcon className="h-6 w-6 text-gray-500" />
-                    </Button>
+                    <button className="-mr-2 -mt-1 p-2 text-zinc-500 hover:text-white">
+                      <EllipsisVerticalIcon className="h-6 w-6" />
+                    </button>
                   </DropdownTrigger>
-                  <DropdownMenu aria-label="Event Actions">
+                  <DropdownMenu aria-label="Event Actions" variant="flat">
                     <DropdownItem
                       key="view-raw"
                       onPress={() => setShowRawEventModal(true)}
@@ -152,37 +156,39 @@ export default function ProductCard({
                 </Dropdown>
               )}
             </div>
-          </div>
-        )}
-        <div className="mb-3">
-          <ProfileWithDropdown
-            pubkey={productData.pubkey}
-            dropDownKeys={
-              productData.pubkey === userPubkey
-                ? ["shop_profile"]
-                : ["shop", "inquiry", "copy_npub"]
-            }
-          />
-        </div>
-        {router.pathname !== "/" && (
-          <div className="mt-1 flex items-center justify-between">
-            <Chip
-              key={productData.location}
-              startContent={locationAvatar(productData.location)}
-              className="text-xs"
-            >
-              {productData.location}
-            </Chip>
-            {!isZapsnag ? (
-              <CompactPriceDisplay monetaryInfo={productData} />
-            ) : (
-              <div className="flex items-center justify-center rounded-md bg-black/10 px-2 py-1 dark:bg-white/10">
-                <span className="text-sm font-bold text-shopstr-purple dark:text-shopstr-yellow">
-                  ⚡ {productData.price} {productData.currency}
-                </span>
+
+            <div className="mb-6">
+              <ProfileWithDropdown
+                pubkey={productData.pubkey}
+                dropDownKeys={
+                  productData.pubkey === userPubkey
+                    ? ["shop_profile"]
+                    : ["shop", "inquiry", "copy_npub"]
+                }
+              />
+            </div>
+
+            <div className="mt-auto flex items-center justify-between gap-3">
+              {productData.location && (
+                <div className="flex min-w-0 flex-1 items-center gap-1 rounded-lg bg-zinc-800/80 px-3 py-2 text-xs font-medium text-zinc-400">
+                  <span className="shrink-0">
+                    {locationAvatar(productData.location)}
+                  </span>
+                  <span className="truncate">{productData.location}</span>
+                </div>
+              )}
+
+              <div className="ml-auto flex min-w-fit shrink-0 items-center whitespace-nowrap rounded-lg border border-zinc-700 bg-[#27272a] px-3 py-2 text-xs font-bold text-white shadow-sm">
+                {!isZapsnag ? (
+                  <CompactPriceDisplay monetaryInfo={productData} />
+                ) : (
+                  <span className="text-shopstr-yellow">
+                    ⚡ {productData.price}
+                  </span>
+                )}
               </div>
-            )}
-          </div>
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -190,9 +196,9 @@ export default function ProductCard({
 
   return (
     <div
-      className={`${cardHoverStyle} mx-2 my-4 rounded-2xl bg-white shadow-md duration-300 transition-all dark:bg-neutral-900`}
+      className={`group relative mx-auto w-full max-w-[320px] rounded-2xl border border-zinc-800 bg-[#18181b] duration-300 transition-all hover:-translate-y-1 hover:border-4 hover:border-white hover:shadow-2xl`}
     >
-      <div className="w-80 overflow-hidden rounded-2xl">
+      <div className="h-full w-full overflow-hidden rounded-2xl">
         {href ? (
           <Link href={href} className="block">
             {content}

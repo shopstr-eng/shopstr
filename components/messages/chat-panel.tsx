@@ -10,7 +10,6 @@ import {
   ModalHeader,
   ModalBody,
 } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   ArrowUturnLeftIcon,
   ArrowsUpDownIcon,
@@ -35,6 +34,7 @@ import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 const ChatPanel = ({
   handleGoBack,
@@ -346,18 +346,18 @@ const ChatPanel = ({
 
   if (!currentChatPubkey)
     return (
-      <div className="absolute z-20 hidden h-[85vh] w-full flex-col overflow-clip px-2 dark:bg-dark-bg md:relative md:flex">
+      <div className="absolute z-20 hidden h-[85vh] w-full flex-col overflow-clip rounded-r-2xl border border-l-0 border-zinc-800 bg-[#161616] px-2 md:relative md:flex">
         <div className="mt-10 flex flex-grow items-center justify-center py-10">
-          <div className="w-full max-w-xl rounded-lg bg-light-fg p-10 text-center shadow-lg dark:bg-dark-fg">
-            <ChatBubbleLeftIcon className="mx-auto mb-5 h-20 w-20 text-light-text dark:text-dark-text" />
-            <span className="block text-5xl text-light-text dark:text-dark-text">
+          <div className="w-full max-w-xl rounded-2xl border border-zinc-800 bg-[#111] p-10 text-center shadow-xl">
+            <ChatBubbleLeftIcon className="mx-auto mb-5 h-20 w-20 text-zinc-600" />
+            <span className="block text-4xl font-black uppercase text-white">
               No chat selected . . .
             </span>
             <div className="opacity-4 flex flex-col items-center justify-center gap-3 pt-5">
-              <span className="text-2xl text-light-text dark:text-dark-text">
+              <span className="text-xl font-bold text-zinc-500">
                 Use your up and down arrow keys to select chats!
               </span>
-              <ArrowsUpDownIcon className="h-10 w-10 text-light-text dark:text-dark-text" />
+              <ArrowsUpDownIcon className="h-10 w-10 text-zinc-600" />
             </div>
           </div>
         </div>
@@ -370,11 +370,11 @@ const ChatPanel = ({
   };
 
   return (
-    <div className="absolute flex h-full w-full flex-col overflow-clip bg-light-bg px-2 pb-20 dark:bg-dark-bg md:relative md:h-[85vh] md:pb-0 lg:pb-0">
-      <h2 className="flex h-[60px] w-full flex-row items-center overflow-clip align-middle text-shopstr-purple-light dark:text-shopstr-yellow-light">
+    <div className="absolute flex h-full w-full flex-col overflow-clip rounded-r-2xl border border-l-0 border-zinc-800 bg-[#161616] px-2 pb-20 md:relative md:h-[85vh] md:pb-0 lg:pb-0">
+      <h2 className="flex h-[60px] w-full flex-row items-center overflow-clip align-middle text-yellow-400">
         <ArrowUturnLeftIcon
           onClick={handleGoBack}
-          className="mx-3 h-9 w-9 cursor-pointer rounded-md p-1 text-shopstr-purple-light hover:bg-shopstr-yellow hover:text-purple-700 dark:text-shopstr-yellow-light  hover:dark:bg-shopstr-purple"
+          className="mx-3 h-9 w-9 cursor-pointer rounded-md p-1 text-yellow-400 hover:bg-zinc-800 hover:text-white"
         />
         <ProfileWithDropdown
           pubkey={currentChatPubkey}
@@ -382,7 +382,7 @@ const ChatPanel = ({
           nameClassname="block"
         />
       </h2>
-      <div className="my-2 h-full overflow-y-scroll rounded-md border-2 border-light-fg bg-light-fg p-3 dark:border-dark-fg dark:bg-dark-fg">
+      <div className="my-2 h-full overflow-y-scroll rounded-xl border border-zinc-800 bg-[#111] p-3">
         {messages
           .filter(
             (message, index, self) =>
@@ -405,12 +405,17 @@ const ChatPanel = ({
         <div ref={bottomDivRef} />
       </div>
       {!isPayment ? (
-        <div className="space-x flex items-center p-2">
+        <div className="space-x flex items-center gap-2 p-2">
           <Input
-            className="pr-3 text-light-text dark:text-dark-text"
+            classNames={{
+              input: "text-white placeholder:text-zinc-500",
+              inputWrapper:
+                "h-12 border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400",
+            }}
+            variant="bordered"
             type="text"
             width="100%"
-            size="md"
+            size="lg"
             value={messageInput}
             placeholder="Type your message..."
             onChange={(e) => {
@@ -425,7 +430,7 @@ const ChatPanel = ({
             }}
           />
           <Button
-            className={SHOPSTRBUTTONCLASSNAMES}
+            className={`${NEO_BTN} h-12 px-8 text-sm`}
             isDisabled={messageInput === "" || isSendingDMLoading}
             isLoading={isSendingDMLoading}
             onClick={async () => await sendMessage()}
@@ -435,15 +440,15 @@ const ChatPanel = ({
         </div>
       ) : !canReview && buyerPubkey ? (
         <>
-          <div className="flex items-center justify-between border-t p-4">
+          <div className="flex w-full items-center justify-center border-t border-zinc-800 p-4 sm:justify-between">
             <Button
-              className={SHOPSTRBUTTONCLASSNAMES}
+              className="h-10 w-full rounded-xl border border-zinc-600 bg-transparent px-6 text-sm font-bold uppercase tracking-wider text-white hover:border-white hover:bg-zinc-800 sm:w-auto"
               onClick={handleToggleShippingModal}
             >
               Send Shipping Info
             </Button>
             <Button
-              className={SHOPSTRBUTTONCLASSNAMES}
+              className={`${NEO_BTN} h-10 w-full px-6 text-sm sm:w-auto`}
               onClick={handleMarkAsCompleted}
             >
               Mark as Completed
@@ -454,17 +459,18 @@ const ChatPanel = ({
             isOpen={showShippingModal}
             onClose={handleToggleShippingModal}
             classNames={{
-              body: "py-6",
-              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-              header: "border-b-[1px] border-[#292f46]",
-              footer: "border-t-[1px] border-[#292f46]",
+              base: "bg-[#161616] border border-zinc-800",
+              body: "py-6 text-zinc-300",
+              backdrop: "bg-black/80 backdrop-blur-sm",
+              header: "border-b border-zinc-800 text-white",
+              footer: "border-t border-zinc-800",
               closeButton: "hover:bg-black/5 active:bg-white/10",
             }}
             scrollBehavior={"outside"}
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+              <ModalHeader className="flex flex-col gap-1">
                 Enter Shipping Details
               </ModalHeader>
               <form onSubmit={handleShippingSubmit(onShippingSubmit)}>
@@ -491,7 +497,12 @@ const ChatPanel = ({
                           variant="bordered"
                           isInvalid={isErrored}
                           errorMessage={errorMessage}
-                          className="text-light-text dark:text-dark-text"
+                          classNames={{
+                            label: "text-zinc-500",
+                            input: "text-white",
+                            inputWrapper:
+                              "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400",
+                          }}
                           type="number"
                           onChange={onChange}
                           onBlur={onBlur}
@@ -521,7 +532,12 @@ const ChatPanel = ({
                           placeholder="Fedex, UPS, etc. "
                           isInvalid={isErrored}
                           errorMessage={errorMessage}
-                          className="text-light-text dark:text-dark-text"
+                          classNames={{
+                            label: "text-zinc-500",
+                            input: "text-white",
+                            inputWrapper:
+                              "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400",
+                          }}
                           onChange={onChange}
                           onBlur={onBlur}
                           value={value}
@@ -554,7 +570,12 @@ const ChatPanel = ({
                           variant="bordered"
                           isInvalid={isErrored}
                           errorMessage={errorMessage}
-                          className="text-light-text dark:text-dark-text"
+                          classNames={{
+                            label: "text-zinc-500",
+                            input: "text-white",
+                            inputWrapper:
+                              "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400",
+                          }}
                           onChange={onChange}
                           onBlur={onBlur}
                           value={value}
@@ -571,7 +592,10 @@ const ChatPanel = ({
                   >
                     Cancel
                   </Button>
-                  <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                  <Button
+                    className={`${NEO_BTN} h-10 px-6 text-sm`}
+                    type="submit"
+                  >
                     Confirm Shipping
                   </Button>
                 </ModalFooter>
@@ -583,9 +607,9 @@ const ChatPanel = ({
         productAddress &&
         buyerPubkey && (
           <>
-            <div className="flex items-center justify-between border-t p-4">
+            <div className="flex flex-col gap-3 border-t border-zinc-800 p-4 sm:flex-row sm:items-center sm:justify-between">
               <Button
-                className={SHOPSTRBUTTONCLASSNAMES}
+                className={`${NEO_BTN} h-10 px-6 text-sm`}
                 onClick={handleToggleReviewModal}
               >
                 Leave a Review
@@ -596,31 +620,32 @@ const ChatPanel = ({
               isOpen={showReviewModal}
               onClose={handleToggleReviewModal}
               classNames={{
-                body: "py-6",
-                backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-                header: "border-b-[1px] border-[#292f46]",
-                footer: "border-t-[1px] border-[#292f46]",
+                base: "bg-[#161616] border border-zinc-800",
+                body: "py-6 text-zinc-300",
+                backdrop: "bg-black/80 backdrop-blur-sm",
+                header: "border-b border-zinc-800 text-white",
+                footer: "border-t border-zinc-800",
                 closeButton: "hover:bg-black/5 active:bg-white/10",
               }}
               scrollBehavior={"outside"}
               size="2xl"
             >
               <ModalContent>
-                <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+                <ModalHeader className="flex flex-col gap-1">
                   Leave a Review
                 </ModalHeader>
                 <form onSubmit={handleReviewSubmit(onReviewSubmit)}>
                   <ModalBody>
-                    <div className="mb-4 flex items-center justify-center gap-16">
+                    <div className="mb-4 flex flex-col items-center justify-center gap-6 sm:flex-row sm:gap-16">
                       <div className="flex items-center gap-3">
-                        <span className="text-light-text dark:text-dark-text">
+                        <span className="font-bold uppercase tracking-wider text-white">
                           Good Overall
                         </span>
                         <HandThumbUpIcon
                           className={`h-12 w-12 cursor-pointer rounded-lg border-2 p-2 transition-colors ${
                             selectedThumb === "up"
                               ? "border-green-500 text-green-500"
-                              : "border-light-text text-light-text hover:border-green-500 hover:text-green-500 dark:border-dark-text dark:text-dark-text"
+                              : "border-zinc-600 text-zinc-400 hover:border-green-500 hover:text-green-500"
                           }`}
                           onClick={() => setSelectedThumb("up")}
                         />
@@ -630,11 +655,11 @@ const ChatPanel = ({
                           className={`h-12 w-12 cursor-pointer rounded-lg border-2 p-2 transition-colors ${
                             selectedThumb === "down"
                               ? "border-red-500 text-red-500"
-                              : "border-light-text text-light-text hover:border-red-500 hover:text-red-500 dark:border-dark-text dark:text-dark-text"
+                              : "border-zinc-600 text-zinc-400 hover:border-red-500 hover:text-red-500"
                           }`}
                           onClick={() => setSelectedThumb("down")}
                         />
-                        <span className="text-light-text dark:text-dark-text">
+                        <span className="font-bold uppercase tracking-wider text-white">
                           Bad Overall
                         </span>
                       </div>
@@ -653,9 +678,7 @@ const ChatPanel = ({
                             })
                           }
                         />
-                        <span className="text-light-text dark:text-dark-text">
-                          Good Value
-                        </span>
+                        <span className="text-zinc-300">Good Value</span>
                       </label>
                       <label className="flex items-center gap-2">
                         <input
@@ -669,9 +692,7 @@ const ChatPanel = ({
                             })
                           }
                         />
-                        <span className="text-light-text dark:text-dark-text">
-                          Good Quality
-                        </span>
+                        <span className="text-zinc-300">Good Quality</span>
                       </label>
                       <label className="flex items-center gap-2">
                         <input
@@ -685,9 +706,7 @@ const ChatPanel = ({
                             })
                           }
                         />
-                        <span className="text-light-text dark:text-dark-text">
-                          Quick Delivery
-                        </span>
+                        <span className="text-zinc-300">Quick Delivery</span>
                       </label>
                       <label className="flex items-center gap-2">
                         <input
@@ -704,7 +723,7 @@ const ChatPanel = ({
                             })
                           }
                         />
-                        <span className="text-light-text dark:text-dark-text">
+                        <span className="text-zinc-300">
                           Good Communication
                         </span>
                       </label>
@@ -718,7 +737,7 @@ const ChatPanel = ({
                         <div>
                           <textarea
                             {...field}
-                            className="w-full rounded-md border-2 border-light-fg bg-light-bg p-2 text-light-text dark:border-dark-fg dark:bg-dark-bg dark:text-dark-text"
+                            className="w-full rounded-md border border-zinc-700 bg-[#111] p-2 text-white placeholder-zinc-500 focus:border-yellow-400 focus:outline-none"
                             rows={4}
                             placeholder="Write your review comment here..."
                           />
@@ -738,7 +757,7 @@ const ChatPanel = ({
                       Cancel
                     </Button>
                     <Button
-                      className={SHOPSTRBUTTONCLASSNAMES}
+                      className={`${NEO_BTN} h-10 px-6 text-sm`}
                       type="submit"
                       isDisabled={!selectedThumb}
                     >

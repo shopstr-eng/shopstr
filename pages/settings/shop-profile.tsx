@@ -4,7 +4,6 @@ import { Button, Textarea, Input, Image } from "@nextui-org/react";
 
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { ShopMapContext } from "@/utils/context/context";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   SignerContext,
   NostrContext,
@@ -12,6 +11,7 @@ import {
 import { createNostrShopEvent } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 const ShopProfilePage = () => {
   const { nostr } = useContext(NostrContext);
@@ -51,7 +51,7 @@ const ShopProfilePage = () => {
       reset(mappedContent);
     }
     setIsFetchingShop(false);
-  }, [shopContext, userPubkey, userPubkey]);
+  }, [shopContext, userPubkey, reset]);
 
   const onSubmit = async (data: { [x: string]: string }) => {
     setIsUploadingShopProfile(true);
@@ -81,35 +81,38 @@ const ShopProfilePage = () => {
 
   return (
     <>
-      <div className="flex min-h-screen flex-col bg-light-bg pt-24 dark:bg-dark-bg md:pb-20">
-        <div className="mx-auto h-full w-full px-4 lg:w-1/2">
+      <div className="relative flex min-h-screen flex-col bg-[#111] pt-24 selection:bg-yellow-400 selection:text-black md:pb-20">
+        {/* Background Grid Pattern */}
+        <div className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]"></div>
+
+        <div className="relative z-10 mx-auto h-full w-full px-4 lg:w-1/2">
           <SettingsBreadCrumbs />
           {isFetchingShop ? (
             <ShopstrSpinner />
           ) : (
             <>
-              <div className="mb-20 h-40 rounded-lg bg-light-fg dark:bg-dark-fg">
-                <div className="relative flex h-40 items-center justify-center rounded-lg bg-shopstr-purple-light dark:bg-dark-fg">
+              <div className="mb-20 h-40 overflow-visible rounded-2xl border border-zinc-800 bg-[#161616]">
+                <div className="relative flex h-40 items-center justify-center rounded-2xl bg-[#111]">
                   {watchBanner && (
                     <Image
                       alt={"Shop banner image"}
                       src={watchBanner}
-                      className="h-40 w-full rounded-lg object-cover object-fill"
+                      className="h-40 w-full rounded-2xl object-cover"
                     />
                   )}
                   <FileUploaderButton
-                    className={`absolute bottom-5 right-5 z-20 border-2 border-white bg-shopstr-purple shadow-md ${SHOPSTRBUTTONCLASSNAMES}`}
+                    className={`${NEO_BTN} absolute bottom-4 right-4 z-20 h-10 px-4 text-xs`}
                     imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
                   >
                     Upload Banner
                   </FileUploaderButton>
                 </div>
                 <div className="flex items-center justify-center">
-                  <div className="relative z-50 mt-[-3rem] h-24 w-24">
-                    <div className="">
+                  <div className="relative z-50 mt-[-3rem] h-28 w-28">
+                    <div className="rounded-full border-4 border-[#111]">
                       <FileUploaderButton
                         isIconOnly={true}
-                        className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
+                        className={`${NEO_BTN} min-w-10 absolute bottom-0 right-0 z-20 h-10 w-10 rounded-full border-white p-0`}
                         imgCallbackOnUpload={(imgUrl) =>
                           setValue("picture", imgUrl)
                         }
@@ -118,13 +121,13 @@ const ShopProfilePage = () => {
                         <Image
                           src={watchPicture}
                           alt="shop logo"
-                          className="rounded-full"
+                          className="h-24 w-24 rounded-full object-cover"
                         />
                       ) : (
                         <Image
                           src={defaultImage}
                           alt="shop logo"
-                          className="rounded-full"
+                          className="h-24 w-24 rounded-full object-cover"
                         />
                       )}
                     </div>
@@ -152,9 +155,13 @@ const ShopProfilePage = () => {
                       : "";
                     return (
                       <Input
-                        className="pb-4 text-light-text dark:text-dark-text"
+                        className="pb-6"
                         classNames={{
-                          label: "text-light-text dark:text-dark-text text-lg",
+                          label:
+                            "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                          input: "text-white",
+                          inputWrapper:
+                            "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
                         }}
                         variant="bordered"
                         fullWidth={true}
@@ -163,9 +170,8 @@ const ShopProfilePage = () => {
                         isInvalid={isErrored}
                         errorMessage={errorMessage}
                         placeholder="Add your shop's name . . ."
-                        // controller props
-                        onChange={onChange} // send value to hook form
-                        onBlur={onBlur} // notify when input is touched/blur
+                        onChange={onChange}
+                        onBlur={onBlur}
                         value={value}
                       />
                     );
@@ -191,9 +197,13 @@ const ShopProfilePage = () => {
                       : "";
                     return (
                       <Textarea
-                        className="pb-4 text-light-text dark:text-dark-text"
+                        className="pb-8"
                         classNames={{
-                          label: "text-light-text dark:text-dark-text text-lg",
+                          label:
+                            "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                          input: "text-white",
+                          inputWrapper:
+                            "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400",
                         }}
                         variant="bordered"
                         fullWidth={true}
@@ -202,9 +212,8 @@ const ShopProfilePage = () => {
                         errorMessage={errorMessage}
                         label="About"
                         labelPlacement="outside"
-                        // controller props
-                        onChange={onChange} // send value to hook form
-                        onBlur={onBlur} // notify when input is touched/blur
+                        onChange={onChange}
+                        onBlur={onBlur}
                         value={value}
                       />
                     );
@@ -212,12 +221,12 @@ const ShopProfilePage = () => {
                 />
 
                 <Button
-                  className={`mb-10 w-full ${SHOPSTRBUTTONCLASSNAMES}`}
+                  className={`${NEO_BTN} mb-10 h-14 w-full text-sm font-black tracking-widest`}
                   type="submit"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
-                      e.preventDefault(); // Prevent default to avoid submitting the form again
-                      handleSubmit(onSubmit as any)(); // Programmatic submit
+                      e.preventDefault();
+                      handleSubmit(onSubmit as any)();
                     }
                   }}
                   isDisabled={isUploadingShopProfile}

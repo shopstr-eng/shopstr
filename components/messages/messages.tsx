@@ -22,7 +22,7 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import SignInModal from "../sign-in/SignInModal";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 const Messages = ({ isPayment }: { isPayment: boolean }) => {
   const router = useRouter();
@@ -103,6 +103,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       }
     }
     loadChats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatsContext, isPayment]);
 
   useEffect(() => {
@@ -121,6 +122,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       }
     );
     setSortedChatsByLastMessage(sortedChatsByLastMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatsMap]);
 
   // useEffect used to traverse chats via arrow keys
@@ -293,8 +295,11 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
   };
 
   return (
-    <div className="min-h-screen bg-light-bg text-gray-800 dark:bg-dark-bg dark:text-gray-200">
-      <div className="container mx-auto px-4 py-10">
+    <div className="relative min-h-screen bg-[#111] text-white selection:bg-yellow-400 selection:text-black">
+      {/* Background Grid Pattern */}
+      <div className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]"></div>
+
+      <div className="container relative z-10 mx-auto px-4 py-10">
         {chatsMap.size === 0 ? (
           <div className="flex h-[66vh] items-center justify-center">
             {isChatsLoading ? (
@@ -302,14 +307,14 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
                 <ShopstrSpinner />
               </div>
             ) : (
-              <div className="mx-auto w-full max-w-lg rounded-xl bg-white p-10 shadow-xl transition-all dark:bg-gray-800">
+              <div className="mx-auto w-full max-w-lg rounded-2xl border border-zinc-800 bg-[#161616] p-10 shadow-xl transition-all">
                 <div className="text-center">
                   {isClient && userPubkey ? (
                     <div className="space-y-6">
-                      <h2 className="text-3xl font-semibold text-gray-700 dark:text-gray-100">
+                      <h2 className="text-3xl font-black uppercase tracking-tight text-white">
                         No messages... yet!
                       </h2>
-                      <div className="mt-2 text-base text-gray-600 dark:text-gray-300">
+                      <div className="mt-2 text-base text-zinc-400">
                         <p>Just logged in?</p>
                         <p className="mt-1 font-medium">
                           Try reloading the page.
@@ -318,7 +323,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
                       <div className="pt-4">
                         <Button
                           onClick={handleReload}
-                          className={`${SHOPSTRBUTTONCLASSNAMES} mt-6`}
+                          className={`${NEO_BTN} mt-6 h-12 px-8 text-sm`}
                         >
                           Reload
                         </Button>
@@ -326,13 +331,13 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      <h2 className="text-2xl font-bold text-gray-700 dark:text-gray-100">
+                      <h2 className="text-2xl font-bold text-white">
                         You must be signed in to see your chats!
                       </h2>
                       <div className="pt-4">
                         <Button
                           onClick={onOpen}
-                          className={`${SHOPSTRBUTTONCLASSNAMES} mt-6`}
+                          className={`${NEO_BTN} mt-6 h-12 px-8 text-sm`}
                         >
                           Sign In
                         </Button>
@@ -344,8 +349,8 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
             )}
           </div>
         ) : (
-          <div className="flex flex-row">
-            <div className="h-[85vh] w-full overflow-y-auto rounded-md pb-12 dark:bg-dark-bg md:w-[450px] md:max-w-[33%] md:flex-shrink-0 md:pb-0 lg:pb-0">
+          <div className="relative flex h-[85vh] w-full flex-row overflow-hidden rounded-2xl border border-zinc-800 bg-[#161616] shadow-2xl">
+            <div className="h-full w-full flex-shrink-0 overflow-y-auto md:w-[400px] md:border-r md:border-zinc-800">
               {sortedChatsByLastMessage.map(
                 ([pubkeyOfChat, chatObject]: [string, ChatObject]) => {
                   return (

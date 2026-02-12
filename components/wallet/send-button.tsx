@@ -21,7 +21,7 @@ import {
   Button,
   Input,
 } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 import {
   getLocalStorageData,
   publishProofEvent,
@@ -179,11 +179,9 @@ const SendButton = () => {
   return (
     <div>
       <Button
-        className={SHOPSTRBUTTONCLASSNAMES + " m-2"}
+        className={`${NEO_BTN} w-full py-6 text-sm font-black tracking-widest`}
         onClick={() => setShowSendModal(!showSendModal)}
-        startContent={
-          <ArrowUpTrayIcon className="h-6 w-6 hover:text-yellow-500 dark:hover:text-purple-500" />
-        }
+        startContent={<ArrowUpTrayIcon className="h-5 w-5 stroke-2" />}
       >
         Send
       </Button>
@@ -194,13 +192,12 @@ const SendButton = () => {
         classNames={{
           body: "py-6",
           backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-          // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
           header: "border-b-[1px] border-[#292f46]",
           footer: "border-t-[1px] border-[#292f46]",
           closeButton: "hover:bg-black/5 active:bg-white/10",
         }}
         scrollBehavior={"outside"}
-        size="2xl"
+        size="md"
       >
         <ModalContent>
           <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
@@ -231,6 +228,7 @@ const SendButton = () => {
                   return (
                     <Input
                       className="text-light-text dark:text-dark-text"
+                      classNames={{ input: "text-base" }} // Prevents iOS auto-zoom
                       autoFocus
                       variant="bordered"
                       fullWidth={true}
@@ -238,9 +236,8 @@ const SendButton = () => {
                       labelPlacement="inside"
                       isInvalid={isErrored}
                       errorMessage={errorMessage}
-                      // controller props
-                      onChange={onChange} // send value to hook form
-                      onBlur={onBlur} // notify when input is touched/blur
+                      onChange={onChange}
+                      onBlur={onBlur}
                       value={value}
                     />
                   );
@@ -289,18 +286,18 @@ const SendButton = () => {
                   <Divider />
                   <CardBody className="flex flex-col items-center">
                     {newToken ? (
-                      <div className="flex flex-col items-center justify-center">
-                        <p className="whitespace-break-spaces break-all">
+                      <div className="flex w-full flex-col items-center justify-center">
+                        <p className="whitespace-break-spaces break-all px-2 text-center text-xs">
                           {newToken}
                         </p>
                         <ClipboardIcon
                           onClick={handleCopyTokenString}
-                          className={`ml-2 h-6 w-6 cursor-pointer text-light-text dark:text-dark-text ${
+                          className={`mt-4 h-8 w-8 cursor-pointer text-light-text dark:text-dark-text ${
                             copiedToClipboard ? "hidden" : ""
                           }`}
                         />
                         <CheckIcon
-                          className={`ml-2 h-6 w-6 cursor-pointer text-light-text dark:text-dark-text ${
+                          className={`mt-4 h-8 w-8 cursor-pointer text-light-text dark:text-dark-text ${
                             copiedToClipboard ? "" : "hidden"
                           }`}
                         />
@@ -328,7 +325,7 @@ const SendButton = () => {
                     Cancel
                   </Button>
 
-                  <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                  <Button className={NEO_BTN} type="submit">
                     Send
                   </Button>
                 </ModalFooter>

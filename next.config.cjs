@@ -1,5 +1,4 @@
 /** @type {import('next').NextConfig} */
-
 const withPWA = require("next-pwa")({
   dest: "public",
   register: true,
@@ -58,18 +57,65 @@ const nextConfig = {
     ],
   },
   images: {
-    domains: [
-      "www.google.com",
-      "www.facebook.com",
-      "www.twitter.com",
-      "www.instagram.com",
-      "duckduckgo.com",
-      "www.youtube.com",
-      "www.pinterest.com",
-      "www.linkedin.com",
-      "www.reddit.com",
-      "www.quora.com",
-      "www.wikipedia.org",
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "www.google.com",
+      },
+      {
+        protocol: "https",
+        hostname: "www.facebook.com",
+      },
+      {
+        protocol: "https",
+        hostname: "www.twitter.com",
+      },
+      {
+        protocol: "https",
+        hostname: "www.instagram.com",
+      },
+      {
+        protocol: "https",
+        hostname: "duckduckgo.com",
+      },
+      {
+        protocol: "https",
+        hostname: "www.youtube.com",
+      },
+      {
+        protocol: "https",
+        hostname: "www.pinterest.com",
+      },
+      {
+        protocol: "https",
+        hostname: "www.linkedin.com",
+      },
+      {
+        protocol: "https",
+        hostname: "www.reddit.com",
+      },
+      {
+        protocol: "https",
+        hostname: "www.quora.com",
+      },
+      {
+        protocol: "https",
+        hostname: "www.wikipedia.org",
+      },
+      {
+        protocol: "https",
+        hostname: "cdn.nostrcheck.me",
+      },
+      {
+        protocol: "https",
+        hostname: "blossom.primal.net",
+        pathname: "/**",
+      },
     ],
   },
 };

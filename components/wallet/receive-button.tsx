@@ -15,7 +15,7 @@ import {
   Button,
   Textarea,
 } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 import {
   getLocalStorageData,
   publishProofEvent,
@@ -130,11 +130,9 @@ const ReceiveButton = () => {
     <>
       <div>
         <Button
-          className={SHOPSTRBUTTONCLASSNAMES + " m-2"}
+          className={`${NEO_BTN} w-full py-6 text-sm font-black tracking-widest`}
           onClick={() => setShowReceiveModal(!showReceiveModal)}
-          startContent={
-            <ArrowDownTrayIcon className="h-6 w-6 hover:text-yellow-500 dark:hover:text-purple-500" />
-          }
+          startContent={<ArrowDownTrayIcon className="h-5 w-5 stroke-2" />}
         >
           Receive
         </Button>
@@ -151,7 +149,7 @@ const ReceiveButton = () => {
             closeButton: "hover:bg-black/5 active:bg-white/10",
           }}
           scrollBehavior={"outside"}
-          size="2xl"
+          size="md"
         >
           <ModalContent>
             <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
@@ -181,6 +179,7 @@ const ReceiveButton = () => {
                     return (
                       <Textarea
                         className="text-light-text dark:text-dark-text"
+                        classNames={{ input: "text-base" }}
                         autoFocus
                         variant="bordered"
                         fullWidth={true}
@@ -217,7 +216,7 @@ const ReceiveButton = () => {
                   Cancel
                 </Button>
 
-                <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                <Button className={NEO_BTN} type="submit">
                   Receive
                 </Button>
               </ModalFooter>
@@ -242,7 +241,7 @@ const ReceiveButton = () => {
             isDismissable={true}
             scrollBehavior={"normal"}
             placement={"center"}
-            size="2xl"
+            size="md"
           >
             <ModalContent>
               <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
@@ -275,7 +274,7 @@ const ReceiveButton = () => {
             isDismissable={true}
             scrollBehavior={"normal"}
             placement={"center"}
-            size="2xl"
+            size="md"
           >
             <ModalContent>
               <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
@@ -309,7 +308,7 @@ const ReceiveButton = () => {
             isDismissable={true}
             scrollBehavior={"normal"}
             placement={"center"}
-            size="2xl"
+            size="md"
           >
             <ModalContent>
               <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
@@ -342,7 +341,7 @@ const ReceiveButton = () => {
             isDismissable={true}
             scrollBehavior={"normal"}
             placement={"center"}
-            size="2xl"
+            size="md"
           >
             <ModalContent>
               <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">

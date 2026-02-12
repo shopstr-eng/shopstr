@@ -17,15 +17,8 @@ const TopNav = ({
   setFocusedPubkey: (value: string) => void;
   setSelectedSection: (value: string) => void;
 }) => {
-  const {
-    isHomeActive,
-    isProfileActive,
-    isCommunitiesActive,
-    isMessagesActive,
-    isWalletActive,
-    isMyListingsActive,
-    isCartActive,
-  } = useNavigation();
+  const { isHomeActive, isProfileActive, isCommunitiesActive } =
+    useNavigation();
   const router = useRouter();
 
   const chatsContext = useContext(ChatsContext);
@@ -121,49 +114,49 @@ const TopNav = ({
   };
 
   const MobileMenu = () => (
-    <div className="absolute left-0 top-full w-full bg-light-fg shadow-lg dark:bg-dark-fg">
+    <div className="absolute left-0 top-full flex max-h-[calc(100vh-70px)] w-full flex-col overflow-y-auto border-b border-zinc-800 bg-[#161616] p-2 shadow-xl">
       <Button
-        className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+        className="h-14 w-full justify-start bg-transparent px-6 font-bold uppercase text-zinc-400 hover:text-white"
         onClick={handleHomeClick}
       >
         Marketplace
       </Button>
       <Button
-        className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+        className="h-14 w-full justify-start bg-transparent px-6 font-bold uppercase text-zinc-400 hover:text-white"
         onClick={() => router.push("/communities")}
       >
         Communities
       </Button>
       <Button
-        className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+        className="h-14 w-full justify-start bg-transparent px-6 font-bold uppercase text-zinc-400 hover:text-white"
         onClick={() => handleRoute("/orders")}
       >
         Orders
         {unreadMsgCount > 0 && (
-          <span className="min-w-5 ml-1 inline-flex h-5 items-center justify-center rounded-full bg-shopstr-purple px-1.5 text-xs font-bold text-white dark:bg-shopstr-yellow dark:text-dark-bg">
+          <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-yellow-400 px-1.5 text-xs font-bold text-black">
             {unreadMsgCount}
           </span>
         )}
       </Button>
       <Button
-        className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+        className="h-14 w-full justify-start bg-transparent px-6 font-bold uppercase text-zinc-400 hover:text-white"
         onClick={() => handleRoute("/wallet")}
       >
         Wallet
       </Button>
       <Button
-        className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+        className="h-14 w-full justify-start bg-transparent px-6 font-bold uppercase text-zinc-400 hover:text-white"
         onClick={() => handleRoute("/my-listings")}
       >
         My Listings
       </Button>
       <Button
-        className="w-full bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+        className="h-14 w-full justify-start bg-transparent px-6 font-bold uppercase text-zinc-400 hover:text-white"
         onClick={() => handleRoute("/cart")}
       >
         Cart
         {cartQuantity > 0 && (
-          <span className="min-w-5 ml-1 inline-flex h-5 items-center justify-center rounded-full bg-shopstr-purple px-1.5 text-xs font-bold text-white dark:bg-shopstr-yellow dark:text-dark-bg">
+          <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-yellow-400 px-1.5 text-xs font-bold text-black">
             {cartQuantity}
           </span>
         )}
@@ -172,12 +165,12 @@ const TopNav = ({
   );
 
   return (
-    <div className="fixed top-0 z-50 w-full border-b border-zinc-200 bg-light-fg shadow-lg dark:border-zinc-800 dark:bg-dark-fg">
-      <div className="flex items-center py-2 pr-4">
-        <div className="flex flex-shrink-0 items-center">
+    <div className="fixed top-0 z-50 w-full border-b border-zinc-800 bg-[#161616] shadow-lg">
+      <div className="flex items-center justify-between py-2 pr-4">
+        <div className="flex items-center">
           <Button
             onClick={handleHomeClick}
-            className={`flex items-center bg-transparent text-light-text duration-200 hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text`}
+            className="flex items-center bg-transparent text-white hover:text-yellow-400"
           >
             <Image
               alt="Shopstr logo"
@@ -187,138 +180,124 @@ const TopNav = ({
               width={40}
             />
             <span
-              className={`ml-2 text-xl md:flex ${
-                isHomeActive ? "font-bold" : ""
+              className={`ml-2 hidden text-xl font-black uppercase tracking-tighter md:flex ${
+                isHomeActive ? "text-white" : "text-white"
               }`}
             >
               {shopName != "" ? shopName : "Shopstr"}
             </span>
           </Button>
         </div>
-        <div className="ml-auto flex flex-row items-center md:hidden">
+        <div className="flex flex-row items-center md:hidden">
           <Button
             className="bg-transparent"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           >
-            <Bars4Icon className="h-6 w-6 text-light-text dark:text-dark-text" />
+            <Bars4Icon className="h-6 w-6 text-white" />
           </Button>
           {signedIn ? (
             <ProfileWithDropdown
               pubkey={userPubkey!}
-              baseClassname="flex-shrink-0 dark:hover:shopstr-yellow-light rounded-3xl hover:scale-105 hover:bg-light-bg hover:shadow-lg dark:hover:bg-dark-bg"
+              baseClassname="w-auto rounded-3xl hover:bg-[#111]"
               dropDownKeys={[
                 "shop_profile",
                 "user_profile",
                 "settings",
                 "logout",
               ]}
-              nameClassname="hidden"
+              nameClassname="md:block"
             />
           ) : (
             <Button
               onClick={onOpen}
-              className="bg-transparent text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+              className="w-full bg-transparent font-bold text-yellow-400 hover:text-white"
             >
               Sign In
             </Button>
           )}
         </div>
-        <div className="hidden flex-1 items-center justify-evenly text-light-text dark:text-dark-text md:flex">
+        <div className="hidden items-center gap-1 font-bold text-zinc-400 md:flex">
           <Button
-            className={`bg-transparent hover:text-purple-700 dark:hover:text-accent-dark-text ${
-              isHomeActive
-                ? "font-bold text-shopstr-purple dark:text-shopstr-yellow"
-                : "text-light-text dark:text-dark-text"
+            className={`bg-transparent text-xs font-black uppercase tracking-widest hover:text-white ${
+              isHomeActive ? "text-yellow-400" : ""
             }`}
             onClick={handleHomeClick}
           >
             Marketplace
           </Button>
+          <span className="text-zinc-700">|</span>
           <Button
-            className={`bg-transparent hover:text-purple-700 dark:hover:text-accent-dark-text ${
-              isCommunitiesActive
-                ? "font-bold text-shopstr-purple dark:text-shopstr-yellow"
-                : "text-light-text dark:text-dark-text"
+            className={`bg-transparent text-xs font-black uppercase tracking-widest hover:text-white ${
+              isCommunitiesActive ? "text-yellow-400" : ""
             }`}
             onClick={() => router.push("/communities")}
           >
             Communities
           </Button>
+          <span className="text-zinc-700">|</span>
           <Button
-            className={`bg-transparent hover:text-purple-700 dark:hover:text-accent-dark-text ${
-              isMessagesActive
-                ? "font-bold text-shopstr-purple dark:text-shopstr-yellow"
-                : "text-light-text dark:text-dark-text"
-            }`}
+            className="bg-transparent text-xs font-black uppercase tracking-widest hover:text-white"
             onClick={() => handleRoute("/orders")}
           >
             Orders
             {unreadMsgCount > 0 && (
-              <span className="min-w-5 ml-1 inline-flex h-5 items-center justify-center rounded-full bg-shopstr-purple px-1.5 text-xs font-bold text-white dark:bg-shopstr-yellow dark:text-dark-bg">
+              <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-yellow-400 px-1.5 text-xs font-bold text-black">
                 {unreadMsgCount}
               </span>
             )}
           </Button>
+          <span className="text-zinc-700">|</span>
           <Button
-            className={`bg-transparent hover:text-purple-700 dark:hover:text-accent-dark-text ${
-              isWalletActive
-                ? "font-bold text-shopstr-purple dark:text-shopstr-yellow"
-                : "text-light-text dark:text-dark-text"
-            }`}
+            className="bg-transparent text-xs font-black uppercase tracking-widest hover:text-white"
             onClick={() => handleRoute("/wallet")}
           >
             Wallet
           </Button>
+          <span className="text-zinc-700">|</span>
           <Button
-            className={`bg-transparent hover:text-purple-700 dark:hover:text-accent-dark-text ${
-              isMyListingsActive
-                ? "font-bold text-shopstr-purple dark:text-shopstr-yellow"
-                : "text-light-text dark:text-dark-text"
-            }`}
+            className="bg-transparent text-xs font-black uppercase tracking-widest hover:text-white"
             onClick={() => handleRoute("/my-listings")}
           >
             My Listings
           </Button>
+          <span className="text-zinc-700">|</span>
           <Button
-            className={`bg-transparent hover:text-purple-700 dark:hover:text-accent-dark-text ${
-              isCartActive
-                ? "font-bold text-shopstr-purple dark:text-shopstr-yellow"
-                : "text-light-text dark:text-dark-text"
-            }`}
+            className="bg-transparent text-xs font-black uppercase tracking-widest hover:text-white"
             onClick={() => handleRoute("/cart")}
           >
             Cart
             {cartQuantity > 0 && (
-              <span className="min-w-5 ml-1 inline-flex h-5 items-center justify-center rounded-full bg-shopstr-purple px-1.5 text-xs font-bold text-white dark:bg-shopstr-yellow dark:text-dark-bg">
+              <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-yellow-400 px-1.5 text-xs font-bold text-black">
                 {cartQuantity}
               </span>
             )}
           </Button>
-        </div>
-        <div className="hidden flex-shrink-0 items-center md:flex">
+          <span className="text-zinc-700">|</span>
           {signedIn ? (
-            <ProfileWithDropdown
-              pubkey={userPubkey!}
-              baseClassname="justify-start dark:hover:shopstr-yellow-light pl-2 rounded-3xl py-2 hover:scale-105 hover:bg-light-bg hover:shadow-lg dark:hover:bg-dark-bg"
-              dropDownKeys={[
-                "shop_profile",
-                "user_profile",
-                "settings",
-                "logout",
-              ]}
-              nameClassname="lg:block"
-            />
+            <>
+              <ProfileWithDropdown
+                pubkey={userPubkey!}
+                baseClassname="justify-start pl-4 rounded-3xl py-2 hover:bg-[#111]"
+                dropDownKeys={[
+                  "shop_profile",
+                  "user_profile",
+                  "settings",
+                  "logout",
+                ]}
+                nameClassname="md:block"
+              />
+            </>
           ) : (
-            <Button
-              onClick={onOpen}
-              className={`bg-transparent duration-200 hover:text-purple-700 dark:hover:text-accent-dark-text ${
-                isProfileActive
-                  ? "font-bold text-shopstr-purple dark:text-shopstr-yellow"
-                  : "text-light-text dark:text-dark-text"
-              }`}
-            >
-              Sign In
-            </Button>
+            <>
+              <Button
+                onClick={onOpen}
+                className={`bg-transparent text-xs font-black uppercase tracking-widest hover:text-white ${
+                  isProfileActive ? "text-yellow-400" : ""
+                }`}
+              >
+                Sign In
+              </Button>
+            </>
           )}
         </div>
       </div>

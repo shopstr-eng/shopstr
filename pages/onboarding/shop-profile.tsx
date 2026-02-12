@@ -1,9 +1,9 @@
 import React from "react";
 import { useRouter } from "next/router";
-import { Card, CardBody, Button, Image } from "@nextui-org/react";
-import { ArrowLeftEndOnRectangleIcon } from "@heroicons/react/24/outline";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { Button, Image } from "@nextui-org/react";
+import { ArrowRightStartOnRectangleIcon } from "@heroicons/react/24/outline";
 import ShopProfileForm from "@/components/settings/shop-profile-form";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 const OnboardingShopProfile = () => {
   const router = useRouter();
@@ -13,44 +13,45 @@ const OnboardingShopProfile = () => {
   };
 
   return (
-    <div className="flex h-[100vh] flex-col bg-light-bg pt-24 dark:bg-dark-bg">
-      <div className="mx-auto w-full max-w-2xl px-4 py-6">
-        <Card>
-          <CardBody>
-            <div className="mb-4 flex flex-row items-center justify-center">
-              <Image
-                alt="Shopstr logo"
-                height={50}
-                radius="sm"
-                src="/shopstr-2000x2000.png"
-                width={50}
-              />
-              <h1 className="cursor-pointer text-center text-3xl font-bold text-shopstr-purple-light hover:text-purple-700 dark:text-shopstr-yellow-light">
-                Shopstr
-              </h1>
-            </div>
-            <div className="mb-4 text-center">
-              <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
-                Step 4: Setup Your Shop
-              </h2>
-              <p className="text-light-text dark:text-dark-text">
-                Set up your shop details or, if you&apos;re not a seller, skip
-                this step to finish onboarding.
-              </p>
-            </div>
+    <div className="flex min-h-screen items-center justify-center bg-[#050505] p-4 pt-24">
+      <div className="relative w-full max-w-2xl rounded-3xl border border-white/10 bg-[#1a1a1a] p-6 shadow-2xl md:p-12">
+        {/* Step Pill */}
+        <div className="absolute -top-5 left-1/2 -translate-x-1/2 rounded-full border-2 border-b-4 border-shopstr-yellow bg-[#222] px-6 py-2">
+          <span className="text-xs font-bold uppercase tracking-widest text-shopstr-yellow">
+            Step 4 of 4
+          </span>
+        </div>
 
-            <ShopProfileForm isOnboarding={true} />
+        <div className="mb-8 flex flex-col items-center">
+          <div className="mb-6 flex items-center gap-3">
+            <Image
+              alt="Shopstr logo"
+              height={40}
+              radius="sm"
+              src="/shopstr-2000x2000.png"
+              width={40}
+            />
+            <h1 className="text-3xl font-bold text-white">Shopstr</h1>
+          </div>
+          <h2 className="mb-4 text-center text-3xl font-black text-white md:text-4xl">
+            Setup Your Shop
+          </h2>
+          <p className="text-center text-gray-400">
+            Set up your shop details or, if you&apos;re not a seller, skip this
+            step to finish onboarding.
+          </p>
+        </div>
 
-            <div className="flex justify-center">
-              <Button
-                className={SHOPSTRBUTTONCLASSNAMES}
-                onClick={handleFinish}
-              >
-                Finish <ArrowLeftEndOnRectangleIcon className="h-5 w-5" />
-              </Button>
-            </div>
-          </CardBody>
-        </Card>
+        <ShopProfileForm isOnboarding={true} />
+
+        <div className="mt-6 flex w-full justify-center">
+          <Button
+            className={`${NEO_BTN} w-full px-12 py-6 text-lg font-black tracking-widest md:w-auto`}
+            onClick={handleFinish}
+          >
+            Finish <ArrowRightStartOnRectangleIcon className="h-6 w-6" />
+          </Button>
+        </div>
       </div>
     </div>
   );

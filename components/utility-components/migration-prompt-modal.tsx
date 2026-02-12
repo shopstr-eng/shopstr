@@ -7,6 +7,7 @@ import {
   Input,
 } from "@nextui-org/react";
 import { migrateToNip49 } from "@/utils/nostr/encryption-migration";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 interface MigrationPromptModalProps {
   isOpen: boolean;
@@ -68,11 +69,10 @@ export default function MigrationPromptModal({
         onClose();
       }}
       classNames={{
-        body: "py-6",
-        backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-        header: "border-b-[1px] border-[#292f46]",
-        footer: "border-t-[1px] border-[#292f46]",
-        closeButton: "hover:bg-black/5 active:bg-white/10",
+        base: "bg-[#161616] border border-zinc-800 rounded-2xl",
+        body: "py-8",
+        backdrop: "bg-black/80 backdrop-blur-sm",
+        closeButton: "hover:bg-white/10 text-white",
       }}
       isDismissable={true}
       scrollBehavior={"normal"}
@@ -80,10 +80,12 @@ export default function MigrationPromptModal({
       size="md"
     >
       <ModalContent>
-        <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+        <ModalBody className="flex flex-col overflow-hidden">
           <div className="mb-4 text-center">
-            <h3 className="text-lg font-semibold">Encryption Upgrade</h3>
-            <p className="mt-2 text-sm">
+            <h3 className="text-2xl font-black uppercase tracking-tighter text-white">
+              Encryption Upgrade
+            </h3>
+            <p className="mt-2 text-sm text-zinc-400">
               We&apos;ve upgraded our encryption to the NIP-49 standard for
               better security! Please enter your existing passphrase so we can
               safely decrypt your current key and re-encrypt it with the new
@@ -94,9 +96,17 @@ export default function MigrationPromptModal({
           <div className="mb-4">
             <Input
               type="password"
-              label="Your Passphrase"
+              label="YOUR PASSPHRASE"
+              labelPlacement="outside"
               placeholder="Enter your passphrase..."
-              width="100%"
+              variant="bordered"
+              classNames={{
+                label:
+                  "text-zinc-500 font-bold uppercase tracking-wider text-xs",
+                input: "text-white text-base md:text-sm", // Prevents iOS auto-zoom
+                inputWrapper:
+                  "bg-[#111] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
+              }}
               value={passphrase}
               onChange={(e) => setPassphrase(e.target.value)}
               onKeyDown={(e) => {
@@ -107,9 +117,9 @@ export default function MigrationPromptModal({
             />
           </div>
 
-          <div className="flex justify-end space-x-2">
+          <div className="flex flex-col justify-end gap-3 sm:flex-row sm:space-x-4">
             <Button
-              color="default"
+              className="order-2 h-12 font-bold uppercase tracking-wider text-zinc-500 hover:text-white sm:order-1 sm:h-10"
               variant="light"
               onClick={() => {
                 resetModal();
@@ -119,7 +129,7 @@ export default function MigrationPromptModal({
               Later
             </Button>
             <Button
-              color="primary"
+              className={`${NEO_BTN} order-1 h-12 px-6 text-xs sm:order-2 sm:h-10`}
               onClick={handleMigration}
               isLoading={isLoading}
               isDisabled={!passphrase || isLoading}

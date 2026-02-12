@@ -10,7 +10,15 @@ const CompactCategories = ({ categories }: { categories: string[] }) => {
     .sort((a, b) => b.length - a.length); // sort by longest to shortest to avoid styling bugs of categories jumping around
 
   const categoryChips = validCategories?.map((category, index) => {
-    return <Chip key={index}>{category}</Chip>;
+    return (
+      <Chip
+        key={index}
+        className="rounded-lg border border-zinc-700 bg-[#161616] py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-300"
+        size="sm"
+      >
+        {category}
+      </Chip>
+    );
   });
 
   if (validCategories?.length === 0) return null;
@@ -20,7 +28,9 @@ const CompactCategories = ({ categories }: { categories: string[] }) => {
       {categoryChips && (
         <Tooltip
           content={
-            <div className="flex w-fit flex-col gap-2">{categoryChips}</div>
+            <div className="flex w-fit flex-col gap-2 rounded-xl border border-zinc-800 bg-[#111] p-2.5 shadow-2xl">
+              {categoryChips}
+            </div>
           }
           isOpen={isOpen}
           onOpenChange={(open) => setIsOpen(open)}
@@ -50,15 +60,23 @@ const CompactCategories = ({ categories }: { categories: string[] }) => {
           }}
         >
           <div
-            className="z-0  w-fit"
+            className="z-0 w-fit cursor-pointer transition-transform active:scale-95"
             onClick={() => {
-              setIsOpen(true);
+              setIsOpen(!isOpen);
             }}
           >
             {isOpen ? (
-              <Chip>{validCategories[0]}</Chip>
+              <Chip
+                className="rounded-lg border border-zinc-500 bg-[#161616] text-[10px] font-bold uppercase tracking-wider text-white"
+                size="sm"
+              >
+                {validCategories[0]}
+              </Chip>
             ) : (
-              <Chip>
+              <Chip
+                className="rounded-lg border border-zinc-700 bg-[#161616] text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:border-zinc-500 hover:text-white"
+                size="sm"
+              >
                 {validCategories[0]}
                 {categoryChips.length > 1 ? <span>, ...</span> : null}
               </Chip>

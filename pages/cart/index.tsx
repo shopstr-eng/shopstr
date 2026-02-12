@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import React, { useEffect, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/router";
 import {
   Button,
@@ -17,13 +18,11 @@ import {
   CheckCircleIcon,
   XCircleIcon,
 } from "@heroicons/react/24/outline";
-import {
-  SHOPSTRBUTTONCLASSNAMES,
-  ShippingOptionsType,
-} from "@/utils/STATIC-VARIABLES";
+import { ShippingOptionsType, NEO_BTN } from "@/utils/STATIC-VARIABLES";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import CartInvoiceCard from "../../components/cart-invoice-card";
 import { fiat } from "@getalby/lightning-tools";
+import { sanitizeUrl } from "@braintree/sanitize-url";
 import currencySelection from "../../public/currencySelection.json";
 
 interface QuantitySelectorProps {
@@ -44,11 +43,11 @@ function QuantitySelector({
   max,
 }: QuantitySelectorProps) {
   return (
-    <div className="mt-2 flex items-center space-x-2 rounded-full px-2 py-1">
+    <div className="mt-2 flex w-fit items-center overflow-hidden rounded-lg border border-zinc-700 bg-[#111]">
       <button
         onClick={onDecrease}
         disabled={value <= min}
-        className="flex h-8 w-8 items-center justify-center rounded-full text-black disabled:opacity-50 dark:text-white"
+        className="flex h-10 w-10 items-center justify-center text-zinc-400 hover:bg-zinc-800 hover:text-white disabled:opacity-30"
       >
         <MinusIcon className="h-4 w-4" />
       </button>
@@ -61,13 +60,12 @@ function QuantitySelector({
         }}
         min={min}
         max={max}
-        className="w-12 rounded-md bg-white text-center text-gray-900 outline-none dark:bg-gray-800 dark:text-gray-100
-          [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        className="w-12 bg-transparent text-center text-base font-bold text-white outline-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />
       <button
         onClick={onIncrease}
         disabled={value >= max}
-        className="flex h-8 w-8 items-center justify-center rounded-full text-black disabled:opacity-50 dark:text-white"
+        className="flex h-10 w-10 items-center justify-center text-zinc-400 hover:bg-zinc-800 hover:text-white disabled:opacity-30"
       >
         <PlusIcon className="h-4 w-4" />
       </button>
@@ -416,10 +414,10 @@ export default function Component() {
   return (
     <>
       {!isBeingPaid ? (
-        <div className="flex min-h-screen flex-col bg-light-bg p-4 text-light-text dark:bg-dark-bg dark:text-dark-text">
+        <div className="flex min-h-screen flex-col bg-[#111] p-4 text-white">
           <div className="mx-auto w-full max-w-4xl pt-20">
             <div className="mb-6 flex items-center">
-              <h1 className="w-full text-left text-2xl font-bold">
+              <h1 className="w-full text-left text-4xl font-black uppercase tracking-tighter">
                 Shopping Cart
               </h1>
             </div>
@@ -432,20 +430,22 @@ export default function Component() {
                         {sellerProducts.map((product) => (
                           <div
                             key={product.id}
-                            className="flex flex-col rounded-lg border border-gray-300 p-4 shadow-sm dark:border-gray-700 md:flex-row md:items-start md:justify-between"
+                            className="flex flex-col rounded-xl border border-zinc-800 bg-[#161616] p-6 md:flex-row md:items-start md:justify-between"
                           >
                             <div className="flex w-full md:w-auto">
-                              <img
-                                src={product.images[0]}
+                              <Image
+                                src={sanitizeUrl(product.images[0])}
                                 alt={product.title}
-                                className="mr-4 h-24 w-24 rounded-md object-cover"
+                                width={96}
+                                height={96}
+                                className="mr-6 h-24 w-24 rounded-lg border border-zinc-700 object-cover"
                               />
                               <div className="flex-1">
                                 <div className="flex flex-col md:flex-row md:items-start md:justify-between md:gap-5">
-                                  <h2 className="mb-2 text-lg md:mb-0">
+                                  <h2 className="mb-2 text-xl font-bold md:mb-0">
                                     {product.title}
                                   </h2>
-                                  <p className="text-lg font-bold">
+                                  <p className="text-lg font-black text-yellow-400">
                                     {satPrices[product.id] !== undefined
                                       ? satPrices[product.id] !== null
                                         ? `${satPrices[product.id]} sats`
@@ -455,7 +455,7 @@ export default function Component() {
                                 </div>
                                 {product.quantity && (
                                   <div className="mt-2">
-                                    <p className="mb-2 text-sm text-green-600">
+                                    <p className="mb-2 text-xs font-bold uppercase tracking-wider text-green-400">
                                       {product.quantity} in stock
                                     </p>
                                     <QuantitySelector
@@ -492,7 +492,7 @@ export default function Component() {
                                 size="sm"
                                 color="danger"
                                 variant="light"
-                                className="ml-auto"
+                                className="ml-auto font-bold uppercase tracking-wider text-red-500 hover:bg-red-500/10"
                                 onClick={() => handleRemoveFromCart(product.id)}
                               >
                                 Remove
@@ -502,13 +502,15 @@ export default function Component() {
                         ))}
 
                         {/* Discount code section for this seller */}
-                        <div className="rounded-lg border border-gray-300 p-4 shadow-sm dark:border-gray-700">
-                          <h3 className="mb-3 font-semibold">
+                        <div className="rounded-xl border border-zinc-800 bg-[#161616] p-6">
+                          <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-zinc-400">
                             Have a discount code from this seller?
                           </h3>
-                          <div className="flex gap-2">
+                          <p className="mb-1 text-xs font-bold uppercase tracking-wider text-zinc-500">
+                            Discount Code
+                          </p>
+                          <div className="flex items-start gap-2">
                             <Input
-                              label="Discount Code"
                               placeholder="Enter code"
                               value={discountCodes[sellerPubkey] || ""}
                               onChange={(e) =>
@@ -517,14 +519,20 @@ export default function Component() {
                                   [sellerPubkey]: e.target.value.toUpperCase(),
                                 })
                               }
-                              className="flex-1 text-light-text dark:text-dark-text"
+                              className="flex-1"
+                              variant="bordered"
+                              classNames={{
+                                input: "text-white text-base",
+                                inputWrapper:
+                                  "bg-[#111] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-10",
+                              }}
                               disabled={appliedDiscounts[sellerPubkey]! > 0}
                               isInvalid={!!discountErrors[sellerPubkey]}
                               errorMessage={discountErrors[sellerPubkey]}
                             />
                             {appliedDiscounts[sellerPubkey]! > 0 ? (
                               <Button
-                                color="warning"
+                                className="h-10 rounded-lg bg-red-500 font-bold uppercase tracking-wider text-white"
                                 onClick={() =>
                                   handleRemoveDiscount(sellerPubkey)
                                 }
@@ -533,7 +541,7 @@ export default function Component() {
                               </Button>
                             ) : (
                               <Button
-                                className={SHOPSTRBUTTONCLASSNAMES}
+                                className="h-10 rounded-lg border border-zinc-700 bg-[#161616] font-bold uppercase tracking-wider text-zinc-300 hover:bg-zinc-800 hover:text-white"
                                 onClick={() =>
                                   handleApplyDiscount(sellerPubkey)
                                 }
@@ -543,7 +551,7 @@ export default function Component() {
                             )}
                           </div>
                           {appliedDiscounts[sellerPubkey]! > 0 && (
-                            <p className="mt-2 text-sm text-green-600 dark:text-green-400">
+                            <p className="mt-2 text-sm font-bold text-green-400">
                               {appliedDiscounts[sellerPubkey]}% discount applied
                               to all items from this seller!
                             </p>
@@ -553,13 +561,13 @@ export default function Component() {
                     )
                   )}
                 </div>
-                <div className="mt-6 flex flex-col items-end border-t border-gray-300 pt-4 dark:border-gray-700">
-                  <p className="mb-4 text-xl font-bold">
+                <div className="mt-6 flex flex-col items-end border-t border-zinc-800 pt-6">
+                  <p className="mb-4 text-xl font-black uppercase tracking-tight">
                     Subtotal ({products.length}{" "}
                     {products.length === 1 ? "item" : "items"}): {subtotal} sats
                   </p>
                   <Button
-                    className={SHOPSTRBUTTONCLASSNAMES}
+                    className={`${NEO_BTN} h-14 w-full text-lg font-black tracking-widest md:w-1/2`}
                     onClick={toggleCheckout}
                     size="lg"
                   >
@@ -568,18 +576,18 @@ export default function Component() {
                 </div>
               </>
             ) : (
-              <div className="flex min-h-[60vh] flex-col items-center justify-center rounded-lg border border-gray-300 py-16 shadow-sm dark:border-gray-700 dark:shadow-none">
-                <div className="mb-8 flex items-center justify-center rounded-full border border-gray-300 bg-gray-100 p-6 dark:border-gray-600 dark:bg-gray-700">
-                  <ShoppingBagIcon className="h-16 w-16 text-gray-800 dark:text-gray-200" />
+              <div className="flex min-h-[60vh] flex-col items-center justify-center rounded-xl border border-zinc-800 bg-[#161616] py-16">
+                <div className="mb-8 flex items-center justify-center rounded-full border border-zinc-700 bg-[#111] p-6">
+                  <ShoppingBagIcon className="h-16 w-16 text-zinc-500" />
                 </div>
-                <h2 className="mb-2 text-center text-3xl font-bold text-light-text dark:text-dark-text">
+                <h2 className="mb-2 text-center text-3xl font-black uppercase tracking-tighter text-white">
                   Your cart is empty . . .
                 </h2>
-                <p className="mb-6 max-w-md text-center text-gray-500 dark:text-gray-400">
+                <p className="mb-6 max-w-md text-center text-zinc-400">
                   Go add some items to your cart!
                 </p>
                 <Button
-                  className={SHOPSTRBUTTONCLASSNAMES}
+                  className={`${NEO_BTN} h-12 px-8 text-sm font-black tracking-widest`}
                   size="lg"
                   onClick={() => router.push("/marketplace")}
                 >
@@ -590,7 +598,7 @@ export default function Component() {
           </div>
         </div>
       ) : (
-        <div className="flex min-h-screen w-full bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text sm:items-center sm:justify-center">
+        <div className="flex min-h-screen w-full bg-[#111] text-white sm:items-center sm:justify-center">
           <div className="mx-auto flex w-full flex-col pt-20">
             <div className="flex flex-col items-center">
               <CartInvoiceCard
@@ -624,23 +632,23 @@ export default function Component() {
               router.push("/orders");
             }}
             classNames={{
-              body: "py-6 ",
-              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-              header: "border-b-[1px] border-[#292f46]",
-              footer: "border-t-[1px] border-[#292f46]",
-              closeButton: "hover:bg-black/5 active:bg-white/10",
+              base: "bg-[#161616] border border-zinc-800 rounded-2xl",
+              body: "py-8",
+              backdrop: "bg-black/80 backdrop-blur-sm",
+              header: "border-b border-zinc-800 text-white",
+              closeButton: "hover:bg-white/10 text-white",
             }}
             isDismissable={true}
             scrollBehavior={"normal"}
             placement={"center"}
-            size="2xl"
+            size="md"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="flex items-center justify-center font-black uppercase tracking-tighter">
                 <CheckCircleIcon className="h-6 w-6 text-green-500" />
                 <div className="ml-2">Order successful!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
                 <div className="flex items-center justify-center">
                   The seller will receive a message with your order details.
                 </div>
@@ -658,23 +666,23 @@ export default function Component() {
             isOpen={invoiceGenerationFailed}
             onClose={() => setInvoiceGenerationFailed(false)}
             classNames={{
-              body: "py-6 ",
-              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-              header: "border-b-[1px] border-[#292f46]",
-              footer: "border-t-[1px] border-[#292f46]",
-              closeButton: "hover:bg-black/5 active:bg-white/10",
+              base: "bg-[#161616] border border-zinc-800 rounded-2xl",
+              body: "py-8",
+              backdrop: "bg-black/80 backdrop-blur-sm",
+              header: "border-b border-zinc-800 text-white",
+              closeButton: "hover:bg-white/10 text-white",
             }}
             isDismissable={true}
             scrollBehavior={"normal"}
             placement={"center"}
-            size="2xl"
+            size="md"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="flex items-center justify-center font-black uppercase tracking-tighter">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Invoice generation failed!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
                 <div className="flex items-center justify-center">
                   The price and/or currency set for this listing was invalid.
                 </div>
@@ -692,23 +700,23 @@ export default function Component() {
             isOpen={cashuPaymentFailed}
             onClose={() => setCashuPaymentFailed(false)}
             classNames={{
-              body: "py-6 ",
-              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-              header: "border-b-[1px] border-[#292f46]",
-              footer: "border-t-[1px] border-[#292f46]",
-              closeButton: "hover:bg-black/5 active:bg-white/10",
+              base: "bg-[#161616] border border-zinc-800 rounded-2xl",
+              body: "py-8",
+              backdrop: "bg-black/80 backdrop-blur-sm",
+              header: "border-b border-zinc-800 text-white",
+              closeButton: "hover:bg-white/10 text-white",
             }}
             isDismissable={true}
             scrollBehavior={"normal"}
             placement={"center"}
-            size="2xl"
+            size="md"
           >
             <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+              <ModalHeader className="flex items-center justify-center font-black uppercase tracking-tighter">
                 <XCircleIcon className="h-6 w-6 text-red-500" />
                 <div className="ml-2">Purchase failed!</div>
               </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+              <ModalBody className="flex flex-col overflow-hidden font-medium text-zinc-300">
                 <div className="flex items-center justify-center">
                   You didn&apos;t have enough balance in your wallet to pay.
                 </div>

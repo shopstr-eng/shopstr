@@ -1,7 +1,7 @@
 import "tailwindcss/tailwind.css";
 import type { AppProps } from "next/app";
 import "../styles/globals.css";
-import { useState, useEffect, useCallback, useContext } from "react";
+import { useState, useEffect, useCallback, useContext, useMemo } from "react";
 import { useRouter } from "next/router";
 import {
   ProfileMapContext,
@@ -100,6 +100,16 @@ function Shopstr({ props }: { props: AppProps }) {
         });
       },
     }
+  );
+
+  const productContextValue = useMemo(
+    () => ({
+      productEvents: productContext.productEvents,
+      isLoading: productContext.isLoading,
+      addNewlyCreatedProductEvent: productContext.addNewlyCreatedProductEvent,
+      removeDeletedProductEvent: productContext.removeDeletedProductEvent,
+    }),
+    [productContext.productEvents, productContext.isLoading]
   );
 
   const [reviewsContext, setReviewsContext] = useState<ReviewsContextInterface>(
@@ -437,6 +447,24 @@ function Shopstr({ props }: { props: AppProps }) {
   const [focusedPubkey, setFocusedPubkey] = useState("");
   const [selectedSection, setSelectedSection] = useState("");
 
+  const chatsContextValue = useMemo(
+    () =>
+      ({
+        chatsMap: chatsMap,
+        isLoading: isChatLoading,
+        addNewlyCreatedMessageEvent: addNewlyCreatedMessageEvent,
+        markAllMessagesAsRead: markAllMessagesAsRead,
+        newOrderIds: newOrderIds,
+      }) as ChatsContextInterface,
+    [
+      chatsMap,
+      isChatLoading,
+      addNewlyCreatedMessageEvent,
+      markAllMessagesAsRead,
+      newOrderIds,
+    ]
+  );
+
   const router = useRouter();
 
   /** FETCH initial FOLLOWS, RELAYS, PRODUCTS, and PROFILES **/
@@ -687,30 +715,19 @@ function Shopstr({ props }: { props: AppProps }) {
           <BlossomContext.Provider value={blossomContext}>
             <CashuWalletContext.Provider value={cashuWalletContext}>
               <FollowsContext.Provider value={followsContext}>
-                <ProductContext.Provider value={productContext}>
+                <ProductContext.Provider value={productContextValue}>
                   <ReviewsContext.Provider value={reviewsContext}>
                     <ProfileMapContext.Provider value={profileContext}>
                       <ShopMapContext.Provider value={shopContext}>
-                        <ChatsContext.Provider
-                          value={
-                            {
-                              chatsMap: chatsMap,
-                              isLoading: isChatLoading,
-                              addNewlyCreatedMessageEvent:
-                                addNewlyCreatedMessageEvent,
-                              markAllMessagesAsRead: markAllMessagesAsRead,
-                              newOrderIds: newOrderIds,
-                            } as ChatsContextInterface
-                          }
-                        >
+                        <ChatsContext.Provider value={chatsContextValue}>
                           {router.pathname !== "/" && (
                             <TopNav
                               setFocusedPubkey={setFocusedPubkey}
                               setSelectedSection={setSelectedSection}
                             />
                           )}
-                          <div className="flex">
-                            <main className="flex-1">
+                          <div className="flex min-h-screen w-full flex-col">
+                            <main className="w-full max-w-[100vw] flex-1 overflow-x-hidden">
                               <Component
                                 {...pageProps}
                                 focusedPubkey={focusedPubkey}
@@ -738,7 +755,11 @@ function App(props: AppProps) {
   return (
     <>
       <NextUIProvider>
-        <NextThemesProvider attribute="class">
+        <NextThemesProvider
+          attribute="class"
+          defaultTheme="dark"
+          forcedTheme="dark"
+        >
           <NostrContextProvider>
             <SignerContextProvider>
               <Shopstr props={props} />

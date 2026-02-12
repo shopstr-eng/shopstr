@@ -1,7 +1,10 @@
-import React from "react";
-import { Accordion, AccordionItem } from "@nextui-org/react";
+import React, { useState } from "react";
 
 export default function PrivacyPolicy() {
+  const [expandedItems, setExpandedItems] = useState<Record<number, boolean>>(
+    {}
+  );
+
   const policyContent = [
     {
       title: "Introduction",
@@ -55,48 +58,77 @@ export default function PrivacyPolicy() {
     },
   ];
 
+  const toggleItem = (index: number) => {
+    setExpandedItems((prev) => ({ ...prev, [index]: !prev[index] }));
+  };
+
   return (
-    <div className="flex min-h-screen flex-col bg-light-bg pt-24 dark:bg-dark-bg md:pb-20">
-      <div className="container mx-auto max-w-6xl px-4">
-        <h1 className="mb-8 text-center text-3xl font-bold text-light-text dark:text-dark-text">
-          Privacy Policy
-        </h1>
+    <div className="min-h-screen bg-[#050505] pb-20 pt-32 text-white">
+      <div className="container mx-auto max-w-3xl px-4">
+        {/* Header */}
+        <div className="mb-16 flex flex-col items-center text-center">
+          <h1 className="mb-6 text-3xl font-black uppercase tracking-tight md:text-5xl lg:text-6xl">
+            Privacy Policy
+          </h1>
+          <p className="mb-8 text-lg text-gray-400">
+            How Shopstr protects your privacy
+          </p>
 
-        <p className="mx-auto mb-10 max-w-3xl text-center text-light-text/80 dark:text-dark-text/80">
-          How Shopstr protects your privacy
-        </p>
-
-        <div className="mb-4 text-right text-sm text-light-text/70 dark:text-dark-text/70">
-          Last updated: 2025-04-25
+          {/* Date Pill */}
+          <div className="inline-flex items-center rounded-lg border border-white/10 bg-[#111] px-4 py-2 text-sm text-gray-400">
+            <span>Last updated:</span>
+            <span className="ml-2 font-bold text-shopstr-yellow">
+              2025-04-25
+            </span>
+          </div>
         </div>
 
-        <Accordion
-          selectionMode="multiple"
-          className="mb-6 px-0"
-          variant="bordered"
-        >
-          {policyContent.map((section, sectionIndex) => (
-            <AccordionItem
-              key={sectionIndex}
-              title={
-                <span className="font-medium text-light-text dark:text-dark-text">
-                  {section.title}
-                </span>
-              }
-              classNames={{
-                base: "group",
-                title: "text-md",
-                trigger:
-                  "py-5 px-3 data-[hover=true]:bg-gray-50 dark:data-[hover=true]:bg-gray-900/50 transition-all rounded-lg",
-                content: "py-2 px-3 text-light-text/90 dark:text-dark-text/90",
-              }}
-            >
-              <p className="leading-relaxed text-light-text dark:text-dark-text">
-                {section.content}
-              </p>
-            </AccordionItem>
-          ))}
-        </Accordion>
+        {/* Content List */}
+        <div className="space-y-3">
+          {policyContent.map((item, index) => {
+            const isOpen = expandedItems[index];
+            return (
+              <div
+                key={index}
+                className="overflow-hidden rounded-xl border border-white/10 bg-[#111]"
+              >
+                <button
+                  onClick={() => toggleItem(index)}
+                  className="flex w-full items-center justify-between p-6 text-left transition-colors hover:bg-white/5"
+                >
+                  <span className="pr-8 text-lg font-bold uppercase text-white">
+                    {item.title}
+                  </span>
+                  <div
+                    className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 duration-200 transition-transform ${
+                      isOpen ? "rotate-180" : ""
+                    }`}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="text-gray-400"
+                    >
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </div>
+                </button>
+                {isOpen && (
+                  <div className="border-t border-white/5 px-6 pb-6 pt-4 leading-relaxed text-gray-400">
+                    {item.content}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
