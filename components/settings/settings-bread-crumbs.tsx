@@ -18,26 +18,28 @@ export const SettingsBreadCrumbs = () => {
   return (
     <>
       <Breadcrumbs
-        key="foreground"
-        color="success"
+        key="neobrutalist"
+        color="warning"
         classNames={{
-          base: "pb-2",
+          base: "pb-4 flex-wrap",
         }}
       >
         {path.map((p, i) => {
           const itemClassName =
-            "ml-2 text-light-text dark:text-dark-text text-2xl font-bold" +
-            (i !== path.length - 1 ? " opacity-50 hover:opacity-100" : "");
+            "ml-1 md:ml-2 text-white text-xl md:text-3xl font-black uppercase tracking-tighter" +
+            (i !== path.length - 1
+              ? " opacity-40 hover:opacity-100 transition-opacity"
+              : "");
+
+          const fullPath = "/" + path.slice(0, i + 1).join("/");
+
           return (
             <BreadcrumbItem
               key={i}
-              onClick={() => {
-                router.push(`/${p}`);
-              }}
+              onClick={() => router.push(fullPath)}
               classNames={{
                 item: itemClassName,
-                separator:
-                  "text-shopstr-purple-light dark:text-shopstr-yellow-light text-2xl",
+                separator: "text-yellow-400 text-xl md:text-3xl font-black mx-1 md:mx-2",
               }}
             >
               {pathMap[p]}
@@ -45,7 +47,7 @@ export const SettingsBreadCrumbs = () => {
           );
         })}
       </Breadcrumbs>
-      <Divider className="mb-2" />
+      <Divider className="mb-6 bg-zinc-800 h-[2px]" />
     </>
   );
 };

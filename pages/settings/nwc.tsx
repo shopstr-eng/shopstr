@@ -12,7 +12,6 @@ import {
   getLocalStorageData,
   saveNWCString,
 } from "@/utils/nostr/nostr-helper-functions";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   CheckCircleIcon,
   ExclamationCircleIcon,
@@ -20,6 +19,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { webln } from "@getalby/sdk";
 import { formatWithCommas } from "@/components/utility-components/display-monetary-info";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 const NWCSettingsPage = () => {
   const [nwcString, setNwcString] = useState("");
@@ -143,14 +143,14 @@ const NWCSettingsPage = () => {
   };
 
   return (
-    <div className="flex h-full flex-col bg-light-bg pt-24 dark:bg-dark-bg">
+    <div className="flex h-full flex-col bg-[#111] pt-24">
       <div className="bg mx-auto h-screen w-full lg:w-1/2 lg:pl-4">
         <SettingsBreadCrumbs />
         <div className="p-4">
-          <h2 className="mb-4 text-xl font-bold text-light-text dark:text-dark-text">
+          <h2 className="mb-4 text-xl font-black uppercase tracking-tighter text-white">
             NWC Connection
           </h2>
-          <p className="mb-4 text-sm text-light-text dark:text-dark-text">
+          <p className="mb-6 text-sm font-medium text-zinc-400">
             Connect your wallet using a Nostr Wallet Connect (NIP-47) connection
             string (e.g., from Alby, Mutiny, or Umbrel). This allows Shopstr to
             request payments directly from your wallet.
@@ -158,36 +158,54 @@ const NWCSettingsPage = () => {
 
           <Input
             isClearable
-            label="Nostr Wallet Connect String"
+            label="NOSTR WALLET CONNECT STRING"
+            labelPlacement="outside"
             placeholder="nostr+walletconnect://..."
             value={nwcString}
             onValueChange={setNwcString}
             className="mb-4"
+            variant="bordered"
             classNames={{
-              label: "text-light-text dark:text-dark-text",
-              input: "text-light-text dark:text-dark-text",
+              label: "text-zinc-500 font-bold uppercase tracking-wider text-xs",
+              input: "text-white font-medium",
+              inputWrapper:
+                "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12 rounded-xl",
             }}
           />
 
           {error && (
-            <div className="mb-4 flex items-center rounded border border-red-400 bg-red-100 p-3 text-red-700">
+            <div className="mb-4 flex items-center rounded-xl border border-red-900 bg-red-900/10 p-4 text-red-500">
               <ExclamationCircleIcon className="mr-2 h-5 w-5" />
-              <span className="text-sm">{error}</span>
+              <span className="text-sm font-bold uppercase tracking-wide">
+                {error}
+              </span>
             </div>
           )}
 
           {isSaved && !error && (
-            <div className="mb-4 flex items-center rounded border border-green-400 bg-green-100 p-3 text-green-700">
+            <div className="mb-4 flex items-center rounded-xl border border-green-900 bg-green-900/10 p-4 text-green-500">
               <CheckCircleIcon className="mr-2 h-5 w-5" />
-              <span className="text-sm">Wallet connected successfully!</span>
+              <span className="text-sm font-bold uppercase tracking-wide">
+                Wallet connected successfully!
+              </span>
             </div>
           )}
 
           <div className="flex items-center">
             <Button
-              className={SHOPSTRBUTTONCLASSNAMES}
+              className={`${NEO_BTN} h-12 min-w-fit px-6 text-sm`}
               onClick={handleSave}
               isLoading={isLoading}
+              spinner={
+                <Spinner
+                  size="sm"
+                  classNames={{
+                    wrapper: "h-4 w-4",
+                    circle1: "border-b-black",
+                    circle2: "border-b-black",
+                  }}
+                />
+              }
             >
               {isLoading
                 ? "Connecting..."
@@ -198,9 +216,7 @@ const NWCSettingsPage = () => {
 
             {walletInfo && (
               <Button
-                color="danger"
-                variant="light"
-                className="ml-4"
+                className={`${NEO_BTN} ml-4 h-12 px-6 text-sm bg-red-500 text-white hover:bg-red-400`}
                 onClick={handleRemove}
               >
                 Disconnect Wallet
@@ -209,26 +225,26 @@ const NWCSettingsPage = () => {
           </div>
 
           {walletInfo && (
-            <Card className="mt-6 bg-light-fg dark:bg-dark-fg">
+            <Card className="mt-8 border border-zinc-800 bg-[#161616] p-2">
               <CardHeader>
-                <WalletIcon className="mr-2 h-5 w-5 text-light-text dark:text-dark-text" />
-                <h3 className="font-bold text-light-text dark:text-dark-text">
+                <WalletIcon className="mr-2 h-5 w-5 text-zinc-400" />
+                <h3 className="font-bold uppercase tracking-wide text-white">
                   Connected Wallet: {walletInfo.alias || "Unknown"}
                 </h3>
               </CardHeader>
               <CardBody>
                 {balance !== null ? (
-                  <p className="text-light-text dark:text-dark-text">
+                  <p className="text-zinc-300 font-medium">
                     Balance: {formatWithCommas(balance, "sats")}
                   </p>
                 ) : walletInfo.methods.includes("get_balance") ? (
-                  <Spinner size="sm" />
+                  <Spinner size="sm" color="warning" />
                 ) : (
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm font-medium text-zinc-500">
                     Balance: Not available
                   </p>
                 )}
-                <p className="mt-2 text-sm text-gray-500">
+                <p className="mt-2 text-xs font-bold uppercase tracking-wider text-zinc-600">
                   Supports: {walletInfo.methods.join(", ")}
                 </p>
               </CardBody>

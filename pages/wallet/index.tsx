@@ -66,6 +66,8 @@ const Wallet = () => {
 
   useEffect(() => {
     const interval = setInterval(() => {
+      // Optimization: Do not poll if the tab is in the background
+      if (document.hidden) return;
       const { tokens: newTokens } = getLocalStorageData();
       if (newTokens) {
         const tokensTotal =
@@ -102,19 +104,22 @@ const Wallet = () => {
 
   return (
     <>
-      <div className="flex min-h-screen flex-col bg-light-bg px-4 pt-[8rem] dark:bg-dark-bg">
-        <div className="mx-auto w-full max-w-3xl">
-          <div className="mb-8 rounded-lg bg-white p-6 shadow-md dark:bg-gray-800">
-            <h1 className="mb-2 text-center text-6xl font-bold text-light-text dark:text-dark-text">
-              {totalBalance} sats
+      <div className="flex min-h-screen flex-col items-center bg-[#050505] px-4 pt-24 md:pt-36">
+        <div className="w-full max-w-4xl space-y-8">
+          {/* Balance & Actions Card */}
+          <div className="rounded-3xl border border-white/10 bg-[#111] px-6 py-10 shadow-2xl md:px-16 md:py-16">
+            <h1 className="flex items-baseline justify-center gap-2 text-center text-5xl md:text-8xl font-black text-white">
+              {totalBalance} <span className="text-2xl md:text-5xl font-bold text-gray-600">sats</span>
             </h1>
             <p
-              className="mb-4 cursor-pointer break-words text-center text-sm italic text-gray-500 transition-colors hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-300"
+              className="mt-6 cursor-pointer break-words text-center font-mono text-sm text-gray-600 transition-colors hover:text-gray-400"
               onClick={handleMintClick}
             >
               {mint}: {walletBalance} sats
             </p>
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            
+            {/* Action Buttons Grid */}
+            <div className="mt-16 grid grid-cols-2 gap-4 md:grid-cols-4">
               <div className="flex items-center justify-center">
                 <ReceiveButton />
               </div>
@@ -130,7 +135,8 @@ const Wallet = () => {
             </div>
           </div>
 
-          <div className="flex justify-center">
+          {/* Transactions Container */}
+          <div className="rounded-3xl border border-white/10 bg-[#111] p-1">
             <Transactions />
           </div>
         </div>

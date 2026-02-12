@@ -61,7 +61,7 @@ export const ProfileWithDropdown = ({
       if (profile?.content?.nip05 && profile.nip05Verified) {
         name = profile.content.nip05;
       }
-      name = name.length > 15 ? name.slice(0, 15) + "..." : name;
+      name = name.length > 18 ? name.slice(0, 18) + "..." : name;
       return name;
     });
     setPfp(
@@ -78,7 +78,8 @@ export const ProfileWithDropdown = ({
     shop: {
       key: "shop",
       color: "default",
-      className: "text-light-text dark:text-dark-text",
+      className:
+        "text-zinc-400 font-bold uppercase tracking-wider text-xs hover:text-white",
       startContent: <BuildingStorefrontIcon className={"h-5 w-5"} />,
       onClick: () => {
         const npub = nip19.npubEncode(pubkey);
@@ -89,7 +90,8 @@ export const ProfileWithDropdown = ({
     shop_profile: {
       key: "shop_profile",
       color: "default",
-      className: "text-light-text dark:text-dark-text",
+      className:
+        "text-zinc-400 font-bold uppercase tracking-wider text-xs hover:text-white",
       startContent: <BuildingStorefrontIcon className={"h-5 w-5"} />,
       onClick: () => {
         router.push("/settings/shop-profile");
@@ -99,7 +101,8 @@ export const ProfileWithDropdown = ({
     inquiry: {
       key: "inquiry",
       color: "default",
-      className: "text-light-text dark:text-dark-text",
+      className:
+        "text-zinc-400 font-bold uppercase tracking-wider text-xs hover:text-white",
       startContent: <ChatBubbleBottomCenterIcon className={"h-5 w-5"} />,
       onClick: () => {
         if (isLoggedIn) {
@@ -116,7 +119,8 @@ export const ProfileWithDropdown = ({
     user_profile: {
       key: "user_profile",
       color: "default",
-      className: "text-light-text dark:text-dark-text",
+      className:
+        "text-zinc-400 font-bold uppercase tracking-wider text-xs hover:text-white",
       startContent: <UserIcon className={"h-5 w-5"} />,
       onClick: () => {
         router.push("/settings/user-profile");
@@ -126,7 +130,8 @@ export const ProfileWithDropdown = ({
     settings: {
       key: "settings",
       color: "default",
-      className: "text-light-text dark:text-dark-text",
+      className:
+        "text-zinc-400 font-bold uppercase tracking-wider text-xs hover:text-white",
       startContent: <Cog6ToothIcon className={"h-5 w-5"} />,
       onClick: () => {
         router.push("/settings");
@@ -136,7 +141,8 @@ export const ProfileWithDropdown = ({
     logout: {
       key: "logout",
       color: "danger",
-      className: "text-light-text dark:text-dark-text",
+      className:
+        "text-red-500 font-bold uppercase tracking-wider text-xs hover:text-red-400",
       startContent: (
         <ArrowRightStartOnRectangleIcon
           className={"text-color-red-900 " + "h-5 w-5"}
@@ -152,7 +158,8 @@ export const ProfileWithDropdown = ({
     copy_npub: {
       key: "copy_npub",
       color: "default",
-      className: "text-light-text dark:text-dark-text",
+      className:
+        "text-zinc-400 font-bold uppercase tracking-wider text-xs hover:text-white",
       startContent: isNPubCopied ? (
         <CheckIcon className="h-5 w-5" />
       ) : (
@@ -172,19 +179,24 @@ export const ProfileWithDropdown = ({
 
   return (
     <>
-      <Dropdown placement="bottom-start">
+      <Dropdown
+        placement="bottom-start"
+        classNames={{
+          content:
+            "border border-zinc-800 bg-[#161616] p-1 rounded-xl shadow-xl min-w-[180px]",
+        }}
+      >
         <DropdownTrigger>
           <User
             as="button"
             avatarProps={{
+              size: "sm",
               src: pfp,
             }}
             className={"transition-transform"}
             classNames={{
-              name: `overflow-hidden text-ellipsis whitespace-nowrap text-light-text dark:text-dark-text hidden ${nameClassname} ${
-                isNip05Verified
-                  ? "text-shopstr-purple dark:text-shopstr-yellow"
-                  : ""
+              name: `overflow-hidden text-ellipsis whitespace-nowrap font-bold text-white max-w-[120px] md:max-w-none ${nameClassname} ${
+                isNip05Verified ? "text-yellow-400" : ""
               }`,
               base: `${baseClassname}`,
             }}
@@ -194,14 +206,14 @@ export const ProfileWithDropdown = ({
         <DropdownMenu
           aria-label="User Actions"
           variant="flat"
-          items={dropDownKeys.map((key) => DropDownItems[key])}
+          items={dropDownKeys.map((key) => ({ ...DropDownItems[key], key }))}
         >
           {(item) => {
             return (
               <DropdownItem
                 key={item.key}
                 color={item.color}
-                className={item.className}
+                className={`${item.className} py-3 md:py-2`}
                 startContent={item.startContent}
                 onClick={item.onClick}
               >

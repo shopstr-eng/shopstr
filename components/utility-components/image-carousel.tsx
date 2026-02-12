@@ -5,7 +5,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import { Image } from "@nextui-org/react";
 import { buildSrcSet } from "@/utils/images";
 import { useRouter } from "next/router";
-import { PREVNEXTBUTTONSTYLES } from "@/utils/STATIC-VARIABLES";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 interface ImageCarouselProps {
   images: string[];
@@ -25,8 +25,8 @@ export default function ImageCarousel({
   const containerClass = `flex items-center justify-center ${classname}`;
 
   const imageClass = fixedHeight
-    ? "h-full w-full object-cover rounded-xl transition-transform duration-300 ease-in-out hover:scale-105"
-    : "w-full object-cover rounded-xl";
+    ? "h-full w-full object-cover rounded-2xl border border-zinc-800 bg-[#161616]"
+    : "w-full object-cover rounded-2xl border border-zinc-800 bg-[#161616]";
 
   const displayImages = () => {
     if (!images || images.length === 0) {
@@ -71,40 +71,41 @@ export default function ImageCarousel({
       renderArrowPrev={(onClickHandler, hasPrev, label) =>
         hasPrev && (
           <button
-            className={`left-4 ${PREVNEXTBUTTONSTYLES}`}
+            className={`${NEO_BTN} absolute left-2 md:left-4 top-1/2 z-10 flex h-8 w-8 md:h-10 md:w-10 -translate-y-1/2 items-center justify-center rounded-lg p-0`}
             onClick={(e) => {
               onClickHandler();
               e.stopPropagation();
             }}
             title={label}
           >
-            <ChevronLeftIcon className="h-6 w-6 text-black dark:text-white" />
+            <ChevronLeftIcon className="h-5 w-5 md:h-6 md:w-6 text-black" />
           </button>
         )
       }
       renderArrowNext={(onClickHandler, hasNext, label) =>
         hasNext && (
           <button
-            className={`right-4 ${PREVNEXTBUTTONSTYLES}`}
+            className={`${NEO_BTN} absolute right-2 md:right-4 top-1/2 z-10 flex h-8 w-8 md:h-10 md:w-10 -translate-y-1/2 items-center justify-center rounded-lg p-0`}
             onClick={(e) => {
               onClickHandler();
               e.stopPropagation();
             }}
             title={label}
           >
-            <ChevronRightIcon className="h-6 w-6 text-black dark:text-white" />
+            <ChevronRightIcon className="h-5 w-5 md:h-6 md:w-6 text-black" />
           </button>
         )
       }
       renderIndicator={(onClickHandler, isSelected, index, label) => {
-        const base = "inline-block w-3 h-3 rounded-full mx-1 cursor-pointer";
+        const base =
+          "inline-block w-2.5 h-2.5 md:w-3 md:h-3 rounded-full mx-1.5 cursor-pointer border border-black/20 transition-all";
         return (
           <li
             key={index}
             className={
               isSelected
-                ? `${base} bg-blue-500`
-                : `${base} bg-gray-300 hover:bg-gray-500`
+                ? `${base} bg-yellow-400 border-white`
+                : `${base} bg-zinc-700 hover:bg-zinc-500`
             }
             onClick={(e) => {
               onClickHandler(e);

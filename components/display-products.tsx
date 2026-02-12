@@ -9,10 +9,10 @@ import {
 } from "../utils/context/context";
 import ProductCard from "./utility-components/product-card";
 import DisplayProductModal from "./display-product-modal";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { Button, Pagination } from "@nextui-org/react";
 import ShopstrSpinner from "./utility-components/shopstr-spinner";
 import { useRouter } from "next/router";
+import { CubeIcon } from "@heroicons/react/24/outline";
 import parseTags, {
   ProductData,
 } from "@/utils/parsers/product-parser-functions";
@@ -21,6 +21,7 @@ import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 const DisplayProducts = ({
   focusedPubkey,
@@ -357,7 +358,7 @@ const DisplayProducts = ({
 
   return (
     <>
-      <div className="w-full md:pl-4">
+      <div className="w-full px-2 md:pl-4 md:px-0">
         {!isMyListings &&
         (profileMapContext.isLoading ||
           productEventContext.isLoading ||
@@ -368,7 +369,7 @@ const DisplayProducts = ({
         ) : null}
         {filteredProducts.length > 0 ? (
           <>
-            <div className="grid max-w-full grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-x-hidden">
+            <div className="grid w-full grid-cols-[repeat(auto-fill,minmax(280px,1fr))] md:grid-cols-[repeat(auto-fill,minmax(300px,1fr))] justify-items-center gap-4 overflow-hidden">
               {getCurrentPageProducts().map(
                 (productData: ProductData, index) => (
                   <ProductCard
@@ -382,14 +383,21 @@ const DisplayProducts = ({
             </div>
 
             {totalPages > 1 && (
-              <div className="mt-4 flex justify-center">
+              <div className="mt-12 mb-8 flex justify-center overflow-x-auto pb-2">
                 <Pagination
                   total={totalPages}
                   page={currentPage}
                   onChange={handlePageChange}
-                  showControls
+                  showControls={filteredProducts.length > itemsPerPage * 2}
+                  size="sm"
                   classNames={{
-                    cursor: "bg-purple-500",
+                    wrapper:
+                      "gap-1 md:gap-2 h-12 md:h-16 rounded-2xl bg-[#18181b] border border-[#27272a] px-2 items-center shadow-lg",
+                    item: "w-8 h-8 md:w-10 md:h-10 text-xs md:text-base rounded-xl bg-transparent data-[hover=true]:bg-zinc-800 text-zinc-500 font-bold transition-colors",
+                    cursor:
+                      "bg-[#d946ef] shadow-lg text-white font-bold rounded-xl w-8 h-8 md:w-10 md:h-10",
+                    prev: "text-zinc-500 hover:text-zinc-300 data-[hover=true]:bg-zinc-800 w-8 h-8 md:w-10 md:h-10 rounded-xl transition-colors",
+                    next: "text-zinc-500 hover:text-zinc-300 data-[hover=true]:bg-zinc-800 w-8 h-8 md:w-10 md:h-10 rounded-xl transition-colors",
                   }}
                 />
               </div>
@@ -419,19 +427,22 @@ const DisplayProducts = ({
         {isMyListings &&
           !isProductsLoading &&
           !productEvents.some((product) => product.pubkey === userPubkey) && (
-            <div className="mt-20 flex flex-grow items-center justify-center py-10">
-              <div className="w-full max-w-lg rounded-lg bg-light-fg p-8 text-center shadow-lg dark:bg-dark-fg">
-                <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
+            <div className="flex h-[60vh] flex-col items-center justify-center">
+              <div className="flex w-full max-w-2xl flex-col items-center justify-center rounded-[32px] border border-zinc-800 bg-[#18181b] p-6 md:p-12 text-center shadow-2xl">
+                <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-3xl bg-zinc-800/50">
+                  <CubeIcon className="h-12 w-12 text-zinc-400" />
+                </div>
+                <h2 className="mb-2 text-3xl font-bold text-white">
                   No products found...
-                </p>
-                <p className="mt-4 text-lg text-light-text dark:text-dark-text">
+                </h2>
+                <p className="mb-8 text-lg text-zinc-400">
                   Try adding a new listing!
                 </p>
                 <Button
-                  className={`${SHOPSTRBUTTONCLASSNAMES} mt-6`}
+                  className={`${NEO_BTN} h-14 px-8 text-sm font-bold uppercase tracking-wider`}
                   onClick={() => router.push("?addNewListing")}
                 >
-                  Add Listing
+                  ADD LISTING
                 </Button>
               </div>
             </div>

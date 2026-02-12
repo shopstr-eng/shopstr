@@ -1,7 +1,10 @@
-import React from "react";
-import { Accordion, AccordionItem } from "@nextui-org/react";
+import React, { useState } from "react";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 export default function Faq() {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+
   const faqSections = [
     {
       title: "General Information",
@@ -140,50 +143,171 @@ export default function Faq() {
     },
   ];
 
+  const toggleItem = (key: string) => {
+    setExpandedItems((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const filteredSections = faqSections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter(
+        (item) =>
+          item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.content.toLowerCase().includes(searchQuery.toLowerCase())
+      ),
+    }))
+    .filter((section) => section.items.length > 0);
+
   return (
-    <div className="flex min-h-screen flex-col bg-light-bg pt-24 dark:bg-dark-bg md:pb-20">
-      <div className="container mx-auto max-w-6xl px-4">
-        <h1 className="mb-8 text-center text-3xl font-bold text-light-text dark:text-dark-text">
-          Frequently Asked Questions
-        </h1>
-
-        <p className="mx-auto mb-10 max-w-3xl text-center text-light-text/80 dark:text-dark-text/80">
-          Answers to common questions about using Shopstr
-        </p>
-
-        {faqSections.map((section, sectionIndex) => (
-          <div key={sectionIndex} className="mb-8">
-            <h2 className="mb-4 border-b border-gray-200 pb-2 text-xl font-semibold text-light-text dark:border-gray-700 dark:text-dark-text">
-              {section.title}
-            </h2>
-
-            <Accordion
-              selectionMode="multiple"
-              className="mb-6 px-0"
-              variant="bordered"
+    <div className="min-h-screen bg-[#050505] pt-32 pb-20 text-white">
+      <div className="container mx-auto max-w-3xl px-4">
+        {/* Header */}
+        <div className="mb-16 flex flex-col items-center text-center">
+          <div className="mb-8 flex h-16 w-16 items-center justify-center rounded-2xl border-2 border-shopstr-yellow text-shopstr-yellow">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="32"
+              height="32"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             >
-              {section.items.map((item, itemIndex) => (
-                <AccordionItem
-                  key={`${sectionIndex}-${itemIndex}`}
-                  title={item.title}
-                  classNames={{
-                    base: "group",
-                    title:
-                      "text-md font-medium text-light-text dark:text-dark-text",
-                    trigger:
-                      "py-5 px-3 data-[hover=true]:bg-gray-50 dark:data-[hover=true]:bg-gray-900/50 transition-all rounded-lg",
-                    content:
-                      "py-2 px-3 text-light-text/90 dark:text-dark-text/90",
-                  }}
-                >
-                  <p className="leading-relaxed text-light-text dark:text-dark-text">
-                    {item.content}
-                  </p>
-                </AccordionItem>
-              ))}
-            </Accordion>
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+              <path d="M12 17h.01" />
+            </svg>
           </div>
-        ))}
+          <h1 className="mb-4 text-3xl md:text-5xl font-black uppercase tracking-tight lg:text-6xl">
+            How can we <span className="text-shopstr-yellow">help?</span>
+          </h1>
+          <p className="mb-10 max-w-lg text-lg text-gray-400">
+            Answers to common questions about using Shopstr, payments, and the
+            protocol.
+          </p>
+
+          {/* Search */}
+          <div className="relative w-full max-w-xl">
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-gray-500">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+            </div>
+            <input
+              type="text"
+              className="w-full rounded-xl border border-white/10 bg-[#111] py-4 pl-12 pr-4 text-white text-base placeholder-gray-600 transition-colors focus:border-white/20 focus:outline-none"
+              placeholder="Search for answers..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </div>
+
+        {/* Sections */}
+        <div className="space-y-4">
+          {filteredSections.map((section, sectionIndex) => (
+            <div key={sectionIndex}>
+              {/* Section Title Pill */}
+              <div className="relative flex items-center justify-center py-10">
+                <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-white/10"></div>
+                <div className="relative rounded-full border border-white/5 p-1">
+                  <div className="rounded-full border border-white/10 bg-[#111] px-6 py-2 md:px-10 md:py-3 text-center">
+                    <span className="text-lg md:text-2xl font-black uppercase tracking-tight text-white">
+                      {section.title}
+                    </span>
+                 </div>
+                </div>
+              </div>
+
+              {/* Items */}
+              <div className="space-y-3">
+                {section.items.map((item, itemIndex) => {
+                  const key = `${sectionIndex}-${itemIndex}`;
+                  const isOpen = expandedItems[key];
+
+                  return (
+                    <div
+                      key={itemIndex}
+                      className="overflow-hidden rounded-xl border border-white/10 bg-[#111]"
+                    >
+                      <button
+                        onClick={() => toggleItem(key)}
+                        className="flex w-full items-center justify-between p-5 text-left transition-colors hover:bg-white/5"
+                      >
+                        <span className="pr-8 font-bold text-white">
+                          {item.title}
+                        </span>
+                        <div
+                          className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/5 transition-transform duration-200 ${
+                            isOpen ? "rotate-180" : ""
+                          }`}
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="text-gray-400"
+                          >
+                            <path d="m6 9 6 6 6-6" />
+                          </svg>
+                        </div>
+                      </button>
+                      {isOpen && (
+                        <div className="border-t border-white/5 px-5 pb-5 pt-3 text-gray-400">
+                          {item.content}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div className="mt-24 border-t border-white/10 pt-16 text-center">
+          <h3 className="mb-8 text-sm font-bold uppercase tracking-widest text-gray-500">
+            Still need help?
+          </h3>
+          <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
+            <a
+              href="https://discord.gg/XDPb4kXJNv"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex min-w-[160px] items-center justify-center gap-1 rounded-xl border-1 border-white/20 bg-transparent px-6 py-3.5 text-lg font-bold uppercase text-white transition-colors hover:bg-white/10"
+            >
+              <span>Join Discord</span>
+            </a>
+            <a
+              href="https://njump.me/npub15dc33fyg3cpd9r58vlqge2hh8dy6hkkrjxkhluv2xpyfreqkmsesesyv6e"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`${NEO_BTN} flex items-center justify-center min-w-[160px] py-3 px-6`}
+            >
+              Contact Support
+            </a>
+          </div>
+        </div>
       </div>
     </div>
   );

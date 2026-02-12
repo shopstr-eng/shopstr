@@ -7,7 +7,6 @@ import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { DisplayCheckoutCost } from "./display-monetary-info";
 import ProductInvoiceCard from "../product-invoice-card";
 import { useRouter } from "next/router";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   Button,
   Chip,
@@ -35,6 +34,7 @@ import { SignerContext } from "@/components/utility-components/nostr-context-pro
 import VolumeSelector from "./volume-selector";
 import ZapsnagButton from "@/components/ZapsnagButton";
 import { RawEventModal, EventIdModal } from "./modals/event-modals";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 const SUMMARY_CHARACTER_LIMIT = 100;
 
@@ -373,10 +373,10 @@ export default function CheckoutCard({
           (productData.sizeQuantities?.get(size) || 0) > 0 ? (
             <button
               key={size}
-              className={`rounded-md border p-2 text-sm ${
+              className={`rounded-lg border p-2 text-sm font-bold uppercase tracking-wider ${
                 selectedSize === size
-                  ? "bg-shopstr-purple text-white dark:bg-shopstr-yellow dark:text-black"
-                  : "bg-white text-black dark:bg-black dark:text-white"
+                  ? "bg-yellow-400 text-black border-yellow-400"
+                  : "bg-[#161616] text-zinc-400 border-zinc-700 hover:border-zinc-500 hover:text-white"
               }`}
               onClick={() => setSelectedSize(size)}
             >
@@ -413,18 +413,18 @@ export default function CheckoutCard({
   };
 
   return (
-    <div className="flex w-full items-center justify-center bg-light-bg dark:bg-dark-bg">
+    <div className="flex w-full items-center justify-center bg-[#111]">
       <div className="mx-auto flex w-full flex-col">
         {!isBeingPaid ? (
           <>
             <div className="max-w-screen pt-4">
               <div
-                className="max-w-screen mx-3 my-3 flex flex-row whitespace-normal break-words"
+                className="max-w-screen mx-3 my-3 flex flex-col md:flex-row whitespace-normal break-words gap-6"
                 key={uniqueKey}
               >
-                <div className="w-1/2 pr-4">
+                <div className="w-full md:w-1/2">
                   <div className="flex w-full flex-row">
-                    <div className="flex w-1/4 flex-col pr-4">
+                    <div className="hidden md:flex w-1/4 flex-col pr-4">
                       <div
                         ref={containerRef}
                         className="flex-1 overflow-hidden"
@@ -444,8 +444,8 @@ export default function CheckoutCard({
                               alt={`Product image ${index + 1}`}
                               className={`w-full cursor-pointer rounded-xl object-cover ${
                                 image === selectedImage
-                                  ? "border-2 border-shopstr-purple dark:border-shopstr-yellow"
-                                  : ""
+                                  ? "border-2 border-yellow-400"
+                                  : "border border-zinc-800"
                               }`}
                               style={{ aspectRatio: "1 / 1" }}
                               onClick={() => setSelectedImage(image)}
@@ -456,7 +456,7 @@ export default function CheckoutCard({
                       {productData.images.length > 3 && (
                         <button
                           onClick={() => setShowAllImages(!showAllImages)}
-                          className="mt-2 flex flex-col items-center text-sm text-purple-500 hover:text-purple-700 dark:text-yellow-500 dark:hover:text-yellow-700"
+                          className="mt-2 flex flex-col items-center text-sm text-yellow-500 hover:text-yellow-400"
                         >
                           {showAllImages ? (
                             <ArrowLongUpIcon className="h-5 w-5" />
@@ -466,17 +466,17 @@ export default function CheckoutCard({
                         </button>
                       )}
                     </div>
-                    <div className="w-3/4">
+                    <div className="w-full md:w-3/4">
                       <img
                         src={selectedImage}
                         alt="Selected product image"
-                        className="w-full rounded-xl object-cover"
+                        className="w-full rounded-2xl object-cover border border-zinc-800 shadow-2xl"
                         style={{ aspectRatio: "1 / 1" }}
                       />
                     </div>
                   </div>
                 </div>
-                <div className="w-1/2 px-3">
+                <div className="w-full md:w-1/2 px-1 md:px-3">
                   <div className="flex w-full flex-col gap-4">
                     <div className="flex flex-wrap items-center gap-4">
                       <ProfileWithDropdown
@@ -488,30 +488,30 @@ export default function CheckoutCard({
                         }
                       />
                       {merchantQuality !== "" && (
-                        <div className="inline-flex items-center gap-1 rounded-lg border-2 border-black px-2 dark:border-white">
+                        <div className="inline-flex items-center gap-1 rounded-lg border border-zinc-700 bg-[#161616] px-3 py-1">
                           {merchantReview >= 0.5 ? (
                             <>
                               <FaceSmileIcon
-                                className={`h-10 w-10 p-1 ${
+                                className={`h-6 w-6 ${
                                   merchantReview >= 0.75
                                     ? "text-green-500"
                                     : "text-green-300"
                                 }`}
                               />
-                              <span className="mr-2 whitespace-nowrap text-sm text-light-text dark:text-dark-text">
+                              <span className="whitespace-nowrap text-xs font-bold uppercase tracking-wider text-zinc-300">
                                 {merchantQuality}
                               </span>
                             </>
                           ) : (
                             <>
                               <FaceFrownIcon
-                                className={`h-10 w-10 p-1 ${
+                                className={`h-6 w-6 ${
                                   merchantReview >= 0.25
                                     ? "text-red-300"
                                     : "text-red-500"
                                 }`}
                               />
-                              <span className="mr-2 whitespace-nowrap text-sm text-light-text dark:text-dark-text">
+                              <span className="whitespace-nowrap text-xs font-bold uppercase tracking-wider text-zinc-300">
                                 {merchantQuality}
                               </span>
                             </>
@@ -521,7 +521,7 @@ export default function CheckoutCard({
                     </div>
                   </div>
                   <div className="mt-4 flex w-full items-start justify-between">
-                    <h2 className="text-left text-2xl font-bold text-light-text dark:text-dark-text">
+                    <h2 className="text-left text-2xl font-black uppercase tracking-tighter text-white">
                       {productData.title}
                       {isExpired && (
                         <Chip color="warning" variant="flat" className="ml-2">
@@ -530,15 +530,19 @@ export default function CheckoutCard({
                       )}
                     </h2>
                     {rawEvent && (
-                      <Dropdown>
+                      <Dropdown
+                        classNames={{
+                          content: "bg-[#161616] border border-zinc-800 rounded-xl",
+                        }}
+                      >
                         <DropdownTrigger>
                           <Button
                             isIconOnly
                             variant="light"
                             size="sm"
-                            className="min-w-8 h-8"
+                            className="min-w-8 h-8 text-zinc-400 hover:text-white"
                           >
-                            <EllipsisVerticalIcon className="h-6 w-6 text-gray-500" />
+                            <EllipsisVerticalIcon className="h-6 w-6" />
                           </Button>
                         </DropdownTrigger>
                         <DropdownMenu aria-label="Event Actions">
@@ -561,7 +565,7 @@ export default function CheckoutCard({
                   {productData.expiration && (
                     <p
                       className={`mt-1 text-left text-sm ${
-                        isExpired ? "font-medium text-red-500" : "text-gray-500"
+                        isExpired ? "font-medium text-red-500" : "text-zinc-500"
                       }`}
                     >
                       {isExpired ? "Expired on: " : "Valid until: "}{" "}
@@ -571,12 +575,17 @@ export default function CheckoutCard({
                     </p>
                   )}
                   {productData.condition && (
-                    <div className="text-left text-xs text-light-text dark:text-dark-text">
-                      <span>Condition: {productData.condition}</span>
+                    <div className="text-left text-xs font-bold uppercase tracking-wider text-zinc-400">
+                      <span>
+                        Condition:{" "}
+                        <span className="text-white">
+                          {productData.condition}
+                        </span>
+                      </span>
                     </div>
                   )}
                   {productData.restrictions && (
-                    <div className="text-left text-xs text-light-text dark:text-dark-text">
+                    <div className="text-left text-xs font-bold uppercase tracking-wider text-zinc-400">
                       <span>Restrictions: </span>
                       <span className="text-red-500">
                         {productData.restrictions}
@@ -584,13 +593,13 @@ export default function CheckoutCard({
                     </div>
                   )}
                   <div className="hidden sm:block">
-                    <p className="mt-4 w-full text-left text-lg text-light-text dark:text-dark-text">
+                    <p className="mt-4 w-full text-left text-base text-zinc-300">
                       {renderSummary()}
                     </p>
                     {productData.summary.length > SUMMARY_CHARACTER_LIMIT && (
                       <button
                         onClick={toggleExpand}
-                        className="mt-2 text-purple-500 hover:text-purple-700 dark:text-yellow-500 dark:hover:text-yellow-700"
+                        className="mt-2 text-sm font-bold text-yellow-500 hover:text-yellow-400"
                       >
                         {isExpanded ? "Show less" : "Show more"}
                       </button>
@@ -618,29 +627,35 @@ export default function CheckoutCard({
                     <>
                       {productData.pubkey !== userPubkey && (
                         <div className="mt-4 space-y-2">
-                          <div className="flex gap-2">
+                          <p className="text-zinc-500 font-bold uppercase tracking-wider text-xs">DISCOUNT CODE</p>
+                          <div className="flex items-start gap-2">
                             <Input
-                              label="Discount Code"
                               placeholder="Enter code"
                               value={discountCode}
                               onChange={(e) =>
                                 setDiscountCode(e.target.value.toUpperCase())
                               }
-                              className="flex-1 text-light-text dark:text-dark-text"
+                              className="flex-1"
+                              classNames={{
+                                input: "text-white",
+                                inputWrapper:
+                                  "bg-[#111] border-zinc-700 data-[hover=true]:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-10",
+                              }}
+                              variant="bordered"
                               disabled={appliedDiscount > 0}
                               isInvalid={!!discountError}
                               errorMessage={discountError}
                             />
                             {appliedDiscount > 0 ? (
                               <Button
-                                color="warning"
+                                className="h-10 rounded-lg bg-red-500 font-bold uppercase tracking-wider text-white"
                                 onClick={handleRemoveDiscount}
                               >
                                 Remove
                               </Button>
                             ) : (
                               <Button
-                                className={SHOPSTRBUTTONCLASSNAMES}
+                                className="h-10 rounded-lg border border-zinc-700 bg-[#161616] font-bold uppercase tracking-wider text-zinc-300 hover:bg-zinc-800 hover:text-white"
                                 onClick={handleApplyDiscount}
                               >
                                 Apply
@@ -648,7 +663,7 @@ export default function CheckoutCard({
                             )}
                           </div>
                           {appliedDiscount > 0 && (
-                            <p className="text-sm text-green-600 dark:text-green-400">
+                            <p className="text-sm font-bold text-green-400">
                               {appliedDiscount}% discount applied! You save{" "}
                               {Math.ceil((discountAmount / 100) * 100) / 100}{" "}
                               {productData.currency}
@@ -671,12 +686,12 @@ export default function CheckoutCard({
                         </Chip>
                       </div>
                       {renderSizeGrid()}
-                      <div className="flex w-full flex-col gap-2">
+                      <div className="flex w-full flex-col gap-4 pt-2">
                         <div className="flex flex-wrap items-center gap-2">
                           {productData.status !== "sold" ? (
                             <>
                               <Button
-                                className={`min-w-fit bg-gradient-to-tr from-purple-700 via-purple-500 to-purple-700 text-dark-text shadow-lg dark:from-yellow-700 dark:via-yellow-500 dark:to-yellow-700 dark:text-light-text ${
+                                className={`${NEO_BTN} flex-1 md:flex-none min-w-[140px] h-14 px-8 text-lg font-black tracking-widest ${
                                   (hasSizes && !selectedSize) ||
                                   (hasVolumes && !selectedVolume)
                                     ? "cursor-not-allowed opacity-50"
@@ -692,7 +707,7 @@ export default function CheckoutCard({
                                 Buy Now
                               </Button>
                               <Button
-                                className={`${SHOPSTRBUTTONCLASSNAMES} ${
+                                className={`h-14 flex-1 md:flex-none min-w-[140px] rounded-xl border-2 border-zinc-700 bg-[#161616] px-6 text-sm font-bold uppercase tracking-wider text-zinc-300 hover:border-zinc-500 hover:text-white ${
                                   isAdded ||
                                   (hasSizes && !selectedSize) ||
                                   (hasVolumes && !selectedVolume)
@@ -713,7 +728,7 @@ export default function CheckoutCard({
                           ) : (
                             <>
                               <Button
-                                className={`${SHOPSTRBUTTONCLASSNAMES} cursor-not-allowed opacity-50`}
+                                className="h-12 min-w-fit cursor-not-allowed rounded-xl border-2 border-zinc-800 bg-zinc-900 px-6 text-sm font-bold uppercase tracking-wider text-zinc-600 opacity-50"
                                 disabled
                               >
                                 Sold Out
@@ -722,7 +737,7 @@ export default function CheckoutCard({
                           )}
                           <Button
                             type="submit"
-                            className={SHOPSTRBUTTONCLASSNAMES}
+                            className="h-14 w-full md:w-auto rounded-xl border-2 border-zinc-700 bg-[#161616] px-6 text-sm font-bold uppercase tracking-wider text-zinc-300 hover:border-zinc-500 hover:text-white"
                             onClick={handleShare}
                           >
                             Share
@@ -739,7 +754,7 @@ export default function CheckoutCard({
                       className="cursor-pointer text-gray-500"
                     >
                       or{" "}
-                      <span className="underline hover:text-light-text dark:hover:text-dark-text">
+                      <span className="underline hover:text-white">
                         contact
                       </span>{" "}
                       seller
@@ -748,13 +763,13 @@ export default function CheckoutCard({
                 </div>
               </div>
               <div className="max-w-screen mx-3 my-3 max-w-full overflow-hidden whitespace-normal break-words sm:hidden">
-                <p className="break-words-all w-full text-left text-lg text-light-text dark:text-dark-text">
+                <p className="break-words-all w-full text-left text-base text-zinc-300">
                   {renderSummary()}
                 </p>
                 {productData.summary.length > SUMMARY_CHARACTER_LIMIT && (
                   <button
                     onClick={toggleExpand}
-                    className="mt-2 text-purple-500 hover:text-purple-700 dark:text-yellow-500 dark:hover:text-yellow-700"
+                    className="mt-2 text-sm font-bold text-yellow-500 hover:text-yellow-400"
                   >
                     {isExpanded ? "Show less" : "Show more"}
                   </button>
@@ -762,7 +777,7 @@ export default function CheckoutCard({
               </div>
               {!isFetchingReviews && productReviews && (
                 <div className="mt-4 max-w-full p-4 pt-4">
-                  <h3 className="mb-3 text-lg font-semibold text-light-text dark:text-dark-text">
+                  <h3 className="mb-3 text-lg font-black uppercase tracking-tighter text-white">
                     Product Reviews
                   </h3>
                   {productReviews.size > 0 ? (
@@ -771,7 +786,7 @@ export default function CheckoutCard({
                         ([reviewerPubkey, reviewData]) => (
                           <div
                             key={reviewerPubkey}
-                            className="rounded-lg border-2 border-black p-3 dark:border-white"
+                            className="rounded-xl border border-zinc-800 bg-[#161616] p-4"
                           >
                             <div className="mb-2 flex items-center gap-2">
                               <ProfileWithDropdown
@@ -794,10 +809,10 @@ export default function CheckoutCard({
                                       return (
                                         <Chip
                                           key={index}
-                                          className={`text-light-text dark:text-dark-text ${
+                                          className={`border font-bold uppercase tracking-wider text-xs ${
                                             value === "1"
-                                              ? "bg-green-500"
-                                              : "bg-red-500"
+                                              ? "bg-green-900/20 text-green-400 border-green-900"
+                                              : "bg-red-900/20 text-red-400 border-red-900"
                                           }`}
                                         >
                                           {`overall: ${
@@ -810,10 +825,10 @@ export default function CheckoutCard({
                                       return (
                                         <Chip
                                           key={index}
-                                          className={`text-light-text dark:text-dark-text ${
+                                          className={`border font-bold uppercase tracking-wider text-xs ${
                                             value === "1"
-                                              ? "bg-green-500"
-                                              : "bg-red-500"
+                                              ? "bg-green-900/20 text-green-400 border-green-900"
+                                              : "bg-red-900/20 text-red-400 border-red-900"
                                           }`}
                                         >
                                           {`${category}: ${
@@ -831,7 +846,7 @@ export default function CheckoutCard({
                                   return (
                                     <p
                                       key={index}
-                                      className="italic text-light-text dark:text-dark-text"
+                                      className="italic text-zinc-300 mt-2 text-sm"
                                     >
                                       &ldquo;{value}&rdquo;
                                     </p>
@@ -846,12 +861,12 @@ export default function CheckoutCard({
                     </div>
                   ) : (
                     <div className="flex justify-center">
-                      <div className="w-full max-w-xl rounded-lg bg-light-fg p-10 text-center shadow-lg dark:bg-dark-fg">
-                        <span className="block text-5xl text-light-text dark:text-dark-text">
+                      <div className="w-full max-w-xl rounded-2xl border border-zinc-800 bg-[#161616] p-10 text-center">
+                        <span className="block text-4xl font-black uppercase tracking-tighter text-zinc-700">
                           No reviews . . . yet!
                         </span>
                         <div className="flex flex-col items-center justify-center gap-3 pt-5 opacity-80">
-                          <span className="text-2xl text-light-text dark:text-dark-text">
+                          <span className="text-lg font-bold text-zinc-500">
                             Be the first to leave a review!
                           </span>
                         </div>

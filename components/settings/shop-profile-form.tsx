@@ -4,7 +4,6 @@ import { useForm, Controller } from "react-hook-form";
 import { Button, Textarea, Input, Image } from "@nextui-org/react";
 
 import { ShopMapContext } from "@/utils/context/context";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   SignerContext,
   NostrContext,
@@ -12,6 +11,7 @@ import {
 import { createNostrShopEvent } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 interface ShopProfileFormProps {
   isOnboarding?: boolean;
@@ -94,41 +94,41 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
 
   return (
     <>
-      <div className="mb-20 h-40 rounded-lg bg-light-fg dark:bg-dark-fg">
-        <div className="relative flex h-40 items-center justify-center rounded-lg bg-shopstr-purple-light dark:bg-dark-fg">
+      <div className="mb-16 md:mb-20 h-32 md:h-48 rounded-2xl bg-[#161616] border border-zinc-800 overflow-visible">
+        <div className="relative flex h-32 md:h-48 items-center justify-center rounded-2xl bg-[#111] overflow-hidden">
           {watchBanner && (
             <Image
               alt={"Shop banner image"}
               src={watchBanner}
-              className="h-40 w-full rounded-lg object-cover object-fill"
+              className="h-32 md:h-48 w-full rounded-2xl object-cover"
             />
           )}
           <FileUploaderButton
-            className={`absolute bottom-5 right-5 z-20 border-2 border-white bg-shopstr-purple shadow-md ${SHOPSTRBUTTONCLASSNAMES}`}
+            className={`${NEO_BTN} absolute bottom-2 right-2 md:bottom-4 md:right-4 z-20 h-8 md:h-10 px-3 md:px-4 text-[10px] md:text-xs`}
             imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
           >
             Upload Banner
           </FileUploaderButton>
         </div>
         <div className="flex items-center justify-center">
-          <div className="relative z-50 mt-[-3rem] h-24 w-24">
-            <div className="">
+          <div className="relative z-50 mt-[-2.5rem] md:mt-[-3.5rem] h-20 w-20 md:h-28 md:w-28">
+            <div className="border-4 border-[#111] rounded-full">
               <FileUploaderButton
                 isIconOnly={true}
-                className={`absolute bottom-[-0.5rem] right-[-0.5rem] z-20 ${SHOPSTRBUTTONCLASSNAMES}`}
+                className={`${NEO_BTN} absolute bottom-0 right-0 z-[60] h-8 w-8 md:h-10 md:w-10 min-w-0 rounded-full border-white p-0 shadow-lg`}
                 imgCallbackOnUpload={(imgUrl) => setValue("picture", imgUrl)}
               />
               {watchPicture ? (
                 <Image
                   src={watchPicture}
                   alt="shop logo"
-                  className="rounded-full"
+                  className="rounded-full h-18 w-18 md:h-24 md:w-24 object-cover"
                 />
               ) : (
                 <Image
                   src={defaultImage}
                   alt="shop logo"
-                  className="rounded-full"
+                  className="rounded-full h-18 w-18 md:h-24 md:w-24 object-cover"
                 />
               )}
             </div>
@@ -154,9 +154,12 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Input
-                className="pb-4 text-light-text dark:text-dark-text"
+                className="pb-6"
                 classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
+                  label: "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                  input: "text-white",
+                  inputWrapper:
+                    "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-12",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -190,9 +193,12 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
             const errorMessage: string = error?.message ? error.message : "";
             return (
               <Textarea
-                className="pb-4 text-light-text dark:text-dark-text"
+                className="pb-8"
                 classNames={{
-                  label: "text-light-text dark:text-dark-text text-lg",
+                  label: "text-zinc-400 font-bold uppercase tracking-wider text-sm",
+                  input: "text-white",
+                  inputWrapper:
+                    "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400",
                 }}
                 variant="bordered"
                 fullWidth={true}
@@ -210,7 +216,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         />
 
         <Button
-          className={`mb-10 w-full ${SHOPSTRBUTTONCLASSNAMES}`}
+          className={`${NEO_BTN} mb-10 h-14 w-full text-sm shadow-[4px_4px_0px_0px_#ffffff]`}
           type="submit"
           onKeyDown={(e) => {
             if (e.key === "Enter") {

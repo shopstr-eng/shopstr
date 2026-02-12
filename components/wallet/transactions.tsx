@@ -43,22 +43,22 @@ const Transactions = () => {
       second: "2-digit",
       hour12: true,
     };
-    return `${date.toLocaleDateString("en-US", options)}`;
+    return date.toLocaleString("en-US", options);
   };
 
   return (
-    <div className="relative mt-4 overflow-x-auto rounded-lg shadow-md">
-      <div className="max-h-[50vh]">
-        <table className="w-full min-w-[50vw] text-left text-sm text-gray-500 dark:text-gray-400">
-          <thead className="bg-gray-50 text-xs uppercase text-gray-700 dark:bg-gray-700 dark:text-gray-400">
+    <div className="relative mt-4 w-full overflow-x-auto rounded-2xl border border-white/5">
+      <div className="max-h-[50vh] w-full min-w-[320px]">
+        <table className="w-full text-left text-sm text-gray-400">
+          <thead className="bg-[#1a1a1a] text-xs font-bold uppercase tracking-widest text-gray-500">
             <tr>
-              <th scope="col" className="px-6 py-3">
+              <th scope="col" className="px-3 md:px-6 pt-5 pb-3">
                 Type
               </th>
-              <th scope="col" className="px-6 py-3">
+              <th scope="col" className="px-3 md:px-6 pt-5 pb-3">
                 Amount
               </th>
-              <th scope="col" className="px-6 py-3">
+              <th scope="col" className="px-3 md:px-6 pt-5 pb-3 text-right">
                 Date
               </th>
             </tr>
@@ -67,23 +67,29 @@ const Transactions = () => {
             {history.map((transaction: Transaction, index) => (
               <tr
                 key={index}
-                className="border-b bg-white dark:border-gray-700 dark:bg-gray-800"
+                className="border-b border-white/5 bg-transparent transition-colors hover:bg-white/5"
               >
-                <td className="flex items-center px-6 py-4">
-                  {transaction.type === 1 ? (
-                    <ArrowDownTrayIcon className="mr-2 h-5 w-5 text-green-500" />
-                  ) : transaction.type === 2 ? (
-                    <ArrowUpTrayIcon className="mr-2 h-5 w-5 text-red-500" />
-                  ) : transaction.type === 3 ? (
-                    <BanknotesIcon className="mr-2 h-5 w-5 text-green-500" />
-                  ) : transaction.type === 4 ? (
-                    <BoltIcon className="mr-2 h-5 w-5 text-red-500" />
-                  ) : transaction.type === 5 ? (
-                    <ShoppingBagIcon className="mr-2 h-5 w-5 text-shopstr-purple-light dark:text-shopstr-yellow-light" />
-                  ) : null}
+                <td className="px-3 md:px-6 py-4">
+                  <div className="flex items-center">
+                    {transaction.type === 1 ? (
+                      <ArrowDownTrayIcon className="mr-2 h-5 w-5 text-green-500" />
+                    ) : transaction.type === 2 ? (
+                      <ArrowUpTrayIcon className="mr-2 h-5 w-5 text-red-500" />
+                    ) : transaction.type === 3 ? (
+                      <BanknotesIcon className="mr-2 h-5 w-5 text-green-500" />
+                    ) : transaction.type === 4 ? (
+                      <BoltIcon className="mr-2 h-5 w-5 text-red-500" />
+                    ) : transaction.type === 5 ? (
+                      <ShoppingBagIcon className="mr-2 h-5 w-5 text-shopstr-purple-light dark:text-shopstr-yellow-light" />
+                    ) : null}
+                  </div>
                 </td>
-                <td className="px-6 py-4">{transaction.amount} sats</td>
-                <td className="px-6 py-4">{formatDate(transaction.date)}</td>
+                <td className="px-3 md:px-6 py-4 font-mono font-bold text-white whitespace-nowrap">
+                  {transaction.amount} sats
+                </td>
+                <td className="px-3 md:px-6 py-4 text-right font-mono text-[10px] md:text-xs leading-tight">
+                  {formatDate(transaction.date)}
+                </td>
               </tr>
             ))}
           </tbody>

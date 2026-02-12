@@ -75,7 +75,7 @@ const ChatMessage = ({
     );
     setProductAddress?.(productAddress as string);
     setOrderId?.(orderId as string);
-  }, [messageEvent]);
+  }, [messageEvent, setCanReview, setOrderId, setProductAddress]);
 
   const cashuMatch = messageEvent.content.match(/cashu[A-Za-z]/);
   const cashuPrefix = cashuMatch ? cashuMatch[0] : null;
@@ -115,7 +115,7 @@ const ChatMessage = ({
         return (
           <span
             key={index}
-            className="cursor-pointer text-shopstr-purple hover:underline dark:text-shopstr-yellow"
+            className="cursor-pointer font-bold underline hover:text-white/80"
             onClick={() => {
               router.replace({
                 pathname: "/orders",
@@ -145,10 +145,10 @@ const ChatMessage = ({
       }`}
     >
       <div
-        className={`flex max-w-[90%] flex-col rounded-t-large p-3 ${
+        className={`flex max-w-[85%] flex-col rounded-2xl p-4 shadow-md md:max-w-[60%] ${
           isUserMessage
-            ? "dark:from-shopstr-yellow-dark rounded-bl-lg bg-gradient-to-br from-shopstr-purple to-shopstr-purple-light text-white dark:to-shopstr-yellow-light dark:text-dark-bg"
-            : "rounded-br-lg bg-gray-300 text-light-text dark:bg-gray-700 dark:text-dark-text"
+            ? "rounded-tr-sm bg-yellow-400 text-black shadow-[2px_2px_0px_0px_rgba(255,255,255,0.2)]"
+            : "rounded-tl-sm border border-zinc-700 bg-[#27272a] text-white shadow-[2px_2px_0px_0px_#000000]"
         }`}
       >
         <p className="inline-block flex-wrap overflow-x-hidden break-all">
@@ -170,8 +170,10 @@ const ChatMessage = ({
               </div>
             </>
           ) : orderData ? (
-            <div className="flex flex-col gap-2 border-l-4 border-shopstr-purple pl-3 dark:border-shopstr-yellow">
-              <span className="text-sm font-bold uppercase opacity-70">
+            <div
+              className={`flex flex-col gap-2 border-l-4 pl-3 ${isUserMessage ? "border-black/20" : "border-yellow-400"}`}
+            >
+              <span className="text-xs font-black uppercase tracking-wider opacity-70">
                 ⚡ Zapsnag Order
               </span>
               <div className="font-semibold">{orderData.shipping.name}</div>
@@ -191,7 +193,7 @@ const ChatMessage = ({
         </p>
         <div className="m-1"></div>
         <span
-          className={`text-xs opacity-50 ${
+          className={`text-[10px] font-bold uppercase tracking-wider opacity-60 ${
             isUserMessage ? "text-right" : "text-left"
           }`}
         >

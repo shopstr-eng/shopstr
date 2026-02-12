@@ -14,15 +14,57 @@ import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs
 const SettingsPage = () => {
   const router = useRouter();
   const listBoxSectionClassnames = {
-    heading: "text-light-text dark:text-dark-text text-lg font-bold",
+    heading:
+      "text-zinc-500 text-xs font-bold uppercase tracking-wider mb-2 mt-4",
   };
   const listBoxClassnames = {
-    title: "text-light-text dark:text-dark-text",
-    base: "bg-light-fg hover:bg-light-bg hover:opacity-50 dark:bg-dark-fg my-2",
+    title: "text-white font-bold uppercase tracking-wide",
+    description: "text-zinc-500 text-xs",
+    base: "group rounded-xl border border-zinc-800 bg-[#161616] p-3 mb-3 hover:bg-[#161616] hover:border-zinc-600 transition-all cursor-pointer",
   };
-  const startIconClassnames = "h-6 w-6 text-light-text dark:text-dark-text";
+  const startIconClassnames =
+    "h-6 w-6 text-zinc-400 group-hover:text-white transition-colors";
+
+  const menuItems = [
+    {
+      key: "shop-profile",
+      description: "Edit your shop profile",
+      title: "Shop Profile",
+      icon: <BuildingStorefrontIcon className={startIconClassnames} />,
+      route: "/settings/shop-profile",
+    },
+    {
+      key: "user-profile",
+      description: "Edit your user profile",
+      title: "User Profile",
+      icon: <UserIcon className={startIconClassnames} />,
+      route: "/settings/user-profile",
+    },
+    {
+      key: "community",
+      description: "Create and manage your seller community",
+      title: "Community Management",
+      icon: <UserGroupIcon className={startIconClassnames} />,
+      route: "/settings/community",
+    },
+    {
+      key: "preferences",
+      description: "Change your mints, relays, media servers, and more",
+      title: "Preferences",
+      icon: <Cog6ToothIcon className={startIconClassnames} />,
+      route: "/settings/preferences",
+    },
+    {
+      key: "wallet",
+      description: "Connect your NIP-47 Nostr Wallet",
+      title: "Nostr Wallet Connect",
+      icon: <BanknotesIcon className={startIconClassnames} />,
+      route: "/settings/nwc",
+    },
+  ];
+
   return (
-    <div className="flex h-full flex-col bg-light-bg pt-24 dark:bg-dark-bg">
+    <div className="flex h-full min-h-screen flex-col bg-[#111] pt-24">
       <div className="bg mx-auto h-screen w-full lg:w-1/2 lg:pl-4">
         <SettingsBreadCrumbs />
         <Listbox variant="flat" aria-label="Listbox menu with sections">
@@ -31,80 +73,34 @@ const SettingsPage = () => {
             showDivider
             classNames={listBoxSectionClassnames}
           >
-            <ListboxItem
-              key="shop-profile"
-              description="Edit your shop profile"
-              classNames={listBoxClassnames}
-              startContent={
-                <BuildingStorefrontIcon className={startIconClassnames} />
-              }
-              onClick={() => {
-                router.push("/settings/shop-profile");
-              }}
-            >
-              Shop Profile
-            </ListboxItem>
-            <ListboxItem
-              key="user-profile"
-              description="Edit your user profile"
-              classNames={listBoxClassnames}
-              startContent={<UserIcon className={startIconClassnames} />}
-              onClick={() => {
-                router.push("/settings/user-profile");
-              }}
-            >
-              User Profile
-            </ListboxItem>
-            <ListboxItem
-              key="community"
-              description="Create and manage your seller community"
-              classNames={listBoxClassnames}
-              startContent={<UserGroupIcon className={startIconClassnames} />}
-              onClick={() => {
-                router.push("/settings/community");
-              }}
-            >
-              Community Management
-            </ListboxItem>
-            <ListboxItem
-              key="preferences"
-              description="Change your mints, relays, media servers, and more"
-              classNames={listBoxClassnames}
-              startContent={<Cog6ToothIcon className={startIconClassnames} />}
-              onClick={() => {
-                router.push("/settings/preferences");
-              }}
-            >
-              Preferences
-            </ListboxItem>
-            <ListboxItem
-              key="wallet"
-              description="Connect your NIP-47 Nostr Wallet"
-              classNames={listBoxClassnames}
-              startContent={<BanknotesIcon className={startIconClassnames} />}
-              onClick={() => {
-                router.push("/settings/wallet");
-              }}
-            >
-              Nostr Wallet Connect
-            </ListboxItem>
+            {menuItems.map((item) => (
+              <ListboxItem
+                key={item.key}
+                description={item.description}
+                classNames={listBoxClassnames}
+                startContent={item.icon}
+                onClick={() => router.push(item.route)}
+              >
+                {item.title}
+              </ListboxItem>
+            ))}
           </ListboxSection>
           <ListboxSection title="Log out" classNames={listBoxSectionClassnames}>
             <ListboxItem
               key="delete"
-              className="text-danger"
-              color="danger"
               description="Log out of Shopstr"
-              classNames={listBoxClassnames}
+              classNames={{
+                ...listBoxClassnames,
+                base: "group rounded-xl border border-zinc-800 bg-[#161616] p-3 mb-3 hover:bg-[#161616] hover:border-red-500/50 transition-all cursor-pointer",
+                title: "text-red-500 font-bold uppercase tracking-wide",
+              }}
               startContent={
                 <ArrowRightStartOnRectangleIcon
-                  className={"text-color-red-900 " + "h-5 w-5"}
-                  color="red"
+                  className="h-6 w-6 text-red-500"
                 />
               }
               onClick={() => {
                 LogOut();
-
                 router.push("/marketplace");
               }}
             >

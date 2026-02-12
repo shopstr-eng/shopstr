@@ -1,32 +1,38 @@
 /* eslint-disable @next/next/no-img-element */
 
-import router from "next/router";
+import { useRouter } from "next/router";
 import React, { useContext, useState, useEffect, useRef } from "react";
 import DisplayProducts from "../display-products";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { Button, useDisclosure } from "@nextui-org/react";
-import { Bars3Icon } from "@heroicons/react/24/outline";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import {
+  Bars3Icon,
+  PlusIcon,
+  PencilSquareIcon,
+  BuildingStorefrontIcon,
+} from "@heroicons/react/24/outline";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 import SignInModal from "../sign-in/SignInModal";
 import { ShopMapContext } from "@/utils/context/context";
 import { ShopProfile } from "../../utils/types/types";
-import { sanitizeUrl } from "@braintree/sanitize-url";
-import SideShopNav from "../home/side-shop-nav";
 import DiscountCodes from "./discount-codes";
 
 const MyListingsPage = () => {
   const { pubkey: usersPubkey } = useContext(SignerContext);
+  const router = useRouter();
   const { isOpen, onOpen, onClose } = useDisclosure();
 
   const [shopBannerURL, setShopBannerURL] = useState("");
   const [shopAbout, setShopAbout] = useState("");
-  const [isFetchingShop, setIsFetchingShop] = useState(false);
 
   const [selectedSection, setSelectedSection] = useState("Listings");
 
   const [selectedCategories, setSelectedCategories] = useState(
     new Set<string>([])
   );
+  const [talliedCategories, setTalliedCategories] = useState<
+    Record<string, number>
+  >({});
   const [categories, setCategories] = useState([""]);
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -49,7 +55,6 @@ const MyListingsPage = () => {
   }, []);
 
   useEffect(() => {
-    setIsFetchingShop(true);
     if (
       usersPubkey &&
       shopMapContext.shopData.has(usersPubkey) &&
@@ -62,8 +67,23 @@ const MyListingsPage = () => {
         setShopAbout(shopProfile.content.about);
       }
     }
-    setIsFetchingShop(false);
   }, [usersPubkey, shopMapContext, shopBannerURL]);
+
+  useEffect(() => {
+    if (categories) {
+      const excludedCategories = ["shopstr"];
+      const tallied = categories
+        .filter((category) => !excludedCategories.includes(category))
+        .reduce(
+          (acc, category) => {
+            acc[category] = (acc[category] || 0) + 1;
+            return acc;
+          },
+          {} as Record<string, number>
+        );
+      setTalliedCategories(tallied);
+    }
+  }, [categories]);
 
   const handleCreateNewListing = () => {
     if (usersPubkey) {
@@ -98,10 +118,10 @@ const MyListingsPage = () => {
   };
 
   const MobileMenu = () => (
-    <div className="absolute left-0 top-full z-10 mt-2 w-48 rounded-md bg-light-fg shadow-lg dark:bg-dark-fg md:hidden">
+    <div className="absolute right-0 top-full z-50 mt-2 w-48 rounded-xl border border-zinc-800 bg-[#1a1a1a] p-1 shadow-2xl md:hidden">
       <div className="py-1">
         <Button
-          className="w-full bg-transparent px-4 py-2 text-left text-sm text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+          className="w-full justify-start bg-transparent px-4 py-2 text-left text-sm font-bold uppercase tracking-wider text-zinc-400 hover:text-white"
           onClick={() => {
             setSelectedSection("Listings");
             setIsMobileMenuOpen(false);
@@ -110,7 +130,7 @@ const MyListingsPage = () => {
           Listings
         </Button>
         <Button
-          className="w-full bg-transparent px-4 py-2 text-left text-sm text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+          className="w-full justify-start bg-transparent px-4 py-2 text-left text-sm font-bold uppercase tracking-wider text-zinc-400 hover:text-white"
           onClick={() => {
             setSelectedSection("Discounts");
             setIsMobileMenuOpen(false);
@@ -119,7 +139,7 @@ const MyListingsPage = () => {
           Discounts
         </Button>
         <Button
-          className="w-full bg-transparent px-4 py-2 text-left text-sm text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+          className="w-full justify-start bg-transparent px-4 py-2 text-left text-sm font-bold uppercase tracking-wider text-zinc-400 hover:text-white"
           onClick={() => {
             setSelectedSection("About");
             setIsMobileMenuOpen(false);
@@ -128,7 +148,7 @@ const MyListingsPage = () => {
           About
         </Button>
         <Button
-          className="w-full bg-transparent px-4 py-2 text-left text-sm text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+          className="w-full justify-start bg-transparent px-4 py-2 text-left text-sm font-bold uppercase tracking-wider text-zinc-400 hover:text-white"
           onClick={() => {
             handleViewOrders();
             setIsMobileMenuOpen(false);
@@ -137,7 +157,7 @@ const MyListingsPage = () => {
           Orders
         </Button>
         <Button
-          className="w-full bg-transparent px-4 py-2 text-left text-sm text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+          className="w-full justify-start bg-transparent px-4 py-2 text-left text-sm font-bold uppercase tracking-wider text-zinc-400 hover:text-white"
           onClick={() => {
             handleManageCommunity();
             setIsMobileMenuOpen(false);
@@ -150,149 +170,129 @@ const MyListingsPage = () => {
   );
 
   return (
-    <div className="mx-auto h-full w-full">
-      <div className="flex max-w-[100%] flex-col bg-light-bg px-3 pb-2 dark:bg-dark-bg">
-        {shopBannerURL != "" && !isFetchingShop ? (
-          <>
-            <div className="flex h-auto w-full items-center justify-center bg-light-bg bg-cover bg-center dark:bg-dark-bg">
-              <img
-                src={sanitizeUrl(shopBannerURL)}
-                alt="Shop Banner"
-                className="max-h-[210px] w-full items-center justify-center object-cover"
-              />
-            </div>
-            <div className="mt-3 flex items-center justify-between font-bold text-light-text dark:text-dark-text">
-              <div className="flex items-center gap-2">
-                <div className="relative md:hidden" ref={menuRef}>
-                  <Button
-                    className="bg-transparent p-1"
-                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                  >
-                    <Bars3Icon className="h-6 w-6 text-light-text dark:text-dark-text" />
-                  </Button>
-                  {isMobileMenuOpen && <MobileMenu />}
-                </div>
-                <div className="hidden gap-2 md:flex">
-                  <Button
-                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                    onClick={() => setSelectedSection("Listings")}
-                  >
-                    Listings
-                  </Button>
-                  <Button
-                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                    onClick={() => setSelectedSection("Discounts")}
-                  >
-                    Discounts
-                  </Button>
-                  <Button
-                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                    onClick={() => setSelectedSection("About")}
-                  >
-                    About
-                  </Button>
-                  <Button
-                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                    onClick={() => handleViewOrders()}
-                  >
-                    Orders
-                  </Button>
-                  <Button
-                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                    onClick={() => handleManageCommunity()}
-                  >
-                    Community
-                  </Button>
-                </div>
-              </div>
-              <div className="flex gap-2 md:hidden">
-                <Button
-                  className={`${SHOPSTRBUTTONCLASSNAMES}`}
-                  onClick={() => handleCreateNewListing()}
+    <div className="mx-auto flex h-full min-h-screen w-full flex-col bg-light-bg dark:bg-dark-bg md:flex-row">
+      {/* Mobile Header */}
+      <div className="flex items-center justify-between border-b border-zinc-800 bg-[#161616] p-4 md:hidden">
+        <h2 className="text-lg font-bold uppercase tracking-wider text-white">
+          {selectedSection}
+        </h2>
+        <div className="relative" ref={menuRef}>
+          <Button
+            isIconOnly
+            variant="light"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          >
+            <Bars3Icon className="h-6 w-6 text-white" />
+          </Button>
+          {isMobileMenuOpen && <MobileMenu />}
+        </div>
+      </div>
+
+      {/* Left Sidebar */}
+      <div className="hidden w-64 flex-col gap-6 border-r border-zinc-800 p-8 md:flex">
+        <div className="flex flex-col gap-4">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+            Manage
+          </h3>
+          <button
+            onClick={() => setSelectedSection("Listings")}
+            className={`text-left text-sm font-bold uppercase tracking-wide ${
+              selectedSection === "Listings"
+                ? "text-shopstr-yellow"
+                : "text-zinc-400 hover:text-white"
+            }`}
+          >
+            Listings
+          </button>
+          <button
+            onClick={() => setSelectedSection("About")}
+            className={`text-left text-sm font-bold uppercase tracking-wide ${
+              selectedSection === "About"
+                ? "text-shopstr-yellow"
+                : "text-zinc-400 hover:text-white"
+            }`}
+          >
+            About
+          </button>
+          <button
+            onClick={handleViewOrders}
+            className={`text-left text-sm font-bold uppercase tracking-wide ${
+              selectedSection === "Orders"
+                ? "text-shopstr-yellow"
+                : "text-zinc-400 hover:text-white"
+            }`}
+          >
+            Orders
+          </button>
+          <button
+            onClick={handleManageCommunity}
+            className={`text-left text-sm font-bold uppercase tracking-wide ${
+              selectedSection === "Community"
+                ? "text-shopstr-yellow"
+                : "text-zinc-400 hover:text-white"
+            }`}
+          >
+            Community
+          </button>
+          <button
+            onClick={() => setSelectedSection("Discounts")}
+            className={`text-left text-sm font-bold uppercase tracking-wide ${
+              selectedSection === "Discounts"
+                ? "text-shopstr-yellow"
+                : "text-zinc-400 hover:text-white"
+            }`}
+          >
+            Discounts
+          </button>
+
+          {/* Category Filters (Restored) */}
+          {selectedSection === "Listings" &&
+            Object.keys(talliedCategories).length > 0 && (
+              <>
+                <div className="my-2 h-px bg-zinc-800" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+                  Filter Categories
+                </h3>
+                <button
+                  onClick={() => setSelectedCategories(new Set([]))}
+                  className="text-left text-sm font-bold uppercase tracking-wide text-zinc-400 hover:text-white"
                 >
-                  Add Listing
-                </Button>
-                <Button
-                  className={`${SHOPSTRBUTTONCLASSNAMES}`}
-                  onClick={() => handleEditShop()}
-                >
-                  Edit Shop
-                </Button>
-              </div>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="mt-3 flex items-center justify-between font-bold text-light-text dark:text-dark-text">
-              <div className="flex items-center gap-2">
-                <div className="relative md:hidden" ref={menuRef}>
-                  <Button
-                    className="bg-transparent p-1"
-                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                  All Listings
+                </button>
+                {Object.entries(talliedCategories).map(([category, count]) => (
+                  <button
+                    key={category}
+                    onClick={() => setSelectedCategories(new Set([category]))}
+                    className="text-left text-sm font-medium text-zinc-400 hover:text-white"
                   >
-                    <Bars3Icon className="h-6 w-6 text-light-text dark:text-dark-text" />
-                  </Button>
-                  {isMobileMenuOpen && <MobileMenu />}
-                </div>
-                <div className="hidden gap-2 md:flex">
-                  <Button
-                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                    onClick={() => setSelectedSection("Listings")}
-                  >
-                    Listings
-                  </Button>
-                  <Button
-                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                    onClick={() => setSelectedSection("Discounts")}
-                  >
-                    Discounts
-                  </Button>
-                  <Button
-                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                    onClick={() => setSelectedSection("About")}
-                  >
-                    About
-                  </Button>
-                  <Button
-                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                    onClick={() => handleViewOrders()}
-                  >
-                    Orders
-                  </Button>
-                  <Button
-                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
-                    onClick={() => handleManageCommunity()}
-                  >
-                    Community
-                  </Button>
-                </div>
-              </div>
-              <div className="flex gap-2 md:hidden">
-                <Button
-                  className={`${SHOPSTRBUTTONCLASSNAMES}`}
-                  onClick={() => handleCreateNewListing()}
-                >
-                  Add Listing
-                </Button>
-                <Button
-                  className={`${SHOPSTRBUTTONCLASSNAMES}`}
-                  onClick={() => handleEditShop()}
-                >
-                  Edit Shop
-                </Button>
-              </div>
-            </div>
-          </>
-        )}
-        <div className="flex">
-          {usersPubkey && (
-            <SideShopNav
-              focusedPubkey={usersPubkey}
-              categories={categories}
-              setSelectedCategories={setSelectedCategories}
-              isEditingShop={true}
-            />
-          )}
+                    {category} <span className="text-zinc-600">({count})</span>
+                  </button>
+                ))}
+              </>
+            )}
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <Button
+            className={`${NEO_BTN} h-10 w-full text-xs`}
+            startContent={<PlusIcon className="h-4 w-4" />}
+            onClick={handleCreateNewListing}
+          >
+            Add Listing
+          </Button>
+          <Button
+            className="h-10 w-full rounded-xl border border-zinc-700 bg-zinc-800/50 text-xs font-bold uppercase tracking-wider text-zinc-300 hover:bg-zinc-800 hover:text-white"
+            startContent={<PencilSquareIcon className="h-4 w-4" />}
+            onClick={handleEditShop}
+          >
+            Edit Shop
+          </Button>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 p-4 md:p-8">
+        <div className="mx-auto max-w-7xl">
           {usersPubkey && selectedSection === "Listings" && (
             <DisplayProducts
               focusedPubkey={usersPubkey}
@@ -310,16 +310,19 @@ const MyListingsPage = () => {
             </div>
           )}
           {selectedSection === "About" && !shopAbout && (
-            <div className="mt-20 flex flex-grow items-center justify-center py-10">
-              <div className="w-full max-w-lg rounded-lg bg-light-fg p-8 text-center shadow-lg dark:bg-dark-fg">
-                <p className="text-3xl font-semibold text-light-text dark:text-dark-text">
-                  Nothing here . . . yet!
-                </p>
-                <p className="mt-4 text-lg text-light-text dark:text-dark-text">
-                  Set up your shop in settings!
+            <div className="mt-12 flex w-full flex-col items-center justify-center">
+              <div className="mx-auto w-full max-w-md rounded-3xl border border-white/10 bg-[#18181b] p-8 text-center shadow-2xl md:p-16">
+                <div className="mx-auto mb-6 flex h-24 w-24 items-center justify-center rounded-3xl bg-zinc-900">
+                  <BuildingStorefrontIcon className="h-10 w-10 text-zinc-600" />
+                </div>
+                <h2 className="mb-2 text-2xl font-black uppercase text-white">
+                  Nothing here... yet!
+                </h2>
+                <p className="mb-8 text-sm font-medium text-zinc-500">
+                  Set up your shop description in settings.
                 </p>
                 <Button
-                  className={`${SHOPSTRBUTTONCLASSNAMES} mt-6`}
+                  className={`${NEO_BTN} h-12 px-8 text-sm`}
                   onClick={() => handleEditShop()}
                 >
                   Go to Settings

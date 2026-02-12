@@ -17,7 +17,7 @@ const ShopstrSwitch = ({
   };
 
   return (
-    <div className="flex items-center p-2">
+    <div className="flex items-center gap-3">
       <Switch
         size={"lg"}
         color={theme === "dark" ? "warning" : "secondary"}
@@ -25,13 +25,11 @@ const ShopstrSwitch = ({
           setWotFilter(!wotFilter);
         }}
       />
-      <span>
-        <p
-          className="text-light-text hover:underline dark:text-dark-text"
-          onClick={handleTrustClick}
-        >
-          Trust
-        </p>
+      <span
+        className="cursor-pointer text-xs font-bold uppercase tracking-wider text-zinc-500 transition-colors hover:text-zinc-300"
+        onClick={handleTrustClick}
+      >
+        Trust
       </span>
     </div>
   );

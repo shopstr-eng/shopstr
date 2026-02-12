@@ -5,12 +5,12 @@ import {
   ProfileMapContext,
 } from "../utils/context/context";
 import { useForm } from "react-hook-form";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 import {
   Button,
   Card,
   CardHeader,
   CardBody,
-  Divider,
   Image,
   useDisclosure,
   Select,
@@ -47,7 +47,6 @@ import { nip19 } from "nostr-tools";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { webln } from "@getalby/sdk";
 import { formatWithCommas } from "./utility-components/display-monetary-info";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import SignInModal from "./sign-in/SignInModal";
 import FailureModal from "@/components/utility-components/failure-modal";
 import CountryDropdown from "./utility-components/dropdowns/country-dropdown";
@@ -1824,6 +1823,7 @@ export default function CartInvoiceCard({
                 fieldState: { error },
               }) => (
                 <Input
+                  classNames={{ input: "text-base" }}
                   variant="bordered"
                   fullWidth={true}
                   label={
@@ -1856,6 +1856,7 @@ export default function CartInvoiceCard({
                 fieldState: { error },
               }) => (
                 <Input
+                  classNames={{ input: "text-base" }}
                   variant="bordered"
                   fullWidth={true}
                   label={
@@ -1887,6 +1888,7 @@ export default function CartInvoiceCard({
                 fieldState: { error },
               }) => (
                 <Input
+                  classNames={{ input: "text-base" }}
                   variant="bordered"
                   fullWidth={true}
                   label="Apt, suite, unit, etc."
@@ -1915,6 +1917,7 @@ export default function CartInvoiceCard({
                 fieldState: { error },
               }) => (
                 <Input
+                  classNames={{ input: "text-base" }}
                   variant="bordered"
                   fullWidth={true}
                   label={
@@ -1941,6 +1944,7 @@ export default function CartInvoiceCard({
                 fieldState: { error },
               }) => (
                 <Input
+                  classNames={{ input: "text-base" }}
                   variant="bordered"
                   fullWidth={true}
                   label={
@@ -1973,6 +1977,7 @@ export default function CartInvoiceCard({
                 fieldState: { error },
               }) => (
                 <Input
+                  classNames={{ input: "text-base" }}
                   variant="bordered"
                   fullWidth={true}
                   label={
@@ -1999,6 +2004,7 @@ export default function CartInvoiceCard({
                 fieldState: { error },
               }) => (
                 <CountryDropdown
+                  classNames={{ input: "text-base" }}
                   variant="bordered"
                   aria-label="Select Country"
                   label={
@@ -2102,12 +2108,12 @@ export default function CartInvoiceCard({
 
   if (showInvoiceCard) {
     return (
-      <div className="flex min-h-screen w-full bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text">
+      <div className="flex min-h-screen w-full bg-[#111] text-white">
         <div className="mx-auto flex w-full flex-col lg:flex-row">
           {/* Order Summary - Full width on mobile, half on desktop */}
-          <div className="w-full bg-gray-50 p-6 dark:bg-gray-800 lg:w-1/2">
+          <div className="w-full border-b lg:border-b-0 lg:border-r border-zinc-800 bg-[#161616] p-6 lg:w-1/2">
             <div className="sticky top-6">
-              <h2 className="mb-6 text-2xl font-bold">Order Summary</h2>
+              <h2 className="mb-6 text-2xl font-black uppercase tracking-tighter text-white">Order Summary</h2>
 
               <div className="mb-6 space-y-4">
                 {products.map((product) => (
@@ -2115,7 +2121,7 @@ export default function CartInvoiceCard({
                     <Image
                       src={product.images[0]}
                       alt={product.title}
-                      className="h-16 w-16 rounded-lg object-cover"
+                      className="h-16 w-16 rounded-lg border border-zinc-700 object-cover"
                     />
                     <div className="flex-1">
                       <h3 className="font-medium">{product.title}</h3>
@@ -2129,7 +2135,7 @@ export default function CartInvoiceCard({
                           Volume: {product.selectedVolume}
                         </p>
                       )}
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                      <p className="text-sm font-medium text-zinc-400">
                         Quantity: {quantities[product.id] || 1}
                       </p>
                     </div>
@@ -2137,9 +2143,9 @@ export default function CartInvoiceCard({
                 ))}
               </div>
 
-              <div className="border-t pt-4">
+              <div className="border-t border-zinc-700 pt-4">
                 <div className="space-y-3">
-                  <h4 className="font-semibold text-gray-700 dark:text-gray-300">
+                  <h4 className="font-bold uppercase tracking-wider text-zinc-400">
                     Cost Breakdown
                   </h4>
                   <div className="space-y-3">
@@ -2157,7 +2163,7 @@ export default function CartInvoiceCard({
                       return (
                         <div
                           key={product.id}
-                          className="space-y-2 border-l-2 border-gray-200 pl-3 dark:border-gray-600"
+                          className="space-y-2 border-l-2 border-zinc-700 pl-3"
                         >
                           <div className="text-sm font-medium">
                             {product.title}{" "}
@@ -2177,7 +2183,7 @@ export default function CartInvoiceCard({
                           </div>
                           {discount > 0 && (
                             <>
-                              <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
+                              <div className="flex justify-between text-sm font-bold text-green-400">
                                 <span className="ml-2">
                                   {(discountCodes &&
                                     discountCodes[product.pubkey]) ||
@@ -2194,7 +2200,7 @@ export default function CartInvoiceCard({
                                   )}
                                 </span>
                               </div>
-                              <div className="flex justify-between text-sm font-medium">
+                              <div className="flex justify-between text-sm font-bold text-white">
                                 <span className="ml-2">Discounted price:</span>
                                 <span>
                                   {formatWithCommas(
@@ -2206,7 +2212,7 @@ export default function CartInvoiceCard({
                             </>
                           )}
                           {product.shippingCost! > 0 && (
-                            <div className="flex justify-between text-sm">
+                            <div className="flex justify-between text-sm text-zinc-300">
                               <span className="ml-2">Shipping cost:</span>
                               <span>
                                 {formatWithCommas(
@@ -2220,7 +2226,7 @@ export default function CartInvoiceCard({
                       );
                     })}
                   </div>
-                  <div className="flex justify-between border-t pt-2 font-semibold">
+                  <div className="flex justify-between border-t border-zinc-700 pt-2 text-lg font-black uppercase text-yellow-400">
                     <span>Total:</span>
                     <span>{formatWithCommas(totalCost, "sats")}</span>
                   </div>
@@ -2229,7 +2235,7 @@ export default function CartInvoiceCard({
 
               <button
                 onClick={() => onBackToCart?.()}
-                className="mt-4 text-shopstr-purple underline hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light"
+                className="mt-4 text-sm font-bold uppercase tracking-wider text-zinc-500 hover:text-white"
               >
                 ← Back to cart
               </button>
@@ -2237,31 +2243,30 @@ export default function CartInvoiceCard({
           </div>
 
           {/* Divider */}
-          <div className="h-px w-full bg-gray-300 dark:bg-gray-600 lg:h-full lg:w-px"></div>
+          <div className="hidden"></div>
 
           {/* Right Side - Lightning Invoice - maintain consistent width */}
-          <div className="w-full p-6 lg:w-1/2">
-            <Card className="w-full">
-              <CardHeader className="flex justify-center gap-3">
-                <span className="text-xl font-bold">Lightning Invoice</span>
+          <div className="w-full bg-[#111] p-6 lg:w-1/2">
+            <Card className="w-full border border-zinc-800 bg-[#161616]">
+              <CardHeader className="flex justify-center border-b border-zinc-800 pb-4">
+                <span className="text-xl font-black uppercase tracking-tighter text-white">Lightning Invoice</span>
               </CardHeader>
-              <Divider />
               <CardBody className="flex flex-col items-center">
                 {!paymentConfirmed ? (
                   <div className="flex flex-col items-center justify-center">
                     {qrCodeUrl ? (
                       <>
-                        <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900 text-light-text dark:text-dark-text">
+                        <h3 className="mt-3 mb-4 text-center text-lg font-bold text-white">
                           Don&apos;t refresh or close the page until the payment
                           has been confirmed!
                         </h3>
                         <Image
                           alt="Lightning invoice"
-                          className="object-cover"
+                          className="rounded-xl bg-white p-2 object-cover"
                           src={qrCodeUrl}
                         />
                         <div className="flex items-center justify-center">
-                          <p className="text-center">
+                          <p className="mt-4 text-center font-mono text-zinc-400">
                             {invoice.length > 30
                               ? `${invoice.substring(
                                   0,
@@ -2274,12 +2279,12 @@ export default function CartInvoiceCard({
                           </p>
                           <ClipboardIcon
                             onClick={handleCopyInvoice}
-                            className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
+                            className={`ml-2 mt-4 h-5 w-5 cursor-pointer text-zinc-400 hover:text-white ${
                               copiedToClipboard ? "hidden" : ""
                             }`}
                           />
                           <CheckIcon
-                            className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
+                            className={`ml-2 mt-4 h-5 w-5 text-green-500 ${
                               copiedToClipboard ? "" : "hidden"
                             }`}
                           />
@@ -2287,13 +2292,13 @@ export default function CartInvoiceCard({
                       </>
                     ) : (
                       <div>
-                        <p>Waiting for lightning invoice...</p>
+                        <p className="animate-pulse text-zinc-500">Waiting for lightning invoice...</p>
                       </div>
                     )}
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center">
-                    <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
+                    <h3 className="mt-3 text-center text-lg font-bold text-white">
                       Payment confirmed!
                     </h3>
                     <Image
@@ -2313,12 +2318,12 @@ export default function CartInvoiceCard({
   }
 
   return (
-    <div className="flex min-h-screen w-full bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text">
+    <div className="flex min-h-screen w-full bg-[#111] text-white">
       <div className="mx-auto flex w-full flex-col lg:flex-row">
         {/* Order Summary - Full width on mobile, half on desktop */}
-        <div className="w-full bg-gray-50 p-6 dark:bg-gray-800 lg:w-1/2">
+        <div className="w-full border-b lg:border-b-0 lg:border-r border-zinc-800 bg-[#161616] p-6 lg:w-1/2">
           <div className="sticky top-6">
-            <h2 className="mb-6 text-2xl font-bold">Order Summary</h2>
+            <h2 className="mb-6 text-2xl font-black uppercase tracking-tighter text-white">Order Summary</h2>
 
             <div className="mb-6 space-y-4">
               {products.map((product) => (
@@ -2326,21 +2331,21 @@ export default function CartInvoiceCard({
                   <Image
                     src={product.images[0]}
                     alt={product.title}
-                    className="h-16 w-16 rounded-lg object-cover"
+                    className="h-16 w-16 rounded-lg border border-zinc-700 object-cover"
                   />
                   <div className="flex-1">
-                    <h3 className="font-medium">{product.title}</h3>
+                    <h3 className="font-bold text-white">{product.title}</h3>
                     {product.selectedSize && (
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                      <p className="text-sm font-medium text-zinc-400">
                         Size: {product.selectedSize}
                       </p>
                     )}
                     {product.selectedVolume && (
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                      <p className="text-sm font-medium text-zinc-400">
                         Volume: {product.selectedVolume}
                       </p>
                     )}
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                    <p className="text-sm font-medium text-zinc-400">
                       Quantity: {quantities[product.id] || 1}
                     </p>
                   </div>
@@ -2348,9 +2353,9 @@ export default function CartInvoiceCard({
               ))}
             </div>
 
-            <div className="border-t pt-4">
+            <div className="border-t border-zinc-700 pt-4">
               <div className="space-y-3">
-                <h4 className="font-semibold text-gray-700 dark:text-gray-300">
+                <h4 className="font-bold uppercase tracking-wider text-zinc-400">
                   Cost Breakdown
                 </h4>
                 <div className="space-y-3">
@@ -2380,15 +2385,15 @@ export default function CartInvoiceCard({
                     return (
                       <div
                         key={product.id}
-                        className="space-y-2 border-l-2 border-gray-200 pl-3 dark:border-gray-600"
+                        className="space-y-2 border-l-2 border-zinc-700 pl-3"
                       >
-                        <div className="text-sm font-medium">
+                        <div className="text-sm font-bold text-white">
                           {product.title}{" "}
                           {quantities[product.id] &&
                             quantities[product.id]! > 1 &&
                             `(x${quantities[product.id]})`}
                         </div>
-                        <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
+                        <div className="flex justify-between text-sm text-zinc-400">
                           <span className="ml-2">Original price:</span>
                           <span>
                             {formatWithCommas(originalPrice, product.currency)}
@@ -2401,11 +2406,11 @@ export default function CartInvoiceCard({
                                 Base cost ({quantities[product.id]}x):
                               </span>
                               <span
-                                className={
+                                className={`text-zinc-300 ${
                                   discount > 0
-                                    ? "text-gray-500 line-through"
+                                    ? "text-zinc-500 line-through"
                                     : ""
-                                }
+                                }`}
                               >
                                 {formatWithCommas(basePrice, product.currency)}
                               </span>
@@ -2413,7 +2418,7 @@ export default function CartInvoiceCard({
                           )}
                         {discount > 0 && (
                           <>
-                            <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
+                            <div className="flex justify-between text-sm font-bold text-green-400">
                               <span className="ml-2">
                                 {(discountCodes &&
                                   discountCodes[product.pubkey]) ||
@@ -2430,7 +2435,7 @@ export default function CartInvoiceCard({
                                 )}
                               </span>
                             </div>
-                            <div className="flex justify-between text-sm font-medium">
+                            <div className="flex justify-between text-sm font-bold text-white">
                               <span className="ml-2">Discounted price:</span>
                               <span>
                                 {formatWithCommas(
@@ -2442,7 +2447,7 @@ export default function CartInvoiceCard({
                           </>
                         )}
                         {shouldShowShipping && product.shippingCost! > 0 && (
-                          <div className="flex justify-between text-sm">
+                          <div className="flex justify-between text-sm text-zinc-300">
                             <span className="ml-2">Shipping cost:</span>
                             <span>
                               {formatWithCommas(
@@ -2457,7 +2462,7 @@ export default function CartInvoiceCard({
                     );
                   })}
                 </div>
-                <div className="flex justify-between border-t pt-2 font-semibold">
+                <div className="flex justify-between border-t border-zinc-700 pt-2 text-lg font-black uppercase text-yellow-400">
                   <span>Total:</span>
                   <span>{formatWithCommas(totalCost, "sats")}</span>
                 </div>
@@ -2466,7 +2471,7 @@ export default function CartInvoiceCard({
 
             <button
               onClick={() => onBackToCart?.()}
-              className="mt-4 text-shopstr-purple underline hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light"
+              className="mt-4 text-sm font-bold uppercase tracking-wider text-zinc-500 hover:text-white"
             >
               ← Back to cart
             </button>
@@ -2474,14 +2479,14 @@ export default function CartInvoiceCard({
         </div>
 
         {/* Divider */}
-        <div className="h-px w-full bg-gray-300 dark:bg-gray-600 lg:h-full lg:w-px"></div>
+        <div className="hidden"></div>
 
         {/* Right Side - Order Type Selection, Forms, and Payment */}
-        <div className="w-full p-6 lg:w-1/2">
+        <div className="w-full bg-[#111] p-6 lg:w-1/2">
           {/* Order Type Selection */}
           {showOrderTypeSelection && (
             <>
-              <h2 className="mb-6 text-2xl font-bold">Select Order Type</h2>
+              <h2 className="mb-6 text-2xl font-black uppercase tracking-tighter text-white">Select Order Type</h2>
               <div className="space-y-4">
                 {/* Check if we have mixed shipping types or all products are Free/Pickup */}
                 {uniqueShippingTypes.length > 1 ? (
@@ -2489,10 +2494,10 @@ export default function CartInvoiceCard({
                     {/* Mixed shipping types - only show combined */}
                     <button
                       onClick={() => handleOrderTypeSelection("combined")}
-                      className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
+                      className="w-full rounded-xl border border-zinc-800 bg-[#161616] p-4 text-left transition-colors hover:border-yellow-400 hover:bg-zinc-900"
                     >
-                      <div className="font-medium">Mixed delivery</div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                      <div className="font-bold uppercase tracking-wide text-white">Mixed delivery</div>
+                      <div className="text-sm font-medium text-zinc-500">
                         {hasFreePickupProducts
                           ? "Products require different delivery methods (includes flexible shipping/pickup options)"
                           : "Products require different delivery methods"}
@@ -2505,19 +2510,19 @@ export default function CartInvoiceCard({
                     {/* All products have Free/Pickup - show shipping and contact options */}
                     <button
                       onClick={() => handleOrderTypeSelection("shipping")}
-                      className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
+                      className="w-full rounded-xl border border-zinc-800 bg-[#161616] p-4 text-left transition-colors hover:border-yellow-400 hover:bg-zinc-900"
                     >
-                      <div className="font-medium">Free shipping</div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                      <div className="font-bold uppercase tracking-wide text-white">Free shipping</div>
+                      <div className="text-sm font-medium text-zinc-500">
                         Get products shipped to your address
                       </div>
                     </button>
                     <button
                       onClick={() => handleOrderTypeSelection("contact")}
-                      className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
+                      className="w-full rounded-xl border border-zinc-800 bg-[#161616] p-4 text-left transition-colors hover:border-yellow-400 hover:bg-zinc-900"
                     >
-                      <div className="font-medium">Pickup</div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                      <div className="font-bold uppercase tracking-wide text-white">Pickup</div>
+                      <div className="text-sm font-medium text-zinc-500">
                         Arrange pickup with seller
                       </div>
                     </button>
@@ -2526,22 +2531,22 @@ export default function CartInvoiceCard({
                   uniqueShippingTypes.includes("Added Cost") ? (
                   <button
                     onClick={() => handleOrderTypeSelection("shipping")}
-                    className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
+                    className="w-full rounded-xl border border-zinc-800 bg-[#161616] p-4 text-left transition-colors hover:border-yellow-400 hover:bg-zinc-900"
                   >
-                    <div className="font-medium">
+                    <div className="font-bold uppercase tracking-wide text-white">
                       Online order with shipping
                     </div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                    <div className="text-sm font-medium text-zinc-500">
                       Get products shipped to your address
                     </div>
                   </button>
                 ) : (
                   <button
                     onClick={() => handleOrderTypeSelection("contact")}
-                    className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
+                    className="w-full rounded-xl border border-zinc-800 bg-[#161616] p-4 text-left transition-colors hover:border-yellow-400 hover:bg-zinc-900"
                   >
-                    <div className="font-medium">Online order</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                    <div className="font-bold uppercase tracking-wide text-white">Online order</div>
+                    <div className="text-sm font-medium text-zinc-500">
                       Digital or pickup delivery
                     </div>
                   </button>
@@ -2553,10 +2558,10 @@ export default function CartInvoiceCard({
           {/* Free/Pickup Preference Selection */}
           {showFreePickupSelection && (
             <>
-              <h2 className="mb-6 text-2xl font-bold">
+              <h2 className="mb-6 text-2xl font-black uppercase tracking-tighter text-white">
                 Free/Pickup Products Preference
               </h2>
-              <p className="mb-4 text-gray-600 dark:text-gray-400">
+              <p className="mb-4 text-zinc-400">
                 Some products offer both free shipping and pickup options. How
                 would you like to handle these products?
               </p>
@@ -2581,14 +2586,14 @@ export default function CartInvoiceCard({
                     });
                     setTotalCost(subtotalCost + shippingTotal);
                   }}
-                  className={`w-full rounded-lg border p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-600 ${
+                  className={`w-full rounded-xl border p-4 text-left transition-colors hover:bg-zinc-900 ${
                     freePickupPreference === "shipping"
-                      ? "border-shopstr-purple bg-purple-50 dark:border-shopstr-yellow dark:bg-yellow-50"
-                      : "border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700"
+                      ? "border-yellow-400 bg-yellow-400/5"
+                      : "border-zinc-800 bg-[#161616]"
                   }`}
                 >
-                  <div className="font-medium">Free shipping</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                  <div className="font-bold uppercase tracking-wide text-white">Free shipping</div>
+                  <div className="text-sm font-medium text-zinc-500">
                     Use free shipping for products that offer it
                   </div>
                 </button>
@@ -2611,14 +2616,14 @@ export default function CartInvoiceCard({
                     });
                     setTotalCost(subtotalCost + shippingTotal);
                   }}
-                  className={`w-full rounded-lg border p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-600 ${
+                  className={`w-full rounded-xl border p-4 text-left transition-colors hover:bg-zinc-900 ${
                     freePickupPreference === "contact"
-                      ? "border-shopstr-purple bg-purple-50 dark:border-shopstr-yellow dark:bg-yellow-50"
-                      : "border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700"
+                      ? "border-yellow-400 bg-yellow-400/5"
+                      : "border-zinc-800 bg-[#161616]"
                   }`}
                 >
-                  <div className="font-medium">Pickup</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                  <div className="font-bold uppercase tracking-wide text-white">Pickup</div>
+                  <div className="text-sm font-medium text-zinc-500">
                     Arrange pickup for products that offer it
                   </div>
                 </button>
@@ -2628,15 +2633,22 @@ export default function CartInvoiceCard({
               {productsWithPickupLocations.length > 0 &&
                 freePickupPreference === "contact" && (
                   <div className="space-y-6">
-                    <h3 className="text-lg font-semibold">
+                    <h3 className="text-lg font-bold uppercase text-zinc-400">
                       Select Pickup Locations
                     </h3>
                     {productsWithPickupLocations.map((product) => (
                       <div key={product.id} className="space-y-2">
-                        <h4 className="font-medium">{product.title}</h4>
+                        <h4 className="font-bold text-white">{product.title}</h4>
                         <Select
                           variant="bordered"
-                          label="Select pickup location"
+                          label="PICKUP LOCATION"
+                          labelPlacement="outside"
+                          classNames={{
+                            label: "text-zinc-500 font-bold uppercase tracking-wider text-xs",
+                            trigger: "bg-[#161616] border-zinc-700 data-[hover=true]:border-zinc-500 data-[focus=true]:border-yellow-400 rounded-xl min-h-[56px]",
+                            value: "text-white font-bold text-base",
+                            popoverContent: "bg-[#161616] border border-zinc-800 rounded-xl p-1",
+                          }}
                           placeholder="Choose a pickup location"
                           value={selectedPickupLocations[product.id] || ""}
                           onChange={(e) => {
@@ -2647,7 +2659,7 @@ export default function CartInvoiceCard({
                           }}
                         >
                           {(product.pickupLocations || []).map((location) => (
-                            <SelectItem key={location} value={location}>
+                            <SelectItem key={location} value={location} className="text-zinc-300 data-[hover=true]:bg-zinc-800 data-[hover=true]:text-white rounded-lg">
                               {location}
                             </SelectItem>
                           ))}
@@ -2663,15 +2675,15 @@ export default function CartInvoiceCard({
           {formType && !showFreePickupSelection && (
             <>
               {formType === "shipping" && (
-                <h2 className="mb-6 text-2xl font-bold">
+                <h2 className="mb-6 text-2xl font-black uppercase tracking-tighter text-white">
                   Shipping Information
                 </h2>
               )}
               {formType === "contact" && (
-                <h2 className="mb-6 text-2xl font-bold">Payment Method</h2>
+                <h2 className="mb-6 text-2xl font-black uppercase tracking-tighter text-white">Payment Method</h2>
               )}
               {formType === "combined" && (
-                <h2 className="mb-6 text-2xl font-bold">
+                <h2 className="mb-6 text-2xl font-black uppercase tracking-tighter text-white">
                   Shipping Information
                 </h2>
               )}
@@ -2684,19 +2696,17 @@ export default function CartInvoiceCard({
 
                 <div
                   className={`space-y-4 ${
-                    formType !== "contact" ? "border-t pt-6" : ""
+                    formType !== "contact" ? "border-t border-zinc-800 pt-6" : ""
                   }`}
                 >
                   {formType !== "contact" && (
-                    <h3 className="mb-4 text-lg font-semibold">
+                    <h3 className="mb-4 text-lg font-black uppercase tracking-wide text-white">
                       Payment Method
                     </h3>
                   )}
 
                   <Button
-                    className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
-                      !isFormValid ? "cursor-not-allowed opacity-50" : ""
-                    }`}
+                    className={`${NEO_BTN} h-14 w-full text-sm font-black tracking-widest ${!isFormValid ? "cursor-not-allowed opacity-50" : ""}`}
                     disabled={!isFormValid}
                     onClick={() => {
                       if (!isLoggedIn) {
@@ -2714,9 +2724,7 @@ export default function CartInvoiceCard({
 
                   {hasTokensAvailable && (
                     <Button
-                      className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
-                        !isFormValid ? "cursor-not-allowed opacity-50" : ""
-                      }`}
+                      className={`${NEO_BTN} h-14 w-full text-sm font-black tracking-widest ${!isFormValid ? "cursor-not-allowed opacity-50" : ""}`}
                       disabled={!isFormValid}
                       onClick={() => {
                         if (!isLoggedIn) {
@@ -2736,9 +2744,7 @@ export default function CartInvoiceCard({
                   {/* NWC Button */}
                   {nwcInfo && (
                     <Button
-                      className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
-                        !isFormValid ? "cursor-not-allowed opacity-50" : ""
-                      }`}
+                      className={`${NEO_BTN} h-14 w-full text-sm font-black tracking-widest ${!isFormValid ? "cursor-not-allowed opacity-50" : ""}`}
                       disabled={!isFormValid || isNwcLoading}
                       isLoading={isNwcLoading}
                       onClick={() => {
@@ -2759,7 +2765,7 @@ export default function CartInvoiceCard({
           )}
           {orderConfirmed && (
             <div className="flex flex-col items-center justify-center">
-              <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
+              <h3 className="mt-3 text-center text-lg font-bold text-white">
                 Order confirmed!
               </h3>
               <Image

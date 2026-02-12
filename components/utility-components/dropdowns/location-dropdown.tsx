@@ -25,7 +25,7 @@ export const locationAvatar = (location: string) => {
 const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
   const locationOptions = useMemo(() => {
     const headingClasses =
-      "flex w-full sticky top-1 z-20 py-1.5 px-2 dark:bg-dark-bg bg-light-bg shadow-small rounded-small";
+      "flex w-full sticky top-1 z-20 py-1.5 px-2 dark:bg-zinc-900 bg-white shadow-small rounded-small";
 
     const countryOptions = (
       <SelectSection
@@ -40,9 +40,6 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
           return (
             <SelectItem
               key={country.country}
-              classNames={{
-                wrapper: "dark:bg-dark-bg bg-dark-bg",
-              }}
               // startContent={
               //   <Avatar
               //     alt={country.country}
@@ -108,7 +105,12 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
     <Select
       startContent={locationAvatar(value)}
       {...props}
-      className="mt-2 text-light-text dark:text-dark-text"
+      className={`text-light-text dark:text-dark-text ${props.className || ""}`}
+      classNames={{
+        trigger: "h-12",
+        value: "text-base", // Prevents iOS auto-zoom on focus
+        listbox: "max-h-[300px]", // Better scrolling experience on mobile
+      }}
     >
       {locationOptions}
     </Select>

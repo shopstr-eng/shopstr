@@ -57,7 +57,7 @@ const Tabs = ({
   return (
     <nav
       ref={navRef}
-      className="relative z-0 flex w-full flex-shrink-0 items-center justify-center "
+      className="relative z-0 flex w-full flex-shrink-0 items-center justify-start md:justify-center border-b border-zinc-800 bg-[#111] overflow-x-auto no-scrollbar"
     >
       {tabs.map((item, i) => {
         const isActive = selectedTabIndex === i;
@@ -66,10 +66,10 @@ const Tabs = ({
           <button
             key={i}
             className={classNames(
-              "relative z-20 flex h-10 w-full cursor-pointer select-none items-center  justify-center bg-transparent px-4 py-8 text-lg duration-200 transition-colors hover:bg-white/10",
+              "relative z-20 flex h-10 w-full min-w-fit cursor-pointer select-none items-center justify-center bg-transparent px-6 py-8 text-xs md:text-sm uppercase tracking-widest duration-200 transition-colors hover:bg-white/5 whitespace-nowrap",
               {
-                "text-light-text/60 dark:text-dark-text/60": !isActive, // Default color for non-active tabs
-                "font-bold text-light-text/90 dark:text-dark-text/90": isActive, // Color for active tabs
+                "text-zinc-500 font-bold hover:text-zinc-300": !isActive,
+                "font-black text-white": isActive,
               }
             )}
             ref={(el) => (buttonRefs[i] = el)}
@@ -85,11 +85,11 @@ const Tabs = ({
       {selectedRect && navRect && (
         <motion.div
           className={
-            "absolute bottom-0 left-0.5 z-10 h-[5px] rounded-full bg-shopstr-purple dark:bg-shopstr-yellow"
+            "absolute bottom-0 left-0.5 z-10 h-[4px] rounded-t-sm bg-yellow-400"
           }
           animate={{
-            width: selectedRect.width * 0.2,
-            x: `calc(${selectedRect.left - navRect.left}px + 195%)`,
+            width: selectedRect.width * 0.8, // Increased width for better mobile visibility
+            x: selectedRect.left - navRect.left + selectedRect.width * 0.1, // Centered underline
             opacity: 1,
           }}
           transition={transition}

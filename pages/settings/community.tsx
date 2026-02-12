@@ -22,7 +22,7 @@ import {
 } from "@/utils/nostr/nostr-helper-functions";
 import CreateCommunityForm from "@/components/communities/CreateCommunityForm";
 import { Community } from "@/utils/types/types";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 const CommunityManagementPage = () => {
   const { signer, pubkey } = useContext(SignerContext);
@@ -55,7 +55,7 @@ const CommunityManagementPage = () => {
     try {
       const communityEvent = await createOrUpdateCommunity(signer, nostr, {
         ...data,
-        moderators: [pubkey], // Add creator as a moderator
+        moderators: [pubkey], 
       });
 
       await finalizeAndSendNostrEvent(signer!, nostr!, communityEvent);
@@ -90,23 +90,24 @@ const CommunityManagementPage = () => {
   };
 
   return (
-    <div className="flex h-full flex-col bg-light-bg pt-24 dark:bg-dark-bg">
-      <div className="mx-auto h-screen w-full lg:w-1/2 lg:pl-4">
+    <div className="relative flex min-h-screen flex-col bg-[#111] pt-24 selection:bg-yellow-400 selection:text-black">
+      <div className="pointer-events-none absolute inset-0 z-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]"></div>
+
+      <div className="relative z-10 mx-auto h-full w-full px-4 lg:w-1/2 lg:pl-4">
         <SettingsBreadCrumbs />
 
         {communityToEdit ? (
-          // Show the Form for Creating or Editing
-          <Card>
+          <Card className="rounded-2xl border border-zinc-800 bg-[#161616] p-4 shadow-none">
             <CardBody>
-              <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
+              <h2 className="text-3xl font-black uppercase tracking-tighter text-white">
                 {communityToEdit === "new"
                   ? "Create Your Community"
                   : `Editing: ${communityToEdit.name}`}
               </h2>
-              <p className="mb-4 text-light-text/80 dark:text-dark-text/80">
+              <p className="mb-4 text-zinc-400">
                 Create a space for your customers to gather and get updates.
               </p>
-              <Divider className="my-4" />
+              <Divider className="my-4 bg-zinc-800" />
               <CreateCommunityForm
                 existingCommunity={
                   communityToEdit === "new" ? null : communityToEdit
@@ -117,15 +118,14 @@ const CommunityManagementPage = () => {
             </CardBody>
           </Card>
         ) : (
-          // Show the List of Communities
-          <Card>
+          <Card className="rounded-2xl border border-zinc-800 bg-[#161616] p-4 shadow-none">
             <CardHeader>
               <div className="flex w-full items-center justify-between">
-                <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
+                <h2 className="text-3xl font-black uppercase tracking-tighter text-white">
                   Your Communities
                 </h2>
                 <Button
-                  className={SHOPSTRBUTTONCLASSNAMES}
+                  className={`${NEO_BTN} h-10 px-6 text-xs`}
                   onClick={() => setCommunityToEdit("new")}
                 >
                   Create New
@@ -134,26 +134,29 @@ const CommunityManagementPage = () => {
             </CardHeader>
             <CardBody>
               {isLoading && myCommunities.length === 0 ? (
-                <Spinner label="Loading your communities..." />
+                <Spinner
+                  color="warning"
+                  label="Loading your communities..."
+                />
               ) : myCommunities.length > 0 ? (
                 <div className="space-y-2">
                   {myCommunities.map((community) => (
                     <div
                       key={community.id}
-                      className="flex items-center justify-between rounded-lg bg-light-fg p-3 dark:bg-dark-fg"
+                      className="flex items-center justify-between rounded-xl border border-zinc-800 bg-[#111] p-4 transition-all hover:border-zinc-600"
                     >
-                      <span className="font-semibold">{community.name}</span>
+                      <span className="font-bold text-white uppercase tracking-tight">
+                        {community.name}
+                      </span>
                       <div className="flex gap-2">
                         <Button
-                          size="sm"
+                          className={`${NEO_BTN} h-8 text-xs`}
                           onClick={() => setCommunityToEdit(community)}
                         >
                           Edit
                         </Button>
                         <Button
-                          size="sm"
-                          color="danger"
-                          variant="flat"
+                          className={`${NEO_BTN} h-8 text-xs bg-red-500 text-white hover:bg-red-400`}
                           onClick={() => handleDelete(community.id)}
                         >
                           Delete
@@ -163,7 +166,7 @@ const CommunityManagementPage = () => {
                   ))}
                 </div>
               ) : (
-                <p className="text-center text-light-text/80 dark:text-dark-text/80">
+                <p className="text-center text-zinc-500 italic">
                   You haven&apos;t created any communities yet.
                 </p>
               )}

@@ -7,8 +7,8 @@ import {
   ModalFooter,
   Button,
 } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { useRouter } from "next/router";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 function sanitizeURL(s: string) {
   try {
@@ -54,23 +54,23 @@ export default function AuthChallengeModal({
       isOpen={isOpen}
       onClose={onCancel}
       classNames={{
-        body: "py-6",
-        backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-        // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
-        header: "border-b-[1px] border-[#292f46]",
-        footer: "border-t-[1px] border-[#292f46]",
-        closeButton: "hover:bg-black/5 active:bg-white/10",
+        base: "bg-[#161616] border border-zinc-800",
+        body: "py-8",
+        backdrop: "bg-black/80 backdrop-blur-sm",
+        header: "border-b border-zinc-800",
+        footer: "border-t border-zinc-800",
+        closeButton: "hover:bg-white/10 text-white",
       }}
       scrollBehavior={"outside"}
-      size="2xl"
+      size="md"
       isDismissable={false}
     >
       <ModalContent>
-        <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+        <ModalHeader className="flex flex-col gap-1 font-black uppercase tracking-tighter text-white">
           Waiting for confirmation
         </ModalHeader>
         <ModalBody>
-          <div className="text-light-text dark:text-dark-text">
+          <div className="text-zinc-300 break-words">
             {challengeUrl
               ? "Please confirm this action on your remote signer"
               : challenge}
@@ -82,15 +82,17 @@ export default function AuthChallengeModal({
         </ModalBody>
 
         <ModalFooter>
-          <Button color="danger" variant="light" onClick={onCancel}>
+          <Button
+            className="font-bold uppercase tracking-wider text-red-500 hover:bg-red-500/10"
+            color="danger"
+            variant="light"
+            onClick={onCancel}
+          >
             Cancel
           </Button>
           {challengeUrl && (
             <Button
-              className={
-                "bg-gradient-to-tr text-white shadow-lg" +
-                SHOPSTRBUTTONCLASSNAMES
-              }
+              className={`${NEO_BTN} h-10 px-6 text-xs`}
               type="submit"
               onClick={() => {
                 window.open(challengeUrl, "_blank");

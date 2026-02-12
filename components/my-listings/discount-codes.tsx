@@ -4,11 +4,10 @@ import {
   Input,
   Card,
   CardBody,
-  CardHeader,
   Chip,
 } from "@nextui-org/react";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 import { TrashIcon } from "@heroicons/react/24/outline";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import ConfirmActionDropdown from "../utility-components/dropdowns/confirm-action-dropdown";
 
@@ -31,6 +30,7 @@ export default function DiscountCodes() {
     if (pubkey) {
       fetchCodes();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pubkey]);
 
   const fetchCodes = async () => {
@@ -121,41 +121,57 @@ export default function DiscountCodes() {
   return (
     <div className="w-full space-y-6 p-4">
       <div className="mb-6">
-        <h2 className="mb-2 text-2xl font-bold text-light-text dark:text-dark-text">
+        <h2 className="mb-2 text-2xl font-black uppercase tracking-wide text-white">
           Discount Codes
         </h2>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
+        <p className="text-sm text-zinc-400">
           Create discount codes that customers can use at checkout to reduce the
           price of all products in their order.
         </p>
       </div>
 
-      <Card className="bg-light-fg dark:bg-dark-fg">
-        <CardHeader>
-          <h3 className="text-lg font-semibold text-light-text dark:text-dark-text">
+      <div className="rounded-2xl border border-zinc-800 bg-[#161616] p-4 shadow-none sm:p-6">
+        <div className="mb-4">
+          <h3 className="text-lg font-bold uppercase tracking-wider text-white">
             Add New Discount Code
           </h3>
-        </CardHeader>
-        <CardBody className="space-y-4">
-          <Input
-            label="Code"
-            placeholder="SUMMER2024"
-            value={newCode}
-            onChange={(e) => setNewCode(e.target.value.toUpperCase())}
-            className="text-light-text dark:text-dark-text"
-          />
-          <Input
-            type="number"
-            label="Discount Percentage"
-            placeholder="10"
-            min="0.01"
-            max="100"
-            step="0.01"
-            value={newDiscount}
-            onChange={(e) => setNewDiscount(e.target.value)}
-            endContent={<span className="text-default-400">%</span>}
-            className="text-light-text dark:text-dark-text"
-          />
+        </div>
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Input
+              label="Code"
+              placeholder="SUMMER2024"
+              value={newCode}
+              onChange={(e) => setNewCode(e.target.value.toUpperCase())}
+              classNames={{
+                input: "text-white placeholder:text-zinc-600 text-base",
+                inputWrapper:
+                  "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-14",
+                label: "text-zinc-400",
+              }}
+              variant="bordered"
+              labelPlacement="outside"
+            />
+            <Input
+              type="number"
+              label="Discount Percentage"
+              placeholder="10"
+              min="0.01"
+              max="100"
+              step="0.01"
+              value={newDiscount}
+              onChange={(e) => setNewDiscount(e.target.value)}
+              endContent={<span className="text-zinc-500">%</span>}
+              classNames={{
+                input: "text-white placeholder:text-zinc-600 text-base",
+                inputWrapper:
+                  "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-14",
+                label: "text-zinc-400",
+              }}
+              variant="bordered"
+              labelPlacement="outside"
+            />
+          </div>
           <Input
             type="datetime-local"
             label="Expiration (Optional)"
@@ -163,54 +179,70 @@ export default function DiscountCodes() {
             value={newExpiration}
             onChange={(e) => setNewExpiration(e.target.value)}
             min={new Date().toISOString().slice(0, 16)}
-            className="text-light-text dark:text-dark-text"
+            classNames={{
+              input: "text-white placeholder:text-zinc-600 text-base",
+              inputWrapper:
+                "border-zinc-700 bg-[#111] hover:border-zinc-500 group-data-[focus=true]:border-yellow-400 h-14",
+              label: "text-zinc-400",
+            }}
+            variant="bordered"
+            labelPlacement="outside"
           />
           <Button
-            className={SHOPSTRBUTTONCLASSNAMES}
+            className={`${NEO_BTN} h-12 w-full text-sm font-bold tracking-wide`}
             onClick={handleAddCode}
             isDisabled={!newCode || !newDiscount || isSaving}
             isLoading={isSaving}
           >
             Add Code
           </Button>
-        </CardBody>
-      </Card>
+        </div>
+      </div>
 
       <div className="space-y-3">
-        <h3 className="text-lg font-semibold text-light-text dark:text-dark-text">
+        <h3 className="text-lg font-bold uppercase tracking-wider text-white">
           Active Codes
         </h3>
         {isLoading ? (
-          <p className="text-light-text dark:text-dark-text">Loading...</p>
+          <p className="text-zinc-400">Loading...</p>
         ) : codes.length === 0 ? (
-          <Card className="bg-light-fg dark:bg-dark-fg">
+          <Card className="border border-dashed border-zinc-700 bg-transparent shadow-none">
             <CardBody>
-              <p className="text-center text-gray-500">
+              <p className="text-center text-zinc-500">
                 No discount codes yet. Create one above!
               </p>
             </CardBody>
           </Card>
         ) : (
           codes.map((code) => (
-            <Card key={code.code} className="bg-light-fg dark:bg-dark-fg">
+            <Card
+              key={code.code}
+              className="rounded-xl border border-zinc-800 bg-[#161616] shadow-none"
+            >
               <CardBody>
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-lg font-bold text-light-text dark:text-dark-text">
+                      <span className="font-mono text-xl font-bold text-white">
                         {code.code}
                       </span>
                       {isExpired(code.expiration) && (
-                        <Chip color="warning" size="sm">
+                        <Chip
+                          classNames={{
+                            base: "bg-red-500/20 text-red-500 border border-red-500/50",
+                          }}
+                          size="sm"
+                          variant="bordered"
+                        >
                           Expired
                         </Chip>
                       )}
                     </div>
-                    <p className="text-sm text-light-text dark:text-dark-text">
+                    <p className="text-sm text-zinc-300">
                       {code.discount_percentage}% off
                     </p>
                     {code.expiration && (
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-zinc-500">
                         {isExpired(code.expiration)
                           ? "Expired on: "
                           : "Expires: "}

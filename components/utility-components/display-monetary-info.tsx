@@ -29,12 +29,10 @@ export default function CompactPriceDisplay({
     compactDisplay: "short",
   });
   return (
-    <div className=" inline-block h-[30px] max-w-[70%] overflow-hidden text-ellipsis whitespace-nowrap rounded-md bg-black px-3 text-cyan-50 opacity-50">
-      <span className="font-semibold ">
-        {formatter.format(Number(price))} {currency}{" "}
-        {monetaryInfo.shippingType ? getShippingLabel() : ""}{" "}
-      </span>
-    </div>
+    <span className="whitespace-nowrap font-bold">
+      {formatter.format(Number(price))} {currency}{" "}
+      {monetaryInfo.shippingType ? getShippingLabel() : ""}{" "}
+    </span>
   );
 }
 
@@ -48,12 +46,12 @@ export function DisplayCheckoutCost({
   const formattedPrice = formatWithCommas(price, currency);
 
   return (
-    <div>
-      <p className="text-lg font-semibold text-light-text dark:text-dark-text">
+    <div className="flex flex-col gap-0.5">
+      <p className="text-xl md:text-2xl font-black tracking-tight text-white">
         {formattedPrice}
       </p>
       {shippingType && (
-        <p className="mb-4 text-sm text-light-text dark:text-dark-text">
+        <p className="mb-2 text-xs md:text-sm font-bold uppercase tracking-wider text-zinc-500">
           Shipping: {shippingType}
         </p>
       )}

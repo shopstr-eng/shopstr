@@ -260,7 +260,7 @@ export const FileUploaderButton = ({
         onDrop={handleDrop}
         className={`relative w-full duration-300 transition-all ${
           isPlaceholder
-            ? "flex h-full min-h-[250px] items-center justify-center rounded-xl border-2 border-dashed border-shopstr-purple p-6 dark:border-shopstr-yellow"
+            ? "flex h-full min-h-[180px] md:min-h-[250px] items-center justify-center rounded-2xl border-2 border-dashed border-zinc-700 bg-[#111] p-4 md:p-6 hover:border-yellow-400 hover:bg-[#161616]"
             : !isDragging && "border-2 border-dashed border-transparent"
         }`}
       >
@@ -278,15 +278,15 @@ export const FileUploaderButton = ({
               animate={{ scale: [1, 1.1, 1] }}
               transition={{ duration: 0.8, repeat: Infinity }}
             >
-              <PhotoIcon className="mb-4 h-16 w-16 text-shopstr-purple dark:text-shopstr-yellow" />
+              <PhotoIcon className="mb-4 h-12 w-12 md:h-16 md:w-16 text-yellow-400" />
             </motion.div>
-            <p className="text-xl font-semibold text-light-text dark:text-dark-text">
-              {isDragging ? "Drop to upload" : "Drag & Drop Images Here"}
+            <p className="text-lg md:text-xl font-black uppercase tracking-wider text-white text-center px-4">
+              {isDragging ? "DROP TO UPLOAD" : "TAP OR DRAG TO UPLOAD"}
             </p>
-            <p className="mt-1 text-center text-sm text-light-text dark:text-dark-text">
+            <p className="mt-2 text-center text-[10px] md:text-xs font-bold uppercase tracking-wider text-zinc-500">
               {isPlaceholder && !isDragging
-                ? "Or click below to select files"
-                : "Supports JPEG, PNG, WebP"}
+                ? "Supports JPEG, PNG, WebP"
+                : "Release to start upload"}
             </p>
           </motion.div>
         )}
@@ -300,21 +300,21 @@ export const FileUploaderButton = ({
             disabled={disabled || loading}
             className={`${
               isProductUpload && "w-full"
-            } ${className} transition-all`}
+            } ${className} transition-all font-bold uppercase tracking-wider h-12 md:h-14`}
             startContent={
               <motion.div
                 animate={loading ? {} : { scale: [1, 1.05, 1] }}
                 transition={{ duration: 2, repeat: Infinity }}
               >
-                <ArrowUpTrayIcon className="h-6 w-6" />
+                <ArrowUpTrayIcon className="h-5 w-5 md:h-6 md:w-6" />
               </motion.div>
             }
           >
             {children ||
               (isIconOnly ? null : isProductUpload ? (
-                <span className="text-lg font-medium">Upload Images</span>
+                <span className="text-base md:text-lg">Upload Images</span>
               ) : (
-                <span className="text-lg font-medium">Upload Banner</span>
+                <span className="text-base md:text-lg">Upload Banner</span>
               ))}
           </Button>
         )}
@@ -347,11 +347,11 @@ export const FileUploaderButton = ({
             className="w-full space-y-4"
           >
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-default-700">
-                Uploading {previews.length} image
+              <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                UPLOADING {previews.length} IMAGE
                 {previews.length > 1 ? "s" : ""}
               </span>
-              <span className="text-sm font-medium text-shopstr-purple dark:text-shopstr-yellow">
+              <span className="text-xs font-bold text-yellow-400">
                 {progress}%
               </span>
             </div>
@@ -359,13 +359,13 @@ export const FileUploaderButton = ({
               aria-label="Upload progress"
               size="md"
               value={progress}
-              color="primary"
+              color="warning"
               classNames={{
-                track: "h-3",
-                indicator: "bg-gradient-to-r from-pink-400 to-pink-600",
+                track: "h-3 bg-zinc-800 border border-zinc-700",
+                indicator: "bg-yellow-400",
               }}
             />
-            <div className="flex justify-between text-xs text-default-500">
+            <div className="flex justify-between text-[10px] font-bold uppercase tracking-wider text-zinc-600">
               <span>Preprocessing{progress >= 30 ? " ✓" : ""}</span>
               <span>Uploading{progress >= 100 ? " ✓" : ""}</span>
               <span>Processing</span>

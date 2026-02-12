@@ -17,13 +17,10 @@ import {
 import {
   Button,
   Textarea,
-  Card,
-  CardBody,
   Spinner,
-  Divider,
   Chip,
 } from "@nextui-org/react";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 import {
   createCommunityPost,
   approveCommunityPost,
@@ -31,6 +28,11 @@ import {
 } from "@/utils/nostr/nostr-helper-functions";
 import { ProfileWithDropdown } from "../utility-components/profile/profile-dropdown";
 import { sanitizeUrl } from "@braintree/sanitize-url";
+import {
+  ChatBubbleLeftIcon,
+  CheckCircleIcon,
+  ArrowUturnLeftIcon,
+} from "@heroicons/react/24/outline";
 
 interface CommunityFeedProps {
   community: Community;
@@ -56,8 +58,8 @@ const RenderContent = ({
     .map((tag) => tag[1]);
 
   return (
-    <div className="space-y-2">
-      <p className="whitespace-pre-wrap text-light-text dark:text-dark-text">
+    <div className="space-y-3">
+      <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-300">
         {parts.map((part, index) => {
           if (isImage(part)) {
             return (
@@ -65,7 +67,7 @@ const RenderContent = ({
                 key={index}
                 src={sanitizeUrl(part)}
                 alt="User content"
-                className="mt-2 max-h-96 rounded-lg"
+                className="mt-3 max-h-96 rounded-lg border border-white/10"
               />
             );
           }
@@ -280,24 +282,31 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
   return (
     <div className="space-y-6">
       {isModerator && (
-        <Card>
-          <CardBody>
-            <h3 className="mb-2 text-lg font-bold">Create an Announcement</h3>
-            <Textarea
-              value={newPostContent}
-              onChange={(e) => setNewPostContent(e.target.value)}
-              placeholder="What's on your mind?"
-              minRows={3}
-            />
+        <div className="rounded-xl border border-white/10 bg-[#111] p-6">
+          <h3 className="mb-4 text-lg font-bold text-white">
+            Create an Announcement
+          </h3>
+          <Textarea
+            value={newPostContent}
+            onChange={(e) => setNewPostContent(e.target.value)}
+            placeholder="What's on your mind?"
+            minRows={3}
+            classNames={{
+              inputWrapper:
+                "bg-[#1a1a1a] border-white/10 data-[hover=true]:bg-[#222] group-data-[focus=true]:bg-[#222]",
+              input: "text-white placeholder:text-gray-500",
+            }}
+          />
+          <div className="mt-4 flex justify-end">
             <Button
               onClick={handlePost}
-              className={`${SHOPSTRBUTTONCLASSNAMES} mt-2 self-end`}
+              className={`${NEO_BTN} h-10 px-6 text-sm`}
               disabled={!newPostContent.trim()}
             >
               Post
             </Button>
-          </CardBody>
-        </Card>
+          </div>
+        </div>
       )}
 
       {isLoading ? (
@@ -308,9 +317,9 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
         <div className="space-y-4">
           {topLevelPosts.map((post: CommunityPost) => (
             <React.Fragment key={post.id}>
-              <Card>
-                <CardBody>
-                  <div className="mb-4 flex items-center justify-between">
+              <div className="rounded-xl border border-white/10 bg-[#111] p-4 transition-colors hover:border-white/20 sm:p-6">
+                <div>
+                  <div className="mb-3 flex items-center justify-between">
                     <ProfileWithDropdown
                       pubkey={post.pubkey}
                       dropDownKeys={["shop", "copy_npub"]}
@@ -322,23 +331,27 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
                     )}
                   </div>
                   <RenderContent content={post.content} tags={post.tags} />
-                  <Divider className="my-4" />
-                  <div className="flex items-center justify-between">
+
+                  <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-white/5 pt-4 sm:gap-4">
                     <Button
                       size="sm"
                       variant="light"
+                      className="text-gray-400 hover:text-white"
                       onClick={() =>
                         setReplyingTo(replyingTo === post.id ? null : post.id)
                       }
                     >
+                      <ChatBubbleLeftIcon className="h-4 w-4" />
                       {replyingTo === post.id ? "Cancel" : "Reply"}
                     </Button>
                     {isModerator && !post.approved && (
                       <Button
                         size="sm"
                         color="success"
+                        variant="flat"
                         onClick={() => handleApprove(post)}
                       >
+                        <CheckCircleIcon className="h-4 w-4" />
                         Approve
                       </Button>
                     )}
@@ -349,16 +362,18 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
                         <Button
                           size="sm"
                           color="warning"
+                          variant="flat"
                           onClick={() =>
                             handleRetractApproval(post.approvalEventId)
                           }
                         >
+                          <ArrowUturnLeftIcon className="h-4 w-4" />
                           Retract Approval
                         </Button>
                       )}
                   </div>
                   {replyingTo === post.id && (
-                    <div className="mt-4 border-t-2 pt-4 dark:border-zinc-800">
+                    <div className="mt-4 border-t border-white/10 pt-4">
                       <Textarea
                         value={replyContent}
                         onChange={(e) => setReplyContent(e.target.value)}
@@ -367,10 +382,14 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
                           8
                         )}...`}
                         minRows={2}
+                        classNames={{
+                          inputWrapper: "bg-[#1a1a1a] border-white/10",
+                          input: "text-white",
+                        }}
                       />
                       <Button
                         onClick={() => handleReply(post)}
-                        className={`${SHOPSTRBUTTONCLASSNAMES} mt-2 self-end`}
+                        className={`${NEO_BTN} mt-2 h-8 self-end px-4 text-xs`}
                         disabled={!replyContent.trim()}
                         size="sm"
                       >
@@ -378,18 +397,21 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
                       </Button>
                     </div>
                   )}
-                </CardBody>
-              </Card>
+                </div>
+              </div>
 
               {/* Render Replies */}
               {repliesByParentId.has(post.id) && (
-                <div className="ml-8 space-y-4 border-l-2 border-zinc-200 pl-4 dark:border-zinc-800">
+                <div className="ml-2 space-y-4 border-l border-white/10 pl-3 md:ml-8 md:pl-6">
                   {repliesByParentId
                     .get(post.id)!
                     .map((reply: CommunityPost) => (
-                      <Card key={reply.id}>
-                        <CardBody>
-                          <div className="mb-4 flex items-center justify-between">
+                      <div
+                        key={reply.id}
+                        className="rounded-xl border border-white/10 bg-[#111] p-3 sm:p-5"
+                      >
+                        <div>
+                          <div className="mb-3 flex items-center justify-between">
                             <ProfileWithDropdown
                               pubkey={reply.pubkey}
                               dropDownKeys={["shop", "copy_npub"]}
@@ -404,31 +426,34 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
                             content={reply.content}
                             tags={reply.tags}
                           />
-                          <Divider className="my-4" />
-                          <div className="flex items-center justify-between">
+                          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-white/5 pt-4 sm:gap-4">
                             <Button
                               size="sm"
                               variant="light"
+                              className="text-gray-400 hover:text-white"
                               onClick={() =>
                                 setReplyingTo(
                                   replyingTo === reply.id ? null : reply.id
                                 )
                               }
                             >
+                              <ChatBubbleLeftIcon className="h-4 w-4" />
                               {replyingTo === reply.id ? "Cancel" : "Reply"}
                             </Button>
                             {isModerator && !reply.approved && (
                               <Button
                                 size="sm"
                                 color="success"
+                                variant="flat"
                                 onClick={() => handleApprove(reply)}
                               >
+                                <CheckCircleIcon className="h-4 w-4" />
                                 Approve
                               </Button>
                             )}
                           </div>
                           {replyingTo === reply.id && (
-                            <div className="mt-4 border-t-2 pt-4 dark:border-zinc-800">
+                            <div className="mt-4 border-t border-white/10 pt-4">
                               <Textarea
                                 value={replyContent}
                                 onChange={(e) =>
@@ -439,10 +464,14 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
                                   8
                                 )}...`}
                                 minRows={2}
+                                classNames={{
+                                  inputWrapper: "bg-[#1a1a1a] border-white/10",
+                                  input: "text-white",
+                                }}
                               />
                               <Button
                                 onClick={() => handleReply(reply)}
-                                className={`${SHOPSTRBUTTONCLASSNAMES} mt-2 self-end`}
+                                className={`${NEO_BTN} mt-2 h-8 self-end px-4 text-xs`}
                                 disabled={!replyContent.trim()}
                                 size="sm"
                               >
@@ -450,8 +479,8 @@ const CommunityFeed: React.FC<CommunityFeedProps> = ({ community }) => {
                               </Button>
                             </div>
                           )}
-                        </CardBody>
-                      </Card>
+                        </div>
+                      </div>
                     ))}
                 </div>
               )}

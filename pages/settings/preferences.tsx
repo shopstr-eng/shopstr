@@ -13,18 +13,14 @@ import {
   ModalFooter,
   Button,
   Textarea,
-  Radio,
-  RadioGroup,
 } from "@nextui-org/react";
 import { Relay } from "nostr-tools";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   createBlossomServerEvent,
   createNostrRelayEvent,
   getLocalStorageData,
   publishWalletEvent,
 } from "@/utils/nostr/nostr-helper-functions";
-import { useTheme } from "next-themes";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import ShopstrSlider from "../../components/utility-components/shopstr-slider";
 import FailureModal from "../../components/utility-components/failure-modal";
@@ -32,6 +28,7 @@ import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 
 const PreferencesPage = () => {
   const { nostr } = useContext(NostrContext);
@@ -80,8 +77,6 @@ const PreferencesPage = () => {
       localStorage.setItem("blossomServers", JSON.stringify(blossomServers));
     }
   }, [blossomServers]);
-
-  const { theme, setTheme } = useTheme();
 
   const {
     handleSubmit: handleMintSubmit,
@@ -260,35 +255,35 @@ const PreferencesPage = () => {
 
   return (
     <>
-      <div className="flex min-h-screen flex-col bg-light-bg pb-6 pt-24 dark:bg-dark-bg">
+      <div className="flex min-h-screen flex-col bg-[#111] pb-6 pt-24">
         <div className="mx-auto px-4">
           <SettingsBreadCrumbs />
-          <span className="my-4 flex  text-2xl font-bold text-light-text dark:text-dark-text">
+          <span className="my-4 flex text-2xl font-black uppercase tracking-tighter text-white">
             Mint
           </span>
 
           <div>
             {mints.length === 0 && (
               <div className="mt-8 flex items-center justify-center">
-                <p className="text-liht-text break-words text-center text-xl dark:text-dark-text">
+                <p className="break-words text-center text-xl text-zinc-500">
                   No mint added . . .
                 </p>
               </div>
             )}
-            <div className="mt-4 max-h-96 overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
+            <div className="mt-4 max-h-96 overflow-y-auto rounded-xl border border-zinc-800 bg-[#161616] p-2">
               {mints.map((mint, index) => (
                 <div
                   key={mint}
-                  className={`mb-2 flex items-center justify-between rounded-md border-2 ${
+                  className={`mb-2 flex items-center justify-between rounded-lg border ${
                     index === 0
-                      ? "relative border-purple-500 dark:border-yellow-500"
-                      : "border-light-fg dark:border-dark-fg"
+                      ? "relative border-yellow-400 bg-yellow-400/5"
+                      : "border-zinc-700 bg-[#111]"
                   } px-3 py-2`}
                 >
-                  <div className="max-w-xsm break-all text-light-text dark:text-dark-text ">
+                  <div className="max-w-xsm break-all font-medium text-zinc-300">
                     {mint}
                     {index === 0 && (
-                      <span className="bg-light-bg px-3 text-xs text-gray-500 dark:bg-dark-bg">
+                      <span className="ml-2 rounded bg-yellow-400 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-black">
                         Active Mint
                       </span>
                     )}
@@ -296,7 +291,7 @@ const PreferencesPage = () => {
                   {mints.length > 1 && (
                     <MinusCircleIcon
                       onClick={() => deleteMint(mint)}
-                      className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
+                      className="h-5 w-5 cursor-pointer text-zinc-500 hover:text-red-500"
                     />
                   )}
                 </div>
@@ -304,14 +299,14 @@ const PreferencesPage = () => {
             </div>
             {mints.length > 0 && (
               <div className="mx-4 my-4 flex items-center justify-center text-center">
-                <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-                <p className="ml-2 text-sm text-light-text dark:text-dark-text">
+                <InformationCircleIcon className="h-6 w-6 text-zinc-500" />
+                <p className="ml-2 text-sm text-zinc-400">
                   This mint is used to handle{" "}
                   <Link href="https://cashu.space" passHref legacyBehavior>
                     <a
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="underline"
+                      className="underline hover:text-white"
                     >
                       Cashu
                     </a>
@@ -322,9 +317,9 @@ const PreferencesPage = () => {
               </div>
             )}
 
-            <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+            <div className="flex h-fit flex-row justify-between px-3 py-[15px]">
               <Button
-                className={SHOPSTRBUTTONCLASSNAMES}
+                className={`${NEO_BTN} h-12 px-6 text-sm`}
                 onClick={handleToggleMintModal}
               >
                 Change Active Mint
@@ -335,18 +330,18 @@ const PreferencesPage = () => {
               isOpen={showMintModal}
               onClose={handleToggleMintModal}
               classNames={{
-                body: "py-6",
-                backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-                // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
-                header: "border-b-[1px] border-[#292f46]",
-                footer: "border-t-[1px] border-[#292f46]",
-                closeButton: "hover:bg-black/5 active:bg-white/10",
+                base: "bg-[#161616] border border-zinc-800 rounded-2xl",
+                body: "py-8",
+                backdrop: "bg-black/80 backdrop-blur-sm",
+                header: "border-b border-zinc-800 text-white font-bold uppercase",
+                footer: "border-t border-zinc-800",
+                closeButton: "hover:bg-white/10 text-white",
               }}
               scrollBehavior={"outside"}
               size="2xl"
             >
               <ModalContent>
-                <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+                <ModalHeader className="flex flex-col gap-1">
                   Change Active Mint
                 </ModalHeader>
                 <form onSubmit={handleMintSubmit(onMintSubmit)}>
@@ -374,7 +369,11 @@ const PreferencesPage = () => {
                           : "";
                         return (
                           <Textarea
-                            className="text-light-text dark:text-dark-text"
+                            classNames={{
+                              input: "text-white",
+                              inputWrapper:
+                                "bg-[#111] border-zinc-700 hover:border-zinc-500 focus-within:!border-yellow-400",
+                            }}
                             variant="bordered"
                             fullWidth={true}
                             placeholder="https://..."
@@ -398,14 +397,17 @@ const PreferencesPage = () => {
 
                   <ModalFooter>
                     <Button
-                      color="danger"
+                      className="text-red-500 font-bold uppercase tracking-wider bg-transparent hover:bg-red-500/10"
                       variant="light"
                       onClick={handleToggleMintModal}
                     >
                       Cancel
                     </Button>
 
-                    <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                    <Button
+                      className={`${NEO_BTN} h-10`}
+                      type="submit"
+                    >
                       Change Mint
                     </Button>
                   </ModalFooter>
@@ -414,45 +416,45 @@ const PreferencesPage = () => {
             </Modal>
           </div>
 
-          <span className="mt-4 flex text-2xl font-bold text-light-text dark:text-dark-text">
+          <span className="mt-8 flex text-2xl font-black uppercase tracking-tighter text-white">
             Read/Write Relays
           </span>
 
           {relays.length === 0 && (
             <div className="mt-4 flex items-center justify-center">
-              <p className="break-words text-center text-xl text-light-text dark:text-dark-text">
+              <p className="break-words text-center text-xl text-zinc-500">
                 No relays added . . .
               </p>
             </div>
           )}
-          <div className="mt-4 max-h-96 overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
+          <div className="mt-4 max-h-96 overflow-y-auto rounded-xl border border-zinc-800 bg-[#161616] p-2">
             {relays.map((relay) => (
               <div
                 key={relay}
-                className="mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg"
+                className="mb-2 flex items-center justify-between rounded-lg border border-zinc-700 bg-[#111] px-3 py-2"
               >
-                <div className="max-w-xsm break-all text-light-text dark:text-dark-text ">
+                <div className="max-w-xsm break-all font-medium text-zinc-300">
                   {relay}
                 </div>
                 {relays.length > 1 && (
                   <MinusCircleIcon
                     onClick={() => deleteRelay(relay, "all")}
-                    className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
+                    className="h-5 w-5 cursor-pointer text-zinc-500 hover:text-red-500"
                   />
                 )}
               </div>
             ))}
           </div>
-          <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+          <div className="flex h-fit flex-row justify-between px-3 py-[15px]">
             <Button
-              className={SHOPSTRBUTTONCLASSNAMES}
+              className={`${NEO_BTN} h-12 px-6 text-sm`}
               onClick={() => handleToggleRelayModal("all")}
             >
               Add Relay
             </Button>
             {relaysAreChanged && (
               <Button
-                className={SHOPSTRBUTTONCLASSNAMES}
+                className={`${NEO_BTN} h-12 px-6 text-sm bg-zinc-800 text-white hover:bg-zinc-700 border-zinc-600`}
                 onClick={() => publishRelays()}
               >
                 Save
@@ -464,18 +466,18 @@ const PreferencesPage = () => {
             isOpen={showRelayModal}
             onClose={() => handleToggleRelayModal("all")}
             classNames={{
-              body: "py-6",
-              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-              // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
-              header: "border-b-[1px] border-[#292f46]",
-              footer: "border-t-[1px] border-[#292f46]",
-              closeButton: "hover:bg-black/5 active:bg-white/10",
+              base: "bg-[#161616] border border-zinc-800 rounded-2xl",
+              body: "py-8",
+              backdrop: "bg-black/80 backdrop-blur-sm",
+              header: "border-b border-zinc-800 text-white font-bold uppercase",
+              footer: "border-t border-zinc-800",
+              closeButton: "hover:bg-white/10 text-white",
             }}
             scrollBehavior={"outside"}
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+              <ModalHeader className="flex flex-col gap-1">
                 Add Relay
               </ModalHeader>
               <form onSubmit={handleRelaySubmit(onRelaySubmit)}>
@@ -503,7 +505,11 @@ const PreferencesPage = () => {
                         : "";
                       return (
                         <Textarea
-                          className="text-light-text dark:text-dark-text"
+                          classNames={{
+                            input: "text-white",
+                            inputWrapper:
+                              "bg-[#111] border-zinc-700 hover:border-zinc-500 focus-within:!border-yellow-400",
+                          }}
                           variant="bordered"
                           fullWidth={true}
                           placeholder="wss://..."
@@ -527,14 +533,17 @@ const PreferencesPage = () => {
 
                 <ModalFooter>
                   <Button
-                    color="danger"
+                    className="text-red-500 font-bold uppercase tracking-wider bg-transparent hover:bg-red-500/10"
                     variant="light"
                     onClick={() => handleToggleRelayModal("")}
                   >
                     Cancel
                   </Button>
 
-                  <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                  <Button
+                    className={`${NEO_BTN} h-10`}
+                    type="submit"
+                  >
                     Add Relay
                   </Button>
                 </ModalFooter>
@@ -542,46 +551,46 @@ const PreferencesPage = () => {
             </ModalContent>
           </Modal>
 
-          <span className="mt-4 flex text-2xl font-bold text-light-text dark:text-dark-text">
+          <span className="mt-8 flex text-2xl font-black uppercase tracking-tighter text-white">
             Read Only Relays
           </span>
 
           {readRelays.length === 0 && (
             <div className="mt-4 flex items-center justify-center">
-              <p className="break-words text-center text-xl dark:text-dark-text">
+              <p className="break-words text-center text-xl text-zinc-500">
                 No relays added . . .
               </p>
             </div>
           )}
-          <div className="mt-4 max-h-96 overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
+          <div className="mt-4 max-h-96 overflow-y-auto rounded-xl border border-zinc-800 bg-[#161616] p-2">
             {readRelays.map((relay) => (
               <div
                 key={relay}
-                className="mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg"
+                className="mb-2 flex items-center justify-between rounded-lg border border-zinc-700 bg-[#111] px-3 py-2"
               >
-                <div className="max-w-xsm break-all text-light-text dark:text-dark-text ">
+                <div className="max-w-xsm break-all font-medium text-zinc-300">
                   {relay}
                 </div>
                 {readRelays.length > 1 && (
                   <MinusCircleIcon
                     onClick={() => deleteRelay(relay, "read")}
-                    className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
+                    className="h-5 w-5 cursor-pointer text-zinc-500 hover:text-red-500"
                   />
                 )}
               </div>
             ))}
           </div>
-          <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+          <div className="flex h-fit flex-row justify-between px-3 py-[15px]">
             <Button
-              className={SHOPSTRBUTTONCLASSNAMES}
+              className={`${NEO_BTN} h-12 px-6 text-sm`}
               onClick={() => handleToggleRelayModal("read")}
             >
               Add Relay
             </Button>
             {relaysAreChanged && (
-              <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+              <div className="flex h-fit flex-row justify-between px-3 py-[15px]">
                 <Button
-                  className={SHOPSTRBUTTONCLASSNAMES}
+                  className={`${NEO_BTN} h-12 px-6 text-sm bg-zinc-800 text-white hover:bg-zinc-700 border-zinc-600`}
                   onClick={() => publishRelays()}
                 >
                   Save
@@ -594,18 +603,18 @@ const PreferencesPage = () => {
             isOpen={showRelayModal}
             onClose={() => handleToggleRelayModal("read")}
             classNames={{
-              body: "py-6",
-              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-              // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
-              header: "border-b-[1px] border-[#292f46]",
-              footer: "border-t-[1px] border-[#292f46]",
-              closeButton: "hover:bg-black/5 active:bg-white/10",
+              base: "bg-[#161616] border border-zinc-800 rounded-2xl",
+              body: "py-8",
+              backdrop: "bg-black/80 backdrop-blur-sm",
+              header: "border-b border-zinc-800 text-white font-bold uppercase",
+              footer: "border-t border-zinc-800",
+              closeButton: "hover:bg-white/10 text-white",
             }}
             scrollBehavior={"outside"}
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+              <ModalHeader className="flex flex-col gap-1">
                 Add Relay
               </ModalHeader>
               <form onSubmit={handleRelaySubmit(onRelaySubmit)}>
@@ -633,7 +642,11 @@ const PreferencesPage = () => {
                         : "";
                       return (
                         <Textarea
-                          className="text-light-text dark:text-dark-text"
+                          classNames={{
+                            input: "text-white",
+                            inputWrapper:
+                              "bg-[#111] border-zinc-700 hover:border-zinc-500 focus-within:!border-yellow-400",
+                          }}
                           variant="bordered"
                           fullWidth={true}
                           placeholder="wss://..."
@@ -657,14 +670,17 @@ const PreferencesPage = () => {
 
                 <ModalFooter>
                   <Button
-                    color="danger"
+                    className="text-red-500 font-bold uppercase tracking-wider bg-transparent hover:bg-red-500/10"
                     variant="light"
                     onClick={() => handleToggleRelayModal("")}
                   >
                     Cancel
                   </Button>
 
-                  <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                  <Button
+                    className={`${NEO_BTN} h-10`}
+                    type="submit"
+                  >
                     Add Relay
                   </Button>
                 </ModalFooter>
@@ -672,46 +688,46 @@ const PreferencesPage = () => {
             </ModalContent>
           </Modal>
 
-          <span className="mt-4 flex text-2xl font-bold text-light-text dark:text-dark-text">
+          <span className="mt-8 flex text-2xl font-black uppercase tracking-tighter text-white">
             Write Only Relays
           </span>
 
           {writeRelays.length === 0 && (
             <div className="mt-4 flex items-center justify-center">
-              <p className="break-words text-center text-xl dark:text-dark-text">
+              <p className="break-words text-center text-xl text-zinc-500">
                 No relays added . . .
               </p>
             </div>
           )}
-          <div className="mt-4 max-h-96 overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
+          <div className="mt-4 max-h-96 overflow-y-auto rounded-xl border border-zinc-800 bg-[#161616] p-2">
             {writeRelays.map((relay) => (
               <div
                 key={relay}
-                className="mb-2 flex items-center justify-between rounded-md border-2 border-light-fg px-3 py-2 dark:border-dark-fg"
+                className="mb-2 flex items-center justify-between rounded-lg border border-zinc-700 bg-[#111] px-3 py-2"
               >
-                <div className="max-w-xsm break-all text-light-text dark:text-dark-text ">
+                <div className="max-w-xsm break-all font-medium text-zinc-300">
                   {relay}
                 </div>
                 {writeRelays.length > 1 && (
                   <MinusCircleIcon
                     onClick={() => deleteRelay(relay, "write")}
-                    className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
+                    className="h-5 w-5 cursor-pointer text-zinc-500 hover:text-red-500"
                   />
                 )}
               </div>
             ))}
           </div>
-          <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+          <div className="flex h-fit flex-row justify-between px-3 py-[15px]">
             <Button
-              className={SHOPSTRBUTTONCLASSNAMES}
+              className={`${NEO_BTN} h-12 px-6 text-sm`}
               onClick={() => handleToggleRelayModal("write")}
             >
               Add Relay
             </Button>
             {relaysAreChanged && (
-              <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+              <div className="flex h-fit flex-row justify-between px-3 py-[15px]">
                 <Button
-                  className={SHOPSTRBUTTONCLASSNAMES}
+                  className={`${NEO_BTN} h-12 px-6 text-sm bg-zinc-800 text-white hover:bg-zinc-700 border-zinc-600`}
                   onClick={() => publishRelays()}
                 >
                   Save
@@ -724,18 +740,18 @@ const PreferencesPage = () => {
             isOpen={showRelayModal}
             onClose={() => handleToggleRelayModal("write")}
             classNames={{
-              body: "py-6",
-              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-              // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
-              header: "border-b-[1px] border-[#292f46]",
-              footer: "border-t-[1px] border-[#292f46]",
-              closeButton: "hover:bg-black/5 active:bg-white/10",
+              base: "bg-[#161616] border border-zinc-800 rounded-2xl",
+              body: "py-8",
+              backdrop: "bg-black/80 backdrop-blur-sm",
+              header: "border-b border-zinc-800 text-white font-bold uppercase",
+              footer: "border-t border-zinc-800",
+              closeButton: "hover:bg-white/10 text-white",
             }}
             scrollBehavior={"outside"}
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+              <ModalHeader className="flex flex-col gap-1">
                 Add Relay
               </ModalHeader>
               <form onSubmit={handleRelaySubmit(onRelaySubmit)}>
@@ -763,7 +779,11 @@ const PreferencesPage = () => {
                         : "";
                       return (
                         <Textarea
-                          className="text-light-text dark:text-dark-text"
+                          classNames={{
+                            input: "text-white",
+                            inputWrapper:
+                              "bg-[#111] border-zinc-700 hover:border-zinc-500 focus-within:!border-yellow-400",
+                          }}
                           variant="bordered"
                           fullWidth={true}
                           placeholder="wss://..."
@@ -787,14 +807,17 @@ const PreferencesPage = () => {
 
                 <ModalFooter>
                   <Button
-                    color="danger"
+                    className="text-red-500 font-bold uppercase tracking-wider bg-transparent hover:bg-red-500/10"
                     variant="light"
                     onClick={() => handleToggleRelayModal("")}
                   >
                     Cancel
                   </Button>
 
-                  <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                  <Button
+                    className={`${NEO_BTN} h-10`}
+                    type="submit"
+                  >
                     Add Relay
                   </Button>
                 </ModalFooter>
@@ -802,31 +825,31 @@ const PreferencesPage = () => {
             </ModalContent>
           </Modal>
 
-          <span className="mt-4 flex text-2xl font-bold text-light-text dark:text-dark-text">
+          <span className="mt-8 flex text-2xl font-black uppercase tracking-tighter text-white">
             Blossom Media Servers
           </span>
 
           {blossomServers.length === 0 && (
             <div className="mt-4 flex items-center justify-center">
-              <p className="break-words text-center text-xl dark:text-dark-text">
+              <p className="break-words text-center text-xl text-zinc-500">
                 No servers added . . .
               </p>
             </div>
           )}
-          <div className="mt-4 max-h-96 overflow-y-scroll rounded-md bg-light-bg dark:bg-dark-bg">
+          <div className="mt-4 max-h-96 overflow-y-auto rounded-xl border border-zinc-800 bg-[#161616] p-2">
             {blossomServers.map((server, index) => (
               <div
                 key={server}
-                className={`mb-2 flex items-center justify-between rounded-md border-2 ${
+                className={`mb-2 flex items-center justify-between rounded-lg border ${
                   index === 0
-                    ? "relative border-purple-500 dark:border-yellow-500"
-                    : "border-light-fg dark:border-dark-fg"
+                    ? "relative border-yellow-400 bg-yellow-400/5"
+                    : "border-zinc-700 bg-[#111]"
                 } px-3 py-2`}
               >
-                <div className="max-w-xsm break-all text-light-text dark:text-dark-text ">
+                <div className="max-w-xsm break-all font-medium text-zinc-300">
                   {server}
                   {index === 0 && (
-                    <span className="bg-light-bg px-3 text-xs text-gray-500 dark:bg-dark-bg">
+                    <span className="ml-2 rounded bg-yellow-400 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-black">
                       Primary Server
                     </span>
                   )}
@@ -834,23 +857,23 @@ const PreferencesPage = () => {
                 {blossomServers.length > 1 && (
                   <MinusCircleIcon
                     onClick={() => deleteBlossomServer(server)}
-                    className="h-5 w-5 cursor-pointer text-red-500 hover:text-yellow-700"
+                    className="h-5 w-5 cursor-pointer text-zinc-500 hover:text-red-500"
                   />
                 )}
               </div>
             ))}
           </div>
-          <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+          <div className="flex h-fit flex-row justify-between px-3 py-[15px]">
             <Button
-              className={SHOPSTRBUTTONCLASSNAMES}
+              className={`${NEO_BTN} h-12 px-6 text-sm`}
               onClick={() => handleToggleBlossomServerModal()}
             >
               Add Server
             </Button>
             {blossomServersAreChanged && (
-              <div className="flex h-fit flex-row justify-between bg-light-bg px-3 py-[15px] dark:bg-dark-bg">
+              <div className="flex h-fit flex-row justify-between px-3 py-[15px]">
                 <Button
-                  className={SHOPSTRBUTTONCLASSNAMES}
+                  className={`${NEO_BTN} h-12 px-6 text-sm bg-zinc-800 text-white hover:bg-zinc-700 border-zinc-600`}
                   onClick={() => publishBlossomServers()}
                 >
                   Save
@@ -863,18 +886,18 @@ const PreferencesPage = () => {
             isOpen={showBlossomServerModal}
             onClose={() => handleToggleBlossomServerModal()}
             classNames={{
-              body: "py-6",
-              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-              // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
-              header: "border-b-[1px] border-[#292f46]",
-              footer: "border-t-[1px] border-[#292f46]",
-              closeButton: "hover:bg-black/5 active:bg-white/10",
+              base: "bg-[#161616] border border-zinc-800 rounded-2xl",
+              body: "py-8",
+              backdrop: "bg-black/80 backdrop-blur-sm",
+              header: "border-b border-zinc-800 text-white font-bold uppercase",
+              footer: "border-t border-zinc-800",
+              closeButton: "hover:bg-white/10 text-white",
             }}
             scrollBehavior={"outside"}
             size="2xl"
           >
             <ModalContent>
-              <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
+              <ModalHeader className="flex flex-col gap-1">
                 Add Server
               </ModalHeader>
               <form onSubmit={handleBlossomSubmit(onBlossomSubmit)}>
@@ -902,7 +925,11 @@ const PreferencesPage = () => {
                         : "";
                       return (
                         <Textarea
-                          className="text-light-text dark:text-dark-text"
+                          classNames={{
+                            input: "text-white",
+                            inputWrapper:
+                              "bg-[#111] border-zinc-700 hover:border-zinc-500 focus-within:!border-yellow-400",
+                          }}
                           variant="bordered"
                           fullWidth={true}
                           placeholder="https://..."
@@ -926,14 +953,17 @@ const PreferencesPage = () => {
 
                 <ModalFooter>
                   <Button
-                    color="danger"
+                    className="text-red-500 font-bold uppercase tracking-wider bg-transparent hover:bg-red-500/10"
                     variant="light"
                     onClick={() => handleToggleBlossomServerModal()}
                   >
                     Cancel
                   </Button>
 
-                  <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+                  <Button
+                    className={`${NEO_BTN} h-10`}
+                    type="submit"
+                  >
                     Add Server
                   </Button>
                 </ModalFooter>
@@ -941,7 +971,7 @@ const PreferencesPage = () => {
             </ModalContent>
           </Modal>
 
-          <span className="my-4 flex  text-2xl font-bold text-light-text dark:text-dark-text">
+          <span className="mt-8 mb-4 flex text-2xl font-black uppercase tracking-tighter text-white">
             Web of Trust
           </span>
 
@@ -952,39 +982,11 @@ const PreferencesPage = () => {
           )}
 
           <div className="mx-4 my-4 flex items-center justify-center text-center">
-            <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
-            <p className="ml-2 text-sm text-light-text dark:text-dark-text">
+            <InformationCircleIcon className="h-6 w-6 text-zinc-500" />
+            <p className="ml-2 text-sm text-zinc-400">
               This filters for listings from friends and friends of friends.
             </p>
           </div>
-
-          <span className="my-4 flex text-2xl font-bold text-light-text dark:text-dark-text">
-            Theme
-          </span>
-          {isLoaded && (
-            <RadioGroup
-              className="ml-2"
-              label="Select your prefered theme:"
-              orientation={"horizontal"}
-              defaultValue={
-                (localStorage.getItem("theme") as string) || theme || "system"
-              }
-              onChange={(e) => {
-                localStorage.setItem("theme", e.target.value);
-                setTheme(e.target.value);
-              }}
-            >
-              <Radio value="system" className="mr-4">
-                System
-              </Radio>
-              <Radio value="light" className="mx-4">
-                Light
-              </Radio>
-              <Radio value="dark" className="mx-4">
-                Dark
-              </Radio>
-            </RadioGroup>
-          )}
         </div>
       </div>
       <FailureModal

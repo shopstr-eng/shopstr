@@ -21,7 +21,7 @@ import {
   getLocalStorageData,
   publishProofEvent,
 } from "@/utils/nostr/nostr-helper-functions";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 import { CashuMint, CashuWallet, MintKeyset, Proof } from "@cashu/cashu-ts";
 import { formatWithCommas } from "../utility-components/display-monetary-info";
 import { CashuWalletContext } from "../../utils/context/context";
@@ -190,10 +190,10 @@ const PayButton = () => {
   return (
     <div>
       <Button
-        className={SHOPSTRBUTTONCLASSNAMES + " m-2"}
+        className={`${NEO_BTN} w-full py-6 text-sm font-black tracking-widest`}
         onClick={() => setShowPayModal(!showPayModal)}
         startContent={
-          <BoltIcon className="h-6 w-6 hover:text-yellow-500 dark:hover:text-purple-500" />
+          <BoltIcon className="h-5 w-5 stroke-2" />
         }
       >
         Pay
@@ -205,13 +205,12 @@ const PayButton = () => {
         classNames={{
           body: "py-6",
           backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-          // base: "border-[#292f46] bg-[#19172c] dark:bg-[#19172c] text-[#a8b0d3]",
           header: "border-b-[1px] border-[#292f46]",
           footer: "border-t-[1px] border-[#292f46]",
           closeButton: "hover:bg-black/5 active:bg-white/10",
         }}
         scrollBehavior={"outside"}
-        size="2xl"
+        size="md"
       >
         <ModalContent>
           <ModalHeader className="flex flex-col gap-1 text-light-text dark:text-dark-text">
@@ -243,6 +242,7 @@ const PayButton = () => {
                     <>
                       <Textarea
                         className="text-light-text dark:text-dark-text"
+                        classNames={{ input: "text-base" }} // Prevents iOS auto-zoom
                         autoFocus
                         variant="bordered"
                         fullWidth={true}
@@ -267,11 +267,6 @@ const PayButton = () => {
                           Fee Reserve: {feeReserveAmount}
                         </div>
                       )}
-                      {/* {totalAmount && totalAmount >= 1 && (
-                        <div className="mt-2 text-right text-light-text dark:text-dark-text">
-                          Total Amount: {totalAmount} sats
-                        </div>
-                      )} */}
                     </>
                   );
                 }}
@@ -294,7 +289,6 @@ const PayButton = () => {
                   backdrop="blur"
                   isOpen={paymentFailed}
                   onClose={() => setPaymentFailed(false)}
-                  // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
                   classNames={{
                     body: "py-6 ",
                     backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -305,7 +299,7 @@ const PayButton = () => {
                   isDismissable={true}
                   scrollBehavior={"normal"}
                   placement={"center"}
-                  size="2xl"
+                  size="md"
                 >
                   <ModalContent>
                     <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
@@ -330,7 +324,6 @@ const PayButton = () => {
                   backdrop="blur"
                   isOpen={isPaid}
                   onClose={() => setIsPaid(false)}
-                  // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
                   classNames={{
                     body: "py-6 ",
                     backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -341,7 +334,7 @@ const PayButton = () => {
                   isDismissable={true}
                   scrollBehavior={"normal"}
                   placement={"center"}
-                  size="2xl"
+                  size="md"
                 >
                   <ModalContent>
                     <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
@@ -367,7 +360,7 @@ const PayButton = () => {
                 Cancel
               </Button>
 
-              <Button className={SHOPSTRBUTTONCLASSNAMES} type="submit">
+              <Button className={NEO_BTN} type="submit">
                 {isRedeeming ? (
                   <>
                     {theme === "dark" ? (

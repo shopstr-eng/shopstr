@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import React from "react";
+import Image from "next/image";
 import HomeFeed from "@/components/home/home-feed";
 
 export default function SellerView({
@@ -17,31 +18,41 @@ export default function SellerView({
   return (
     <>
       {!focusedPubkey && (
-        <div className="flex h-auto w-full items-center justify-center bg-white bg-cover bg-center pt-20 dark:bg-black">
-          <img
+        <div className="flex h-auto w-full items-center justify-center bg-[#111] bg-cover bg-center pt-20">
+          <Image
             src="/shop-freely-light.png"
             alt="Shopstr Banner"
-            className="hidden max-h-[210px] w-full items-center justify-center object-cover dark:hidden sm:flex"
+            className="hidden h-full w-full object-cover"
+            width={1200}
+            height={210}
           />
-          <img
+          <Image
             src="/shop-freely-dark.png"
             alt="Shopstr Banner"
-            className="hidden max-h-[210px] w-full items-center justify-center object-cover sm:hidden dark:sm:flex"
+            className="hidden max-h-[210px] w-full object-cover sm:flex"
+            width={1200}
+            height={210}
+            priority
           />
-          <img
+          <Image
             src="/shop-freely-light-sm.png"
             alt="Shopstr Banner"
-            className="flex max-h-[210px] w-full items-center justify-center object-cover pb-4 dark:hidden sm:hidden"
+            className="hidden"
+            width={600}
+            height={210}
           />
-          <img
+          <Image
             src="/shop-freely-dark-sm.png"
             alt="Shopstr Banner"
-            className="hidden max-h-[210px] w-full items-center justify-center object-cover pb-4 dark:flex dark:sm:hidden"
+            className="flex h-auto w-full object-contain pb-4 sm:hidden"
+            width={600}
+            height={210}
+            priority
           />
         </div>
       )}
       <div
-        className={`flex h-full min-h-screen flex-col bg-light-bg dark:bg-dark-bg ${
+        className={`flex h-full min-h-screen flex-col bg-[#111] ${
           focusedPubkey ? "pt-20" : ""
         }`}
       >

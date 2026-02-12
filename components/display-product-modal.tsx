@@ -18,7 +18,7 @@ import ProductForm from "./product-form";
 import ImageCarousel from "./utility-components/image-carousel";
 import CompactCategories from "./utility-components/compact-categories";
 import { locationAvatar } from "./utility-components/dropdowns/location-dropdown";
-import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
+import { NEO_BTN } from "@/utils/STATIC-VARIABLES";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
 import SuccessModal from "./utility-components/success-modal";
@@ -105,13 +105,13 @@ export default function DisplayProductModal({
         backdrop="blur"
         isOpen={showModal}
         onClose={handleModalToggle}
-        // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
         classNames={{
+          base: "bg-white dark:bg-[#18181b] border border-zinc-200 dark:border-[#27272a] shadow-xl",
           body: "py-6",
-          backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-          header: "border-b-[1px] border-[#292f46]",
-          footer: "border-t-[1px] border-[#292f46]",
-          closeButton: "hover:bg-black/5 active:bg-white/10",
+          backdrop: "bg-black/80 backdrop-blur-sm",
+          header: "border-b border-zinc-200 dark:border-[#27272a] py-4",
+          footer: "border-t border-zinc-200 dark:border-[#27272a] py-4",
+          closeButton: "hover:bg-zinc-100 dark:hover:bg-zinc-800 active:bg-zinc-200 dark:active:bg-zinc-700 text-zinc-500",
         }}
         isDismissable={false}
         scrollBehavior={"outside"}
@@ -119,22 +119,21 @@ export default function DisplayProductModal({
       >
         <ModalContent>
           <ModalHeader className="flex flex-col text-light-text dark:text-dark-text">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+              <h2 className="text-xl md:text-2xl font-black uppercase tracking-tighter text-light-text dark:text-dark-text">
                 {productData.title}
                 {isExpired && (
-                  <Chip color="warning" variant="flat" className="ml-2">
+                  <Chip color="warning" variant="flat" className="ml-2" size="sm">
                     Outdated
                   </Chip>
                 )}
               </h2>
-              {productData.expiration && (
-                <p className="text-sm text-gray-500">
-                  Valid until:{" "}
-                  {new Date(productData.expiration * 1000).toLocaleDateString()}
-                </p>
-              )}
-              <div>
+              <div className="flex items-center gap-3">
+                {productData.expiration && (
+                  <p className="text-xs font-bold uppercase tracking-widest text-zinc-500">
+                    Expires: {new Date(productData.expiration * 1000).toLocaleDateString()}
+                  </p>
+                )}
                 {productData.status === "active" && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900 dark:text-green-300">
                     Active
@@ -153,7 +152,7 @@ export default function DisplayProductModal({
               <ImageCarousel
                 images={productData.images}
                 showThumbs={productData.images.length > 1}
-                classname="max-h-[80vh]"
+                classname="max-h-[50vh] md:max-h-[80vh]"
               />
             ) : null}
             <Divider />
@@ -261,10 +260,10 @@ export default function DisplayProductModal({
           </ModalBody>
 
           <ModalFooter>
-            <div className="flex w-full flex-wrap justify-evenly gap-2">
+            <div className="grid w-full grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <Button
                 type="submit"
-                className={SHOPSTRBUTTONCLASSNAMES}
+                className={`${NEO_BTN} w-full`}
                 startContent={
                   <ShareIcon className="h-6 w-6 hover:text-yellow-500" />
                 }
@@ -278,7 +277,7 @@ export default function DisplayProductModal({
                 <>
                   <Button
                     type="submit"
-                    className={SHOPSTRBUTTONCLASSNAMES}
+                    className={`${NEO_BTN} w-full`}
                     startContent={
                       <PencilSquareIcon className="h-6 w-6 hover:text-yellow-500" />
                     }
@@ -293,7 +292,7 @@ export default function DisplayProductModal({
                     onConfirm={beginDeleteListingProcess}
                   >
                     <Button
-                      className="min-w-fit bg-gradient-to-tr from-red-600 via-red-500 to-red-600 text-white shadow-lg"
+                      className={`${NEO_BTN} w-full bg-red-500 text-white hover:bg-red-400`}
                       startContent={
                         <TrashIcon className="h-6 w-6 hover:text-yellow-500" />
                       }

@@ -56,7 +56,7 @@ const MessageFeed = ({ isInquiry = false }) => {
     return () => {
       router.events.off("routeChangeComplete", handleRouteChange);
     };
-  }, [router, framer]);
+  }, [router, framer, hookProps.tabs]);
 
   return (
     <div className="flex w-full min-w-0 flex-1 flex-col">
@@ -68,7 +68,7 @@ const MessageFeed = ({ isInquiry = false }) => {
         </div>
       </div>
 
-      <div className="flex w-full min-w-0 flex-1 flex-col overflow-x-auto bg-light-bg pt-4 dark:bg-dark-bg">
+      <div className="flex w-full min-w-0 flex-1 flex-col overflow-x-auto bg-[#111] pt-4 text-white selection:bg-yellow-400 selection:text-black">
         {showSpinner ? null : framer.selectedTab!.children}
       </div>
     </div>
