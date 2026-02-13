@@ -180,6 +180,20 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### Bulk/Bundle Pricing Feature (February 12, 2026)
+
+- Added bulk pricing data model: `bulkPrices` (Map<number, number>), `selectedBulkOption`, and `bulkPrice` fields to ProductData type
+- Created `BulkSelector` component (`components/utility-components/bulk-selector.tsx`) for buyer-side bundle selection dropdown
+- Updated product parser (`utils/parsers/product-parser-functions.ts`) to parse "bulk" tags from Nostr events into bulkPrices Map
+- Added seller UI in product form (`components/product-form.tsx`) with toggle switch and dynamic tier management (add/remove unit-price pairs)
+- Product form writes bulk pricing as ["bulk", "units", "price"] Nostr event tags
+- Integrated BulkSelector into checkout card (`components/utility-components/checkout-card.tsx`) with price calculation and display
+- Updated cart page (`pages/cart/index.tsx`) to handle bulk selection, display bundle info, and use bulk prices in calculations
+- Added bulk pricing to all order messages in both ProductInvoiceCard and CartInvoiceCard via "bulk" tag in constructGiftWrappedEvent
+- Added `selectedBulkOption` to all message options (order-payment, order-receipt, order-info) in both invoice cards
+- Added bulk option display in productDetails strings and order summary UI throughout both invoice cards
+- Priority system: bulk pricing overrides single-unit price when selected (bulk > volume > base price)
+
 ### Size and Volume Options for Orders (February 2, 2026)
 
 - Added "size" and "volume" tags to Nostr order messages via constructGiftWrappedEvent function

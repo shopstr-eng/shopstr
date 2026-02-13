@@ -76,6 +76,7 @@ export default function ProductInvoiceCard({
   setCashuPaymentFailed,
   selectedSize,
   selectedVolume,
+  selectedBulkOption,
   discountCode,
   discountPercentage,
   originalPrice,
@@ -90,6 +91,7 @@ export default function ProductInvoiceCard({
   setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
   selectedSize?: string;
   selectedVolume?: string;
+  selectedBulkOption?: number;
   discountCode?: string;
   discountPercentage?: number;
   originalPrice?: number;
@@ -136,7 +138,7 @@ export default function ProductInvoiceCard({
     if (!signer || !nostr || !userPubkey) return;
 
     try {
-      const inquiryMessage = `I just placed an order for your ${productTitle} listing on Shopstr! Please check your Shopstr DMs for any related order information.`;
+      const inquiryMessage = `I just placed an order for your ${productTitle} listing on Shopstr! Please check your Shopstr order dashboard for any relevant information.`;
 
       const { nsec: nsecForSellerReceiver, npub: npubForSellerReceiver } =
         await generateKeys();
@@ -362,6 +364,7 @@ export default function ProductInvoiceCard({
           ...productData,
           selectedSize,
           selectedVolume,
+          selectedBulkOption,
         },
         paymentType,
         paymentReference,
@@ -370,6 +373,7 @@ export default function ProductInvoiceCard({
         pickup,
         selectedSize,
         selectedVolume,
+        selectedBulkOption,
         buyerPubkey,
         donationAmount: donationAmountValue,
         donationPercentage: donationPercentageValue,
@@ -385,6 +389,7 @@ export default function ProductInvoiceCard({
           ...productData,
           selectedSize,
           selectedVolume,
+          selectedBulkOption,
         },
         status: "confirmed",
         paymentType,
@@ -394,6 +399,7 @@ export default function ProductInvoiceCard({
         pickup,
         selectedSize,
         selectedVolume,
+        selectedBulkOption,
         buyerPubkey,
         donationAmount: donationAmountValue,
         donationPercentage: donationPercentageValue,
@@ -411,6 +417,7 @@ export default function ProductInvoiceCard({
           ...productData,
           selectedSize,
           selectedVolume,
+          selectedBulkOption,
         },
         quantity: 1,
         contact,
@@ -418,6 +425,7 @@ export default function ProductInvoiceCard({
         pickup,
         selectedSize,
         selectedVolume,
+        selectedBulkOption,
         buyerPubkey,
         donationAmount: donationAmountValue,
         donationPercentage: donationPercentageValue,
@@ -734,6 +742,13 @@ export default function ProductInvoiceCard({
           productDetails += " in a " + selectedVolume;
         }
       }
+      if (selectedBulkOption) {
+        if (productDetails) {
+          productDetails += " (bulk: " + selectedBulkOption + " units)";
+        } else {
+          productDetails += " (bulk: " + selectedBulkOption + " units)";
+        }
+      }
       if (selectedPickupLocation) {
         if (productDetails) {
           productDetails += " (pickup at: " + selectedPickupLocation + ")";
@@ -816,6 +831,13 @@ export default function ProductInvoiceCard({
               productDetails += " and a " + selectedVolume;
             } else {
               productDetails += " in a " + selectedVolume;
+            }
+          }
+          if (selectedBulkOption) {
+            if (productDetails) {
+              productDetails += " (bulk: " + selectedBulkOption + " units)";
+            } else {
+              productDetails += " (bulk: " + selectedBulkOption + " units)";
             }
           }
           if (selectedPickupLocation) {
@@ -933,6 +955,13 @@ export default function ProductInvoiceCard({
               productDetails += " in a " + selectedVolume;
             }
           }
+          if (selectedBulkOption) {
+            if (productDetails) {
+              productDetails += " (bulk: " + selectedBulkOption + " units)";
+            } else {
+              productDetails += " (bulk: " + selectedBulkOption + " units)";
+            }
+          }
           if (selectedPickupLocation) {
             if (productDetails) {
               productDetails += " (pickup at: " + selectedPickupLocation + ")";
@@ -985,6 +1014,13 @@ export default function ProductInvoiceCard({
             productDetails += " and a " + selectedVolume;
           } else {
             productDetails += " in a " + selectedVolume;
+          }
+        }
+        if (selectedBulkOption) {
+          if (productDetails) {
+            productDetails += " (bulk: " + selectedBulkOption + " units)";
+          } else {
+            productDetails += " (bulk: " + selectedBulkOption + " units)";
           }
         }
         if (selectedPickupLocation) {
@@ -1334,6 +1370,13 @@ export default function ProductInvoiceCard({
               productDetails += " in a " + selectedVolume;
             }
           }
+          if (selectedBulkOption) {
+            if (productDetails) {
+              productDetails += " (bulk: " + selectedBulkOption + " units)";
+            } else {
+              productDetails += " (bulk: " + selectedBulkOption + " units)";
+            }
+          }
           if (selectedPickupLocation) {
             if (productDetails) {
               productDetails += " (pickup at: " + selectedPickupLocation + ")";
@@ -1416,6 +1459,13 @@ export default function ProductInvoiceCard({
               productDetails += " in a " + selectedVolume;
             }
           }
+          if (selectedBulkOption) {
+            if (productDetails) {
+              productDetails += " (bulk: " + selectedBulkOption + " units)";
+            } else {
+              productDetails += " (bulk: " + selectedBulkOption + " units)";
+            }
+          }
           if (selectedPickupLocation) {
             if (productDetails) {
               productDetails += " (pickup at: " + selectedPickupLocation + ")";
@@ -1464,6 +1514,13 @@ export default function ProductInvoiceCard({
           productDetails += " and a " + selectedVolume;
         } else {
           productDetails += " in a " + selectedVolume;
+        }
+      }
+      if (selectedBulkOption) {
+        if (productDetails) {
+          productDetails += " (bulk: " + selectedBulkOption + " units)";
+        } else {
+          productDetails += " (bulk: " + selectedBulkOption + " units)";
         }
       }
       if (selectedPickupLocation) {
@@ -1572,6 +1629,13 @@ export default function ProductInvoiceCard({
             productDetails += " and a " + selectedVolume;
           } else {
             productDetails += " in a " + selectedVolume;
+          }
+        }
+        if (selectedBulkOption) {
+          if (productDetails) {
+            productDetails += " (bulk: " + selectedBulkOption + " units)";
+          } else {
+            productDetails += " (bulk: " + selectedBulkOption + " units)";
           }
         }
         if (selectedPickupLocation) {
@@ -1686,6 +1750,13 @@ export default function ProductInvoiceCard({
           productDetails += " in a " + selectedVolume;
         }
       }
+      if (selectedBulkOption) {
+        if (productDetails) {
+          productDetails += " (bulk: " + selectedBulkOption + " units)";
+        } else {
+          productDetails += " (bulk: " + selectedBulkOption + " units)";
+        }
+      }
       if (selectedPickupLocation) {
         if (productDetails) {
           productDetails += " (pickup at: " + selectedPickupLocation + ")";
@@ -1731,6 +1802,13 @@ export default function ProductInvoiceCard({
           productDetails += " and a " + selectedVolume;
         } else {
           productDetails += " in a " + selectedVolume;
+        }
+      }
+      if (selectedBulkOption) {
+        if (productDetails) {
+          productDetails += " (bulk: " + selectedBulkOption + " units)";
+        } else {
+          productDetails += " (bulk: " + selectedBulkOption + " units)";
         }
       }
       if (selectedPickupLocation) {
@@ -2239,6 +2317,12 @@ export default function ProductInvoiceCard({
                   </p>
                 )}
 
+                {selectedBulkOption && (
+                  <p className="mb-1 text-gray-600 dark:text-gray-400">
+                    Bundle: {selectedBulkOption} units
+                  </p>
+                )}
+
                 <p className="mb-1 text-gray-600 dark:text-gray-400">
                   Quantity: 1
                 </p>
@@ -2429,6 +2513,12 @@ export default function ProductInvoiceCard({
               {selectedVolume && (
                 <p className="mb-1 text-gray-600 dark:text-gray-400">
                   Volume: {selectedVolume}
+                </p>
+              )}
+
+              {selectedBulkOption && (
+                <p className="mb-1 text-gray-600 dark:text-gray-400">
+                  Bundle: {selectedBulkOption} units
                 </p>
               )}
 

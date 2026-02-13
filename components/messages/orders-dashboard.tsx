@@ -79,6 +79,7 @@ interface OrderData {
   pickupLocation?: string;
   selectedSize?: string;
   selectedVolume?: string;
+  selectedBulkOption?: number;
   paymentToken?: string;
   paymentMethod?: string;
   productTitle?: string;
@@ -335,6 +336,9 @@ const OrdersDashboard = () => {
             const pickupLocation = tagsMap.get("pickup");
             const selectedSize = tagsMap.get("size");
             const selectedVolume = tagsMap.get("volume");
+            const bulkTag = messageEvent.tags.find((tag) => tag[0] === "bulk");
+            const selectedBulkOption =
+              bulkTag && bulkTag[1] ? parseInt(bulkTag[1]) : undefined;
 
             const donationTagArray = messageEvent.tags.find(
               (tag) => tag[0] === "donation_amount"
@@ -461,6 +465,7 @@ const OrdersDashboard = () => {
               pickupLocation,
               selectedSize,
               selectedVolume,
+              selectedBulkOption,
               paymentToken,
               paymentMethod,
               productTitle,
@@ -533,6 +538,8 @@ const OrdersDashboard = () => {
             pickupLocation: order.pickupLocation || existing.pickupLocation,
             selectedSize: order.selectedSize || existing.selectedSize,
             selectedVolume: order.selectedVolume || existing.selectedVolume,
+            selectedBulkOption:
+              order.selectedBulkOption || existing.selectedBulkOption,
             paymentToken: order.paymentToken || existing.paymentToken,
             paymentMethod:
               order.paymentMethod !== "Not specified"
@@ -1248,6 +1255,10 @@ const OrdersDashboard = () => {
                               specs.push(`Size: ${order.selectedSize}`);
                             if (order.selectedVolume)
                               specs.push(`Volume: ${order.selectedVolume}`);
+                            if (order.selectedBulkOption)
+                              specs.push(
+                                `Bundle: ${order.selectedBulkOption} units`
+                              );
                             return specs.length > 0 ? specs.join(", ") : "N/A";
                           })()}
                         </td>
@@ -1272,7 +1283,8 @@ const OrdersDashboard = () => {
                               }
                               className="cursor-pointer text-left underline hover:text-purple-600 dark:hover:text-purple-400"
                             >
-                              {order.productTitle} x {order.quantity || 1}
+                              {order.productTitle} x{" "}
+                              {order.selectedBulkOption || order.quantity || 1}
                             </button>
                           ) : (
                             "N/A"

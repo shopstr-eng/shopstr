@@ -124,7 +124,7 @@ export default function CartInvoiceCard({
       const actualUserPubkey = await signer.getPubKey?.();
       if (!actualUserPubkey) return;
 
-      const inquiryMessage = `I just placed an order for your ${productTitle} listing on Shopstr! Please check your Shopstr DMs for any related order information.`;
+      const inquiryMessage = `I just placed an order for your ${productTitle} listing on Shopstr! Please check your Shopstr order dashboard for any relevant information.`;
 
       const { nsec: nsecForSellerReceiver, npub: npubForSellerReceiver } =
         await generateKeys();
@@ -468,6 +468,7 @@ export default function CartInvoiceCard({
         donationPercentage: donationPercentageValue,
         selectedSize: product.selectedSize,
         selectedVolume: product.selectedVolume,
+        selectedBulkOption: product.selectedBulkOption,
       };
     } else if (isReceipt) {
       messageSubject = "order-receipt";
@@ -488,6 +489,7 @@ export default function CartInvoiceCard({
         donationPercentage: donationPercentageValue,
         selectedSize: product.selectedSize,
         selectedVolume: product.selectedVolume,
+        selectedBulkOption: product.selectedBulkOption,
       };
     } else if (isDonation) {
       messageSubject = "donation";
@@ -508,6 +510,7 @@ export default function CartInvoiceCard({
         donationPercentage: donationPercentageValue,
         selectedSize: product.selectedSize,
         selectedVolume: product.selectedVolume,
+        selectedBulkOption: product.selectedBulkOption,
       };
     }
 
@@ -1126,6 +1129,15 @@ export default function CartInvoiceCard({
                 productDetails += " in a " + product.selectedVolume;
               }
             }
+            if (product.selectedBulkOption) {
+              if (productDetails) {
+                productDetails +=
+                  " (bulk: " + product.selectedBulkOption + " units)";
+              } else {
+                productDetails +=
+                  " (bulk: " + product.selectedBulkOption + " units)";
+              }
+            }
 
             // Add pickup location if available for this specific product
             const pickupLocation =
@@ -1240,6 +1252,15 @@ export default function CartInvoiceCard({
                 productDetails += " in a " + product.selectedVolume;
               }
             }
+            if (product.selectedBulkOption) {
+              if (productDetails) {
+                productDetails +=
+                  " (bulk: " + product.selectedBulkOption + " units)";
+              } else {
+                productDetails +=
+                  " (bulk: " + product.selectedBulkOption + " units)";
+              }
+            }
 
             // Add pickup location if available for this specific product
             const pickupLocation =
@@ -1311,6 +1332,15 @@ export default function CartInvoiceCard({
             productDetails += " and a " + product.selectedVolume;
           } else {
             productDetails += " in a " + product.selectedVolume;
+          }
+        }
+        if (product.selectedBulkOption) {
+          if (productDetails) {
+            productDetails +=
+              " (bulk: " + product.selectedBulkOption + " units)";
+          } else {
+            productDetails +=
+              " (bulk: " + product.selectedBulkOption + " units)";
           }
         }
 
@@ -1466,6 +1496,15 @@ export default function CartInvoiceCard({
               productDetails += " in a " + product.selectedVolume;
             }
           }
+          if (product.selectedBulkOption) {
+            if (productDetails) {
+              productDetails +=
+                " (bulk: " + product.selectedBulkOption + " units)";
+            } else {
+              productDetails +=
+                " (bulk: " + product.selectedBulkOption + " units)";
+            }
+          }
 
           // Add pickup location if available for this specific product
           const pickupLocation =
@@ -1590,6 +1629,15 @@ export default function CartInvoiceCard({
             productDetails += " in a " + product.selectedVolume;
           }
         }
+        if (product.selectedBulkOption) {
+          if (productDetails) {
+            productDetails +=
+              " (bulk: " + product.selectedBulkOption + " units)";
+          } else {
+            productDetails +=
+              " (bulk: " + product.selectedBulkOption + " units)";
+          }
+        }
 
         const pickupLocation =
           selectedPickupLocations[product.id] ||
@@ -1642,6 +1690,15 @@ export default function CartInvoiceCard({
             productDetails += " and a " + product.selectedVolume;
           } else {
             productDetails += " in a " + product.selectedVolume;
+          }
+        }
+        if (product.selectedBulkOption) {
+          if (productDetails) {
+            productDetails +=
+              " (bulk: " + product.selectedBulkOption + " units)";
+          } else {
+            productDetails +=
+              " (bulk: " + product.selectedBulkOption + " units)";
           }
         }
 
@@ -2129,6 +2186,11 @@ export default function CartInvoiceCard({
                           Volume: {product.selectedVolume}
                         </p>
                       )}
+                      {product.selectedBulkOption && (
+                        <p className="mb-1 text-gray-600 dark:text-gray-400">
+                          Bundle: {product.selectedBulkOption} units
+                        </p>
+                      )}
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         Quantity: {quantities[product.id] || 1}
                       </p>
@@ -2146,9 +2208,11 @@ export default function CartInvoiceCard({
                     {products.map((product) => {
                       const discount = appliedDiscounts[product.pubkey] || 0;
                       const basePrice =
-                        (product.volumePrice !== undefined
-                          ? product.volumePrice
-                          : product.price) * (quantities[product.id] || 1);
+                        (product.bulkPrice !== undefined
+                          ? product.bulkPrice
+                          : product.volumePrice !== undefined
+                            ? product.volumePrice
+                            : product.price) * (quantities[product.id] || 1);
                       const discountedPrice =
                         discount > 0
                           ? basePrice * (1 - discount / 100)
@@ -2340,6 +2404,11 @@ export default function CartInvoiceCard({
                         Volume: {product.selectedVolume}
                       </p>
                     )}
+                    {product.selectedBulkOption && (
+                      <p className="mb-1 text-gray-600 dark:text-gray-400">
+                        Bundle: {product.selectedBulkOption} units
+                      </p>
+                    )}
                     <p className="text-sm text-gray-600 dark:text-gray-400">
                       Quantity: {quantities[product.id] || 1}
                     </p>
@@ -2357,9 +2426,11 @@ export default function CartInvoiceCard({
                   {products.map((product) => {
                     const discount = appliedDiscounts[product.pubkey] || 0;
                     const originalPrice =
-                      product.volumePrice !== undefined
-                        ? product.volumePrice
-                        : product.price;
+                      product.bulkPrice !== undefined
+                        ? product.bulkPrice
+                        : product.volumePrice !== undefined
+                          ? product.volumePrice
+                          : product.price;
                     const basePrice =
                       originalPrice * (quantities[product.id] || 1);
                     const discountedPrice =
@@ -2389,7 +2460,7 @@ export default function CartInvoiceCard({
                             `(x${quantities[product.id]})`}
                         </div>
                         <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
-                          <span className="ml-2">Original price:</span>
+                          <span className="ml-2">Price:</span>
                           <span>
                             {formatWithCommas(originalPrice, product.currency)}
                           </span>

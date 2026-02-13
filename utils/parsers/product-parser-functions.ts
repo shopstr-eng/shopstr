@@ -30,6 +30,9 @@ export type ProductData = {
   selectedQuantity?: number;
   selectedVolume?: string;
   volumePrice?: number;
+  bulkPrices?: Map<number, number>;
+  selectedBulkOption?: number;
+  bulkPrice?: number;
   required?: string;
   restrictions?: string;
   pickupLocations?: string[];
@@ -147,6 +150,14 @@ export const parseTags = (productEvent: NostrEvent) => {
           if (values[1]) {
             parsedData.volumePrices!.set(values[0], parseFloat(values[1]));
           }
+        }
+        break;
+      case "bulk":
+        if (!parsedData.bulkPrices) {
+          parsedData.bulkPrices = new Map<number, number>();
+        }
+        if (values[0] && values[1]) {
+          parsedData.bulkPrices.set(parseInt(values[0]), parseFloat(values[1]));
         }
         break;
       case "condition":

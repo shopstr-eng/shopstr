@@ -25,15 +25,6 @@ externalPort = 5000
 runButton = "Project"
 
 [[workflows.workflow]]
-name = "Run"
-author = 20519411
-mode = "sequential"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npm run dev"
-
-[[workflows.workflow]]
 name = "Project"
 mode = "parallel"
 author = "agent"

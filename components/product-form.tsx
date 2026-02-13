@@ -108,6 +108,12 @@ export default function ProductForm({
           "Volume Prices": oldValues.volumePrices
             ? oldValues.volumePrices
             : new Map<string, number>(),
+          "Bulk Pricing Enabled": oldValues.bulkPrices
+            ? oldValues.bulkPrices.size > 0
+            : false,
+          "Bulk Prices": oldValues.bulkPrices
+            ? oldValues.bulkPrices
+            : new Map<number, number>(),
           Condition: oldValues.condition ? oldValues.condition : "",
           Status: oldValues.status ? oldValues.status : "",
           Required: oldValues.required ? oldValues.required : "",
@@ -214,6 +220,15 @@ export default function ProductForm({
         const price =
           (data["Volume Prices"] as Map<string, number>).get(volume) || 0;
         tags.push(["volume", volume, price.toString()]);
+      });
+    }
+
+    if (data["Bulk Pricing Enabled"] && data["Bulk Prices"]) {
+      const bulkPrices = data["Bulk Prices"] as unknown as Map<number, number>;
+      bulkPrices.forEach((price, units) => {
+        if (units > 0 && price > 0) {
+          tags.push(["bulk", units.toString(), price.toString()]);
+        }
       });
     }
 
@@ -909,6 +924,161 @@ export default function ProductForm({
                       ))}
                     </SelectSection>
                   </Select>
+                );
+              }}
+            />
+
+            <Controller
+              name="Bulk Pricing Enabled"
+              control={control}
+              render={({ field: { onChange, value } }) => (
+                <div className="mt-4 flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-semibold text-light-text dark:text-dark-text">
+                      Bulk/Bundle Pricing
+                    </span>
+                    <span className="text-tiny text-gray-500">
+                      Offer discounted pricing for multiple units
+                    </span>
+                  </div>
+                  <Switch
+                    isSelected={!!value}
+                    onValueChange={onChange}
+                    classNames={{
+                      wrapper:
+                        "group-data-[selected=true]:bg-shopstr-purple dark:group-data-[selected=true]:bg-shopstr-yellow",
+                    }}
+                  />
+                </div>
+              )}
+            />
+
+            <Controller
+              name="Bulk Prices"
+              control={control}
+              render={({
+                field: { onChange, value = new Map<number, number>() },
+              }) => {
+                const bulkEnabled = watch("Bulk Pricing Enabled");
+                if (!bulkEnabled) return <></>;
+
+                const handleAddTier = () => {
+                  const newPrices = new Map(value);
+                  newPrices.set(0, 0);
+                  onChange(newPrices);
+                };
+
+                const handleRemoveTier = (units: number) => {
+                  const newPrices = new Map(value);
+                  newPrices.delete(units);
+                  onChange(newPrices);
+                };
+
+                const handleUnitsChange = (
+                  oldUnits: number,
+                  newUnits: number
+                ) => {
+                  const newPrices = new Map<number, number>();
+                  value.forEach((price: number, units: number) => {
+                    if (units === oldUnits) {
+                      newPrices.set(newUnits, price);
+                    } else {
+                      newPrices.set(units, price);
+                    }
+                  });
+                  onChange(newPrices);
+                };
+
+                const handlePriceChange = (units: number, price: number) => {
+                  const newPrices = new Map(value);
+                  newPrices.set(units, price);
+                  onChange(newPrices);
+                };
+
+                const entries = Array.from(value.entries()).sort(
+                  (a: [number, number], b: [number, number]) => a[0] - b[0]
+                );
+
+                return (
+                  <div className="mt-2 space-y-3">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Set prices for different unit quantities. These prices
+                      override the single-unit price.
+                    </p>
+                    {entries.map(
+                      ([units, price]: [number, number], index: number) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            min="1"
+                            label="Units"
+                            labelPlacement="inside"
+                            value={units > 0 ? units.toString() : ""}
+                            onChange={(e) =>
+                              handleUnitsChange(
+                                units,
+                                parseInt(e.target.value) || 0
+                              )
+                            }
+                            className="w-24"
+                          />
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            label="Total Price"
+                            labelPlacement="inside"
+                            value={price > 0 ? price.toString() : ""}
+                            onChange={(e) =>
+                              handlePriceChange(
+                                units,
+                                parseFloat(e.target.value) || 0
+                              )
+                            }
+                            className="flex-1"
+                            endContent={
+                              <span className="text-small text-default-400">
+                                {watchCurrency}
+                              </span>
+                            }
+                          />
+                          <Button
+                            isIconOnly
+                            color="danger"
+                            variant="light"
+                            onClick={() => handleRemoveTier(units)}
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )
+                    )}
+                    {theme === "dark" ? (
+                      <Button
+                        variant="bordered"
+                        color="warning"
+                        className="w-full"
+                        onClick={handleAddTier}
+                      >
+                        Add Bulk Tier
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="bordered"
+                        color="secondary"
+                        className="w-full"
+                        onClick={handleAddTier}
+                      >
+                        Add Bulk Tier
+                      </Button>
+                    )}
+                    {entries.length > 0 && (
+                      <div className="w-full text-xs text-light-text opacity-75 dark:text-dark-text">
+                        Note: Bulk prices override the single-unit price when a
+                        buyer selects a bundle option.
+                      </div>
+                    )}
+                  </div>
                 );
               }}
             />
