@@ -475,7 +475,8 @@ export async function sendGiftWrappedMessageEvent(
     const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
     await trackFailedRelayPublish(
       giftWrappedMessageEvent.id,
-      allWriteRelays
+      allWriteRelays,
+      giftWrappedMessageEvent
     ).catch(console.error);
   }
 }
@@ -1006,9 +1007,11 @@ export async function finalizeAndSendNostrEvent(
         error
       );
       const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
-      await trackFailedRelayPublish(signedEvent.id, allWriteRelays).catch(
-        console.error
-      );
+      await trackFailedRelayPublish(
+        signedEvent.id,
+        allWriteRelays,
+        signedEvent
+      ).catch(console.error);
     }
 
     // return the signed event to caller so we know generated IDs

@@ -21,6 +21,16 @@ export default async function handler(
 
     client = await dbPool.connect();
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS failed_relay_publishes (
+        event_id TEXT PRIMARY KEY,
+        relays TEXT NOT NULL,
+        event_data TEXT,
+        created_at BIGINT NOT NULL,
+        retry_count INTEGER DEFAULT 0
+      )
+    `);
+
     if (incrementRetry) {
       // Increment retry count
       await client.query(
