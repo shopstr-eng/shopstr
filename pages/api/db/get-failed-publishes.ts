@@ -15,24 +15,45 @@ export default async function handler(
   try {
     client = await dbPool.connect();
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS failed_relay_publishes (
+        event_id TEXT PRIMARY KEY,
+        relays TEXT NOT NULL,
+        event_data TEXT,
+        created_at BIGINT NOT NULL,
+        retry_count INTEGER DEFAULT 0
+      )
+    `);
+
+    await client.query(`
+      ALTER TABLE failed_relay_publishes
+      ADD COLUMN IF NOT EXISTS event_data TEXT
+    `);
+
     // Get all failed publishes with retry count < 5 (limit retries)
     const result = await client.query(
-      `SELECT fp.event_id, fp.relays, fp.retry_count, e.event_data
-       FROM failed_relay_publishes fp
-       LEFT JOIN events e ON fp.event_id = e.id
-       WHERE fp.retry_count < 5
-       ORDER BY fp.created_at ASC
+      `SELECT event_id, relays, retry_count, event_data
+       FROM failed_relay_publishes
+       WHERE retry_count < 5
+         AND event_data IS NOT NULL
+       ORDER BY created_at ASC
        LIMIT 50`
     );
 
     const failedPublishes = result.rows
-      .filter((row: any) => row.event_data)
-      .map((row: any) => ({
-        eventId: row.event_id,
-        relays: JSON.parse(row.relays),
-        event: JSON.parse(row.event_data),
-        retryCount: row.retry_count,
-      }));
+      .map((row: any) => {
+        try {
+          return {
+            eventId: row.event_id,
+            relays: JSON.parse(row.relays),
+            event: JSON.parse(row.event_data),
+            retryCount: row.retry_count,
+          };
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean);
 
     return res.status(200).json(failedPublishes);
   } catch (error) {

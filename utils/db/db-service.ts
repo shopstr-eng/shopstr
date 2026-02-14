@@ -182,6 +182,18 @@ async function initializeTables(): Promise<void> {
 
       CREATE INDEX IF NOT EXISTS idx_discount_codes_pubkey ON discount_codes(pubkey);
       CREATE INDEX IF NOT EXISTS idx_discount_codes_code ON discount_codes(code);
+
+      -- Failed relay publish tracking table
+      CREATE TABLE IF NOT EXISTS failed_relay_publishes (
+          event_id TEXT PRIMARY KEY,
+          relays TEXT NOT NULL,
+          event_data TEXT,
+          created_at BIGINT NOT NULL,
+          retry_count INTEGER DEFAULT 0
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_failed_relay_publishes_created_at ON failed_relay_publishes(created_at ASC);
+      CREATE INDEX IF NOT EXISTS idx_failed_relay_publishes_retry_count ON failed_relay_publishes(retry_count);
     `);
 
     // Migration: Add is_read, order_status, order_id columns to existing message_events tables
@@ -209,6 +221,13 @@ async function initializeTables(): Promise<void> {
         ) THEN
           ALTER TABLE message_events ADD COLUMN order_id TEXT DEFAULT NULL;
           CREATE INDEX IF NOT EXISTS idx_message_events_order_id ON message_events(order_id);
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'failed_relay_publishes' AND column_name = 'event_data'
+        ) THEN
+          ALTER TABLE failed_relay_publishes ADD COLUMN event_data TEXT;
         END IF;
       END $$;
     `);
