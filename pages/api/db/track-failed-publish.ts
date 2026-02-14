@@ -13,7 +13,7 @@ export default async function handler(
   let client;
 
   try {
-    const { eventId, relays } = req.body;
+    const { eventId, relays, event } = req.body;
 
     if (!eventId || !relays || !Array.isArray(relays)) {
       return res.status(400).json({ error: "Invalid request body" });
@@ -26,19 +26,31 @@ export default async function handler(
       CREATE TABLE IF NOT EXISTS failed_relay_publishes (
         event_id TEXT PRIMARY KEY,
         relays TEXT NOT NULL,
+        event_data TEXT,
         created_at BIGINT NOT NULL,
         retry_count INTEGER DEFAULT 0
       )
     `);
 
+    await client.query(`
+      ALTER TABLE failed_relay_publishes
+      ADD COLUMN IF NOT EXISTS event_data TEXT
+    `);
+
     // Insert or update the failed publish record
     await client.query(
-      `INSERT INTO failed_relay_publishes (event_id, relays, created_at, retry_count)
-       VALUES ($1, $2, $3, 0)
+      `INSERT INTO failed_relay_publishes (event_id, relays, event_data, created_at, retry_count)
+       VALUES ($1, $2, $3, $4, 0)
        ON CONFLICT (event_id) DO UPDATE SET
          relays = EXCLUDED.relays,
+         event_data = EXCLUDED.event_data,
          created_at = EXCLUDED.created_at`,
-      [eventId, JSON.stringify(relays), Math.floor(Date.now() / 1000)]
+      [
+        eventId,
+        JSON.stringify(relays),
+        event ? JSON.stringify(event) : null,
+        Math.floor(Date.now() / 1000),
+      ]
     );
 
     return res.status(200).json({ success: true });
