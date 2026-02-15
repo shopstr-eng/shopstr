@@ -7,7 +7,11 @@ import {
 import FailureModal from "./failure-modal";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { AnimatePresence, motion } from "framer-motion";
-import { PhotoIcon, ArrowUpTrayIcon } from "@heroicons/react/24/outline";
+import {
+  PhotoIcon,
+  ArrowUpTrayIcon,
+  LinkIcon,
+} from "@heroicons/react/24/outline";
 
 // Maximum file size in bytes (100MB)
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
@@ -21,6 +25,7 @@ export const FileUploaderButton = ({
   imgCallbackOnUpload,
   isPlaceholder,
   isProductUpload,
+  allowUrlInput,
 }: {
   disabled?: boolean;
   isIconOnly?: boolean;
@@ -29,6 +34,7 @@ export const FileUploaderButton = ({
   imgCallbackOnUpload: (imgUrl: string) => void;
   isPlaceholder?: boolean;
   isProductUpload?: boolean;
+  allowUrlInput?: boolean;
 }) => {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
@@ -38,6 +44,7 @@ export const FileUploaderButton = ({
     { src: string; name: string; size: number }[]
   >([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
 
   const hiddenFileInput = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
@@ -249,6 +256,25 @@ export const FileUploaderButton = ({
     }
   };
 
+  const handleUrlSubmit = () => {
+    const trimmed = urlInput.trim();
+    if (!trimmed) return;
+
+    try {
+      const parsed = new URL(trimmed);
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        throw new Error("Invalid protocol");
+      }
+    } catch {
+      setFailureText("Please enter a valid image URL (starting with https://).");
+      setShowFailureModal(true);
+      return;
+    }
+
+    imgCallbackOnUpload(trimmed);
+    setUrlInput("");
+  };
+
   return (
     <div className="flex w-full flex-col gap-4">
       {/* Drag and Drop Zone */}
@@ -336,6 +362,39 @@ export const FileUploaderButton = ({
           />
         )}
       </div>
+
+      {/* URL paste input — lets users provide an already-hosted image */}
+      {allowUrlInput && (
+        <div className="flex w-full items-center gap-2">
+          <Input
+            type="url"
+            placeholder="Or paste an image URL..."
+            value={urlInput}
+            onChange={(e) => setUrlInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleUrlSubmit();
+              }
+            }}
+            variant="bordered"
+            size="sm"
+            className="flex-1 text-light-text dark:text-dark-text"
+            startContent={
+              <LinkIcon className="h-4 w-4 text-default-400" />
+            }
+            isDisabled={disabled || loading}
+          />
+          <Button
+            size="sm"
+            className="shrink-0 bg-shopstr-purple text-white dark:bg-shopstr-yellow dark:text-black"
+            onClick={handleUrlSubmit}
+            isDisabled={!urlInput.trim() || disabled || loading}
+          >
+            Use URL
+          </Button>
+        </div>
+      )}
 
       {/* Progress Bar */}
       <AnimatePresence>

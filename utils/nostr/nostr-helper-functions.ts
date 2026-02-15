@@ -1066,14 +1066,29 @@ export async function blossomUploadImages(
     if (i == 0) {
       const url = new URL("/upload", server);
 
-      const response = await fetch(url, {
+      const res = await fetch(url, {
         method: "PUT",
         body: image,
         headers: {
           authorization,
           "content-type": image.type,
         },
-      }).then((res) => res.json());
+      });
+
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => "");
+        throw new Error(
+          `Blossom server returned ${res.status}: ${errBody || res.statusText}`
+        );
+      }
+
+      const response: BlossomUploadResponse = await res.json();
+
+      if (!response || !response.url || !response.sha256) {
+        throw new Error(
+          "Blossom server returned an incomplete response. Try a different media server in settings."
+        );
+      }
 
       responseUrl = response.url;
 
@@ -1081,7 +1096,7 @@ export async function blossomUploadImages(
         ["url", responseUrl],
         ["x", response.sha256],
         ["ox", response.sha256],
-        ["size", response.size.toString()],
+        ["size", response.size != null ? String(response.size) : "0"],
       ];
 
       if (response.type) {
