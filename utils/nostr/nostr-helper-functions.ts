@@ -1084,7 +1084,7 @@ export async function blossomUploadImages(
 
       const response: BlossomUploadResponse = await res.json();
 
-      if (!response || !response.url || !response.sha256) {
+      if (!response || !response.url || !response.sha256 || response.size == null) {
         throw new Error(
           "Blossom server returned an incomplete response. Try a different media server in settings."
         );
@@ -1096,7 +1096,7 @@ export async function blossomUploadImages(
         ["url", responseUrl],
         ["x", response.sha256],
         ["ox", response.sha256],
-        ["size", response.size != null ? String(response.size) : "0"],
+        ["size", String(response.size)],
       ];
 
       if (response.type) {

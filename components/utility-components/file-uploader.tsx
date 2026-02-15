@@ -262,7 +262,7 @@ export const FileUploaderButton = ({
 
     try {
       const parsed = new URL(trimmed);
-      if (!["http:", "https:"].includes(parsed.protocol)) {
+      if (parsed.protocol !== "https:") {
         throw new Error("Invalid protocol");
       }
     } catch {
