@@ -1,13 +1,12 @@
 /** @type {import('next').NextConfig} */
 
-const withPWA = require("next-pwa")({
+import withPWAInit from "next-pwa";
+
+const withPWA = withPWAInit({
   dest: "public",
   register: true,
   skipWaiting: true,
-  sw: {
-    swSrc: "./public/service-worker.js",
-    swDest: "service-worker.js",
-  },
+  sw: "service-worker.js",
 });
 
 const nextConfig = {
@@ -18,19 +17,17 @@ const nextConfig = {
     disable: process.env.NODE_ENV === "development",
     runtimeCaching: [
       {
-        // Cache static assets
         urlPattern: /^https:\/\/.*\.(png|jpg|jpeg|svg|gif|ico|css|js)$/,
         handler: "CacheFirst",
         options: {
           cacheName: "static-assets",
           expiration: {
             maxEntries: 200,
-            maxAgeSeconds: 7 * 24 * 60 * 60, // 1 week
+            maxAgeSeconds: 7 * 24 * 60 * 60,
           },
         },
       },
       {
-        // Cache API responses
         urlPattern: /^https:\/\/.*\/api\/.*/,
         handler: "NetworkFirst",
         options: {
@@ -38,12 +35,11 @@ const nextConfig = {
           networkTimeoutSeconds: 10,
           expiration: {
             maxEntries: 50,
-            maxAgeSeconds: 24 * 60 * 60, // 1 day
+            maxAgeSeconds: 24 * 60 * 60,
           },
         },
       },
       {
-        // Cache other requests
         urlPattern: /^https?.*/,
         handler: "NetworkFirst",
         options: {
@@ -51,7 +47,7 @@ const nextConfig = {
           networkTimeoutSeconds: 15,
           expiration: {
             maxEntries: 100,
-            maxAgeSeconds: 7 * 24 * 60 * 60, // 1 week
+            maxAgeSeconds: 7 * 24 * 60 * 60,
           },
         },
       },
@@ -74,4 +70,4 @@ const nextConfig = {
   },
 };
 
-module.exports = withPWA(nextConfig);
+export default withPWA(nextConfig);
