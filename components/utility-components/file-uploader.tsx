@@ -9,9 +9,8 @@ import { SignerContext } from "@/components/utility-components/nostr-context-pro
 import { AnimatePresence, motion } from "framer-motion";
 import { PhotoIcon, ArrowUpTrayIcon } from "@heroicons/react/24/outline";
 
-// Maximum file size in bytes (100MB)
-const MAX_FILE_SIZE = 100 * 1024 * 1024;
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const MAX_STRIP_SIZE = 25 * 1024 * 1024;
 
 export const FileUploaderButton = ({
   disabled,
@@ -44,14 +43,7 @@ export const FileUploaderButton = ({
   const { signer, isLoggedIn } = useContext(SignerContext);
   const { blossomServers } = getLocalStorageData() || {};
 
-  // Create base64 preview for UI
-  const getBase64 = (file: File): Promise<string> =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+  const getPreviewUrl = (file: File): string => URL.createObjectURL(file);
 
   const MAX_CANVAS_DIMENSION = 4096;
 
@@ -112,12 +104,15 @@ export const FileUploaderButton = ({
     }
   };
 
-  // Main upload logic
+  const revokePreviewUrls = (urls: { src: string }[]) => {
+    urls.forEach((p) => URL.revokeObjectURL(p.src));
+  };
+
   const uploadImages = async (files: FileList) => {
+    let previewsList: { src: string; name: string; size: number }[] = [];
     try {
       const imageFiles = Array.from(files);
 
-      // Strict MIME type check
       if (
         imageFiles.some(
           (imgFile) =>
@@ -128,34 +123,28 @@ export const FileUploaderButton = ({
         throw new Error("Only JPEG, PNG, or WebP images are supported!");
       }
 
-      // File size check
-      if (imageFiles.some((imgFile) => imgFile.size > MAX_FILE_SIZE)) {
-        throw new Error(
-          `Each image must be smaller than ${MAX_FILE_SIZE / (1024 * 1024)} MB`
-        );
-      }
-
       setProgress(0);
 
-      // Show base64 previews
-      const previewsList = await Promise.all(
-        imageFiles.map(async (file) => {
-          const base64 = await getBase64(file);
-          return { src: base64, name: file.name, size: file.size };
-        })
-      );
+      previewsList = imageFiles.map((file) => ({
+        src: getPreviewUrl(file),
+        name: file.name,
+        size: file.size,
+      }));
       setPreviews(previewsList);
 
-      // Stage 1: Stripping metadata (30%)
-      const strippedImageFiles = await Promise.all(
-        imageFiles.map(async (imageFile, idx) => {
-          const stripped = await stripImageMetadata(imageFile);
-          setProgress(Math.round(((idx + 1) / imageFiles.length) * 30));
-          return stripped;
-        })
-      );
+      const strippedImageFiles: File[] = [];
+      for (let idx = 0; idx < imageFiles.length; idx++) {
+        const imageFile = imageFiles[idx]!;
+        let stripped: File;
+        if (imageFile.size > MAX_STRIP_SIZE) {
+          stripped = imageFile;
+        } else {
+          stripped = await stripImageMetadata(imageFile);
+        }
+        strippedImageFiles.push(stripped);
+        setProgress(Math.round(((idx + 1) / imageFiles.length) * 30));
+      }
 
-      // Stage 2: Uploading to servers (30% to 100%)
       let responses: any[] = [];
       if (isLoggedIn) {
         responses = await Promise.all(
@@ -189,7 +178,9 @@ export const FileUploaderButton = ({
         .filter((url) => url !== null);
 
       setTimeout(() => {
-        setProgress(null); // Reset progress after a short delay for better UX
+        setProgress(null);
+        revokePreviewUrls(previewsList);
+        setPreviews([]);
       }, 500);
 
       if (imageUrls && imageUrls.length > 0) {
@@ -203,6 +194,8 @@ export const FileUploaderButton = ({
       }
     } catch (e) {
       setProgress(null);
+      revokePreviewUrls(previewsList);
+      setPreviews([]);
       setFailureText(
         e instanceof Error
           ? e.message
