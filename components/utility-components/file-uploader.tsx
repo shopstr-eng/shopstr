@@ -4,10 +4,9 @@ import {
   blossomUploadImages,
   getLocalStorageData,
 } from "@/utils/nostr/nostr-helper-functions";
-import FailureModal from "./failure-modal";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { AnimatePresence, motion } from "framer-motion";
-import { PhotoIcon, ArrowUpTrayIcon } from "@heroicons/react/24/outline";
+import { PhotoIcon, ArrowUpTrayIcon, XCircleIcon, XMarkIcon } from "@heroicons/react/24/outline";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_STRIP_SIZE = 25 * 1024 * 1024;
@@ -385,14 +384,31 @@ export const FileUploaderButton = ({
         )}
       </AnimatePresence>
 
-      <FailureModal
-        bodyText={failureText}
-        isOpen={showFailureModal}
-        onClose={() => {
-          setShowFailureModal(false);
-          setFailureText("");
-        }}
-      />
+      <AnimatePresence>
+        {showFailureModal && failureText && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 p-3 dark:border-red-700 dark:bg-red-900/30"
+          >
+            <XCircleIcon className="h-5 w-5 flex-shrink-0 text-red-500" />
+            <span className="flex-1 text-sm text-red-700 dark:text-red-300">
+              {failureText}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setShowFailureModal(false);
+                setFailureText("");
+              }}
+              className="flex-shrink-0 rounded-full p-0.5 text-red-500 hover:bg-red-100 dark:hover:bg-red-800/50"
+            >
+              <XMarkIcon className="h-4 w-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
