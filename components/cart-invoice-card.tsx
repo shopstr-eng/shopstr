@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect, useMemo } from "react";
+import { useContext, useState, useEffect, useMemo } from "react";
 import {
   CashuWalletContext,
   ChatsContext,
