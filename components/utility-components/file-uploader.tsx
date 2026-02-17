@@ -6,10 +6,16 @@ import {
 } from "@/utils/nostr/nostr-helper-functions";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { AnimatePresence, motion } from "framer-motion";
-import { PhotoIcon, ArrowUpTrayIcon, XCircleIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import {
+  PhotoIcon,
+  ArrowUpTrayIcon,
+  XCircleIcon,
+  XMarkIcon,
+} from "@heroicons/react/24/outline";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_STRIP_SIZE = 25 * 1024 * 1024;
+const COMPRESSION_THRESHOLD = 20 * 1024 * 1024;
 
 export const FileUploaderButton = ({
   disabled,
@@ -53,7 +59,10 @@ export const FileUploaderButton = ({
       let targetWidth = bitmap.width;
       let targetHeight = bitmap.height;
 
-      if (targetWidth > MAX_CANVAS_DIMENSION || targetHeight > MAX_CANVAS_DIMENSION) {
+      if (
+        targetWidth > MAX_CANVAS_DIMENSION ||
+        targetHeight > MAX_CANVAS_DIMENSION
+      ) {
         const scale = Math.min(
           MAX_CANVAS_DIMENSION / targetWidth,
           MAX_CANVAS_DIMENSION / targetHeight
@@ -103,6 +112,97 @@ export const FileUploaderButton = ({
     }
   };
 
+  const compressImage = async (imageFile: File): Promise<File> => {
+    try {
+      const bitmap = await createImageBitmap(imageFile);
+
+      let targetWidth = bitmap.width;
+      let targetHeight = bitmap.height;
+
+      if (
+        targetWidth > MAX_CANVAS_DIMENSION ||
+        targetHeight > MAX_CANVAS_DIMENSION
+      ) {
+        const scale = Math.min(
+          MAX_CANVAS_DIMENSION / targetWidth,
+          MAX_CANVAS_DIMENSION / targetHeight
+        );
+        targetWidth = Math.round(targetWidth * scale);
+        targetHeight = Math.round(targetHeight * scale);
+      }
+
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        bitmap.close();
+        throw new Error("Failed to get canvas context");
+      }
+
+      const outputType =
+        imageFile.type === "image/png" ? "image/webp" : imageFile.type;
+
+      const qualitySteps = [0.85, 0.75, 0.65, 0.5, 0.4, 0.3];
+      const scaleSteps = [1.0, 0.85, 0.7, 0.5, 0.35];
+
+      let lastBlob: Blob | null = null;
+
+      for (const scale of scaleSteps) {
+        const w = Math.round(targetWidth * scale);
+        const h = Math.round(targetHeight * scale);
+        canvas.width = w;
+        canvas.height = h;
+        ctx.drawImage(bitmap, 0, 0, w, h);
+
+        for (const quality of qualitySteps) {
+          const blob = await new Promise<Blob>((resolve, reject) => {
+            canvas.toBlob(
+              (b) =>
+                b ? resolve(b) : reject(new Error("Failed to create blob")),
+              outputType,
+              quality
+            );
+          });
+
+          lastBlob = blob;
+
+          if (blob.size <= COMPRESSION_THRESHOLD) {
+            bitmap.close();
+            canvas.width = 0;
+            canvas.height = 0;
+            const name =
+              imageFile.type === "image/png"
+                ? imageFile.name.replace(/\.png$/i, ".webp")
+                : imageFile.name;
+            return new File([blob], name, {
+              type: outputType,
+              lastModified: Date.now(),
+            });
+          }
+        }
+      }
+
+      bitmap.close();
+      canvas.width = 0;
+      canvas.height = 0;
+
+      if (lastBlob && lastBlob.size < imageFile.size) {
+        const name =
+          imageFile.type === "image/png"
+            ? imageFile.name.replace(/\.png$/i, ".webp")
+            : imageFile.name;
+        return new File([lastBlob], name, {
+          type: outputType,
+          lastModified: Date.now(),
+        });
+      }
+
+      return imageFile;
+    } catch (e) {
+      console.error("Image compression failed, using original file:", e);
+      return imageFile;
+    }
+  };
+
   const revokePreviewUrls = (urls: { src: string }[]) => {
     urls.forEach((p) => URL.revokeObjectURL(p.src));
   };
@@ -131,23 +231,26 @@ export const FileUploaderButton = ({
       }));
       setPreviews(previewsList);
 
-      const strippedImageFiles: File[] = [];
+      const processedImageFiles: File[] = [];
       for (let idx = 0; idx < imageFiles.length; idx++) {
         const imageFile = imageFiles[idx]!;
-        let stripped: File;
+        let processed: File;
         if (imageFile.size > MAX_STRIP_SIZE) {
-          stripped = imageFile;
+          processed = imageFile;
         } else {
-          stripped = await stripImageMetadata(imageFile);
+          processed = await stripImageMetadata(imageFile);
         }
-        strippedImageFiles.push(stripped);
+        if (processed.size > COMPRESSION_THRESHOLD) {
+          processed = await compressImage(processed);
+        }
+        processedImageFiles.push(processed);
         setProgress(Math.round(((idx + 1) / imageFiles.length) * 30));
       }
 
       let responses: any[] = [];
       if (isLoggedIn) {
         responses = await Promise.all(
-          strippedImageFiles.map(async (imageFile, idx) => {
+          processedImageFiles.map(async (imageFile, idx) => {
             const tags = await blossomUploadImages(
               imageFile,
               signer!,
@@ -156,7 +259,7 @@ export const FileUploaderButton = ({
                 : ["https://cdn.nostrcheck.me"]
             );
             setProgress(
-              30 + Math.round(((idx + 1) / strippedImageFiles.length) * 70)
+              30 + Math.round(((idx + 1) / processedImageFiles.length) * 70)
             );
             return tags;
           })

@@ -180,6 +180,16 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### Image Compression for Blossom Uploads (February 17, 2026)
+
+- Added automatic image compression for files exceeding 20 MiB in `components/utility-components/file-uploader.tsx`
+- Compression uses progressive quality reduction (0.85 down to 0.3) and resolution scaling (100% down to 35%) to bring files under the 20 MiB threshold
+- PNG images are converted to WebP during compression for better size reduction
+- Canvas dimensions are capped at MAX_CANVAS_DIMENSION (4096) to prevent GPU/memory issues
+- If compression cannot reach the threshold, the best compressed result is still used if smaller than the original
+- Compression runs after metadata stripping and before Blossom server upload
+- Added COMPRESSION_THRESHOLD constant (20 MiB) alongside existing MAX_STRIP_SIZE (25 MiB)
+
 ### Bulk/Bundle Pricing Feature (February 12, 2026)
 
 - Added bulk pricing data model: `bulkPrices` (Map<number, number>), `selectedBulkOption`, and `bulkPrice` fields to ProductData type

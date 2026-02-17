@@ -1110,9 +1110,7 @@ export async function blossomUploadImages(
 
       if (!res.ok) {
         const errorText = await res.text().catch(() => "Unknown server error");
-        throw new Error(
-          `Upload failed (${res.status}): ${errorText}`
-        );
+        throw new Error(`Upload failed (${res.status}): ${errorText}`);
       }
 
       const response = await res.json();

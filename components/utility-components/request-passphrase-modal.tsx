@@ -40,6 +40,12 @@ export default function PassphraseChallengeModal({
       setIsLoading(false);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (error) {
+      setIsLoading(false);
+    }
+  }, [error]);
   const passphraseInputRef = useRef<HTMLInputElement>(null);
 
   const buttonClassName = useMemo(() => {
@@ -54,7 +60,9 @@ export default function PassphraseChallengeModal({
     } else if (!isButtonDisabled) {
       setIsLoading(true);
       if (actionOnSubmit) {
-        actionOnSubmit(passphraseInput, remindToggled);
+        setTimeout(() => {
+          actionOnSubmit(passphraseInput, remindToggled);
+        }, 0);
       }
     }
   };
@@ -119,7 +127,12 @@ export default function PassphraseChallengeModal({
         </ModalBody>
 
         <ModalFooter>
-          <Button color="danger" variant="light" onClick={onCancel} isDisabled={isLoading}>
+          <Button
+            color="danger"
+            variant="light"
+            onClick={onCancel}
+            isDisabled={isLoading}
+          >
             Cancel
           </Button>
 
