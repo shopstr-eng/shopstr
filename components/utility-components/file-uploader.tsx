@@ -100,8 +100,10 @@ export const FileUploaderButton = ({
       canvas.width = 0;
       canvas.height = 0;
 
+      const outputType = blob.type || imageFile.type;
+
       return new File([blob], imageFile.name, {
-        type: imageFile.type,
+        type: outputType,
         lastModified: Date.now(),
       });
     } catch (e) {
