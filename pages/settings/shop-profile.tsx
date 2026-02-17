@@ -100,6 +100,7 @@ const ShopProfilePage = () => {
                   <FileUploaderButton
                     className={`absolute bottom-5 right-5 z-20 border-2 border-white bg-shopstr-purple shadow-md ${SHOPSTRBUTTONCLASSNAMES}`}
                     imgCallbackOnUpload={(imgUrl) => setValue("banner", imgUrl)}
+                    allowUrlInput
                   >
                     Upload Banner
                   </FileUploaderButton>
@@ -113,6 +114,7 @@ const ShopProfilePage = () => {
                         imgCallbackOnUpload={(imgUrl) =>
                           setValue("picture", imgUrl)
                         }
+                        allowUrlInput
                       />
                       {watchPicture ? (
                         <Image
