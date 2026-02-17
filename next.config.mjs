@@ -51,9 +51,7 @@ const nextConfig = {
   bundlePagesRouterDependencies: true,
   output: "standalone",
   reactStrictMode: true,
-  experimental: {
-    turbo: {},
-  },
+  turbopack: {},
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "www.google.com" },
