@@ -53,45 +53,61 @@ export const FileUploaderButton = ({
       reader.readAsDataURL(file);
     });
 
-  // Strip metadata from image
+  const MAX_CANVAS_DIMENSION = 4096;
+
   const stripImageMetadata = async (imageFile: File): Promise<File> => {
-    return new Promise((resolve, reject) => {
-      const img = new window.Image();
-      const url = URL.createObjectURL(imageFile);
+    try {
+      const bitmap = await createImageBitmap(imageFile);
 
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          URL.revokeObjectURL(url);
-          reject(new Error("Failed to get canvas context"));
-          return;
-        }
-        ctx.drawImage(img, 0, 0);
-        canvas.toBlob((blob) => {
-          if (!blob) {
-            URL.revokeObjectURL(url);
-            reject(new Error("Failed to create blob"));
-            return;
-          }
-          const strippedFile = new File([blob], imageFile.name, {
-            type: imageFile.type,
-            lastModified: Date.now(),
-          });
-          URL.revokeObjectURL(url);
-          resolve(strippedFile);
-        }, imageFile.type);
-      };
+      let targetWidth = bitmap.width;
+      let targetHeight = bitmap.height;
 
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
-        reject(new Error("Failed to load image"));
-      };
+      if (targetWidth > MAX_CANVAS_DIMENSION || targetHeight > MAX_CANVAS_DIMENSION) {
+        const scale = Math.min(
+          MAX_CANVAS_DIMENSION / targetWidth,
+          MAX_CANVAS_DIMENSION / targetHeight
+        );
+        targetWidth = Math.round(targetWidth * scale);
+        targetHeight = Math.round(targetHeight * scale);
+      }
 
-      img.src = url;
-    });
+      const canvas = document.createElement("canvas");
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        bitmap.close();
+        throw new Error("Failed to get canvas context");
+      }
+
+      ctx.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
+      bitmap.close();
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (b) => {
+            if (!b) {
+              reject(new Error("Failed to create blob"));
+              return;
+            }
+            resolve(b);
+          },
+          imageFile.type,
+          0.92
+        );
+      });
+
+      canvas.width = 0;
+      canvas.height = 0;
+
+      return new File([blob], imageFile.name, {
+        type: imageFile.type,
+        lastModified: Date.now(),
+      });
+    } catch (e) {
+      console.error("Metadata stripping failed, using original file:", e);
+      return imageFile;
+    }
   };
 
   // Main upload logic
