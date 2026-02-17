@@ -1,4 +1,3 @@
-import React from "react";
 import { Button } from "@nextui-org/react";
 import { ArrowLongLeftIcon } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";

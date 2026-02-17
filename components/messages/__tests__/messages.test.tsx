@@ -6,7 +6,6 @@ import {
   act,
 } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import React from "react";
 import Messages from "../messages";
 import { ChatsContext } from "../../../utils/context/context";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";

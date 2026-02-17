@@ -1,6 +1,6 @@
 // initialize new react funcitonal component
 import { Button, Input } from "@nextui-org/react";
-import React, { useEffect, useContext, useRef, useState } from "react";
+import { useEffect, useContext, useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { nip19 } from "nostr-tools";
 import {

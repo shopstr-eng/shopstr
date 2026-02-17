@@ -1,5 +1,4 @@
 import { renderHook, act } from "@testing-library/react";
-import React from "react";
 import { useTabs, Tab } from "../use-tabs";
 
 const mockTabs: Tab[] = [

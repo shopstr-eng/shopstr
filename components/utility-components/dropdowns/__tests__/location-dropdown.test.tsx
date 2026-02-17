@@ -1,4 +1,3 @@
-import React from "react";
 import { render, screen } from "@testing-library/react";
 import LocationDropdown, { locationAvatar } from "../location-dropdown";
 import locations from "../../../../public/locationSelection.json";

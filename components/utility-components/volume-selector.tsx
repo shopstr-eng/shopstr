@@ -1,4 +1,3 @@
-import React from "react";
 import { Select, SelectItem, SelectSection } from "@nextui-org/react";
 
 interface VolumeSelectorProps {

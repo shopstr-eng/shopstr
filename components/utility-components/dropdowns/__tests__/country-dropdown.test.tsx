@@ -1,4 +1,3 @@
-import React from "react";
 import { render, screen } from "@testing-library/react";
 import CountryDropdown from "../country-dropdown";
 import { Select, SelectItem } from "@nextui-org/react";

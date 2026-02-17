@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Tab } from "@/components/hooks/use-tabs";
 import classNames from "classnames";

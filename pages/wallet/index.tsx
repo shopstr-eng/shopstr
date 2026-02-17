@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/router";
 import { getLocalStorageData } from "@/utils/nostr/nostr-helper-functions";
 import MintButton from "../../components/wallet/mint-button";
