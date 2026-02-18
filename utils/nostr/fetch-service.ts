@@ -601,13 +601,26 @@ export const fetchGiftWrappedChatsAndMessages = async (
             );
             return;
           }
-          let chatMessage = chatMessagesFromCache.get(messageEvent.id);
-          if (!chatMessage) {
-            chatMessage = { ...messageEvent, sig: "", read: false }; // false because the user received it and it wasn't in the cache
+          let cachedMessage = chatMessagesFromCache.get(event.id);
+          let chatMessage: NostrMessageEvent;
+          if (cachedMessage) {
+            chatMessage = {
+              ...messageEvent,
+              sig: "",
+              read: cachedMessage.read,
+              wrappedEventId: event.id,
+            };
+          } else {
+            chatMessage = {
+              ...messageEvent,
+              sig: "",
+              read: false,
+              wrappedEventId: event.id,
+            };
           }
-          if (senderPubkey === userPubkey && chatMessage) {
+          if (senderPubkey === userPubkey) {
             addToChatsMap(recipientPubkey, chatMessage);
-          } else if (chatMessage) {
+          } else {
             addToChatsMap(senderPubkey, chatMessage);
           }
         }

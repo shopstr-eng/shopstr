@@ -9,6 +9,7 @@ export interface NostrEvent extends Event {}
 
 export interface NostrMessageEvent extends NostrEvent {
   read: boolean;
+  wrappedEventId?: string;
 }
 
 export interface ChatObject {

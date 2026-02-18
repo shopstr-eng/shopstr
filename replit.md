@@ -2,7 +2,7 @@
 
 ## Overview
 
-Shopstr is a global, permissionless marketplace built on the Nostr protocol, enabling Bitcoin commerce through decentralized communication and censorship-resistant transactions. The platform leverages Nostr's event-based architecture to create, manage, and trade products while supporting multiple payment methods including Lightning Network, Cashu ecash, and fiat currencies. Built with Next.js 14, the application provides a Progressive Web App (PWA) experience with client-side state management and serverside caching via PostgreSQL.
+Shopstr is a global, permissionless marketplace built on the Nostr protocol, enabling Bitcoin commerce through decentralized communication and censorship-resistant transactions. It supports multiple payment methods including Lightning Network, Cashu ecash, and fiat currencies. The platform provides a Progressive Web App (PWA) experience with client-side state management and server-side caching. Its core purpose is to offer a censorship-resistant, decentralized e-commerce solution.
 
 ## User Preferences
 
@@ -10,257 +10,51 @@ Preferred communication style: Simple, everyday language.
 
 ## System Architecture
 
-### Frontend Architecture
+### Frontend
 
-**Framework & Core Technologies**
+- **Framework**: Next.js 14 with TypeScript (App Router), React 18.
+- **UI/UX**: NextUI, Tailwind CSS, Framer Motion for animations, PWA support.
+- **State Management**: React Context API for various domains (products, profiles, shops, chats, reviews, follows, relays, media, wallet, communities).
+- **Data Persistence**: Local storage for user preferences and authentication, service worker for caching.
+- **Routing**: Middleware-based URL rewriting, dynamic routing, protected routes for authenticated operations.
 
-- Next.js 14.2.32 with TypeScript in App Router mode
-- React 18.2.0 for component composition
-- NextUI component library with Tailwind CSS for styling
-- Framer Motion for animations and transitions
-- Progressive Web App (PWA) capabilities via next-pwa
+### Backend
 
-**State Management Pattern**
+- **Nostr Protocol Integration**: Multi-signer architecture (NIP-07, NIP-46, NIP-49), utilizing standard and custom Nostr event kinds for products (NIP-99), user metadata, shop profiles, direct messages (NIP-17), reviews (NIP-85), and communities (NIP-72).
+- **Data Fetching & Caching**: Service layer with dedicated fetch functions, subscription-based real-time updates from Nostr relays, multi-relay querying with fallback, cache-first strategy with background refresh.
+- **Authentication & Authorization**: Stateless authentication via cryptographic signing, passphrase-based encryption (NIP-49), challenge-response pattern for secure operations.
 
-- React Context API for global state distribution across multiple domains:
-  - ProductContext: Product listings and marketplace data
-  - ProfileMapContext: User profile information
-  - ShopMapContext: Shop metadata and configurations
-  - ChatsContext: Direct messaging state
-  - ReviewsContext: Product and seller reviews
-  - FollowsContext: Social graph relationships
-  - RelaysContext: Nostr relay connections
-  - BlossomContext: Media server configurations
-  - CashuWalletContext: Ecash wallet state
-  - CommunityContext: Community management
+### Payment Processing
 
-**Client-Side Data Persistence**
-
-- Local storage for user preferences and authentication tokens
-- Service worker for asset caching and offline functionality
-
-**Routing Strategy**
-
-- Middleware-based URL rewriting for Nostr identifier handling (npub, naddr)
-- Dynamic routing for product listings, user profiles, and communities
-- Protected routes requiring authentication for sensitive operations
-
-### Backend Architecture
-
-**Nostr Protocol Integration**
-
-- Multi-signer architecture supporting:
-  - NIP-07: Browser extension signing (Alby, nos2x)
-  - NIP-46: Remote signing via Nostr Connect/bunker
-  - NIP-49: Encrypted private key storage with passphrase
-- Event-based data model using standardized Nostr event kinds:
-  - Kind 30402: Product listings (NIP-99 classified listings)
-  - Kind 0: User metadata profiles
-  - Kind 10000: Shop profiles (custom merchant metadata)
-  - Kind 14: Direct messages with gift wrapping (NIP-17)
-  - Kind 1985: Product reviews (NIP-85)
-  - Kind 34550: Community definitions (NIP-72)
-
-**Data Fetching & Caching**
-
-- Service layer pattern with dedicated fetch functions per data type
-- Subscription-based real-time updates from Nostr relays
-- Multi-relay querying with timeout handling and fallback mechanisms
-- Cache-first strategy with background refresh for product listings and profiles
-
-**Authentication & Authorization**
-
-- Stateless authentication via cryptographic signing
-- Passphrase-based encryption for stored credentials (NIP-49 standard)
-- Challenge-response pattern for secure operations
-- Migration system for upgrading encryption standards
-
-### Payment Processing Architecture
-
-**Multi-Payment Support**
-
-- Lightning Network: Invoice generation and payment verification via Lightning Address (LNURL)
-- Cashu Ecash: Privacy-preserving payments using Cashu protocol with token minting and redemption
-- Fiat Options: Traditional payment metadata support with currency conversion display
-
-**Payment Flow Components**
-
-- Product/Cart Invoice Cards: Payment interface generation
-- Claim Button: Ecash token redemption
-- Volume Selector: Quantity-based pricing calculations
-
-**Order Management**
-
-- Gift-wrapped messaging for order placement (encrypted buyer-seller communication)
-- Proof publication for payment confirmation
-- Review system post-fulfillment
+- **Multi-Payment Support**: Lightning Network (invoice generation, LNURL), Cashu Ecash (token minting/redemption), and fiat currency display.
+- **Payment Flow**: Invoice generation, ecash token redemption, quantity-based pricing.
+- **Order Management**: Encrypted buyer-seller communication (gift-wrapped messages), payment confirmation proof, post-fulfillment review system.
 
 ### Media Handling
 
-**Blossom Protocol Integration (NIP-B7)**
-
-- Decentralized media storage via Blossom servers
-- Authenticated uploads with Nostr event signing
-- Progress tracking for multi-file uploads
-- Image optimization with responsive srcset generation
-- Maximum 100MB file size limit per upload
-- Supported formats: JPEG, PNG, WebP
-
-**Image Serving Strategy**
-
-- Automatic responsive image generation for nostr.build domains
-- Fallback to original URLs for unknown providers
-- Lazy loading and placeholder support
+- **Blossom Protocol Integration (NIP-B7)**: Decentralized media storage, authenticated uploads, multi-file upload progress, image optimization (responsive srcset generation), maximum 100MB file size, automatic image compression for larger files.
+- **Image Serving**: Automatic responsive image generation for nostr.build domains, fallback to original URLs, lazy loading.
 
 ### Community Features
 
-**Moderated Communities (NIP-72)**
+- **Moderated Communities (NIP-72)**: Creation and management, post approval workflows, rich content feed rendering.
+- **Social Graph & Trust**: Web of Trust (WoT) filtering based on follow relationships, configurable trust thresholds.
 
-- Community creation and management interface
-- Post approval workflow for moderators
-- Feed rendering with rich content support (images, videos, YouTube embeds)
-- Member interaction through Nostr events
+### Core Features
 
-**Social Graph & Trust**
-
-- Web of Trust (WoT) filtering based on follow relationships
-- First and second-degree follow calculations
-- Configurable trust thresholds for marketplace filtering
+- **Bulk/Bundle Pricing**: Support for tiered pricing based on quantity.
+- **Size and Volume Options**: Customizable product options for orders.
+- **Pickup Location Selection**: Option for customers to select pickup locations for orders.
+- **Order Status Persistence**: Database storage and API for tracking and updating order statuses.
+- **Unread/Read Indicator System**: Visual indicators for unread messages and new orders, with persistence.
 
 ## External Dependencies
 
-**Nostr Protocol Libraries**
-
-- nostr-tools 2.7.1: Core Nostr protocol implementation (event creation, signing, encoding)
-- @getalby/lightning-tools 5.0.1: Lightning Network utilities and LNURL handling
-
-**Payment & Wallet Integration**
-
-- @cashu/cashu-ts 2.1.0: Cashu ecash protocol client for privacy-preserving payments
-- Lightning Address support via Alby tools
-
-**Database & Storage**
-
-- pg 8.11.5: Server-side caching and database operations
-
-**UI & Styling**
-
-- @nextui-org/react 2.2.9: Component library providing consistent UI patterns
-- @heroicons/react 2.1.1: Icon system
-- Tailwind CSS 3.3.1: Utility-first CSS framework
-- Framer Motion 10.16.4: Animation library for transitions
-
-**Media & Content**
-
-- qrcode 1.5.3: QR code generation for Lightning invoices and payment requests
-- react-responsive-carousel 3.2.23: Image carousel component
-- @braintree/sanitize-url 7.1.0: URL sanitization for user-generated content
-
-**Cryptography & Security**
-
-- crypto-js 4.2.0: Additional encryption utilities beyond Nostr protocol requirements
-
-**Development & Testing**
-
-- Jest 29.5.14 with Testing Library: Unit and integration testing
-- ESLint with TypeScript support: Code quality enforcement
-- TypeScript 5.x: Static type checking
-
-**Relay Infrastructure**
-
-- Default relay set managed in localStorage with fallback to hardcoded defaults
-- Multi-relay broadcast for event publication redundancy
-- Subscription management for real-time event streaming
-
-**Blossom Media Servers**
-
-- User-configurable Blossom server list stored in localStorage
-- Authenticated upload support with progress tracking
-- Fallback to traditional image hosting when Blossom unavailable
-
-## Recent Changes
-
-### Event Merge Fix for DB + Relay Data (February 18, 2026)
-
-- Fixed fetchAllPosts in `utils/nostr/fetch-service.ts` to merge DB products with relay products instead of replacing them
-- Products are merged by replaceable key (pubkey + d-tag for kind 30402, event ID for kind 1 zapsnags), with newer created_at taking precedence
-- Fixed fetchProfile to initialize relay profile map with DB profile data, preventing DB profiles from being discarded when relay data arrives
-- Fixed fetchAllCommunities to use a single DB fetch and merge relay results into it with createdAt comparison, avoiding duplicate DB calls
-- All three fixes ensure DB-only events are preserved while relay data still overwrites when newer
-- Fixed fetchShopProfile to resolve (not reject) when relays return no shop events, preserving DB-loaded shop profiles instead of wiping them
-- Fixed fetchReviews to use a reviewScoreTracker Map keyed by merchant+product+reviewer, preventing double-counting scores when same review exists in both DB and relay
-- Fixed fetchAllRelays to check dedup Sets before pushing relay URLs into arrays, preventing duplicate relay entries
-- Fixed fetchAllBlossomServers with same Set-guarded dedup pattern to prevent duplicate blossom server URLs
-
-### Image Compression for Blossom Uploads (February 17, 2026)
-
-- Added automatic image compression for files exceeding 20 MiB in `components/utility-components/file-uploader.tsx`
-- Compression uses progressive quality reduction (0.85 down to 0.3) and resolution scaling (100% down to 35%) to bring files under the 20 MiB threshold
-- PNG images are converted to WebP during compression for better size reduction
-- Canvas dimensions are capped at MAX_CANVAS_DIMENSION (4096) to prevent GPU/memory issues
-- If compression cannot reach the threshold, the best compressed result is still used if smaller than the original
-- Compression runs after metadata stripping and before Blossom server upload
-- Added COMPRESSION_THRESHOLD constant (20 MiB) alongside existing MAX_STRIP_SIZE (25 MiB)
-
-### Bulk/Bundle Pricing Feature (February 12, 2026)
-
-- Added bulk pricing data model: `bulkPrices` (Map<number, number>), `selectedBulkOption`, and `bulkPrice` fields to ProductData type
-- Created `BulkSelector` component (`components/utility-components/bulk-selector.tsx`) for buyer-side bundle selection dropdown
-- Updated product parser (`utils/parsers/product-parser-functions.ts`) to parse "bulk" tags from Nostr events into bulkPrices Map
-- Added seller UI in product form (`components/product-form.tsx`) with toggle switch and dynamic tier management (add/remove unit-price pairs)
-- Product form writes bulk pricing as ["bulk", "units", "price"] Nostr event tags
-- Integrated BulkSelector into checkout card (`components/utility-components/checkout-card.tsx`) with price calculation and display
-- Updated cart page (`pages/cart/index.tsx`) to handle bulk selection, display bundle info, and use bulk prices in calculations
-- Added bulk pricing to all order messages in both ProductInvoiceCard and CartInvoiceCard via "bulk" tag in constructGiftWrappedEvent
-- Added `selectedBulkOption` to all message options (order-payment, order-receipt, order-info) in both invoice cards
-- Added bulk option display in productDetails strings and order summary UI throughout both invoice cards
-- Priority system: bulk pricing overrides single-unit price when selected (bulk > volume > base price)
-
-### Size and Volume Options for Orders (February 2, 2026)
-
-- Added "size" and "volume" tags to Nostr order messages via constructGiftWrappedEvent function
-- Updated sendPaymentAndContactMessageWithKeys in CartInvoiceCard to pass product.selectedSize and product.selectedVolume in messageOptions for payment, receipt, and order-info messages
-- Updated sendPaymentAndContactMessage in ProductInvoiceCard to pass selectedSize and selectedVolume at top level of messageOptions for all order message types
-- Added "Order Specs" column to orders dashboard combining size and volume into formatted display
-- Display format: "Size: S, Volume: 1 gal" when both present, individual values when only one, "N/A" when neither
-- Updated OrderData interface to include selectedSize and selectedVolume fields
-- Size and volume values are extracted from message tags and consolidated across related order messages
-
-### Pickup Location Selection and Address Tag for Orders (January 24, 2026)
-
-- Added pickup location dropdown in ProductInvoiceCard for contact orders when product has pickup shipping options (Pickup, Free/Pickup, Added Cost/Pickup) and pickupLocations array defined
-- Added pickup location selection to CartInvoiceCard for multi-product cart orders, with product title displayed next to each dropdown for clarity
-- Payment buttons disabled until pickup location is selected when required
-- Added "pickup" tag to Nostr order messages via constructGiftWrappedEvent function
-- Updated sendPaymentAndContactMessage in both ProductInvoiceCard and CartInvoiceCard to include pickup parameter
-- Pickup tags are applied per-product, only to order messages corresponding to that specific product (not all products in cart)
-- Added "Pickup Location" column to orders dashboard with proper tag parsing and display
-- Pickup location state resets when form type changes to prevent stale selections
-- Fixed "address" tag to be properly included in all order message types (payment, receipt, and info) when shipping information is provided
-- Both ProductInvoiceCard and CartInvoiceCard now construct address tag early and pass it to all relevant message calls
-- CartInvoiceCard handles both form field naming conventions (shippingName/shippingAddress and Name/Address)
-
-### Order Status Persistence (January 23, 2026)
-
-- Added `order_status` and `order_id` columns to `message_events` table for efficient order status tracking
-- Created API endpoints for updating and retrieving order statuses (`/api/db/update-order-status`, `/api/db/get-order-statuses`)
-- Orders dashboard now loads cached statuses from database first, then updates from parsed messages
-- Status priority system prevents status downgrades (canceled > completed > shipped > confirmed > pending)
-- Status persisted to database only when parsed status has higher priority than cached
-
-### Unread/Read Indicator System (January 23, 2026)
-
-- Added `is_read` column to `message_events` table for tracking read status
-- Navbar displays styled unread count badge (purple in light mode, yellow in dark mode)
-- New order indicators in orders dashboard with colored borders during current session
-- Messages automatically marked as read when orders page opens
-- Database migration handles existing deployments
-
-### Deployment Configuration (October 4, 2025)
-
-- Added health check endpoint at `/api/health` for Cloud Run deployment monitoring
-- Configured production server to bind to `0.0.0.0` and respect PORT environment variable
-- Removed `babel.config.json` to use Next.js 14's default SWC compiler for better performance
-- Enhanced error handling in `_app.tsx` initialization with individual try-catch blocks for each data fetch operation
-- Updated development workflow to run on port 5000
-- Configured autoscale deployment with proper build and run commands
+- **Nostr Protocol Libraries**: `nostr-tools`, `@getalby/lightning-tools`.
+- **Payment & Wallet Integration**: `@cashu/cashu-ts`, Lightning Address support (via Alby tools).
+- **Database**: `pg` (PostgreSQL) for server-side caching.
+- **UI & Styling**: `@nextui-org/react`, `@heroicons/react`, Tailwind CSS, Framer Motion.
+- **Media & Content**: `qrcode`, `react-responsive-carousel`, `@braintree/sanitize-url`.
+- **Cryptography**: `crypto-js`.
+- **Relay Infrastructure**: Default and user-configurable Nostr relays, multi-relay broadcast, subscription management.
+- **Blossom Media Servers**: User-configurable Blossom server list for decentralized media.

@@ -205,9 +205,24 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
           pubkeyOfChat
         ) as NostrMessageEvent[];
         if (!encryptedChat) return prevChatMap;
+        const wrappedIdsToMark: string[] = [];
         encryptedChat.forEach((message) => {
-          message.read = true;
+          if (!message.read) {
+            message.read = true;
+            if (message.wrappedEventId) {
+              wrappedIdsToMark.push(message.wrappedEventId);
+            }
+          }
         });
+        if (wrappedIdsToMark.length > 0) {
+          fetch("/api/db/mark-messages-read", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ messageIds: wrappedIdsToMark }),
+          }).catch((err) =>
+            console.error("Failed to mark messages as read:", err)
+          );
+        }
         const newChatMap = new Map(prevChatMap);
         newChatMap.set(pubkeyOfChat, updatedChat);
         return newChatMap;
