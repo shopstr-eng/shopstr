@@ -180,6 +180,18 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### Event Merge Fix for DB + Relay Data (February 18, 2026)
+
+- Fixed fetchAllPosts in `utils/nostr/fetch-service.ts` to merge DB products with relay products instead of replacing them
+- Products are merged by replaceable key (pubkey + d-tag for kind 30402, event ID for kind 1 zapsnags), with newer created_at taking precedence
+- Fixed fetchProfile to initialize relay profile map with DB profile data, preventing DB profiles from being discarded when relay data arrives
+- Fixed fetchAllCommunities to use a single DB fetch and merge relay results into it with createdAt comparison, avoiding duplicate DB calls
+- All three fixes ensure DB-only events are preserved while relay data still overwrites when newer
+- Fixed fetchShopProfile to resolve (not reject) when relays return no shop events, preserving DB-loaded shop profiles instead of wiping them
+- Fixed fetchReviews to use a reviewScoreTracker Map keyed by merchant+product+reviewer, preventing double-counting scores when same review exists in both DB and relay
+- Fixed fetchAllRelays to check dedup Sets before pushing relay URLs into arrays, preventing duplicate relay entries
+- Fixed fetchAllBlossomServers with same Set-guarded dedup pattern to prevent duplicate blossom server URLs
+
 ### Image Compression for Blossom Uploads (February 17, 2026)
 
 - Added automatic image compression for files exceeding 20 MiB in `components/utility-components/file-uploader.tsx`

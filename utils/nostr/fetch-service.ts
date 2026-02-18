@@ -63,8 +63,6 @@ export const fetchAllPosts = async (
         console.error("Failed to fetch products from database: ", error);
       }
 
-      let deletedProductsInCacheSet: Set<any> = new Set(); // used to remove deleted items from cache
-
       const filter: Filter = {
         kinds: [30402],
       };
@@ -74,8 +72,11 @@ export const fetchAllPosts = async (
         "#t": ["shopstr-zapsnag", "zapsnag"],
       };
 
-      const productArrayFromRelay: NostrEvent[] = [];
       const profileSetFromProducts: Set<string> = new Set();
+
+      productArrayFromDb.forEach((event) => {
+        if (event.pubkey) profileSetFromProducts.add(event.pubkey);
+      });
 
       const fetchedEvents = await nostr.fetch(
         [filter, zapsnagFilter],
@@ -96,27 +97,39 @@ export const fetchAllPosts = async (
         );
       }
 
-      for (const event of fetchedEvents) {
-        if (!event || !event.id) continue;
+      const getEventKey = (event: NostrEvent): string => {
+        if (event.kind === 30402) {
+          const dTag = event.tags?.find((tag: string[]) => tag[0] === "d")?.[1];
+          if (dTag) return `${event.pubkey}:${dTag}`;
+        }
+        return event.id;
+      };
 
-        productArrayFromRelay.push(event);
-        try {
-          if (
-            deletedProductsInCacheSet &&
-            event.id in deletedProductsInCacheSet
-          ) {
-            deletedProductsInCacheSet.delete(event.id);
-          }
-          profileSetFromProducts.add(event.pubkey);
-        } catch (error) {
-          console.error("Failed to process product:", event.id, error);
+      const mergedProductsMap = new Map<string, NostrEvent>();
+
+      for (const event of productArrayFromDb) {
+        if (event && event.id) {
+          mergedProductsMap.set(getEventKey(event), event);
         }
       }
 
-      editProductContext(productArrayFromRelay, false);
+      for (const event of fetchedEvents) {
+        if (!event || !event.id) continue;
+
+        const key = getEventKey(event);
+        const existing = mergedProductsMap.get(key);
+        if (!existing || event.created_at >= existing.created_at) {
+          mergedProductsMap.set(key, event);
+        }
+        profileSetFromProducts.add(event.pubkey);
+      }
+
+      const mergedProductArray = Array.from(mergedProductsMap.values());
+
+      editProductContext(mergedProductArray, false);
 
       // Cache fetched products to database via API (only valid events with signatures)
-      const validProducts = productArrayFromRelay.filter(
+      const validProducts = fetchedEvents.filter(
         (e) => e.id && e.sig && e.pubkey
       );
       if (validProducts.length > 0) {
@@ -126,7 +139,7 @@ export const fetchAllPosts = async (
       }
 
       resolve({
-        productEvents: productArrayFromRelay,
+        productEvents: mergedProductArray,
         profileSetFromProducts,
       });
     } catch (error) {
@@ -340,7 +353,8 @@ export const fetchShopProfile = async (
 
         resolve({ shopProfileMap: shopProfile });
       } else {
-        reject();
+        editShopContext(shopProfile, false);
+        resolve({ shopProfileMap: shopProfile });
       }
     } catch (error) {
       reject(error);
@@ -364,12 +378,11 @@ export const fetchProfile = async (
         return;
       }
 
-      // First load from database
+      const dbProfileMap = new Map<string, any>();
       try {
         const response = await fetch("/api/db/fetch-profiles");
         if (response.ok) {
           const profilesFromDb = await response.json();
-          const profileMap = new Map<string, any>();
           for (const event of profilesFromDb) {
             if (pubkeyProfilesToFetch.includes(event.pubkey)) {
               try {
@@ -386,7 +399,7 @@ export const fetchProfile = async (
                     event.pubkey
                   );
                 }
-                profileMap.set(event.pubkey, profile);
+                dbProfileMap.set(event.pubkey, profile);
               } catch (error) {
                 console.error(
                   `Failed to parse profile from DB: ${event.pubkey}`,
@@ -395,8 +408,8 @@ export const fetchProfile = async (
               }
             }
           }
-          if (profileMap.size > 0) {
-            editProfileContext(profileMap, false);
+          if (dbProfileMap.size > 0) {
+            editProfileContext(dbProfileMap, false);
           }
         }
       } catch (error) {
@@ -407,18 +420,23 @@ export const fetchProfile = async (
         kinds: [0],
         authors: Array.from(pubkeyProfilesToFetch),
       };
+
       const profileMap: Map<string, any> = new Map(
-        Array.from(pubkeyProfilesToFetch).map((pubkey) => [pubkey, null])
+        Array.from(pubkeyProfilesToFetch).map((pubkey) => [
+          pubkey,
+          dbProfileMap.get(pubkey) || null,
+        ])
       );
 
       const fetchedEvents = await nostr.fetch([subParams], {}, relays);
 
       for (const event of fetchedEvents) {
+        const existing = profileMap.get(event.pubkey);
         if (
-          profileMap.get(event.pubkey) === null ||
-          profileMap.get(event.pubkey).created_at > event.created_at
+          existing === null ||
+          !existing ||
+          event.created_at > existing.created_at
         ) {
-          // update only if the profile is not already set or the new event is newer
           try {
             const content = JSON.parse(event.content);
             const profile = {
@@ -645,11 +663,76 @@ export const fetchReviews = async (
         })
         .filter((address): address is string => address !== null);
 
-      const merchantScoresMap = new Map<string, number[]>();
       const productReviewsMap = new Map<
         string,
         Map<string, Map<string, string[][]>>
       >();
+
+      const reviewScoreTracker = new Map<
+        string,
+        { score: number; created_at: number }
+      >();
+      const getReviewScoreKey = (
+        merchantPubkey: string,
+        productDTag: string,
+        reviewerPubkey: string
+      ) => `${merchantPubkey}:${productDTag}:${reviewerPubkey}`;
+
+      const processReviewEvent = (event: NostrEvent, addressTag: string) => {
+        const [_, _kind, merchantPubkey, productDTag] = addressTag.split(":");
+        if (!merchantPubkey || !productDTag) return;
+
+        const ratingTags = event.tags.filter(
+          (tag: string[]) => tag[0] === "rating"
+        );
+        const commentArray = ["comment", event.content];
+        ratingTags.unshift(commentArray);
+
+        const scoreKey = getReviewScoreKey(
+          merchantPubkey,
+          productDTag,
+          event.pubkey
+        );
+        const score = calculateWeightedScore(event.tags);
+        const existingScore = reviewScoreTracker.get(scoreKey);
+
+        if (!existingScore || event.created_at > existingScore.created_at) {
+          reviewScoreTracker.set(scoreKey, {
+            score,
+            created_at: event.created_at,
+          });
+        }
+
+        if (!productReviewsMap.has(merchantPubkey)) {
+          productReviewsMap.set(merchantPubkey, new Map());
+        }
+
+        const merchantProducts = productReviewsMap.get(merchantPubkey)!;
+        if (!merchantProducts.has(productDTag)) {
+          merchantProducts.set(productDTag, new Map());
+        }
+
+        const productReviews = merchantProducts.get(productDTag)!;
+        const createdAt = event.created_at;
+        const existingReview = productReviews.get(event.pubkey);
+
+        if (
+          !existingReview ||
+          createdAt >
+            Number(existingReview.find((item) => item[0] === "created_at")?.[1])
+        ) {
+          const updatedReview = existingReview
+            ? existingReview.map((item) => {
+                if (item[0] === "created_at") {
+                  return ["created_at", createdAt.toString()];
+                }
+                return item;
+              })
+            : [...ratingTags, ["created_at", createdAt.toString()]];
+
+          productReviews.set(event.pubkey, updatedReview);
+        }
+      };
 
       // First load from database
       try {
@@ -662,59 +745,22 @@ export const fetchReviews = async (
             (tag: string[]) => tag[0] === "d"
           )?.[1];
           if (!addressTag || !addresses.includes(addressTag)) continue;
-
-          const [_, _kind, merchantPubkey, productDTag] = addressTag.split(":");
-          if (!merchantPubkey || !productDTag) continue;
-
-          const ratingTags = event.tags.filter(
-            (tag: string[]) => tag[0] === "rating"
-          );
-          const commentArray = ["comment", event.content];
-          ratingTags.unshift(commentArray);
-
-          if (!merchantScoresMap.has(merchantPubkey)) {
-            merchantScoresMap.set(merchantPubkey, []);
-          }
-          merchantScoresMap
-            .get(merchantPubkey)!
-            .push(calculateWeightedScore(event.tags));
-
-          if (!productReviewsMap.has(merchantPubkey)) {
-            productReviewsMap.set(merchantPubkey, new Map());
-          }
-
-          const merchantProducts = productReviewsMap.get(merchantPubkey)!;
-          if (!merchantProducts.has(productDTag)) {
-            merchantProducts.set(productDTag, new Map());
-          }
-
-          const productReviews = merchantProducts.get(productDTag)!;
-          const createdAt = event.created_at;
-          const existingReview = productReviews.get(event.pubkey);
-
-          if (
-            !existingReview ||
-            createdAt >
-              Number(
-                existingReview.find((item) => item[0] === "created_at")?.[1]
-              )
-          ) {
-            const updatedReview = existingReview
-              ? existingReview.map((item) => {
-                  if (item[0] === "created_at") {
-                    return ["created_at", createdAt.toString()];
-                  }
-                  return item;
-                })
-              : [...ratingTags, ["created_at", createdAt.toString()]];
-
-            productReviews.set(event.pubkey, updatedReview);
-          }
+          processReviewEvent(event, addressTag);
         }
 
-        if (merchantScoresMap.size > 0 || productReviewsMap.size > 0) {
-          productReviewsMap.forEach((merchantProducts, _) => {
-            merchantProducts.forEach((productReviews, _) => {
+        if (reviewScoreTracker.size > 0 || productReviewsMap.size > 0) {
+          const merchantScoresMap = new Map<string, number[]>();
+          reviewScoreTracker.forEach(({ score }, key) => {
+            const merchantPubkey = key.split(":")[0]!;
+            if (!merchantScoresMap.has(merchantPubkey)) {
+              merchantScoresMap.set(merchantPubkey, []);
+            }
+            merchantScoresMap.get(merchantPubkey)!.push(score);
+          });
+
+          const cleanedProductReviewsMap = new Map(productReviewsMap);
+          cleanedProductReviewsMap.forEach((merchantProducts) => {
+            merchantProducts.forEach((productReviews) => {
               productReviews.forEach((review, reviewerPubkey) => {
                 const cleanedReview = review.filter(
                   (item) => item[0] !== "created_at"
@@ -725,7 +771,11 @@ export const fetchReviews = async (
               });
             });
           });
-          editReviewsContext(merchantScoresMap, productReviewsMap, false);
+          editReviewsContext(
+            merchantScoresMap,
+            cleanedProductReviewsMap,
+            false
+          );
         }
       } catch (error) {
         console.error("Failed to fetch reviews from database: ", error);
@@ -741,63 +791,21 @@ export const fetchReviews = async (
       for (const event of fetchedEvents) {
         const addressTag = event.tags.find((tag) => tag[0] === "d")?.[1];
         if (!addressTag) continue;
+        processReviewEvent(event, addressTag);
+      }
 
-        const [_, _kind, merchantPubkey, productDTag] = addressTag.split(":");
-        if (!merchantPubkey || !productDTag) continue;
-
-        const ratingTags = event.tags.filter((tag) => tag[0] === "rating");
-        const commentArray = ["comment", event.content];
-        ratingTags.unshift(commentArray);
-
-        // Add score to merchant's scores (all reviews)
+      const merchantScoresMap = new Map<string, number[]>();
+      reviewScoreTracker.forEach(({ score }, key) => {
+        const merchantPubkey = key.split(":")[0]!;
         if (!merchantScoresMap.has(merchantPubkey)) {
           merchantScoresMap.set(merchantPubkey, []);
         }
-        merchantScoresMap
-          .get(merchantPubkey)!
-          .push(calculateWeightedScore(event.tags));
+        merchantScoresMap.get(merchantPubkey)!.push(score);
+      });
 
-        // Initialize merchant map if doesn't exist
-        if (!productReviewsMap.has(merchantPubkey)) {
-          productReviewsMap.set(merchantPubkey, new Map());
-        }
-
-        // Initialize product map if doesn't exist
-        const merchantProducts = productReviewsMap.get(merchantPubkey)!;
-        if (!merchantProducts.has(productDTag)) {
-          merchantProducts.set(productDTag, new Map());
-        }
-
-        // Add or update review
-        const productReviews = merchantProducts.get(productDTag)!;
-
-        const createdAt = event.created_at;
-
-        // Only update if this is a newer review from this pubkey
-        const existingReview = productReviews.get(event.pubkey);
-        if (
-          !existingReview ||
-          createdAt >
-            Number(existingReview.find((item) => item[0] === "created_at")?.[1])
-        ) {
-          // Replace the existing created_at or set a new entry
-          const updatedReview = existingReview
-            ? existingReview.map((item) => {
-                if (item[0] === "created_at") {
-                  return ["created_at", createdAt.toString()]; // Replace the created_at entry
-                }
-                return item; // Keep existing items
-              })
-            : [...ratingTags, ["created_at", createdAt.toString()]]; // Initialize if it's a new review
-
-          productReviews.set(event.pubkey, updatedReview);
-        }
-      }
-
-      productReviewsMap.forEach((merchantProducts, _) => {
-        merchantProducts.forEach((productReviews, _) => {
+      productReviewsMap.forEach((merchantProducts) => {
+        merchantProducts.forEach((productReviews) => {
           productReviews.forEach((review, reviewerPubkey) => {
-            // Filter out the created_at entries
             const cleanedReview = review.filter(
               (item) => item[0] !== "created_at"
             );
@@ -1040,26 +1048,26 @@ export const fetchAllRelays = async (
           (tag) => tag[0] === "r" && tag[2] === "write"
         );
 
-        validRelays.forEach((tag) => relaySet.add(tag[1]!));
-        relayList.push(
-          ...validRelays
-            .map((tag) => tag[1]!)
-            .filter((tag) => tag !== undefined)
-        );
+        validRelays.forEach((tag) => {
+          if (tag[1] && !relaySet.has(tag[1])) {
+            relaySet.add(tag[1]);
+            relayList.push(tag[1]);
+          }
+        });
 
-        validReadRelays.forEach((tag) => readRelaySet.add(tag[1]!));
-        readRelayList.push(
-          ...validReadRelays
-            .map((tag) => tag[1]!)
-            .filter((tag) => tag !== undefined)
-        );
+        validReadRelays.forEach((tag) => {
+          if (tag[1] && !readRelaySet.has(tag[1])) {
+            readRelaySet.add(tag[1]);
+            readRelayList.push(tag[1]);
+          }
+        });
 
-        validWriteRelays.forEach((tag) => writeRelaySet.add(tag[1]!));
-        writeRelayList.push(
-          ...validWriteRelays
-            .map((tag) => tag[1]!)
-            .filter((tag) => tag !== undefined)
-        );
+        validWriteRelays.forEach((tag) => {
+          if (tag[1] && !writeRelaySet.has(tag[1])) {
+            writeRelaySet.add(tag[1]);
+            writeRelayList.push(tag[1]);
+          }
+        });
       }
       editRelaysContext(relayList, readRelayList, writeRelayList, false);
       resolve({
@@ -1152,12 +1160,12 @@ export const fetchAllBlossomServers = async (
           (tag) => tag[0] === "server"
         );
 
-        validBlossomServers.forEach((tag) => blossomSet.add(tag[1]!));
-        blossomServers.push(
-          ...validBlossomServers
-            .map((tag) => tag[1]!)
-            .filter((tag) => tag !== undefined)
-        );
+        validBlossomServers.forEach((tag) => {
+          if (tag[1] && !blossomSet.has(tag[1])) {
+            blossomSet.add(tag[1]);
+            blossomServers.push(tag[1]);
+          }
+        });
       }
       editBlossomContext(blossomServers, false);
       resolve({
@@ -1611,24 +1619,20 @@ export const fetchAllCommunities = async (
 ): Promise<Map<string, Community>> => {
   return new Promise(async (resolve, reject) => {
     try {
-      // First load from database
+      const dbCommunityMap = new Map<string, Community>();
       try {
         const response = await fetch("/api/db/fetch-communities");
         if (response.ok) {
           const communitiesFromDb = await response.json();
           if (communitiesFromDb.length > 0) {
-            const parsedCommunitiesFromDb: Community[] = [];
             for (const event of communitiesFromDb) {
               const community = parseCommunityEvent(event);
               if (community) {
-                parsedCommunitiesFromDb.push(community);
+                dbCommunityMap.set(community.id, community);
               }
             }
-            if (parsedCommunitiesFromDb.length > 0) {
-              const communityMap = new Map(
-                parsedCommunitiesFromDb.map((c) => [c.id, c])
-              );
-              editCommunityContext(communityMap, false);
+            if (dbCommunityMap.size > 0) {
+              editCommunityContext(new Map(dbCommunityMap), false);
             }
           }
         }
@@ -1642,16 +1646,19 @@ export const fetchAllCommunities = async (
       };
 
       const fetchedEvents = await nostr.fetch([filter], {}, relays);
-      const parsedCommunities: Community[] = [];
+
+      const communityMap = new Map(dbCommunityMap);
 
       for (const event of fetchedEvents) {
         const community = parseCommunityEvent(event);
         if (community) {
-          parsedCommunities.push(community);
+          const existing = communityMap.get(community.id);
+          if (!existing || community.createdAt >= existing.createdAt) {
+            communityMap.set(community.id, community);
+          }
         }
       }
 
-      const communityMap = new Map(parsedCommunities.map((c) => [c.id, c]));
       editCommunityContext(communityMap, false);
 
       // Cache communities to database via API (only valid events)
