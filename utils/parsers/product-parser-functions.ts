@@ -24,15 +24,20 @@ export type ProductData = {
   sizeQuantities?: Map<string, number>;
   volumes?: string[];
   volumePrices?: Map<string, number>;
+  weights?: string[];
+  weightPrices?: Map<string, number>;
   condition?: string;
   status?: string;
   selectedSize?: string;
   selectedQuantity?: number;
   selectedVolume?: string;
   volumePrice?: number;
+  selectedWeight?: string;
+  weightPrice?: number;
   bulkPrices?: Map<number, number>;
   selectedBulkOption?: number;
   bulkPrice?: number;
+  digitalContent?: string;
   required?: string;
   restrictions?: string;
   pickupLocations?: string[];
@@ -152,6 +157,18 @@ export const parseTags = (productEvent: NostrEvent) => {
           }
         }
         break;
+      case "weight":
+        if (!parsedData.weights) {
+          parsedData.weights = [];
+          parsedData.weightPrices = new Map<string, number>();
+        }
+        if (values[0]) {
+          parsedData.weights.push(values[0]);
+          if (values[1]) {
+            parsedData.weightPrices!.set(values[0], parseFloat(values[1]));
+          }
+        }
+        break;
       case "bulk":
         if (!parsedData.bulkPrices) {
           parsedData.bulkPrices = new Map<number, number>();
@@ -179,6 +196,9 @@ export const parseTags = (productEvent: NostrEvent) => {
         break;
       case "valid_until":
         parsedData.expiration = Number(values[0]);
+        break;
+      case "digital_content":
+        parsedData.digitalContent = values[0];
         break;
       default:
         return;
