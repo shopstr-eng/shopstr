@@ -640,6 +640,7 @@ export default function CartInvoiceCard({
         donationPercentage: donationPercentageValue,
         selectedSize: product.selectedSize,
         selectedVolume: product.selectedVolume,
+        selectedWeight: product.selectedWeight,
         selectedBulkOption: product.selectedBulkOption,
       };
     } else if (isReceipt) {
@@ -661,6 +662,7 @@ export default function CartInvoiceCard({
         donationPercentage: donationPercentageValue,
         selectedSize: product.selectedSize,
         selectedVolume: product.selectedVolume,
+        selectedWeight: product.selectedWeight,
         selectedBulkOption: product.selectedBulkOption,
       };
     } else if (isDonation) {
@@ -682,6 +684,7 @@ export default function CartInvoiceCard({
         donationPercentage: donationPercentageValue,
         selectedSize: product.selectedSize,
         selectedVolume: product.selectedVolume,
+        selectedWeight: product.selectedWeight,
         selectedBulkOption: product.selectedBulkOption,
       };
     }
@@ -707,6 +710,51 @@ export default function CartInvoiceCard({
       pubkeyToReceiveMessage
     );
     await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent);
+
+    if (
+      isReceipt &&
+      buyerPubkey &&
+      pubkeyToReceiveMessage === buyerPubkey &&
+      product.digitalContent
+    ) {
+      const deliveryMessageEvent = await constructGiftWrappedEvent(
+        decodedRandomPubkeyForSender.data as string,
+        pubkeyToReceiveMessage,
+        `digital_content_delivery:${btoa(
+          encodeURIComponent(
+            JSON.stringify({
+              listingId: product.id,
+              payload: product.digitalContent,
+            })
+          ).replace(/%([0-9A-F]{2})/g, function (_match, p1) {
+            return String.fromCharCode(Number("0x" + p1));
+          })
+        )}`,
+        "digital-content-delivery"
+      );
+      const deliverySealedEvent = await constructMessageSeal(
+        signer!,
+        deliveryMessageEvent,
+        decodedRandomPubkeyForSender.data as string,
+        pubkeyToReceiveMessage,
+        decodedRandomPrivkeyForSender.data as Uint8Array
+      );
+      const deliveryWrappedEvent = await constructMessageGiftWrap(
+        deliverySealedEvent,
+        decodedRandomPubkeyForReceiver.data as string,
+        decodedRandomPrivkeyForReceiver.data as Uint8Array,
+        pubkeyToReceiveMessage
+      );
+      await sendGiftWrappedMessageEvent(nostr!, deliveryWrappedEvent);
+      chatsContext.addNewlyCreatedMessageEvent(
+        {
+          ...deliveryMessageEvent,
+          sig: "",
+          read: false,
+        },
+        true
+      );
+    }
 
     if (isReceipt) {
       chatsContext.addNewlyCreatedMessageEvent(
@@ -1363,6 +1411,13 @@ export default function CartInvoiceCard({
                 productDetails += " in a " + product.selectedVolume;
               }
             }
+            if (product.selectedWeight) {
+              if (productDetails) {
+                productDetails += " and weight " + product.selectedWeight;
+              } else {
+                productDetails += " in weight " + product.selectedWeight;
+              }
+            }
             if (product.selectedBulkOption) {
               if (productDetails) {
                 productDetails +=
@@ -1489,6 +1544,13 @@ export default function CartInvoiceCard({
                 productDetails += " in a " + product.selectedVolume;
               }
             }
+            if (product.selectedWeight) {
+              if (productDetails) {
+                productDetails += " and weight " + product.selectedWeight;
+              } else {
+                productDetails += " in weight " + product.selectedWeight;
+              }
+            }
             if (product.selectedBulkOption) {
               if (productDetails) {
                 productDetails +=
@@ -1569,6 +1631,13 @@ export default function CartInvoiceCard({
             productDetails += " and a " + product.selectedVolume;
           } else {
             productDetails += " in a " + product.selectedVolume;
+          }
+        }
+        if (product.selectedWeight) {
+          if (productDetails) {
+            productDetails += " and weight " + product.selectedWeight;
+          } else {
+            productDetails += " in weight " + product.selectedWeight;
           }
         }
         if (product.selectedBulkOption) {
@@ -1739,6 +1808,13 @@ export default function CartInvoiceCard({
               productDetails += " in a " + product.selectedVolume;
             }
           }
+          if (product.selectedWeight) {
+            if (productDetails) {
+              productDetails += " and weight " + product.selectedWeight;
+            } else {
+              productDetails += " in weight " + product.selectedWeight;
+            }
+          }
           if (product.selectedBulkOption) {
             if (productDetails) {
               productDetails +=
@@ -1875,6 +1951,13 @@ export default function CartInvoiceCard({
             productDetails += " and a " + product.selectedVolume;
           } else {
             productDetails += " in a " + product.selectedVolume;
+          }
+        }
+        if (product.selectedWeight) {
+          if (productDetails) {
+            productDetails += " and weight " + product.selectedWeight;
+          } else {
+            productDetails += " in weight " + product.selectedWeight;
           }
         }
         if (product.selectedBulkOption) {
@@ -2475,6 +2558,11 @@ export default function CartInvoiceCard({
                           Volume: {product.selectedVolume}
                         </p>
                       )}
+                      {product.selectedWeight && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          Weight: {product.selectedWeight}
+                        </p>
+                      )}
                       {product.selectedBulkOption && (
                         <p className="text-sm text-gray-600 dark:text-gray-400">
                           Bundle: {product.selectedBulkOption} units
@@ -2694,6 +2782,11 @@ export default function CartInvoiceCard({
                     {product.selectedVolume && (
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         Volume: {product.selectedVolume}
+                      </p>
+                    )}
+                    {product.selectedWeight && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Weight: {product.selectedWeight}
                       </p>
                     )}
                     {product.selectedBulkOption && (
