@@ -350,7 +350,9 @@ export default function Component() {
         ? product.bulkPrice
         : product.volumePrice !== undefined
           ? product.volumePrice
-          : product.price;
+          : product.weightPrice !== undefined
+            ? product.weightPrice
+            : product.price;
 
     if (
       product.currency.toLowerCase() === "sats" ||
@@ -454,7 +456,9 @@ export default function Component() {
                                         ? `${product.bulkPrice} ${product.currency}`
                                         : product.volumePrice !== undefined
                                           ? `${product.volumePrice} ${product.currency}`
-                                          : `${product.price} ${product.currency}`}
+                                          : product.weightPrice !== undefined
+                                            ? `${product.weightPrice} ${product.currency}`
+                                            : `${product.price} ${product.currency}`}
                                     </p>
                                     {product.currency.toLowerCase() !==
                                       "sats" &&
@@ -475,6 +479,11 @@ export default function Component() {
                                 {product.selectedBulkOption && (
                                   <p className="text-sm text-purple-600 dark:text-yellow-400">
                                     Bundle: {product.selectedBulkOption} units
+                                  </p>
+                                )}
+                                {product.selectedWeight && (
+                                  <p className="text-sm text-purple-600 dark:text-yellow-400">
+                                    Weight: {product.selectedWeight}
                                   </p>
                                 )}
                                 {product.quantity && (

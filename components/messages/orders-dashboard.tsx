@@ -79,6 +79,7 @@ interface OrderData {
   pickupLocation?: string;
   selectedSize?: string;
   selectedVolume?: string;
+  selectedWeight?: string;
   selectedBulkOption?: number;
   paymentToken?: string;
   paymentMethod?: string;
@@ -336,6 +337,7 @@ const OrdersDashboard = () => {
             const pickupLocation = tagsMap.get("pickup");
             const selectedSize = tagsMap.get("size");
             const selectedVolume = tagsMap.get("volume");
+            const selectedWeight = tagsMap.get("weight");
             const bulkTag = messageEvent.tags.find((tag) => tag[0] === "bulk");
             const selectedBulkOption =
               bulkTag && bulkTag[1] ? parseInt(bulkTag[1]) : undefined;
@@ -465,6 +467,7 @@ const OrdersDashboard = () => {
               pickupLocation,
               selectedSize,
               selectedVolume,
+              selectedWeight,
               selectedBulkOption,
               paymentToken,
               paymentMethod,
@@ -538,6 +541,7 @@ const OrdersDashboard = () => {
             pickupLocation: order.pickupLocation || existing.pickupLocation,
             selectedSize: order.selectedSize || existing.selectedSize,
             selectedVolume: order.selectedVolume || existing.selectedVolume,
+            selectedWeight: order.selectedWeight || existing.selectedWeight,
             selectedBulkOption:
               order.selectedBulkOption || existing.selectedBulkOption,
             paymentToken: order.paymentToken || existing.paymentToken,
@@ -1255,6 +1259,8 @@ const OrdersDashboard = () => {
                               specs.push(`Size: ${order.selectedSize}`);
                             if (order.selectedVolume)
                               specs.push(`Volume: ${order.selectedVolume}`);
+                            if (order.selectedWeight)
+                              specs.push(`Weight: ${order.selectedWeight}`);
                             if (order.selectedBulkOption)
                               specs.push(
                                 `Bundle: ${order.selectedBulkOption} units`

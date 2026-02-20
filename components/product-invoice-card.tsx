@@ -76,6 +76,7 @@ export default function ProductInvoiceCard({
   setCashuPaymentFailed,
   selectedSize,
   selectedVolume,
+  selectedWeight,
   selectedBulkOption,
   discountCode,
   discountPercentage,
@@ -91,6 +92,7 @@ export default function ProductInvoiceCard({
   setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
   selectedSize?: string;
   selectedVolume?: string;
+  selectedWeight?: string;
   selectedBulkOption?: number;
   discountCode?: string;
   discountPercentage?: number;
@@ -364,6 +366,7 @@ export default function ProductInvoiceCard({
           ...productData,
           selectedSize,
           selectedVolume,
+          selectedWeight,
           selectedBulkOption,
         },
         paymentType,
@@ -373,6 +376,7 @@ export default function ProductInvoiceCard({
         pickup,
         selectedSize,
         selectedVolume,
+        selectedWeight,
         selectedBulkOption,
         buyerPubkey,
         donationAmount: donationAmountValue,
@@ -389,6 +393,7 @@ export default function ProductInvoiceCard({
           ...productData,
           selectedSize,
           selectedVolume,
+          selectedWeight,
           selectedBulkOption,
         },
         status: "confirmed",
@@ -399,6 +404,7 @@ export default function ProductInvoiceCard({
         pickup,
         selectedSize,
         selectedVolume,
+        selectedWeight,
         selectedBulkOption,
         buyerPubkey,
         donationAmount: donationAmountValue,
@@ -417,6 +423,7 @@ export default function ProductInvoiceCard({
           ...productData,
           selectedSize,
           selectedVolume,
+          selectedWeight,
           selectedBulkOption,
         },
         quantity: 1,
@@ -425,6 +432,7 @@ export default function ProductInvoiceCard({
         pickup,
         selectedSize,
         selectedVolume,
+        selectedWeight,
         selectedBulkOption,
         buyerPubkey,
         donationAmount: donationAmountValue,
@@ -453,6 +461,51 @@ export default function ProductInvoiceCard({
       pubkeyToReceiveMessage
     );
     await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent);
+
+    if (
+      isReceipt &&
+      buyerPubkey &&
+      pubkeyToReceiveMessage === buyerPubkey &&
+      productData.digitalContent
+    ) {
+      const deliveryMessageEvent = await constructGiftWrappedEvent(
+        decodedRandomPubkeyForSender.data as string,
+        pubkeyToReceiveMessage,
+        `digital_content_delivery:${btoa(
+          encodeURIComponent(
+            JSON.stringify({
+              listingId: productData.id,
+              payload: productData.digitalContent,
+            })
+          ).replace(/%([0-9A-F]{2})/g, function (_match, p1) {
+            return String.fromCharCode(Number("0x" + p1));
+          })
+        )}`,
+        "digital-content-delivery"
+      );
+      const deliverySealedEvent = await constructMessageSeal(
+        signer!,
+        deliveryMessageEvent,
+        decodedRandomPubkeyForSender.data as string,
+        pubkeyToReceiveMessage,
+        decodedRandomPrivkeyForSender.data as Uint8Array
+      );
+      const deliveryWrappedEvent = await constructMessageGiftWrap(
+        deliverySealedEvent,
+        decodedRandomPubkeyForReceiver.data as string,
+        decodedRandomPrivkeyForReceiver.data as Uint8Array,
+        pubkeyToReceiveMessage
+      );
+      await sendGiftWrappedMessageEvent(nostr!, deliveryWrappedEvent);
+      chatsContext.addNewlyCreatedMessageEvent(
+        {
+          ...deliveryMessageEvent,
+          sig: "",
+          read: false,
+        },
+        true
+      );
+    }
 
     if (isReceipt) {
       chatsContext.addNewlyCreatedMessageEvent(
@@ -733,13 +786,20 @@ export default function ProductInvoiceCard({
 
       let productDetails = "";
       if (selectedSize) {
-        productDetails += " in a size " + selectedSize;
+        productDetails += " in size " + selectedSize;
       }
       if (selectedVolume) {
         if (productDetails) {
           productDetails += " and a " + selectedVolume;
         } else {
           productDetails += " in a " + selectedVolume;
+        }
+      }
+      if (selectedWeight) {
+        if (productDetails) {
+          productDetails += " and weight " + selectedWeight;
+        } else {
+          productDetails += " in weight " + selectedWeight;
         }
       }
       if (selectedBulkOption) {
@@ -1370,6 +1430,13 @@ export default function ProductInvoiceCard({
               productDetails += " in a " + selectedVolume;
             }
           }
+          if (selectedWeight) {
+            if (productDetails) {
+              productDetails += " and weight " + selectedWeight;
+            } else {
+              productDetails += " in weight " + selectedWeight;
+            }
+          }
           if (selectedBulkOption) {
             if (productDetails) {
               productDetails += " (bulk: " + selectedBulkOption + " units)";
@@ -1631,6 +1698,13 @@ export default function ProductInvoiceCard({
             productDetails += " in a " + selectedVolume;
           }
         }
+        if (selectedWeight) {
+          if (productDetails) {
+            productDetails += " and weight " + selectedWeight;
+          } else {
+            productDetails += " in weight " + selectedWeight;
+          }
+        }
         if (selectedBulkOption) {
           if (productDetails) {
             productDetails += " (bulk: " + selectedBulkOption + " units)";
@@ -1748,6 +1822,13 @@ export default function ProductInvoiceCard({
           productDetails += " and a " + selectedVolume;
         } else {
           productDetails += " in a " + selectedVolume;
+        }
+      }
+      if (selectedWeight) {
+        if (productDetails) {
+          productDetails += " and weight " + selectedWeight;
+        } else {
+          productDetails += " in weight " + selectedWeight;
         }
       }
       if (selectedBulkOption) {
@@ -2317,6 +2398,12 @@ export default function ProductInvoiceCard({
                   </p>
                 )}
 
+                {selectedWeight && (
+                  <p className="mb-1 text-gray-600 dark:text-gray-400">
+                    Weight: {selectedWeight}
+                  </p>
+                )}
+
                 {selectedBulkOption && (
                   <p className="mb-1 text-gray-600 dark:text-gray-400">
                     Bundle: {selectedBulkOption} units
@@ -2513,6 +2600,12 @@ export default function ProductInvoiceCard({
               {selectedVolume && (
                 <p className="mb-1 text-gray-600 dark:text-gray-400">
                   Volume: {selectedVolume}
+                </p>
+              )}
+
+              {selectedWeight && (
+                <p className="mb-1 text-gray-600 dark:text-gray-400">
+                  Weight: {selectedWeight}
                 </p>
               )}
 
