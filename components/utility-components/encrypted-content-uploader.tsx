@@ -8,8 +8,8 @@ import { SignerContext } from "@/components/utility-components/nostr-context-pro
 import {
   encodeDigitalContentPayload,
   decodeDigitalContentPayload,
-  encryptFileContent,
-} from "@/utils/encryption/content-crypto";
+  encryptFileWithNip44,
+} from "@/utils/encryption/file-encryption";
 import FailureModal from "./failure-modal";
 import { TrashIcon, DocumentIcon } from "@heroicons/react/24/outline";
 
@@ -56,15 +56,7 @@ export default function EncryptedContentUploader({
 
     try {
       setIsUploading(true);
-      const encryptedResult = await encryptFileContent(selectedFile);
-      const encryptedFile = new File(
-        [encryptedResult.encryptedBlob],
-        `${selectedFile.name}.enc`,
-        {
-          type: "application/octet-stream",
-          lastModified: Date.now(),
-        }
-      );
+      const { encryptedFile, fileNsec } = await encryptFileWithNip44(selectedFile);
 
       const fallbackServers = [
         "https://blossom.primal.net",
@@ -105,8 +97,7 @@ export default function EncryptedContentUploader({
 
       const encodedPayload = encodeDigitalContentPayload({
         url: uploadedUrl,
-        key: encryptedResult.keyBase64,
-        iv: encryptedResult.ivBase64,
+        nsec: fileNsec,
         mimeType: selectedFile.type,
         fileName: selectedFile.name,
       });

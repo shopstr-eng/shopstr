@@ -10,8 +10,8 @@ import { getDecodedToken } from "@cashu/cashu-ts";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import {
   decodeDigitalContentPayload,
-  decryptFileContent,
-} from "@/utils/encryption/content-crypto";
+  decryptFileWithNip44,
+} from "@/utils/encryption/file-encryption";
 
 function isDecodableToken(token: string): boolean {
   try {
@@ -151,10 +151,10 @@ const ChatMessage = ({
       }
 
       const encryptedBlob = await response.blob();
-      const decryptedBlob = await decryptFileContent(
-        encryptedBlob,
-        contentPayload.key,
-        contentPayload.iv
+      const arrayBuffer = await encryptedBlob.arrayBuffer();
+      const decryptedBlob = await decryptFileWithNip44(
+        arrayBuffer,
+        contentPayload.nsec
       );
 
       const finalBlob = new Blob([decryptedBlob], {
