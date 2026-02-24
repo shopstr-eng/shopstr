@@ -10,6 +10,7 @@ import { getDecodedToken } from "@cashu/cashu-ts";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import {
   decodeDigitalContentPayload,
+  decodeDigitalContentDeliveryPayload,
   decryptFileWithNip44,
 } from "@/utils/encryption/file-encryption";
 
@@ -124,28 +125,40 @@ const ChatMessage = ({
   const handleDownloadDigitalContent = async (encodedDelivery: string) => {
     try {
       setIsDownloadingDigitalContent(true);
-      const rawDecoded = atob(encodedDelivery);
-      const jsonString = decodeURIComponent(
-        rawDecoded
-          .split("")
-          .map(function (c) {
-            return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
-          })
-          .join("")
-      );
-      const deliveryPayload = JSON.parse(jsonString) as {
+      const deliveryPayload = decodeDigitalContentDeliveryPayload(encodedDelivery);
+      let fileInfo: {
+        url: string;
+        nsec: string;
+        mimeType?: string;
+        fileName?: string;
         listingId?: string;
-        payload: string;
       };
 
-      if (!deliveryPayload.payload) {
-        throw new Error("Digital delivery payload is missing");
+      if ("v" in deliveryPayload && deliveryPayload.v === 2) {
+        fileInfo = {
+          url: deliveryPayload.url,
+          nsec: deliveryPayload.nsec,
+          mimeType: deliveryPayload.mimeType,
+          fileName: deliveryPayload.fileName,
+          listingId: deliveryPayload.listingId,
+        };
+      } else if ("payload" in deliveryPayload && deliveryPayload.payload) {
+        const contentPayload = decodeDigitalContentPayload(deliveryPayload.payload);
+        if (!("nsec" in contentPayload)) {
+          throw new Error("Legacy digital payload is missing decryption key");
+        }
+        fileInfo = {
+          url: contentPayload.url,
+          nsec: contentPayload.nsec,
+          mimeType: contentPayload.mimeType,
+          fileName: contentPayload.fileName,
+          listingId: deliveryPayload.listingId,
+        };
+      } else {
+        throw new Error("Digital delivery payload is malformed");
       }
 
-      const contentPayload = decodeDigitalContentPayload(
-        deliveryPayload.payload
-      );
-      const response = await fetch(contentPayload.url);
+      const response = await fetch(fileInfo.url);
       if (!response.ok) {
         throw new Error("Failed to fetch encrypted digital content");
       }
@@ -154,19 +167,19 @@ const ChatMessage = ({
       const arrayBuffer = await encryptedBlob.arrayBuffer();
       const decryptedBlob = await decryptFileWithNip44(
         arrayBuffer,
-        contentPayload.nsec
+        fileInfo.nsec
       );
 
       const finalBlob = new Blob([decryptedBlob], {
-        type: contentPayload.mimeType || "application/octet-stream",
+        type: fileInfo.mimeType || "application/octet-stream",
       });
       const objectUrl = URL.createObjectURL(finalBlob);
 
       const downloadLink = document.createElement("a");
       downloadLink.href = objectUrl;
       downloadLink.download =
-        contentPayload.fileName ||
-        deliveryPayload.listingId ||
+        fileInfo.fileName ||
+        fileInfo.listingId ||
         "digital-content.bin";
       document.body.appendChild(downloadLink);
       downloadLink.click();
@@ -174,9 +187,9 @@ const ChatMessage = ({
       URL.revokeObjectURL(objectUrl);
     } catch (error) {
       console.error("Digital content download failed:", error);
-      setFailureText(
-        "Failed to download or decrypt digital content. Please try again."
-      );
+      const errorText =
+        error instanceof Error ? error.message : "Unknown download error";
+      setFailureText(`Failed to download digital content: ${errorText}`);
       setShowFailureModal(true);
     } finally {
       setIsDownloadingDigitalContent(false);

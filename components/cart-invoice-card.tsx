@@ -44,7 +44,10 @@ import { LightningAddress } from "@getalby/lightning-tools";
 import QRCode from "qrcode";
 import { v4 as uuidv4 } from "uuid";
 import { nip19 } from "nostr-tools";
-import { ProductData } from "@/utils/parsers/product-parser-functions";
+import {
+  ProductData,
+  resolveEffectiveUnitPrice,
+} from "@/utils/parsers/product-parser-functions";
 import { webln } from "@getalby/sdk";
 import { formatWithCommas } from "./utility-components/display-monetary-info";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
@@ -538,51 +541,6 @@ export default function CartInvoiceCard({
       pubkeyToReceiveMessage
     );
     await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent);
-
-    if (
-      isReceipt &&
-      buyerPubkey &&
-      pubkeyToReceiveMessage === buyerPubkey &&
-      product.digitalContent
-    ) {
-      const deliveryMessageEvent = await constructGiftWrappedEvent(
-        decodedRandomPubkeyForSender.data as string,
-        pubkeyToReceiveMessage,
-        `digital_content_delivery:${btoa(
-          encodeURIComponent(
-            JSON.stringify({
-              listingId: product.id,
-              payload: product.digitalContent,
-            })
-          ).replace(/%([0-9A-F]{2})/g, function (_match, p1) {
-            return String.fromCharCode(Number("0x" + p1));
-          })
-        )}`,
-        "digital-content-delivery"
-      );
-      const deliverySealedEvent = await constructMessageSeal(
-        signer!,
-        deliveryMessageEvent,
-        decodedRandomPubkeyForSender.data as string,
-        pubkeyToReceiveMessage,
-        decodedRandomPrivkeyForSender.data as Uint8Array
-      );
-      const deliveryWrappedEvent = await constructMessageGiftWrap(
-        deliverySealedEvent,
-        decodedRandomPubkeyForReceiver.data as string,
-        decodedRandomPrivkeyForReceiver.data as Uint8Array,
-        pubkeyToReceiveMessage
-      );
-      await sendGiftWrappedMessageEvent(nostr!, deliveryWrappedEvent);
-      chatsContext.addNewlyCreatedMessageEvent(
-        {
-          ...deliveryMessageEvent,
-          sig: "",
-          read: false,
-        },
-        true
-      );
-    }
 
     if (isReceipt) {
       chatsContext.addNewlyCreatedMessageEvent(
@@ -2296,11 +2254,8 @@ export default function CartInvoiceCard({
                     {products.map((product) => {
                       const discount = appliedDiscounts[product.pubkey] || 0;
                       const basePrice =
-                        (product.bulkPrice !== undefined
-                          ? product.bulkPrice
-                          : product.volumePrice !== undefined
-                            ? product.volumePrice
-                            : product.price) * (quantities[product.id] || 1);
+                        resolveEffectiveUnitPrice(product) *
+                        (quantities[product.id] || 1);
                       const discountedPrice =
                         discount > 0
                           ? basePrice * (1 - discount / 100)
@@ -2518,12 +2473,7 @@ export default function CartInvoiceCard({
                 <div className="space-y-3">
                   {products.map((product) => {
                     const discount = appliedDiscounts[product.pubkey] || 0;
-                    const originalPrice =
-                      product.bulkPrice !== undefined
-                        ? product.bulkPrice
-                        : product.volumePrice !== undefined
-                          ? product.volumePrice
-                          : product.price;
+                    const originalPrice = resolveEffectiveUnitPrice(product);
                     const basePrice =
                       originalPrice * (quantities[product.id] || 1);
                     const discountedPrice =

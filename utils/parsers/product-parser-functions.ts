@@ -45,6 +45,15 @@ export type ProductData = {
   rawEvent?: NostrEvent;
 };
 
+export const resolveEffectiveUnitPrice = (
+  product: Pick<ProductData, "price" | "bulkPrice" | "volumePrice" | "weightPrice">
+): number => {
+  if (product.bulkPrice !== undefined) return product.bulkPrice;
+  if (product.volumePrice !== undefined) return product.volumePrice;
+  if (product.weightPrice !== undefined) return product.weightPrice;
+  return product.price;
+};
+
 export const parseTags = (productEvent: NostrEvent) => {
   const parsedData: ProductData = {
     id: "",

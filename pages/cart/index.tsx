@@ -21,7 +21,10 @@ import {
   SHOPSTRBUTTONCLASSNAMES,
   ShippingOptionsType,
 } from "@/utils/STATIC-VARIABLES";
-import { ProductData } from "@/utils/parsers/product-parser-functions";
+import {
+  ProductData,
+  resolveEffectiveUnitPrice,
+} from "@/utils/parsers/product-parser-functions";
 import CartInvoiceCard from "../../components/cart-invoice-card";
 import { fiat } from "@getalby/lightning-tools";
 import currencySelection from "../../public/currencySelection.json";
@@ -345,14 +348,7 @@ export default function Component() {
   };
 
   const convertPriceToSats = async (product: ProductData): Promise<number> => {
-    const basePrice =
-      product.bulkPrice !== undefined
-        ? product.bulkPrice
-        : product.volumePrice !== undefined
-          ? product.volumePrice
-          : product.weightPrice !== undefined
-            ? product.weightPrice
-            : product.price;
+    const basePrice = resolveEffectiveUnitPrice(product);
 
     if (
       product.currency.toLowerCase() === "sats" ||

@@ -462,51 +462,6 @@ export default function ProductInvoiceCard({
     );
     await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent);
 
-    if (
-      isReceipt &&
-      buyerPubkey &&
-      pubkeyToReceiveMessage === buyerPubkey &&
-      productData.digitalContent
-    ) {
-      const deliveryMessageEvent = await constructGiftWrappedEvent(
-        decodedRandomPubkeyForSender.data as string,
-        pubkeyToReceiveMessage,
-        `digital_content_delivery:${btoa(
-          encodeURIComponent(
-            JSON.stringify({
-              listingId: productData.id,
-              payload: productData.digitalContent,
-            })
-          ).replace(/%([0-9A-F]{2})/g, function (_match, p1) {
-            return String.fromCharCode(Number("0x" + p1));
-          })
-        )}`,
-        "digital-content-delivery"
-      );
-      const deliverySealedEvent = await constructMessageSeal(
-        signer!,
-        deliveryMessageEvent,
-        decodedRandomPubkeyForSender.data as string,
-        pubkeyToReceiveMessage,
-        decodedRandomPrivkeyForSender.data as Uint8Array
-      );
-      const deliveryWrappedEvent = await constructMessageGiftWrap(
-        deliverySealedEvent,
-        decodedRandomPubkeyForReceiver.data as string,
-        decodedRandomPrivkeyForReceiver.data as Uint8Array,
-        pubkeyToReceiveMessage
-      );
-      await sendGiftWrappedMessageEvent(nostr!, deliveryWrappedEvent);
-      chatsContext.addNewlyCreatedMessageEvent(
-        {
-          ...deliveryMessageEvent,
-          sig: "",
-          read: false,
-        },
-        true
-      );
-    }
-
     if (isReceipt) {
       chatsContext.addNewlyCreatedMessageEvent(
         {
