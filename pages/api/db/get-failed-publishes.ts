@@ -17,11 +17,10 @@ export default async function handler(
 
     // Get all failed publishes with retry count < 5 (limit retries)
     const result = await client.query(
-      `SELECT fp.event_id, fp.relays, fp.retry_count, e.event_data
-       FROM failed_relay_publishes fp
-       LEFT JOIN events e ON fp.event_id = e.id
-       WHERE fp.retry_count < 5
-       ORDER BY fp.created_at ASC
+      `SELECT event_id, event_data, relays, retry_count
+       FROM failed_relay_publishes
+       WHERE retry_count < 5
+       ORDER BY created_at ASC
        LIMIT 50`
     );
 

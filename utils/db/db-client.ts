@@ -52,13 +52,14 @@ export async function deleteEventsFromDatabase(
 
 export async function trackFailedRelayPublish(
   eventId: string,
+  event: NostrEvent,
   relays: string[]
 ): Promise<void> {
   try {
     await fetch("/api/db/track-failed-publish", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ eventId, relays }),
+      body: JSON.stringify({ eventId, event, relays }),
     });
   } catch (error) {
     console.error("Failed to track failed relay publish:", error);
