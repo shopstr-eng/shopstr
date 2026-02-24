@@ -2,6 +2,67 @@ import { nip44, nip19, generateSecretKey, getPublicKey } from "nostr-tools";
 
 const MAX_CHUNK_SIZE = 60000;
 
+export interface DigitalContentPublicPayloadV1 {
+  url: string;
+  nsec: string;
+  mimeType?: string;
+  fileName?: string;
+}
+
+export interface DigitalContentPublicPayloadV2 {
+  v: 2;
+  url: string;
+  keyEnvelope: string;
+  mimeType?: string;
+  fileName?: string;
+}
+
+export type DigitalContentPublicPayload =
+  | DigitalContentPublicPayloadV1
+  | DigitalContentPublicPayloadV2;
+
+export interface DigitalContentDeliveryPayloadV1 {
+  listingId?: string;
+  payload: string;
+}
+
+export interface DigitalContentDeliveryPayloadV2 {
+  v: 2;
+  url: string;
+  nsec: string;
+  mimeType?: string;
+  fileName?: string;
+  listingId?: string;
+}
+
+export type DigitalContentDeliveryPayload =
+  | DigitalContentDeliveryPayloadV1
+  | DigitalContentDeliveryPayloadV2;
+
+export function isDigitalContentPublicPayloadV2(
+  payload: DigitalContentPublicPayload
+): payload is DigitalContentPublicPayloadV2 {
+  return (
+    typeof payload === "object" &&
+    payload !== null &&
+    "v" in payload &&
+    payload.v === 2 &&
+    "keyEnvelope" in payload
+  );
+}
+
+export function isDigitalContentDeliveryPayloadV2(
+  payload: DigitalContentDeliveryPayload
+): payload is DigitalContentDeliveryPayloadV2 {
+  return (
+    typeof payload === "object" &&
+    payload !== null &&
+    "v" in payload &&
+    payload.v === 2 &&
+    "nsec" in payload
+  );
+}
+
 export async function encryptFileWithNip44(file: File): Promise<{ encryptedFile: File; fileNsec: string }> {
   const sk = generateSecretKey();
   const pk = getPublicKey(sk);
@@ -92,13 +153,7 @@ export async function decryptFileWithNip44(encryptedData: ArrayBuffer, fileNsec:
   }
 }
 
-export function encodeDigitalContentPayload(payload: {
-  url: string;
-  nsec: string;
-  mimeType?: string;
-  fileName?: string;
-}) {
-  const jsonString = JSON.stringify(payload);
+function encodeUtf8Base64(jsonString: string): string {
   const utf8String = encodeURIComponent(jsonString).replace(
     /%([0-9A-F]{2})/g,
     function toSolidBytes(_match, p1) {
@@ -108,14 +163,9 @@ export function encodeDigitalContentPayload(payload: {
   return btoa(utf8String);
 }
 
-export function decodeDigitalContentPayload(encodedPayload: string): {
-  url: string;
-  nsec: string;
-  mimeType?: string;
-  fileName?: string;
-} {
+function decodeUtf8Base64(encodedPayload: string): string {
   const utf8String = atob(encodedPayload);
-  const jsonString = decodeURIComponent(
+  return decodeURIComponent(
     utf8String
       .split("")
       .map(function (c) {
@@ -123,5 +173,30 @@ export function decodeDigitalContentPayload(encodedPayload: string): {
       })
       .join("")
   );
+}
+
+export function encodeDigitalContentPayload(
+  payload: DigitalContentPublicPayload
+) {
+  return encodeUtf8Base64(JSON.stringify(payload));
+}
+
+export function decodeDigitalContentPayload(
+  encodedPayload: string
+): DigitalContentPublicPayload {
+  const jsonString = decodeUtf8Base64(encodedPayload);
+  return JSON.parse(jsonString) as DigitalContentPublicPayload;
+}
+
+export function encodeDigitalContentDeliveryPayload(
+  payload: DigitalContentDeliveryPayload
+) {
+  return encodeUtf8Base64(JSON.stringify(payload));
+}
+
+export function decodeDigitalContentDeliveryPayload(
+  encodedPayload: string
+): DigitalContentDeliveryPayload {
+  const jsonString = decodeUtf8Base64(encodedPayload);
   return JSON.parse(jsonString);
 }

@@ -27,7 +27,7 @@ export default function EncryptedContentUploader({
   const [failureText, setFailureText] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { signer, isLoggedIn } = useContext(SignerContext);
+  const { signer, isLoggedIn, pubkey: signerPubkey } = useContext(SignerContext);
   const { blossomServers } = getLocalStorageData() || {};
 
   const fileInfo = useMemo(() => {
@@ -57,6 +57,11 @@ export default function EncryptedContentUploader({
     try {
       setIsUploading(true);
       const { encryptedFile, fileNsec } = await encryptFileWithNip44(selectedFile);
+      const sellerPubkey = signerPubkey || (await signer.getPubKey?.());
+      if (!sellerPubkey) {
+        throw new Error("Unable to resolve seller public key for encryption.");
+      }
+      const keyEnvelope = await signer.encrypt(sellerPubkey, fileNsec);
 
       const fallbackServers = [
         "https://blossom.primal.net",
@@ -96,8 +101,9 @@ export default function EncryptedContentUploader({
       }
 
       const encodedPayload = encodeDigitalContentPayload({
+        v: 2,
         url: uploadedUrl,
-        nsec: fileNsec,
+        keyEnvelope,
         mimeType: selectedFile.type,
         fileName: selectedFile.name,
       });
