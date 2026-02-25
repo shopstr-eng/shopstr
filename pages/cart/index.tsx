@@ -645,7 +645,7 @@ export default function Component() {
             onClose={() => {
               setInvoiceIsPaid(false);
               setCashuPaymentSent(false);
-              router.push("/orders");
+              router.push("/order-summary");
             }}
             classNames={{
               body: "py-6 ",

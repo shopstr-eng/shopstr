@@ -1,4 +1,5 @@
-import { useContext, useState, useEffect, useMemo } from "react";
+import { useContext, useState, useEffect, useMemo, useCallback } from "react";
+import { useRouter } from "next/router";
 import {
   CashuWalletContext,
   ChatsContext,
@@ -116,6 +117,52 @@ export default function CartInvoiceCard({
     "shipping" | "contact" | "combined" | null
   >(null);
   const [showOrderTypeSelection, setShowOrderTypeSelection] = useState(true);
+
+  const router = useRouter();
+
+  const saveOrderSummary = useCallback(
+    (orderId: string, paymentMethod: string, shippingAddr?: string) => {
+      const cartItems = products.map((product) => ({
+        title: product.title || "",
+        image: product.images?.[0] || "",
+        amount: String(totalCostsInSats[product.id] || 0),
+        currency: "sats",
+        quantity: quantities[product.id] || 1,
+        shipping: shippingTypes[product.id] || "",
+        pickupLocation: selectedPickupLocations[product.id] || undefined,
+        selectedSize: product.selectedSize || undefined,
+        selectedVolume: product.selectedVolume || undefined,
+        selectedWeight: undefined,
+        selectedBulkOption: product.selectedBulkOption
+          ? String(product.selectedBulkOption)
+          : undefined,
+      }));
+
+      const summaryData = {
+        productTitle: products[0]?.title || "",
+        productImage: products[0]?.images?.[0] || "",
+        amount: String(totalCost),
+        subtotal: String(subtotalCost),
+        currency: products[0]?.currency || "SAT",
+        paymentMethod,
+        orderId,
+        shippingAddress: shippingAddr || undefined,
+        sellerPubkey: products[0]?.pubkey,
+        isCart: true,
+        cartItems,
+      };
+      sessionStorage.setItem("orderSummary", JSON.stringify(summaryData));
+    },
+    [
+      products,
+      quantities,
+      totalCostsInSats,
+      shippingTypes,
+      selectedPickupLocations,
+      totalCost,
+      subtotalCost,
+    ]
+  );
 
   const sendInquiryDM = async (sellerPubkey: string, productTitle: string) => {
     if (!signer || !nostr) return;
@@ -828,13 +875,14 @@ export default function CartInvoiceCard({
           try {
             const proofs = await wallet.mintProofs(convertedPrice, hash);
             if (proofs && proofs.length > 0) {
-              await sendTokens(wallet, proofs, data);
+              await sendTokens(wallet, proofs, data, "lightning");
               localStorage.setItem("cart", JSON.stringify([]));
               setPaymentConfirmed(true);
               if (setInvoiceIsPaid) {
                 setInvoiceIsPaid(true);
               }
               setQrCodeUrl(null);
+              router.push("/order-summary");
               break;
             }
           } catch (mintError) {
@@ -913,7 +961,8 @@ export default function CartInvoiceCard({
   const sendTokens = async (
     wallet: CashuWallet,
     proofs: Proof[],
-    data: any
+    data: any,
+    paymentMethod: string = "ecash"
   ) => {
     const userPubkey = await signer?.getPubKey?.();
     const userNPub = userPubkey ? nip19.npubEncode(userPubkey) : undefined;
@@ -932,6 +981,7 @@ export default function CartInvoiceCard({
           : `${data.Name}, ${data.Address}, ${data.City}, ${data["State/Province"]}, ${data["Postal Code"]}, ${data.Country}`
       : undefined;
 
+    let lastOrderId = "";
     for (const product of products) {
       const title = product.title;
       const pubkey = product.pubkey;
@@ -972,6 +1022,7 @@ export default function CartInvoiceCard({
       }
 
       const orderId = uuidv4();
+      lastOrderId = orderId;
 
       // Generate keys once per order to ensure consistent sender pubkey
       const orderKeys = await generateNewKeys();
@@ -1743,6 +1794,8 @@ export default function CartInvoiceCard({
         );
       }
     }
+
+    saveOrderSummary(lastOrderId, paymentMethod, shippingAddressTag);
   };
 
   const handleCopyInvoice = () => {
@@ -1845,6 +1898,7 @@ export default function CartInvoiceCard({
       if (setCashuPaymentSent) {
         setCashuPaymentSent(true);
       }
+      router.push("/order-summary");
     } catch (error) {
       if (setCashuPaymentFailed) {
         setCashuPaymentFailed(true);

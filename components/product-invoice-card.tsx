@@ -1,4 +1,5 @@
-import { useContext, useState, useEffect } from "react";
+import { useContext, useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/router";
 import {
   CashuWalletContext,
   ChatsContext,
@@ -251,6 +252,56 @@ export default function ProductInvoiceCard({
   const appliedDiscount = discountPercentage || 0;
   const currentPrice =
     originalPrice !== undefined ? originalPrice : productData.price;
+
+  const router = useRouter();
+
+  const saveOrderSummary = useCallback(
+    (
+      orderId: string,
+      paymentMethod: string,
+      shippingAddr?: string,
+      pickupLoc?: string
+    ) => {
+      const discountAmt =
+        appliedDiscount > 0
+          ? Math.ceil(((currentPrice * appliedDiscount) / 100) * 100) / 100
+          : 0;
+      const discountedPrice =
+        appliedDiscount > 0 ? currentPrice - discountAmt : currentPrice;
+      const shippingCost =
+        formType === "shipping" ? productData.shippingCost ?? 0 : 0;
+      const finalPrice = discountedPrice + shippingCost;
+
+      const summaryData = {
+        productTitle: productData.title,
+        productImage: productData.images[0] || "",
+        amount: String(finalPrice),
+        currency: productData.currency,
+        paymentMethod,
+        orderId,
+        shippingCost: shippingCost > 0 ? String(shippingCost) : undefined,
+        selectedSize: selectedSize || undefined,
+        selectedVolume: selectedVolume || undefined,
+        selectedBulkOption: selectedBulkOption
+          ? String(selectedBulkOption)
+          : undefined,
+        shippingAddress: shippingAddr || undefined,
+        pickupLocation: pickupLoc || selectedPickupLocation || undefined,
+        sellerPubkey: productData.pubkey,
+      };
+      sessionStorage.setItem("orderSummary", JSON.stringify(summaryData));
+    },
+    [
+      appliedDiscount,
+      currentPrice,
+      formType,
+      productData,
+      selectedSize,
+      selectedVolume,
+      selectedBulkOption,
+      selectedPickupLocation,
+    ]
+  );
 
   useEffect(() => {
     const fetchKeys = async () => {
@@ -1063,11 +1114,18 @@ export default function ProductInvoiceCard({
           selectedPickupLocation || undefined
         );
       }
+      saveOrderSummary(
+        orderId,
+        selectedFiatOption.toLowerCase(),
+        addressTag,
+        selectedPickupLocation || undefined
+      );
       if (setFiatOrderIsPlaced) {
         setFiatOrderIsPlaced(true);
       }
       setFormType(null);
       setOrderConfirmed(true);
+      router.push("/order-summary");
     } catch (error) {
       if (setFiatOrderFailed) {
         setFiatOrderFailed(true);
@@ -1202,13 +1260,15 @@ export default function ProductInvoiceCard({
                 shippingPostalCode ? shippingPostalCode : undefined,
                 shippingState ? shippingState : undefined,
                 shippingCountry ? shippingCountry : undefined,
-                additionalInfo ? additionalInfo : undefined
+                additionalInfo ? additionalInfo : undefined,
+                "lightning"
               );
               setPaymentConfirmed(true);
               setQrCodeUrl(null);
               if (setInvoiceIsPaid) {
                 setInvoiceIsPaid(true);
               }
+              router.push("/order-summary");
               break;
             }
           } catch (mintError) {
@@ -1285,7 +1345,8 @@ export default function ProductInvoiceCard({
     shippingPostalCode?: string,
     shippingState?: string,
     shippingCountry?: string,
-    additionalInfo?: string
+    additionalInfo?: string,
+    paymentMethod: string = "ecash"
   ) => {
     let remainingProofs = proofs;
     let sellerToken;
@@ -1844,6 +1905,19 @@ export default function ProductInvoiceCard({
         donationPercentage
       );
     }
+
+    const addressStr =
+      shippingName && shippingAddress
+        ? shippingUnitNo
+          ? `${shippingName}, ${shippingAddress}, ${shippingUnitNo}, ${shippingCity}, ${shippingState}, ${shippingPostalCode}, ${shippingCountry}`
+          : `${shippingName}, ${shippingAddress}, ${shippingCity}, ${shippingState}, ${shippingPostalCode}, ${shippingCountry}`
+        : undefined;
+    saveOrderSummary(
+      orderId,
+      paymentMethod,
+      addressStr,
+      selectedPickupLocation || undefined
+    );
   };
 
   const handleCopyInvoice = () => {
@@ -1987,6 +2061,7 @@ export default function ProductInvoiceCard({
       if (setCashuPaymentSent) {
         setCashuPaymentSent(true);
       }
+      router.push("/order-summary");
     } catch (error) {
       if (setCashuPaymentFailed) {
         setCashuPaymentFailed(true);

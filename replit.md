@@ -42,6 +42,7 @@ Preferred communication style: Simple, everyday language.
 
 ### Core Features
 
+- **Order Summary Page**: Dedicated post-purchase page (`/order-summary`) displaying order confirmation with order ID, product details (single product or cart items with images, sizes, volumes, weights, bulk options, quantities), payment method with human-readable names, subtotal/shipping/total cost breakdown, and delivery information (shipping address or per-item pickup locations). Data is passed via sessionStorage from the checkout flow. Includes "Continue Shopping" (primary), "Check Order Status", and "Contact Merchant" buttons (latter two shown when logged in). Also displays a "More From the Marketplace" section with randomized product recommendations excluding the seller's own products.
 - **Bulk/Bundle Pricing**: Support for tiered pricing based on quantity.
 - **Size and Volume Options**: Customizable product options for orders.
 - **Pickup Location Selection**: Option for customers to select pickup locations for orders.
