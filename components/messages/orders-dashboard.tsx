@@ -1429,7 +1429,7 @@ const OrdersDashboard = () => {
                               </button>
                             )}
                             {order.isSale &&
-                              order.subject === "order-receipt" &&
+                              (order.subject === "order-payment" || order.subject === "order-info" || order.subject === "order-completed") &&
                               (order.hasDigitalContent ||
                                 !!order.digitalContentPayload) && (
                                 <>
