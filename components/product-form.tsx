@@ -43,6 +43,7 @@ import { ProductContext, ProfileMapContext } from "../utils/context/context";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { buildSrcSet } from "@/utils/images";
 import { FileUploaderButton } from "./utility-components/file-uploader";
+import EncryptedContentUploader from "./utility-components/encrypted-content-uploader";
 import currencySelection from "../public/currencySelection.json";
 import {
   NostrContext,
@@ -78,6 +79,9 @@ export default function ProductForm({
     useState(false);
   const [showOptionalTags, setShowOptionalTags] = useState(false);
   const [isFlashSale, setIsFlashSale] = useState(false);
+  const [digitalContentTag, setDigitalContentTag] = useState<string>(
+    oldValues?.digitalContent || ""
+  );
   const productEventContext = useContext(ProductContext);
   const profileContext = useContext(ProfileMapContext);
   const {
@@ -107,6 +111,10 @@ export default function ProductForm({
           Volumes: oldValues.volumes ? oldValues.volumes.join(",") : "",
           "Volume Prices": oldValues.volumePrices
             ? oldValues.volumePrices
+            : new Map<string, number>(),
+          Weights: oldValues.weights ? oldValues.weights.join(",") : "",
+          "Weight Prices": oldValues.weightPrices
+            ? oldValues.weightPrices
             : new Map<string, number>(),
           "Bulk Pricing Enabled": oldValues.bulkPrices
             ? oldValues.bulkPrices.size > 0
@@ -223,6 +231,17 @@ export default function ProductForm({
       });
     }
 
+    if (data["Weights"]) {
+      const weightsArray = Array.isArray(data["Weights"])
+        ? data["Weights"]
+        : (data["Weights"] as string).split(",").filter(Boolean);
+      weightsArray.forEach((weight) => {
+        const price =
+          (data["Weight Prices"] as Map<string, number>).get(weight) || 0;
+        tags.push(["weight", weight, price.toString()]);
+      });
+    }
+
     if (data["Bulk Pricing Enabled"] && data["Bulk Prices"]) {
       const bulkPrices = data["Bulk Prices"] as unknown as Map<number, number>;
       bulkPrices.forEach((price, units) => {
@@ -254,6 +273,10 @@ export default function ProductForm({
         const unixTime = Math.floor(dateObj.getTime() / 1000);
         tags.push(["valid_until", unixTime.toString()]);
       }
+    }
+
+    if (digitalContentTag) {
+      tags.push(["digital_content", digitalContentTag]);
     }
 
     // Add pickup locations if they exist and shipping involves pickup
@@ -316,6 +339,7 @@ export default function ProductForm({
   const clear = () => {
     handleModalToggle();
     setImages([]);
+    setDigitalContentTag("");
     reset();
     setCurrentSlide(0);
   };
@@ -1222,6 +1246,52 @@ export default function ProductForm({
                 />
 
                 <Controller
+                  name="Size Quantities"
+                  control={control}
+                  render={({
+                    field: { onChange, value = new Map<string, number>() },
+                  }) => {
+                    const handleQuantityChange = (
+                      size: string,
+                      quantity: number
+                    ) => {
+                      const newQuantities = new Map(value);
+                      newQuantities.set(size, quantity);
+                      onChange(newQuantities);
+                    };
+
+                    const sizes = watch("Sizes");
+                    const sizeArray = Array.isArray(sizes)
+                      ? sizes
+                      : sizes?.split(",").filter(Boolean) || [];
+
+                    return (
+                      <div className="mt-4 flex flex-wrap gap-4">
+                        {sizeArray.map((size: string) => (
+                          <div key={size} className="flex items-center">
+                            <span className="mr-2 text-light-text dark:text-dark-text">
+                              {size}:
+                            </span>
+                            <Input
+                              type="number"
+                              min="0"
+                              value={(value.get(size) || 0).toString()}
+                              onChange={(e) =>
+                                handleQuantityChange(
+                                  size,
+                                  parseInt(e.target.value) || 0
+                                )
+                              }
+                              className="w-20"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  }}
+                />
+
+                <Controller
                   name="Volumes"
                   control={control}
                   render={({
@@ -1354,50 +1424,148 @@ export default function ProductForm({
                 />
 
                 <Controller
-                  name="Size Quantities"
+                  name="Weights"
+                  control={control}
+                  render={({
+                    field: { onChange, onBlur, value },
+                    fieldState: { error },
+                  }) => {
+                    const isErrored = error !== undefined;
+                    const errorMessage = error?.message || "";
+
+                    const selectedWeights = Array.isArray(value)
+                      ? value
+                      : typeof value === "string"
+                        ? value.split(",").filter(Boolean)
+                        : [];
+
+                    const handleWeightChange = (
+                      newValue: string | string[]
+                    ) => {
+                      const newWeights = Array.isArray(newValue)
+                        ? newValue
+                        : newValue.split(",").filter(Boolean);
+                      onChange(newWeights);
+                    };
+
+                    return (
+                      <Select
+                        variant="bordered"
+                        isMultiline={true}
+                        autoFocus
+                        aria-label="Weights"
+                        label="Weights"
+                        labelPlacement="inside"
+                        selectionMode="multiple"
+                        isInvalid={isErrored}
+                        errorMessage={errorMessage}
+                        onChange={(e) => handleWeightChange(e.target.value)}
+                        onBlur={onBlur}
+                        value={selectedWeights}
+                        defaultSelectedKeys={new Set(selectedWeights)}
+                        classNames={{
+                          base: "mt-4",
+                          trigger: "min-h-unit-12 py-2",
+                        }}
+                      >
+                        <SelectSection className="text-light-text dark:text-dark-text">
+                          <SelectItem key="100g" value="100g">
+                            100g
+                          </SelectItem>
+                          <SelectItem key="250g" value="250g">
+                            250g
+                          </SelectItem>
+                          <SelectItem key="500g" value="500g">
+                            500g
+                          </SelectItem>
+                          <SelectItem key="1kg" value="1kg">
+                            1kg
+                          </SelectItem>
+                          <SelectItem key="5kg" value="5kg">
+                            5kg
+                          </SelectItem>
+                        </SelectSection>
+                      </Select>
+                    );
+                  }}
+                />
+
+                <Controller
+                  name="Weight Prices"
                   control={control}
                   render={({
                     field: { onChange, value = new Map<string, number>() },
                   }) => {
-                    const handleQuantityChange = (
-                      size: string,
-                      quantity: number
+                    const handlePriceChange = (
+                      weight: string,
+                      price: number
                     ) => {
-                      const newQuantities = new Map(value);
-                      newQuantities.set(size, quantity);
-                      onChange(newQuantities);
+                      const newPrices = new Map(value);
+                      newPrices.set(weight, price);
+                      onChange(newPrices);
                     };
 
-                    const sizes = watch("Sizes");
-                    const sizeArray = Array.isArray(sizes)
-                      ? sizes
-                      : sizes?.split(",").filter(Boolean) || [];
+                    const weights = watch("Weights");
+                    const weightArray = Array.isArray(weights)
+                      ? weights
+                      : typeof weights === "string"
+                        ? weights
+                            .split(",")
+                            .filter(Boolean)
+                            .map((w) => w.trim())
+                        : [];
 
                     return (
                       <div className="mt-4 flex flex-wrap gap-4">
-                        {sizeArray.map((size: string) => (
-                          <div key={size} className="flex items-center">
+                        {weightArray.map((weight: string) => (
+                          <div key={weight} className="flex items-center">
                             <span className="mr-2 text-light-text dark:text-dark-text">
-                              {size}:
+                              {weight}:
                             </span>
                             <Input
                               type="number"
+                              step="0.01"
                               min="0"
-                              value={(value.get(size) || 0).toString()}
+                              value={(value.get(weight) || 0).toString()}
                               onChange={(e) =>
-                                handleQuantityChange(
-                                  size,
-                                  parseInt(e.target.value) || 0
+                                handlePriceChange(
+                                  weight,
+                                  parseFloat(e.target.value) || 0
                                 )
                               }
-                              className="w-20"
+                              className="w-32"
+                              endContent={
+                                <div className="flex items-center">
+                                  <span className="text-small text-default-400">
+                                    {watchCurrency}
+                                  </span>
+                                </div>
+                              }
                             />
                           </div>
                         ))}
+                        {weightArray.length > 0 && (
+                          <div className="w-full text-xs text-light-text opacity-75 dark:text-dark-text">
+                            Note: Weight prices will override the main product
+                            price when selected.
+                          </div>
+                        )}
                       </div>
                     );
                   }}
                 />
+
+                <div className="mt-4 flex flex-col gap-2">
+                  <span className="text-sm text-light-text dark:text-dark-text">
+                    Optional: attach encrypted digital delivery content for this
+                    listing.
+                  </span>
+                  <EncryptedContentUploader
+                    currentPayload={digitalContentTag}
+                    className={SHOPSTRBUTTONCLASSNAMES}
+                    onUploadComplete={(payload) => setDigitalContentTag(payload)}
+                  />
+                </div>
 
                 <Controller
                   name="Condition"

@@ -30,6 +30,11 @@ import parseTags, {
   ProductData,
 } from "@/utils/parsers/product-parser-functions";
 import {
+  decodeDigitalContentPayload,
+  encodeDigitalContentDeliveryPayload,
+  isDigitalContentPublicPayloadV2,
+} from "@/utils/encryption/file-encryption";
+import {
   constructGiftWrappedEvent,
   constructMessageSeal,
   constructMessageGiftWrap,
@@ -79,6 +84,7 @@ interface OrderData {
   pickupLocation?: string;
   selectedSize?: string;
   selectedVolume?: string;
+  selectedWeight?: string;
   selectedBulkOption?: number;
   paymentToken?: string;
   paymentMethod?: string;
@@ -92,6 +98,8 @@ interface OrderData {
   currency?: string;
   donationAmount?: number;
   donationPercentage?: number;
+  hasDigitalContent?: boolean;
+  digitalContentPayload?: string;
 }
 
 const OrdersDashboard = () => {
@@ -111,6 +119,14 @@ const OrdersDashboard = () => {
   const [showShippingModal, setShowShippingModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<OrderData | null>(null);
   const [isSendingShipping, setIsSendingShipping] = useState(false);
+  const [isSendingDigitalContent, setIsSendingDigitalContent] = useState<
+    Record<string, boolean>
+  >({});
+  const [digitalContentSendErrors, setDigitalContentSendErrors] = useState<
+    Record<string, string>
+  >({});
+  const [digitalContentDeliveredOrders, setDigitalContentDeliveredOrders] =
+    useState<Set<string>>(new Set());
 
   const [randomNpubForSender, setRandomNpubForSender] = useState<string>("");
   const [randomNsecForSender, setRandomNsecForSender] = useState<string>("");
@@ -249,6 +265,26 @@ const OrdersDashboard = () => {
   }, [chatsContext?.isLoading]);
 
   useEffect(() => {
+    if (!chatsContext || chatsContext.isLoading) return;
+
+    const deliveredOrderIds = new Set<string>();
+    for (const entry of chatsContext.chatsMap) {
+      const chat = entry[1] as NostrMessageEvent[];
+      for (const messageEvent of chat) {
+        const tagsMap = new Map(
+          messageEvent.tags.map((tag: string[]) => [tag[0], tag[1]])
+        );
+        const subject = tagsMap.get("subject");
+        if (subject === "digital-content-delivery") {
+          const orderId = tagsMap.get("order");
+          if (orderId) deliveredOrderIds.add(orderId);
+        }
+      }
+    }
+    setDigitalContentDeliveredOrders(deliveredOrderIds);
+  }, [chatsContext?.isLoading, chatsContext?.chatsMap]);
+
+  useEffect(() => {
     async function loadCachedStatuses() {
       if (!chatsContext || chatsContext.isLoading) return;
 
@@ -336,6 +372,7 @@ const OrdersDashboard = () => {
             const pickupLocation = tagsMap.get("pickup");
             const selectedSize = tagsMap.get("size");
             const selectedVolume = tagsMap.get("volume");
+            const selectedWeight = tagsMap.get("weight");
             const bulkTag = messageEvent.tags.find((tag) => tag[0] === "bulk");
             const selectedBulkOption =
               bulkTag && bulkTag[1] ? parseInt(bulkTag[1]) : undefined;
@@ -373,6 +410,8 @@ const OrdersDashboard = () => {
             let isSale = false;
             let productCurrency = "sats";
             let productPrice = 0;
+            let hasDigitalContent = false;
+            let digitalContentPayload = "";
             const addressParts = productAddress.split(":");
             const merchantPubkey =
               addressParts.length >= 2 ? addressParts[1] : null;
@@ -393,6 +432,8 @@ const OrdersDashboard = () => {
                 productTitle = productData?.title || "Unknown Product";
                 productCurrency = productData?.currency || "sats";
                 productPrice = productData?.price || 0;
+                hasDigitalContent = !!productData?.digitalContent;
+                digitalContentPayload = productData?.digitalContent || "";
               }
             }
             const finalAmount = amount > 0 ? amount : productPrice * quantity;
@@ -465,6 +506,7 @@ const OrdersDashboard = () => {
               pickupLocation,
               selectedSize,
               selectedVolume,
+              selectedWeight,
               selectedBulkOption,
               paymentToken,
               paymentMethod,
@@ -477,6 +519,8 @@ const OrdersDashboard = () => {
               currency: productCurrency,
               donationAmount,
               donationPercentage,
+              hasDigitalContent,
+              digitalContentPayload,
             });
           }
         }
@@ -538,6 +582,7 @@ const OrdersDashboard = () => {
             pickupLocation: order.pickupLocation || existing.pickupLocation,
             selectedSize: order.selectedSize || existing.selectedSize,
             selectedVolume: order.selectedVolume || existing.selectedVolume,
+            selectedWeight: order.selectedWeight || existing.selectedWeight,
             selectedBulkOption:
               order.selectedBulkOption || existing.selectedBulkOption,
             paymentToken: order.paymentToken || existing.paymentToken,
@@ -568,6 +613,10 @@ const OrdersDashboard = () => {
             donationAmount: order.donationAmount ?? existing.donationAmount,
             donationPercentage:
               order.donationPercentage ?? existing.donationPercentage,
+            hasDigitalContent:
+              order.hasDigitalContent ?? existing.hasDigitalContent,
+            digitalContentPayload:
+              order.digitalContentPayload || existing.digitalContentPayload,
           });
         }
       }
@@ -720,8 +769,8 @@ const OrdersDashboard = () => {
     },
   };
 
-  const handleProductClick = (productAddress: string) => {
-    if (!productContext?.productEvents) return;
+  const getProductDataByAddress = (productAddress: string): ProductData | null => {
+    if (!productAddress || !productContext?.productEvents) return null;
 
     const productEvent = productContext.productEvents.find((event: any) => {
       const eventAddress = `30402:${event.pubkey}:${event.tags.find(
@@ -730,12 +779,45 @@ const OrdersDashboard = () => {
       return productAddress.includes(eventAddress);
     });
 
-    if (productEvent) {
-      const productData = parseTags(productEvent);
-      if (productData) {
-        setSelectedProduct(productData);
-        setShowProductModal(true);
-      }
+    if (!productEvent) return null;
+    return parseTags(productEvent) || null;
+  };
+
+  const ensureRandomKeys = async () => {
+    let senderNpub = randomNpubForSender;
+    let senderNsec = randomNsecForSender;
+    let receiverNpub = randomNpubForReceiver;
+    let receiverNsec = randomNsecForReceiver;
+
+    if (!senderNpub || !senderNsec) {
+      const { nsec, npub } = await generateKeys();
+      senderNpub = npub;
+      senderNsec = nsec;
+      setRandomNpubForSender(npub);
+      setRandomNsecForSender(nsec);
+    }
+
+    if (!receiverNpub || !receiverNsec) {
+      const { nsec, npub } = await generateKeys();
+      receiverNpub = npub;
+      receiverNsec = nsec;
+      setRandomNpubForReceiver(npub);
+      setRandomNsecForReceiver(nsec);
+    }
+
+    return {
+      senderNpub,
+      senderNsec,
+      receiverNpub,
+      receiverNsec,
+    };
+  };
+
+  const handleProductClick = (productAddress: string) => {
+    const productData = getProductDataByAddress(productAddress);
+    if (productData) {
+      setSelectedProduct(productData);
+      setShowProductModal(true);
     }
   };
 
@@ -860,6 +942,127 @@ const OrdersDashboard = () => {
       console.error("Error sending shipping info:", error);
     } finally {
       setIsSendingShipping(false);
+    }
+  };
+
+  const handleSendDigitalContent = async (order: OrderData) => {
+    if (!signer || !nostr) return;
+    if (!order.buyerPubkey) {
+      setDigitalContentSendErrors((prev) => ({
+        ...prev,
+        [order.orderId]: "Missing buyer pubkey for delivery.",
+      }));
+      return;
+    }
+
+    const productData = getProductDataByAddress(order.productAddress);
+    const encodedPublicPayload =
+      productData?.digitalContent || order.digitalContentPayload;
+    if (!encodedPublicPayload) {
+      setDigitalContentSendErrors((prev) => ({
+        ...prev,
+        [order.orderId]: "No digital content is attached to this listing.",
+      }));
+      return;
+    }
+
+    setIsSendingDigitalContent((prev) => ({ ...prev, [order.orderId]: true }));
+    setDigitalContentSendErrors((prev) => ({ ...prev, [order.orderId]: "" }));
+
+    try {
+      const keyBundle = await ensureRandomKeys();
+      const decodedRandomPubkeyForSender = nip19.decode(keyBundle.senderNpub);
+      const decodedRandomPrivkeyForSender = nip19.decode(keyBundle.senderNsec);
+      const decodedRandomPubkeyForReceiver = nip19.decode(keyBundle.receiverNpub);
+      const decodedRandomPrivkeyForReceiver = nip19.decode(keyBundle.receiverNsec);
+
+      const decodedPayload = decodeDigitalContentPayload(encodedPublicPayload);
+      let deliveryNsec = "";
+      let deliveryUrl = "";
+      let deliveryMimeType = "";
+      let deliveryFileName = "";
+
+      if (isDigitalContentPublicPayloadV2(decodedPayload)) {
+        const sellerPubkey = await signer.getPubKey();
+        deliveryNsec = await signer.decrypt(sellerPubkey, decodedPayload.keyEnvelope);
+        deliveryUrl = decodedPayload.url;
+        deliveryMimeType = decodedPayload.mimeType || "";
+        deliveryFileName = decodedPayload.fileName || "";
+      } else {
+        deliveryNsec = decodedPayload.nsec;
+        deliveryUrl = decodedPayload.url;
+        deliveryMimeType = decodedPayload.mimeType || "";
+        deliveryFileName = decodedPayload.fileName || "";
+      }
+
+      if (!deliveryNsec || !deliveryUrl) {
+        throw new Error("Missing decrypted key or file URL.");
+      }
+
+      const encodedDelivery = encodeDigitalContentDeliveryPayload({
+        v: 2,
+        url: deliveryUrl,
+        nsec: deliveryNsec,
+        mimeType: deliveryMimeType,
+        fileName: deliveryFileName,
+        listingId: order.productAddress,
+      });
+
+      const deliveryMessageEvent = await constructGiftWrappedEvent(
+        decodedRandomPubkeyForSender.data as string,
+        order.buyerPubkey,
+        `digital_content_delivery:${encodedDelivery}`,
+        "digital-content-delivery",
+        {
+          isOrder: true,
+          type: 5,
+          orderId: order.orderId,
+          productAddress: order.productAddress,
+          buyerPubkey: order.buyerPubkey,
+          status: order.status,
+        }
+      );
+
+      const deliverySealedEvent = await constructMessageSeal(
+        signer,
+        deliveryMessageEvent,
+        decodedRandomPubkeyForSender.data as string,
+        order.buyerPubkey,
+        decodedRandomPrivkeyForSender.data as Uint8Array
+      );
+      const deliveryWrappedEvent = await constructMessageGiftWrap(
+        deliverySealedEvent,
+        decodedRandomPubkeyForReceiver.data as string,
+        decodedRandomPrivkeyForReceiver.data as Uint8Array,
+        order.buyerPubkey
+      );
+      await sendGiftWrappedMessageEvent(nostr, deliveryWrappedEvent);
+
+      chatsContext.addNewlyCreatedMessageEvent(
+        {
+          ...deliveryMessageEvent,
+          sig: "",
+          read: false,
+        },
+        true
+      );
+
+      setDigitalContentDeliveredOrders((prev) => {
+        const updated = new Set(prev);
+        updated.add(order.orderId);
+        return updated;
+      });
+    } catch (error) {
+      console.error("Error sending digital content:", error);
+      setDigitalContentSendErrors((prev) => ({
+        ...prev,
+        [order.orderId]:
+          error instanceof Error
+            ? error.message
+            : "Failed to send digital content.",
+      }));
+    } finally {
+      setIsSendingDigitalContent((prev) => ({ ...prev, [order.orderId]: false }));
     }
   };
 
@@ -1225,6 +1428,33 @@ const OrdersDashboard = () => {
                                 Send Shipping Update
                               </button>
                             )}
+                            {order.isSale &&
+                              (order.subject === "order-payment" || order.subject === "order-info" || order.subject === "order-completed") &&
+                              (order.hasDigitalContent ||
+                                !!order.digitalContentPayload) && (
+                                <>
+                                  {digitalContentDeliveredOrders.has(order.orderId) ? (
+                                    <span className="text-xs text-green-600 dark:text-green-400">
+                                      Digital Content Sent
+                                    </span>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleSendDigitalContent(order)}
+                                      className="cursor-pointer text-left text-xs text-shopstr-purple-light underline hover:text-shopstr-purple disabled:cursor-not-allowed disabled:opacity-60 dark:text-shopstr-yellow-light dark:hover:text-shopstr-yellow"
+                                      disabled={!!isSendingDigitalContent[order.orderId]}
+                                    >
+                                      {isSendingDigitalContent[order.orderId]
+                                        ? "Sending Digital Content..."
+                                        : "Send Digital Content"}
+                                    </button>
+                                  )}
+                                  {digitalContentSendErrors[order.orderId] && (
+                                    <span className="text-xs text-red-500 dark:text-red-400">
+                                      {digitalContentSendErrors[order.orderId]}
+                                    </span>
+                                  )}
+                                </>
+                              )}
                           </div>
                         </td>
                         <td className="whitespace-nowrap px-4 py-4 text-sm text-light-text dark:text-dark-text">
@@ -1255,6 +1485,8 @@ const OrdersDashboard = () => {
                               specs.push(`Size: ${order.selectedSize}`);
                             if (order.selectedVolume)
                               specs.push(`Volume: ${order.selectedVolume}`);
+                            if (order.selectedWeight)
+                              specs.push(`Weight: ${order.selectedWeight}`);
                             if (order.selectedBulkOption)
                               specs.push(
                                 `Bundle: ${order.selectedBulkOption} units`

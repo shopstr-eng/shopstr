@@ -264,6 +264,7 @@ export async function constructGiftWrappedEvent(
     donationPercentage?: number;
     selectedSize?: string;
     selectedVolume?: string;
+    selectedWeight?: string;
     selectedBulkOption?: number;
   } = {}
 ): Promise<GiftWrappedMessageEvent> {
@@ -292,6 +293,7 @@ export async function constructGiftWrappedEvent(
     donationPercentage,
     selectedSize,
     selectedVolume,
+    selectedWeight,
     selectedBulkOption,
   } = options;
 
@@ -326,6 +328,7 @@ export async function constructGiftWrappedEvent(
     if (pickup) tags.push(["pickup", pickup]);
     if (selectedSize) tags.push(["size", selectedSize]);
     if (selectedVolume) tags.push(["volume", selectedVolume]);
+    if (selectedWeight) tags.push(["weight", selectedWeight]);
     if (selectedBulkOption) tags.push(["bulk", selectedBulkOption.toString()]);
     if (
       donationAmount &&
@@ -1151,6 +1154,129 @@ export async function blossomUploadImages(
       console.error("Failed to cache blossom upload event to database:", error)
     );
   }
+  return tags;
+}
+
+export async function blossomUploadFile(
+  file: File,
+  signer: NostrSigner,
+  servers: Request["url"][]
+) {
+  const arrayBuffer = await file.arrayBuffer();
+  const uint8Array = new Uint8Array(arrayBuffer);
+  const words: number[] = [];
+  for (let i = 0; i < uint8Array.length; i += 4) {
+    words.push(
+      ((uint8Array[i] || 0) << 24) |
+        ((uint8Array[i + 1] || 0) << 16) |
+        ((uint8Array[i + 2] || 0) << 8) |
+        (uint8Array[i + 3] || 0)
+    );
+  }
+  const wordArray = CryptoJS.lib.WordArray.create(words, uint8Array.length);
+  const hash = CryptoJS.SHA256(wordArray).toString(CryptoJS.enc.Hex);
+
+  const event = {
+    kind: 24242,
+    content: `Upload ${file.name}`,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [
+      ["t", "upload"],
+      ["x", hash],
+      ["size", file.size.toString()],
+      [
+        "expiration",
+        Math.floor((Date.now() + 24 * 60 * 60 * 1000) / 1000).toString(),
+      ],
+    ],
+  };
+
+  const signedEvent = await signer!.sign(event);
+
+  const authorization = `Nostr ${CryptoJS.enc.Base64.stringify(
+    CryptoJS.enc.Utf8.parse(JSON.stringify(signedEvent))
+  )}`;
+
+  const validServers = servers
+    .map((s) => {
+      let server = (s || "").trim();
+      if (!server) return null;
+      if (!server.match(/^https?:\/\//i)) {
+        server = `https://${server}`;
+      }
+      try {
+        new URL(server);
+        return server;
+      } catch {
+        return null;
+      }
+    })
+    .filter((s): s is string => s !== null);
+
+  if (validServers.length === 0) {
+    throw new Error(
+      "No valid Blossom servers configured. Please check your media server settings."
+    );
+  }
+
+  let tags: string[][] = [];
+  let responseUrl: string = "";
+  for (let i = 0; i < validServers.length; i++) {
+    const server = validServers[i];
+
+    if (i == 0) {
+      const url = new URL("/upload", server);
+
+      const res = await fetch(url, {
+        method: "PUT",
+        body: file,
+        headers: {
+          authorization,
+          "content-type": file.type || "application/octet-stream",
+        },
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => "Unknown server error");
+        throw new Error(`Upload failed (${res.status}): ${errorText}`);
+      }
+
+      const response = await res.json();
+
+      responseUrl = response.url;
+
+      tags = [
+        ["url", responseUrl],
+        ["x", response.sha256],
+        ["ox", response.sha256],
+        ["size", response.size.toString()],
+      ];
+
+      if (response.type) {
+        tags.push(["m", response.type]);
+      }
+    } else {
+      const url = new URL("/mirror", server);
+
+      await fetch(url, {
+        method: "PUT",
+        body: JSON.stringify({
+          url: responseUrl,
+        }),
+        headers: {
+          authorization,
+          "content-type": file.type || "application/octet-stream",
+        },
+      });
+    }
+  }
+
+  if (signedEvent) {
+    await cacheEventToDatabase(signedEvent).catch((error) =>
+      console.error("Failed to cache blossom upload event to database:", error)
+    );
+  }
+
   return tags;
 }
 
