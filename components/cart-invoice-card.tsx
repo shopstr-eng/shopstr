@@ -93,7 +93,6 @@ export default function CartInvoiceCard({
   const {
     pubkey: userPubkey,
     npub: userNPub,
-    isLoggedIn,
     signer,
   } = useContext(SignerContext);
 
@@ -122,6 +121,9 @@ export default function CartInvoiceCard({
     sellerPubkey: string;
     shippingAddress?: string;
     pickupLocation?: string;
+    selectedSize?: string;
+    selectedVolume?: string;
+    selectedBulkOption?: string;
   } | null>(null);
 
   useEffect(() => {
@@ -165,7 +167,7 @@ export default function CartInvoiceCard({
 
   const walletContext = useContext(CashuWalletContext);
 
-  const { isOpen, onOpen, onClose } = useDisclosure();
+  const { isOpen, onClose } = useDisclosure();
 
   const [formType, setFormType] = useState<
     "shipping" | "contact" | "combined" | null
@@ -312,8 +314,7 @@ export default function CartInvoiceCard({
   const productsWithPickupLocations = useMemo(() => {
     return products.filter(
       (product) =>
-        (product.shippingType === "Added Cost/Pickup" ||
-          product.shippingType === "Free/Pickup" ||
+        (product.shippingType === "Free/Pickup" ||
           product.shippingType === "Pickup") &&
         product.pickupLocations &&
         product.pickupLocations.length > 0
@@ -422,7 +423,6 @@ export default function CartInvoiceCard({
     isPayment?: boolean,
     isReceipt?: boolean,
     isDonation?: boolean,
-    isHerdshare?: boolean,
     orderId?: string,
     paymentType?: string,
     paymentReference?: string,
@@ -452,7 +452,6 @@ export default function CartInvoiceCard({
           isPayment,
           isReceipt,
           isDonation,
-          isHerdshare,
           orderId,
           paymentType,
           paymentReference,
@@ -495,7 +494,6 @@ export default function CartInvoiceCard({
     isPayment?: boolean,
     isReceipt?: boolean,
     isDonation?: boolean,
-    isHerdshare?: boolean,
     orderId?: string,
     paymentType?: string,
     paymentReference?: string,
@@ -575,16 +573,6 @@ export default function CartInvoiceCard({
       };
     } else if (isDonation) {
       messageSubject = "donation";
-    } else if (isHerdshare) {
-      messageSubject = "order-info";
-      messageOptions = {
-        isOrder: true,
-        type: 1,
-        orderAmount: messageAmount ? messageAmount : undefined,
-        orderId,
-        productData: product,
-        quantity: productQuantity ? productQuantity : 1,
-      };
     } else if (orderId) {
       messageSubject = "order-info";
       messageOptions = {
@@ -628,7 +616,7 @@ export default function CartInvoiceCard({
     );
     await sendGiftWrappedMessageEvent(nostr!, giftWrappedEvent);
 
-    if (isReceipt || isHerdshare) {
+    if (isReceipt) {
       chatsContext.addNewlyCreatedMessageEvent(
         {
           ...giftWrappedMessageEvent,
@@ -736,7 +724,7 @@ export default function CartInvoiceCard({
         };
       }
 
-      const emailAddressTag =
+      const addressTag =
         paymentData.shippingName && paymentData.shippingAddress
           ? `${paymentData.shippingName}, ${paymentData.shippingAddress}, ${
               paymentData.shippingCity || ""
@@ -761,24 +749,14 @@ export default function CartInvoiceCard({
         .filter(Boolean)
         .join(", ");
 
-      const emailAddressTag =
-        paymentData.shippingName && paymentData.shippingAddress
-          ? `${paymentData.shippingName}, ${paymentData.shippingAddress}, ${
-              paymentData.shippingCity || ""
-            }, ${paymentData.shippingState || ""}, ${
-              paymentData.shippingPostalCode || ""
-            }, ${paymentData.shippingCountry || ""}`
-          : undefined;
       pendingOrderRef.current = {
         orderId: "",
-        productTitle: products
-          .map((p: any) => p.title || p.productName)
-          .join(", "),
+        productTitle: productTitles,
         amount: String(price),
         currency: "sats",
         paymentMethod: paymentType || "lightning",
         sellerPubkey: products[0]?.pubkey || "",
-        shippingAddress: emailAddressTag,
+        shippingAddress: addressTag,
         pickupLocation: pickupSummary || undefined,
       };
 
@@ -1343,7 +1321,6 @@ export default function CartInvoiceCard({
               true,
               false,
               false,
-              false,
               orderId,
               "lightning",
               lnurl,
@@ -1373,7 +1350,6 @@ export default function CartInvoiceCard({
                   changeMessage,
                   product,
                   true,
-                  false,
                   false,
                   false,
                   orderId,
@@ -1467,7 +1443,6 @@ export default function CartInvoiceCard({
                 true,
                 false,
                 false,
-                false,
                 orderId,
                 "ecash",
                 unusedToken,
@@ -1550,7 +1525,6 @@ export default function CartInvoiceCard({
             true,
             false,
             false,
-            false,
             orderId,
             "ecash",
             sellerToken,
@@ -1600,7 +1574,6 @@ export default function CartInvoiceCard({
             false,
             false,
             false,
-            false,
             orderId,
             undefined,
             undefined,
@@ -1618,32 +1591,6 @@ export default function CartInvoiceCard({
         } catch (error) {
           console.error("Failed to send additional info message:", error);
         }
-      }
-
-      // Send herdshare agreement if product has one
-      if (product.herdshareAgreement) {
-        // Add delay before herdshare message
-        await new Promise((resolve) => setTimeout(resolve, 500));
-
-        const herdshareMessage =
-          "To finalize your purchase, sign and send the following herdshare agreement for the dairy: " +
-          product.herdshareAgreement;
-        await sendPaymentAndContactMessageWithKeys(
-          userPubkey!,
-          herdshareMessage,
-          product,
-          false,
-          false,
-          false,
-          true,
-          orderId,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          orderKeys
-        );
       }
 
       // Step 4: Handle shipping and contact information
@@ -1762,7 +1709,6 @@ export default function CartInvoiceCard({
             false,
             false,
             false,
-            false,
             orderId,
             undefined,
             undefined,
@@ -1795,7 +1741,6 @@ export default function CartInvoiceCard({
               product,
               false,
               true,
-              false,
               false,
               orderId,
               undefined,
@@ -1872,7 +1817,6 @@ export default function CartInvoiceCard({
             false,
             true,
             false,
-            false,
             orderId,
             undefined,
             undefined,
@@ -1935,7 +1879,6 @@ export default function CartInvoiceCard({
           product,
           false,
           true,
-          false,
           false,
           orderId,
           undefined,
@@ -2488,11 +2431,9 @@ export default function CartInvoiceCard({
                       const basePrice =
                         (product.bulkPrice !== undefined
                           ? product.bulkPrice
-                          : product.weightPrice !== undefined
-                            ? product.weightPrice
-                            : product.volumePrice !== undefined
-                              ? product.volumePrice
-                              : product.price) * (quantities[product.id] || 1);
+                          : product.volumePrice !== undefined
+                            ? product.volumePrice
+                            : product.price) * (quantities[product.id] || 1);
                       const discountedPrice =
                         discount > 0
                           ? basePrice * (1 - discount / 100)
@@ -2709,11 +2650,9 @@ export default function CartInvoiceCard({
                     const originalPrice =
                       product.bulkPrice !== undefined
                         ? product.bulkPrice
-                        : product.weightPrice != undefined
-                          ? product.weightPrice
-                          : product.volumePrice !== undefined
-                            ? product.volumePrice
-                            : product.price;
+                        : product.volumePrice !== undefined
+                          ? product.volumePrice
+                          : product.price;
                     const basePrice =
                       originalPrice * (quantities[product.id] || 1);
                     const discountedPrice =
