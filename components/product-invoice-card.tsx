@@ -49,6 +49,7 @@ import { nip19 } from "nostr-tools";
 import { webln } from "@getalby/sdk";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { formatWithCommas } from "./utility-components/display-monetary-info";
+import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import SignInModal from "./sign-in/SignInModal";
 import currencySelection from "../public/currencySelection.json";
 import FailureModal from "@/components/utility-components/failure-modal";
@@ -95,6 +96,7 @@ export default function ProductInvoiceCard({
   const {
     pubkey: userPubkey,
     npub: userNPub,
+    isLoggedIn,
     signer,
   } = useContext(SignerContext);
 
@@ -137,7 +139,7 @@ export default function ProductInvoiceCard({
   const [randomNsecForReceiver, setRandomNsecForReceiver] =
     useState<string>("");
 
-  const { isOpen, onClose } = useDisclosure();
+  const { isOpen, onOpen, onClose } = useDisclosure();
 
   const [formType, setFormType] = useState<"shipping" | "contact" | null>(null);
   const [showOrderTypeSelection, setShowOrderTypeSelection] = useState(true);
@@ -2145,17 +2147,10 @@ export default function ProductInvoiceCard({
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Select Pickup Location</h3>
             <Select
+              variant="bordered"
               label="Pickup Location"
               placeholder="Choose a pickup location"
               className="max-w-full"
-              classNames={{
-                trigger:
-                  "border-2 border-black rounded-md shadow-neo !bg-white hover:!bg-white data-[hover=true]:!bg-white data-[focus=true]:!bg-white",
-                value: "!text-black",
-                label: "text-gray-600",
-                popoverContent: "border-2 border-black rounded-md bg-white",
-                listbox: "!text-black",
-              }}
               selectedKeys={
                 selectedPickupLocation ? [selectedPickupLocation] : []
               }
@@ -2195,15 +2190,15 @@ export default function ProductInvoiceCard({
                 <Input
                   variant="bordered"
                   fullWidth={true}
-                  label={<span className="text-light-text">Name</span>}
+                  label={
+                    <span>
+                      Name <span className="text-red-500">*</span>
+                    </span>
+                  }
                   labelPlacement="inside"
                   isInvalid={!!error}
                   errorMessage={error?.message}
-                  classNames={{
-                    inputWrapper: "border-2 border-black rounded-md shadow-neo",
-                  }}
                   onChange={onChange}
-                  isRequired={true}
                   onBlur={onBlur}
                   value={value || ""}
                 />
@@ -2227,15 +2222,15 @@ export default function ProductInvoiceCard({
                 <Input
                   variant="bordered"
                   fullWidth={true}
-                  label={<span className="text-light-text">Address</span>}
+                  label={
+                    <span>
+                      Address <span className="text-red-500">*</span>
+                    </span>
+                  }
                   labelPlacement="inside"
                   isInvalid={!!error}
                   errorMessage={error?.message}
-                  classNames={{
-                    inputWrapper: "border-2 border-black rounded-md shadow-neo",
-                  }}
                   onChange={onChange}
-                  isRequired={true}
                   onBlur={onBlur}
                   value={value || ""}
                 />
@@ -2262,9 +2257,6 @@ export default function ProductInvoiceCard({
                   labelPlacement="inside"
                   isInvalid={!!error}
                   errorMessage={error?.message}
-                  classNames={{
-                    inputWrapper: "border-2 border-black rounded-md shadow-neo",
-                  }}
                   onChange={onChange}
                   onBlur={onBlur}
                   value={value || ""}
@@ -2290,16 +2282,15 @@ export default function ProductInvoiceCard({
                   <Input
                     variant="bordered"
                     fullWidth={true}
-                    label={<span className="text-light-text">City</span>}
+                    label={
+                      <span>
+                        City <span className="text-red-500">*</span>
+                      </span>
+                    }
                     labelPlacement="inside"
                     isInvalid={!!error}
                     errorMessage={error?.message}
-                    classNames={{
-                      inputWrapper:
-                        "border-2 border-black rounded-md shadow-neo",
-                    }}
                     onChange={onChange}
-                    isRequired={true}
                     onBlur={onBlur}
                     value={value || ""}
                   />
@@ -2318,17 +2309,14 @@ export default function ProductInvoiceCard({
                     variant="bordered"
                     fullWidth={true}
                     label={
-                      <span className="text-light-text">State/Province</span>
+                      <span>
+                        State/Province <span className="text-red-500">*</span>
+                      </span>
                     }
                     labelPlacement="inside"
                     isInvalid={!!error}
                     errorMessage={error?.message}
-                    classNames={{
-                      inputWrapper:
-                        "border-2 border-black rounded-md shadow-neo",
-                    }}
                     onChange={onChange}
-                    isRequired={true}
                     onBlur={onBlur}
                     value={value || ""}
                   />
@@ -2354,16 +2342,15 @@ export default function ProductInvoiceCard({
                   <Input
                     variant="bordered"
                     fullWidth={true}
-                    label={<span className="text-light-text">Postal code</span>}
+                    label={
+                      <span>
+                        Postal code <span className="text-red-500">*</span>
+                      </span>
+                    }
                     labelPlacement="inside"
                     isInvalid={!!error}
                     errorMessage={error?.message}
-                    classNames={{
-                      inputWrapper:
-                        "border-2 border-black rounded-md shadow-neo",
-                    }}
                     onChange={onChange}
-                    isRequired={true}
                     onBlur={onBlur}
                     value={value || ""}
                   />
@@ -2381,16 +2368,15 @@ export default function ProductInvoiceCard({
                   <CountryDropdown
                     variant="bordered"
                     aria-label="Select Country"
-                    label={<span className="text-light-text">Country</span>}
+                    label={
+                      <span>
+                        Country <span className="text-red-500">*</span>
+                      </span>
+                    }
                     labelPlacement="inside"
                     isInvalid={!!error}
                     errorMessage={error?.message}
-                    classNames={{
-                      trigger:
-                        "border-2 border-black rounded-md shadow-neo !bg-white",
-                    }}
                     onChange={onChange}
-                    isRequired={true}
                     onBlur={onBlur}
                     value={value || ""}
                   />
@@ -2413,18 +2399,15 @@ export default function ProductInvoiceCard({
                 variant="bordered"
                 fullWidth={true}
                 label={
-                  <span className="text-light-text">
-                    Enter {productData.required}
+                  <span>
+                    Enter {productData.required}{" "}
+                    <span className="text-red-500">*</span>
                   </span>
                 }
                 labelPlacement="inside"
                 isInvalid={!!error}
                 errorMessage={error?.message}
-                classNames={{
-                  inputWrapper: "border-2 border-black rounded-md shadow-neo",
-                }}
                 onChange={onChange}
-                isRequired={true}
                 onBlur={onBlur}
                 value={value || ""}
               />
@@ -2437,10 +2420,10 @@ export default function ProductInvoiceCard({
 
   if (showInvoiceCard) {
     return (
-      <div className="flex min-h-screen w-full bg-white text-black">
+      <div className="flex min-h-screen w-full bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text">
         <div className="mx-auto flex w-full max-w-7xl flex-col lg:flex-row">
           {/* Left Side - Product Summary - maintain same width */}
-          <div className="w-full bg-gray-50 p-6 lg:w-1/2">
+          <div className="w-full bg-gray-50 p-6 dark:bg-gray-800 lg:w-1/2">
             <div className="sticky top-6">
               <h2 className="mb-6 text-2xl font-bold">Order Summary</h2>
 
@@ -2456,27 +2439,33 @@ export default function ProductInvoiceCard({
                 </h3>
 
                 {selectedSize && (
-                  <p className="mb-1 text-gray-600">Size: {selectedSize}</p>
+                  <p className="mb-1 text-gray-600 dark:text-gray-400">
+                    Size: {selectedSize}
+                  </p>
                 )}
 
                 {selectedVolume && (
-                  <p className="mb-1 text-gray-600">Volume: {selectedVolume}</p>
+                  <p className="mb-1 text-gray-600 dark:text-gray-400">
+                    Volume: {selectedVolume}
+                  </p>
                 )}
 
                 {selectedBulkOption && (
-                  <p className="mb-1 text-gray-600">
+                  <p className="mb-1 text-gray-600 dark:text-gray-400">
                     Bundle: {selectedBulkOption} units
                   </p>
                 )}
-                <p className="mb-1 text-gray-600">Quantity: 1</p>
+                <p className="mb-1 text-gray-600 dark:text-gray-400">
+                  Quantity: 1
+                </p>
               </div>
 
               <div className="border-t pt-4">
                 <div className="space-y-3">
-                  <h4 className="font-semibold text-gray-700">
+                  <h4 className="font-semibold text-gray-700 dark:text-gray-300">
                     Cost Breakdown
                   </h4>
-                  <div className="space-y-2 border-l-2 border-gray-200 pl-3">
+                  <div className="space-y-2 border-l-2 border-gray-200 pl-3 dark:border-gray-600">
                     <div className="text-sm font-medium">
                       {productData.title}
                     </div>
@@ -2503,7 +2492,7 @@ export default function ProductInvoiceCard({
                               </span>
                             </div>
                           )}
-                        <div className="flex justify-between text-sm text-green-600">
+                        <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
                           <span className="ml-2">
                             {discountCode || "Discount"} ({appliedDiscount}%):
                           </span>
@@ -2557,7 +2546,7 @@ export default function ProductInvoiceCard({
 
               <button
                 onClick={() => setIsBeingPaid(false)}
-                className="mt-4 text-black underline hover:text-gray-600"
+                className="mt-4 text-shopstr-purple underline hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light"
               >
                 ← Back to product
               </button>
@@ -2565,7 +2554,7 @@ export default function ProductInvoiceCard({
           </div>
 
           {/* Divider */}
-          <div className="h-px w-full bg-gray-300 lg:h-full lg:w-px"></div>
+          <div className="h-px w-full bg-gray-300 dark:bg-gray-600 lg:h-full lg:w-px"></div>
 
           {/* Right Side - Lightning Invoice - maintain consistent width */}
           <div className="w-full p-6 lg:w-1/2">
@@ -2578,7 +2567,7 @@ export default function ProductInvoiceCard({
                   <div className="flex flex-col items-center justify-center">
                     {qrCodeUrl && (
                       <>
-                        <h3 className="mt-3 text-center text-lg font-medium leading-6 text-dark-text">
+                        <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900 text-light-text dark:text-dark-text">
                           Don&apos;t refresh or close the page until the payment
                           has been confirmed!
                         </h3>
@@ -2601,12 +2590,12 @@ export default function ProductInvoiceCard({
                           </p>
                           <ClipboardIcon
                             onClick={handleCopyInvoice}
-                            className={`ml-2 h-4 w-4 cursor-pointer text-dark-text ${
+                            className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
                               copiedToClipboard ? "hidden" : ""
                             }`}
                           />
                           <CheckIcon
-                            className={`ml-2 h-4 w-4 cursor-pointer text-dark-text ${
+                            className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
                               copiedToClipboard ? "" : "hidden"
                             }`}
                           />
@@ -2621,7 +2610,7 @@ export default function ProductInvoiceCard({
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center">
-                    <h3 className="mt-3 text-center text-lg font-medium leading-6 text-dark-text">
+                    <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
                       Payment confirmed!
                     </h3>
                     <Image
@@ -2641,10 +2630,10 @@ export default function ProductInvoiceCard({
   }
 
   return (
-    <div className="flex min-h-screen w-full bg-white text-black">
+    <div className="flex min-h-screen w-full bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text">
       <div className="mx-auto flex w-full max-w-7xl flex-col lg:flex-row">
         {/* Left Side - Product Summary */}
-        <div className="w-full bg-gray-50 p-6 lg:w-1/2">
+        <div className="w-full bg-gray-50 p-6 dark:bg-gray-800 lg:w-1/2">
           <div className="sticky top-6">
             <h2 className="mb-6 text-2xl font-bold">Order Summary</h2>
 
@@ -2660,25 +2649,33 @@ export default function ProductInvoiceCard({
               </h3>
 
               {selectedSize && (
-                <p className="mb-1 text-gray-600">Size: {selectedSize}</p>
+                <p className="mb-1 text-gray-600 dark:text-gray-400">
+                  Size: {selectedSize}
+                </p>
               )}
 
               {selectedVolume && (
-                <p className="mb-1 text-gray-600">Volume: {selectedVolume}</p>
+                <p className="mb-1 text-gray-600 dark:text-gray-400">
+                  Volume: {selectedVolume}
+                </p>
               )}
 
               {selectedBulkOption && (
-                <p className="mb-1 text-gray-600">
+                <p className="mb-1 text-gray-600 dark:text-gray-400">
                   Bundle: {selectedBulkOption} units
                 </p>
               )}
-              <p className="mb-1 text-gray-600">Quantity: 1</p>
+              <p className="mb-1 text-gray-600 dark:text-gray-400">
+                Quantity: 1
+              </p>
             </div>
 
             <div className="border-t pt-4">
               <div className="space-y-3">
-                <h4 className="font-semibold text-gray-700">Cost Breakdown</h4>
-                <div className="space-y-2 border-l-2 border-gray-200 pl-3">
+                <h4 className="font-semibold text-gray-700 dark:text-gray-300">
+                  Cost Breakdown
+                </h4>
+                <div className="space-y-2 border-l-2 border-gray-200 pl-3 dark:border-gray-600">
                   <div className="text-sm font-medium">{productData.title}</div>
                   {appliedDiscount > 0 ? (
                     <>
@@ -2688,7 +2685,7 @@ export default function ProductInvoiceCard({
                           {formatWithCommas(currentPrice, productData.currency)}
                         </span>
                       </div>
-                      <div className="flex justify-between text-sm text-green-600">
+                      <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
                         <span className="ml-2">
                           {discountCode || "Discount"} ({appliedDiscount}%):
                         </span>
@@ -2718,7 +2715,7 @@ export default function ProductInvoiceCard({
                       </span>
                     </div>
                   )}
-                  {productData.shippingCost! > 0 && formType === "shipping" && (
+                  {formType === "shipping" && productData.shippingCost! > 0 && (
                     <div className="flex justify-between text-sm">
                       <span className="ml-2">Shipping cost:</span>
                       <span>
@@ -2741,7 +2738,7 @@ export default function ProductInvoiceCard({
 
             <button
               onClick={() => setIsBeingPaid(false)}
-              className="mt-4 text-black underline hover:text-gray-600"
+              className="mt-4 text-shopstr-purple underline hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light"
             >
               ← Back to product
             </button>
@@ -2749,7 +2746,7 @@ export default function ProductInvoiceCard({
         </div>
 
         {/* Divider */}
-        <div className="h-px w-full bg-gray-300 lg:h-full lg:w-px"></div>
+        <div className="h-px w-full bg-gray-300 dark:bg-gray-600 lg:h-full lg:w-px"></div>
 
         {/* Right Side - Order Type Selection, Forms, and Payment */}
         <div className="w-full p-6 lg:w-1/2">
@@ -2757,24 +2754,24 @@ export default function ProductInvoiceCard({
           {showOrderTypeSelection && (
             <>
               <h2 className="mb-6 text-2xl font-bold">Select Order Type</h2>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {productData.shippingType === "Free/Pickup" ? (
                   <>
                     <button
                       onClick={() => handleOrderTypeSelection("shipping")}
-                      className="shadow-neo w-full rounded-md border-2 border-black bg-white p-4 text-left transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+                      className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
                     >
-                      <div className="font-medium">Free or added shipping</div>
-                      <div className="text-sm text-gray-500">
+                      <div className="font-medium">Free shipping</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
                         Get it shipped to your address
                       </div>
                     </button>
                     <button
                       onClick={() => handleOrderTypeSelection("contact")}
-                      className="shadow-neo w-full rounded-md border-2 border-black bg-white p-4 text-left transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+                      className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
                     >
                       <div className="font-medium">Pickup</div>
-                      <div className="text-sm text-gray-500">
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
                         Arrange pickup with seller
                       </div>
                     </button>
@@ -2783,22 +2780,22 @@ export default function ProductInvoiceCard({
                   productData.shippingType === "Added Cost" ? (
                   <button
                     onClick={() => handleOrderTypeSelection("shipping")}
-                    className="shadow-neo w-full rounded-md border-2 border-black bg-white p-4 text-left transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+                    className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
                   >
                     <div className="font-medium">
                       Online order with shipping
                     </div>
-                    <div className="text-sm text-gray-500">
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
                       Get it shipped to your address
                     </div>
                   </button>
                 ) : (
                   <button
                     onClick={() => handleOrderTypeSelection("contact")}
-                    className="shadow-neo w-full rounded-md border-2 border-black bg-white p-4 text-left transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+                    className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
                   >
                     <div className="font-medium">Online order</div>
-                    <div className="text-sm text-gray-500">
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
                       Digital or pickup delivery
                     </div>
                   </button>
@@ -2825,15 +2822,48 @@ export default function ProductInvoiceCard({
               >
                 {renderContactForm()}
 
-                <div className="mt-6 space-y-3 border-t pt-6">
-                  <h3 className="mb-4 text-xl font-bold">Payment Method</h3>
+                <div
+                  className={`space-y-4 ${
+                    formType === "shipping" ? "border-t pt-6" : ""
+                  }`}
+                >
+                  {formType === "shipping" && (
+                    <h3 className="mb-4 text-lg font-semibold">
+                      Payment Method
+                    </h3>
+                  )}
+
+                  {Object.keys(fiatPaymentOptions).length > 0 && (
+                    <Button
+                      className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
+                        !isFormValid ? "cursor-not-allowed opacity-50" : ""
+                      }`}
+                      disabled={!isFormValid}
+                      onClick={() => {
+                        if (!isLoggedIn) {
+                          onOpen();
+                          return;
+                        }
+                        handleFormSubmit((data) =>
+                          onFormSubmit(data, "fiat")
+                        )();
+                      }}
+                      startContent={<CurrencyDollarIcon className="h-6 w-6" />}
+                    >
+                      Pay with Fiat
+                    </Button>
+                  )}
 
                   <Button
-                    className={`bg-primary-blue shadow-neo w-full rounded-md border-2 border-black px-4 py-2 font-bold text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                    className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
                       !isFormValid ? "cursor-not-allowed opacity-50" : ""
                     }`}
                     disabled={!isFormValid}
                     onClick={() => {
+                      if (!isLoggedIn) {
+                        onOpen();
+                        return;
+                      }
                       handleFormSubmit((data) =>
                         onFormSubmit(data, "lightning")
                       )();
@@ -2845,11 +2875,15 @@ export default function ProductInvoiceCard({
 
                   {hasTokensAvailable && (
                     <Button
-                      className={`shadow-neo w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                      className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
                         !isFormValid ? "cursor-not-allowed opacity-50" : ""
                       }`}
                       disabled={!isFormValid}
                       onClick={() => {
+                        if (!isLoggedIn) {
+                          onOpen();
+                          return;
+                        }
                         handleFormSubmit((data) =>
                           onFormSubmit(data, "cashu")
                         )();
@@ -2859,34 +2893,24 @@ export default function ProductInvoiceCard({
                       Pay with Cashu: {formattedTotalCost}
                     </Button>
                   )}
-
-                  {Object.keys(fiatPaymentOptions).length > 0 && (
-                    <Button
-                      className={`shadow-neo w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
-                        !isFormValid ? "cursor-not-allowed opacity-50" : ""
-                      }`}
-                      disabled={!isFormValid}
-                      onClick={() => {
-                        handleFormSubmit((data) =>
-                          onFormSubmit(data, "fiat")
-                        )();
-                      }}
-                      startContent={<CurrencyDollarIcon className="h-6 w-6" />}
-                    >
-                      Pay with Cash or Payment App: {formattedTotalCost}
-                    </Button>
-                  )}
-
                   {/* NWC Button */}
                   {nwcInfo && (
                     <Button
-                      className={`shadow-neo w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                      className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
                         !isFormValid ? "cursor-not-allowed opacity-50" : ""
                       }`}
                       disabled={!isFormValid || isNwcLoading}
                       isLoading={isNwcLoading}
                       onClick={() => {
-                        handleFormSubmit((data) => onFormSubmit(data, "nwc"))();
+                        if (!isLoggedIn) {
+                          onOpen();
+                          return;
+                        }
+                        // We must call handleFormSubmit to get the validated form data
+                        handleFormSubmit((data) =>
+                          // Then pass that data to our new NWC payment handler
+                          onFormSubmit(data, "nwc")
+                        )();
                       }}
                       startContent={<WalletIcon className="h-6 w-6" />}
                     >
@@ -2918,16 +2942,19 @@ export default function ProductInvoiceCard({
       {/* Fiat Payment Instructions */}
       {showFiatPaymentInstructions && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="max-w-md rounded-lg bg-gray-800 p-8 text-center">
+          <div className="max-w-md rounded-lg bg-white p-8 text-center dark:bg-gray-800">
             {selectedFiatOption === "cash" ? (
               <>
-                <h3 className="mb-4 text-2xl font-bold text-white">
+                <h3 className="mb-4 text-2xl font-bold text-gray-900 dark:text-white">
                   Cash Payment
                 </h3>
-                <p className="mb-6 text-gray-400">
+                <p className="mb-6 text-gray-600 dark:text-gray-400">
                   You will need{" "}
-                  {formatWithCommas(discountedTotal, productData.currency)} in
-                  cash for this order.
+                  {formatWithCommas(
+                    productData.totalCost,
+                    productData.currency
+                  )}{" "}
+                  in cash for this order.
                 </p>
                 <div className="mb-6 flex items-center space-x-2">
                   <input
@@ -2935,11 +2962,11 @@ export default function ProductInvoiceCard({
                     id="paymentConfirmed"
                     checked={fiatPaymentConfirmed}
                     onChange={(e) => setFiatPaymentConfirmed(e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 text-light-text focus:ring-accent-light-text"
+                    className="h-4 w-4 rounded border-gray-300 text-shopstr-purple focus:ring-shopstr-purple"
                   />
                   <label
                     htmlFor="paymentConfirmed"
-                    className="text-left text-gray-300"
+                    className="text-left text-gray-700 dark:text-gray-300"
                   >
                     I will have the sufficient cash to complete the order upon
                     pickup or delivery
@@ -2948,15 +2975,19 @@ export default function ProductInvoiceCard({
               </>
             ) : (
               <>
-                <h3 className="mb-4 text-2xl font-bold text-white">
+                <h3 className="mb-4 text-2xl font-bold text-gray-900 dark:text-white">
                   Send Payment
                 </h3>
-                <p className="mb-4 text-gray-400">
+                <p className="mb-4 text-gray-600 dark:text-gray-400">
                   Please send{" "}
-                  {formatWithCommas(discountedTotal, productData.currency)} to:
+                  {formatWithCommas(
+                    productData.totalCost,
+                    productData.currency
+                  )}{" "}
+                  to:
                 </p>
-                <div className="mb-6 rounded-lg bg-gray-100 p-4">
-                  <p className="font-semibold text-gray-900">
+                <div className="mb-6 rounded-lg bg-gray-100 p-4 dark:bg-gray-700">
+                  <p className="font-semibold text-gray-900 dark:text-white">
                     {selectedFiatOption}:{" "}
                     {profileContext.profileData.get(productData.pubkey)?.content
                       ?.fiat_options?.[selectedFiatOption] || "N/A"}
@@ -2968,9 +2999,12 @@ export default function ProductInvoiceCard({
                     id="paymentConfirmed"
                     checked={fiatPaymentConfirmed}
                     onChange={(e) => setFiatPaymentConfirmed(e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 text-light-text focus:ring-accent-light-text"
+                    className="h-4 w-4 rounded border-gray-300 text-shopstr-purple focus:ring-shopstr-purple"
                   />
-                  <label htmlFor="paymentConfirmed" className="text-gray-300">
+                  <label
+                    htmlFor="paymentConfirmed"
+                    className="text-gray-700 dark:text-gray-300"
+                  >
                     I have sent the payment
                   </label>
                 </div>
@@ -2982,14 +3016,14 @@ export default function ProductInvoiceCard({
                   if (fiatPaymentConfirmed) {
                     setShowFiatPaymentInstructions(false);
                     await handleFiatPayment(
-                      discountedTotal,
+                      productData.totalCost,
                       pendingPaymentData || {}
                     );
                     setPendingPaymentData(null); // Clear stored data
                   }
                 }}
                 disabled={!fiatPaymentConfirmed}
-                className={`shadow-neo w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
                   !fiatPaymentConfirmed ? "cursor-not-allowed opacity-50" : ""
                 }`}
               >
@@ -3004,7 +3038,8 @@ export default function ProductInvoiceCard({
                   setSelectedFiatOption("");
                   setPendingPaymentData(null); // Clear stored data
                 }}
-                className="shadow-neo w-full rounded-md border-2 border-black bg-white px-4 py-2 font-bold text-black transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+                variant="bordered"
+                className="w-full"
               >
                 Cancel
               </Button>
@@ -3019,10 +3054,10 @@ export default function ProductInvoiceCard({
         isOpen={showFiatTypeOption}
         onClose={() => setShowFiatTypeOption(false)}
         classNames={{
-          body: "py-6 bg-dark-fg",
+          body: "py-6 ",
           backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-          header: "border-b-[1px] border-[#292f46] bg-dark-fg rounded-t-lg",
-          footer: "border-t-[1px] border-[#292f46] bg-dark-fg rounded-b-lg",
+          header: "border-b-[1px] border-[#292f46]",
+          footer: "border-t-[1px] border-[#292f46]",
           closeButton: "hover:bg-black/5 active:bg-white/10",
         }}
         isDismissable={true}
@@ -3031,7 +3066,7 @@ export default function ProductInvoiceCard({
         size="2xl"
       >
         <ModalContent>
-          <ModalHeader className="flex items-center justify-center text-dark-text">
+          <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
             Select your fiat payment preference:
           </ModalHeader>
           <ModalBody className="flex flex-col overflow-hidden">
@@ -3039,14 +3074,6 @@ export default function ProductInvoiceCard({
               <Select
                 label="Fiat Payment Options"
                 className="max-w-xs"
-                classNames={{
-                  trigger:
-                    "border-2 border-black rounded-md shadow-neo !bg-white hover:!bg-white data-[hover=true]:!bg-white data-[focus=true]:!bg-white",
-                  value: "!text-black",
-                  label: "text-gray-600",
-                  popoverContent: "border-2 border-black rounded-md bg-white",
-                  listbox: "!text-black",
-                }}
                 onChange={(e) => {
                   setSelectedFiatOption(e.target.value);
                   setShowFiatTypeOption(false);
@@ -3058,7 +3085,7 @@ export default function ProductInvoiceCard({
                     <SelectItem
                       key={option}
                       value={option}
-                      className="text-dark-text"
+                      className="text-light-text dark:text-dark-text"
                     >
                       {option}
                     </SelectItem>

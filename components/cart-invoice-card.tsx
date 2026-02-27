@@ -91,6 +91,7 @@ export default function CartInvoiceCard({
 }) {
   const { mints, tokens, history } = getLocalStorageData();
   const {
+    isLoggedIn,
     pubkey: userPubkey,
     npub: userNPub,
     signer,
@@ -167,7 +168,7 @@ export default function CartInvoiceCard({
 
   const walletContext = useContext(CashuWalletContext);
 
-  const { isOpen, onClose } = useDisclosure();
+  const { isOpen, onOpen, onClose } = useDisclosure();
 
   const [formType, setFormType] = useState<
     "shipping" | "contact" | "combined" | null
@@ -2064,20 +2065,17 @@ export default function CartInvoiceCard({
                 fieldState: { error },
               }) => (
                 <Input
-                  classNames={{
-                    inputWrapper:
-                      "border-2 border-black rounded-md shadow-neo !bg-white hover:!bg-white focus-within:!bg-white data-[hover=true]:!bg-white group-data-[focus=true]:!bg-white",
-                    input: "!text-black placeholder:text-gray-400",
-                    label: "text-gray-600",
-                    innerWrapper: "!bg-white",
-                  }}
+                  variant="bordered"
                   fullWidth={true}
-                  label={<span>Name</span>}
+                  label={
+                    <span>
+                      Name <span className="text-red-500">*</span>
+                    </span>
+                  }
                   labelPlacement="inside"
                   isInvalid={!!error}
                   errorMessage={error?.message}
                   onChange={onChange}
-                  isRequired={true}
                   onBlur={onBlur}
                   value={value || ""}
                 />
@@ -2099,20 +2097,17 @@ export default function CartInvoiceCard({
                 fieldState: { error },
               }) => (
                 <Input
-                  classNames={{
-                    inputWrapper:
-                      "border-2 border-black rounded-md shadow-neo !bg-white hover:!bg-white focus-within:!bg-white data-[hover=true]:!bg-white group-data-[focus=true]:!bg-white",
-                    input: "!text-black placeholder:text-gray-400",
-                    label: "text-gray-600",
-                    innerWrapper: "!bg-white",
-                  }}
+                  variant="bordered"
                   fullWidth={true}
-                  label={<span>Address</span>}
+                  label={
+                    <span>
+                      Address <span className="text-red-500">*</span>
+                    </span>
+                  }
                   labelPlacement="inside"
                   isInvalid={!!error}
                   errorMessage={error?.message}
                   onChange={onChange}
-                  isRequired={true}
                   onBlur={onBlur}
                   value={value || ""}
                 />
@@ -2133,13 +2128,7 @@ export default function CartInvoiceCard({
                 fieldState: { error },
               }) => (
                 <Input
-                  classNames={{
-                    inputWrapper:
-                      "border-2 border-black rounded-md shadow-neo !bg-white hover:!bg-white focus-within:!bg-white data-[hover=true]:!bg-white group-data-[focus=true]:!bg-white",
-                    input: "!text-black placeholder:text-gray-400",
-                    label: "text-gray-600",
-                    innerWrapper: "!bg-white",
-                  }}
+                  variant="bordered"
                   fullWidth={true}
                   label="Apt, suite, unit, etc."
                   labelPlacement="inside"
@@ -2169,20 +2158,17 @@ export default function CartInvoiceCard({
                   fieldState: { error },
                 }) => (
                   <Input
-                    classNames={{
-                      inputWrapper:
-                        "border-2 border-black rounded-md shadow-neo !bg-white hover:!bg-white focus-within:!bg-white data-[hover=true]:!bg-white group-data-[focus=true]:!bg-white",
-                      input: "!text-black placeholder:text-gray-400",
-                      label: "text-gray-600",
-                      innerWrapper: "!bg-white",
-                    }}
+                    variant="bordered"
                     fullWidth={true}
-                    label={<span>City</span>}
+                    label={
+                      <span>
+                        City <span className="text-red-500">*</span>
+                      </span>
+                    }
                     labelPlacement="inside"
                     isInvalid={!!error}
                     errorMessage={error?.message}
                     onChange={onChange}
-                    isRequired={true}
                     onBlur={onBlur}
                     value={value || ""}
                   />
@@ -2198,20 +2184,17 @@ export default function CartInvoiceCard({
                   fieldState: { error },
                 }) => (
                   <Input
-                    classNames={{
-                      inputWrapper:
-                        "border-2 border-black rounded-md shadow-neo !bg-white hover:!bg-white focus-within:!bg-white data-[hover=true]:!bg-white group-data-[focus=true]:!bg-white",
-                      input: "!text-black placeholder:text-gray-400",
-                      label: "text-gray-600",
-                      innerWrapper: "!bg-white",
-                    }}
+                    variant="bordered"
                     fullWidth={true}
-                    label={<span>State/Province</span>}
+                    label={
+                      <span>
+                        State/Province <span className="text-red-500">*</span>
+                      </span>
+                    }
                     labelPlacement="inside"
                     isInvalid={!!error}
                     errorMessage={error?.message}
                     onChange={onChange}
-                    isRequired={true}
                     onBlur={onBlur}
                     value={value || ""}
                   />
@@ -2236,20 +2219,17 @@ export default function CartInvoiceCard({
                   fieldState: { error },
                 }) => (
                   <Input
-                    classNames={{
-                      inputWrapper:
-                        "border-2 border-black rounded-md shadow-neo !bg-white hover:!bg-white focus-within:!bg-white data-[hover=true]:!bg-white group-data-[focus=true]:!bg-white",
-                      input: "!text-black placeholder:text-gray-400",
-                      label: "text-gray-600",
-                      innerWrapper: "!bg-white",
-                    }}
+                    variant="bordered"
                     fullWidth={true}
-                    label={<span>Postal code</span>}
+                    label={
+                      <span>
+                        Postal code <span className="text-red-500">*</span>
+                      </span>
+                    }
                     labelPlacement="inside"
                     isInvalid={!!error}
                     errorMessage={error?.message}
                     onChange={onChange}
-                    isRequired={true}
                     onBlur={onBlur}
                     value={value || ""}
                   />
@@ -2265,20 +2245,17 @@ export default function CartInvoiceCard({
                   fieldState: { error },
                 }) => (
                   <CountryDropdown
-                    classNames={{
-                      trigger:
-                        "border-2 border-black rounded-md shadow-neo !bg-white hover:!bg-white data-[hover=true]:!bg-white data-[focus=true]:!bg-white",
-                      value: "!text-black",
-                      label: "text-gray-600 font-normal",
-                      innerWrapper: "!bg-white",
-                    }}
+                    variant="bordered"
                     aria-label="Select Country"
-                    label={<span>Country</span>}
+                    label={
+                      <span>
+                        Country <span className="text-red-500">*</span>
+                      </span>
+                    }
                     labelPlacement="inside"
                     isInvalid={!!error}
                     errorMessage={error?.message}
                     onChange={onChange}
-                    isRequired={true}
                     onBlur={onBlur}
                     value={value || ""}
                   />
@@ -2293,7 +2270,7 @@ export default function CartInvoiceCard({
           formType === "combined" &&
           shippingPickupPreference === "contact" && (
             <div className="space-y-4">
-              <h4 className="font-medium text-gray-700">
+              <h4 className="font-medium text-gray-700 dark:text-gray-300">
                 Select Pickup Locations
               </h4>
               {productsWithPickupLocations.map((product) => (
@@ -2307,17 +2284,13 @@ export default function CartInvoiceCard({
                     fieldState: { error },
                   }) => (
                     <Select
-                      className="shadow-neo rounded-md border-2 border-black bg-white"
-                      classNames={{
-                        trigger:
-                          "border-2 border-black rounded-md shadow-neo !bg-white hover:!bg-white data-[hover=true]:!bg-white data-[focus=true]:!bg-white",
-                        value: "!text-black",
-                        label: "text-gray-600",
-                        popoverContent:
-                          "border-2 border-black rounded-md bg-white",
-                        listbox: "!text-black",
-                      }}
-                      label={<span>{product.title} - Pickup Location</span>}
+                      variant="bordered"
+                      label={
+                        <span>
+                          {product.title} - Pickup Location{" "}
+                          <span className="text-red-500">*</span>
+                        </span>
+                      }
                       placeholder="Select pickup location"
                       isInvalid={!!error}
                       errorMessage={error?.message}
@@ -2328,7 +2301,6 @@ export default function CartInvoiceCard({
                           [product.id]: e.target.value,
                         }));
                       }}
-                      isRequired={true}
                       onBlur={onBlur}
                       value={value || ""}
                     >
@@ -2354,20 +2326,17 @@ export default function CartInvoiceCard({
               fieldState: { error },
             }) => (
               <Input
-                classNames={{
-                  inputWrapper:
-                    "border-2 border-black rounded-md shadow-neo !bg-white hover:!bg-white focus-within:!bg-white data-[hover=true]:!bg-white group-data-[focus=true]:!bg-white",
-                  input: "!text-black placeholder:text-gray-400",
-                  label: "text-gray-600",
-                  innerWrapper: "!bg-white",
-                }}
+                variant="bordered"
                 fullWidth={true}
-                label={<span>Enter {requiredInfo}</span>}
+                label={
+                  <span>
+                    Enter {requiredInfo} <span className="text-red-500">*</span>
+                  </span>
+                }
                 labelPlacement="inside"
                 isInvalid={!!error}
                 errorMessage={error?.message}
                 onChange={onChange}
-                isRequired={true}
                 onBlur={onBlur}
                 value={value || ""}
               />
@@ -2380,10 +2349,10 @@ export default function CartInvoiceCard({
 
   if (showInvoiceCard) {
     return (
-      <div className="flex min-h-screen w-full bg-white text-black">
+      <div className="flex min-h-screen w-full bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text">
         <div className="mx-auto flex w-full flex-col lg:flex-row">
           {/* Order Summary - Full width on mobile, half on desktop */}
-          <div className="w-full bg-white p-6 lg:w-1/2">
+          <div className="w-full bg-gray-50 p-6 dark:bg-gray-800 lg:w-1/2">
             <div className="sticky top-6">
               <h2 className="mb-6 text-2xl font-bold">Order Summary</h2>
 
@@ -2398,21 +2367,21 @@ export default function CartInvoiceCard({
                     <div className="flex-1">
                       <h3 className="font-medium">{product.title}</h3>
                       {product.selectedSize && (
-                        <p className="text-sm text-gray-600">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
                           Size: {product.selectedSize}
                         </p>
                       )}
                       {product.selectedVolume && (
-                        <p className="text-sm text-gray-600">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
                           Volume: {product.selectedVolume}
                         </p>
                       )}
                       {product.selectedBulkOption && (
-                        <p className="text-sm text-gray-600">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
                           Bundle: {product.selectedBulkOption} units
                         </p>
                       )}
-                      <p className="text-sm text-gray-600">
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
                         Quantity: {quantities[product.id] || 1}
                       </p>
                     </div>
@@ -2422,7 +2391,7 @@ export default function CartInvoiceCard({
 
               <div className="border-t pt-4">
                 <div className="space-y-3">
-                  <h4 className="font-semibold text-gray-700">
+                  <h4 className="font-semibold text-gray-700 dark:text-gray-300">
                     Cost Breakdown
                   </h4>
                   <div className="space-y-3">
@@ -2442,7 +2411,7 @@ export default function CartInvoiceCard({
                       return (
                         <div
                           key={product.id}
-                          className="space-y-2 border-l-2 border-gray-200 pl-3"
+                          className="space-y-2 border-l-2 border-gray-200 pl-3 dark:border-gray-600"
                         >
                           <div className="text-sm font-medium">
                             {product.title}{" "}
@@ -2462,7 +2431,7 @@ export default function CartInvoiceCard({
                           </div>
                           {discount > 0 && (
                             <>
-                              <div className="flex justify-between text-sm text-green-600">
+                              <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
                                 <span className="ml-2">
                                   {(discountCodes &&
                                     discountCodes[product.pubkey]) ||
@@ -2517,7 +2486,7 @@ export default function CartInvoiceCard({
 
               <button
                 onClick={() => onBackToCart?.()}
-                className="mt-4 text-black underline hover:text-gray-700"
+                className="mt-4 text-shopstr-purple underline hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light"
               >
                 ← Back to cart
               </button>
@@ -2525,7 +2494,7 @@ export default function CartInvoiceCard({
           </div>
 
           {/* Divider */}
-          <div className="h-px w-full bg-gray-300 lg:h-full lg:w-px"></div>
+          <div className="h-px w-full bg-gray-300 dark:bg-gray-600 lg:h-full lg:w-px"></div>
 
           {/* Right Side - Lightning Invoice - maintain consistent width */}
           <div className="w-full p-6 lg:w-1/2">
@@ -2539,7 +2508,7 @@ export default function CartInvoiceCard({
                   <div className="flex flex-col items-center justify-center">
                     {qrCodeUrl ? (
                       <>
-                        <h3 className="mt-3 text-center text-lg font-medium leading-6 text-dark-text">
+                        <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900 text-light-text dark:text-dark-text">
                           Don&apos;t refresh or close the page until the payment
                           has been confirmed!
                         </h3>
@@ -2562,12 +2531,12 @@ export default function CartInvoiceCard({
                           </p>
                           <ClipboardIcon
                             onClick={handleCopyInvoice}
-                            className={`ml-2 h-4 w-4 cursor-pointer text-dark-text ${
+                            className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
                               copiedToClipboard ? "hidden" : ""
                             }`}
                           />
                           <CheckIcon
-                            className={`ml-2 h-4 w-4 cursor-pointer text-dark-text ${
+                            className={`ml-2 h-4 w-4 cursor-pointer text-light-text dark:text-dark-text ${
                               copiedToClipboard ? "" : "hidden"
                             }`}
                           />
@@ -2581,7 +2550,7 @@ export default function CartInvoiceCard({
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center">
-                    <h3 className="mt-3 text-center text-lg font-medium leading-6 text-dark-text">
+                    <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
                       Payment confirmed!
                     </h3>
                     <Image
@@ -2601,10 +2570,10 @@ export default function CartInvoiceCard({
   }
 
   return (
-    <div className="flex min-h-screen w-full bg-white text-black">
+    <div className="flex min-h-screen w-full bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text">
       <div className="mx-auto flex w-full flex-col lg:flex-row">
         {/* Order Summary - Full width on mobile, half on desktop */}
-        <div className="w-full bg-white p-6 lg:w-1/2">
+        <div className="w-full bg-gray-50 p-6 dark:bg-gray-800 lg:w-1/2">
           <div className="sticky top-6">
             <h2 className="mb-6 text-2xl font-bold">Order Summary</h2>
 
@@ -2619,21 +2588,21 @@ export default function CartInvoiceCard({
                   <div className="flex-1">
                     <h3 className="font-medium">{product.title}</h3>
                     {product.selectedSize && (
-                      <p className="text-sm text-gray-600">
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
                         Size: {product.selectedSize}
                       </p>
                     )}
                     {product.selectedVolume && (
-                      <p className="text-sm text-gray-600">
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
                         Volume: {product.selectedVolume}
                       </p>
                     )}
                     {product.selectedBulkOption && (
-                      <p className="text-sm text-gray-600">
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
                         Bundle: {product.selectedBulkOption} units
                       </p>
                     )}
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
                       Quantity: {quantities[product.id] || 1}
                     </p>
                   </div>
@@ -2643,7 +2612,9 @@ export default function CartInvoiceCard({
 
             <div className="border-t pt-4">
               <div className="space-y-3">
-                <h4 className="font-semibold text-gray-700">Cost Breakdown</h4>
+                <h4 className="font-semibold text-gray-700 dark:text-gray-300">
+                  Cost Breakdown
+                </h4>
                 <div className="space-y-3">
                   {products.map((product) => {
                     const discount = appliedDiscounts[product.pubkey] || 0;
@@ -2673,7 +2644,7 @@ export default function CartInvoiceCard({
                     return (
                       <div
                         key={product.id}
-                        className="space-y-2 border-l-2 border-gray-200 pl-3"
+                        className="space-y-2 border-l-2 border-gray-200 pl-3 dark:border-gray-600"
                       >
                         <div className="text-sm font-medium">
                           {product.title}{" "}
@@ -2681,7 +2652,7 @@ export default function CartInvoiceCard({
                             quantities[product.id]! > 1 &&
                             `(x${quantities[product.id]})`}
                         </div>
-                        <div className="flex justify-between text-sm text-gray-500">
+                        <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400">
                           <span className="ml-2">Price:</span>
                           <span>
                             {formatWithCommas(originalPrice, product.currency)}
@@ -2706,7 +2677,7 @@ export default function CartInvoiceCard({
                           )}
                         {discount > 0 && (
                           <>
-                            <div className="flex justify-between text-sm text-green-600">
+                            <div className="flex justify-between text-sm text-green-600 dark:text-green-400">
                               <span className="ml-2">
                                 {(discountCodes &&
                                   discountCodes[product.pubkey]) ||
@@ -2763,7 +2734,7 @@ export default function CartInvoiceCard({
 
             <button
               onClick={() => onBackToCart?.()}
-              className="mt-4 text-black underline hover:text-gray-700"
+              className="mt-4 text-shopstr-purple underline hover:text-shopstr-purple-light dark:text-shopstr-yellow dark:hover:text-shopstr-yellow-light"
             >
               ← Back to cart
             </button>
@@ -2771,7 +2742,7 @@ export default function CartInvoiceCard({
         </div>
 
         {/* Divider */}
-        <div className="h-px w-full bg-gray-300 lg:h-full lg:w-px"></div>
+        <div className="h-px w-full bg-gray-300 dark:bg-gray-600 lg:h-full lg:w-px"></div>
 
         {/* Right Side - Order Type Selection, Forms, and Payment */}
         <div className="w-full p-6 lg:w-1/2">
@@ -2786,10 +2757,10 @@ export default function CartInvoiceCard({
                     {/* Mixed shipping types - only show combined */}
                     <button
                       onClick={() => handleOrderTypeSelection("combined")}
-                      className="shadow-neo w-full transform rounded-md border-2 border-black bg-white p-4 text-left transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+                      className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
                     >
                       <div className="font-medium">Mixed delivery</div>
-                      <div className="text-sm text-gray-500">
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
                         {hasShippingPickupProducts
                           ? "Products require different delivery methods (includes flexible shipping/pickup options)"
                           : "Products require different delivery methods"}
@@ -2803,19 +2774,19 @@ export default function CartInvoiceCard({
                     {/* All products have Free/Pickup - show shipping and contact options */}
                     <button
                       onClick={() => handleOrderTypeSelection("shipping")}
-                      className="shadow-neo w-full transform rounded-md border-2 border-black bg-white p-4 text-left transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+                      className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
                     >
-                      <div className="font-medium">Free or added shipping</div>
-                      <div className="text-sm text-gray-500">
+                      <div className="font-medium">Free shipping</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
                         Get products shipped to your address
                       </div>
                     </button>
                     <button
                       onClick={() => handleOrderTypeSelection("contact")}
-                      className="shadow-neo w-full transform rounded-md border-2 border-black bg-white p-4 text-left transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+                      className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
                     >
                       <div className="font-medium">Pickup</div>
-                      <div className="text-sm text-gray-500">
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
                         Arrange pickup with seller
                       </div>
                     </button>
@@ -2824,22 +2795,22 @@ export default function CartInvoiceCard({
                   uniqueShippingTypes.includes("Added Cost") ? (
                   <button
                     onClick={() => handleOrderTypeSelection("shipping")}
-                    className="shadow-neo w-full transform rounded-md border-2 border-black bg-white p-4 text-left transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+                    className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
                   >
                     <div className="font-medium">
                       Online order with shipping
                     </div>
-                    <div className="text-sm text-gray-500">
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
                       Get products shipped to your address
                     </div>
                   </button>
                 ) : (
                   <button
                     onClick={() => handleOrderTypeSelection("contact")}
-                    className="shadow-neo w-full transform rounded-md border-2 border-black bg-white p-4 text-left transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
+                    className="w-full rounded-lg border border-gray-300 bg-white p-4 text-left hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:hover:bg-gray-600"
                   >
                     <div className="font-medium">Online order</div>
-                    <div className="text-sm text-gray-500">
+                    <div className="text-sm text-gray-500 dark:text-gray-400">
                       Digital or pickup delivery
                     </div>
                   </button>
@@ -2854,7 +2825,7 @@ export default function CartInvoiceCard({
               <h2 className="mb-6 text-2xl font-bold">
                 Shipping/Pickup Products Preference
               </h2>
-              <p className="mb-4 text-gray-600">
+              <p className="mb-4 text-gray-600 dark:text-gray-400">
                 Some products offer both shipping and pickup options. How would
                 you like to handle these products?
               </p>
@@ -2894,15 +2865,15 @@ export default function CartInvoiceCard({
 
                     setTotalCost(subtotalCost + shippingTotal);
                   }}
-                  className={`shadow-neo w-full transform rounded-md border-2 border-black p-4 text-left transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                  className={`w-full rounded-lg border p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-600 ${
                     shippingPickupPreference === "shipping"
-                      ? "bg-primary-yellow"
-                      : "bg-white"
+                      ? "border-shopstr-purple bg-purple-50 dark:border-shopstr-yellow dark:bg-yellow-50"
+                      : "border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700"
                   }`}
                 >
-                  <div className="font-medium">Free or added shipping</div>
-                  <div className="text-sm text-gray-500">
-                    Arrange shipping for products that offer it
+                  <div className="font-medium">Free shipping</div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    Use free shipping for products that offer it
                   </div>
                 </button>
                 <button
@@ -2939,14 +2910,14 @@ export default function CartInvoiceCard({
 
                     setTotalCost(subtotalCost + shippingTotal);
                   }}
-                  className={`shadow-neo w-full transform rounded-md border-2 border-black p-4 text-left transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                  className={`w-full rounded-lg border p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-600 ${
                     shippingPickupPreference === "contact"
-                      ? "bg-primary-yellow"
-                      : "bg-white"
+                      ? "border-shopstr-purple bg-purple-50 dark:border-shopstr-yellow dark:bg-yellow-50"
+                      : "border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700"
                   }`}
                 >
                   <div className="font-medium">Pickup</div>
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
                     Arrange pickup for products that offer it
                   </div>
                 </button>
@@ -2963,15 +2934,7 @@ export default function CartInvoiceCard({
                       <div key={product.id} className="space-y-2">
                         <h4 className="font-medium">{product.title}</h4>
                         <Select
-                          classNames={{
-                            trigger:
-                              "border-2 border-black rounded-md shadow-neo !bg-white hover:!bg-white data-[hover=true]:!bg-white data-[focus=true]:!bg-white",
-                            value: "!text-black",
-                            label: "text-gray-600",
-                            popoverContent:
-                              "border-2 border-black rounded-md bg-white",
-                            listbox: "!text-black",
-                          }}
+                          variant="bordered"
                           label="Select pickup location"
                           placeholder="Choose a pickup location"
                           value={selectedPickupLocations[product.id] || ""}
@@ -3035,6 +2998,10 @@ export default function CartInvoiceCard({
                     }`}
                     disabled={!isFormValid}
                     onClick={() => {
+                      if (!isLoggedIn) {
+                        onOpen();
+                        return;
+                      }
                       handleFormSubmit((data) =>
                         onFormSubmit(data, "lightning")
                       )();
@@ -3051,6 +3018,10 @@ export default function CartInvoiceCard({
                       }`}
                       disabled={!isFormValid}
                       onClick={() => {
+                        if (!isLoggedIn) {
+                          onOpen();
+                          return;
+                        }
                         handleFormSubmit((data) =>
                           onFormSubmit(data, "cashu")
                         )();
@@ -3070,6 +3041,10 @@ export default function CartInvoiceCard({
                       disabled={!isFormValid || isNwcLoading}
                       isLoading={isNwcLoading}
                       onClick={() => {
+                        if (!isLoggedIn) {
+                          onOpen();
+                          return;
+                        }
                         handleFormSubmit((data) => onFormSubmit(data, "nwc"))();
                       }}
                       startContent={<WalletIcon className="h-6 w-6" />}
