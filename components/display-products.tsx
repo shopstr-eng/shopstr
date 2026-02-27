@@ -238,9 +238,9 @@ const DisplayProducts = ({
     }
 
     const allParsed = productEventContext.productEvents
-      .filter((e) => e.kind !== 1)
-      .map((e) => parseTags(e))
-      .filter((p): p is ProductData => !!p);
+      .filter((e: NostrEvent) => e.kind !== 1)
+      .map((e: NostrEvent) => parseTags(e))
+      .filter((p: ProductData | undefined): p is ProductData => !!p);
 
     const slug = getListingSlug(product, allParsed);
     if (slug) {
