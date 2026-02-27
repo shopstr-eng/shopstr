@@ -73,7 +73,6 @@ export interface ProfileData {
     lud16?: string;
     nip05?: string;
     payment_preference?: string;
-    fiat_options?: string[];
     shopstr_donation?: number;
   };
   created_at: number;
@@ -84,10 +83,6 @@ export interface Transaction {
   amount: number;
   date: number;
 }
-
-export type FiatOptionsType = {
-  [key: string]: string;
-};
 
 export interface ShippingFormData {
   Name: string;

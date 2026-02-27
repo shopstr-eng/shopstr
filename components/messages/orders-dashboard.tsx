@@ -406,50 +406,19 @@ const OrdersDashboard = () => {
                 case "lightning":
                   paymentMethod = "Lightning";
                   break;
-                case "cashapp":
-                case "cash app":
-                  paymentMethod = "CashApp";
-                  break;
-                case "venmo":
-                  paymentMethod = "Venmo";
-                  break;
-                case "zelle":
-                  paymentMethod = "Zelle";
-                  break;
-                case "paypal":
-                  paymentMethod = "PayPal";
-                  break;
-                case "applepay":
-                case "apple pay":
-                  paymentMethod = "Apple Pay";
-                  break;
-                case "cash":
-                  paymentMethod = "Cash";
-                  break;
                 default:
                   paymentMethod =
                     paymentType.charAt(0).toUpperCase() + paymentType.slice(1);
               }
             } else if (messageEvent.content) {
               const content = messageEvent.content.toLowerCase();
-              if (content.includes("cashapp") || content.includes("cash app")) {
-                paymentMethod = "CashApp";
-              } else if (
-                content.includes("lightning") ||
-                content.includes("lnurl")
-              ) {
+              if (content.includes("lightning") || content.includes("lnurl")) {
                 paymentMethod = "Lightning";
               } else if (
                 content.includes("cashu") ||
                 content.includes("ecash")
               ) {
                 paymentMethod = "Cashu";
-              } else if (content.includes("cash")) {
-                paymentMethod = "Cash";
-              } else if (content.includes("venmo")) {
-                paymentMethod = "Venmo";
-              } else if (content.includes("paypal")) {
-                paymentMethod = "PayPal";
               }
             }
 

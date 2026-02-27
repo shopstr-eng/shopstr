@@ -88,8 +88,6 @@ export default function OrderSummary() {
       cashu: "Cashu eCash",
       ecash: "Cashu eCash",
       nwc: "Nostr Wallet Connect",
-      cash: "Cash",
-      fiat: "Fiat Payment",
     };
     return methods[method] || method;
   };

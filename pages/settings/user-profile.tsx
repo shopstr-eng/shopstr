@@ -16,7 +16,6 @@ import {
   EyeSlashIcon,
   EyeIcon,
 } from "@heroicons/react/24/outline";
-import { FiatOptionsType } from "@/utils/types/types";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
   SignerContext,
@@ -53,7 +52,6 @@ const UserProfilePage = () => {
       website: "",
       lud16: "", // Lightning address
       payment_preference: "ecash",
-      fiat_options: {} as FiatOptionsType,
       shopstr_donation: 2.1,
     },
   });
@@ -463,109 +461,9 @@ const UserProfilePage = () => {
                       >
                         Lightning (Bitcoin)
                       </SelectItem>
-                      <SelectItem
-                        key="fiat"
-                        value="fiat"
-                        className="text-light-text dark:text-dark-text"
-                      >
-                        Local Currency (Fiat)
-                      </SelectItem>
                     </Select>
                   )}
                 />
-
-                <div className="pb-4">
-                  <label className="mb-2 block text-lg text-light-text dark:text-dark-text">
-                    Fiat payment options
-                  </label>
-                  <div className="space-y-4">
-                    {[
-                      { key: "cash", label: "Cash", requiresUsername: false },
-                      { key: "venmo", label: "Venmo", requiresUsername: true },
-                      { key: "zelle", label: "Zelle", requiresUsername: true },
-                      {
-                        key: "cashapp",
-                        label: "Cash App",
-                        requiresUsername: true,
-                      },
-                      {
-                        key: "applepay",
-                        label: "Apple Pay",
-                        requiresUsername: true,
-                      },
-                      {
-                        key: "googlepay",
-                        label: "Google Pay",
-                        requiresUsername: true,
-                      },
-                      {
-                        key: "paypal",
-                        label: "PayPal",
-                        requiresUsername: true,
-                      },
-                    ].map((option) => (
-                      <div
-                        key={option.key}
-                        className="flex items-center space-x-4"
-                      >
-                        <input
-                          type="checkbox"
-                          id={option.key}
-                          checked={Object.keys(
-                            watch("fiat_options") || {}
-                          ).includes(option.key)}
-                          onChange={(e) => {
-                            const currentOptions = watch("fiat_options") || {};
-                            if (e.target.checked) {
-                              if (option.requiresUsername) {
-                                setValue("fiat_options", {
-                                  ...currentOptions,
-                                  [option.key]: "",
-                                });
-                              } else {
-                                setValue("fiat_options", {
-                                  ...currentOptions,
-                                  [option.key]: "available",
-                                });
-                              }
-                            } else {
-                              const { [option.key]: _removed, ...rest } =
-                                currentOptions;
-                              setValue("fiat_options", rest);
-                            }
-                          }}
-                          className="h-4 w-4 rounded border-gray-300 text-shopstr-purple focus:ring-shopstr-purple"
-                        />
-                        <label
-                          htmlFor={option.key}
-                          className="text-light-text dark:text-dark-text"
-                        >
-                          {option.label}
-                        </label>
-                        {option.requiresUsername &&
-                          Object.keys(watch("fiat_options") || {}).includes(
-                            option.key
-                          ) && (
-                            <Input
-                              size="sm"
-                              placeholder={`Enter your ${option.label} username/tag`}
-                              value={watch("fiat_options")?.[option.key] || ""}
-                              onChange={(e) => {
-                                const currentOptions =
-                                  watch("fiat_options") || {};
-                                setValue("fiat_options", {
-                                  ...currentOptions,
-                                  [option.key]: e.target.value,
-                                });
-                              }}
-                              className="flex-1 text-light-text dark:text-dark-text"
-                              variant="bordered"
-                            />
-                          )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
 
                 <Controller
                   name="shopstr_donation"

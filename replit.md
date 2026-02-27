@@ -26,7 +26,7 @@ Preferred communication style: Simple, everyday language.
 
 ### Payment Processing
 
-- **Multi-Payment Support**: Lightning Network (invoice generation, LNURL), Cashu Ecash (token minting/redemption), and fiat currency display.
+- **Multi-Payment Support**: Lightning Network (invoice generation, LNURL), Cashu Ecash (token minting/redemption), NWC (Nostr Wallet Connect), and Zapsnags. Fiat-to-Bitcoin price conversion is supported for display purposes, but no out-of-band fiat payment methods (Venmo, Cash App, Zelle, PayPal, etc.) are offered.
 - **Payment Flow**: Invoice generation, ecash token redemption, quantity-based pricing.
 - **Order Management**: Encrypted buyer-seller communication (gift-wrapped messages), payment confirmation proof, post-fulfillment review system.
 

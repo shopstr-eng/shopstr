@@ -9,10 +9,6 @@ import {
   Button,
   Image,
   useDisclosure,
-  Modal,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
   Select,
   SelectItem,
   Input,
@@ -22,7 +18,6 @@ import {
   BoltIcon,
   CheckIcon,
   ClipboardIcon,
-  CurrencyDollarIcon,
   WalletIcon,
 } from "@heroicons/react/24/outline";
 import { fiat } from "@getalby/lightning-tools";
@@ -64,8 +59,6 @@ import { Controller } from "react-hook-form";
 export default function ProductInvoiceCard({
   productData,
   setIsBeingPaid,
-  setFiatOrderIsPlaced,
-  setFiatOrderFailed,
   setInvoiceIsPaid,
   setInvoiceGenerationFailed,
   setCashuPaymentSent,
@@ -79,8 +72,6 @@ export default function ProductInvoiceCard({
 }: {
   productData: ProductData;
   setIsBeingPaid: (isBeingPaid: boolean) => void;
-  setFiatOrderIsPlaced: (fiatOrderIsPlaced: boolean) => void;
-  setFiatOrderFailed: (fiatOrderFailed: boolean) => void;
   setInvoiceIsPaid: (invoiceIsPaid: boolean) => void;
   setInvoiceGenerationFailed: (invoiceGenerationFailed: boolean) => void;
   setCashuPaymentSent: (cashuPaymentSent: boolean) => void;
@@ -113,8 +104,6 @@ export default function ProductInvoiceCard({
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [invoice, setInvoice] = useState("");
   const [copiedToClipboard, setCopiedToClipboard] = useState(false);
-
-  const [orderConfirmed, setOrderConfirmed] = useState(false);
 
   const pendingOrderRef = useRef<{
     orderId: string;
@@ -223,14 +212,8 @@ export default function ProductInvoiceCard({
     }
   };
 
-  const [fiatPaymentOptions, setFiatPaymentOptions] = useState({});
-  const [showFiatTypeOption, setShowFiatTypeOption] = useState(false);
-  const [selectedFiatOption, setSelectedFiatOption] = useState("");
   const [isNwcLoading, setIsNwcLoading] = useState(false);
   const [nwcInfo, setNwcInfo] = useState<any | null>(null);
-  const [showFiatPaymentInstructions, setShowFiatPaymentInstructions] =
-    useState(false);
-  const [fiatPaymentConfirmed, setFiatPaymentConfirmed] = useState(false);
 
   // State for failure modal
   const [showFailureModal, setShowFailureModal] = useState(false);
@@ -266,7 +249,6 @@ export default function ProductInvoiceCard({
   }, [paymentConfirmed]);
 
   const [isFormValid, setIsFormValid] = useState(false);
-  const [pendingPaymentData, setPendingPaymentData] = useState<any>(null);
 
   const {
     handleSubmit: handleFormSubmit,
@@ -307,9 +289,6 @@ export default function ProductInvoiceCard({
   }, []);
 
   useEffect(() => {
-    const sellerProfile = profileContext.profileData.get(productData.pubkey);
-    const fiatOptions = sellerProfile?.content?.fiat_options || {};
-    setFiatPaymentOptions(fiatOptions);
     const loadNwcInfo = () => {
       const { nwcInfo: infoString } = getLocalStorageData();
       if (infoString) {
@@ -579,7 +558,7 @@ export default function ProductInvoiceCard({
 
   const onFormSubmit = async (
     data: { [x: string]: string },
-    paymentType?: "fiat" | "lightning" | "cashu" | "nwc"
+    paymentType?: "lightning" | "cashu" | "nwc"
   ) => {
     try {
       // Use discounted total instead of original price
@@ -629,19 +608,6 @@ export default function ProductInvoiceCard({
           shippingState: data["State/Province"],
           shippingCountry: data["Country"],
         };
-      }
-
-      if (paymentType === "fiat") {
-        setPendingPaymentData(paymentData); // Store the payment data
-        const fiatOptionKeys = Object.keys(fiatPaymentOptions);
-        if (fiatOptionKeys.length === 1) {
-          setSelectedFiatOption(fiatOptionKeys[0]!);
-          // Show payment instructions
-          setShowFiatPaymentInstructions(true);
-        } else if (fiatOptionKeys.length > 1) {
-          setShowFiatTypeOption(true);
-        }
-        return; // Important: exit early for fiat payments
       }
 
       const emailAddressTag =
@@ -775,420 +741,6 @@ export default function ProductInvoiceCard({
     } finally {
       nwc?.close();
       setIsNwcLoading(false);
-    }
-  };
-
-  const handleFiatPayment = async (convertedPrice: number, data: any) => {
-    try {
-      if (
-        data.shippingName ||
-        data.shippingAddress ||
-        data.shippingCity ||
-        data.shippingPostalCode ||
-        data.shippingState ||
-        data.shippingCountry
-      ) {
-        validatePaymentData(convertedPrice, {
-          Name: data.shippingName || "",
-          Address: data.shippingAddress || "",
-          Unit: data.shippingUnitNo || "",
-          City: data.shippingCity || "",
-          "Postal Code": data.shippingPostalCode || "",
-          "State/Province": data.shippingState || "",
-          Country: data.shippingCountry || "",
-          Required: data.additionalInfo || "",
-        });
-      } else if (data.contact || data.contactType || data.contactInstructions) {
-        validatePaymentData(convertedPrice, {
-          Contact: data.contact || "",
-          "Contact Type": data.contactType || "",
-          Instructions: data.contactInstructions || "",
-          Required: data.additionalInfo || "",
-        });
-      } else {
-        validatePaymentData(convertedPrice);
-      }
-      const title = productData.title;
-      const pubkey = productData.pubkey;
-      const required = productData.required;
-      const orderId = uuidv4();
-
-      if (pendingOrderRef.current && !pendingOrderRef.current.orderId) {
-        pendingOrderRef.current.orderId = orderId;
-      }
-
-      // Construct address tag early so it can be passed to all messages
-      const addressTag =
-        data.shippingName && data.shippingAddress
-          ? data.shippingUnitNo
-            ? `${data.shippingName}, ${data.shippingAddress}, ${data.shippingUnitNo}, ${data.shippingCity}, ${data.shippingState}, ${data.shippingPostalCode}, ${data.shippingCountry}`
-            : `${data.shippingName}, ${data.shippingAddress}, ${data.shippingCity}, ${data.shippingState}, ${data.shippingPostalCode}, ${data.shippingCountry}`
-          : undefined;
-
-      let productDetails = "";
-      if (selectedSize) {
-        productDetails += " in size " + selectedSize;
-      }
-      if (selectedVolume) {
-        if (productDetails) {
-          productDetails += " and a " + selectedVolume;
-        } else {
-          productDetails += " in a " + selectedVolume;
-        }
-      }
-      if (selectedBulkOption) {
-        if (productDetails) {
-          productDetails += " (bulk: " + selectedBulkOption + " units)";
-        } else {
-          productDetails += " (bulk: " + selectedBulkOption + " units)";
-        }
-      }
-      if (selectedPickupLocation) {
-        if (productDetails) {
-          productDetails += " (pickup at: " + selectedPickupLocation + ")";
-        } else {
-          productDetails += " (pickup at: " + selectedPickupLocation + ")";
-        }
-      }
-
-      const paymentMessage =
-        "You have received an order from " +
-        (userNPub || "a guest buyer") +
-        " for your " +
-        title +
-        " listing on Shopstr" +
-        productDetails +
-        "! Check your " +
-        selectedFiatOption +
-        " account for the payment.";
-
-      await sendPaymentAndContactMessage(
-        pubkey,
-        paymentMessage,
-        true,
-        false,
-        false,
-        orderId,
-        selectedFiatOption.toLowerCase(),
-        selectedFiatOption.toLowerCase() === "cash"
-          ? "in-person"
-          : (fiatPaymentOptions as any)[selectedFiatOption] ||
-              selectedFiatOption,
-        undefined,
-        undefined,
-        undefined,
-        addressTag,
-        selectedPickupLocation || undefined
-      );
-
-      if (required && required !== "") {
-        if (data.additionalInfo) {
-          const additionalMessage =
-            "Additional customer information: " + data.additionalInfo;
-          await sendPaymentAndContactMessage(
-            pubkey,
-            additionalMessage,
-            false,
-            false,
-            false,
-            orderId
-          );
-        }
-      }
-
-      if (
-        !(
-          data.shippingName === undefined &&
-          data.shippingAddress === undefined &&
-          data.shippingUnitNo === undefined &&
-          data.shippingCity === undefined &&
-          data.shippingPostalCode === undefined &&
-          data.shippingState === undefined &&
-          data.shippingCountry === undefined &&
-          data.contact === undefined &&
-          data.contactType === undefined &&
-          data.contactInstructions === undefined
-        )
-      ) {
-        if (
-          productData.shippingType === "Added Cost" ||
-          productData.shippingType === "Free" ||
-          (productData.shippingType === "Free/Pickup" &&
-            formType === "shipping")
-        ) {
-          let productDetails = "";
-          if (selectedSize) {
-            productDetails += " in size " + selectedSize;
-          }
-          if (selectedVolume) {
-            if (productDetails) {
-              productDetails += " and a " + selectedVolume;
-            } else {
-              productDetails += " in a " + selectedVolume;
-            }
-          }
-          if (selectedBulkOption) {
-            if (productDetails) {
-              productDetails += " (bulk: " + selectedBulkOption + " units)";
-            } else {
-              productDetails += " (bulk: " + selectedBulkOption + " units)";
-            }
-          }
-          if (selectedPickupLocation) {
-            if (productDetails) {
-              productDetails += " (pickup at: " + selectedPickupLocation + ")";
-            } else {
-              productDetails += " (pickup at: " + selectedPickupLocation + ")";
-            }
-          }
-
-          let contactMessage = "";
-          if (!data.shippingUnitNo) {
-            contactMessage =
-              "Please ship the product" +
-              productDetails +
-              " to " +
-              data.shippingName +
-              " at " +
-              data.shippingAddress +
-              ", " +
-              data.shippingCity +
-              ", " +
-              data.shippingPostalCode +
-              ", " +
-              data.shippingState +
-              ", " +
-              data.shippingCountry +
-              ".";
-          } else {
-            contactMessage =
-              "Please ship the product" +
-              productDetails +
-              " to " +
-              data.shippingName +
-              " at " +
-              data.shippingAddress +
-              " " +
-              data.shippingUnitNo +
-              ", " +
-              data.shippingCity +
-              ", " +
-              data.shippingPostalCode +
-              ", " +
-              data.shippingState +
-              ", " +
-              data.shippingCountry +
-              ".";
-          }
-          const addressTag = data.shippingUnitNo
-            ? `${data.shippingName}, ${data.shippingAddress}, ${data.shippingUnitNo}, ${data.shippingCity}, ${data.shippingState}, ${data.shippingPostalCode}, ${data.shippingCountry}`
-            : `${data.shippingName}, ${data.shippingAddress}, ${data.shippingCity}, ${data.shippingState}, ${data.shippingPostalCode}, ${data.shippingCountry}`;
-          await sendPaymentAndContactMessage(
-            pubkey,
-            contactMessage,
-            false,
-            false,
-            false,
-            orderId,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            undefined,
-            addressTag
-          );
-
-          if (userPubkey) {
-            const fiatReference =
-              selectedFiatOption.toLowerCase() === "cash"
-                ? "in-person"
-                : (fiatPaymentOptions as any)[selectedFiatOption] ||
-                  selectedFiatOption;
-            const fiatProof =
-              selectedFiatOption.toLowerCase() === "cash"
-                ? "in-person"
-                : (fiatPaymentOptions as any)[selectedFiatOption] || "";
-            const receiptMessage =
-              "Your order for " +
-              productData.title +
-              productDetails +
-              " was processed successfully! If applicable, you should be receiving delivery information from " +
-              nip19.npubEncode(productData.pubkey) +
-              " as soon as they review your order.";
-            await sendPaymentAndContactMessage(
-              userPubkey,
-              receiptMessage,
-              false,
-              true, // isReceipt is true
-              false,
-              orderId,
-              selectedFiatOption.toLowerCase(),
-              fiatReference,
-              fiatProof,
-              undefined,
-              undefined,
-              addressTag,
-              selectedPickupLocation || undefined
-            );
-          }
-        } else if (
-          productData.shippingType === "N/A" ||
-          productData.shippingType === "Pickup" ||
-          ((productData.shippingType === "Free/Pickup" ||
-            productData.shippingType === "Added Cost/Pickup") &&
-            formType === "contact")
-        ) {
-          await sendInquiryDM(productData.pubkey, productData.title);
-
-          let productDetails = "";
-          if (selectedSize) {
-            productDetails += " in size " + selectedSize;
-          }
-          if (selectedVolume) {
-            if (productDetails) {
-              productDetails += " and a " + selectedVolume;
-            } else {
-              productDetails += " in a " + selectedVolume;
-            }
-          }
-          if (selectedBulkOption) {
-            if (productDetails) {
-              productDetails += " (bulk: " + selectedBulkOption + " units)";
-            } else {
-              productDetails += " (bulk: " + selectedBulkOption + " units)";
-            }
-          }
-          if (selectedPickupLocation) {
-            if (productDetails) {
-              productDetails += " (pickup at: " + selectedPickupLocation + ")";
-            } else {
-              productDetails += " (pickup at: " + selectedPickupLocation + ")";
-            }
-          }
-
-          if (userPubkey) {
-            const receiptMessage =
-              "Your order for " +
-              productData.title +
-              productDetails +
-              " was processed successfully! If applicable, you should be receiving delivery information from " +
-              nip19.npubEncode(productData.pubkey) +
-              " as soon as they review your order.";
-            const fiatReference =
-              selectedFiatOption.toLowerCase() === "cash"
-                ? "in-person"
-                : (fiatPaymentOptions as any)[selectedFiatOption] ||
-                  selectedFiatOption;
-            const fiatProof =
-              selectedFiatOption.toLowerCase() === "cash"
-                ? "in-person"
-                : (fiatPaymentOptions as any)[selectedFiatOption] || "";
-            await sendPaymentAndContactMessage(
-              userPubkey,
-              receiptMessage,
-              false,
-              true,
-              false,
-              orderId,
-              selectedFiatOption.toLowerCase(),
-              fiatReference,
-              fiatProof,
-              undefined,
-              undefined,
-              undefined,
-              selectedPickupLocation || undefined
-            );
-          }
-        }
-      } else {
-        let productDetails = "";
-        if (selectedSize) {
-          productDetails += " in size " + selectedSize;
-        }
-        if (selectedVolume) {
-          if (productDetails) {
-            productDetails += " and a " + selectedVolume;
-          } else {
-            productDetails += " in a " + selectedVolume;
-          }
-        }
-        if (selectedBulkOption) {
-          if (productDetails) {
-            productDetails += " (bulk: " + selectedBulkOption + " units)";
-          } else {
-            productDetails += " (bulk: " + selectedBulkOption + " units)";
-          }
-        }
-        if (selectedPickupLocation) {
-          if (productDetails) {
-            productDetails += " (pickup at: " + selectedPickupLocation + ")";
-          } else {
-            productDetails += " (pickup at: " + selectedPickupLocation + ")";
-          }
-        }
-
-        const fiatReference =
-          selectedFiatOption.toLowerCase() === "cash"
-            ? "in-person"
-            : (fiatPaymentOptions as any)[selectedFiatOption] ||
-              selectedFiatOption;
-        const fiatProof =
-          selectedFiatOption.toLowerCase() === "cash"
-            ? "in-person"
-            : (fiatPaymentOptions as any)[selectedFiatOption] || "";
-        const receiptMessage =
-          "Thank you for your purchase of " +
-          productData.title +
-          productDetails +
-          " from " +
-          nip19.npubEncode(productData.pubkey) +
-          ".";
-        await sendPaymentAndContactMessage(
-          userPubkey!,
-          receiptMessage,
-          false,
-          true, // isReceipt is true
-          false,
-          orderId,
-          selectedFiatOption.toLowerCase(),
-          fiatReference,
-          fiatProof,
-          undefined,
-          undefined,
-          addressTag,
-          selectedPickupLocation || undefined
-        );
-      }
-      setFiatOrderIsPlaced(true);
-      setFormType(null);
-      setOrderConfirmed(true);
-
-      try {
-        sessionStorage.setItem(
-          "orderSummary",
-          JSON.stringify({
-            productTitle: title,
-            productImage: productData.images[0] || "",
-            amount: String(productData.totalCost),
-            currency: productData.currency === "USD" ? "USD" : "sats",
-            paymentMethod: selectedFiatOption || "fiat",
-            orderId: orderId || "",
-            shippingCost: productData.shippingCost
-              ? String(productData.shippingCost)
-              : undefined,
-            selectedSize,
-            selectedVolume,
-            selectedBulkOption: selectedBulkOption
-              ? String(selectedBulkOption)
-              : undefined,
-            shippingAddress: addressTag,
-            pickupLocation: selectedPickupLocation || undefined,
-            sellerPubkey: pubkey,
-          })
-        );
-      } catch {}
-    } catch (error) {
-      setFiatOrderFailed(true);
     }
   };
 
@@ -2833,27 +2385,6 @@ export default function ProductInvoiceCard({
                     </h3>
                   )}
 
-                  {Object.keys(fiatPaymentOptions).length > 0 && (
-                    <Button
-                      className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
-                        !isFormValid ? "cursor-not-allowed opacity-50" : ""
-                      }`}
-                      disabled={!isFormValid}
-                      onClick={() => {
-                        if (!isLoggedIn) {
-                          onOpen();
-                          return;
-                        }
-                        handleFormSubmit((data) =>
-                          onFormSubmit(data, "fiat")
-                        )();
-                      }}
-                      startContent={<CurrencyDollarIcon className="h-6 w-6" />}
-                    >
-                      Pay with Fiat
-                    </Button>
-                  )}
-
                   <Button
                     className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
                       !isFormValid ? "cursor-not-allowed opacity-50" : ""
@@ -2921,180 +2452,8 @@ export default function ProductInvoiceCard({
               </form>
             </>
           )}
-
-          {/* Order Confirmed Display */}
-          {orderConfirmed && (
-            <div className="flex flex-col items-center justify-center">
-              <h3 className="mt-3 text-center text-lg font-medium leading-6 text-gray-900">
-                Order confirmed!
-              </h3>
-              <Image
-                alt="Payment Confirmed"
-                className="object-cover"
-                src="../payment-confirmed.gif"
-                width={350}
-              />
-            </div>
-          )}
         </div>
       </div>
-
-      {/* Fiat Payment Instructions */}
-      {showFiatPaymentInstructions && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="max-w-md rounded-lg bg-white p-8 text-center dark:bg-gray-800">
-            {selectedFiatOption === "cash" ? (
-              <>
-                <h3 className="mb-4 text-2xl font-bold text-gray-900 dark:text-white">
-                  Cash Payment
-                </h3>
-                <p className="mb-6 text-gray-600 dark:text-gray-400">
-                  You will need{" "}
-                  {formatWithCommas(
-                    productData.totalCost,
-                    productData.currency
-                  )}{" "}
-                  in cash for this order.
-                </p>
-                <div className="mb-6 flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="paymentConfirmed"
-                    checked={fiatPaymentConfirmed}
-                    onChange={(e) => setFiatPaymentConfirmed(e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 text-shopstr-purple focus:ring-shopstr-purple"
-                  />
-                  <label
-                    htmlFor="paymentConfirmed"
-                    className="text-left text-gray-700 dark:text-gray-300"
-                  >
-                    I will have the sufficient cash to complete the order upon
-                    pickup or delivery
-                  </label>
-                </div>
-              </>
-            ) : (
-              <>
-                <h3 className="mb-4 text-2xl font-bold text-gray-900 dark:text-white">
-                  Send Payment
-                </h3>
-                <p className="mb-4 text-gray-600 dark:text-gray-400">
-                  Please send{" "}
-                  {formatWithCommas(
-                    productData.totalCost,
-                    productData.currency
-                  )}{" "}
-                  to:
-                </p>
-                <div className="mb-6 rounded-lg bg-gray-100 p-4 dark:bg-gray-700">
-                  <p className="font-semibold text-gray-900 dark:text-white">
-                    {selectedFiatOption}:{" "}
-                    {profileContext.profileData.get(productData.pubkey)?.content
-                      ?.fiat_options?.[selectedFiatOption] || "N/A"}
-                  </p>
-                </div>
-                <div className="mb-6 flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="paymentConfirmed"
-                    checked={fiatPaymentConfirmed}
-                    onChange={(e) => setFiatPaymentConfirmed(e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 text-shopstr-purple focus:ring-shopstr-purple"
-                  />
-                  <label
-                    htmlFor="paymentConfirmed"
-                    className="text-gray-700 dark:text-gray-300"
-                  >
-                    I have sent the payment
-                  </label>
-                </div>
-              </>
-            )}
-            <div className="space-y-2">
-              <Button
-                onClick={async () => {
-                  if (fiatPaymentConfirmed) {
-                    setShowFiatPaymentInstructions(false);
-                    await handleFiatPayment(
-                      productData.totalCost,
-                      pendingPaymentData || {}
-                    );
-                    setPendingPaymentData(null); // Clear stored data
-                  }
-                }}
-                disabled={!fiatPaymentConfirmed}
-                className={`${SHOPSTRBUTTONCLASSNAMES} w-full ${
-                  !fiatPaymentConfirmed ? "cursor-not-allowed opacity-50" : ""
-                }`}
-              >
-                {selectedFiatOption === "cash"
-                  ? "Confirm Order"
-                  : "Confirm Payment Sent"}
-              </Button>
-              <Button
-                onClick={() => {
-                  setShowFiatPaymentInstructions(false);
-                  setFiatPaymentConfirmed(false);
-                  setSelectedFiatOption("");
-                  setPendingPaymentData(null); // Clear stored data
-                }}
-                variant="bordered"
-                className="w-full"
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modals */}
-      <Modal
-        backdrop="blur"
-        isOpen={showFiatTypeOption}
-        onClose={() => setShowFiatTypeOption(false)}
-        classNames={{
-          body: "py-6 ",
-          backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-          header: "border-b-[1px] border-[#292f46]",
-          footer: "border-t-[1px] border-[#292f46]",
-          closeButton: "hover:bg-black/5 active:bg-white/10",
-        }}
-        isDismissable={true}
-        scrollBehavior={"normal"}
-        placement={"center"}
-        size="2xl"
-      >
-        <ModalContent>
-          <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
-            Select your fiat payment preference:
-          </ModalHeader>
-          <ModalBody className="flex flex-col overflow-hidden">
-            <div className="flex items-center justify-center">
-              <Select
-                label="Fiat Payment Options"
-                className="max-w-xs"
-                onChange={(e) => {
-                  setSelectedFiatOption(e.target.value);
-                  setShowFiatTypeOption(false);
-                  setShowFiatPaymentInstructions(true);
-                }}
-              >
-                {fiatPaymentOptions &&
-                  Object.keys(fiatPaymentOptions).map((option) => (
-                    <SelectItem
-                      key={option}
-                      value={option}
-                      className="text-light-text dark:text-dark-text"
-                    >
-                      {option}
-                    </SelectItem>
-                  ))}
-              </Select>
-            </div>
-          </ModalBody>
-        </ModalContent>
-      </Modal>
 
       <SignInModal isOpen={isOpen} onClose={onClose} />
 
