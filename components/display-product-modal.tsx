@@ -23,8 +23,12 @@ import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action
 import { ProfileWithDropdown } from "./utility-components/profile/profile-dropdown";
 import SuccessModal from "./utility-components/success-modal";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
-import { nip19 } from "nostr-tools";
-import { ProductData } from "@/utils/parsers/product-parser-functions";
+import parseTags, {
+  ProductData,
+} from "@/utils/parsers/product-parser-functions";
+import { ProductContext } from "@/utils/context/context";
+import { getListingSlug } from "@/utils/url-slugs";
+import { NostrEvent } from "@/utils/types/types";
 
 interface ProductModalProps {
   productData: ProductData;
@@ -40,6 +44,7 @@ export default function DisplayProductModal({
   handleDelete,
 }: ProductModalProps) {
   const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
+  const productEventContext = useContext(ProductContext);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showProductForm, setShowProductForm] = useState(false);
 
@@ -58,24 +63,22 @@ export default function DisplayProductModal({
   };
 
   const handleShare = async () => {
-    const naddr = nip19.naddrEncode({
-      identifier: productData.d as string,
-      pubkey: productData.pubkey,
-      kind: 30402,
-    });
-    // The content you want to share
+    const allParsed = productEventContext.productEvents
+      .filter((e: NostrEvent) => e.kind !== 1)
+      .map((e: NostrEvent) => parseTags(e))
+      .filter((p: ProductData | undefined): p is ProductData => !!p);
+
+    const slug = getListingSlug(productData, allParsed);
+    const listingPath = slug || productData.id;
     const shareData = {
       title: productData.title,
-      url: `${window.location.origin}/listing/${naddr}`,
+      url: `${window.location.origin}/listing/${listingPath}`,
     };
-    // Check if the Web Share API is available
     if (navigator.share) {
-      // Use the share API
       await navigator.share(shareData);
     } else {
-      // Fallback for browsers that do not support the Web Share API
       navigator.clipboard.writeText(
-        `${window.location.origin}/listing/${naddr}`
+        `${window.location.origin}/listing/${listingPath}`
       );
       setShowSuccessModal(true);
     }

@@ -1,9 +1,18 @@
 import Head from "next/head";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { NostrEvent, ShopProfile } from "@/utils/types/types";
-import parseTags from "@/utils/parsers/product-parser-functions";
+import { NostrEvent, ProfileData, ShopProfile } from "@/utils/types/types";
+import parseTags, {
+  ProductData,
+} from "@/utils/parsers/product-parser-functions";
 import { nip19 } from "nostr-tools";
+import {
+  findProductBySlug,
+  getListingSlug,
+  isNpub,
+  findPubkeyByProfileSlug,
+  getProfileSlug,
+} from "@/utils/url-slugs";
 
 type MetaTagsType = {
   title: string;
@@ -17,7 +26,8 @@ const getMetaTags = (
   pathname: string,
   query: { productId?: string[]; npub?: string[] },
   productEvents: NostrEvent[],
-  shopEvents: Map<string, ShopProfile>
+  shopEvents: Map<string, ShopProfile>,
+  profileData: Map<string, ProfileData>
 ): MetaTagsType => {
   const defaultTags = {
     title: "Shopstr",
@@ -28,58 +38,88 @@ const getMetaTags = (
 
   if (pathname.startsWith("/listing/")) {
     const productId = query.productId?.[0];
-    const product = productEvents.find((event) => {
-      const dTagMatch =
-        event.tags.find((tag: string[]) => tag[0] === "d")?.[1] === productId;
-      const idMatch = event.id === productId;
-      return dTagMatch || idMatch;
-    });
+    if (!productId) return defaultTags;
 
-    if (product) {
-      const naddr = nip19.naddrEncode({
-        identifier: productId as string,
-        pubkey: product.pubkey,
-        kind: 30402,
+    const allParsed = productEvents
+      .filter((e) => e.kind !== 1)
+      .map((e) => parseTags(e))
+      .filter((p): p is ProductData => !!p);
+
+    let productData: ProductData | undefined;
+
+    productData = findProductBySlug(productId, allParsed);
+
+    if (!productData) {
+      const product = productEvents.find((event) => {
+        const naddrMatch = (() => {
+          try {
+            return (
+              nip19.naddrEncode({
+                identifier:
+                  event.tags.find((tag: string[]) => tag[0] === "d")?.[1] || "",
+                pubkey: event.pubkey,
+                kind: event.kind,
+              }) === productId
+            );
+          } catch {
+            return false;
+          }
+        })();
+        const dTagMatch =
+          event.tags.find((tag: string[]) => tag[0] === "d")?.[1] === productId;
+        const idMatch = event.id === productId;
+        return naddrMatch || dTagMatch || idMatch;
       });
-      const productData = parseTags(product);
-      if (productData) {
-        return {
-          title: productData.title || "Shopstr Listing",
-          description:
-            productData.summary || "Check out this product on Shopstr!",
-          image: productData.images?.[0] || "/shopstr-2000x2000.png",
-          url: `${windowOrigin}/listing/${naddr}`,
-        };
+      if (product) {
+        productData = parseTags(product);
       }
+    }
+
+    if (productData) {
+      const slug = getListingSlug(productData, allParsed);
       return {
-        ...defaultTags,
-        title: "Shopstr Listing",
-        description: "Check out this listing on Shopstr!",
-        url: `${windowOrigin}/listing/${naddr}`,
+        title: productData.title || "Shopstr Listing",
+        description:
+          productData.summary || "Check out this product on Shopstr!",
+        image: productData.images?.[0] || "/shopstr-2000x2000.png",
+        url: `${windowOrigin}/listing/${slug || productId}`,
       };
     }
-  } else if (pathname.includes("/npub")) {
-    const npub = query.npub?.[0];
-    const shopInfo = npub
-      ? Array.from(shopEvents.values()).find(
-          (event) => nip19.npubEncode(event.pubkey) === npub
-        )
-      : undefined;
+
+    return {
+      ...defaultTags,
+      title: "Shopstr Listing",
+      description: "Check out this listing on Shopstr!",
+    };
+  } else if (pathname.startsWith("/marketplace/") && query.npub?.[0]) {
+    const slug = query.npub[0];
+    let shopInfo: ShopProfile | undefined;
+
+    if (isNpub(slug)) {
+      shopInfo = Array.from(shopEvents.values()).find(
+        (event) => nip19.npubEncode(event.pubkey) === slug
+      );
+    } else {
+      const pubkey = findPubkeyByProfileSlug(slug, profileData);
+      if (pubkey) {
+        shopInfo = shopEvents.get(pubkey);
+      }
+    }
 
     if (shopInfo) {
+      const profileSlug = getProfileSlug(shopInfo.pubkey, profileData);
       return {
         title: `${shopInfo.content.name} Shop` || "Shopstr Shop",
         description:
           shopInfo.content.about || "Check out this shop on Shopstr!",
         image: shopInfo.content.ui.picture || "/shopstr-2000x2000.png",
-        url: `${windowOrigin}/marketplace/${npub}`,
+        url: `${windowOrigin}/marketplace/${profileSlug}`,
       };
     }
     return {
       ...defaultTags,
       title: "Shopstr Shop",
       description: "Check out this shop on Shopstr!",
-      url: `${windowOrigin}/marketplace/${npub}`,
     };
   }
 
@@ -89,9 +129,11 @@ const getMetaTags = (
 const DynamicHead = ({
   productEvents,
   shopEvents,
+  profileData,
 }: {
   productEvents: NostrEvent[];
   shopEvents: Map<string, ShopProfile>;
+  profileData: Map<string, ProfileData>;
 }) => {
   const router = useRouter();
   const [origin, setOrigin] = useState("");
@@ -105,7 +147,8 @@ const DynamicHead = ({
     router.pathname,
     router.query,
     productEvents,
-    shopEvents
+    shopEvents,
+    profileData
   );
 
   return (

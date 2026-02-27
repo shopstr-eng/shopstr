@@ -21,6 +21,7 @@ import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
+import { getListingSlug } from "@/utils/url-slugs";
 
 const DisplayProducts = ({
   focusedPubkey,
@@ -229,26 +230,24 @@ const DisplayProducts = ({
 
   const getProductHref = (product: ProductData) => {
     if (product.pubkey === userPubkey) {
-      return null; // Will show modal instead
+      return null;
     }
 
     if (product.d === "zapsnag" || product.categories?.includes("zapsnag")) {
       return `/listing/${product.id}`;
     }
 
-    const naddr = nip19.naddrEncode({
-      identifier: product.d as string,
-      pubkey: product.pubkey,
-      kind: 30402,
-    });
+    const allParsed = productEventContext.productEvents
+      .filter((e) => e.kind !== 1)
+      .map((e) => parseTags(e))
+      .filter((p): p is ProductData => !!p);
 
-    if (naddr) {
-      return `/listing/${naddr}`;
-    } else if (product.d !== undefined) {
-      return `/listing/${product.d}`;
-    } else {
-      return `/listing/${product.id}`;
+    const slug = getListingSlug(product, allParsed);
+    if (slug) {
+      return `/listing/${slug}`;
     }
+
+    return `/listing/${product.id}`;
   };
 
   const onProductClick = (product: ProductData, e?: React.MouseEvent) => {

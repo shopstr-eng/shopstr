@@ -687,6 +687,7 @@ function Shopstr({ props }: { props: AppProps }) {
       <DynamicHead
         productEvents={productContext.productEvents}
         shopEvents={shopContext.shopData}
+        profileData={profileContext.profileData}
       />
       <CommunityContext.Provider value={communityContext}>
         <RelaysContext.Provider value={relaysContext}>

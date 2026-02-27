@@ -25,13 +25,17 @@ import {
   ReviewsContext,
   ShopMapContext,
   FollowsContext,
+  ProductContext,
+  ProfileMapContext,
 } from "@/utils/context/context";
 import DisplayProducts from "../display-products";
 import LocationDropdown from "../utility-components/dropdowns/location-dropdown";
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
 import { CATEGORIES, SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
-import { ProductData } from "@/utils/parsers/product-parser-functions";
+import parseTags, {
+  ProductData,
+} from "@/utils/parsers/product-parser-functions";
 import SignInModal from "../sign-in/SignInModal";
 import ShopstrSwitch from "../utility-components/shopstr-switch";
 import { ShopProfile } from "../../utils/types/types";
@@ -40,6 +44,12 @@ import {
   RawEventModal,
   EventIdModal,
 } from "../utility-components/modals/event-modals";
+import {
+  getListingSlug,
+  getProfileSlug,
+  findPubkeyByProfileSlug,
+  isNpub,
+} from "@/utils/url-slugs";
 
 function MarketplacePage({
   focusedPubkey,
@@ -84,6 +94,8 @@ function MarketplacePage({
   const reviewsContext = useContext(ReviewsContext);
   const shopMapContext = useContext(ShopMapContext);
   const followsContext = useContext(FollowsContext);
+  const productEventContext = useContext(ProductContext);
+  const profileMapContext = useContext(ProfileMapContext);
 
   const { pubkey: userPubkey, isLoggedIn: loggedIn } =
     useContext(SignerContext);
@@ -93,11 +105,49 @@ function MarketplacePage({
   useEffect(() => {
     const npub = router.query.npub;
     if (npub && typeof npub[0] === "string") {
-      const { data } = nip19.decode(npub[0]);
-      setFocusedPubkey(data as string);
-      setSelectedSection("shop");
+      const slug = npub[0];
+      let pubkey: string | undefined;
+
+      if (isNpub(slug)) {
+        try {
+          const { data } = nip19.decode(slug);
+          pubkey = data as string;
+        } catch {
+          return;
+        }
+      } else {
+        pubkey = findPubkeyByProfileSlug(slug, profileMapContext.profileData);
+      }
+
+      if (pubkey) {
+        setFocusedPubkey(pubkey);
+        setSelectedSection("shop");
+      }
     }
-  }, [router.query.npub]);
+  }, [router.query.npub, profileMapContext.profileData]);
+
+  useEffect(() => {
+    if (
+      focusedPubkey &&
+      !profileMapContext.isLoading &&
+      router.query.npub?.[0]
+    ) {
+      const currentSlug = router.query.npub[0] as string;
+      const canonicalSlug = getProfileSlug(
+        focusedPubkey,
+        profileMapContext.profileData
+      );
+      if (canonicalSlug && currentSlug !== canonicalSlug) {
+        router.replace(`/marketplace/${canonicalSlug}`, undefined, {
+          shallow: true,
+        });
+      }
+    }
+  }, [
+    focusedPubkey,
+    profileMapContext.isLoading,
+    profileMapContext.profileData,
+  ]);
 
   useEffect(() => {
     setIsFetchingReviews(true);
@@ -193,14 +243,16 @@ function MarketplacePage({
       router.push(`/listing/${product.id}`);
       return;
     }
-    try {
-      const naddr = nip19.naddrEncode({
-        identifier: product.d!,
-        pubkey: product.pubkey,
-        kind: 30402,
-      });
-      router.push(`/listing/${naddr}`);
-    } catch {
+
+    const allParsed = productEventContext.productEvents
+      .filter((e: Event) => e.kind !== 1)
+      .map((e: Event) => parseTags(e))
+      .filter((p: ProductData | undefined): p is ProductData => !!p);
+
+    const slug = getListingSlug(product, allParsed);
+    if (slug) {
+      router.push(`/listing/${slug}`);
+    } else {
       router.push(`/listing/${product.id}`);
     }
   };

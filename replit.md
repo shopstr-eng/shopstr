@@ -16,7 +16,7 @@ Preferred communication style: Simple, everyday language.
 - **UI/UX**: NextUI, Tailwind CSS, Framer Motion for animations, PWA support.
 - **State Management**: React Context API for various domains (products, profiles, shops, chats, reviews, follows, relays, media, wallet, communities).
 - **Data Persistence**: Local storage for user preferences and authentication, service worker for caching.
-- **Routing**: Middleware-based URL rewriting, dynamic routing, protected routes for authenticated operations.
+- **Routing**: Middleware-based URL rewriting, dynamic routing, protected routes for authenticated operations. Friendly URL slugs for listings (title-based) and profiles (name-based) with collision handling via pubkey disambiguation. naddr/npub inputs still resolve but redirect to friendly slugs. URL slug utilities in `utils/url-slugs.ts`.
 
 ### Backend
 

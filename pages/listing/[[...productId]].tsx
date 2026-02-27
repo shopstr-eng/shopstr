@@ -28,6 +28,7 @@ import {
   RawEventModal,
   EventIdModal,
 } from "../../components/utility-components/modals/event-modals";
+import { findProductBySlug, getListingSlug } from "@/utils/url-slugs";
 
 const Listing = () => {
   const router = useRouter();
@@ -53,16 +54,29 @@ const Listing = () => {
       const productIdString = productId ? productId[0] : "";
       setProductIdString(productIdString!);
       if (!productIdString) {
-        router.push("/marketplace"); // if there isn't a productId, redirect to home page
+        router.push("/marketplace");
       }
     }
   }, [router]);
 
   useEffect(() => {
     if (!productContext.isLoading && productContext.productEvents) {
-      const matchingEvent = productContext.productEvents.find(
-        (event: Event) => {
-          // check for matching naddr
+      const allParsed = productContext.productEvents
+        .filter((e: Event) => e.kind !== 1)
+        .map((e: Event) => parseTags(e))
+        .filter((p: ProductData | undefined): p is ProductData => !!p);
+
+      let matchingEvent: Event | undefined;
+
+      const slugMatch = findProductBySlug(productIdString, allParsed);
+      if (slugMatch) {
+        matchingEvent = productContext.productEvents.find(
+          (e: Event) => e.id === slugMatch.id
+        );
+      }
+
+      if (!matchingEvent) {
+        matchingEvent = productContext.productEvents.find((event: Event) => {
           const naddrMatch =
             nip19.naddrEncode({
               identifier:
@@ -71,15 +85,13 @@ const Listing = () => {
               kind: event.kind,
             }) === productIdString;
 
-          // Check for matching d tag
           const dTagMatch =
             event.tags.find((tag: string[]) => tag[0] === "d")?.[1] ===
             productIdString;
-          // Check for matching event id
           const idMatch = event.id === productIdString;
           return naddrMatch || dTagMatch || idMatch;
-        }
-      );
+        });
+      }
 
       if (matchingEvent) {
         setRawEvent(matchingEvent);
@@ -92,6 +104,15 @@ const Listing = () => {
           setIsZapsnag(false);
         }
         setProductData(parsed);
+
+        if (parsed && parsed.title && matchingEvent.kind !== 1) {
+          const canonicalSlug = getListingSlug(parsed, allParsed);
+          if (canonicalSlug && productIdString !== canonicalSlug) {
+            router.replace(`/listing/${canonicalSlug}`, undefined, {
+              shallow: true,
+            });
+          }
+        }
       }
     }
   }, [productContext.isLoading, productContext.productEvents, productIdString]);
