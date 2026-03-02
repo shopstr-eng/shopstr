@@ -11,6 +11,7 @@ interface ImageCarouselProps {
   classname?: string;
   showThumbs?: boolean;
   fixedHeight?: boolean;
+  priorityFirstImage?: boolean;
 }
 
 export default function ImageCarousel({
@@ -18,6 +19,7 @@ export default function ImageCarousel({
   classname = "",
   showThumbs = false,
   fixedHeight = true,
+  priorityFirstImage = false,
 }: ImageCarouselProps) {
   const router = useRouter();
 
@@ -47,6 +49,8 @@ export default function ImageCarousel({
           srcSet={buildSrcSet(image)}
           className={imageClass}
           alt={image || `Product image ${index + 1}`}
+          loading={index === 0 && priorityFirstImage ? "eager" : "lazy"}
+          decoding="async"
           radius="none"
           style={{
             width: "100%",

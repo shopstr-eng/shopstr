@@ -20,21 +20,33 @@ export default function SellerView({
           <img
             src="/shop-freely-light.png"
             alt="Shopstr Banner"
+            loading="lazy"
+            decoding="async"
+            fetchPriority="low"
             className="hidden max-h-[210px] w-full items-center justify-center object-cover dark:hidden sm:flex"
           />
           <img
             src="/shop-freely-dark.png"
             alt="Shopstr Banner"
+            loading="lazy"
+            decoding="async"
+            fetchPriority="low"
             className="hidden max-h-[210px] w-full items-center justify-center object-cover sm:hidden dark:sm:flex"
           />
           <img
             src="/shop-freely-light-sm.png"
             alt="Shopstr Banner"
+            loading="lazy"
+            decoding="async"
+            fetchPriority="low"
             className="flex max-h-[210px] w-full items-center justify-center object-cover pb-4 dark:hidden sm:hidden"
           />
           <img
             src="/shop-freely-dark-sm.png"
             alt="Shopstr Banner"
+            loading="lazy"
+            decoding="async"
+            fetchPriority="low"
             className="hidden max-h-[210px] w-full items-center justify-center object-cover pb-4 dark:flex dark:sm:hidden"
           />
         </div>

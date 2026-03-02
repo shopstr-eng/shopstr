@@ -85,15 +85,16 @@ const MintButton = () => {
         console.error("ERROR", err);
       });
 
-    if (typeof window.webln !== "undefined") {
+    const webln = window.webln;
+    if (webln) {
       try {
-        await window.webln.enable();
-        const isEnabled = await window.webln.isEnabled();
+        await webln.enable();
+        const isEnabled = await webln.isEnabled();
         if (!isEnabled) {
           throw new Error("WebLN is not enabled");
         }
         try {
-          const res = await window.webln.sendPayment(pr);
+          const res = await webln.sendPayment(pr);
           if (!res) {
             throw new Error("Payment failed");
           }

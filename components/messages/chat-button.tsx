@@ -25,7 +25,7 @@ const ChatButton = ({
     if (pubkeyOfChat === openedChatPubkey) {
       divRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [openedChatPubkey]);
+  }, [openedChatPubkey, pubkeyOfChat]);
 
   return (
     <div

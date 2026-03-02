@@ -1,5 +1,5 @@
 import Head from "next/head";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { NostrEvent, ProfileData, ShopProfile } from "@/utils/types/types";
 import parseTags, {
@@ -12,6 +12,8 @@ import {
   isNpub,
   findPubkeyByProfileSlug,
   getProfileSlug,
+  buildProductSlugIndexes,
+  ProductSlugIndexes,
 } from "@/utils/url-slugs";
 
 type MetaTagsType = {
@@ -26,6 +28,8 @@ const getMetaTags = (
   pathname: string,
   query: { productId?: string[]; npub?: string[] },
   productEvents: NostrEvent[],
+  parsedProducts: ProductData[],
+  productSlugIndexes: ProductSlugIndexes,
   shopEvents: Map<string, ShopProfile>,
   profileData: Map<string, ProfileData>
 ): MetaTagsType => {
@@ -40,14 +44,13 @@ const getMetaTags = (
     const productId = query.productId?.[0];
     if (!productId) return defaultTags;
 
-    const allParsed = productEvents
-      .filter((e) => e.kind !== 1)
-      .map((e) => parseTags(e))
-      .filter((p): p is ProductData => !!p);
-
     let productData: ProductData | undefined;
 
-    productData = findProductBySlug(productId, allParsed);
+    productData = findProductBySlug(
+      productId,
+      parsedProducts,
+      productSlugIndexes
+    );
 
     if (!productData) {
       const product = productEvents.find((event) => {
@@ -76,7 +79,11 @@ const getMetaTags = (
     }
 
     if (productData) {
-      const slug = getListingSlug(productData, allParsed);
+      const slug = getListingSlug(
+        productData,
+        parsedProducts,
+        productSlugIndexes
+      );
       return {
         title: productData.title || "Shopstr Listing",
         description:
@@ -142,13 +149,42 @@ const DynamicHead = ({
     setOrigin(window.location.origin);
   }, []);
 
-  const metaTags = getMetaTags(
-    origin ? origin : "https://shopstr.store",
-    router.pathname,
-    router.query,
-    productEvents,
-    shopEvents,
-    profileData
+  const parsedProducts = useMemo(
+    () =>
+      productEvents
+        .filter((event) => event.kind !== 1)
+        .map((event) => parseTags(event))
+        .filter((product): product is ProductData => !!product),
+    [productEvents]
+  );
+
+  const productSlugIndexes = useMemo(
+    () => buildProductSlugIndexes(parsedProducts),
+    [parsedProducts]
+  );
+
+  const metaTags = useMemo(
+    () =>
+      getMetaTags(
+        origin ? origin : "https://shopstr.store",
+        router.pathname,
+        router.query,
+        productEvents,
+        parsedProducts,
+        productSlugIndexes,
+        shopEvents,
+        profileData
+      ),
+    [
+      origin,
+      router.pathname,
+      router.query,
+      productEvents,
+      parsedProducts,
+      productSlugIndexes,
+      shopEvents,
+      profileData,
+    ]
   );
 
   return (

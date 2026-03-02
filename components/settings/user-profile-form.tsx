@@ -1,6 +1,6 @@
 import { useEffect, useState, useContext, useMemo } from "react";
 import { useRouter } from "next/router";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, type SubmitHandler } from "react-hook-form";
 import {
   Button,
   Textarea,
@@ -23,6 +23,19 @@ interface UserProfileFormProps {
   isOnboarding?: boolean;
 }
 
+interface UserProfileFormValues {
+  banner: string;
+  picture: string;
+  display_name: string;
+  name: string;
+  nip05: string;
+  about: string;
+  website: string;
+  lud16: string;
+  payment_preference: string;
+  shopstr_donation: number;
+}
+
 const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   const router = useRouter();
   const { nostr } = useContext(NostrContext);
@@ -32,7 +45,8 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
 
   const profileContext = useContext(ProfileMapContext);
-  const { handleSubmit, control, reset, watch, setValue } = useForm({
+  const { handleSubmit, control, reset, watch, setValue } =
+    useForm<UserProfileFormValues>({
     defaultValues: {
       banner: "",
       picture: "",
@@ -66,7 +80,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
     setIsFetchingProfile(false);
   }, [profileContext, userPubkey, reset]);
 
-  const onSubmit = async (data: { [x: string]: string }) => {
+  const onSubmit: SubmitHandler<UserProfileFormValues> = async (data) => {
     if (!userPubkey) throw new Error("pubkey is undefined");
     setIsUploadingProfile(true);
     await createNostrProfileEvent(nostr!, signer!, JSON.stringify(data));
@@ -130,7 +144,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit as any)}>
+      <form onSubmit={handleSubmit(onSubmit)}>
         <Controller
           name="display_name"
           control={control}
@@ -363,7 +377,10 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
               fullWidth
               label="Shopstr donation % (for sellers)"
               labelPlacement="outside"
-              onChange={onChange}
+              onChange={(e) => {
+                const nextDonation = Number(e.target.value);
+                onChange(Number.isNaN(nextDonation) ? 0 : nextDonation);
+              }}
               onBlur={onBlur}
               value={value.toString()}
             />
@@ -376,7 +393,7 @@ const UserProfileForm = ({ isOnboarding }: UserProfileFormProps) => {
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
-              handleSubmit(onSubmit as any)();
+              handleSubmit(onSubmit)();
             }
           }}
           isDisabled={isUploadingProfile}

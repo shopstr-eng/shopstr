@@ -8,15 +8,32 @@ const withPWA = withPWAInit({
   skipWaiting: true,
   sw: "service-worker.js",
   disable: process.env.NODE_ENV === "development",
+  buildExcludes: [/middleware-manifest\.json$/],
+  publicExcludes: [
+    "!**/*.map",
+    "!payment-confirmed.gif",
+    "!shop-freely-*.png",
+  ],
   runtimeCaching: [
     {
-      urlPattern: /^https:\/\/.*\.(png|jpg|jpeg|svg|gif|ico|css|js)$/,
+      urlPattern: /^https:\/\/.*\.(png|jpg|jpeg|svg|webp|gif|ico)$/,
       handler: "CacheFirst",
+      options: {
+        cacheName: "image-assets",
+        expiration: {
+          maxEntries: 120,
+          maxAgeSeconds: 3 * 24 * 60 * 60,
+        },
+      },
+    },
+    {
+      urlPattern: /^https:\/\/.*\.(css|js)$/,
+      handler: "StaleWhileRevalidate",
       options: {
         cacheName: "static-assets",
         expiration: {
-          maxEntries: 200,
-          maxAgeSeconds: 7 * 24 * 60 * 60,
+          maxEntries: 80,
+          maxAgeSeconds: 24 * 60 * 60,
         },
       },
     },
@@ -32,26 +49,12 @@ const withPWA = withPWAInit({
         },
       },
     },
-    {
-      urlPattern: /^https?.*/,
-      handler: "NetworkFirst",
-      options: {
-        cacheName: "general-cache",
-        networkTimeoutSeconds: 15,
-        expiration: {
-          maxEntries: 100,
-          maxAgeSeconds: 7 * 24 * 60 * 60,
-        },
-      },
-    },
   ],
 });
 
 const nextConfig = {
-  bundlePagesRouterDependencies: true,
   output: "standalone",
   reactStrictMode: true,
-  turbopack: {},
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "www.google.com" },

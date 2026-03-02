@@ -1,11 +1,12 @@
 /* eslint-disable @next/next/no-img-element */
 
-import { useContext, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Event, nip19 } from "nostr-tools";
-import parseTags, {
+import {
   ProductData,
+  parseProductEventsWithLookup,
 } from "@/utils/parsers/product-parser-functions";
-import { getListingSlug } from "@/utils/url-slugs";
+import { buildProductSlugIndexes } from "@/utils/url-slugs";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { DisplayCheckoutCost } from "./display-monetary-info";
 import ProductInvoiceCard from "../product-invoice-card";
@@ -106,6 +107,13 @@ export default function CheckoutCard({
   const [discountError, setDiscountError] = useState("");
 
   const reviewsContext = useContext(ReviewsContext);
+  const listingSlugIndexes = useMemo(() => {
+    const listingEvents = (productEventContext.productEvents || []).filter(
+      (event: Event) => event.kind !== 1
+    );
+    const { parsedProducts } = parseProductEventsWithLookup(listingEvents);
+    return buildProductSlugIndexes(parsedProducts);
+  }, [productEventContext.productEvents]);
 
   const hasVolumes = productData.volumes && productData.volumes.length > 0;
   const hasBulkPrices =
@@ -157,11 +165,17 @@ export default function CheckoutCard({
     return `${productData.summary.slice(0, SUMMARY_CHARACTER_LIMIT)}...`;
   };
 
-  const calculateVisibleImages = (containerHeight: number) => {
-    const imageHeight = containerHeight / 3;
-    const visibleCount = Math.max(3, Math.floor(containerHeight / imageHeight));
-    setVisibleImages(productData.images.slice(0, visibleCount));
-  };
+  const calculateVisibleImages = useCallback(
+    (containerHeight: number) => {
+      const imageHeight = containerHeight / 3;
+      const visibleCount = Math.max(
+        3,
+        Math.floor(containerHeight / imageHeight)
+      );
+      setVisibleImages(productData.images.slice(0, visibleCount));
+    },
+    [productData.images]
+  );
 
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -236,7 +250,7 @@ export default function CheckoutCard({
       };
     }
     return;
-  }, [selectedImage, isBeingPaid]);
+  }, [selectedImage, isBeingPaid, calculateVisibleImages]);
 
   useEffect(() => {
     setHasSizes(
@@ -340,12 +354,7 @@ export default function CheckoutCard({
   };
 
   const handleShare = async () => {
-    const allParsed = productEventContext.productEvents
-      .filter((e: Event) => e.kind !== 1)
-      .map((e: Event) => parseTags(e))
-      .filter((p: ProductData | undefined): p is ProductData => !!p);
-
-    const slug = getListingSlug(productData, allParsed);
+    const slug = listingSlugIndexes.slugByProductId.get(productData.id);
     const listingPath = slug || productData.id;
     const shareData = {
       title: productData.title,

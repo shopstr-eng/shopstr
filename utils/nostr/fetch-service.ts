@@ -4,9 +4,11 @@ import {
   NostrMessageEvent,
   ShopProfile,
   Community,
+  ProfileData,
+  CommunityPost,
 } from "@/utils/types/types";
 import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
-import { ChatsMap } from "@/utils/context/context";
+import { ChatsMap, CashuProofEvent } from "@/utils/context/context";
 import {
   getLocalStorageData,
   deleteEvent,
@@ -39,6 +41,12 @@ function isHexString(value: string): boolean {
   return /^[0-9a-fA-F]{64}$/.test(value);
 }
 
+function toCsv(values: Array<string | number>): string {
+  return values
+    .filter((value) => value !== undefined && value !== null && `${value}` !== "")
+    .join(",");
+}
+
 export const fetchAllPosts = async (
   nostr: NostrManager,
   relays: string[],
@@ -52,7 +60,7 @@ export const fetchAllPosts = async (
       // First, load from database to immediately populate the UI
       let productArrayFromDb: NostrEvent[] = [];
       try {
-        const response = await fetch("/api/db/fetch-products");
+        const response = await fetch("/api/db/fetch-products?limit=2000");
         if (response.ok) {
           productArrayFromDb = await response.json();
           if (productArrayFromDb.length > 0) {
@@ -127,16 +135,6 @@ export const fetchAllPosts = async (
       const mergedProductArray = Array.from(mergedProductsMap.values());
 
       editProductContext(mergedProductArray, false);
-
-      // Cache fetched products to database via API (only valid events with signatures)
-      const validProducts = fetchedEvents.filter(
-        (e) => e.id && e.sig && e.pubkey
-      );
-      if (validProducts.length > 0) {
-        cacheEventsToDatabase(validProducts).catch((error) =>
-          console.error("Failed to cache products to database:", error)
-        );
-      }
 
       resolve({
         productEvents: mergedProductArray,
@@ -248,9 +246,7 @@ export const fetchShopProfile = async (
     try {
       const shopEvents: NostrEvent[] = [];
 
-      const shopProfile: Map<string, ShopProfile | any> = new Map(
-        pubkeyShopProfileToFetch.map((pubkey) => [pubkey, null])
-      );
+      const shopProfile = new Map<string, ShopProfile>();
 
       if (pubkeyShopProfileToFetch.length === 0) {
         editShopContext(new Map(), false);
@@ -260,7 +256,12 @@ export const fetchShopProfile = async (
 
       // First load from database
       try {
-        const response = await fetch("/api/db/fetch-profiles");
+        const profileQuery = new URLSearchParams({
+          kinds: "30019",
+          pubkeys: toCsv(pubkeyShopProfileToFetch),
+          limit: String(Math.max(pubkeyShopProfileToFetch.length * 4, 200)),
+        });
+        const response = await fetch(`/api/db/fetch-profiles?${profileQuery}`);
         if (response.ok) {
           const profilesFromDb = await response.json();
           const shopProfilesFromDb = profilesFromDb.filter(
@@ -366,9 +367,12 @@ export const fetchProfile = async (
   nostr: NostrManager,
   relays: string[],
   pubkeyProfilesToFetch: string[],
-  editProfileContext: (productEvents: Map<any, any>, isLoading: boolean) => void
+  editProfileContext: (
+    profileEvents: Map<string, ProfileData>,
+    isLoading: boolean
+  ) => void
 ): Promise<{
-  profileMap: Map<string, any>;
+  profileMap: Map<string, ProfileData>;
 }> => {
   return new Promise(async function (resolve, reject) {
     try {
@@ -378,16 +382,21 @@ export const fetchProfile = async (
         return;
       }
 
-      const dbProfileMap = new Map<string, any>();
+      const dbProfileMap = new Map<string, ProfileData>();
       try {
-        const response = await fetch("/api/db/fetch-profiles");
+        const profileQuery = new URLSearchParams({
+          kinds: "0",
+          pubkeys: toCsv(pubkeyProfilesToFetch),
+          limit: String(Math.max(pubkeyProfilesToFetch.length * 4, 200)),
+        });
+        const response = await fetch(`/api/db/fetch-profiles?${profileQuery}`);
         if (response.ok) {
           const profilesFromDb = await response.json();
           for (const event of profilesFromDb) {
             if (pubkeyProfilesToFetch.includes(event.pubkey)) {
               try {
                 const content = JSON.parse(event.content);
-                const profile = {
+                const profile: ProfileData = {
                   pubkey: event.pubkey,
                   created_at: event.created_at,
                   content: content,
@@ -421,25 +430,16 @@ export const fetchProfile = async (
         authors: Array.from(pubkeyProfilesToFetch),
       };
 
-      const profileMap: Map<string, any> = new Map(
-        Array.from(pubkeyProfilesToFetch).map((pubkey) => [
-          pubkey,
-          dbProfileMap.get(pubkey) || null,
-        ])
-      );
+      const profileMap = new Map<string, ProfileData>(dbProfileMap);
 
       const fetchedEvents = await nostr.fetch([subParams], {}, relays);
 
       for (const event of fetchedEvents) {
         const existing = profileMap.get(event.pubkey);
-        if (
-          existing === null ||
-          !existing ||
-          event.created_at > existing.created_at
-        ) {
+        if (!existing || event.created_at > existing.created_at) {
           try {
             const content = JSON.parse(event.content);
-            const profile = {
+            const profile: ProfileData = {
               pubkey: event.pubkey,
               created_at: event.created_at,
               content: content,
@@ -601,7 +601,7 @@ export const fetchGiftWrappedChatsAndMessages = async (
             );
             return;
           }
-          let cachedMessage = chatMessagesFromCache.get(event.id);
+          const cachedMessage = chatMessagesFromCache.get(event.id);
           let chatMessage: NostrMessageEvent;
           if (cachedMessage) {
             chatMessage = {
@@ -749,7 +749,13 @@ export const fetchReviews = async (
 
       // First load from database
       try {
-        const response = await fetch("/api/db/fetch-reviews");
+        const reviewQuery = new URLSearchParams({
+          limit: String(Math.max(addresses.length * 8, 300)),
+        });
+        if (addresses.length > 0) {
+          reviewQuery.set("addresses", toCsv(addresses));
+        }
+        const response = await fetch(`/api/db/fetch-reviews?${reviewQuery}`);
         if (!response.ok) throw new Error("Failed to fetch reviews");
         const reviewsFromDb = await response.json();
 
@@ -1195,13 +1201,13 @@ export const fetchCashuWallet = async (
   signer: NostrSigner | undefined,
   relays: string[],
   editCashuWalletContext: (
-    proofEvents: any[],
+    proofEvents: CashuProofEvent[],
     cashuMints: string[],
     cashuProofs: Proof[],
     isLoading: boolean
   ) => void
 ): Promise<{
-  proofEvents: any[];
+  proofEvents: CashuProofEvent[];
   cashuMints: string[];
   cashuProofs: Proof[];
 }> => {
@@ -1221,7 +1227,7 @@ export const fetchCashuWallet = async (
     try {
       const enc = new TextEncoder();
       let mostRecentWalletEvent: NostrEvent | null = null;
-      const proofEvents: any[] = [];
+      const proofEvents: CashuProofEvent[] = [];
       const cashuRelays: string[] = [];
       const cashuMints: string[] = [];
       const cashuMintSet: Set<string> = new Set();
@@ -1230,9 +1236,12 @@ export const fetchCashuWallet = async (
 
       // Load wallet events from database first
       try {
-        const response = await fetch(
-          `/api/db/fetch-wallet?pubkey=${userPubkey}`
-        );
+        const walletQuery = new URLSearchParams({
+          pubkey: userPubkey,
+          kinds: "17375,37375,7375,7376",
+          limit: "2000",
+        });
+        const response = await fetch(`/api/db/fetch-wallet?${walletQuery}`);
         if (!response.ok) throw new Error("Failed to fetch wallet events");
         const walletEventsFromDb = await response.json();
 
@@ -1696,7 +1705,7 @@ export const fetchCommunityPosts = async (
   nostr: NostrManager,
   community: Community,
   limit: number = 20
-): Promise<NostrEvent[]> => {
+): Promise<CommunityPost[]> => {
   return new Promise(async (resolve, reject) => {
     if (!community) {
       resolve([]);
@@ -1791,9 +1800,9 @@ export const fetchCommunityPosts = async (
       }
 
       // Annotate posts with approval metadata where available
-      const annotatedPosts = postEvents.map((post) => {
+      const annotatedPosts: CommunityPost[] = postEvents.map((post) => {
         const approval = approvalByPostId.get(post.id);
-        const annotated: any = { ...post };
+        const annotated: CommunityPost = { ...post };
         if (approval) {
           annotated.approved = true;
           annotated.approvalEventId = approval.approvalId;
@@ -1801,7 +1810,7 @@ export const fetchCommunityPosts = async (
         } else {
           annotated.approved = false;
         }
-        return annotated as NostrEvent;
+        return annotated;
       });
 
       // Sort posts by creation date, newest first.

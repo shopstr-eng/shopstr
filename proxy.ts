@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { nip19 } from "nostr-tools";
+import * as nip19 from "nostr-tools/nip19";
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

@@ -84,7 +84,7 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
   }, [nostrManager, product.id, product.quantity]);
 
   const handleBuy = async () => {
-    let originalWebLN: any;
+    let originalWebLN: WebLNProvider | null = null;
     if (!signer || !isLoggedIn || !userPubkey) {
       alert("Please sign in to purchase.");
       return;
@@ -118,16 +118,16 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
         throw new Error("Seller has not set up a Lightning Address (LUD16).");
       }
 
-      originalWebLN = (window as any).webln;
+      originalWebLN = window.webln;
       const { nwcString } = getLocalStorageData();
       if (nwcString) {
         const nwcProvider = new webln.NostrWebLNProvider({
           nostrWalletConnectUrl: nwcString,
         });
         await nwcProvider.enable();
-        (window as any).webln = nwcProvider;
-      } else if (typeof (window as any).webln !== "undefined") {
-        await (window as any).webln.enable();
+        window.webln = nwcProvider as unknown as WebLNProvider;
+      } else if (window.webln) {
+        await window.webln.enable();
       } else {
         throw new Error(
           "No wallet connected. Please connect a wallet in Settings."
@@ -219,12 +219,12 @@ export default function ZapsnagButton({ product }: { product: ProductData }) {
         }
         onClose();
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
-      alert("Order failed: " + e.message);
+      alert("Order failed: " + (e instanceof Error ? e.message : "Unknown"));
     } finally {
-      if ((window as any).webln !== originalWebLN) {
-        (window as any).webln = originalWebLN;
+      if (window.webln !== originalWebLN) {
+        window.webln = originalWebLN;
       }
       setLoading(false);
       setStatus("");

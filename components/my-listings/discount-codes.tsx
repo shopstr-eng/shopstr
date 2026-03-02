@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useState, useCallback } from "react";
 import {
   Button,
   Input,
@@ -27,13 +27,7 @@ export default function DiscountCodes() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    if (pubkey) {
-      fetchCodes();
-    }
-  }, [pubkey]);
-
-  const fetchCodes = async () => {
+  const fetchCodes = useCallback(async () => {
     if (!pubkey) return;
 
     setIsLoading(true);
@@ -48,7 +42,13 @@ export default function DiscountCodes() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [pubkey]);
+
+  useEffect(() => {
+    if (pubkey) {
+      fetchCodes();
+    }
+  }, [pubkey, fetchCodes]);
 
   const handleAddCode = async () => {
     if (!pubkey || !newCode || !newDiscount) return;

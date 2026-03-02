@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 
-import { useEffect, useState, useContext } from "react";
+import { useEffect, useMemo, useRef, useState, useContext } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/router";
 import {
   Button,
@@ -23,11 +24,14 @@ import {
   ShippingOptionsType,
 } from "@/utils/STATIC-VARIABLES";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
-import CartInvoiceCard from "../../components/cart-invoice-card";
 import { fiat } from "@getalby/lightning-tools";
 import currencySelection from "../../public/currencySelection.json";
 import { ShopMapContext, ProfileMapContext } from "@/utils/context/context";
 import { nip19 } from "nostr-tools";
+
+const CartInvoiceCard = dynamic(() => import("../../components/cart-invoice-card"), {
+  ssr: false,
+});
 
 interface QuantitySelectorProps {
   value: number;
@@ -126,17 +130,22 @@ export default function Component() {
   const [discountErrors, setDiscountErrors] = useState<{
     [pubkey: string]: string;
   }>({});
+  const satsRateCache = useRef<Map<string, number>>(new Map());
 
   // Group products by seller pubkey
-  const productsBySeller = products.reduce(
-    (acc, product) => {
-      if (!acc[product.pubkey]) {
-        acc[product.pubkey] = [];
-      }
-      acc[product.pubkey]!.push(product);
-      return acc;
-    },
-    {} as { [pubkey: string]: ProductData[] }
+  const productsBySeller = useMemo(
+    () =>
+      products.reduce(
+        (acc, product) => {
+          if (!acc[product.pubkey]) {
+            acc[product.pubkey] = [];
+          }
+          acc[product.pubkey]!.push(product);
+          return acc;
+        },
+        {} as { [pubkey: string]: ProductData[] }
+      ),
+    [products]
   );
 
   const getSellerName = (pubkey: string): string => {
@@ -192,11 +201,14 @@ export default function Component() {
       // Load saved discount codes
       const storedDiscounts = localStorage.getItem("cartDiscounts");
       if (storedDiscounts) {
-        const discounts = JSON.parse(storedDiscounts);
+        const discounts = JSON.parse(storedDiscounts) as Record<
+          string,
+          { code: string; percentage: number }
+        >;
         const codes: { [pubkey: string]: string } = {};
         const applied: { [pubkey: string]: number } = {};
 
-        Object.entries(discounts).forEach(([pubkey, data]: [string, any]) => {
+        Object.entries(discounts).forEach(([pubkey, data]) => {
           codes[pubkey] = data.code;
           applied[pubkey] = data.percentage;
         });
@@ -214,46 +226,51 @@ export default function Component() {
       const totals: { [key: string]: number } = {};
       let subtotalAmount = 0;
 
-      for (const product of products) {
-        try {
-          const priceSats = await convertPriceToSats(product);
-          const shippingSatPrice = await convertShippingToSats(product);
-          const discount = appliedDiscounts[product.pubkey] || 0;
-          let discountedPrice = priceSats;
-          let productSubtotal = 0;
-          let productShipping = 0;
-
-          if (discount > 0) {
-            discountedPrice = Math.ceil(priceSats * (1 - discount / 100));
+      const conversionResults = await Promise.all(
+        products.map(async (product) => {
+          try {
+            const [priceSats, shippingSatPrice] = await Promise.all([
+              convertPriceToSats(product),
+              convertShippingToSats(product),
+            ]);
+            return { product, priceSats, shippingSatPrice, error: null };
+          } catch (error) {
+            return { product, priceSats: null, shippingSatPrice: 0, error };
           }
+        })
+      );
 
-          if (discountedPrice !== null || shippingSatPrice !== null) {
-            if (quantities[product.id]) {
-              productSubtotal = Math.ceil(
-                discountedPrice * quantities[product.id]!
-              );
-              productShipping = Math.ceil(
-                shippingSatPrice * quantities[product.id]!
-              );
-              subtotalAmount += productSubtotal;
-            } else {
-              productSubtotal = discountedPrice;
-              productShipping = shippingSatPrice;
-              subtotalAmount += discountedPrice;
-            }
-            prices[product.id] = productSubtotal;
-            shipping[product.id] = productShipping;
-            // Store just the product cost in totals for now
-            totals[product.pubkey] = productSubtotal;
-          }
-        } catch (error) {
-          console.error(
-            `Error converting price for product ${product.id}:`,
-            error
-          );
+      for (const result of conversionResults) {
+        const { product, priceSats, shippingSatPrice, error } = result;
+        if (error || priceSats === null) {
+          console.error(`Error converting price for product ${product.id}:`, error);
           prices[product.id] = null;
           shipping[product.id] = 0;
+          continue;
         }
+
+        const discount = appliedDiscounts[product.pubkey] || 0;
+        let discountedPrice = priceSats;
+        let productSubtotal = 0;
+        let productShipping = 0;
+
+        if (discount > 0) {
+          discountedPrice = Math.ceil(priceSats * (1 - discount / 100));
+        }
+
+        if (quantities[product.id]) {
+          productSubtotal = Math.ceil(discountedPrice * quantities[product.id]!);
+          productShipping = Math.ceil(shippingSatPrice * quantities[product.id]!);
+          subtotalAmount += productSubtotal;
+        } else {
+          productSubtotal = discountedPrice;
+          productShipping = shippingSatPrice;
+          subtotalAmount += discountedPrice;
+        }
+
+        prices[product.id] = productSubtotal;
+        shipping[product.id] = productShipping;
+        totals[product.id] = productSubtotal;
       }
 
       setSatPrices(prices);
@@ -404,12 +421,16 @@ export default function Component() {
       product.currency.toLowerCase() !== "sat"
     ) {
       try {
-        const currencyData = {
-          amount: basePrice,
-          currency: product.currency,
-        };
-        const numSats = await fiat.getSatoshiValue(currencyData);
-        price = Math.round(numSats);
+        const cacheKey = product.currency.toUpperCase();
+        let satsPerUnit = satsRateCache.current.get(cacheKey);
+        if (!satsPerUnit) {
+          satsPerUnit = await fiat.getSatoshiValue({
+            amount: 1,
+            currency: product.currency,
+          });
+          satsRateCache.current.set(cacheKey, satsPerUnit);
+        }
+        price = Math.round(basePrice * satsPerUnit);
       } catch (err) {
         console.error("ERROR", err);
       }
@@ -438,12 +459,16 @@ export default function Component() {
       product.currency.toLowerCase() !== "sat"
     ) {
       try {
-        const currencyData = {
-          amount: shippingCost,
-          currency: product.currency,
-        };
-        const numSats = await fiat.getSatoshiValue(currencyData);
-        cost = Math.round(numSats);
+        const cacheKey = product.currency.toUpperCase();
+        let satsPerUnit = satsRateCache.current.get(cacheKey);
+        if (!satsPerUnit) {
+          satsPerUnit = await fiat.getSatoshiValue({
+            amount: 1,
+            currency: product.currency,
+          });
+          satsRateCache.current.set(cacheKey, satsPerUnit);
+        }
+        cost = Math.round(shippingCost * satsPerUnit);
       } catch (err) {
         console.error("ERROR", err);
       }
@@ -478,6 +503,8 @@ export default function Component() {
                               <img
                                 src={product.images[0]}
                                 alt={product.title}
+                                loading="lazy"
+                                decoding="async"
                                 className="mr-4 h-24 w-24 rounded-md object-cover"
                               />
                               <div className="flex-1">

@@ -1,4 +1,4 @@
-import { NostrEventTemplate, NostrEvent } from "@/utils/nostr/nostr-manager";
+import type { NostrEventTemplate, NostrEvent } from "@/utils/nostr/nostr-manager";
 
 export interface NostrSigner {
   connect(): Promise<string>;
@@ -7,7 +7,7 @@ export interface NostrSigner {
   encrypt(pubkey: string, plainText: string): Promise<string>;
   decrypt(pubkey: string, cipherText: string): Promise<string>;
   close(): Promise<void>;
-  toJSON(): { [key: string]: any };
+  toJSON(): { [key: string]: unknown };
 }
 
 export type ChallengeHandler = (

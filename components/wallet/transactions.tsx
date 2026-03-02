@@ -12,24 +12,33 @@ import { Transaction } from "@/utils/types/types";
 // add found proofs as nutsack deposit with different icon
 
 const Transactions = () => {
-  const [history, setHistory] = useState([]);
+  const [history, setHistory] = useState<Transaction[]>([]);
 
   useEffect(() => {
-    // Function to fetch and update transactions
     const fetchAndUpdateTransactions = () => {
       const localData = getLocalStorageData();
       if (localData && localData.history) {
         setHistory(localData.history);
       }
     };
-    // Initial fetch
+
     fetchAndUpdateTransactions();
-    // Set up polling with setInterval
-    const interval = setInterval(() => {
-      fetchAndUpdateTransactions();
-    }, 2100); // Polling every 2100 milliseconds (2.1 seconds)
-    // Clean up on component unmount
-    return () => clearInterval(interval);
+
+    window.addEventListener("storage", fetchAndUpdateTransactions);
+    window.addEventListener(
+      "shopstr:storage",
+      fetchAndUpdateTransactions as EventListener
+    );
+    window.addEventListener("focus", fetchAndUpdateTransactions);
+
+    return () => {
+      window.removeEventListener("storage", fetchAndUpdateTransactions);
+      window.removeEventListener(
+        "shopstr:storage",
+        fetchAndUpdateTransactions as EventListener
+      );
+      window.removeEventListener("focus", fetchAndUpdateTransactions);
+    };
   }, []);
 
   const formatDate = (timestamp: number) => {

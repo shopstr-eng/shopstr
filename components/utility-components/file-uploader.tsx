@@ -241,7 +241,7 @@ export const FileUploaderButton = ({
         setProgress(Math.round(((idx + 1) / imageFiles.length) * 30));
       }
 
-      let responses: any[] = [];
+      let responses: unknown[] = [];
       if (isLoggedIn) {
         responses = await Promise.all(
           processedImageFiles.map(async (imageFile, idx) => {
@@ -261,8 +261,8 @@ export const FileUploaderButton = ({
       }
 
       const imageUrls = responses
-        .filter((response) => response && Array.isArray(response))
-        .map((response: string[][]) => {
+        .filter((response): response is string[][] => Array.isArray(response))
+        .map((response) => {
           const urlTag = response.find(
             (tag) => Array.isArray(tag) && tag[0] === "url"
           );
@@ -271,7 +271,7 @@ export const FileUploaderButton = ({
           }
           return null;
         })
-        .filter((url) => url !== null);
+        .filter((url): url is string => url !== null);
 
       setTimeout(() => {
         setProgress(null);

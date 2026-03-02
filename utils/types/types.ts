@@ -1,4 +1,4 @@
-import { Event } from "nostr-tools";
+import type { Event } from "nostr-tools";
 
 export type ItemType = "products" | "profiles" | "chats" | "communities";
 
@@ -67,12 +67,14 @@ export interface ShopProfile {
 
 export interface ProfileData {
   pubkey: string;
+  nip05Verified?: boolean;
   content: {
     name?: string;
     picture?: string;
     about?: string;
     banner?: string;
     lud16?: string;
+    lnurl?: string;
     nip05?: string;
     payment_preference?: string;
     shopstr_donation?: number;
@@ -119,17 +121,25 @@ export interface CombinedFormData {
 }
 
 declare global {
+  interface WebLNProvider {
+    enable: () => Promise<void>;
+    isEnabled: () => Promise<boolean>;
+    sendPayment: (paymentRequest: string) => Promise<unknown>;
+    [key: string]: unknown;
+  }
+
   interface Window {
     // For NIP-07 browser extensions
     nostr: {
       getPublicKey: () => Promise<string>;
-      signEvent: (event: any) => Promise<any>;
+      signEvent: (event: unknown) => Promise<NostrEvent>;
       nip44: {
         encrypt: (pubkey: string, plainText: string) => Promise<string>;
         decrypt: (pubkey: string, cipherText: string) => Promise<string>;
       };
     };
     // For WebLN (which Alby SDK also polyfills)
-    webln: any;
+    webln: WebLNProvider | null;
+    __shopstrStoragePatched?: boolean;
   }
 }

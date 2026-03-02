@@ -20,7 +20,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import { nip19, Event } from "nostr-tools";
-import { useContext, useEffect, useState, useRef } from "react";
+import { useContext, useEffect, useState, useRef, useMemo } from "react";
 import {
   ReviewsContext,
   ShopMapContext,
@@ -33,8 +33,9 @@ import LocationDropdown from "../utility-components/dropdowns/location-dropdown"
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
 import { CATEGORIES, SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
-import parseTags, {
+import {
   ProductData,
+  parseProductEventsWithLookup,
 } from "@/utils/parsers/product-parser-functions";
 import SignInModal from "../sign-in/SignInModal";
 import ShopstrSwitch from "../utility-components/shopstr-switch";
@@ -45,10 +46,10 @@ import {
   EventIdModal,
 } from "../utility-components/modals/event-modals";
 import {
-  getListingSlug,
   getProfileSlug,
   findPubkeyByProfileSlug,
   isNpub,
+  buildProductSlugIndexes,
 } from "@/utils/url-slugs";
 
 function MarketplacePage({
@@ -102,6 +103,14 @@ function MarketplacePage({
 
   const searchBarRef = useRef<HTMLDivElement>(null);
 
+  const listingSlugIndexes = useMemo(() => {
+    const listingEvents = (productEventContext.productEvents || []).filter(
+      (event: Event) => event.kind !== 1
+    );
+    const { parsedProducts } = parseProductEventsWithLookup(listingEvents);
+    return buildProductSlugIndexes(parsedProducts);
+  }, [productEventContext.productEvents]);
+
   useEffect(() => {
     const npub = router.query.npub;
     if (npub && typeof npub[0] === "string") {
@@ -124,7 +133,12 @@ function MarketplacePage({
         setSelectedSection("shop");
       }
     }
-  }, [router.query.npub, profileMapContext.profileData]);
+  }, [
+    router.query.npub,
+    profileMapContext.profileData,
+    setFocusedPubkey,
+    setSelectedSection,
+  ]);
 
   useEffect(() => {
     if (
@@ -144,6 +158,7 @@ function MarketplacePage({
       }
     }
   }, [
+    router,
     focusedPubkey,
     profileMapContext.isLoading,
     profileMapContext.profileData,
@@ -188,7 +203,7 @@ function MarketplacePage({
     } else {
       setMerchantQuality("Don't trust, don't bother verifying");
     }
-  }, [reviewsContext, merchantReview]);
+  }, [reviewsContext, merchantReview, focusedPubkey]);
 
   useEffect(() => {
     setIsFetchingShop(true);
@@ -206,7 +221,7 @@ function MarketplacePage({
       }
     }
     setIsFetchingShop(false);
-  }, [focusedPubkey, shopMapContext, shopBannerURL]);
+  }, [focusedPubkey, shopMapContext]);
 
   useEffect(() => {
     setIsFetchingFollows(true);
@@ -244,12 +259,7 @@ function MarketplacePage({
       return;
     }
 
-    const allParsed = productEventContext.productEvents
-      .filter((e: Event) => e.kind !== 1)
-      .map((e: Event) => parseTags(e))
-      .filter((p: ProductData | undefined): p is ProductData => !!p);
-
-    const slug = getListingSlug(product, allParsed);
+    const slug = listingSlugIndexes.slugByProductId.get(product.id);
     if (slug) {
       router.push(`/listing/${slug}`);
     } else {
@@ -496,7 +506,7 @@ function MarketplacePage({
                 placeholder="All"
                 label="Location"
                 value={selectedLocation}
-                onChange={(event: any) => {
+                onChange={(event: { target: { value: string } }) => {
                   setSelectedLocation(event.target.value);
                 }}
               />
@@ -582,7 +592,7 @@ function MarketplacePage({
                     No reviews . . . yet!
                   </p>
                   <p className="mt-4 text-lg text-light-text dark:text-dark-text">
-                    Seems there aren&apos;t any reviews for this shop yet.
+                    Seems there aren&apos;t unknown reviews for this shop yet.
                   </p>
                 </div>
               </div>

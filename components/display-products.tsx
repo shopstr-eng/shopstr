@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from "react";
+import { useState, useEffect, useContext, useMemo, useCallback } from "react";
 import { nip19 } from "nostr-tools";
 import { deleteEvent } from "@/utils/nostr/nostr-helper-functions";
 import { NostrEvent } from "../utils/types/types";
@@ -15,13 +15,14 @@ import ShopstrSpinner from "./utility-components/shopstr-spinner";
 import { useRouter } from "next/router";
 import parseTags, {
   ProductData,
+  parseProductEventsWithLookup,
 } from "@/utils/parsers/product-parser-functions";
 import { parseZapsnagNote } from "@/utils/parsers/zapsnag-parser";
 import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
-import { getListingSlug } from "@/utils/url-slugs";
+import { buildProductSlugIndexes } from "@/utils/url-slugs";
 
 const DisplayProducts = ({
   focusedPubkey,
@@ -63,6 +64,14 @@ const DisplayProducts = ({
   const { nostr } = useContext(NostrContext);
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
 
+  const listingSlugIndexes = useMemo(() => {
+    const listingEvents = (productEventContext.productEvents || []).filter(
+      (event: NostrEvent) => event.kind !== 1
+    );
+    const { parsedProducts } = parseProductEventsWithLookup(listingEvents);
+    return buildProductSlugIndexes(parsedProducts);
+  }, [productEventContext.productEvents]);
+
   // Load saved page from session storage on mount
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -84,43 +93,125 @@ const DisplayProducts = ({
     if (!productEventContext) return;
     if (!productEventContext.isLoading && productEventContext.productEvents) {
       setIsProductLoading(true);
-      const sortedProductEvents = [
-        ...productEventContext.productEvents.sort(
-          (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
-        ),
-      ];
+      const sortedProductEvents = [...productEventContext.productEvents].sort(
+        (a: NostrEvent, b: NostrEvent) => b.created_at - a.created_at
+      );
       const parsedProductData: ProductData[] = [];
+      const followSet = new Set(followsContext.followList || []);
+      const useFollowFilter = wotFilter && !followsContext.isLoading;
+
       sortedProductEvents.forEach((event) => {
-        if (wotFilter) {
-          if (!followsContext.isLoading && followsContext.followList) {
-            const followList = followsContext.followList;
-            if (followList.length > 0 && followList.includes(event.pubkey)) {
-              let parsedData;
-              if (event.kind === 1) {
-                parsedData = parseZapsnagNote(event);
-              } else {
-                parsedData = parseTags(event);
-              }
-              if (parsedData) {
-                parsedData.rawEvent = event;
-                parsedProductData.push(parsedData);
-              }
-            }
-          }
-        } else {
-          let parsedData;
-          if (event.kind === 1) {
-            parsedData = parseZapsnagNote(event);
-          } else {
-            parsedData = parseTags(event);
-          }
-          if (parsedData) parsedProductData.push(parsedData);
+        if (useFollowFilter && !followSet.has(event.pubkey)) {
+          return;
         }
+
+        const parsedData =
+          event.kind === 1
+            ? parseZapsnagNote(event)
+            : parseTags(event);
+        if (parsedData) parsedProductData.push(parsedData);
       });
       setProductEvents(parsedProductData);
       setIsProductLoading(false);
     }
-  }, [productEventContext, wotFilter]);
+  }, [
+    productEventContext,
+    wotFilter,
+    followsContext.followList,
+    followsContext.isLoading,
+  ]);
+
+  const productSatisfiesCategoryFilter = useCallback(
+    (productData: ProductData) => {
+      if (selectedCategories.size === 0) return true;
+      return Array.from(selectedCategories).some((selectedCategory) => {
+        const re = new RegExp(selectedCategory, "gi");
+        return productData?.categories?.some((category) => {
+          const match = category.match(re);
+          return match && match.length > 0;
+        });
+      });
+    },
+    [selectedCategories]
+  );
+
+  const productSatisfieslocationFilter = useCallback(
+    (productData: ProductData) => {
+      return !selectedLocation || productData.location === selectedLocation;
+    },
+    [selectedLocation]
+  );
+
+  const productSatisfiesSearchFilter = useCallback(
+    (productData: ProductData) => {
+      if (!selectedSearch) return true;
+      if (!productData.title) return false;
+
+      if (selectedSearch.includes("naddr")) {
+        try {
+          const parsedNaddr = nip19.decode(selectedSearch);
+          if (parsedNaddr.type === "naddr") {
+            return (
+              productData.d === parsedNaddr.data.identifier &&
+              productData.pubkey === parsedNaddr.data.pubkey
+            );
+          }
+          return false;
+        } catch (_) {
+          return false;
+        }
+      }
+
+      if (selectedSearch.includes("npub")) {
+        try {
+          const parsedNpub = nip19.decode(selectedSearch);
+          if (parsedNpub.type === "npub") {
+            return parsedNpub.data === productData.pubkey;
+          }
+          return false;
+        } catch (_) {
+          return false;
+        }
+      }
+
+      try {
+        const re = new RegExp(selectedSearch, "gi");
+
+        const titleMatch = productData.title.match(re);
+        if (titleMatch && titleMatch.length > 0) return true;
+
+        if (productData.summary) {
+          const summaryMatch = productData.summary.match(re);
+          if (summaryMatch && summaryMatch.length > 0) return true;
+        }
+
+        const numericSearch = parseFloat(selectedSearch);
+        if (!isNaN(numericSearch) && productData.price === numericSearch) {
+          return true;
+        }
+
+        return false;
+      } catch (_) {
+        return false;
+      }
+    },
+    [selectedSearch]
+  );
+
+  const productSatisfiesAllFilters = useCallback(
+    (productData: ProductData) => {
+      return (
+        productSatisfiesCategoryFilter(productData) &&
+        productSatisfieslocationFilter(productData) &&
+        productSatisfiesSearchFilter(productData)
+      );
+    },
+    [
+      productSatisfiesCategoryFilter,
+      productSatisfieslocationFilter,
+      productSatisfiesSearchFilter,
+    ]
+  );
 
   useEffect(() => {
     if (focusedPubkey && setCategories) {
@@ -132,7 +223,7 @@ const DisplayProducts = ({
       });
       setCategories(productCategories);
     }
-  }, [productEvents, focusedPubkey]);
+  }, [productEvents, focusedPubkey, setCategories]);
 
   useEffect(() => {
     if (!productEvents || !isInitialized) return;
@@ -190,6 +281,10 @@ const DisplayProducts = ({
     selectedCategories,
     focusedPubkey,
     isInitialized,
+    currentPage,
+    onFilteredProductsChange,
+    productSatisfiesAllFilters,
+    userPubkey,
   ]);
 
   // Scroll effect only on page change
@@ -237,12 +332,7 @@ const DisplayProducts = ({
       return `/listing/${product.id}`;
     }
 
-    const allParsed = productEventContext.productEvents
-      .filter((e: NostrEvent) => e.kind !== 1)
-      .map((e: NostrEvent) => parseTags(e))
-      .filter((p: ProductData | undefined): p is ProductData => !!p);
-
-    const slug = getListingSlug(product, allParsed);
+    const slug = listingSlugIndexes.slugByProductId.get(product.id);
     if (slug) {
       return `/listing/${slug}`;
     }
@@ -258,82 +348,6 @@ const DisplayProducts = ({
     } else {
       setShowModal(false);
     }
-  };
-
-  const productSatisfiesCategoryFilter = (productData: ProductData) => {
-    if (selectedCategories.size === 0) return true;
-    return Array.from(selectedCategories).some((selectedCategory) => {
-      const re = new RegExp(selectedCategory, "gi");
-      return productData?.categories?.some((category) => {
-        const match = category.match(re);
-        return match && match.length > 0;
-      });
-    });
-  };
-
-  const productSatisfieslocationFilter = (productData: ProductData) => {
-    return !selectedLocation || productData.location === selectedLocation;
-  };
-
-  const productSatisfiesSearchFilter = (productData: ProductData) => {
-    if (!selectedSearch) return true;
-    if (!productData.title) return false;
-
-    if (selectedSearch.includes("naddr")) {
-      try {
-        const parsedNaddr = nip19.decode(selectedSearch);
-        if (parsedNaddr.type === "naddr") {
-          return (
-            productData.d === parsedNaddr.data.identifier &&
-            productData.pubkey === parsedNaddr.data.pubkey
-          );
-        }
-        return false;
-      } catch (_) {
-        return false;
-      }
-    }
-
-    if (selectedSearch.includes("npub")) {
-      try {
-        const parsedNpub = nip19.decode(selectedSearch);
-        if (parsedNpub.type === "npub") {
-          return parsedNpub.data === productData.pubkey;
-        }
-        return false;
-      } catch (_) {
-        return false;
-      }
-    }
-
-    try {
-      const re = new RegExp(selectedSearch, "gi");
-
-      const titleMatch = productData.title.match(re);
-      if (titleMatch && titleMatch.length > 0) return true;
-
-      if (productData.summary) {
-        const summaryMatch = productData.summary.match(re);
-        if (summaryMatch && summaryMatch.length > 0) return true;
-      }
-
-      const numericSearch = parseFloat(selectedSearch);
-      if (!isNaN(numericSearch) && productData.price === numericSearch) {
-        return true;
-      }
-
-      return false;
-    } catch (_) {
-      return false;
-    }
-  };
-
-  const productSatisfiesAllFilters = (productData: ProductData) => {
-    return (
-      productSatisfiesCategoryFilter(productData) &&
-      productSatisfieslocationFilter(productData) &&
-      productSatisfiesSearchFilter(productData)
-    );
   };
 
   const getCurrentPageProducts = () => {
@@ -373,6 +387,7 @@ const DisplayProducts = ({
                   <ProductCard
                     key={productData.id + "-" + index}
                     productData={productData}
+                    compactMedia
                     onProductClick={onProductClick}
                     href={getProductHref(productData)}
                   />

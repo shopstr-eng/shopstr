@@ -40,7 +40,51 @@ export type ProductData = {
   rawEvent?: NostrEvent;
 };
 
+type ParsedProductLookup = {
+  parsedProducts: ProductData[];
+  byEventId: Map<string, ProductData>;
+  byAddress: Map<string, ProductData>;
+};
+
+const PARSED_EVENT_CACHE_MAX_ENTRIES = 3000;
+const parsedEventCache = new Map<string, ProductData>();
+
+function getEventCacheKey(productEvent: NostrEvent): string {
+  return `${productEvent.id}:${productEvent.created_at}`;
+}
+
+function getParsedProductFromCache(cacheKey: string): ProductData | undefined {
+  const cachedProduct = parsedEventCache.get(cacheKey);
+  if (!cachedProduct) return undefined;
+
+  // Refresh insertion order on read so oldest entries can be evicted first.
+  parsedEventCache.delete(cacheKey);
+  parsedEventCache.set(cacheKey, cachedProduct);
+  return cachedProduct;
+}
+
+function setParsedProductCache(cacheKey: string, parsedData: ProductData): void {
+  if (parsedEventCache.has(cacheKey)) {
+    parsedEventCache.delete(cacheKey);
+  }
+
+  parsedEventCache.set(cacheKey, parsedData);
+
+  if (parsedEventCache.size > PARSED_EVENT_CACHE_MAX_ENTRIES) {
+    const oldestCacheKey = parsedEventCache.keys().next().value;
+    if (oldestCacheKey !== undefined) {
+      parsedEventCache.delete(oldestCacheKey);
+    }
+  }
+}
+
 export const parseTags = (productEvent: NostrEvent) => {
+  const cacheKey = getEventCacheKey(productEvent);
+  const cachedProduct = getParsedProductFromCache(cacheKey);
+  if (cachedProduct) {
+    return cachedProduct;
+  }
+
   const parsedData: ProductData = {
     id: "",
     pubkey: "",
@@ -185,7 +229,33 @@ export const parseTags = (productEvent: NostrEvent) => {
     }
   });
   parsedData.totalCost = calculateTotalCost(parsedData);
+  setParsedProductCache(cacheKey, parsedData);
   return parsedData;
+};
+
+export const parseProductEventsWithLookup = (
+  productEvents: NostrEvent[]
+): ParsedProductLookup => {
+  const parsedProducts: ProductData[] = [];
+  const byEventId = new Map<string, ProductData>();
+  const byAddress = new Map<string, ProductData>();
+
+  for (const event of productEvents) {
+    const parsed = parseTags(event);
+    if (!parsed) continue;
+
+    parsedProducts.push(parsed);
+    byEventId.set(event.id, parsed);
+    if (parsed.d) {
+      byAddress.set(`${event.kind}:${event.pubkey}:${parsed.d}`, parsed);
+    }
+  }
+
+  return {
+    parsedProducts,
+    byEventId,
+    byAddress,
+  };
 };
 
 export default parseTags;

@@ -150,7 +150,7 @@ export default function ProductForm({
     } else {
       setIsFlashSale(false);
     }
-  }, [showModal, signerPubKey, profileContext]);
+  }, [showModal, oldValues, signerPubKey, profileContext]);
 
   const onSubmit = async (data: {
     [x: string]: string | Map<string, number> | string[];
@@ -364,7 +364,9 @@ export default function ProductForm({
             if (e.target !== e.currentTarget) {
               e.preventDefault();
             }
-            return handleSubmit(onSubmit as any)(e);
+            return handleSubmit(
+              onSubmit as unknown as Parameters<typeof handleSubmit>[0]
+            )(e);
           }}
         >
           <ModalBody>
@@ -1641,13 +1643,17 @@ export default function ProductForm({
               onClick={(e) => {
                 if (signer && isLoggedIn) {
                   e.preventDefault();
-                  handleSubmit(onSubmit as any)();
+                  handleSubmit(
+                    onSubmit as unknown as Parameters<typeof handleSubmit>[0]
+                  )();
                 }
               }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault(); // Prevent default to avoid submitting the form again
-                  handleSubmit(onSubmit as any)(); // Programmatic submit
+                  handleSubmit(
+                    onSubmit as unknown as Parameters<typeof handleSubmit>[0]
+                  )(); // Programmatic submit
                 }
               }}
               isDisabled={isPostingOrUpdatingProduct}

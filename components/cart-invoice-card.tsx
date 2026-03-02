@@ -63,6 +63,8 @@ import {
 } from "@/utils/types/types";
 import { Controller } from "react-hook-form";
 
+type PaymentFormPayload = Record<string, string | undefined>;
+
 export default function CartInvoiceCard({
   products,
   quantities,
@@ -129,66 +131,6 @@ export default function CartInvoiceCard({
     selectedVolume?: string;
     selectedBulkOption?: string;
   } | null>(null);
-
-  useEffect(() => {
-    if (paymentConfirmed && pendingOrderRef.current) {
-      try {
-        const cartItems = products.map((p: any) => ({
-          title: p.title || p.productName,
-          image: p.images?.[0] || "",
-          amount: String(totalCostsInSats[p.id] || 0),
-          currency: "sats",
-          quantity: quantities[p.id] || 1,
-          shipping: shippingTypes[p.id] || "",
-          pickupLocation: selectedPickupLocations[p.id] || undefined,
-          selectedSize: p.selectedSize || undefined,
-          selectedVolume: p.selectedVolume || undefined,
-          selectedBulkOption: p.selectedBulkOption
-            ? String(p.selectedBulkOption)
-            : undefined,
-        }));
-        const anyFreeShipping = Object.values(sellerFreeShippingStatus).some(
-          (s) => s.qualifies
-        );
-        let originalShipping = 0;
-        if (anyFreeShipping) {
-          const sellersSeen = new Set<string>();
-          products.forEach((p) => {
-            if (sellersSeen.has(p.pubkey)) return;
-            sellersSeen.add(p.pubkey);
-            if (sellerFreeShippingStatus[p.pubkey]?.qualifies) {
-              const { highestShippingCost } = getConsolidatedShippingForSeller(
-                p.pubkey
-              );
-              originalShipping += highestShippingCost;
-            }
-          });
-        }
-        sessionStorage.setItem(
-          "orderSummary",
-          JSON.stringify({
-            productTitle: pendingOrderRef.current.productTitle,
-            productImage: products[0]?.images?.[0] || "",
-            amount: String(totalCost),
-            subtotal: String(subtotalCost),
-            currency: pendingOrderRef.current.currency,
-            paymentMethod: pendingOrderRef.current.paymentMethod,
-            orderId: pendingOrderRef.current.orderId,
-            shippingAddress: pendingOrderRef.current.shippingAddress,
-            sellerPubkey: pendingOrderRef.current.sellerPubkey,
-            isCart: true,
-            cartItems,
-            freeShippingApplied: anyFreeShipping,
-            originalShippingCost: anyFreeShipping
-              ? String(originalShipping)
-              : undefined,
-          })
-        );
-      } catch {}
-
-      pendingOrderRef.current = null;
-    }
-  }, [paymentConfirmed]);
 
   const walletContext = useContext(CashuWalletContext);
 
@@ -351,7 +293,7 @@ export default function CartInvoiceCard({
   const [showFailureModal, setShowFailureModal] = useState(false);
 
   // NWC State
-  const [nwcInfo, setNwcInfo] = useState<any | null>(null);
+  const [nwcInfo, setNwcInfo] = useState<Record<string, unknown> | null>(null);
   const [isNwcLoading, setIsNwcLoading] = useState(false);
   const [failureText, setFailureText] = useState("");
 
@@ -365,6 +307,84 @@ export default function CartInvoiceCard({
   }>({});
 
   const [totalCost, setTotalCost] = useState<number>(subtotalCost);
+  const [effectiveTotalCostsInSats, setEffectiveTotalCostsInSats] = useState<{
+    [key: string]: number;
+  }>(totalCostsInSats);
+
+  useEffect(() => {
+    setEffectiveTotalCostsInSats(totalCostsInSats);
+  }, [totalCostsInSats]);
+
+  useEffect(() => {
+    if (paymentConfirmed && pendingOrderRef.current) {
+      try {
+        const cartItems = products.map((p: ProductData) => ({
+          title: p.title || "",
+          image: p.images?.[0] || "",
+          amount: String(effectiveTotalCostsInSats[p.id] || 0),
+          currency: "sats",
+          quantity: quantities[p.id] || 1,
+          shipping: shippingTypes[p.id] || "",
+          pickupLocation: selectedPickupLocations[p.id] || undefined,
+          selectedSize: p.selectedSize || undefined,
+          selectedVolume: p.selectedVolume || undefined,
+          selectedBulkOption: p.selectedBulkOption
+            ? String(p.selectedBulkOption)
+            : undefined,
+        }));
+        const anyFreeShipping = Object.values(sellerFreeShippingStatus).some(
+          (status) => status.qualifies
+        );
+        let originalShipping = 0;
+        if (anyFreeShipping) {
+          const sellersSeen = new Set<string>();
+          products.forEach((product: ProductData) => {
+            if (sellersSeen.has(product.pubkey)) return;
+            sellersSeen.add(product.pubkey);
+            if (sellerFreeShippingStatus[product.pubkey]?.qualifies) {
+              const { highestShippingCost } = getConsolidatedShippingForSeller(
+                product.pubkey
+              );
+              originalShipping += highestShippingCost;
+            }
+          });
+        }
+        sessionStorage.setItem(
+          "orderSummary",
+          JSON.stringify({
+            productTitle: pendingOrderRef.current.productTitle,
+            productImage: products[0]?.images?.[0] || "",
+            amount: String(totalCost),
+            subtotal: String(subtotalCost),
+            currency: pendingOrderRef.current.currency,
+            paymentMethod: pendingOrderRef.current.paymentMethod,
+            orderId: pendingOrderRef.current.orderId,
+            shippingAddress: pendingOrderRef.current.shippingAddress,
+            sellerPubkey: pendingOrderRef.current.sellerPubkey,
+            isCart: true,
+            cartItems,
+            freeShippingApplied: anyFreeShipping,
+            originalShippingCost: anyFreeShipping
+              ? String(originalShipping)
+              : undefined,
+          })
+        );
+      } catch {}
+
+      pendingOrderRef.current = null;
+    }
+  }, [
+    paymentConfirmed,
+    products,
+    quantities,
+    selectedPickupLocations,
+    shippingTypes,
+    subtotalCost,
+    totalCost,
+    effectiveTotalCostsInSats,
+    sellerFreeShippingStatus,
+    getConsolidatedShippingForSeller,
+  ]);
 
   const {
     handleSubmit: handleFormSubmit,
@@ -402,7 +422,7 @@ export default function CartInvoiceCard({
     }
   }, [products]);
 
-  // Check if any products have pickup locations
+  // Check if unknown products have pickup locations
   const productsWithPickupLocations = useMemo(() => {
     return products.filter(
       (product) =>
@@ -609,6 +629,11 @@ export default function CartInvoiceCard({
       setShowFailureModal(true);
       return;
     }
+    if (!signer) {
+      setFailureText("Signer is required to send order messages.");
+      setShowFailureModal(true);
+      return;
+    }
 
     const decodedRandomPubkeyForSender = nip19.decode(keys.senderNpub);
     const decodedRandomPrivkeyForSender = nip19.decode(keys.senderNsec);
@@ -621,7 +646,7 @@ export default function CartInvoiceCard({
     }
 
     let messageSubject = "";
-    let messageOptions: any = {};
+    let messageOptions: Parameters<typeof constructGiftWrappedEvent>[4] = {};
     if (isPayment) {
       messageSubject = "order-payment";
       messageOptions = {
@@ -694,7 +719,7 @@ export default function CartInvoiceCard({
       messageOptions
     );
     const sealedEvent = await constructMessageSeal(
-      signer || ({} as any),
+      signer,
       giftWrappedMessageEvent,
       decodedRandomPubkeyForSender.data as string,
       pubkeyToReceiveMessage,
@@ -722,7 +747,7 @@ export default function CartInvoiceCard({
 
   const validatePaymentData = (
     price: number,
-    data?: ShippingFormData | ContactFormData | CombinedFormData
+    data?: PaymentFormPayload
   ) => {
     if (price < 1) {
       throw new Error("Payment amount must be greater than 0 sats");
@@ -730,7 +755,7 @@ export default function CartInvoiceCard({
 
     if (data) {
       if ("Name" in data && "Contact" in data) {
-        const combinedData = data as CombinedFormData;
+        const combinedData = data as unknown as CombinedFormData;
         if (
           !combinedData.Name?.trim() ||
           !combinedData.Address?.trim() ||
@@ -745,7 +770,7 @@ export default function CartInvoiceCard({
           throw new Error("Required fields are missing");
         }
       } else if ("Name" in data) {
-        const shippingData = data as ShippingFormData;
+        const shippingData = data as unknown as ShippingFormData;
         if (
           !shippingData.Name?.trim() ||
           !shippingData.Address?.trim() ||
@@ -757,7 +782,7 @@ export default function CartInvoiceCard({
           throw new Error("Required shipping fields are missing");
         }
       } else if ("Contact" in data) {
-        const contactData = data as ContactFormData;
+        const contactData = data as unknown as ContactFormData;
         if (
           !contactData.Contact?.trim() ||
           !contactData["Contact Type"]?.trim() ||
@@ -790,7 +815,16 @@ export default function CartInvoiceCard({
         additionalInfo: data["Required"],
       };
 
-      let paymentData: any = commonData;
+      let paymentData: {
+        additionalInfo?: string;
+        shippingName?: string;
+        shippingAddress?: string;
+        shippingUnitNo?: string;
+        shippingCity?: string;
+        shippingPostalCode?: string;
+        shippingState?: string;
+        shippingCountry?: string;
+      } = commonData;
 
       if (formType === "shipping") {
         paymentData = {
@@ -825,8 +859,8 @@ export default function CartInvoiceCard({
             }, ${paymentData.shippingCountry || ""}`
           : undefined;
       const productTitles = products
-        .map((p: any) => {
-          const parts = [p.title || p.productName];
+        .map((p: ProductData) => {
+          const parts = [p.title || ""];
           if (p.selectedSize) parts.push(`Size: ${p.selectedSize}`);
           if (p.selectedVolume) parts.push(`Volume: ${p.selectedVolume}`);
           if (p.selectedBulkOption)
@@ -837,7 +871,7 @@ export default function CartInvoiceCard({
         })
         .join("; ");
       const pickupSummary = products
-        .map((p: any) => selectedPickupLocations[p.id])
+        .map((p: ProductData) => selectedPickupLocations[p.id])
         .filter(Boolean)
         .join(", ");
 
@@ -887,14 +921,17 @@ export default function CartInvoiceCard({
           (totalCostsInSats[product.id] || 0) + productShippingCost;
       }
 
+      setEffectiveTotalCostsInSats(updatedTotalCostsInSats);
       setTotalCost(subtotalCost + shippingTotal);
     } else if (selectedOrderType === "contact") {
       setFormType("contact");
       setIsFormValid(true);
+      setEffectiveTotalCostsInSats(totalCostsInSats);
       setTotalCost(subtotalCost);
     } else if (selectedOrderType === "combined") {
       setFormType("combined");
       if (hasMixedShippingWithPickup) {
+        setEffectiveTotalCostsInSats(totalCostsInSats);
         setShowFreePickupSelection(true);
       } else {
         let shippingTotal = 0;
@@ -925,16 +962,19 @@ export default function CartInvoiceCard({
           }
         }
 
+        setEffectiveTotalCostsInSats(updatedTotalCostsInSats);
         setTotalCost(subtotalCost + shippingTotal);
       }
     }
   };
 
-  const handleNWCError = (error: any) => {
+  const handleNWCError = (error: unknown) => {
     console.error("NWC Payment failed:", error);
     let message = "Payment failed. Please try again.";
     if (error && typeof error === "object" && "code" in error) {
-      switch (error.code) {
+      const errorCode =
+        typeof error.code === "string" ? error.code : "UNKNOWN_ERROR";
+      switch (errorCode) {
         case "INSUFFICIENT_BALANCE":
           message = "Payment failed: Insufficient balance in your wallet.";
           break;
@@ -951,7 +991,10 @@ export default function CartInvoiceCard({
             "You are sending payments too quickly. Please wait a moment.";
           break;
         default:
-          message = error.message || "An unknown wallet error occurred.";
+          message =
+            "message" in error && typeof error.message === "string"
+              ? error.message
+              : "An unknown wallet error occurred.";
       }
     } else if (error instanceof Error) {
       message = error.message;
@@ -960,7 +1003,10 @@ export default function CartInvoiceCard({
     setShowFailureModal(true);
   };
 
-  const handleNWCPayment = async (convertedPrice: number, data: any) => {
+  const handleNWCPayment = async (
+    convertedPrice: number,
+    data: PaymentFormPayload
+  ) => {
     setIsNwcLoading(true);
     let nwc: webln.NostrWebLNProvider | null = null;
 
@@ -979,7 +1025,7 @@ export default function CartInvoiceCard({
 
       await nwc.sendPayment(pr);
       await invoiceHasBeenPaid(wallet, totalCost, hash, data);
-    } catch (error: any) {
+    } catch (error: unknown) {
       handleNWCError(error);
     } finally {
       nwc?.close();
@@ -987,7 +1033,10 @@ export default function CartInvoiceCard({
     }
   };
 
-  const handleLightningPayment = async (convertedPrice: number, data: any) => {
+  const handleLightningPayment = async (
+    convertedPrice: number,
+    data: PaymentFormPayload
+  ) => {
     try {
       validatePaymentData(convertedPrice, data);
 
@@ -1007,15 +1056,23 @@ export default function CartInvoiceCard({
           console.error("ERROR", err);
         });
 
-      if (typeof window.webln !== "undefined") {
+      const browserWebLn = window.webln as
+        | {
+            enable: () => Promise<void>;
+            isEnabled: () => Promise<boolean>;
+            sendPayment: (invoice: string) => Promise<unknown>;
+          }
+        | null
+        | undefined;
+      if (browserWebLn) {
         try {
-          await window.webln.enable();
-          const isEnabled = await window.webln.isEnabled();
+          await browserWebLn.enable();
+          const isEnabled = await browserWebLn.isEnabled();
           if (!isEnabled) {
             throw new Error("WebLN is not enabled");
           }
           try {
-            const res = await window.webln.sendPayment(pr);
+            const res = await browserWebLn.sendPayment(pr);
             if (!res) {
               throw new Error("Payment failed");
             }
@@ -1045,7 +1102,7 @@ export default function CartInvoiceCard({
     wallet: CashuWallet,
     convertedPrice: number,
     hash: string,
-    data: any
+    data: PaymentFormPayload
   ) {
     let retryCount = 0;
     const maxRetries = 30; // Maximum 30 retries (about 1 minute)
@@ -1145,7 +1202,7 @@ export default function CartInvoiceCard({
   const sendTokens = async (
     wallet: CashuWallet,
     proofs: Proof[],
-    data: any
+    data: PaymentFormPayload
   ) => {
     let remainingProofs = proofs;
 
@@ -1166,10 +1223,18 @@ export default function CartInvoiceCard({
       const title = product.title;
       const pubkey = product.pubkey;
       const required = product.required;
-      const tokenAmount = totalCostsInSats[pubkey];
+      const tokenAmount = effectiveTotalCostsInSats[product.id] || 0;
       let sellerToken;
       let donationToken;
-      const sellerProfile = profileContext.profileData.get(pubkey);
+      const sellerProfile = profileContext.profileData.get(pubkey) as
+        | {
+            content?: {
+              shopstr_donation?: number;
+              payment_preference?: string;
+              lud16?: string;
+            };
+          }
+        | undefined;
       const donationPercentage =
         sellerProfile?.content?.shopstr_donation || 2.1;
       const donationAmount = Math.ceil(
@@ -1177,29 +1242,6 @@ export default function CartInvoiceCard({
       );
       const sellerAmount = tokenAmount! - donationAmount;
       let sellerProofs: Proof[] = [];
-
-      let shippingData = data; // Assume data contains shipping info
-      if (formType === "shipping") {
-        shippingData = {
-          Name: data.Name,
-          Address: data.Address,
-          Unit: data.Unit,
-          City: data.City,
-          "State/Province": data["State/Province"],
-          "Postal Code": data["Postal Code"],
-          Country: data.Country,
-        };
-      } else if (formType === "combined") {
-        shippingData = {
-          Name: data.Name,
-          Address: data.Address,
-          Unit: data.Unit,
-          City: data.City,
-          "State/Province": data["State/Province"],
-          "Postal Code": data["Postal Code"],
-          Country: data.Country,
-        };
-      }
 
       const orderId = uuidv4();
 
@@ -1218,48 +1260,6 @@ export default function CartInvoiceCard({
         sellerProfile?.content?.payment_preference || "ecash";
       const lnurl = sellerProfile?.content?.lud16 || "";
 
-      // Construct address string for order-info type
-      const addressString = shippingData.Name
-        ? `${shippingData.Name}, ${shippingData.Address}${
-            shippingData.Unit ? `, ${shippingData.Unit}` : ""
-          }, ${shippingData.City}, ${shippingData["State/Province"]}, ${
-            shippingData["Postal Code"]
-          }, ${shippingData.Country}`
-        : "";
-
-      // Construct order-info message with address tag
-      const orderInfoMessage = await constructMessageGiftWrap(
-        pubkey as any,
-        "", // Placeholder for seal
-        orderKeys.receiverNsec as any, // Placeholder for keypair
-        pubkey // Recipient pubkey
-      );
-      const orderInfoTags: string[][] = [
-        ["type", "1"],
-        ["subject", "order-info"],
-        ["order", orderId],
-        ["item", product.id],
-        ["shipping", shippingTypes[product.id] || ""], // Assuming shippingId can be derived from shippingTypes
-      ];
-      if (addressString) {
-        orderInfoTags.push(["address", addressString]);
-      }
-      if (tokenAmount) {
-        orderInfoTags.push(["amount", tokenAmount.toString()]);
-      }
-      if (donationAmount > 0) {
-        orderInfoTags.push([
-          "donation_amount",
-          donationAmount.toString(),
-          donationPercentage.toString(),
-        ]);
-      }
-      orderInfoMessage.tags = orderInfoTags;
-
-      // Construct payment message with cashu token tag
-      let paymentMessageText;
-      let paymentTags;
-
       if (sellerAmount > 0) {
         const { keep, send } = await wallet.send(
           sellerAmount,
@@ -1274,31 +1274,6 @@ export default function CartInvoiceCard({
           proofs: send,
         });
         remainingProofs = keep;
-
-        // Construct payment message with cashu token tag
-        paymentMessageText = await constructMessageGiftWrap(
-          pubkey as any,
-          "", // Placeholder for seal
-          orderKeys.receiverNsec as any, // Placeholder for keypair
-          pubkey // Recipient pubkey
-        );
-        paymentTags = [
-          ["type", "2"],
-          ["subject", "order-payment"],
-          ["order", orderId],
-          ["payment", "ecash", sellerToken],
-        ];
-        if (sellerAmount) {
-          paymentTags.push(["amount", sellerAmount.toString()]);
-        }
-        if (donationAmount > 0) {
-          paymentTags.push([
-            "donation_amount",
-            donationAmount.toString(),
-            donationPercentage.toString(),
-          ]);
-        }
-        paymentMessageText.tags = paymentTags;
       }
 
       // Handle donation if applicable
@@ -2036,8 +2011,13 @@ export default function CartInvoiceCard({
   };
 
   const formattedTotalCost = formatWithCommas(totalCost, "sats");
+  const nwcAlias =
+    nwcInfo && typeof nwcInfo.alias === "string" ? nwcInfo.alias : "NWC";
 
-  const handleCashuPayment = async (price: number, data: any) => {
+  const handleCashuPayment = async (
+    price: number,
+    data: PaymentFormPayload
+  ) => {
     try {
       if (!mints || mints.length === 0) {
         throw new Error("No Cashu mint available");
@@ -2059,9 +2039,13 @@ export default function CartInvoiceCard({
       const { keep, send } = await wallet.send(price, filteredProofs, {
         includeFees: true,
       });
+      const proofEvents = walletContext.proofEvents as Array<{
+        id: string;
+        proofs: Proof[];
+      }>;
       const deletedEventIds = [
         ...new Set([
-          ...walletContext.proofEvents
+          ...proofEvents
             .filter((event) =>
               event.proofs.some((proof: Proof) =>
                 filteredProofs.some(
@@ -2071,7 +2055,7 @@ export default function CartInvoiceCard({
               )
             )
             .map((event) => event.id),
-          ...walletContext.proofEvents
+          ...proofEvents
             .filter((event) =>
               event.proofs.some((proof: Proof) =>
                 keep.some(
@@ -2081,7 +2065,7 @@ export default function CartInvoiceCard({
               )
             )
             .map((event) => event.id),
-          ...walletContext.proofEvents
+          ...proofEvents
             .filter((event) =>
               event.proofs.some((proof: Proof) =>
                 send.some(
@@ -2967,6 +2951,7 @@ export default function CartInvoiceCard({
                       }
                     }
 
+                    setEffectiveTotalCostsInSats(updatedTotalCostsInSats);
                     setTotalCost(subtotalCost + shippingTotal);
                   }}
                   className={`w-full rounded-lg border p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-600 ${
@@ -3016,6 +3001,7 @@ export default function CartInvoiceCard({
                       }
                     }
 
+                    setEffectiveTotalCostsInSats(updatedTotalCostsInSats);
                     setTotalCost(subtotalCost + shippingTotal);
                   }}
                   className={`w-full rounded-lg border p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-600 ${
@@ -3157,7 +3143,7 @@ export default function CartInvoiceCard({
                       }}
                       startContent={<WalletIcon className="h-6 w-6" />}
                     >
-                      Pay with {nwcInfo.alias || "NWC"}: {formattedTotalCost}
+                      Pay with {nwcAlias}: {formattedTotalCost}
                     </Button>
                   )}
                 </div>

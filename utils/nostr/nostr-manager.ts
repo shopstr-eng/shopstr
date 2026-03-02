@@ -6,14 +6,6 @@ import {
   verifyEvent,
 } from "nostr-tools";
 import { SubscribeManyParams, SubCloser } from "nostr-tools/abstract-pool";
-
-import { NostrNIP46Signer } from "@/utils/nostr/signers/nostr-nip46-signer";
-import {
-  ChallengeHandler,
-  NostrSigner,
-} from "@/utils/nostr/signers/nostr-signer";
-import { NostrNSecSigner } from "@/utils/nostr/signers/nostr-nsec-signer";
-import { NostrNIP07Signer } from "@/utils/nostr/signers/nostr-nip07-signer";
 import { newPromiseWithTimeout } from "../timeout";
 
 export type NostrRelay = {
@@ -45,7 +37,7 @@ export class NostrManager {
   private readonly pool: SimplePool;
   private readonly params: NostrManagerParams;
   private readonly relays: Array<NostrRelay> = [];
-  private gcTimeout: any;
+  private gcTimeout: ReturnType<typeof setTimeout> | undefined;
 
   constructor(relays: Array<string> = [], params?: NostrManagerParams) {
     const {
@@ -68,18 +60,6 @@ export class NostrManager {
       this.addRelay(relay, { connectionTimeout: connectionTimeout });
     }
     this.gc().catch(console.error);
-  }
-
-  public static signerFrom(
-    args: { [key: string]: string },
-    challengeHandler: ChallengeHandler
-  ): NostrSigner {
-    const signer =
-      NostrNIP07Signer.fromJSON(args, challengeHandler) ??
-      NostrNSecSigner.fromJSON(args, challengeHandler) ??
-      NostrNIP46Signer.fromJSON(args, challengeHandler);
-    if (!signer) throw new Error("Invalid signer type " + JSON.stringify(args));
-    return signer;
   }
 
   private keepAlive(relays: NostrRelay[]) {

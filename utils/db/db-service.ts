@@ -347,7 +347,7 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
       // Delete older events from the same pubkey with the same kind
       const deleteQuery = {
         text: `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2`,
-        values: [event.pubkey, event.kind] as any[],
+        values: [event.pubkey, event.kind] as unknown[],
       };
       await client.query(deleteQuery);
 
@@ -363,7 +363,7 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
           JSON.stringify(event.tags),
           event.content,
           event.sig,
-        ] as any[],
+        ] as unknown[],
       };
       await client.query(insertQuery);
 
@@ -379,7 +379,7 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
         // Delete older reviews from the same pubkey for the same product
         const deleteQuery = {
           text: `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND tags::text LIKE $3`,
-          values: [event.pubkey, event.kind, `%"d","${dTag}"%`] as any[],
+          values: [event.pubkey, event.kind, `%"d","${dTag}"%`] as unknown[],
         };
         await client.query(deleteQuery);
       }
@@ -396,7 +396,7 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
           JSON.stringify(event.tags),
           event.content,
           event.sig,
-        ] as any[],
+        ] as unknown[],
       };
       await client.query(insertQuery);
 
@@ -421,7 +421,7 @@ export async function cacheEvent(event: NostrEvent): Promise<void> {
           JSON.stringify(event.tags),
           event.content,
           event.sig,
-        ] as any[],
+        ] as unknown[],
       };
       await client.query(query);
     }
@@ -457,15 +457,24 @@ export async function cacheEvents(events: NostrEvent[]): Promise<void> {
             await cacheEventsTransaction(events);
             resolve();
             return;
-          } catch (error: any) {
-            const isDeadlock = error?.code === "40P01";
+          } catch (error: unknown) {
+            const pgError =
+              typeof error === "object" && error !== null
+                ? (error as { code?: string; message?: string })
+                : {};
+            const isDeadlock = pgError.code === "40P01";
             const isConnectionError =
-              error?.message?.includes("Connection terminated") ||
-              error?.message?.includes("Connection timeout");
+              pgError.message?.includes("Connection terminated") ||
+              pgError.message?.includes("Connection timeout");
 
             if ((isDeadlock || isConnectionError) && attempt < maxRetries - 1) {
               attempt++;
               const delay = 100 * Math.pow(2, attempt);
+              console.warn(
+                `Database error detected (${
+                  isDeadlock ? "deadlock" : "connection error"
+                }), retrying in ${delay}ms (attempt ${attempt}/${maxRetries})...`
+              );
               await new Promise((res) => setTimeout(res, delay));
             } else {
               reject(error);
@@ -524,7 +533,7 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
         // First, lock and delete old rows
         await client.query(
           `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND id != $3`,
-          [event.pubkey, event.kind, event.id] as any[]
+          [event.pubkey, event.kind, event.id] as unknown[]
         );
 
         // Then insert/update with ON CONFLICT
@@ -548,7 +557,7 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
             JSON.stringify(event.tags),
             event.content,
             event.sig,
-          ] as any[],
+          ] as unknown[],
         };
         await client.query(upsertQuery);
       }
@@ -573,7 +582,7 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
           // First, lock and delete old rows
           await client.query(
             `DELETE FROM ${table} WHERE pubkey = $1 AND kind = $2 AND tags::text LIKE $3 AND id != $4`,
-            [event.pubkey, event.kind, `%"d","${dTag}"%`, event.id] as any[]
+            [event.pubkey, event.kind, `%"d","${dTag}"%`, event.id] as unknown[]
           );
 
           // Then insert/update with ON CONFLICT
@@ -597,7 +606,7 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
               JSON.stringify(event.tags),
               event.content,
               event.sig,
-            ] as any[],
+            ] as unknown[],
           };
           await client.query(upsertQuery);
         }
@@ -623,7 +632,7 @@ async function cacheEventsTransaction(events: NostrEvent[]): Promise<void> {
             JSON.stringify(event.tags),
             event.content,
             event.sig,
-          ] as any[],
+          ] as unknown[],
         };
         await client.query(query);
       }
@@ -666,7 +675,7 @@ export async function fetchCachedEvents(
   try {
     client = await dbPool.connect();
     let query = `SELECT id, pubkey, created_at, kind, tags, content, sig FROM ${table} WHERE 1=1`;
-    const params: any[] = [];
+    const params: unknown[] = [];
     let paramIndex = 1;
 
     if (filters?.pubkey) {
@@ -781,13 +790,124 @@ export async function deleteCachedEventsByIds(
 }
 
 // Fetch all products from database
-export async function fetchAllProductsFromDb(): Promise<NostrEvent[]> {
-  return fetchCachedEvents(30402);
+export async function fetchAllProductsFromDb(filters?: {
+  pubkeys?: string[];
+  since?: number;
+  until?: number;
+  limit?: number;
+}): Promise<NostrEvent[]> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    let query = `SELECT id, pubkey, created_at, kind, tags, content, sig
+                 FROM product_events WHERE 1=1`;
+    const params: unknown[] = [];
+    let paramIndex = 1;
+
+    if (filters?.pubkeys?.length) {
+      query += ` AND pubkey = ANY($${paramIndex++})`;
+      params.push(filters.pubkeys);
+    }
+
+    if (filters?.since) {
+      query += ` AND created_at >= $${paramIndex++}`;
+      params.push(filters.since);
+    }
+
+    if (filters?.until) {
+      query += ` AND created_at <= $${paramIndex++}`;
+      params.push(filters.until);
+    }
+
+    query += " ORDER BY created_at DESC";
+
+    if (filters?.limit) {
+      query += ` LIMIT $${paramIndex++}`;
+      params.push(filters.limit);
+    }
+
+    const result = await client.query(query, params);
+    return result.rows.map((row) => ({
+      id: row.id,
+      pubkey: row.pubkey,
+      created_at: row.created_at,
+      kind: row.kind,
+      tags: row.tags,
+      content: row.content,
+      sig: row.sig,
+    }));
+  } catch (error) {
+    console.error("Failed to fetch products from database:", error);
+    return [];
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
 }
 
 // Fetch all reviews from database
-export async function fetchAllReviewsFromDb(): Promise<NostrEvent[]> {
-  return fetchCachedEvents(31555);
+export async function fetchAllReviewsFromDb(filters?: {
+  addresses?: string[];
+  pubkeys?: string[];
+  since?: number;
+  limit?: number;
+}): Promise<NostrEvent[]> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    let query = `SELECT id, pubkey, created_at, kind, tags, content, sig
+                 FROM review_events WHERE 1=1`;
+    const params: unknown[] = [];
+    let paramIndex = 1;
+
+    if (filters?.pubkeys?.length) {
+      query += ` AND pubkey = ANY($${paramIndex++})`;
+      params.push(filters.pubkeys);
+    }
+
+    if (filters?.addresses?.length) {
+      query += ` AND EXISTS (
+        SELECT 1 FROM jsonb_array_elements(tags) AS tag
+        WHERE tag->>0 = 'd' AND tag->>1 = ANY($${paramIndex++})
+      )`;
+      params.push(filters.addresses);
+    }
+
+    if (filters?.since) {
+      query += ` AND created_at >= $${paramIndex++}`;
+      params.push(filters.since);
+    }
+
+    query += " ORDER BY created_at DESC";
+
+    if (filters?.limit) {
+      query += ` LIMIT $${paramIndex++}`;
+      params.push(filters.limit);
+    }
+
+    const result = await client.query(query, params);
+    return result.rows.map((row) => ({
+      id: row.id,
+      pubkey: row.pubkey,
+      created_at: row.created_at,
+      kind: row.kind,
+      tags: row.tags,
+      content: row.content,
+      sig: row.sig,
+    }));
+  } catch (error) {
+    console.error("Failed to fetch reviews from database:", error);
+    return [];
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
 }
 
 // Fetch all messages from database with read status
@@ -801,7 +921,7 @@ export async function fetchAllMessagesFromDb(
     client = await dbPool.connect();
     let query = `SELECT id, pubkey, created_at, kind, tags, content, sig, COALESCE(is_read, FALSE) as is_read 
                  FROM message_events WHERE 1=1`;
-    const params: any[] = [];
+    const params: unknown[] = [];
     let paramIndex = 1;
 
     if (pubkey) {
@@ -948,17 +1068,45 @@ export async function getOrderStatuses(
 }
 
 // Fetch all profiles from database (both user and shop profiles)
-export async function fetchAllProfilesFromDb(): Promise<NostrEvent[]> {
+export async function fetchAllProfilesFromDb(filters?: {
+  pubkeys?: string[];
+  kinds?: number[];
+  since?: number;
+  limit?: number;
+}): Promise<NostrEvent[]> {
   const dbPool = getDbPool();
   let client;
 
   try {
     client = await dbPool.connect();
-    const query = `SELECT id, pubkey, created_at, kind, tags, content, sig 
-                   FROM profile_events 
-                   ORDER BY created_at DESC`;
+    let query = `SELECT id, pubkey, created_at, kind, tags, content, sig
+                 FROM profile_events WHERE 1=1`;
+    const params: unknown[] = [];
+    let paramIndex = 1;
 
-    const result = await client.query(query);
+    if (filters?.pubkeys?.length) {
+      query += ` AND pubkey = ANY($${paramIndex++})`;
+      params.push(filters.pubkeys);
+    }
+
+    if (filters?.kinds?.length) {
+      query += ` AND kind = ANY($${paramIndex++})`;
+      params.push(filters.kinds);
+    }
+
+    if (filters?.since) {
+      query += ` AND created_at >= $${paramIndex++}`;
+      params.push(filters.since);
+    }
+
+    query += " ORDER BY created_at DESC";
+
+    if (filters?.limit) {
+      query += ` LIMIT $${paramIndex++}`;
+      params.push(filters.limit);
+    }
+
+    const result = await client.query(query, params);
 
     return result.rows.map((row) => ({
       id: row.id,
@@ -981,19 +1129,42 @@ export async function fetchAllProfilesFromDb(): Promise<NostrEvent[]> {
 
 // Fetch wallet events from database
 export async function fetchAllWalletEventsFromDb(
-  pubkey: string
+  pubkey: string,
+  filters?: {
+    kinds?: number[];
+    since?: number;
+    limit?: number;
+  }
 ): Promise<NostrEvent[]> {
   const dbPool = getDbPool();
   let client;
 
   try {
     client = await dbPool.connect();
-    const query = `SELECT id, pubkey, created_at, kind, tags, content, sig 
-                   FROM wallet_events 
-                   WHERE pubkey = $1
-                   ORDER BY created_at DESC`;
+    let query = `SELECT id, pubkey, created_at, kind, tags, content, sig
+                 FROM wallet_events
+                 WHERE pubkey = $1`;
+    const params: unknown[] = [pubkey];
+    let paramIndex = 2;
 
-    const result = await client.query(query, [pubkey]);
+    if (filters?.kinds?.length) {
+      query += ` AND kind = ANY($${paramIndex++})`;
+      params.push(filters.kinds);
+    }
+
+    if (filters?.since) {
+      query += ` AND created_at >= $${paramIndex++}`;
+      params.push(filters.since);
+    }
+
+    query += " ORDER BY created_at DESC";
+
+    if (filters?.limit) {
+      query += ` LIMIT $${paramIndex++}`;
+      params.push(filters.limit);
+    }
+
+    const result = await client.query(query, params);
 
     return result.rows.map((row) => ({
       id: row.id,
@@ -1051,7 +1222,7 @@ export async function addDiscountCode(
              ON CONFLICT (code, pubkey) DO UPDATE SET
                discount_percentage = EXCLUDED.discount_percentage,
                expiration = EXCLUDED.expiration`,
-      values: [code, pubkey, discountPercentage, expiration || null] as any[],
+      values: [code, pubkey, discountPercentage, expiration || null] as unknown[],
     };
     await client.query(query);
   } catch (error) {
