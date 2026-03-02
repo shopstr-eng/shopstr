@@ -58,6 +58,8 @@ export interface ShopProfile {
       darkMode: boolean;
     };
     merchants: string[];
+    freeShippingThreshold?: number;
+    freeShippingCurrency?: string;
   };
   created_at: number;
   event?: NostrEvent;

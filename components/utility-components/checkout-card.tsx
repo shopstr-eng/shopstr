@@ -29,7 +29,12 @@ import {
   ArrowLongUpIcon,
   EllipsisVerticalIcon,
 } from "@heroicons/react/24/outline";
-import { ReviewsContext, ProductContext } from "@/utils/context/context";
+import {
+  ReviewsContext,
+  ProductContext,
+  ShopMapContext,
+} from "@/utils/context/context";
+import FreeShippingNotification from "../free-shipping-notification";
 import FailureModal from "../utility-components/failure-modal";
 import SuccessModal from "../utility-components/success-modal";
 import SignInModal from "../sign-in/SignInModal";
@@ -61,7 +66,10 @@ export default function CheckoutCard({
 }) {
   const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
   const productEventContext = useContext(ProductContext);
+  const shopMapContext = useContext(ShopMapContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const [showFreeShippingNotification, setShowFreeShippingNotification] =
+    useState(false);
   const [showRawEventModal, setShowRawEventModal] = useState(false);
   const [showEventIdModal, setShowEventIdModal] = useState(false);
 
@@ -306,6 +314,15 @@ export default function CheckoutCard({
       updatedCart = [...cart, productToAdd];
       setCart(updatedCart);
       localStorage.setItem("cart", JSON.stringify(updatedCart));
+
+      const sellerShop = shopMapContext.shopData.get(productData.pubkey);
+      if (
+        sellerShop &&
+        sellerShop.content.freeShippingThreshold &&
+        sellerShop.content.freeShippingThreshold > 0
+      ) {
+        setShowFreeShippingNotification(true);
+      }
 
       // Store discount code if applied
       if (appliedDiscount > 0 && discountCode) {
@@ -954,6 +971,12 @@ export default function CheckoutCard({
           isOpen={showEventIdModal}
           onClose={() => setShowEventIdModal(false)}
           rawEvent={rawEvent}
+        />
+        <FreeShippingNotification
+          isVisible={showFreeShippingNotification}
+          onClose={() => setShowFreeShippingNotification(false)}
+          shopData={shopMapContext.shopData}
+          cart={cart}
         />
       </div>
     </div>

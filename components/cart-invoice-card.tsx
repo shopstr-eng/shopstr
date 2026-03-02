@@ -59,6 +59,7 @@ import {
   ShippingFormData,
   ContactFormData,
   CombinedFormData,
+  ShopProfile,
 } from "@/utils/types/types";
 import { Controller } from "react-hook-form";
 
@@ -70,6 +71,7 @@ export default function CartInvoiceCard({
   subtotalCost,
   appliedDiscounts = {},
   discountCodes = {},
+  shopProfiles,
   onBackToCart,
   setInvoiceIsPaid,
   setInvoiceGenerationFailed,
@@ -83,6 +85,7 @@ export default function CartInvoiceCard({
   subtotalCost: number;
   appliedDiscounts?: { [key: string]: number };
   discountCodes?: { [key: string]: string };
+  shopProfiles?: Map<string, ShopProfile>;
   onBackToCart?: () => void;
   setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
   setInvoiceGenerationFailed?: (invoiceGenerationFailed: boolean) => void;
@@ -144,6 +147,23 @@ export default function CartInvoiceCard({
             ? String(p.selectedBulkOption)
             : undefined,
         }));
+        const anyFreeShipping = Object.values(sellerFreeShippingStatus).some(
+          (s) => s.qualifies
+        );
+        let originalShipping = 0;
+        if (anyFreeShipping) {
+          const sellersSeen = new Set<string>();
+          products.forEach((p) => {
+            if (sellersSeen.has(p.pubkey)) return;
+            sellersSeen.add(p.pubkey);
+            if (sellerFreeShippingStatus[p.pubkey]?.qualifies) {
+              const { highestShippingCost } = getConsolidatedShippingForSeller(
+                p.pubkey
+              );
+              originalShipping += highestShippingCost;
+            }
+          });
+        }
         sessionStorage.setItem(
           "orderSummary",
           JSON.stringify({
@@ -158,6 +178,10 @@ export default function CartInvoiceCard({
             sellerPubkey: pendingOrderRef.current.sellerPubkey,
             isCart: true,
             cartItems,
+            freeShippingApplied: anyFreeShipping,
+            originalShippingCost: anyFreeShipping
+              ? String(originalShipping)
+              : undefined,
           })
         );
       } catch {}
@@ -174,6 +198,73 @@ export default function CartInvoiceCard({
     "shipping" | "contact" | "combined" | null
   >(null);
   const [showOrderTypeSelection, setShowOrderTypeSelection] = useState(true);
+
+  const sellerFreeShippingStatus = useMemo(() => {
+    const statusMap: {
+      [pubkey: string]: {
+        qualifies: boolean;
+        threshold: number;
+        currency: string;
+        sellerSubtotal: number;
+        sellerName: string;
+      };
+    } = {};
+    const productsBySeller: { [pubkey: string]: ProductData[] } = {};
+    products.forEach((p) => {
+      if (!productsBySeller[p.pubkey]) productsBySeller[p.pubkey] = [];
+      productsBySeller[p.pubkey]!.push(p);
+    });
+
+    Object.entries(productsBySeller).forEach(([pubkey, sellerProducts]) => {
+      const profile = shopProfiles?.get(pubkey);
+      if (
+        !profile?.content?.freeShippingThreshold ||
+        profile.content.freeShippingThreshold <= 0
+      )
+        return;
+      let sellerSubtotal = 0;
+      sellerProducts.forEach((product) => {
+        const discount = appliedDiscounts[pubkey] || 0;
+        const basePrice =
+          product.bulkPrice !== undefined
+            ? product.bulkPrice
+            : product.volumePrice !== undefined
+              ? product.volumePrice
+              : product.price;
+        const qty = quantities[product.id] || 1;
+        const discountedPrice =
+          discount > 0 ? basePrice * (1 - discount / 100) : basePrice;
+        sellerSubtotal += discountedPrice * qty;
+      });
+      statusMap[pubkey] = {
+        qualifies: sellerSubtotal >= profile.content.freeShippingThreshold,
+        threshold: profile.content.freeShippingThreshold,
+        currency: profile.content.freeShippingCurrency || "USD",
+        sellerSubtotal,
+        sellerName: profile.content.name || pubkey.substring(0, 8),
+      };
+    });
+    return statusMap;
+  }, [products, quantities, appliedDiscounts, shopProfiles]);
+
+  const getConsolidatedShippingForSeller = (
+    sellerPubkey: string
+  ): {
+    highestShippingProduct: ProductData | null;
+    highestShippingCost: number;
+  } => {
+    const sellerProducts = products.filter((p) => p.pubkey === sellerPubkey);
+    let highestShippingCost = 0;
+    let highestShippingProduct: ProductData | null = null;
+    sellerProducts.forEach((product) => {
+      const cost = product.shippingCost || 0;
+      if (cost > highestShippingCost) {
+        highestShippingCost = cost;
+        highestShippingProduct = product;
+      }
+    });
+    return { highestShippingProduct, highestShippingCost };
+  };
 
   const sendInquiryDM = async (sellerPubkey: string, productTitle: string) => {
     if (!signer || !nostr) return;
@@ -779,11 +870,15 @@ export default function CartInvoiceCard({
 
     if (selectedOrderType === "shipping") {
       setFormType("shipping");
-      // Calculate total with shipping in sats
       let shippingTotal = 0;
       const updatedTotalCostsInSats: { [productId: string]: number } = {};
 
       for (const product of products) {
+        if (sellerFreeShippingStatus[product.pubkey]?.qualifies) {
+          updatedTotalCostsInSats[product.id] =
+            totalCostsInSats[product.id] || 0;
+          continue;
+        }
         const shippingCostInSats = await convertShippingToSats(product);
         const quantity = quantities[product.id] || 1;
         const productShippingCost = Math.ceil(shippingCostInSats * quantity);
@@ -802,11 +897,15 @@ export default function CartInvoiceCard({
       if (hasMixedShippingWithPickup) {
         setShowFreePickupSelection(true);
       } else {
-        // Calculate shipping for combined non-Free/Pickup items in sats
         let shippingTotal = 0;
         const updatedTotalCostsInSats: { [productId: string]: number } = {};
 
         for (const product of products) {
+          if (sellerFreeShippingStatus[product.pubkey]?.qualifies) {
+            updatedTotalCostsInSats[product.id] =
+              totalCostsInSats[product.id] || 0;
+            continue;
+          }
           const productShippingType = shippingTypes[product.id];
           if (
             productShippingType === "Added Cost" ||
@@ -2841,6 +2940,11 @@ export default function CartInvoiceCard({
                     } = {};
 
                     for (const product of products) {
+                      if (sellerFreeShippingStatus[product.pubkey]?.qualifies) {
+                        updatedTotalCostsInSats[product.id] =
+                          totalCostsInSats[product.id] || 0;
+                        continue;
+                      }
                       const productShippingType = shippingTypes[product.id];
                       if (
                         productShippingType === "Added Cost" ||
@@ -2880,13 +2984,17 @@ export default function CartInvoiceCard({
                   onClick={async () => {
                     setShippingPickupPreference("contact");
                     setShowFreePickupSelection(false);
-                    // Calculate shipping for non-Free/Pickup items only in sats
                     let shippingTotal = 0;
                     const updatedTotalCostsInSats: {
                       [productId: string]: number;
                     } = {};
 
                     for (const product of products) {
+                      if (sellerFreeShippingStatus[product.pubkey]?.qualifies) {
+                        updatedTotalCostsInSats[product.id] =
+                          totalCostsInSats[product.id] || 0;
+                        continue;
+                      }
                       const productShippingType = shippingTypes[product.id];
                       if (
                         productShippingType === "Added Cost" ||

@@ -48,6 +48,7 @@ Preferred communication style: Simple, everyday language.
 - **Pickup Location Selection**: Option for customers to select pickup locations for orders.
 - **Order Status Persistence**: Database storage and API for tracking and updating order statuses.
 - **Unread/Read Indicator System**: Visual indicators for unread messages and new orders, with persistence.
+- **Free Shipping Threshold**: Merchants can set a minimum order amount (with currency) in their shop profile settings. When a buyer's cart subtotal from a seller meets or exceeds the threshold, shipping costs for that seller's items are waived. Features include: shop profile form fields (`freeShippingThreshold`, `freeShippingCurrency` in `ShopProfile` type), a slide-in notification on add-to-cart (`components/free-shipping-notification.tsx` using Framer Motion), per-seller progress bars on the cart page, automatic shipping cost waiver in `cart-invoice-card.tsx` for all order types (shipping/combined/pickup selection), and strikethrough original shipping cost with "Free" badge on the order summary page.
 
 ## External Dependencies
 
