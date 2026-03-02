@@ -244,9 +244,9 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
             Free Shipping Threshold
           </label>
           <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
-            Set a minimum order amount to offer free shipping. When a buyer's
-            order total from your shop reaches this amount, shipping costs will
-            be waived.
+            Set a minimum order amount to offer free shipping. When a
+            buyer&apos;s order total from your shop reaches this amount,
+            shipping costs will be waived.
           </p>
           <div className="flex gap-3">
             <div className="flex-1">
