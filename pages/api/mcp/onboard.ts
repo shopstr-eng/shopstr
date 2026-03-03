@@ -46,7 +46,8 @@ export default async function handler(
         body: {
           name: "(required) string - Name for this agent/integration",
           permissions: '(optional) "read" | "read_write" - defaults to "read"',
-          contact: "(optional) string - Contact email or URL for this agent",
+          contact:
+            "(optional) string - Contact URL or identifier for this agent",
           pubkey:
             "(optional) string - Existing Nostr pubkey (hex or npub1...). If omitted, a new keypair is generated.",
         },

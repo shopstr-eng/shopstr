@@ -125,8 +125,6 @@ CREATE TABLE IF NOT EXISTS discount_codes (
 CREATE INDEX IF NOT EXISTS idx_discount_codes_pubkey ON discount_codes(pubkey);
 CREATE INDEX IF NOT EXISTS idx_discount_codes_code ON discount_codes(code);
 
-CREATE INDEX IF NOT EXISTS idx_notification_emails_role ON notification_emails(role);
-
 -- MCP API Keys table
 CREATE TABLE IF NOT EXISTS mcp_api_keys (
     id SERIAL PRIMARY KEY,
@@ -154,10 +152,9 @@ CREATE TABLE IF NOT EXISTS mcp_orders (
     product_title TEXT,
     quantity INTEGER NOT NULL DEFAULT 1,
     amount_total NUMERIC(12,2) NOT NULL,
-    currency TEXT NOT NULL DEFAULT 'usd',
-    buyer_email TEXT,
+    currency TEXT NOT NULL DEFAULT 'sats',
     shipping_address JSONB,
-    payment_intent_id TEXT,
+    payment_ref TEXT,
     payment_status TEXT NOT NULL DEFAULT 'pending' CHECK (payment_status IN ('pending', 'processing', 'paid', 'failed', 'refunded')),
     order_status TEXT NOT NULL DEFAULT 'pending' CHECK (order_status IN ('pending', 'confirmed', 'shipped', 'delivered', 'cancelled')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
