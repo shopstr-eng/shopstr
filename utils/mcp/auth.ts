@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "crypto";
+import { createHash, randomBytes, pbkdf2Sync } from "crypto";
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getDbPool } from "@/utils/db/db-service";
 
@@ -21,7 +21,13 @@ export interface AuthenticatedRequest extends NextApiRequest {
 }
 
 export function hashApiKey(key: string): string {
-  return createHash("sha256").update(key).digest("hex");
+  const salt = randomBytes(16);
+  const iterations = 100_000;
+  const derivedKey = pbkdf2Sync(key, salt, iterations, 32, "sha256");
+  const saltHex = salt.toString("hex");
+  const hashHex = derivedKey.toString("hex");
+  // format: algorithm$iterations$salt$hash
+  return `pbkdf2_sha256$${iterations}$${saltHex}$${hashHex}`;
 }
 
 export function generateApiKey(): { key: string; prefix: string } {
