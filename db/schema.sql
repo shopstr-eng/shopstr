@@ -124,3 +124,44 @@ CREATE TABLE IF NOT EXISTS discount_codes (
 
 CREATE INDEX IF NOT EXISTS idx_discount_codes_pubkey ON discount_codes(pubkey);
 CREATE INDEX IF NOT EXISTS idx_discount_codes_code ON discount_codes(code);
+
+-- MCP API Keys table
+CREATE TABLE IF NOT EXISTS mcp_api_keys (
+    id SERIAL PRIMARY KEY,
+    key_prefix TEXT NOT NULL,
+    key_hash TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    pubkey TEXT NOT NULL,
+    permissions TEXT NOT NULL DEFAULT 'read' CHECK (permissions IN ('read', 'read_write')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_used_at TIMESTAMP,
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+CREATE INDEX IF NOT EXISTS idx_mcp_api_keys_key_hash ON mcp_api_keys(key_hash);
+CREATE INDEX IF NOT EXISTS idx_mcp_api_keys_pubkey ON mcp_api_keys(pubkey);
+
+-- MCP Orders table
+CREATE TABLE IF NOT EXISTS mcp_orders (
+    id SERIAL PRIMARY KEY,
+    order_id TEXT NOT NULL UNIQUE,
+    api_key_id INTEGER REFERENCES mcp_api_keys(id),
+    buyer_pubkey TEXT NOT NULL,
+    seller_pubkey TEXT NOT NULL,
+    product_id TEXT NOT NULL,
+    product_title TEXT,
+    quantity INTEGER NOT NULL DEFAULT 1,
+    amount_total NUMERIC(12,2) NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'sats',
+    shipping_address JSONB,
+    payment_ref TEXT,
+    payment_status TEXT NOT NULL DEFAULT 'pending' CHECK (payment_status IN ('pending', 'processing', 'paid', 'failed', 'refunded')),
+    order_status TEXT NOT NULL DEFAULT 'pending' CHECK (order_status IN ('pending', 'confirmed', 'shipped', 'delivered', 'cancelled')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_mcp_orders_order_id ON mcp_orders(order_id);
+CREATE INDEX IF NOT EXISTS idx_mcp_orders_buyer_pubkey ON mcp_orders(buyer_pubkey);
+CREATE INDEX IF NOT EXISTS idx_mcp_orders_seller_pubkey ON mcp_orders(seller_pubkey);
+CREATE INDEX IF NOT EXISTS idx_mcp_orders_api_key_id ON mcp_orders(api_key_id);

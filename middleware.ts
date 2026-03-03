@@ -5,6 +5,12 @@ import { nip19 } from "nostr-tools";
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  if (pathname === "/.well-known/agent.json") {
+    return NextResponse.rewrite(
+      new URL("/api/.well-known/agent.json", request.url)
+    );
+  }
+
   // Handle npub redirects, but ignore if already in marketplace page route
   if (
     pathname.match(/^\/npub[a-zA-Z0-9]+$/) &&
