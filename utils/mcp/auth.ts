@@ -1,4 +1,4 @@
-import { createHash, randomBytes, pbkdf2Sync } from "crypto";
+import { pbkdf2Sync, randomBytes, timingSafeEqual } from "crypto";
 import type { NextApiRequest, NextApiResponse } from "next";
 import type { PoolClient } from "pg";
 import { getDbPool } from "@/utils/db/db-service";
@@ -112,28 +112,47 @@ export async function createApiKey(
   }
 }
 
+export function verifyApiKey(key: string, storedHash: string): boolean {
+  const parts = storedHash.split("$");
+  if (parts.length !== 4 || parts[0] !== "pbkdf2_sha256") return false;
+  const iterations = parseInt(parts[1]!, 10);
+  const salt = Buffer.from(parts[2]!, "hex");
+  const expectedKey = Buffer.from(parts[3]!, "hex");
+  const derivedKey = pbkdf2Sync(
+    key,
+    salt,
+    iterations,
+    expectedKey.length,
+    "sha256"
+  );
+  return timingSafeEqual(derivedKey, expectedKey);
+}
+
 export async function validateApiKey(
   key: string
 ): Promise<ApiKeyRecord | null> {
-  const keyHash = hashApiKey(key);
+  const prefix = key.substring(0, 10);
 
   const pool = getDbPool();
   let client: PoolClient | undefined;
   try {
     client = await pool.connect();
     const result = await client.query(
-      `SELECT * FROM mcp_api_keys WHERE key_hash = $1 AND is_active = TRUE`,
-      [keyHash]
+      `SELECT * FROM mcp_api_keys WHERE key_prefix = $1 AND is_active = TRUE`,
+      [prefix]
     );
 
-    if (result.rows.length === 0) return null;
+    const match = result.rows.find((row: ApiKeyRecord) =>
+      verifyApiKey(key, row.key_hash)
+    );
+    if (!match) return null;
 
     await client.query(
       `UPDATE mcp_api_keys SET last_used_at = CURRENT_TIMESTAMP WHERE id = $1`,
-      [result.rows[0].id]
+      [match.id]
     );
 
-    return result.rows[0];
+    return match;
   } finally {
     if (client) client.release();
   }
