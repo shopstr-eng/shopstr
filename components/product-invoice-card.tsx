@@ -78,6 +78,9 @@ export default function ProductInvoiceCard({
   selectedBulkOption,
   discountCode,
   discountPercentage,
+  isSubscription,
+  subscriptionFrequency,
+  subscriptionDiscount,
   originalPrice,
 }: {
   productData: ProductData;
@@ -94,6 +97,9 @@ export default function ProductInvoiceCard({
   selectedBulkOption?: number;
   discountCode?: string;
   discountPercentage?: number;
+  isSubscription?: boolean;
+  subscriptionFrequency?: string;
+  subscriptionDiscount?: number;
   originalPrice?: number;
 }) {
   const { mints, tokens, history } = getLocalStorageData();
@@ -543,6 +549,10 @@ export default function ProductInvoiceCard({
     selectedPickupLocation,
   ]);
 
+  const [stripeSubscriptionId, setStripeSubscriptionId] = useState<
+    string | null
+  >(null);
+
   const sendPaymentAndContactMessage = async (
     pubkeyToReceiveMessage: string,
     message: string,
@@ -560,7 +570,12 @@ export default function ProductInvoiceCard({
     pickup?: string,
     donationAmountValue?: number,
     donationPercentageValue?: number,
-    retryCount: number = 3
+    retryCount: number = 3,
+    subscriptionInfoParam?: {
+      enabled: boolean;
+      frequency: string;
+      stripeSubscriptionId?: string;
+    }
   ) => {
     const decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
     const decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
@@ -603,6 +618,7 @@ export default function ProductInvoiceCard({
         buyerPubkey,
         donationAmount: donationAmountValue,
         donationPercentage: donationPercentageValue,
+        subscriptionInfo: subscriptionInfoParam,
       };
     } else if (isReceipt) {
       messageSubject = "order-receipt";
@@ -631,6 +647,7 @@ export default function ProductInvoiceCard({
         buyerPubkey,
         donationAmount: donationAmountValue,
         donationPercentage: donationPercentageValue,
+        subscriptionInfo: subscriptionInfoParam,
       };
     } else if (isDonation) {
       messageSubject = "donation";
@@ -659,6 +676,7 @@ export default function ProductInvoiceCard({
         buyerPubkey,
         donationAmount: donationAmountValue,
         donationPercentage: donationPercentageValue,
+        subscriptionInfo: subscriptionInfoParam,
       };
     }
 
@@ -2519,59 +2537,132 @@ export default function ProductInvoiceCard({
         stripeCurrency = productData.currency;
       }
 
-      const response = await fetch("/api/stripe/create-payment-intent", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          amount: stripeAmount,
-          currency: stripeCurrency,
-          customerEmail:
-            buyerEmail ||
-            (userPubkey
-              ? `${userPubkey.substring(0, 8)}@nostr.com`
-              : `guest-${orderId.substring(0, 8)}@nostr.com`),
-          productTitle: productData.title,
-          productDescription:
-            selectedSize || selectedVolume || selectedWeight
-              ? `${selectedSize ? `Size: ${selectedSize}` : ""}${
-                  selectedVolume ? ` Volume: ${selectedVolume}` : ""
-                }${selectedWeight ? ` Weight: ${selectedWeight}` : ""}`
-              : undefined,
-          metadata: {
-            orderId,
-            productId: productData.id,
-            sellerPubkey: productData.pubkey,
-            buyerPubkey: userPubkey || "",
+      if (isSubscription && subscriptionFrequency) {
+        const shippingAddressObj =
+          data.shippingName && data.shippingAddress
+            ? {
+                name: data.shippingName,
+                address: data.shippingAddress,
+                unit: data.shippingUnitNo || "",
+                city: data.shippingCity || "",
+                state: data.shippingState || "",
+                postalCode: data.shippingPostalCode || "",
+                country: data.shippingCountry || "",
+              }
+            : undefined;
+
+        const response = await fetch("/api/stripe/create-subscription", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            customerEmail: buyerEmail,
             productTitle: productData.title,
-            selectedSize: selectedSize || "",
-            selectedVolume: selectedVolume || "",
-            selectedWeight: selectedWeight || "",
+            productDescription:
+              selectedSize || selectedVolume || selectedWeight
+                ? `${selectedSize ? `Size: ${selectedSize}` : ""}${
+                    selectedVolume ? ` Volume: ${selectedVolume}` : ""
+                  }${selectedWeight ? ` Weight: ${selectedWeight}` : ""}`
+                : undefined,
+            amount: stripeAmount,
+            currency: stripeCurrency,
+            frequency: subscriptionFrequency,
+            discountPercent: subscriptionDiscount || 0,
+            sellerPubkey: productData.pubkey,
+            buyerPubkey: userPubkey || null,
+            productEventId: `30402:${productData.pubkey}:${productData.d}`,
+            quantity: 1,
+            variantInfo:
+              selectedSize ||
+              selectedVolume ||
+              selectedWeight ||
+              selectedBulkOption
+                ? {
+                    size: selectedSize || undefined,
+                    volume: selectedVolume || undefined,
+                    weight: selectedWeight || undefined,
+                    bulk: selectedBulkOption || undefined,
+                  }
+                : undefined,
+            shippingAddress: shippingAddressObj,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.details || "Failed to create subscription");
+        }
+
+        const {
+          clientSecret,
+          subscriptionId: subId,
+          connectedAccountId: respConnectedId,
+        } = await response.json();
+
+        setStripeSubscriptionId(subId);
+        setStripeClientSecret(clientSecret);
+        setStripePaymentIntentId(null);
+        setStripeConnectedAccountForForm(
+          respConnectedId || sellerConnectedAccountId || null
+        );
+        setPendingStripeData(data);
+        setShowInvoiceCard(true);
+        setStripeTimeoutSeconds(STRIPE_TIMEOUT_SECONDS);
+        setHasTimedOut(false);
+      } else {
+        const response = await fetch("/api/stripe/create-payment-intent", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
           },
-        }),
-      });
+          body: JSON.stringify({
+            amount: stripeAmount,
+            currency: stripeCurrency,
+            customerEmail:
+              buyerEmail ||
+              (userPubkey
+                ? `${userPubkey.substring(0, 8)}@nostr.com`
+                : `guest-${orderId.substring(0, 8)}@nostr.com`),
+            productTitle: productData.title,
+            productDescription:
+              selectedSize || selectedVolume || selectedWeight
+                ? `${selectedSize ? `Size: ${selectedSize}` : ""}${
+                    selectedVolume ? ` Volume: ${selectedVolume}` : ""
+                  }${selectedWeight ? ` Weight: ${selectedWeight}` : ""}`
+                : undefined,
+            metadata: {
+              orderId,
+              productId: productData.id,
+              sellerPubkey: productData.pubkey,
+              buyerPubkey: userPubkey || "",
+              productTitle: productData.title,
+              selectedSize: selectedSize || "",
+              selectedVolume: selectedVolume || "",
+              selectedWeight: selectedWeight || "",
+            },
+          }),
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.details || "Failed to create payment");
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.details || "Failed to create payment");
+        }
+
+        const {
+          clientSecret,
+          paymentIntentId,
+          connectedAccountId: respConnectedId,
+        } = await response.json();
+
+        setStripeClientSecret(clientSecret);
+        setStripePaymentIntentId(paymentIntentId);
+        setStripeConnectedAccountForForm(
+          respConnectedId || sellerConnectedAccountId || null
+        );
+        setPendingStripeData(data);
+        setShowInvoiceCard(true);
+        setStripeTimeoutSeconds(STRIPE_TIMEOUT_SECONDS);
+        setHasTimedOut(false);
       }
-
-      const {
-        clientSecret,
-        paymentIntentId,
-        connectedAccountId: respConnectedId,
-      } = await response.json();
-
-      setStripeClientSecret(clientSecret);
-      setStripePaymentIntentId(paymentIntentId);
-      setStripeConnectedAccountForForm(
-        respConnectedId || sellerConnectedAccountId || null
-      );
-      setPendingStripeData(data);
-      setShowInvoiceCard(true);
-      setStripeTimeoutSeconds(STRIPE_TIMEOUT_SECONDS);
-      setHasTimedOut(false);
     } catch (error) {
       console.error("Stripe payment error:", error);
       setInvoiceGenerationFailed(true);
@@ -2631,6 +2722,20 @@ export default function ProductInvoiceCard({
           : `${data.shippingName}, ${data.shippingAddress}, ${data.shippingCity}, ${data.shippingState}, ${data.shippingPostalCode}, ${data.shippingCountry}`
         : undefined;
 
+    const subInfo =
+      isSubscription && subscriptionFrequency && stripeSubscriptionId
+        ? {
+            enabled: true,
+            frequency: subscriptionFrequency,
+            stripeSubscriptionId: stripeSubscriptionId,
+          }
+        : undefined;
+
+    const subscriptionLabel =
+      isSubscription && subscriptionFrequency
+        ? " (subscription: " + subscriptionFrequency + ")"
+        : "";
+
     const paymentMessage =
       "You have received a stripe payment from " +
       (userNPub || "a guest buyer") +
@@ -2638,6 +2743,7 @@ export default function ProductInvoiceCard({
       productData.title +
       " listing" +
       productDetails +
+      subscriptionLabel +
       " on Milk Market! Check your Stripe account for the payment.";
 
     await sendPaymentAndContactMessage(
@@ -2654,7 +2760,11 @@ export default function ProductInvoiceCard({
       discountedTotal,
       undefined,
       addressTag,
-      selectedPickupLocation || undefined
+      selectedPickupLocation || undefined,
+      undefined,
+      undefined,
+      3,
+      subInfo
     );
 
     if (data.additionalInfo) {
@@ -2766,7 +2876,11 @@ export default function ProductInvoiceCard({
         undefined,
         undefined,
         addressTag,
-        selectedPickupLocation || undefined
+        selectedPickupLocation || undefined,
+        undefined,
+        undefined,
+        3,
+        subInfo
       );
     } else if (formType === "contact") {
       await sendInquiryDM(productData.pubkey, productData.title);
@@ -2776,6 +2890,7 @@ export default function ProductInvoiceCard({
         "Your order for " +
         productData.title +
         productDetails +
+        subscriptionLabel +
         " was processed successfully! You should be receiving delivery information from " +
         nip19.npubEncode(productData.pubkey) +
         " as soon as they review your order.";
@@ -2793,7 +2908,11 @@ export default function ProductInvoiceCard({
         undefined,
         undefined,
         undefined,
-        selectedPickupLocation || undefined
+        selectedPickupLocation || undefined,
+        undefined,
+        undefined,
+        3,
+        subInfo
       );
     } else {
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -2801,6 +2920,7 @@ export default function ProductInvoiceCard({
         "Thank you for your purchase of " +
         productData.title +
         productDetails +
+        subscriptionLabel +
         " from " +
         nip19.npubEncode(productData.pubkey) +
         ".";
@@ -2818,7 +2938,11 @@ export default function ProductInvoiceCard({
         undefined,
         undefined,
         undefined,
-        selectedPickupLocation || undefined
+        selectedPickupLocation || undefined,
+        undefined,
+        undefined,
+        3,
+        subInfo
       );
     }
 
@@ -3357,6 +3481,32 @@ export default function ProductInvoiceCard({
                   </p>
                 )}
                 <p className="mb-1 text-gray-600">Quantity: 1</p>
+
+                {isSubscription && subscriptionFrequency && (
+                  <div className="mt-3 rounded-md border-2 border-purple-300 bg-purple-50 p-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">🔄</span>
+                      <span className="font-semibold text-purple-700">
+                        Subscribe & Save
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-purple-600">
+                      Delivery every{" "}
+                      {subscriptionFrequency === "weekly"
+                        ? "week"
+                        : subscriptionFrequency === "monthly"
+                          ? "month"
+                          : subscriptionFrequency === "quarterly"
+                            ? "3 months"
+                            : subscriptionFrequency}
+                    </p>
+                    {(subscriptionDiscount ?? 0) > 0 && (
+                      <p className="text-sm font-medium text-green-600">
+                        {subscriptionDiscount}% subscription discount applied
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="border-t pt-4">
@@ -3435,9 +3585,25 @@ export default function ProductInvoiceCard({
                       )}
                   </div>
                   <div className="flex justify-between border-t pt-2 font-semibold">
-                    <span>Total:</span>
+                    <span>
+                      {isSubscription && subscriptionFrequency
+                        ? "Total (recurring):"
+                        : "Total:"}
+                    </span>
                     <span>
                       {formatWithCommas(discountedTotal, productData.currency)}
+                      {isSubscription && subscriptionFrequency && (
+                        <span className="text-sm font-normal text-purple-600">
+                          /
+                          {subscriptionFrequency === "weekly"
+                            ? "wk"
+                            : subscriptionFrequency === "monthly"
+                              ? "mo"
+                              : subscriptionFrequency === "quarterly"
+                                ? "qtr"
+                                : subscriptionFrequency}
+                        </span>
+                      )}
                       {!isSatsCurrency && satsEstimate != null && (
                         <span className="ml-2 text-sm font-normal text-gray-500">
                           ≈ {formatWithCommas(satsEstimate, "sats")}
@@ -3802,16 +3968,25 @@ export default function ProductInvoiceCard({
 
                 {isLoggedIn && (
                   <div className="mt-4 space-y-2">
+                    {isSubscription && (
+                      <p className="text-sm font-medium text-purple-600">
+                        Email is required for subscription management and
+                        renewal notifications.
+                      </p>
+                    )}
                     <Input
                       variant="bordered"
                       fullWidth={true}
                       label={
                         <span className="text-light-text">
-                          Email for Order Updates (optional)
+                          {isSubscription
+                            ? "Email for Subscription Management (required)"
+                            : "Email for Order Updates (optional)"}
                         </span>
                       }
                       labelPlacement="inside"
                       type="email"
+                      isRequired={isSubscription}
                       classNames={{
                         inputWrapper: `border-2 rounded-md shadow-neo ${
                           emailError ? "border-red-500" : "border-black"
@@ -3836,11 +4011,17 @@ export default function ProductInvoiceCard({
 
                   <Button
                     className={`w-full rounded-md border-2 border-black bg-primary-blue px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
-                      !isFormValid || (!isLoggedIn && !buyerEmail)
+                      !isFormValid ||
+                      (!isLoggedIn && !buyerEmail) ||
+                      (isSubscription && !buyerEmail)
                         ? "cursor-not-allowed opacity-50"
                         : ""
                     }`}
-                    disabled={!isFormValid || (!isLoggedIn && !buyerEmail)}
+                    disabled={
+                      !isFormValid ||
+                      (!isLoggedIn && !buyerEmail) ||
+                      (isSubscription && !buyerEmail)
+                    }
                     onClick={() => {
                       handleFormSubmit((data) =>
                         onFormSubmit(data, "lightning")
@@ -3855,11 +4036,17 @@ export default function ProductInvoiceCard({
                   {hasTokensAvailable && (
                     <Button
                       className={`w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
-                        !isFormValid || (!isLoggedIn && !buyerEmail)
+                        !isFormValid ||
+                        (!isLoggedIn && !buyerEmail) ||
+                        (isSubscription && !buyerEmail)
                           ? "cursor-not-allowed opacity-50"
                           : ""
                       }`}
-                      disabled={!isFormValid || (!isLoggedIn && !buyerEmail)}
+                      disabled={
+                        !isFormValid ||
+                        (!isLoggedIn && !buyerEmail) ||
+                        (isSubscription && !buyerEmail)
+                      }
                       onClick={() => {
                         handleFormSubmit((data) =>
                           onFormSubmit(data, "cashu")
@@ -3876,11 +4063,17 @@ export default function ProductInvoiceCard({
                   {isStripeMerchant && (
                     <Button
                       className={`w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
-                        !isFormValid || (!isLoggedIn && !buyerEmail)
+                        !isFormValid ||
+                        (!isLoggedIn && !buyerEmail) ||
+                        (isSubscription && !buyerEmail)
                           ? "cursor-not-allowed opacity-50"
                           : ""
                       }`}
-                      disabled={!isFormValid || (!isLoggedIn && !buyerEmail)}
+                      disabled={
+                        !isFormValid ||
+                        (!isLoggedIn && !buyerEmail) ||
+                        (isSubscription && !buyerEmail)
+                      }
                       onClick={() => {
                         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                         if (!buyerEmail || !emailRegex.test(buyerEmail)) {
@@ -3904,11 +4097,17 @@ export default function ProductInvoiceCard({
                   {Object.keys(fiatPaymentOptions).length > 0 && (
                     <Button
                       className={`w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
-                        !isFormValid || (!isLoggedIn && !buyerEmail)
+                        !isFormValid ||
+                        (!isLoggedIn && !buyerEmail) ||
+                        (isSubscription && !buyerEmail)
                           ? "cursor-not-allowed opacity-50"
                           : ""
                       }`}
-                      disabled={!isFormValid || (!isLoggedIn && !buyerEmail)}
+                      disabled={
+                        !isFormValid ||
+                        (!isLoggedIn && !buyerEmail) ||
+                        (isSubscription && !buyerEmail)
+                      }
                       onClick={() => {
                         handleFormSubmit((data) =>
                           onFormSubmit(data, "fiat")
@@ -3944,13 +4143,16 @@ export default function ProductInvoiceCard({
                   {nwcInfo && (
                     <Button
                       className={`w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
-                        !isFormValid || (!isLoggedIn && !buyerEmail)
+                        !isFormValid ||
+                        (!isLoggedIn && !buyerEmail) ||
+                        (isSubscription && !buyerEmail)
                           ? "cursor-not-allowed opacity-50"
                           : ""
                       }`}
                       disabled={
                         !isFormValid ||
                         (!isLoggedIn && !buyerEmail) ||
+                        (isSubscription && !buyerEmail) ||
                         isNwcLoading
                       }
                       isLoading={isNwcLoading}

@@ -42,6 +42,9 @@ export type ProductData = {
   pickupLocations?: string[];
   herdshareAgreement?: string;
   expiration?: number;
+  subscriptionEnabled?: boolean;
+  subscriptionDiscount?: number;
+  subscriptionFrequency?: string[];
   rawEvent?: NostrEvent;
 };
 
@@ -199,6 +202,17 @@ export const parseTags = (productEvent: NostrEvent) => {
         break;
       case "valid_until":
         parsedData.expiration = Number(values[0]);
+        break;
+      case "subscription":
+        if (values[0] === "true") {
+          parsedData.subscriptionEnabled = true;
+        }
+        break;
+      case "subscription_discount":
+        parsedData.subscriptionDiscount = Number(values[0]);
+        break;
+      case "subscription_frequency":
+        parsedData.subscriptionFrequency = values;
         break;
       default:
         return;

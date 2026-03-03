@@ -266,6 +266,11 @@ export async function constructGiftWrappedEvent(
     selectedVolume?: string;
     selectedWeight?: string;
     selectedBulkOption?: number;
+    subscriptionInfo?: {
+      enabled: boolean;
+      frequency: string;
+      stripeSubscriptionId?: string;
+    };
   } = {}
 ): Promise<GiftWrappedMessageEvent> {
   const { relays } = getLocalStorageData();
@@ -295,6 +300,7 @@ export async function constructGiftWrappedEvent(
     selectedVolume,
     selectedWeight,
     selectedBulkOption,
+    subscriptionInfo,
   } = options;
 
   const tags = [
@@ -339,6 +345,14 @@ export async function constructGiftWrappedEvent(
         "donation_amount",
         donationAmount.toString(),
         donationPercentage.toString(),
+      ]);
+    }
+    if (subscriptionInfo && subscriptionInfo.enabled) {
+      tags.push([
+        "subscription",
+        "yes",
+        subscriptionInfo.frequency,
+        subscriptionInfo.stripeSubscriptionId || "",
       ]);
     }
 

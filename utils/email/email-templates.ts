@@ -250,6 +250,189 @@ export function sellerNewOrderEmail(params: OrderEmailParams): {
   };
 }
 
+export interface SubscriptionEmailParams {
+  productTitle: string;
+  frequency: string;
+  discountPercent: number;
+  regularPrice: string;
+  subscriptionPrice: string;
+  currency: string;
+  nextBillingDate: string;
+  buyerName?: string;
+  shippingAddress?: string;
+  orderId?: string;
+  subscriptionId?: string;
+}
+
+function formatFrequency(frequency: string): string {
+  const map: Record<string, string> = {
+    weekly: "Weekly",
+    every_2_weeks: "Every 2 Weeks",
+    monthly: "Monthly",
+    every_2_months: "Every 2 Months",
+    quarterly: "Quarterly",
+  };
+  return map[frequency] || frequency;
+}
+
+function buildSubscriptionDetailsSection(
+  params: SubscriptionEmailParams
+): string {
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:20px;margin:24px 0;">
+        <tr>
+          <td>
+            <p style="margin:0 0 12px;color:#166534;font-size:14px;font-weight:600;">Subscription Details</p>
+            <p style="margin:0 0 4px;color:#374151;font-size:14px;"><strong>Frequency:</strong> ${esc(
+              formatFrequency(params.frequency)
+            )}</p>
+            <p style="margin:0 0 4px;color:#374151;font-size:14px;"><strong>Discount:</strong> ${
+              params.discountPercent
+            }% off</p>
+            <p style="margin:0 0 4px;color:#374151;font-size:14px;"><strong>Regular Price:</strong> ${esc(
+              params.regularPrice
+            )} ${esc(params.currency)}</p>
+            <p style="margin:0 0 4px;color:#374151;font-size:14px;"><strong>Subscription Price:</strong> ${esc(
+              params.subscriptionPrice
+            )} ${esc(params.currency)}</p>
+            <p style="margin:0;color:#374151;font-size:14px;"><strong>Next Billing Date:</strong> ${esc(
+              params.nextBillingDate
+            )}</p>
+          </td>
+        </tr>
+      </table>`;
+}
+
+export function subscriptionConfirmationEmail(
+  params: SubscriptionEmailParams
+): {
+  subject: string;
+  html: string;
+} {
+  const greeting = params.buyerName
+    ? `Hi ${esc(params.buyerName)},`
+    : "Hi there,";
+
+  const addressSection = params.shippingAddress
+    ? `<p style="margin:16px 0 0;color:#374151;font-size:15px;line-height:1.6;"><strong>Shipping Address:</strong> ${esc(
+        params.shippingAddress
+      )}</p>`
+    : "";
+
+  const body = `
+    <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">${greeting}</h2>
+    <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.6;">Your subscription to <strong>${esc(
+      params.productTitle
+    )}</strong> has been confirmed! You're saving ${
+      params.discountPercent
+    }% on every order.</p>
+    ${buildSubscriptionDetailsSection(params)}
+    ${addressSection}
+    <p style="margin:24px 0 0;color:#374151;font-size:15px;line-height:1.6;">You'll receive a reminder email before each renewal. You can manage your subscription from your orders page on Milk Market.</p>`;
+
+  return {
+    subject: `Subscription Confirmed - ${esc(params.productTitle)}`,
+    html: baseTemplate("Subscription Confirmation", body),
+  };
+}
+
+export function renewalReminderEmail(params: SubscriptionEmailParams): {
+  subject: string;
+  html: string;
+} {
+  const greeting = params.buyerName
+    ? `Hi ${esc(params.buyerName)},`
+    : "Hi there,";
+
+  const body = `
+    <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">${greeting}</h2>
+    <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.6;">This is a reminder that your subscription to <strong>${esc(
+      params.productTitle
+    )}</strong> will renew on <strong>${esc(
+      params.nextBillingDate
+    )}</strong>.</p>
+    ${buildSubscriptionDetailsSection(params)}
+    <p style="margin:0;color:#374151;font-size:15px;line-height:1.6;">If you'd like to make changes to your subscription, such as updating your shipping address or canceling, please visit your orders page on Milk Market before the renewal date.</p>`;
+
+  return {
+    subject: `Upcoming Renewal - ${esc(params.productTitle)} on ${esc(
+      params.nextBillingDate
+    )}`,
+    html: baseTemplate("Subscription Renewal Reminder", body),
+  };
+}
+
+export function addressChangeConfirmationEmail(params: {
+  productTitle: string;
+  newAddress: string;
+  buyerName?: string;
+  subscriptionId?: string;
+}): { subject: string; html: string } {
+  const greeting = params.buyerName
+    ? `Hi ${esc(params.buyerName)},`
+    : "Hi there,";
+
+  const body = `
+    <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">${greeting}</h2>
+    <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.6;">Your shipping address for your <strong>${esc(
+      params.productTitle
+    )}</strong> subscription has been updated.</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border-radius:8px;padding:20px;margin-bottom:24px;">
+      <tr>
+        <td style="padding:8px 0;">
+          <p style="margin:0 0 4px;color:#6b7280;font-size:13px;text-transform:uppercase;letter-spacing:0.05em;">New Shipping Address</p>
+          <p style="margin:0;color:#111827;font-size:15px;">${esc(
+            params.newAddress
+          )}</p>
+        </td>
+      </tr>
+    </table>
+    <p style="margin:0;color:#374151;font-size:15px;line-height:1.6;">The seller has been notified of this change. Your next delivery will be shipped to the new address.</p>`;
+
+  return {
+    subject: `Address Updated - ${esc(params.productTitle)} Subscription`,
+    html: baseTemplate("Address Change Confirmation", body),
+  };
+}
+
+export function subscriptionCancellationEmail(params: {
+  productTitle: string;
+  buyerName?: string;
+  endDate: string;
+  subscriptionId?: string;
+}): { subject: string; html: string } {
+  const greeting = params.buyerName
+    ? `Hi ${esc(params.buyerName)},`
+    : "Hi there,";
+
+  const body = `
+    <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">${greeting}</h2>
+    <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.6;">Your subscription to <strong>${esc(
+      params.productTitle
+    )}</strong> has been canceled.</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:20px;margin-bottom:24px;">
+      <tr>
+        <td>
+          <p style="margin:0 0 8px;color:#991b1b;font-size:14px;font-weight:600;">Cancellation Details</p>
+          <p style="margin:0 0 4px;color:#374151;font-size:14px;"><strong>Product:</strong> ${esc(
+            params.productTitle
+          )}</p>
+          <p style="margin:0;color:#374151;font-size:14px;"><strong>Access Until:</strong> ${esc(
+            params.endDate
+          )}</p>
+        </td>
+      </tr>
+    </table>
+    <p style="margin:0;color:#374151;font-size:15px;line-height:1.6;">You will continue to receive your subscription benefits until ${esc(
+      params.endDate
+    )}. After that, no further charges will be made.</p>
+    <p style="margin:16px 0 0;color:#374151;font-size:15px;line-height:1.6;">If you change your mind, you can resubscribe anytime from the product listing on Milk Market.</p>`;
+
+  return {
+    subject: `Subscription Canceled - ${esc(params.productTitle)}`,
+    html: baseTemplate("Subscription Canceled", body),
+  };
+}
+
 export function orderUpdateEmail(params: {
   orderId: string;
   productTitle: string;

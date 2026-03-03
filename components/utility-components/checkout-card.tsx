@@ -45,6 +45,7 @@ import { BLUEBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import BulkSelector from "./bulk-selector";
 import ZapsnagButton from "@/components/ZapsnagButton";
 import { RawEventModal, EventIdModal } from "./modals/event-modals";
+import SubscriptionPricingCards from "./subscription-pricing-cards";
 
 const SUMMARY_CHARACTER_LIMIT = 200;
 
@@ -109,6 +110,20 @@ export default function CheckoutCard({
   const [appliedDiscount, setAppliedDiscount] = useState<number>(0);
   const [discountError, setDiscountError] = useState("");
   const [satsEstimate, setSatsEstimate] = useState<number | null>(null);
+
+  const hasSubscription = !!(
+    productData.subscriptionEnabled &&
+    productData.subscriptionDiscount &&
+    productData.subscriptionFrequency &&
+    productData.subscriptionFrequency.length > 0
+  );
+  const [isSubscriptionSelected, setIsSubscriptionSelected] =
+    useState(hasSubscription);
+  const [selectedFrequency, setSelectedFrequency] = useState<string>(
+    hasSubscription && productData.subscriptionFrequency?.[0]
+      ? productData.subscriptionFrequency[0]
+      : ""
+  );
 
   const reviewsContext = useContext(ReviewsContext);
 
@@ -483,12 +498,26 @@ export default function CheckoutCard({
   const discountedPrice =
     appliedDiscount > 0 ? currentPrice - discountAmount : currentPrice;
 
-  const discountedTotal = discountedPrice + (productData.shippingCost ?? 0);
+  const subscriptionDiscountAmount =
+    hasSubscription &&
+    isSubscriptionSelected &&
+    productData.subscriptionDiscount
+      ? Math.ceil(
+          ((currentPrice * productData.subscriptionDiscount) / 100) * 100
+        ) / 100
+      : 0;
+
+  const effectivePrice =
+    isSubscriptionSelected && subscriptionDiscountAmount > 0
+      ? discountedPrice - subscriptionDiscountAmount
+      : discountedPrice;
+
+  const effectiveTotal = effectivePrice + (productData.shippingCost ?? 0);
 
   const updatedProductData = {
     ...productData,
-    price: discountedPrice,
-    totalCost: discountedTotal,
+    price: effectivePrice,
+    totalCost: effectiveTotal,
     originalPrice: currentPrice,
     discountPercentage: appliedDiscount,
     weightPrice:
@@ -736,17 +765,33 @@ export default function CheckoutCard({
                     onBulkChange={setSelectedBulkOption}
                   />
                 )}
-                <div className="mt-4">
-                  <DisplayCheckoutCost
-                    monetaryInfo={updatedProductData}
-                    satsEstimate={satsEstimate}
-                  />
-                  {selectedBulkOption && selectedBulkOption !== "1" && (
-                    <p className="mt-1 text-sm text-black">
-                      Bundle: {selectedBulkOption} units
-                    </p>
-                  )}
-                </div>
+                {hasSubscription && (
+                  <div className="mt-4">
+                    <SubscriptionPricingCards
+                      basePrice={currentPrice}
+                      currency={productData.currency}
+                      discountPercent={productData.subscriptionDiscount!}
+                      frequencies={productData.subscriptionFrequency!}
+                      selectedFrequency={selectedFrequency}
+                      onFrequencyChange={setSelectedFrequency}
+                      isSubscription={isSubscriptionSelected}
+                      onSelectionChange={setIsSubscriptionSelected}
+                    />
+                  </div>
+                )}
+                {!hasSubscription && (
+                  <div className="mt-4">
+                    <DisplayCheckoutCost
+                      monetaryInfo={updatedProductData}
+                      satsEstimate={satsEstimate}
+                    />
+                    {selectedBulkOption && selectedBulkOption !== "1" && (
+                      <p className="mt-1 text-sm text-black">
+                        Bundle: {selectedBulkOption} units
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {isZapsnag ? (
                   <div className="mt-4">
@@ -1004,6 +1049,17 @@ export default function CheckoutCard({
                 appliedDiscount > 0 ? appliedDiscount : undefined
               }
               originalPrice={currentPrice}
+              isSubscription={hasSubscription && isSubscriptionSelected}
+              subscriptionFrequency={
+                hasSubscription && isSubscriptionSelected
+                  ? selectedFrequency
+                  : undefined
+              }
+              subscriptionDiscount={
+                hasSubscription && isSubscriptionSelected
+                  ? productData.subscriptionDiscount
+                  : undefined
+              }
             />
           </div>
         )}

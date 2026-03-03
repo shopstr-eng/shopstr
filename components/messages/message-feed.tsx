@@ -5,6 +5,7 @@ import { useTabs } from "@/components/hooks/use-tabs";
 import { Framer } from "@/components/framer";
 import Messages from "./messages";
 import OrdersDashboard from "./orders-dashboard";
+import SubscriptionManagement from "./subscription-management";
 import { useRouter } from "next/router";
 
 const MessageFeed = ({ isInquiry = false }) => {
@@ -17,6 +18,11 @@ const MessageFeed = ({ isInquiry = false }) => {
         label: "Orders",
         children: <OrdersDashboard />,
         id: "orders",
+      },
+      {
+        label: "Subscriptions",
+        children: <SubscriptionManagement />,
+        id: "subscriptions",
       },
       {
         label: "Inquiries",

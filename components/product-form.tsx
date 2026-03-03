@@ -81,6 +81,11 @@ export default function ProductForm({
   const [herdshareAgreementUrl, setHerdshareAgreementUrl] =
     useState<string>("");
   const [isFlashSale, setIsFlashSale] = useState(false);
+  const [subscriptionEnabled, setSubscriptionEnabled] = useState(false);
+  const [subscriptionDiscount, setSubscriptionDiscount] = useState("");
+  const [subscriptionFrequencies, setSubscriptionFrequencies] = useState<
+    string[]
+  >([]);
   const [showStripeConnectModal, setShowStripeConnectModal] = useState(false);
   const productEventContext = useContext(ProductContext);
   const profileContext = useContext(ProfileMapContext);
@@ -155,6 +160,20 @@ export default function ProductForm({
       setHerdshareAgreementUrl(oldValues.herdshareAgreement);
     } else {
       setHerdshareAgreementUrl("");
+    }
+
+    if (oldValues?.subscriptionEnabled) {
+      setSubscriptionEnabled(true);
+      setSubscriptionDiscount(
+        oldValues.subscriptionDiscount
+          ? String(oldValues.subscriptionDiscount)
+          : ""
+      );
+      setSubscriptionFrequencies(oldValues.subscriptionFrequency || []);
+    } else {
+      setSubscriptionEnabled(false);
+      setSubscriptionDiscount("");
+      setSubscriptionFrequencies([]);
     }
 
     if (showModal && !oldValues && signerPubKey) {
@@ -286,6 +305,16 @@ export default function ProductForm({
       tags.push(["t", "SAVEBEEF"]);
     }
 
+    if (subscriptionEnabled) {
+      tags.push(["subscription", "true"]);
+      if (subscriptionDiscount) {
+        tags.push(["subscription_discount", subscriptionDiscount]);
+      }
+      if (subscriptionFrequencies.length > 0) {
+        tags.push(["subscription_frequency", ...subscriptionFrequencies]);
+      }
+    }
+
     if (data["Expiration"]) {
       const dateObj = new Date(data["Expiration"] as string);
       if (!isNaN(dateObj.getTime())) {
@@ -380,6 +409,9 @@ export default function ProductForm({
     handleModalToggle();
     setImages([]);
     setHerdshareAgreementUrl("");
+    setSubscriptionEnabled(false);
+    setSubscriptionDiscount("");
+    setSubscriptionFrequencies([]);
     reset();
     setCurrentSlide(0);
   };
@@ -1630,6 +1662,101 @@ export default function ProductForm({
                   }}
                 />
               </div>
+
+              <div className="mt-4 flex items-center justify-between rounded-md border-2 border-black bg-white p-3">
+                <div className="flex flex-col">
+                  <span className="text-sm font-semibold text-black">
+                    Offer Subscribe & Save
+                  </span>
+                  <span className="text-tiny text-gray-500">
+                    Let buyers subscribe for recurring delivery at a discount
+                  </span>
+                </div>
+                <Switch
+                  isSelected={subscriptionEnabled}
+                  onValueChange={setSubscriptionEnabled}
+                  classNames={{
+                    wrapper: "group-data-[selected=true]:bg-yellow-600",
+                  }}
+                />
+              </div>
+
+              {subscriptionEnabled && (
+                <div className="mt-2 space-y-4 rounded-md border-2 border-dashed border-gray-300 bg-gray-50 p-4">
+                  <div>
+                    <label className="mb-2 block text-base font-semibold text-black">
+                      Subscription Discount (%)
+                    </label>
+                    <Input
+                      classNames={{
+                        input: "text-base !text-black",
+                        inputWrapper:
+                          "border-2 border-black rounded-md shadow-none h-14 !bg-white data-[hover=true]:!bg-white data-[focus=true]:!bg-white",
+                      }}
+                      variant="flat"
+                      type="number"
+                      min="1"
+                      max="100"
+                      placeholder="e.g. 10"
+                      value={subscriptionDiscount}
+                      onChange={(e) => setSubscriptionDiscount(e.target.value)}
+                      endContent={
+                        <span className="text-small text-gray-600">%</span>
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-base font-semibold text-black">
+                      Delivery Frequency
+                    </label>
+                    <Select
+                      classNames={{
+                        trigger:
+                          "border-2 border-black rounded-md shadow-none min-h-14 bg-white data-[hover=true]:bg-white data-[focus=true]:bg-white",
+                        listbox:
+                          "bg-white [&_li]:!bg-white [&_li:hover]:!bg-primary-yellow [&_li[data-hover=true]]:!bg-primary-yellow",
+                        value: "!text-black",
+                      }}
+                      variant="flat"
+                      isMultiline={true}
+                      aria-label="Subscription Frequency"
+                      placeholder="Select frequencies..."
+                      selectionMode="multiple"
+                      selectedKeys={new Set(subscriptionFrequencies)}
+                      onSelectionChange={(keys) => {
+                        setSubscriptionFrequencies(
+                          Array.from(keys) as string[]
+                        );
+                      }}
+                      renderValue={(items) => (
+                        <div className="flex flex-wrap gap-2">
+                          {items.map((item) => (
+                            <Chip key={item.key}>{item.textValue}</Chip>
+                          ))}
+                        </div>
+                      )}
+                    >
+                      <SelectSection>
+                        <SelectItem key="weekly" value="weekly">
+                          Weekly
+                        </SelectItem>
+                        <SelectItem key="every_2_weeks" value="every_2_weeks">
+                          Every 2 Weeks
+                        </SelectItem>
+                        <SelectItem key="monthly" value="monthly">
+                          Monthly
+                        </SelectItem>
+                        <SelectItem key="every_2_months" value="every_2_months">
+                          Every 2 Months
+                        </SelectItem>
+                        <SelectItem key="quarterly" value="quarterly">
+                          Quarterly
+                        </SelectItem>
+                      </SelectSection>
+                    </Select>
+                  </div>
+                </div>
+              )}
 
               <div className="w-full max-w-xs">
                 <Button

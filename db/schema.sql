@@ -209,3 +209,46 @@ CREATE INDEX IF NOT EXISTS idx_mcp_orders_order_id ON mcp_orders(order_id);
 CREATE INDEX IF NOT EXISTS idx_mcp_orders_buyer_pubkey ON mcp_orders(buyer_pubkey);
 CREATE INDEX IF NOT EXISTS idx_mcp_orders_seller_pubkey ON mcp_orders(seller_pubkey);
 CREATE INDEX IF NOT EXISTS idx_mcp_orders_api_key_id ON mcp_orders(api_key_id);
+
+-- Subscriptions table for recurring product subscriptions
+CREATE TABLE IF NOT EXISTS subscriptions (
+    id SERIAL PRIMARY KEY,
+    stripe_subscription_id TEXT NOT NULL UNIQUE,
+    stripe_customer_id TEXT NOT NULL,
+    buyer_pubkey TEXT,
+    buyer_email TEXT NOT NULL,
+    seller_pubkey TEXT NOT NULL,
+    product_event_id TEXT NOT NULL,
+    quantity INTEGER NOT NULL DEFAULT 1,
+    variant_info JSONB,
+    frequency TEXT NOT NULL CHECK (frequency IN ('weekly', 'every_2_weeks', 'monthly', 'every_2_months', 'quarterly')),
+    discount_percent DECIMAL(5,2) NOT NULL CHECK (discount_percent >= 0 AND discount_percent <= 100),
+    base_price NUMERIC(12,2) NOT NULL,
+    subscription_price NUMERIC(12,2) NOT NULL,
+    currency TEXT NOT NULL DEFAULT 'usd',
+    shipping_address JSONB,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'canceled')),
+    next_billing_date TIMESTAMP,
+    next_shipping_date TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_subscription_id ON subscriptions(stripe_subscription_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_customer_id ON subscriptions(stripe_customer_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_buyer_pubkey ON subscriptions(buyer_pubkey);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_buyer_email ON subscriptions(buyer_email);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_seller_pubkey ON subscriptions(seller_pubkey);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);
+
+-- Subscription notifications table
+CREATE TABLE IF NOT EXISTS subscription_notifications (
+    id SERIAL PRIMARY KEY,
+    subscription_id INTEGER NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+    type TEXT NOT NULL CHECK (type IN ('renewal_reminder', 'address_change', 'cancellation')),
+    sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    method TEXT NOT NULL CHECK (method IN ('email', 'nostr', 'both'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_subscription_notifications_subscription_id ON subscription_notifications(subscription_id);
+CREATE INDEX IF NOT EXISTS idx_subscription_notifications_type ON subscription_notifications(type);
