@@ -30,7 +30,7 @@ const getMetaTags = (
   profileData: Map<string, ProfileData>
 ): MetaTagsType => {
   const defaultTags = {
-    title: "Milk Market - Raw Dairy Direct from Local Farmers",
+    title: "Milk Market - Farm-Fresh Dairy Direct from Local Farmers",
     description:
       "Buy farm-fresh, raw milk and dairy products direct from local farmers. Connecting consumers to trusted dairy producers with sovereignty and community in mind.",
     image: "/milk-market.png",
@@ -176,7 +176,7 @@ const DynamicHead = ({
       <meta name="twitter:image" content={metaTags.image} />
       <meta
         name="keywords"
-        content="milk market, raw dairy, nostr marketplace, bitcoin payments, lightning network, cashu, peer-to-peer commerce, local farmers, raw milk"
+        content="milk market, raw dairy, farm-fresh dairy, nostr marketplace, bitcoin payments, lightning network, cashu, peer-to-peer commerce, local farmers, raw milk"
       />
     </Head>
   );
