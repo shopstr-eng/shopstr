@@ -236,7 +236,7 @@ const ProducerGuidePage = () => {
           content="width=device-width, initial-scale=1, maximum-scale=1"
         />
         <title>
-          Producer Guide - Milk Market | Start Selling Raw Dairy Products
+          Producer Guide - Milk Market | Start Selling Farm-Fresh Dairy Products
         </title>
         <meta
           name="description"
@@ -249,7 +249,7 @@ const ProducerGuidePage = () => {
         <meta property="og:type" content="website" />
         <meta
           property="og:title"
-          content="Producer Guide - Milk Market | Start Selling Raw Dairy Products"
+          content="Producer Guide - Milk Market | Start Selling Farm-Fresh Dairy Products"
         />
         <meta
           property="og:description"
@@ -261,7 +261,7 @@ const ProducerGuidePage = () => {
         <meta property="twitter:url" content="https://milk.market/producers" />
         <meta
           name="twitter:title"
-          content="Producer Guide - Milk Market | Start Selling Raw Dairy Products"
+          content="Producer Guide - Milk Market | Start Selling Farm-Fresh Dairy Products"
         />
         <meta
           name="twitter:description"
@@ -270,7 +270,7 @@ const ProducerGuidePage = () => {
         <meta name="twitter:image" content="/milk-market.png" />
         <meta
           name="keywords"
-          content="milk market producer guide, sell raw dairy, bitcoin payments, nostr marketplace, dairy producer, farm to consumer, direct sales, raw milk sales"
+          content="milk market producer guide, sell raw dairy, sell farm-fresh dairy, bitcoin payments, nostr marketplace, dairy producer, farm to consumer, direct sales, raw milk sales"
         />
       </Head>
       <div className="min-h-screen bg-white">

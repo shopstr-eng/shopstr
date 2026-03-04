@@ -194,7 +194,7 @@ export default function Faq() {
         <meta name="twitter:image" content="/milk-market.png" />
         <meta
           name="keywords"
-          content="milk market, FAQ, raw dairy, nostr marketplace, bitcoin payments, lightning network, cashu, peer-to-peer commerce"
+          content="milk market, FAQ, raw dairy, farm-fresh dairy, nostr marketplace, bitcoin payments, lightning network, cashu, peer-to-peer commerce"
         />
       </Head>
       {/* Main container with new background pattern */}

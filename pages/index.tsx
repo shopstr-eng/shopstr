@@ -326,7 +326,7 @@ export default function StandaloneLanding() {
 
         <div className="relative z-10 mx-auto max-w-4xl text-center">
           <h1 className="mb-6 text-4xl font-black leading-tight md:text-6xl">
-            Farm-Fresh Raw Dairy <br />
+            Farm-Fresh Dairy <br />
             <span className="relative inline-block">
               <span className="relative z-10 inline-block rounded-lg border-[3px] border-black bg-black px-4 py-2 text-white">
                 Direct to Your Door
