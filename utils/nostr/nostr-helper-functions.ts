@@ -248,6 +248,7 @@ export async function constructGiftWrappedEvent(
     paymentReference?: string;
     paymentProof?: string;
     orderAmount?: number;
+    orderCurrency?: string;
     status?: string;
     productData?: ProductData;
     quantity?: number;
@@ -266,6 +267,11 @@ export async function constructGiftWrappedEvent(
     selectedVolume?: string;
     selectedWeight?: string;
     selectedBulkOption?: number;
+    subscriptionInfo?: {
+      enabled: boolean;
+      frequency: string;
+      stripeSubscriptionId?: string;
+    };
   } = {}
 ): Promise<GiftWrappedMessageEvent> {
   const { relays } = getLocalStorageData();
@@ -277,6 +283,7 @@ export async function constructGiftWrappedEvent(
     paymentReference,
     paymentProof,
     orderAmount,
+    orderCurrency,
     status,
     productData,
     quantity,
@@ -295,6 +302,7 @@ export async function constructGiftWrappedEvent(
     selectedVolume,
     selectedWeight,
     selectedBulkOption,
+    subscriptionInfo,
   } = options;
 
   const tags = [
@@ -309,6 +317,7 @@ export async function constructGiftWrappedEvent(
     if (buyerPubkey) tags.push(["b", buyerPubkey]);
     if (type) tags.push(["type", type.toString()]);
     if (orderAmount) tags.push(["amount", orderAmount.toString()]);
+    if (orderCurrency) tags.push(["currency", orderCurrency]);
     // Add payment tag with format: ["payment", paymentType, paymentReference, paymentProof?]
     // For order-payment: ["payment", type, destination/token]
     // For order-receipt: ["payment", type, reference, proof]
@@ -339,6 +348,14 @@ export async function constructGiftWrappedEvent(
         "donation_amount",
         donationAmount.toString(),
         donationPercentage.toString(),
+      ]);
+    }
+    if (subscriptionInfo && subscriptionInfo.enabled) {
+      tags.push([
+        "subscription",
+        "yes",
+        subscriptionInfo.frequency,
+        subscriptionInfo.stripeSubscriptionId || "",
       ]);
     }
 

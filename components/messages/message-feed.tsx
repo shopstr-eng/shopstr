@@ -5,9 +5,16 @@ import { useTabs } from "@/components/hooks/use-tabs";
 import { Framer } from "@/components/framer";
 import Messages from "./messages";
 import OrdersDashboard from "./orders-dashboard";
+import SubscriptionManagement from "./subscription-management";
 import { useRouter } from "next/router";
 
-const MessageFeed = ({ isInquiry = false }) => {
+const MessageFeed = ({
+  isInquiry = false,
+  initialTab,
+}: {
+  isInquiry?: boolean;
+  initialTab?: string;
+}) => {
   const router = useRouter();
   const [showSpinner, setShowSpinner] = useState(false);
 
@@ -19,6 +26,11 @@ const MessageFeed = ({ isInquiry = false }) => {
         id: "orders",
       },
       {
+        label: "Subscriptions",
+        children: <SubscriptionManagement />,
+        id: "subscriptions",
+      },
+      {
         label: "Inquiries",
         children: <Messages isPayment={false} />,
         id: "inquiries",
@@ -27,9 +39,11 @@ const MessageFeed = ({ isInquiry = false }) => {
     initialTabId: "orders",
   });
 
+  const resolvedInitialTab = initialTab || (isInquiry ? "inquiries" : "orders");
+
   const framer = useTabs({
     tabs: hookProps.tabs,
-    initialTabId: isInquiry ? "inquiries" : "orders",
+    initialTabId: resolvedInitialTab,
   });
 
   useEffect(() => {
@@ -42,8 +56,16 @@ const MessageFeed = ({ isInquiry = false }) => {
 
   useEffect(() => {
     const handleRouteChange = (url: string) => {
+      const urlParams = new URLSearchParams(url.split("?")[1] || "");
+      const tabParam = urlParams.get("tab");
       const isInquiryTab = url.includes("isInquiry=true");
-      const newTab = isInquiryTab ? "inquiries" : "orders";
+
+      let newTab = "orders";
+      if (tabParam && hookProps.tabs.some((t) => t.id === tabParam)) {
+        newTab = tabParam;
+      } else if (isInquiryTab) {
+        newTab = "inquiries";
+      }
 
       const newIndex = hookProps.tabs.findIndex((tab) => tab.id === newTab);
       if (newIndex !== -1 && framer.tabProps.selectedTabIndex !== newIndex) {

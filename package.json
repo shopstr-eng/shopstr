@@ -56,7 +56,8 @@
     "react-responsive-carousel": "3.2.23",
     "stripe": "19.0.0",
     "tailwindcss": "3.3.1",
-    "uuid": "9.0.0"
+    "uuid": "9.0.0",
+    "ws": "8.19.0"
   },
   "devDependencies": {
     "@testing-library/dom": "10.4.0",

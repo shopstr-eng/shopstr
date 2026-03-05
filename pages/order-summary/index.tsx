@@ -6,6 +6,7 @@ import {
   ShoppingBagIcon,
   ClipboardDocumentListIcon,
   ChatBubbleLeftRightIcon,
+  ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 import { nip19 } from "nostr-tools";
 import { ProductContext } from "@/utils/context/context";
@@ -38,6 +39,7 @@ interface OrderSummaryData {
   subtotal?: string;
   freeShippingApplied?: boolean;
   originalShippingCost?: string;
+  isSubscription?: boolean;
   isCart?: boolean;
   cartItems?: Array<{
     title: string;
@@ -403,7 +405,7 @@ export default function OrderSummary() {
             </div>
           )}
 
-          <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <Button
               className={BLUEBUTTONCLASSNAMES + " flex-1"}
               onClick={() => router.push("/marketplace")}
@@ -433,6 +435,16 @@ export default function OrderSummary() {
                   Contact Merchant
                 </Button>
               </>
+            )}
+            {orderData.isSubscription && (
+              <Button
+                className={WHITEBUTTONCLASSNAMES + " flex-1"}
+                onClick={() => router.push("/orders?tab=subscriptions")}
+                size="lg"
+                startContent={<ArrowPathIcon className="h-5 w-5" />}
+              >
+                Manage Subscription
+              </Button>
             )}
           </div>
         </div>

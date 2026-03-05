@@ -43,6 +43,7 @@ import { viewEncryptedAgreement } from "@/utils/encryption/agreement-viewer";
 import { encryptFileWithNip44 } from "@/utils/encryption/file-encryption";
 import PDFAnnotator from "@/components/utility-components/pdf-annotator";
 import FailureModal from "@/components/utility-components/failure-modal";
+import AddressChangeModal from "@/components/utility-components/address-change-modal";
 import { DocumentTextIcon } from "@heroicons/react/24/outline";
 import {
   NostrContext,
@@ -103,6 +104,9 @@ interface OrderData {
   unsignedHerdshareUrl?: string;
   signedHerdshareUrl?: string;
   sellerPubkey?: string;
+  isSubscription?: boolean;
+  subscriptionFrequency?: string;
+  subscriptionId?: string;
 }
 
 const OrdersDashboard = () => {
@@ -149,6 +153,11 @@ const OrdersDashboard = () => {
   const [currencyRates, setCurrencyRates] = useState<Record<string, number>>(
     {}
   );
+
+  const [showAddressChangeModal, setShowAddressChangeModal] = useState(false);
+  const [addressChangeOrder, setAddressChangeOrder] =
+    useState<OrderData | null>(null);
+  const [isSendingAddressChange, setIsSendingAddressChange] = useState(false);
 
   const [showHerdshareModal, setShowHerdshareModal] = useState(false);
   const [currentPdfUrl, setCurrentPdfUrl] = useState("");
@@ -385,6 +394,22 @@ const OrdersDashboard = () => {
             const paymentProofValue =
               paymentTagArray && paymentTagArray[3] ? paymentTagArray[3] : "";
 
+            const subscriptionTagArray = messageEvent.tags.find(
+              (tag: string[]) => tag[0] === "subscription"
+            );
+            const isSubscription =
+              subscriptionTagArray &&
+              (subscriptionTagArray[1] === "yes" ||
+                subscriptionTagArray[1] === "true");
+            const subscriptionFrequency =
+              subscriptionTagArray && subscriptionTagArray[2]
+                ? subscriptionTagArray[2]
+                : undefined;
+            const subscriptionId =
+              subscriptionTagArray && subscriptionTagArray[3]
+                ? subscriptionTagArray[3]
+                : undefined;
+
             let paymentToken: string | undefined;
             if (paymentType === "ecash") {
               paymentToken = paymentProofValue || paymentReference;
@@ -502,6 +527,9 @@ const OrdersDashboard = () => {
               donationAmount,
               donationPercentage,
               sellerPubkey: merchantPubkey || undefined,
+              isSubscription: !!isSubscription,
+              subscriptionFrequency,
+              subscriptionId,
             });
           }
         }
@@ -639,6 +667,10 @@ const OrdersDashboard = () => {
             donationAmount: order.donationAmount ?? existing.donationAmount,
             donationPercentage:
               order.donationPercentage ?? existing.donationPercentage,
+            isSubscription: order.isSubscription || existing.isSubscription,
+            subscriptionFrequency:
+              order.subscriptionFrequency || existing.subscriptionFrequency,
+            subscriptionId: order.subscriptionId || existing.subscriptionId,
           });
         }
       }
@@ -1316,6 +1348,119 @@ const OrdersDashboard = () => {
     setIsViewMode(false);
   };
 
+  const handleOpenAddressChangeModal = (order: OrderData) => {
+    setAddressChangeOrder(order);
+    setShowAddressChangeModal(true);
+  };
+
+  const handleCloseAddressChangeModal = () => {
+    setShowAddressChangeModal(false);
+    setAddressChangeOrder(null);
+  };
+
+  const onAddressChangeSubmit = async (newAddress: string) => {
+    if (!addressChangeOrder || !signer || !nostr) return;
+
+    setIsSendingAddressChange(true);
+
+    try {
+      const decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
+      const decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
+      const decodedRandomPubkeyForReceiver = nip19.decode(
+        randomNpubForReceiver
+      );
+      const decodedRandomPrivkeyForReceiver = nip19.decode(
+        randomNsecForReceiver
+      );
+
+      const sellerPubkey =
+        addressChangeOrder.sellerPubkey ||
+        addressChangeOrder.productAddress.split(":")[1];
+
+      if (!sellerPubkey) return;
+
+      const message =
+        `Address change request for order ${addressChangeOrder.orderId.substring(
+          0,
+          8
+        )}...` +
+        (addressChangeOrder.subscriptionId
+          ? ` (Subscription: ${addressChangeOrder.subscriptionId})`
+          : "") +
+        `\n\nNew Address: ${newAddress}`;
+
+      const giftWrappedMessageEvent = await constructGiftWrappedEvent(
+        decodedRandomPubkeyForSender.data as string,
+        sellerPubkey,
+        message,
+        "address-change",
+        {
+          productAddress: addressChangeOrder.productAddress,
+          type: 4,
+          isOrder: true,
+          orderId: addressChangeOrder.orderId,
+          buyerPubkey: addressChangeOrder.buyerPubkey,
+        }
+      );
+
+      const sealedEvent = await constructMessageSeal(
+        signer,
+        giftWrappedMessageEvent,
+        decodedRandomPubkeyForSender.data as string,
+        sellerPubkey,
+        decodedRandomPrivkeyForSender.data as Uint8Array
+      );
+
+      const giftWrappedEvent = await constructMessageGiftWrap(
+        sealedEvent,
+        decodedRandomPubkeyForReceiver.data as string,
+        decodedRandomPrivkeyForReceiver.data as Uint8Array,
+        sellerPubkey
+      );
+
+      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent);
+
+      if (addressChangeOrder.subscriptionId) {
+        fetch("/api/stripe/update-subscription", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            subscriptionId: addressChangeOrder.subscriptionId,
+            shippingAddress: { address: newAddress },
+          }),
+        }).catch((err) =>
+          console.error("Failed to update subscription address in DB:", err)
+        );
+      }
+
+      fetch("/api/email/send-subscription-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "address_change",
+          buyerEmail: "",
+          productTitle: addressChangeOrder.productTitle || "Your product",
+          newAddress: newAddress,
+          subscriptionId: addressChangeOrder.subscriptionId,
+        }),
+      }).catch(() => {});
+
+      setOrders((prevOrders) =>
+        prevOrders.map((order) =>
+          order.orderId === addressChangeOrder.orderId
+            ? { ...order, address: newAddress }
+            : order
+        )
+      );
+
+      handleCloseAddressChangeModal();
+    } catch (error) {
+      console.error("Error sending address change:", error);
+    } finally {
+      setIsSendingAddressChange(false);
+    }
+  };
+
   if (isLoading || !chatsContext || chatsContext.isLoading) {
     return (
       <div className="flex h-[66vh] items-center justify-center">
@@ -1443,6 +1588,9 @@ const OrdersDashboard = () => {
                     Donation Amount
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-black">
+                    Subscription
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-black">
                     Herdshare Agreement
                   </th>
                 </tr>
@@ -1451,7 +1599,7 @@ const OrdersDashboard = () => {
                 {orders.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={13}
+                      colSpan={14}
                       className="px-6 py-4 text-center text-black"
                     >
                       No orders yet
@@ -1644,6 +1792,35 @@ const OrdersDashboard = () => {
                                     : ""
                                 }`
                             : "N/A"}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-4 text-sm">
+                          <div className="flex flex-col gap-1">
+                            <span
+                              className={`inline-flex rounded-md border-2 border-black px-2 py-1 text-xs font-bold ${
+                                order.isSubscription
+                                  ? "bg-green-200 text-black"
+                                  : "bg-gray-200 text-black"
+                              }`}
+                            >
+                              {order.isSubscription ? "Yes" : "No"}
+                            </span>
+                            {order.isSubscription &&
+                              order.subscriptionFrequency && (
+                                <span className="text-xs text-gray-600">
+                                  {order.subscriptionFrequency}
+                                </span>
+                              )}
+                            {order.isSubscription && !order.isSale && (
+                              <button
+                                onClick={() =>
+                                  handleOpenAddressChangeModal(order)
+                                }
+                                className="cursor-pointer text-left text-xs text-primary-yellow underline hover:text-yellow-600"
+                              >
+                                Change Address
+                              </button>
+                            )}
+                          </div>
                         </td>
                         <td className="whitespace-nowrap px-4 py-4 text-sm">
                           {order.signedHerdshareUrl ? (
@@ -2037,6 +2214,17 @@ const OrdersDashboard = () => {
           </ModalContent>
         </Modal>
       )}
+
+      <AddressChangeModal
+        isOpen={showAddressChangeModal}
+        onClose={handleCloseAddressChangeModal}
+        onSubmit={onAddressChangeSubmit}
+        isLoading={isSendingAddressChange}
+        orderId={addressChangeOrder?.orderId}
+        productTitle={addressChangeOrder?.productTitle}
+        currentAddress={addressChangeOrder?.address}
+        subscriptionId={addressChangeOrder?.subscriptionId}
+      />
 
       <FailureModal
         bodyText={failureText}

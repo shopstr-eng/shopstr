@@ -223,6 +223,49 @@ async function initializeTables(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_notification_emails_role ON notification_emails(role);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_emails_seller_unique ON notification_emails(pubkey) WHERE role = 'seller';
       CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_emails_buyer_order_unique ON notification_emails(order_id) WHERE role = 'buyer';
+
+      -- Subscriptions table for recurring product subscriptions
+      CREATE TABLE IF NOT EXISTS subscriptions (
+          id SERIAL PRIMARY KEY,
+          stripe_subscription_id TEXT NOT NULL UNIQUE,
+          stripe_customer_id TEXT NOT NULL,
+          buyer_pubkey TEXT,
+          buyer_email TEXT NOT NULL,
+          seller_pubkey TEXT NOT NULL,
+          product_event_id TEXT NOT NULL,
+          quantity INTEGER NOT NULL DEFAULT 1,
+          variant_info JSONB,
+          frequency TEXT NOT NULL CHECK (frequency IN ('weekly', 'every_2_weeks', 'monthly', 'every_2_months', 'quarterly')),
+          discount_percent DECIMAL(5,2) NOT NULL CHECK (discount_percent >= 0 AND discount_percent <= 100),
+          base_price NUMERIC(12,2) NOT NULL,
+          subscription_price NUMERIC(12,2) NOT NULL,
+          currency TEXT NOT NULL DEFAULT 'usd',
+          shipping_address JSONB,
+          status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'canceled')),
+          next_billing_date TIMESTAMP,
+          next_shipping_date TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_subscription_id ON subscriptions(stripe_subscription_id);
+      CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_customer_id ON subscriptions(stripe_customer_id);
+      CREATE INDEX IF NOT EXISTS idx_subscriptions_buyer_pubkey ON subscriptions(buyer_pubkey);
+      CREATE INDEX IF NOT EXISTS idx_subscriptions_buyer_email ON subscriptions(buyer_email);
+      CREATE INDEX IF NOT EXISTS idx_subscriptions_seller_pubkey ON subscriptions(seller_pubkey);
+      CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);
+
+      -- Subscription notifications table
+      CREATE TABLE IF NOT EXISTS subscription_notifications (
+          id SERIAL PRIMARY KEY,
+          subscription_id INTEGER NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+          type TEXT NOT NULL CHECK (type IN ('renewal_reminder', 'address_change', 'cancellation')),
+          sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          method TEXT NOT NULL CHECK (method IN ('email', 'nostr', 'both'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_subscription_notifications_subscription_id ON subscription_notifications(subscription_id);
+      CREATE INDEX IF NOT EXISTS idx_subscription_notifications_type ON subscription_notifications(type);
     `);
 
     await client.query(`
@@ -1313,6 +1356,344 @@ export async function getUserAuthEmail(pubkey: string): Promise<string | null> {
   } catch (error) {
     console.error("Failed to get user auth email:", error);
     return null;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export interface SubscriptionRecord {
+  id: number;
+  stripe_subscription_id: string;
+  stripe_customer_id: string;
+  buyer_pubkey: string | null;
+  buyer_email: string;
+  seller_pubkey: string;
+  product_event_id: string;
+  product_title: string | null;
+  quantity: number;
+  variant_info: any;
+  frequency: string;
+  discount_percent: number;
+  base_price: number;
+  subscription_price: number;
+  currency: string;
+  shipping_address: any;
+  status: string;
+  next_billing_date: string | null;
+  next_shipping_date: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SubscriptionNotificationRecord {
+  id: number;
+  subscription_id: number;
+  type: string;
+  sent_at: string;
+  method: string;
+}
+
+export async function createSubscription(data: {
+  stripe_subscription_id: string;
+  stripe_customer_id: string;
+  buyer_pubkey?: string | null;
+  buyer_email: string;
+  seller_pubkey: string;
+  product_event_id: string;
+  product_title?: string | null;
+  quantity?: number;
+  variant_info?: any;
+  frequency: string;
+  discount_percent: number;
+  base_price: number;
+  subscription_price: number;
+  currency?: string;
+  shipping_address?: any;
+  status?: string;
+  next_billing_date?: Date | null;
+  next_shipping_date?: Date | null;
+}): Promise<SubscriptionRecord> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `INSERT INTO subscriptions (
+        stripe_subscription_id, stripe_customer_id, buyer_pubkey, buyer_email,
+        seller_pubkey, product_event_id, product_title, quantity, variant_info, frequency,
+        discount_percent, base_price, subscription_price, currency,
+        shipping_address, status, next_billing_date, next_shipping_date
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+      RETURNING *`,
+      [
+        data.stripe_subscription_id,
+        data.stripe_customer_id,
+        data.buyer_pubkey || null,
+        data.buyer_email,
+        data.seller_pubkey,
+        data.product_event_id,
+        data.product_title || null,
+        data.quantity || 1,
+        data.variant_info ? JSON.stringify(data.variant_info) : null,
+        data.frequency,
+        data.discount_percent,
+        data.base_price,
+        data.subscription_price,
+        data.currency || "usd",
+        data.shipping_address ? JSON.stringify(data.shipping_address) : null,
+        data.status || "active",
+        data.next_billing_date || null,
+        data.next_shipping_date || null,
+      ] as any[]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error("Failed to create subscription:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function getSubscriptionByStripeId(
+  stripeSubscriptionId: string
+): Promise<SubscriptionRecord | null> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT * FROM subscriptions WHERE stripe_subscription_id = $1`,
+      [stripeSubscriptionId]
+    );
+    if (result.rows.length === 0) return null;
+    return result.rows[0];
+  } catch (error) {
+    console.error("Failed to get subscription:", error);
+    return null;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function getSubscriptionById(
+  id: number
+): Promise<SubscriptionRecord | null> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT * FROM subscriptions WHERE id = $1`,
+      [id]
+    );
+    if (result.rows.length === 0) return null;
+    return result.rows[0];
+  } catch (error) {
+    console.error("Failed to get subscription by id:", error);
+    return null;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function getSubscriptionsByBuyerPubkey(
+  buyerPubkey: string
+): Promise<SubscriptionRecord[]> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT * FROM subscriptions WHERE buyer_pubkey = $1 ORDER BY created_at DESC`,
+      [buyerPubkey]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error("Failed to get subscriptions by buyer pubkey:", error);
+    return [];
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function getSubscriptionsByBuyerEmail(
+  buyerEmail: string
+): Promise<SubscriptionRecord[]> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT * FROM subscriptions WHERE buyer_email = $1 ORDER BY created_at DESC`,
+      [buyerEmail]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error("Failed to get subscriptions by buyer email:", error);
+    return [];
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function getSubscriptionsBySellerPubkey(
+  sellerPubkey: string
+): Promise<SubscriptionRecord[]> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT * FROM subscriptions WHERE seller_pubkey = $1 ORDER BY created_at DESC`,
+      [sellerPubkey]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error("Failed to get subscriptions by seller pubkey:", error);
+    return [];
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function updateSubscriptionStatus(
+  stripeSubscriptionId: string,
+  status: string
+): Promise<void> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    await client.query(
+      `UPDATE subscriptions SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE stripe_subscription_id = $2`,
+      [status, stripeSubscriptionId]
+    );
+  } catch (error) {
+    console.error("Failed to update subscription status:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function updateSubscriptionShippingAddress(
+  stripeSubscriptionId: string,
+  shippingAddress: any
+): Promise<void> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    await client.query(
+      `UPDATE subscriptions SET shipping_address = $1, updated_at = CURRENT_TIMESTAMP WHERE stripe_subscription_id = $2`,
+      [JSON.stringify(shippingAddress), stripeSubscriptionId]
+    );
+  } catch (error) {
+    console.error("Failed to update subscription shipping address:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function updateSubscriptionBillingDate(
+  stripeSubscriptionId: string,
+  nextBillingDate: Date,
+  nextShippingDate?: Date
+): Promise<void> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    if (nextShippingDate) {
+      await client.query(
+        `UPDATE subscriptions SET next_billing_date = $1, next_shipping_date = $2, updated_at = CURRENT_TIMESTAMP WHERE stripe_subscription_id = $3`,
+        [nextBillingDate, nextShippingDate, stripeSubscriptionId] as any[]
+      );
+    } else {
+      await client.query(
+        `UPDATE subscriptions SET next_billing_date = $1, updated_at = CURRENT_TIMESTAMP WHERE stripe_subscription_id = $2`,
+        [nextBillingDate, stripeSubscriptionId] as any[]
+      );
+    }
+  } catch (error) {
+    console.error("Failed to update subscription billing date:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function deleteSubscription(
+  stripeSubscriptionId: string
+): Promise<void> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    await client.query(
+      `DELETE FROM subscriptions WHERE stripe_subscription_id = $1`,
+      [stripeSubscriptionId]
+    );
+  } catch (error) {
+    console.error("Failed to delete subscription:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function createSubscriptionNotification(data: {
+  subscription_id: number;
+  type: string;
+  method: string;
+}): Promise<SubscriptionNotificationRecord> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `INSERT INTO subscription_notifications (subscription_id, type, method)
+       VALUES ($1, $2, $3) RETURNING *`,
+      [data.subscription_id, data.type, data.method] as any[]
+    );
+    return result.rows[0] as SubscriptionNotificationRecord;
+  } catch (error) {
+    console.error("Failed to create subscription notification:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function getSubscriptionNotifications(
+  subscriptionId: number
+): Promise<SubscriptionNotificationRecord[]> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT * FROM subscription_notifications WHERE subscription_id = $1 ORDER BY sent_at DESC`,
+      [subscriptionId]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error("Failed to get subscription notifications:", error);
+    return [];
   } finally {
     if (client) client.release();
   }

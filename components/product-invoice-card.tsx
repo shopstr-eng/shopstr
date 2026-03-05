@@ -78,6 +78,9 @@ export default function ProductInvoiceCard({
   selectedBulkOption,
   discountCode,
   discountPercentage,
+  isSubscription,
+  subscriptionFrequency,
+  subscriptionDiscount,
   originalPrice,
 }: {
   productData: ProductData;
@@ -94,6 +97,9 @@ export default function ProductInvoiceCard({
   selectedBulkOption?: number;
   discountCode?: string;
   discountPercentage?: number;
+  isSubscription?: boolean;
+  subscriptionFrequency?: string;
+  subscriptionDiscount?: number;
   originalPrice?: number;
 }) {
   const { mints, tokens, history } = getLocalStorageData();
@@ -349,6 +355,7 @@ export default function ProductInvoiceCard({
             shippingAddress: pendingOrderEmailRef.current.shippingAddress,
             pickupLocation: selectedPickupLocation || undefined,
             sellerPubkey: pendingOrderEmailRef.current.sellerPubkey,
+            isSubscription: isSubscription && !!subscriptionFrequency,
           })
         );
       } catch {}
@@ -543,6 +550,10 @@ export default function ProductInvoiceCard({
     selectedPickupLocation,
   ]);
 
+  const [stripeSubscriptionId, setStripeSubscriptionId] = useState<
+    string | null
+  >(null);
+
   const sendPaymentAndContactMessage = async (
     pubkeyToReceiveMessage: string,
     message: string,
@@ -560,7 +571,12 @@ export default function ProductInvoiceCard({
     pickup?: string,
     donationAmountValue?: number,
     donationPercentageValue?: number,
-    retryCount: number = 3
+    retryCount: number = 3,
+    subscriptionInfoParam?: {
+      enabled: boolean;
+      frequency: string;
+      stripeSubscriptionId?: string;
+    }
   ) => {
     const decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
     const decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
@@ -583,6 +599,7 @@ export default function ProductInvoiceCard({
           : formType === "shipping"
             ? productData.totalCost
             : productData.price,
+        orderCurrency: productData.currency || undefined,
         orderId,
         productData: {
           ...productData,
@@ -603,6 +620,7 @@ export default function ProductInvoiceCard({
         buyerPubkey,
         donationAmount: donationAmountValue,
         donationPercentage: donationPercentageValue,
+        subscriptionInfo: subscriptionInfoParam,
       };
     } else if (isReceipt) {
       messageSubject = "order-receipt";
@@ -610,6 +628,7 @@ export default function ProductInvoiceCard({
         isOrder: true,
         type: 4,
         orderAmount: messageAmount ? messageAmount : productData.totalCost,
+        orderCurrency: productData.currency || undefined,
         orderId,
         productData: {
           ...productData,
@@ -631,6 +650,7 @@ export default function ProductInvoiceCard({
         buyerPubkey,
         donationAmount: donationAmountValue,
         donationPercentage: donationPercentageValue,
+        subscriptionInfo: subscriptionInfoParam,
       };
     } else if (isDonation) {
       messageSubject = "donation";
@@ -640,6 +660,7 @@ export default function ProductInvoiceCard({
         isOrder: true,
         type: 1,
         orderAmount: messageAmount ? messageAmount : productData.totalCost,
+        orderCurrency: productData.currency || undefined,
         orderId,
         productData: {
           ...productData,
@@ -659,6 +680,7 @@ export default function ProductInvoiceCard({
         buyerPubkey,
         donationAmount: donationAmountValue,
         donationPercentage: donationPercentageValue,
+        subscriptionInfo: subscriptionInfoParam,
       };
     }
 
@@ -843,11 +865,15 @@ export default function ProductInvoiceCard({
               paymentData.shippingPostalCode || ""
             }, ${paymentData.shippingCountry || ""}`
           : undefined;
+      const isSatsProduct =
+        !productData.currency ||
+        productData.currency.toLowerCase() === "sats" ||
+        productData.currency.toLowerCase() === "sat";
       pendingOrderEmailRef.current = {
         orderId: "",
         productTitle: productData.title,
-        amount: String(price),
-        currency: "sats",
+        amount: !isSatsProduct ? String(productData.totalCost) : String(price),
+        currency: productData.currency || "sats",
         paymentMethod: paymentType || "lightning",
         sellerPubkey: productData.pubkey,
         buyerName: paymentData.shippingName || undefined,
@@ -1426,7 +1452,7 @@ export default function ProductInvoiceCard({
             productTitle: title,
             productImage: productData.images[0] || "",
             amount: String(productData.totalCost),
-            currency: productData.currency === "USD" ? "USD" : "sats",
+            currency: productData.currency || "sats",
             paymentMethod: selectedFiatOption || "fiat",
             orderId: orderId || "",
             shippingCost: productData.shippingCost
@@ -1442,6 +1468,7 @@ export default function ProductInvoiceCard({
             shippingAddress: addressTag,
             pickupLocation: selectedPickupLocation || undefined,
             sellerPubkey: pubkey,
+            isSubscription: isSubscription && !!subscriptionFrequency,
           })
         );
       } catch {}
@@ -1450,7 +1477,7 @@ export default function ProductInvoiceCard({
         orderId: orderId || "",
         productTitle: title,
         amount: String(productData.totalCost),
-        currency: productData.currency === "USD" ? "USD" : "sats",
+        currency: productData.currency || "sats",
         paymentMethod: selectedFiatOption || "fiat",
         sellerPubkey: pubkey,
         buyerName: data.shippingName || data.contactName || undefined,
@@ -2519,59 +2546,132 @@ export default function ProductInvoiceCard({
         stripeCurrency = productData.currency;
       }
 
-      const response = await fetch("/api/stripe/create-payment-intent", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          amount: stripeAmount,
-          currency: stripeCurrency,
-          customerEmail:
-            buyerEmail ||
-            (userPubkey
-              ? `${userPubkey.substring(0, 8)}@nostr.com`
-              : `guest-${orderId.substring(0, 8)}@nostr.com`),
-          productTitle: productData.title,
-          productDescription:
-            selectedSize || selectedVolume || selectedWeight
-              ? `${selectedSize ? `Size: ${selectedSize}` : ""}${
-                  selectedVolume ? ` Volume: ${selectedVolume}` : ""
-                }${selectedWeight ? ` Weight: ${selectedWeight}` : ""}`
-              : undefined,
-          metadata: {
-            orderId,
-            productId: productData.id,
-            sellerPubkey: productData.pubkey,
-            buyerPubkey: userPubkey || "",
+      if (isSubscription && subscriptionFrequency) {
+        const shippingAddressObj =
+          data.shippingName && data.shippingAddress
+            ? {
+                name: data.shippingName,
+                address: data.shippingAddress,
+                unit: data.shippingUnitNo || "",
+                city: data.shippingCity || "",
+                state: data.shippingState || "",
+                postalCode: data.shippingPostalCode || "",
+                country: data.shippingCountry || "",
+              }
+            : undefined;
+
+        const response = await fetch("/api/stripe/create-subscription", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            customerEmail: buyerEmail,
             productTitle: productData.title,
-            selectedSize: selectedSize || "",
-            selectedVolume: selectedVolume || "",
-            selectedWeight: selectedWeight || "",
+            productDescription:
+              selectedSize || selectedVolume || selectedWeight
+                ? `${selectedSize ? `Size: ${selectedSize}` : ""}${
+                    selectedVolume ? ` Volume: ${selectedVolume}` : ""
+                  }${selectedWeight ? ` Weight: ${selectedWeight}` : ""}`
+                : undefined,
+            amount: stripeAmount,
+            currency: stripeCurrency,
+            frequency: subscriptionFrequency,
+            discountPercent: subscriptionDiscount || 0,
+            sellerPubkey: productData.pubkey,
+            buyerPubkey: userPubkey || null,
+            productEventId: `30402:${productData.pubkey}:${productData.d}`,
+            quantity: 1,
+            variantInfo:
+              selectedSize ||
+              selectedVolume ||
+              selectedWeight ||
+              selectedBulkOption
+                ? {
+                    size: selectedSize || undefined,
+                    volume: selectedVolume || undefined,
+                    weight: selectedWeight || undefined,
+                    bulk: selectedBulkOption || undefined,
+                  }
+                : undefined,
+            shippingAddress: shippingAddressObj,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.details || "Failed to create subscription");
+        }
+
+        const {
+          clientSecret,
+          subscriptionId: subId,
+          connectedAccountId: respConnectedId,
+        } = await response.json();
+
+        setStripeSubscriptionId(subId);
+        setStripeClientSecret(clientSecret);
+        setStripePaymentIntentId(null);
+        setStripeConnectedAccountForForm(
+          respConnectedId || sellerConnectedAccountId || null
+        );
+        setPendingStripeData(data);
+        setShowInvoiceCard(true);
+        setStripeTimeoutSeconds(STRIPE_TIMEOUT_SECONDS);
+        setHasTimedOut(false);
+      } else {
+        const response = await fetch("/api/stripe/create-payment-intent", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
           },
-        }),
-      });
+          body: JSON.stringify({
+            amount: stripeAmount,
+            currency: stripeCurrency,
+            customerEmail:
+              buyerEmail ||
+              (userPubkey
+                ? `${userPubkey.substring(0, 8)}@nostr.com`
+                : `guest-${orderId.substring(0, 8)}@nostr.com`),
+            productTitle: productData.title,
+            productDescription:
+              selectedSize || selectedVolume || selectedWeight
+                ? `${selectedSize ? `Size: ${selectedSize}` : ""}${
+                    selectedVolume ? ` Volume: ${selectedVolume}` : ""
+                  }${selectedWeight ? ` Weight: ${selectedWeight}` : ""}`
+                : undefined,
+            metadata: {
+              orderId,
+              productId: productData.id,
+              sellerPubkey: productData.pubkey,
+              buyerPubkey: userPubkey || "",
+              productTitle: productData.title,
+              selectedSize: selectedSize || "",
+              selectedVolume: selectedVolume || "",
+              selectedWeight: selectedWeight || "",
+            },
+          }),
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.details || "Failed to create payment");
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.details || "Failed to create payment");
+        }
+
+        const {
+          clientSecret,
+          paymentIntentId,
+          connectedAccountId: respConnectedId,
+        } = await response.json();
+
+        setStripeClientSecret(clientSecret);
+        setStripePaymentIntentId(paymentIntentId);
+        setStripeConnectedAccountForForm(
+          respConnectedId || sellerConnectedAccountId || null
+        );
+        setPendingStripeData(data);
+        setShowInvoiceCard(true);
+        setStripeTimeoutSeconds(STRIPE_TIMEOUT_SECONDS);
+        setHasTimedOut(false);
       }
-
-      const {
-        clientSecret,
-        paymentIntentId,
-        connectedAccountId: respConnectedId,
-      } = await response.json();
-
-      setStripeClientSecret(clientSecret);
-      setStripePaymentIntentId(paymentIntentId);
-      setStripeConnectedAccountForForm(
-        respConnectedId || sellerConnectedAccountId || null
-      );
-      setPendingStripeData(data);
-      setShowInvoiceCard(true);
-      setStripeTimeoutSeconds(STRIPE_TIMEOUT_SECONDS);
-      setHasTimedOut(false);
     } catch (error) {
       console.error("Stripe payment error:", error);
       setInvoiceGenerationFailed(true);
@@ -2631,6 +2731,20 @@ export default function ProductInvoiceCard({
           : `${data.shippingName}, ${data.shippingAddress}, ${data.shippingCity}, ${data.shippingState}, ${data.shippingPostalCode}, ${data.shippingCountry}`
         : undefined;
 
+    const subInfo =
+      isSubscription && subscriptionFrequency && stripeSubscriptionId
+        ? {
+            enabled: true,
+            frequency: subscriptionFrequency,
+            stripeSubscriptionId: stripeSubscriptionId,
+          }
+        : undefined;
+
+    const subscriptionLabel =
+      isSubscription && subscriptionFrequency
+        ? " (subscription: " + subscriptionFrequency + ")"
+        : "";
+
     const paymentMessage =
       "You have received a stripe payment from " +
       (userNPub || "a guest buyer") +
@@ -2638,6 +2752,7 @@ export default function ProductInvoiceCard({
       productData.title +
       " listing" +
       productDetails +
+      subscriptionLabel +
       " on Milk Market! Check your Stripe account for the payment.";
 
     await sendPaymentAndContactMessage(
@@ -2654,7 +2769,11 @@ export default function ProductInvoiceCard({
       discountedTotal,
       undefined,
       addressTag,
-      selectedPickupLocation || undefined
+      selectedPickupLocation || undefined,
+      undefined,
+      undefined,
+      3,
+      subInfo
     );
 
     if (data.additionalInfo) {
@@ -2766,7 +2885,11 @@ export default function ProductInvoiceCard({
         undefined,
         undefined,
         addressTag,
-        selectedPickupLocation || undefined
+        selectedPickupLocation || undefined,
+        undefined,
+        undefined,
+        3,
+        subInfo
       );
     } else if (formType === "contact") {
       await sendInquiryDM(productData.pubkey, productData.title);
@@ -2776,6 +2899,7 @@ export default function ProductInvoiceCard({
         "Your order for " +
         productData.title +
         productDetails +
+        subscriptionLabel +
         " was processed successfully! You should be receiving delivery information from " +
         nip19.npubEncode(productData.pubkey) +
         " as soon as they review your order.";
@@ -2793,7 +2917,11 @@ export default function ProductInvoiceCard({
         undefined,
         undefined,
         undefined,
-        selectedPickupLocation || undefined
+        selectedPickupLocation || undefined,
+        undefined,
+        undefined,
+        3,
+        subInfo
       );
     } else {
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -2801,6 +2929,7 @@ export default function ProductInvoiceCard({
         "Thank you for your purchase of " +
         productData.title +
         productDetails +
+        subscriptionLabel +
         " from " +
         nip19.npubEncode(productData.pubkey) +
         ".";
@@ -2818,7 +2947,11 @@ export default function ProductInvoiceCard({
         undefined,
         undefined,
         undefined,
-        selectedPickupLocation || undefined
+        selectedPickupLocation || undefined,
+        undefined,
+        undefined,
+        3,
+        subInfo
       );
     }
 
@@ -3357,6 +3490,36 @@ export default function ProductInvoiceCard({
                   </p>
                 )}
                 <p className="mb-1 text-gray-600">Quantity: 1</p>
+
+                {isSubscription && subscriptionFrequency && (
+                  <div className="mt-3 rounded-md border-2 border-purple-300 bg-purple-50 p-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">🔄</span>
+                      <span className="font-semibold text-purple-700">
+                        Subscribe & Save
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-purple-600">
+                      Delivery every{" "}
+                      {subscriptionFrequency === "weekly"
+                        ? "week"
+                        : subscriptionFrequency === "every_2_weeks"
+                          ? "2 weeks"
+                          : subscriptionFrequency === "monthly"
+                            ? "month"
+                            : subscriptionFrequency === "every_2_months"
+                              ? "2 months"
+                              : subscriptionFrequency === "quarterly"
+                                ? "3 months"
+                                : subscriptionFrequency}
+                    </p>
+                    {(subscriptionDiscount ?? 0) > 0 && (
+                      <p className="text-sm font-medium text-green-600">
+                        {subscriptionDiscount}% subscription discount applied
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="border-t pt-4">
@@ -3435,9 +3598,29 @@ export default function ProductInvoiceCard({
                       )}
                   </div>
                   <div className="flex justify-between border-t pt-2 font-semibold">
-                    <span>Total:</span>
+                    <span>
+                      {isSubscription && subscriptionFrequency
+                        ? "Total (recurring):"
+                        : "Total:"}
+                    </span>
                     <span>
                       {formatWithCommas(discountedTotal, productData.currency)}
+                      {isSubscription && subscriptionFrequency && (
+                        <span className="text-sm font-normal text-purple-600">
+                          /
+                          {subscriptionFrequency === "weekly"
+                            ? "wk"
+                            : subscriptionFrequency === "every_2_weeks"
+                              ? "2wk"
+                              : subscriptionFrequency === "monthly"
+                                ? "mo"
+                                : subscriptionFrequency === "every_2_months"
+                                  ? "2mo"
+                                  : subscriptionFrequency === "quarterly"
+                                    ? "qtr"
+                                    : subscriptionFrequency}
+                        </span>
+                      )}
                       {!isSatsCurrency && satsEstimate != null && (
                         <span className="ml-2 text-sm font-normal text-gray-500">
                           ≈ {formatWithCommas(satsEstimate, "sats")}
@@ -3802,16 +3985,25 @@ export default function ProductInvoiceCard({
 
                 {isLoggedIn && (
                   <div className="mt-4 space-y-2">
+                    {isSubscription && (
+                      <p className="text-sm font-medium text-purple-600">
+                        Email is required for subscription management and
+                        renewal notifications.
+                      </p>
+                    )}
                     <Input
                       variant="bordered"
                       fullWidth={true}
                       label={
                         <span className="text-light-text">
-                          Email for Order Updates (optional)
+                          {isSubscription
+                            ? "Email for Subscription Management (required)"
+                            : "Email for Order Updates (optional)"}
                         </span>
                       }
                       labelPlacement="inside"
                       type="email"
+                      isRequired={isSubscription}
                       classNames={{
                         inputWrapper: `border-2 rounded-md shadow-neo ${
                           emailError ? "border-red-500" : "border-black"
@@ -3834,53 +4026,65 @@ export default function ProductInvoiceCard({
                 <div className="mt-6 space-y-3 border-t pt-6">
                   <h3 className="mb-4 text-xl font-bold">Payment Method</h3>
 
-                  <Button
-                    className={`w-full rounded-md border-2 border-black bg-primary-blue px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
-                      !isFormValid || (!isLoggedIn && !buyerEmail)
-                        ? "cursor-not-allowed opacity-50"
-                        : ""
-                    }`}
-                    disabled={!isFormValid || (!isLoggedIn && !buyerEmail)}
-                    onClick={() => {
-                      handleFormSubmit((data) =>
-                        onFormSubmit(data, "lightning")
-                      )();
-                    }}
-                    startContent={<BoltIcon className="h-6 w-6" />}
-                  >
-                    Pay with Lightning: {formattedLightningCost}
-                    {getDiscountLabel(bitcoinDiscountPct)}
-                  </Button>
+                  {!(isSubscription && subscriptionFrequency) && (
+                    <>
+                      <Button
+                        className={`w-full rounded-md border-2 border-black bg-primary-blue px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                          !isFormValid || (!isLoggedIn && !buyerEmail)
+                            ? "cursor-not-allowed opacity-50"
+                            : ""
+                        }`}
+                        disabled={!isFormValid || (!isLoggedIn && !buyerEmail)}
+                        onClick={() => {
+                          handleFormSubmit((data) =>
+                            onFormSubmit(data, "lightning")
+                          )();
+                        }}
+                        startContent={<BoltIcon className="h-6 w-6" />}
+                      >
+                        Pay with Lightning: {formattedLightningCost}
+                        {getDiscountLabel(bitcoinDiscountPct)}
+                      </Button>
 
-                  {hasTokensAvailable && (
-                    <Button
-                      className={`w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
-                        !isFormValid || (!isLoggedIn && !buyerEmail)
-                          ? "cursor-not-allowed opacity-50"
-                          : ""
-                      }`}
-                      disabled={!isFormValid || (!isLoggedIn && !buyerEmail)}
-                      onClick={() => {
-                        handleFormSubmit((data) =>
-                          onFormSubmit(data, "cashu")
-                        )();
-                      }}
-                      startContent={<BanknotesIcon className="h-6 w-6" />}
-                    >
-                      Pay with Cashu: {formattedLightningCost}
-                      {getDiscountLabel(bitcoinDiscountPct)}
-                    </Button>
+                      {hasTokensAvailable && (
+                        <Button
+                          className={`w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                            !isFormValid || (!isLoggedIn && !buyerEmail)
+                              ? "cursor-not-allowed opacity-50"
+                              : ""
+                          }`}
+                          disabled={
+                            !isFormValid || (!isLoggedIn && !buyerEmail)
+                          }
+                          onClick={() => {
+                            handleFormSubmit((data) =>
+                              onFormSubmit(data, "cashu")
+                            )();
+                          }}
+                          startContent={<BanknotesIcon className="h-6 w-6" />}
+                        >
+                          Pay with Cashu: {formattedLightningCost}
+                          {getDiscountLabel(bitcoinDiscountPct)}
+                        </Button>
+                      )}
+                    </>
                   )}
 
                   {/* Stripe Payment Button */}
                   {isStripeMerchant && (
                     <Button
                       className={`w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
-                        !isFormValid || (!isLoggedIn && !buyerEmail)
+                        !isFormValid ||
+                        (!isLoggedIn && !buyerEmail) ||
+                        (isSubscription && !buyerEmail)
                           ? "cursor-not-allowed opacity-50"
                           : ""
                       }`}
-                      disabled={!isFormValid || (!isLoggedIn && !buyerEmail)}
+                      disabled={
+                        !isFormValid ||
+                        (!isLoggedIn && !buyerEmail) ||
+                        (isSubscription && !buyerEmail)
+                      }
                       onClick={() => {
                         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                         if (!buyerEmail || !emailRegex.test(buyerEmail)) {
@@ -3901,68 +4105,80 @@ export default function ProductInvoiceCard({
                     </Button>
                   )}
 
-                  {Object.keys(fiatPaymentOptions).length > 0 && (
-                    <Button
-                      className={`w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
-                        !isFormValid || (!isLoggedIn && !buyerEmail)
-                          ? "cursor-not-allowed opacity-50"
-                          : ""
-                      }`}
-                      disabled={!isFormValid || (!isLoggedIn && !buyerEmail)}
-                      onClick={() => {
-                        handleFormSubmit((data) =>
-                          onFormSubmit(data, "fiat")
-                        )();
-                      }}
-                      startContent={<CurrencyDollarIcon className="h-6 w-6" />}
-                    >
-                      Pay with Cash or Payment App:{" "}
-                      {(() => {
-                        const fiatKeys = Object.keys(fiatPaymentOptions);
-                        const fiatDiscounts = fiatKeys.map(
-                          (k) => pmDiscounts[k] || 0
-                        );
-                        const allSame =
-                          fiatDiscounts.length > 0 &&
-                          fiatDiscounts.every((d) => d === fiatDiscounts[0]);
-                        if (allSame && fiatDiscounts[0]! > 0) {
-                          return `${getFormattedFiatCost(
-                            fiatKeys[0]!
-                          )}${getDiscountLabel(fiatDiscounts[0]!)}`;
-                        }
-                        return formatMethodCost(
-                          discountedTotal,
-                          satsEstimate,
-                          usdEstimate,
-                          "card"
-                        );
-                      })()}
-                    </Button>
-                  )}
+                  {!(isSubscription && subscriptionFrequency) && (
+                    <>
+                      {Object.keys(fiatPaymentOptions).length > 0 && (
+                        <Button
+                          className={`w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                            !isFormValid || (!isLoggedIn && !buyerEmail)
+                              ? "cursor-not-allowed opacity-50"
+                              : ""
+                          }`}
+                          disabled={
+                            !isFormValid || (!isLoggedIn && !buyerEmail)
+                          }
+                          onClick={() => {
+                            handleFormSubmit((data) =>
+                              onFormSubmit(data, "fiat")
+                            )();
+                          }}
+                          startContent={
+                            <CurrencyDollarIcon className="h-6 w-6" />
+                          }
+                        >
+                          Pay with Cash or Payment App:{" "}
+                          {(() => {
+                            const fiatKeys = Object.keys(fiatPaymentOptions);
+                            const fiatDiscounts = fiatKeys.map(
+                              (k) => pmDiscounts[k] || 0
+                            );
+                            const allSame =
+                              fiatDiscounts.length > 0 &&
+                              fiatDiscounts.every(
+                                (d) => d === fiatDiscounts[0]
+                              );
+                            if (allSame && fiatDiscounts[0]! > 0) {
+                              return `${getFormattedFiatCost(
+                                fiatKeys[0]!
+                              )}${getDiscountLabel(fiatDiscounts[0]!)}`;
+                            }
+                            return formatMethodCost(
+                              discountedTotal,
+                              satsEstimate,
+                              usdEstimate,
+                              "card"
+                            );
+                          })()}
+                        </Button>
+                      )}
 
-                  {/* NWC Button */}
-                  {nwcInfo && (
-                    <Button
-                      className={`w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
-                        !isFormValid || (!isLoggedIn && !buyerEmail)
-                          ? "cursor-not-allowed opacity-50"
-                          : ""
-                      }`}
-                      disabled={
-                        !isFormValid ||
-                        (!isLoggedIn && !buyerEmail) ||
-                        isNwcLoading
-                      }
-                      isLoading={isNwcLoading}
-                      onClick={() => {
-                        handleFormSubmit((data) => onFormSubmit(data, "nwc"))();
-                      }}
-                      startContent={<WalletIcon className="h-6 w-6" />}
-                    >
-                      Pay with {nwcInfo.alias || "NWC"}:{" "}
-                      {formattedLightningCost}
-                      {getDiscountLabel(bitcoinDiscountPct)}
-                    </Button>
+                      {/* NWC Button */}
+                      {nwcInfo && (
+                        <Button
+                          className={`w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                            !isFormValid || (!isLoggedIn && !buyerEmail)
+                              ? "cursor-not-allowed opacity-50"
+                              : ""
+                          }`}
+                          disabled={
+                            !isFormValid ||
+                            (!isLoggedIn && !buyerEmail) ||
+                            isNwcLoading
+                          }
+                          isLoading={isNwcLoading}
+                          onClick={() => {
+                            handleFormSubmit((data) =>
+                              onFormSubmit(data, "nwc")
+                            )();
+                          }}
+                          startContent={<WalletIcon className="h-6 w-6" />}
+                        >
+                          Pay with {nwcInfo.alias || "NWC"}:{" "}
+                          {formattedLightningCost}
+                          {getDiscountLabel(bitcoinDiscountPct)}
+                        </Button>
+                      )}
+                    </>
                   )}
                 </div>
               </form>

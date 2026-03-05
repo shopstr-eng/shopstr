@@ -81,6 +81,7 @@ export default function CartInvoiceCard({
   setInvoiceGenerationFailed,
   setCashuPaymentSent,
   setCashuPaymentFailed,
+  subscriptionSelections = {},
 }: {
   products: ProductData[];
   quantities: { [key: string]: number };
@@ -95,6 +96,9 @@ export default function CartInvoiceCard({
   setInvoiceGenerationFailed?: (invoiceGenerationFailed: boolean) => void;
   setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
   setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
+  subscriptionSelections?: {
+    [productId: string]: { enabled: boolean; frequency: string };
+  };
 }) {
   const { mints, tokens, history } = getLocalStorageData();
   const {
@@ -127,6 +131,14 @@ export default function CartInvoiceCard({
     return products.every((p) => p.pubkey === firstPubkey);
   }, [products]);
 
+  const hasActiveSubscription = useMemo(() => {
+    return products.some((p) => subscriptionSelections[p.id]?.enabled);
+  }, [products, subscriptionSelections]);
+
+  const uniqueSellerPubkeys = useMemo(() => {
+    return [...new Set(products.map((p) => p.pubkey))];
+  }, [products]);
+
   const singleSellerPubkey = useMemo(() => {
     if (!isSingleSeller || products.length === 0) return null;
     return products[0]!.pubkey;
@@ -142,9 +154,92 @@ export default function CartInvoiceCard({
   const [fiatPaymentConfirmed, setFiatPaymentConfirmed] = useState(false);
   const [pendingPaymentData, setPendingPaymentData] = useState<any>(null);
 
+  const [multiFiatOptions, setMultiFiatOptions] = useState<{
+    [sellerPubkey: string]: { [method: string]: string };
+  }>({});
+  const [multiFiatSelections, setMultiFiatSelections] = useState<{
+    [sellerPubkey: string]: string;
+  }>({});
+  const [multiFiatConfirmed, setMultiFiatConfirmed] = useState<{
+    [sellerPubkey: string]: boolean;
+  }>({});
+
   const [isStripeMerchant, setIsStripeMerchant] = useState(false);
+  const [allSellersHaveStripe, setAllSellersHaveStripe] = useState(false);
+
+  const sellersWithFiat = useMemo(() => {
+    if (isSingleSeller) return [];
+    return uniqueSellerPubkeys.filter((pk) => {
+      const opts = multiFiatOptions[pk];
+      return opts && Object.keys(opts).length > 0;
+    });
+  }, [isSingleSeller, uniqueSellerPubkeys, multiFiatOptions]);
+
+  const allSellersHaveFiat =
+    !isSingleSeller &&
+    uniqueSellerPubkeys.length > 0 &&
+    sellersWithFiat.length === uniqueSellerPubkeys.length;
+
+  const isMultiFiatAvailable = allSellersHaveFiat;
+
+  const getSellerDisplayName = (pubkey: string): string => {
+    const profile = profileContext.profileData.get(pubkey);
+    return profile?.content?.name || pubkey.substring(0, 8) + "...";
+  };
+
+  const getSellerCostBreakdown = (pubkey: string) => {
+    const sellerProducts = products.filter((p) => p.pubkey === pubkey);
+    let nativeTotal: number | null = null;
+    let satsTotal = 0;
+    if (!isSatsCart && nativeCostsPerProduct) {
+      nativeTotal = sellerProducts.reduce(
+        (sum, p) => sum + (nativeCostsPerProduct[p.id] || 0),
+        0
+      );
+    }
+    satsTotal =
+      totalCostsInSats[pubkey] ||
+      sellerProducts.reduce((sum, p) => sum + (totalCostsInSats[p.id] || 0), 0);
+    return { nativeTotal, satsTotal, products: sellerProducts };
+  };
+
+  const allMultiFiatConfirmed = useMemo(() => {
+    if (sellersWithFiat.length === 0) return false;
+    return sellersWithFiat.every((pk) => multiFiatConfirmed[pk] === true);
+  }, [sellersWithFiat, multiFiatConfirmed]);
+
+  const allMultiFiatSelected = useMemo(() => {
+    if (sellersWithFiat.length === 0) return false;
+    return sellersWithFiat.every((pk) => {
+      const sel = multiFiatSelections[pk];
+      return sel !== undefined && sel.length > 0;
+    });
+  }, [sellersWithFiat, multiFiatSelections]);
+
+  const hasSubscriptionStripeConflict = useMemo(() => {
+    if (!hasActiveSubscription) return false;
+    if (isSingleSeller && isStripeMerchant) return false;
+    if (isSingleSeller && !isStripeMerchant) return true;
+    if (!isSingleSeller && allSellersHaveStripe) return false;
+    if (!isSingleSeller && !allSellersHaveStripe) return true;
+    return false;
+  }, [
+    hasActiveSubscription,
+    isSingleSeller,
+    isStripeMerchant,
+    allSellersHaveStripe,
+  ]);
+  const [_sellerStripeAccounts, setSellerStripeAccounts] = useState<
+    Record<string, string>
+  >({});
   const [sellerConnectedAccountId, setSellerConnectedAccountId] = useState<
     string | null
+  >(null);
+  const [multiMerchantTransferGroup, setMultiMerchantTransferGroup] = useState<
+    string | null
+  >(null);
+  const [multiMerchantSellerSplits, setMultiMerchantSellerSplits] = useState<
+    { pubkey: string; amountCents: number; accountId: string }[] | null
   >(null);
   const [stripeClientSecret, setStripeClientSecret] = useState<string | null>(
     null
@@ -161,6 +256,9 @@ export default function CartInvoiceCard({
   const [stripeConnectedAccountForForm, setStripeConnectedAccountForForm] =
     useState<string | null>(null);
   const [pendingStripeData, setPendingStripeData] = useState<any>(null);
+  const [stripeSubscriptionId, setStripeSubscriptionId] = useState<
+    string | null
+  >(null);
   const [usdEstimate, setUsdEstimate] = useState<number | null>(null);
 
   const pendingOrderEmailRef = useRef<Array<{
@@ -200,6 +298,7 @@ export default function CartInvoiceCard({
     selectedWeight?: string;
     selectedBulkOption?: string;
     includeBuyerEmail?: boolean;
+    subscriptionFrequency?: string;
   }) => {
     try {
       const shouldIncludeBuyer = params.includeBuyerEmail !== false;
@@ -223,6 +322,7 @@ export default function CartInvoiceCard({
           selectedVolume: params.selectedVolume,
           selectedWeight: params.selectedWeight,
           selectedBulkOption: params.selectedBulkOption,
+          subscriptionFrequency: params.subscriptionFrequency,
         }),
       });
     } catch (e) {}
@@ -250,8 +350,11 @@ export default function CartInvoiceCard({
         const cartItems = products.map((p: any) => ({
           title: p.title || p.productName,
           image: p.images?.[0] || "",
-          amount: String(totalCostsInSats[p.id] || 0),
-          currency: "sats",
+          amount:
+            !isSatsCart && nativeCostsPerProduct
+              ? String(nativeCostsPerProduct[p.id] || 0)
+              : String(totalCostsInSats[p.id] || 0),
+          currency: !isSatsCart && cartCurrency ? cartCurrency : "sats",
           quantity: quantities[p.id] || 1,
           shipping: shippingTypes[p.id] || "",
           pickupLocation: selectedPickupLocations[p.id] || undefined,
@@ -284,8 +387,14 @@ export default function CartInvoiceCard({
           JSON.stringify({
             productTitle: allProductTitles,
             productImage: products[0]?.images?.[0] || "",
-            amount: String(totalCost),
-            subtotal: String(subtotalCost),
+            amount:
+              !isSatsCart && nativeTotalCost !== null
+                ? String(nativeTotalCost)
+                : String(totalCost),
+            subtotal:
+              !isSatsCart && nativeTotalCost !== null
+                ? String(nativeTotalCost)
+                : String(subtotalCost),
             currency: firstEntry.currency,
             paymentMethod: firstEntry.paymentMethod,
             orderId: firstEntry.orderId,
@@ -431,8 +540,34 @@ export default function CartInvoiceCard({
 
   const cartCurrency = useMemo(() => {
     if (products.length === 0) return null;
-    const currencies = new Set(products.map((p) => p.currency.toUpperCase()));
-    return currencies.size === 1 ? products[0]?.currency ?? null : null;
+    const currencyCounts: { [key: string]: number } = {};
+    products.forEach((p) => {
+      const c = p.currency.toUpperCase();
+      currencyCounts[c] = (currencyCounts[c] || 0) + 1;
+    });
+    let best: string | null = null;
+    let maxCount = 0;
+    for (const [cur, count] of Object.entries(currencyCounts)) {
+      if (
+        count > maxCount ||
+        (count === maxCount &&
+          best &&
+          (cur === "USD"
+            ? true
+            : best === "USD"
+              ? false
+              : cur === "SATS" || cur === "SAT"
+                ? true
+                : cur < best))
+      ) {
+        maxCount = count;
+        best = cur;
+      }
+    }
+    return best
+      ? products.find((p) => p.currency.toUpperCase() === best)?.currency ??
+          best
+      : null;
   }, [products]);
 
   const {
@@ -528,54 +663,91 @@ export default function CartInvoiceCard({
     return { highestShippingProduct, highestShippingCost };
   };
 
-  const nativeTotalCost = useMemo(() => {
+  const [nativeTotalCost, setNativeTotalCost] = useState<number | null>(null);
+
+  useEffect(() => {
     if (
       !cartCurrency ||
       cartCurrency.toLowerCase() === "sats" ||
       cartCurrency.toLowerCase() === "sat"
-    )
-      return null;
-    let nativeSubtotal = 0;
-    products.forEach((product) => {
-      const basePrice =
-        product.bulkPrice !== undefined
-          ? product.bulkPrice
-          : product.weightPrice !== undefined
-            ? product.weightPrice
-            : product.volumePrice !== undefined
-              ? product.volumePrice
-              : product.price;
-      const discount = appliedDiscounts[product.pubkey] || 0;
-      const discountedPrice =
-        discount > 0 ? basePrice * (1 - discount / 100) : basePrice;
-      const qty = quantities[product.id] || 1;
-      nativeSubtotal += discountedPrice * qty;
-    });
-    let nativeShipping = 0;
-    if (
-      formType === "shipping" ||
-      (formType === "combined" && shippingPickupPreference === "shipping")
     ) {
-      const sellersSeen = new Set<string>();
-      products.forEach((product) => {
-        if (sellersSeen.has(product.pubkey)) return;
-        sellersSeen.add(product.pubkey);
-        if (sellerFreeShippingStatus[product.pubkey]?.qualifies) return;
-        const sellerProducts = products.filter(
-          (p) => p.pubkey === product.pubkey
-        );
-        if (sellerProducts.length > 1) {
-          const { highestShippingCost } = getConsolidatedShippingForSeller(
-            product.pubkey
-          );
-          nativeShipping += highestShippingCost;
-        } else {
-          nativeShipping +=
-            (product.shippingCost || 0) * (quantities[product.id] || 1);
-        }
-      });
+      setNativeTotalCost(null);
+      return;
     }
-    return Math.round((nativeSubtotal + nativeShipping) * 100) / 100;
+    let cancelled = false;
+    const compute = async () => {
+      const { fiat: fiatLib } = await import("@getalby/lightning-tools");
+      let nativeSubtotal = 0;
+      for (const product of products) {
+        const basePrice =
+          product.bulkPrice !== undefined
+            ? product.bulkPrice
+            : product.weightPrice !== undefined
+              ? product.weightPrice
+              : product.volumePrice !== undefined
+                ? product.volumePrice
+                : product.price;
+        const discount = appliedDiscounts[product.pubkey] || 0;
+        const discountedPrice =
+          discount > 0 ? basePrice * (1 - discount / 100) : basePrice;
+        const qty = quantities[product.id] || 1;
+        const productCurrencyUpper = product.currency.toUpperCase();
+        const cartCurrencyUpper = cartCurrency.toUpperCase();
+        if (productCurrencyUpper === cartCurrencyUpper) {
+          nativeSubtotal += discountedPrice * qty;
+        } else {
+          try {
+            const satVal =
+              productCurrencyUpper === "SATS" || productCurrencyUpper === "SAT"
+                ? discountedPrice * qty
+                : await fiatLib.getSatoshiValue({
+                    amount: discountedPrice * qty,
+                    currency: product.currency,
+                  });
+            const fiatVal = await fiatLib.getFiatValue({
+              satoshi: Math.round(satVal),
+              currency: cartCurrencyUpper,
+            });
+            nativeSubtotal += fiatVal;
+          } catch {
+            nativeSubtotal += discountedPrice * qty;
+          }
+        }
+      }
+      let nativeShipping = 0;
+      if (
+        formType === "shipping" ||
+        (formType === "combined" && shippingPickupPreference === "shipping")
+      ) {
+        const sellersSeen = new Set<string>();
+        products.forEach((product) => {
+          if (sellersSeen.has(product.pubkey)) return;
+          sellersSeen.add(product.pubkey);
+          if (sellerFreeShippingStatus[product.pubkey]?.qualifies) return;
+          const sellerProducts = products.filter(
+            (p) => p.pubkey === product.pubkey
+          );
+          if (sellerProducts.length > 1) {
+            const { highestShippingCost } = getConsolidatedShippingForSeller(
+              product.pubkey
+            );
+            nativeShipping += highestShippingCost;
+          } else {
+            nativeShipping +=
+              (product.shippingCost || 0) * (quantities[product.id] || 1);
+          }
+        });
+      }
+      if (!cancelled) {
+        setNativeTotalCost(
+          Math.round((nativeSubtotal + nativeShipping) * 100) / 100
+        );
+      }
+    };
+    compute();
+    return () => {
+      cancelled = true;
+    };
   }, [
     products,
     quantities,
@@ -590,6 +762,63 @@ export default function CartInvoiceCard({
     !cartCurrency ||
     cartCurrency.toLowerCase() === "sats" ||
     cartCurrency.toLowerCase() === "sat";
+
+  const [nativeCostsPerProduct, setNativeCostsPerProduct] = useState<{
+    [productId: string]: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (isSatsCart) {
+      setNativeCostsPerProduct(null);
+      return;
+    }
+    let cancelled = false;
+    const compute = async () => {
+      const { fiat: fiatLib } = await import("@getalby/lightning-tools");
+      const map: { [productId: string]: number } = {};
+      const cartCurrencyUpper = cartCurrency!.toUpperCase();
+      for (const product of products) {
+        const basePrice =
+          product.bulkPrice !== undefined
+            ? product.bulkPrice
+            : product.weightPrice !== undefined
+              ? product.weightPrice
+              : product.volumePrice !== undefined
+                ? product.volumePrice
+                : product.price;
+        const discount = appliedDiscounts[product.pubkey] || 0;
+        const discountedPrice =
+          discount > 0 ? basePrice * (1 - discount / 100) : basePrice;
+        const qty = quantities[product.id] || 1;
+        const productCurrencyUpper = product.currency.toUpperCase();
+        if (productCurrencyUpper === cartCurrencyUpper) {
+          map[product.id] = Math.round(discountedPrice * qty * 100) / 100;
+        } else {
+          try {
+            const satVal =
+              productCurrencyUpper === "SATS" || productCurrencyUpper === "SAT"
+                ? discountedPrice * qty
+                : await fiatLib.getSatoshiValue({
+                    amount: discountedPrice * qty,
+                    currency: product.currency,
+                  });
+            const fiatVal = await fiatLib.getFiatValue({
+              satoshi: Math.round(satVal),
+              currency: cartCurrencyUpper,
+            });
+            map[product.id] = Math.round(fiatVal * 100) / 100;
+          } catch {
+            map[product.id] = Math.round(discountedPrice * qty * 100) / 100;
+          }
+        }
+      }
+      if (!cancelled) setNativeCostsPerProduct(map);
+    };
+    compute();
+    return () => {
+      cancelled = true;
+    };
+  }, [products, quantities, appliedDiscounts, isSatsCart, cartCurrency]);
 
   useEffect(() => {
     if (!isSatsCart) {
@@ -660,15 +889,20 @@ export default function CartInvoiceCard({
   }, [products, profileContext.profileData]);
 
   useEffect(() => {
-    if (!isSingleSeller || !singleSellerPubkey) {
-      setIsStripeMerchant(false);
-      setSellerConnectedAccountId(null);
+    setIsStripeMerchant(false);
+    setAllSellersHaveStripe(false);
+    setSellerConnectedAccountId(null);
+    setSellerStripeAccounts({});
+    setStripeClientSecret(null);
+    setStripePaymentIntentId(null);
+    setStripePaymentConfirmed(false);
+    setHasTimedOut(false);
+    setStripeTimeoutSeconds(STRIPE_TIMEOUT_SECONDS);
+    setMultiMerchantTransferGroup(null);
+    setMultiMerchantSellerSplits(null);
+
+    if (products.length === 0 || uniqueSellerPubkeys.length === 0) {
       setFiatPaymentOptions({});
-      setStripeClientSecret(null);
-      setStripePaymentIntentId(null);
-      setStripePaymentConfirmed(false);
-      setHasTimedOut(false);
-      setStripeTimeoutSeconds(STRIPE_TIMEOUT_SECONDS);
       setShowFiatTypeOption(false);
       setShowFiatPaymentInstructions(false);
       setSelectedFiatOption("");
@@ -676,40 +910,99 @@ export default function CartInvoiceCard({
       setPendingPaymentData(null);
       return;
     }
-    if (singleSellerPubkey === process.env.NEXT_PUBLIC_MILK_MARKET_PK) {
-      setIsStripeMerchant(true);
-      return;
+
+    if (!isSingleSeller) {
+      setFiatPaymentOptions({});
+      setShowFiatTypeOption(false);
+      setShowFiatPaymentInstructions(false);
+      setSelectedFiatOption("");
+      setFiatPaymentConfirmed(false);
+      setPendingPaymentData(null);
     }
-    const checkSellerStripe = async () => {
+
+    const checkAllSellersStripe = async () => {
       try {
-        const res = await fetch("/api/stripe/connect/seller-status", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pubkey: singleSellerPubkey }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.hasStripeAccount && data.chargesEnabled) {
-            setIsStripeMerchant(true);
-            if (data.connectedAccountId) {
-              setSellerConnectedAccountId(data.connectedAccountId);
+        const accounts: Record<string, string> = {};
+        let allHaveStripe = true;
+
+        for (const pubkey of uniqueSellerPubkeys) {
+          if (pubkey === process.env.NEXT_PUBLIC_MILK_MARKET_PK) {
+            accounts[pubkey] = "platform";
+            continue;
+          }
+          const res = await fetch("/api/stripe/connect/seller-status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pubkey }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.hasStripeAccount && data.chargesEnabled) {
+              if (data.connectedAccountId) {
+                accounts[pubkey] = data.connectedAccountId;
+              }
+            } else {
+              allHaveStripe = false;
             }
+          } else {
+            allHaveStripe = false;
           }
         }
-      } catch {}
+
+        setSellerStripeAccounts(accounts);
+
+        if (isSingleSeller && singleSellerPubkey) {
+          const hasStripe = !!accounts[singleSellerPubkey];
+          setIsStripeMerchant(hasStripe);
+          if (hasStripe && accounts[singleSellerPubkey] !== "platform") {
+            setSellerConnectedAccountId(accounts[singleSellerPubkey]!);
+          }
+        }
+
+        setAllSellersHaveStripe(
+          allHaveStripe &&
+            Object.keys(accounts).length === uniqueSellerPubkeys.length
+        );
+      } catch {
+        setAllSellersHaveStripe(false);
+      }
     };
-    checkSellerStripe();
-  }, [isSingleSeller, singleSellerPubkey]);
+
+    checkAllSellersStripe();
+  }, [
+    isSingleSeller,
+    singleSellerPubkey,
+    uniqueSellerPubkeys.length,
+    products.length,
+  ]);
 
   useEffect(() => {
-    if (!isSingleSeller || !singleSellerPubkey) {
+    if (isSingleSeller && singleSellerPubkey) {
+      const sellerProfile = profileContext.profileData.get(singleSellerPubkey);
+      const fiatOptions = sellerProfile?.content?.fiat_options || {};
+      setFiatPaymentOptions(fiatOptions);
+      setMultiFiatOptions({});
+    } else if (!isSingleSeller && uniqueSellerPubkeys.length > 1) {
       setFiatPaymentOptions({});
-      return;
+      const perSeller: { [pubkey: string]: { [method: string]: string } } = {};
+      for (const pubkey of uniqueSellerPubkeys) {
+        const profile = profileContext.profileData.get(pubkey);
+        const opts = profile?.content?.fiat_options || {};
+        if (Object.keys(opts).length > 0) {
+          perSeller[pubkey] = opts;
+        }
+      }
+      setMultiFiatOptions(perSeller);
+    } else {
+      setFiatPaymentOptions({});
+      setMultiFiatOptions({});
     }
-    const sellerProfile = profileContext.profileData.get(singleSellerPubkey);
-    const fiatOptions = sellerProfile?.content?.fiat_options || {};
-    setFiatPaymentOptions(fiatOptions);
-  }, [isSingleSeller, singleSellerPubkey, profileContext.profileData]);
+  }, [
+    isSingleSeller,
+    singleSellerPubkey,
+    uniqueSellerPubkeys,
+    profileContext.profileData,
+  ]);
 
   useEffect(() => {
     if (!stripeClientSecret || stripePaymentConfirmed || hasTimedOut) {
@@ -823,7 +1116,13 @@ export default function CartInvoiceCard({
     pickup?: string,
     donationAmountValue?: number,
     donationPercentageValue?: number,
-    retryCount: number = 3
+    retryCount: number = 3,
+    subscriptionInfo?: {
+      enabled: boolean;
+      frequency: string;
+      stripeSubscriptionId: string;
+    },
+    orderCurrency?: string
   ) => {
     const newKeys = await generateNewKeys();
     if (!newKeys) {
@@ -853,7 +1152,9 @@ export default function CartInvoiceCard({
           address,
           pickup,
           donationAmountValue,
-          donationPercentageValue
+          donationPercentageValue,
+          subscriptionInfo,
+          orderCurrency
         );
         // If we get here, the message was sent successfully
         return;
@@ -901,7 +1202,13 @@ export default function CartInvoiceCard({
     address?: string,
     pickup?: string,
     donationAmountValue?: number,
-    donationPercentageValue?: number
+    donationPercentageValue?: number,
+    subscriptionInfo?: {
+      enabled: boolean;
+      frequency: string;
+      stripeSubscriptionId: string;
+    },
+    orderCurrency?: string
   ) => {
     if (!keys) {
       setFailureText("Message keys are required!");
@@ -927,6 +1234,7 @@ export default function CartInvoiceCard({
         isOrder: true,
         type: 2,
         orderAmount: messageAmount ? messageAmount : totalCost,
+        orderCurrency: orderCurrency || undefined,
         orderId,
         productData: product,
         paymentType,
@@ -941,6 +1249,7 @@ export default function CartInvoiceCard({
         selectedVolume: product.selectedVolume,
         selectedWeight: product.selectedWeight,
         selectedBulkOption: product.selectedBulkOption,
+        subscriptionInfo,
       };
     } else if (isReceipt) {
       messageSubject = "order-receipt";
@@ -948,6 +1257,7 @@ export default function CartInvoiceCard({
         isOrder: true,
         type: 4,
         orderAmount: messageAmount ? messageAmount : totalCost,
+        orderCurrency: orderCurrency || undefined,
         orderId,
         productData: product,
         status: "confirmed",
@@ -972,6 +1282,7 @@ export default function CartInvoiceCard({
         isOrder: true,
         type: 1,
         orderAmount: messageAmount ? messageAmount : undefined,
+        orderCurrency: orderCurrency || undefined,
         orderId,
         productData: product,
         quantity: productQuantity ? productQuantity : 1,
@@ -982,6 +1293,7 @@ export default function CartInvoiceCard({
         isOrder: true,
         type: 1,
         orderAmount: messageAmount ? messageAmount : totalCost,
+        orderCurrency: orderCurrency || undefined,
         orderId,
         productData: product,
         quantity: productQuantity ? productQuantity : 1,
@@ -1137,12 +1449,33 @@ export default function CartInvoiceCard({
 
       if (paymentType === "fiat") {
         setPendingPaymentData(paymentData);
-        const fiatOptionKeys = Object.keys(fiatPaymentOptions);
-        if (fiatOptionKeys.length === 1) {
-          setSelectedFiatOption(fiatOptionKeys[0]!);
-          setShowFiatPaymentInstructions(true);
-        } else if (fiatOptionKeys.length > 1) {
-          setShowFiatTypeOption(true);
+        if (isSingleSeller) {
+          const fiatOptionKeys = Object.keys(fiatPaymentOptions);
+          if (fiatOptionKeys.length === 1) {
+            setSelectedFiatOption(fiatOptionKeys[0]!);
+            setShowFiatPaymentInstructions(true);
+          } else if (fiatOptionKeys.length > 1) {
+            setShowFiatTypeOption(true);
+          }
+        } else {
+          setMultiFiatSelections({});
+          setMultiFiatConfirmed({});
+          const autoSelections: { [pk: string]: string } = {};
+          for (const pk of sellersWithFiat) {
+            const opts = multiFiatOptions[pk];
+            if (opts && Object.keys(opts).length === 1) {
+              autoSelections[pk] = Object.keys(opts)[0]!;
+            }
+          }
+          setMultiFiatSelections(autoSelections);
+          const allAutoSelected = sellersWithFiat.every(
+            (pk) => autoSelections[pk]
+          );
+          if (allAutoSelected) {
+            setShowFiatPaymentInstructions(true);
+          } else {
+            setShowFiatTypeOption(true);
+          }
         }
         return;
       }
@@ -1182,13 +1515,29 @@ export default function CartInvoiceCard({
             .map((p: any) => selectedPickupLocations[p.id])
             .filter(Boolean)
             .join(", ");
-          const sellerAmount = totalCostsInSats[sellerPubkey] || 0;
+          const sellerAmountSats = totalCostsInSats[sellerPubkey] || 0;
+          const sellerAmountNative =
+            !isSatsCart && nativeCostsPerProduct
+              ? sellerProducts.reduce(
+                  (sum: number, p: any) =>
+                    sum + (nativeCostsPerProduct[p.id] || 0),
+                  0
+                )
+              : null;
           const orderCurrency =
-            nativeTotalCost !== null && cartCurrency ? cartCurrency : "sats";
+            !isSatsCart && cartCurrency ? cartCurrency : "sats";
           const orderAmount =
-            nativeTotalCost !== null && cartCurrency
-              ? String(nativeTotalCost)
-              : String(sellerAmount || price);
+            sellerAmountNative !== null
+              ? String(Math.round(sellerAmountNative * 100) / 100)
+              : String(sellerAmountSats || price);
+          const sellerSubFrequencies = sellerProducts
+            .map((p: any) => subscriptionSelections[p.id])
+            .filter((s: any) => s?.enabled)
+            .map((s: any) => s.frequency);
+          const sellerSubFrequency =
+            sellerSubFrequencies.length > 0
+              ? sellerSubFrequencies[0]
+              : undefined;
           return {
             orderId: "",
             productTitle: sellerProductTitles,
@@ -1199,6 +1548,7 @@ export default function CartInvoiceCard({
             buyerName: paymentData.shippingName || undefined,
             shippingAddress: emailAddressTag,
             pickupLocation: sellerPickupSummary || undefined,
+            subscriptionFrequency: sellerSubFrequency,
           };
         }
       );
@@ -1414,49 +1764,179 @@ export default function CartInvoiceCard({
       const stripeCurrency =
         nativeTotalCost !== null && cartCurrency ? cartCurrency : "sats";
 
-      const response = await fetch("/api/stripe/create-payment-intent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: stripeAmount,
-          currency: stripeCurrency,
-          customerEmail:
-            buyerEmail ||
-            (userPubkey
-              ? `${userPubkey.substring(0, 8)}@nostr.com`
-              : `guest-${orderId.substring(0, 8)}@nostr.com`),
-          productTitle: `Cart Order: ${productTitles}`,
-          metadata: {
-            orderId,
-            productId: products.map((p) => p.id).join(","),
-            sellerPubkey: singleSellerPubkey || "",
-            buyerPubkey: userPubkey || "",
-            productTitle: productTitles,
-            isCart: "true",
-          },
-        }),
-      });
+      const isMultiMerchant = !isSingleSeller && allSellersHaveStripe;
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.details || "Failed to create payment");
+      if (hasActiveSubscription) {
+        const shippingAddressObj =
+          data.shippingName && data.shippingAddress
+            ? {
+                name: data.shippingName,
+                address: data.shippingAddress,
+                unit: data.shippingUnitNo || "",
+                city: data.shippingCity || "",
+                state: data.shippingState || "",
+                postalCode: data.shippingPostalCode || "",
+                country: data.shippingCountry || "",
+              }
+            : undefined;
+
+        const cartItems = products.map((product) => {
+          const sel = subscriptionSelections[product.id];
+          const basePrice =
+            product.bulkPrice !== undefined
+              ? product.bulkPrice
+              : product.weightPrice !== undefined
+                ? product.weightPrice
+                : product.volumePrice !== undefined
+                  ? product.volumePrice
+                  : product.price;
+          const qty = quantities[product.id] || 1;
+
+          return {
+            productTitle: product.title,
+            productEventId: `30402:${product.pubkey}:${product.d}`,
+            amount: basePrice * qty,
+            currency: product.currency,
+            quantity: qty,
+            isSubscription: !!(sel && sel.enabled),
+            frequency: sel?.enabled ? sel.frequency : undefined,
+            discountPercent: appliedDiscounts[product.pubkey] || 0,
+            subscriptionDiscount: sel?.enabled
+              ? product.subscriptionDiscount || 0
+              : 0,
+            sellerPubkey: product.pubkey,
+            variantInfo:
+              product.selectedSize ||
+              product.selectedVolume ||
+              product.selectedWeight ||
+              product.selectedBulkOption
+                ? {
+                    size: product.selectedSize || undefined,
+                    volume: product.selectedVolume || undefined,
+                    weight: product.selectedWeight || undefined,
+                    bulk: product.selectedBulkOption || undefined,
+                  }
+                : undefined,
+          };
+        });
+
+        const response = await fetch("/api/stripe/create-cart-subscription", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            items: cartItems,
+            customerEmail: buyerEmail,
+            sellerPubkey: isSingleSeller
+              ? singleSellerPubkey || products[0]?.pubkey || ""
+              : undefined,
+            buyerPubkey: userPubkey || null,
+            shippingAddress: shippingAddressObj,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(
+            errorData.details || "Failed to create cart subscription"
+          );
+        }
+
+        const respData = await response.json();
+
+        setStripeSubscriptionId(respData.subscriptionId);
+        setStripeClientSecret(respData.clientSecret);
+        setStripePaymentIntentId(null);
+        setStripeConnectedAccountForForm(
+          respData.isMultiMerchant
+            ? null
+            : respData.connectedAccountId || sellerConnectedAccountId || null
+        );
+        if (respData.isMultiMerchant) {
+          setMultiMerchantTransferGroup(respData.transferGroup);
+          setMultiMerchantSellerSplits(respData.sellerSplits);
+        }
+        setPendingStripeData(data);
+        setShowInvoiceCard(true);
+        setStripeTimeoutSeconds(STRIPE_TIMEOUT_SECONDS);
+        setHasTimedOut(false);
+      } else {
+        const sellerSplitsPayload = isMultiMerchant
+          ? uniqueSellerPubkeys.map((pubkey) => {
+              const sellerProducts = products.filter(
+                (p) => p.pubkey === pubkey
+              );
+              const sellerTotal = sellerProducts.reduce((sum, p) => {
+                const price =
+                  p.bulkPrice !== undefined
+                    ? p.bulkPrice
+                    : p.weightPrice !== undefined
+                      ? p.weightPrice
+                      : p.volumePrice !== undefined
+                        ? p.volumePrice
+                        : p.price;
+                const qty = quantities[p.id] || 1;
+                const discount = appliedDiscounts[p.pubkey] || 0;
+                const discountedPrice =
+                  discount > 0 ? price * (1 - discount / 100) : price;
+                return sum + discountedPrice * qty;
+              }, 0);
+              const { highestShippingCost } =
+                getConsolidatedShippingForSeller(pubkey);
+              return {
+                sellerPubkey: pubkey,
+                amount: sellerTotal + highestShippingCost,
+                currency: sellerProducts[0]?.currency || "usd",
+              };
+            })
+          : undefined;
+
+        const response = await fetch("/api/stripe/create-payment-intent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount: stripeAmount,
+            currency: stripeCurrency,
+            customerEmail:
+              buyerEmail ||
+              (userPubkey
+                ? `${userPubkey.substring(0, 8)}@nostr.com`
+                : `guest-${orderId.substring(0, 8)}@nostr.com`),
+            productTitle: `Cart Order: ${productTitles}`,
+            metadata: {
+              orderId,
+              productId: products.map((p) => p.id).join(","),
+              sellerPubkey: singleSellerPubkey || uniqueSellerPubkeys.join(","),
+              buyerPubkey: userPubkey || "",
+              productTitle: productTitles,
+              isCart: "true",
+            },
+            sellerSplits: sellerSplitsPayload,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.details || "Failed to create payment");
+        }
+
+        const respData = await response.json();
+
+        setStripeClientSecret(respData.clientSecret);
+        setStripePaymentIntentId(respData.paymentIntentId);
+        setStripeConnectedAccountForForm(
+          respData.isMultiMerchant
+            ? null
+            : respData.connectedAccountId || sellerConnectedAccountId || null
+        );
+        if (respData.isMultiMerchant) {
+          setMultiMerchantTransferGroup(respData.transferGroup);
+          setMultiMerchantSellerSplits(respData.sellerSplits);
+        }
+        setPendingStripeData(data);
+        setShowInvoiceCard(true);
+        setStripeTimeoutSeconds(STRIPE_TIMEOUT_SECONDS);
+        setHasTimedOut(false);
       }
-
-      const {
-        clientSecret,
-        paymentIntentId,
-        connectedAccountId: respConnectedId,
-      } = await response.json();
-
-      setStripeClientSecret(clientSecret);
-      setStripePaymentIntentId(paymentIntentId);
-      setStripeConnectedAccountForForm(
-        respConnectedId || sellerConnectedAccountId || null
-      );
-      setPendingStripeData(data);
-      setShowInvoiceCard(true);
-      setStripeTimeoutSeconds(STRIPE_TIMEOUT_SECONDS);
-      setHasTimedOut(false);
     } catch (error) {
       console.error("Stripe payment error:", error);
       if (setInvoiceGenerationFailed) {
@@ -1491,50 +1971,151 @@ export default function CartInvoiceCard({
           : `${data.shippingName}, ${data.shippingAddress}, ${data.shippingCity}, ${data.shippingState}, ${data.shippingPostalCode}, ${data.shippingCountry}`
         : undefined;
 
-    const sellerPubkey = singleSellerPubkey || products[0]?.pubkey || "";
+    if (multiMerchantSellerSplits && multiMerchantTransferGroup) {
+      try {
+        const transferResponse = await fetch("/api/stripe/process-transfers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            paymentIntentId,
+            sellerSplits: multiMerchantSellerSplits,
+            transferGroup: multiMerchantTransferGroup,
+          }),
+        });
+        const transferResult = await transferResponse.json();
+        if (!transferResult.success) {
+          const failedSellers = (transferResult.results || [])
+            .filter((r: any) => r.error)
+            .map((r: any) => r.sellerPubkey?.substring(0, 8) + "...")
+            .join(", ");
+          console.error("Some merchant transfers failed:", failedSellers);
+          setFailureText(
+            "Your payment was received, but there was an issue distributing funds to some sellers. The platform will resolve this. Your order is confirmed."
+          );
+          setShowFailureModal(true);
+        }
+      } catch (e) {
+        console.error("Failed to process merchant transfers:", e);
+        setFailureText(
+          "Your payment was received, but there was an issue distributing funds to sellers. The platform will resolve this. Your order is confirmed."
+        );
+        setShowFailureModal(true);
+      }
+    }
 
-    const paymentMessage =
-      "You have received a stripe payment from " +
-      (userNPub || "a guest buyer") +
-      " for your cart order (" +
-      productTitles +
-      ") on Milk Market! Check your Stripe account for the payment.";
+    const subscriptionProductNames = products
+      .filter((p) => subscriptionSelections[p.id]?.enabled)
+      .map((p) => p.title)
+      .join(", ");
 
+    const subscriptionLabel = hasActiveSubscription
+      ? ` (includes subscriptions: ${subscriptionProductNames})`
+      : "";
+
+    const sellerGroupedProducts: Record<string, typeof products> = {};
     for (const product of products) {
-      await sendPaymentAndContactMessage(
-        sellerPubkey,
-        paymentMessage,
-        product,
-        true,
-        false,
-        false,
-        false,
-        orderId,
-        "stripe",
-        paymentIntentId,
-        paymentIntentId,
-        totalCostsInSats[product.pubkey],
-        quantities[product.id] || 1,
-        undefined,
-        addressTag,
-        selectedPickupLocations[product.id] || undefined
-      );
+      if (!sellerGroupedProducts[product.pubkey]) {
+        sellerGroupedProducts[product.pubkey] = [];
+      }
+      sellerGroupedProducts[product.pubkey]!.push(product);
+    }
+
+    for (const [sellerPk, sellerProducts] of Object.entries(
+      sellerGroupedProducts
+    )) {
+      const sellerProductTitles = sellerProducts
+        .map((p: any) => p.title || p.productName)
+        .join(", ");
+
+      const paymentMessage =
+        "You have received a stripe payment from " +
+        (userNPub || "a guest buyer") +
+        " for your cart order (" +
+        sellerProductTitles +
+        ")" +
+        subscriptionLabel +
+        " on Milk Market! Check your Stripe account for the payment.";
+
+      for (const product of sellerProducts) {
+        const sel = subscriptionSelections[product.id];
+        const subInfo =
+          sel?.enabled && stripeSubscriptionId
+            ? {
+                enabled: true,
+                frequency: sel.frequency,
+                stripeSubscriptionId: stripeSubscriptionId,
+              }
+            : undefined;
+
+        const productAmount =
+          !isSatsCart && nativeCostsPerProduct
+            ? nativeCostsPerProduct[product.id] || product.price
+            : totalCostsInSats[product.pubkey];
+        const productCurrency =
+          !isSatsCart && cartCurrency ? cartCurrency : "sats";
+
+        await sendPaymentAndContactMessage(
+          sellerPk,
+          paymentMessage,
+          product,
+          true,
+          false,
+          false,
+          false,
+          orderId,
+          "stripe",
+          paymentIntentId,
+          paymentIntentId,
+          productAmount,
+          quantities[product.id] || 1,
+          undefined,
+          addressTag,
+          selectedPickupLocations[product.id] || undefined,
+          undefined,
+          undefined,
+          undefined,
+          subInfo,
+          productCurrency
+        );
+      }
+    }
+
+    if (hasActiveSubscription) {
+      try {
+        const existingSummary = sessionStorage.getItem("orderSummary");
+        if (existingSummary) {
+          const summaryData = JSON.parse(existingSummary);
+          summaryData.isSubscription = true;
+          sessionStorage.setItem("orderSummary", JSON.stringify(summaryData));
+        }
+      } catch (e) {
+        console.error(
+          "Failed to update order summary with subscription info:",
+          e
+        );
+      }
     }
 
     if (data.additionalInfo) {
       await new Promise((resolve) => setTimeout(resolve, 500));
       const additionalMessage =
         "Additional customer information: " + data.additionalInfo;
-      await sendPaymentAndContactMessage(
-        sellerPubkey,
-        additionalMessage,
-        products[0]!,
-        false,
-        false,
-        false,
-        false,
-        orderId
-      );
+
+      for (const sellerPk of uniqueSellerPubkeys) {
+        const sellerProduct = products.find((p) => p.pubkey === sellerPk);
+        if (sellerProduct) {
+          await sendPaymentAndContactMessage(
+            sellerPk,
+            additionalMessage,
+            sellerProduct,
+            false,
+            false,
+            false,
+            false,
+            orderId
+          );
+        }
+      }
     }
 
     if (data.shippingName && data.shippingAddress) {
@@ -1568,48 +2149,82 @@ export default function CartInvoiceCard({
           ", " +
           data.shippingCountry +
           ".";
-      await sendPaymentAndContactMessage(
-        sellerPubkey,
-        contactMessage,
-        products[0]!,
-        false,
-        false,
-        false,
-        false,
-        orderId,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        addressTag
-      );
+      for (const sellerPk of uniqueSellerPubkeys) {
+        const sellerProduct = products.find((p) => p.pubkey === sellerPk);
+        if (sellerProduct) {
+          await sendPaymentAndContactMessage(
+            sellerPk,
+            contactMessage,
+            sellerProduct,
+            false,
+            false,
+            false,
+            false,
+            orderId,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            addressTag
+          );
+        }
+      }
 
       await new Promise((resolve) => setTimeout(resolve, 500));
-      const receiptMessage =
-        "Your cart order (" +
-        productTitles +
-        ") was processed successfully via Stripe. You should be receiving delivery information from " +
-        nip19.npubEncode(sellerPubkey) +
-        " as soon as they review your order.";
-      await sendPaymentAndContactMessage(
-        userPubkey!,
-        receiptMessage,
-        products[0]!,
-        false,
-        true,
-        false,
-        false,
-        orderId,
-        "stripe",
-        paymentIntentId,
-        paymentIntentId,
-        totalCost,
-        undefined,
-        undefined,
-        addressTag
-      );
+      const sellerNames = uniqueSellerPubkeys
+        .map((pk) => nip19.npubEncode(pk))
+        .join(", ");
+      for (const product of products) {
+        const productAmount =
+          !isSatsCart && nativeCostsPerProduct
+            ? nativeCostsPerProduct[product.id] || product.price
+            : totalCostsInSats[product.id] ||
+              totalCostsInSats[product.pubkey] ||
+              0;
+        const productCurrency =
+          !isSatsCart && cartCurrency ? cartCurrency : "sats";
+        const qty = quantities[product.id] || 1;
+        const sel = subscriptionSelections[product.id];
+        const subInfo =
+          sel?.enabled && stripeSubscriptionId
+            ? {
+                enabled: true,
+                frequency: sel.frequency,
+                stripeSubscriptionId: stripeSubscriptionId,
+              }
+            : undefined;
+        const receiptMessage =
+          "Your cart order (" +
+          productTitles +
+          ") was processed successfully via Stripe. You should be receiving delivery information from " +
+          sellerNames +
+          " as soon as they review your order.";
+        await sendPaymentAndContactMessage(
+          userPubkey!,
+          receiptMessage,
+          product,
+          false,
+          true,
+          false,
+          false,
+          orderId,
+          "stripe",
+          paymentIntentId,
+          paymentIntentId,
+          productAmount,
+          qty,
+          undefined,
+          addressTag,
+          selectedPickupLocations[product.id] || undefined,
+          undefined,
+          undefined,
+          undefined,
+          subInfo,
+          productCurrency
+        );
+      }
     }
 
     for (const product of products) {
@@ -1628,7 +2243,6 @@ export default function CartInvoiceCard({
     try {
       validatePaymentData(convertedPrice, data);
 
-      const sellerPubkey = singleSellerPubkey || products[0]?.pubkey || "";
       const orderId = uuidv4();
 
       if (pendingOrderEmailRef.current) {
@@ -1648,127 +2262,318 @@ export default function CartInvoiceCard({
         .map((p: any) => p.title || p.productName)
         .join(", ");
 
-      const paymentMessage =
-        "You have received an order from " +
-        (userNPub || "a guest buyer") +
-        " for your cart order (" +
-        productTitles +
-        ") on Milk Market! Check your " +
-        selectedFiatOption +
-        " account for the payment.";
+      const isMultiFiat = !isSingleSeller && sellersWithFiat.length > 0;
 
-      for (const product of products) {
-        await sendPaymentAndContactMessage(
-          sellerPubkey,
-          paymentMessage,
-          product,
-          true,
-          false,
-          false,
-          false,
-          orderId,
-          selectedFiatOption,
-          (fiatPaymentOptions as any)[selectedFiatOption] || "",
-          (fiatPaymentOptions as any)[selectedFiatOption] || "",
-          totalCostsInSats[product.pubkey],
-          quantities[product.id] || 1,
-          undefined,
-          addressTag,
-          selectedPickupLocations[product.id] || undefined
-        );
-      }
+      if (isMultiFiat) {
+        for (const sellerPubkey of sellersWithFiat) {
+          const sellerFiatOption = multiFiatSelections[sellerPubkey] || "";
+          const sellerFiatHandle =
+            multiFiatOptions[sellerPubkey]?.[sellerFiatOption] || "";
+          const sellerProducts = products.filter(
+            (p) => p.pubkey === sellerPubkey
+          );
+          const sellerProductTitles = sellerProducts
+            .map((p: any) => p.title || p.productName)
+            .join(", ");
 
-      if (data.additionalInfo) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        const additionalMessage =
-          "Additional customer information: " + data.additionalInfo;
-        await sendPaymentAndContactMessage(
-          sellerPubkey,
-          additionalMessage,
-          products[0]!,
-          false,
-          false,
-          false,
-          false,
-          orderId
-        );
-      }
+          const paymentMessage =
+            "You have received an order from " +
+            (userNPub || "a guest buyer") +
+            " for your cart order (" +
+            sellerProductTitles +
+            ") on Milk Market! Check your " +
+            sellerFiatOption +
+            " account for the payment.";
 
-      if (data.shippingName && data.shippingAddress) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        const contactMessage = data.shippingUnitNo
-          ? "Please ship the products to " +
-            data.shippingName +
-            " at " +
-            data.shippingAddress +
-            " " +
-            data.shippingUnitNo +
-            ", " +
-            data.shippingCity +
-            ", " +
-            data.shippingPostalCode +
-            ", " +
-            data.shippingState +
-            ", " +
-            data.shippingCountry +
-            "."
-          : "Please ship the products to " +
-            data.shippingName +
-            " at " +
-            data.shippingAddress +
-            ", " +
-            data.shippingCity +
-            ", " +
-            data.shippingPostalCode +
-            ", " +
-            data.shippingState +
-            ", " +
-            data.shippingCountry +
-            ".";
-        await sendPaymentAndContactMessage(
-          sellerPubkey,
-          contactMessage,
-          products[0]!,
-          false,
-          false,
-          false,
-          false,
-          orderId,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          addressTag
-        );
+          for (const product of sellerProducts) {
+            await sendPaymentAndContactMessage(
+              sellerPubkey,
+              paymentMessage,
+              product,
+              true,
+              false,
+              false,
+              false,
+              orderId,
+              sellerFiatOption,
+              sellerFiatHandle,
+              sellerFiatHandle,
+              !isSatsCart && nativeCostsPerProduct
+                ? nativeCostsPerProduct[product.id] || product.price
+                : totalCostsInSats[product.id] ||
+                    totalCostsInSats[product.pubkey] ||
+                    0,
+              quantities[product.id] || 1,
+              undefined,
+              addressTag,
+              selectedPickupLocations[product.id] || undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              !isSatsCart && cartCurrency ? cartCurrency : "sats"
+            );
+          }
 
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        const receiptMessage =
-          "Your cart order (" +
+          if (data.additionalInfo) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            const additionalMessage =
+              "Additional customer information: " + data.additionalInfo;
+            await sendPaymentAndContactMessage(
+              sellerPubkey,
+              additionalMessage,
+              sellerProducts[0]!,
+              false,
+              false,
+              false,
+              false,
+              orderId
+            );
+          }
+
+          if (data.shippingName && data.shippingAddress) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            const contactMessage = data.shippingUnitNo
+              ? "Please ship the products to " +
+                data.shippingName +
+                " at " +
+                data.shippingAddress +
+                " " +
+                data.shippingUnitNo +
+                ", " +
+                data.shippingCity +
+                ", " +
+                data.shippingPostalCode +
+                ", " +
+                data.shippingState +
+                ", " +
+                data.shippingCountry +
+                "."
+              : "Please ship the products to " +
+                data.shippingName +
+                " at " +
+                data.shippingAddress +
+                ", " +
+                data.shippingCity +
+                ", " +
+                data.shippingPostalCode +
+                ", " +
+                data.shippingState +
+                ", " +
+                data.shippingCountry +
+                ".";
+            await sendPaymentAndContactMessage(
+              sellerPubkey,
+              contactMessage,
+              sellerProducts[0]!,
+              false,
+              false,
+              false,
+              false,
+              orderId,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              addressTag
+            );
+
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            for (const product of sellerProducts) {
+              const productAmount =
+                !isSatsCart && nativeCostsPerProduct
+                  ? nativeCostsPerProduct[product.id] || product.price
+                  : totalCostsInSats[product.id] ||
+                    totalCostsInSats[product.pubkey] ||
+                    0;
+              const productCurrency =
+                !isSatsCart && cartCurrency ? cartCurrency : "sats";
+              const qty = quantities[product.id] || 1;
+              const receiptMessage =
+                "Your cart order (" +
+                sellerProductTitles +
+                ") was processed successfully via " +
+                sellerFiatOption +
+                ". You should be receiving delivery information from " +
+                nip19.npubEncode(sellerPubkey) +
+                " as soon as they review your order.";
+              await sendPaymentAndContactMessage(
+                userPubkey!,
+                receiptMessage,
+                product,
+                false,
+                true,
+                false,
+                false,
+                orderId,
+                sellerFiatOption,
+                sellerFiatHandle,
+                sellerFiatHandle,
+                productAmount,
+                qty,
+                undefined,
+                addressTag,
+                selectedPickupLocations[product.id] || undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                productCurrency
+              );
+            }
+          }
+        }
+      } else {
+        const sellerPubkey = singleSellerPubkey || products[0]?.pubkey || "";
+
+        const paymentMessage =
+          "You have received an order from " +
+          (userNPub || "a guest buyer") +
+          " for your cart order (" +
           productTitles +
-          ") was processed successfully via " +
+          ") on Milk Market! Check your " +
           selectedFiatOption +
-          ". You should be receiving delivery information from " +
-          nip19.npubEncode(sellerPubkey) +
-          " as soon as they review your order.";
-        await sendPaymentAndContactMessage(
-          userPubkey!,
-          receiptMessage,
-          products[0]!,
-          false,
-          true,
-          false,
-          false,
-          orderId,
-          selectedFiatOption,
-          (fiatPaymentOptions as any)[selectedFiatOption] || "",
-          (fiatPaymentOptions as any)[selectedFiatOption] || "",
-          totalCost,
-          undefined,
-          undefined,
-          addressTag
-        );
+          " account for the payment.";
+
+        for (const product of products) {
+          await sendPaymentAndContactMessage(
+            sellerPubkey,
+            paymentMessage,
+            product,
+            true,
+            false,
+            false,
+            false,
+            orderId,
+            selectedFiatOption,
+            (fiatPaymentOptions as any)[selectedFiatOption] || "",
+            (fiatPaymentOptions as any)[selectedFiatOption] || "",
+            !isSatsCart && nativeCostsPerProduct
+              ? nativeCostsPerProduct[product.id] || product.price
+              : totalCostsInSats[product.pubkey],
+            quantities[product.id] || 1,
+            undefined,
+            addressTag,
+            selectedPickupLocations[product.id] || undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            !isSatsCart && cartCurrency ? cartCurrency : "sats"
+          );
+        }
+
+        if (data.additionalInfo) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          const additionalMessage =
+            "Additional customer information: " + data.additionalInfo;
+          await sendPaymentAndContactMessage(
+            sellerPubkey,
+            additionalMessage,
+            products[0]!,
+            false,
+            false,
+            false,
+            false,
+            orderId
+          );
+        }
+
+        if (data.shippingName && data.shippingAddress) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          const contactMessage = data.shippingUnitNo
+            ? "Please ship the products to " +
+              data.shippingName +
+              " at " +
+              data.shippingAddress +
+              " " +
+              data.shippingUnitNo +
+              ", " +
+              data.shippingCity +
+              ", " +
+              data.shippingPostalCode +
+              ", " +
+              data.shippingState +
+              ", " +
+              data.shippingCountry +
+              "."
+            : "Please ship the products to " +
+              data.shippingName +
+              " at " +
+              data.shippingAddress +
+              ", " +
+              data.shippingCity +
+              ", " +
+              data.shippingPostalCode +
+              ", " +
+              data.shippingState +
+              ", " +
+              data.shippingCountry +
+              ".";
+          await sendPaymentAndContactMessage(
+            sellerPubkey,
+            contactMessage,
+            products[0]!,
+            false,
+            false,
+            false,
+            false,
+            orderId,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            addressTag
+          );
+
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          for (const product of products) {
+            const productAmount =
+              !isSatsCart && nativeCostsPerProduct
+                ? nativeCostsPerProduct[product.id] || product.price
+                : totalCostsInSats[product.id] ||
+                  totalCostsInSats[product.pubkey] ||
+                  0;
+            const productCurrency =
+              !isSatsCart && cartCurrency ? cartCurrency : "sats";
+            const qty = quantities[product.id] || 1;
+            const receiptMessage =
+              "Your cart order (" +
+              productTitles +
+              ") was processed successfully via " +
+              selectedFiatOption +
+              ". You should be receiving delivery information from " +
+              nip19.npubEncode(sellerPubkey) +
+              " as soon as they review your order.";
+            await sendPaymentAndContactMessage(
+              userPubkey!,
+              receiptMessage,
+              product,
+              false,
+              true,
+              false,
+              false,
+              orderId,
+              selectedFiatOption,
+              (fiatPaymentOptions as any)[selectedFiatOption] || "",
+              (fiatPaymentOptions as any)[selectedFiatOption] || "",
+              productAmount,
+              qty,
+              undefined,
+              addressTag,
+              selectedPickupLocations[product.id] || undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              productCurrency
+            );
+          }
+        }
       }
 
       const emailAddressTag =
@@ -1780,22 +2585,47 @@ export default function CartInvoiceCard({
             }`
           : undefined;
 
-      pendingOrderEmailRef.current = [
-        {
-          orderId,
-          productTitle: productTitles,
-          amount:
-            nativeTotalCost !== null && cartCurrency
-              ? String(nativeTotalCost)
-              : String(totalCost),
-          currency:
-            nativeTotalCost !== null && cartCurrency ? cartCurrency : "sats",
-          paymentMethod: selectedFiatOption || "fiat",
-          sellerPubkey,
-          buyerName: data.shippingName || undefined,
-          shippingAddress: emailAddressTag,
-        },
-      ];
+      if (isMultiFiat) {
+        pendingOrderEmailRef.current = sellersWithFiat.map((sellerPubkey) => {
+          const sellerProducts = products.filter(
+            (p) => p.pubkey === sellerPubkey
+          );
+          const sellerProductTitles = sellerProducts
+            .map((p: any) => p.title || p.productName)
+            .join(", ");
+          const breakdown = getSellerCostBreakdown(sellerPubkey);
+          return {
+            orderId,
+            productTitle: sellerProductTitles,
+            amount:
+              !isSatsCart && breakdown.nativeTotal !== null
+                ? String(Math.round(breakdown.nativeTotal * 100) / 100)
+                : String(breakdown.satsTotal),
+            currency: !isSatsCart && cartCurrency ? cartCurrency : "sats",
+            paymentMethod: multiFiatSelections[sellerPubkey] || "fiat",
+            sellerPubkey,
+            buyerName: data.shippingName || undefined,
+            shippingAddress: emailAddressTag,
+          };
+        });
+      } else {
+        const sellerPubkey = singleSellerPubkey || products[0]?.pubkey || "";
+        pendingOrderEmailRef.current = [
+          {
+            orderId,
+            productTitle: productTitles,
+            amount:
+              !isSatsCart && nativeTotalCost !== null
+                ? String(nativeTotalCost)
+                : String(totalCost),
+            currency: !isSatsCart && cartCurrency ? cartCurrency : "sats",
+            paymentMethod: selectedFiatOption || "fiat",
+            sellerPubkey,
+            buyerName: data.shippingName || undefined,
+            shippingAddress: emailAddressTag,
+          },
+        ];
+      }
 
       for (const product of products) {
         await sendInquiryDM(product.pubkey, product.title);
@@ -1989,6 +2819,14 @@ export default function CartInvoiceCard({
           : `${data.Name}, ${data.Address}, ${data.City}, ${data["State/Province"]}, ${data["Postal Code"]}, ${data.Country}`
       : undefined;
 
+    const orderId = uuidv4();
+
+    if (pendingOrderEmailRef.current) {
+      pendingOrderEmailRef.current.forEach((entry) => {
+        if (!entry.orderId) entry.orderId = orderId;
+      });
+    }
+
     for (const product of products) {
       const title = product.title;
       const pubkey = product.pubkey;
@@ -2026,14 +2864,6 @@ export default function CartInvoiceCard({
           "Postal Code": data["Postal Code"],
           Country: data.Country,
         };
-      }
-
-      const orderId = uuidv4();
-
-      if (pendingOrderEmailRef.current) {
-        pendingOrderEmailRef.current.forEach((entry) => {
-          if (!entry.orderId) entry.orderId = orderId;
-        });
       }
 
       // Generate keys once per order to ensure consistent sender pubkey
@@ -2490,7 +3320,11 @@ export default function CartInvoiceCard({
             orderKeys,
             undefined,
             shippingAddressTag,
-            pickupLocation || undefined
+            pickupLocation || undefined,
+            undefined,
+            undefined,
+            undefined,
+            !isSatsCart && cartCurrency ? cartCurrency : undefined
           );
         }
       }
@@ -2736,14 +3570,16 @@ export default function CartInvoiceCard({
               undefined,
               undefined,
               undefined,
-              undefined,
-              undefined,
+              sellerAmount,
+              quantities[product.id] || 1,
               orderKeys,
               undefined,
               shippingAddressTag,
               pickupLocation || undefined,
               donationAmount,
-              donationPercentage
+              donationPercentage,
+              undefined,
+              !isSatsCart && cartCurrency ? cartCurrency : undefined
             );
           }
         }
@@ -2819,14 +3655,16 @@ export default function CartInvoiceCard({
             undefined,
             undefined,
             undefined,
-            undefined,
-            undefined,
+            sellerAmount,
+            quantities[product.id] || 1,
             orderKeys,
             undefined,
             shippingAddressTag,
             pickupLocation || undefined,
             donationAmount,
-            donationPercentage
+            donationPercentage,
+            undefined,
+            !isSatsCart && cartCurrency ? cartCurrency : undefined
           );
         }
       } else {
@@ -2890,14 +3728,16 @@ export default function CartInvoiceCard({
           undefined,
           undefined,
           undefined,
-          undefined,
-          undefined,
+          sellerAmount,
+          quantities[product.id] || 1,
           orderKeys,
           undefined,
           shippingAddressTag,
           pickupLocation || undefined,
           donationAmount,
-          donationPercentage
+          donationPercentage,
+          undefined,
+          !isSatsCart && cartCurrency ? cartCurrency : undefined
         );
       }
     }
@@ -2956,22 +3796,17 @@ export default function CartInvoiceCard({
         satsTotal: totalCost,
       };
     let nativeMethodSubtotal = 0;
-    products.forEach((product) => {
-      const basePrice =
-        product.bulkPrice !== undefined
-          ? product.bulkPrice
-          : product.weightPrice !== undefined
-            ? product.weightPrice
-            : product.volumePrice !== undefined
-              ? product.volumePrice
-              : product.price;
-      const codeDis = appliedDiscounts[product.pubkey] || 0;
-      const codeDiscountedPrice =
-        codeDis > 0 ? basePrice * (1 - codeDis / 100) : basePrice;
-      const methodDiscountedPrice = codeDiscountedPrice * (1 - pct / 100);
-      const qty = quantities[product.id] || 1;
-      nativeMethodSubtotal += methodDiscountedPrice * qty;
-    });
+    if (!isSatsCart && nativeCostsPerProduct) {
+      products.forEach((product) => {
+        const productNative = nativeCostsPerProduct[product.id] || 0;
+        nativeMethodSubtotal += productNative * (1 - pct / 100);
+      });
+    } else {
+      products.forEach((product) => {
+        const satsPrice = totalCostsInSats[product.id] || 0;
+        nativeMethodSubtotal += satsPrice * (1 - pct / 100);
+      });
+    }
     let nativeShipping = 0;
     if (
       formType === "shipping" ||
@@ -3040,7 +3875,7 @@ export default function CartInvoiceCard({
     if (native !== null && cartCurrency) {
       return formatWithCommas(native, cartCurrency);
     }
-    if (usdEstimate != null && nativeTotalCost !== null && totalCost > 0) {
+    if (usdEstimate != null && totalCost > 0) {
       const ratio = sats / totalCost;
       const methodUsd = Math.round(usdEstimate * ratio * 100) / 100;
       return `${formatWithCommas(sats, "sats")} (≈ ${formatWithCommas(
@@ -3551,6 +4386,30 @@ export default function CartInvoiceCard({
                       <p className="text-sm text-gray-600">
                         Quantity: {quantities[product.id] || 1}
                       </p>
+                      {subscriptionSelections[product.id]?.enabled && (
+                        <div className="mt-1 flex items-center gap-1">
+                          <span className="text-xs">🔄</span>
+                          <span className="text-xs font-semibold text-purple-600">
+                            Subscription
+                            {subscriptionSelections[product.id]?.frequency ===
+                            "weekly"
+                              ? " (Weekly)"
+                              : subscriptionSelections[product.id]
+                                    ?.frequency === "every_2_weeks"
+                                ? " (Every 2 Weeks)"
+                                : subscriptionSelections[product.id]
+                                      ?.frequency === "monthly"
+                                  ? " (Monthly)"
+                                  : subscriptionSelections[product.id]
+                                        ?.frequency === "every_2_months"
+                                    ? " (Every 2 Months)"
+                                    : subscriptionSelections[product.id]
+                                          ?.frequency === "quarterly"
+                                      ? " (Quarterly)"
+                                      : ""}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -3628,10 +4487,49 @@ export default function CartInvoiceCard({
                               </div>
                             </>
                           )}
+                          {subscriptionSelections[product.id]?.enabled &&
+                            product.subscriptionDiscount &&
+                            product.subscriptionDiscount > 0 && (
+                              <div className="flex justify-between text-sm text-purple-600">
+                                <span className="ml-2">
+                                  Subscription ({product.subscriptionDiscount}
+                                  %):
+                                </span>
+                                <span>
+                                  -
+                                  {formatWithCommas(
+                                    Math.ceil(
+                                      (((discount > 0
+                                        ? discountedPrice
+                                        : basePrice) *
+                                        product.subscriptionDiscount) /
+                                        100) *
+                                        100
+                                    ) / 100,
+                                    product.currency
+                                  )}
+                                </span>
+                              </div>
+                            )}
                         </div>
                       );
                     })}
                   </div>
+                  {hasActiveSubscription && (
+                    <div className="mt-3 rounded-md border-2 border-purple-300 bg-purple-50 p-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">🔄</span>
+                        <span className="font-semibold text-purple-700">
+                          Subscription Order
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-purple-600">
+                        Subscription items will be charged recurrently. One-time
+                        items are charged only on this initial order. Card
+                        payment only.
+                      </p>
+                    </div>
+                  )}
                   {((formType === "combined" &&
                     shippingPickupPreference === "shipping") ||
                     formType === "shipping") &&
@@ -3906,6 +4804,30 @@ export default function CartInvoiceCard({
                     <p className="text-sm text-gray-600">
                       Quantity: {quantities[product.id] || 1}
                     </p>
+                    {subscriptionSelections[product.id]?.enabled && (
+                      <div className="mt-1 flex items-center gap-1">
+                        <span className="text-xs">🔄</span>
+                        <span className="text-xs font-semibold text-purple-600">
+                          Subscription
+                          {subscriptionSelections[product.id]?.frequency ===
+                          "weekly"
+                            ? " (Weekly)"
+                            : subscriptionSelections[product.id]?.frequency ===
+                                "every_2_weeks"
+                              ? " (Every 2 Weeks)"
+                              : subscriptionSelections[product.id]
+                                    ?.frequency === "monthly"
+                                ? " (Monthly)"
+                                : subscriptionSelections[product.id]
+                                      ?.frequency === "every_2_months"
+                                  ? " (Every 2 Months)"
+                                  : subscriptionSelections[product.id]
+                                        ?.frequency === "quarterly"
+                                    ? " (Quarterly)"
+                                    : ""}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -3996,10 +4918,48 @@ export default function CartInvoiceCard({
                             </div>
                           </>
                         )}
+                        {subscriptionSelections[product.id]?.enabled &&
+                          product.subscriptionDiscount &&
+                          product.subscriptionDiscount > 0 && (
+                            <div className="flex justify-between text-sm text-purple-600">
+                              <span className="ml-2">
+                                Subscription ({product.subscriptionDiscount}%):
+                              </span>
+                              <span>
+                                -
+                                {formatWithCommas(
+                                  Math.ceil(
+                                    (((discount > 0
+                                      ? discountedPrice
+                                      : basePrice) *
+                                      product.subscriptionDiscount) /
+                                      100) *
+                                      100
+                                  ) / 100,
+                                  product.currency
+                                )}
+                              </span>
+                            </div>
+                          )}
                       </div>
                     );
                   })}
                 </div>
+                {hasActiveSubscription && (
+                  <div className="mt-3 rounded-md border-2 border-purple-300 bg-purple-50 p-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">🔄</span>
+                      <span className="font-semibold text-purple-700">
+                        Subscription Order
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-purple-600">
+                      Subscription items will be charged recurrently. One-time
+                      items are charged only on this initial order. Card payment
+                      only.
+                    </p>
+                  </div>
+                )}
                 {((formType === "combined" &&
                   shippingPickupPreference === "shipping") ||
                   formType === "shipping") &&
@@ -4490,70 +5450,78 @@ export default function CartInvoiceCard({
                     </h3>
                   )}
 
-                  <Button
-                    className={`${BLUEBUTTONCLASSNAMES} w-full ${
-                      !isFormValid || (!isLoggedIn && !buyerEmail)
-                        ? "cursor-not-allowed opacity-50"
-                        : ""
-                    }`}
-                    disabled={!isFormValid || (!isLoggedIn && !buyerEmail)}
-                    onClick={() => {
-                      handleFormSubmit((data) =>
-                        onFormSubmit(data, "lightning")
-                      )();
-                    }}
-                    startContent={<BoltIcon className="h-6 w-6" />}
-                  >
-                    Pay with Lightning: {formattedLightningCost}
-                    {getDiscountLabel(bitcoinDiscountPct)}
-                  </Button>
+                  {!hasActiveSubscription && !hasSubscriptionStripeConflict && (
+                    <>
+                      <Button
+                        className={`${BLUEBUTTONCLASSNAMES} w-full ${
+                          !isFormValid || (!isLoggedIn && !buyerEmail)
+                            ? "cursor-not-allowed opacity-50"
+                            : ""
+                        }`}
+                        disabled={!isFormValid || (!isLoggedIn && !buyerEmail)}
+                        onClick={() => {
+                          handleFormSubmit((data) =>
+                            onFormSubmit(data, "lightning")
+                          )();
+                        }}
+                        startContent={<BoltIcon className="h-6 w-6" />}
+                      >
+                        Pay with Lightning: {formattedLightningCost}
+                        {getDiscountLabel(bitcoinDiscountPct)}
+                      </Button>
 
-                  {hasTokensAvailable && (
-                    <Button
-                      className={`${BLUEBUTTONCLASSNAMES} w-full ${
-                        !isFormValid || (!isLoggedIn && !buyerEmail)
-                          ? "cursor-not-allowed opacity-50"
-                          : ""
-                      }`}
-                      disabled={!isFormValid || (!isLoggedIn && !buyerEmail)}
-                      onClick={() => {
-                        handleFormSubmit((data) =>
-                          onFormSubmit(data, "cashu")
-                        )();
-                      }}
-                      startContent={<BanknotesIcon className="h-6 w-6" />}
-                    >
-                      Pay with Cashu: {formattedLightningCost}
-                      {getDiscountLabel(bitcoinDiscountPct)}
-                    </Button>
+                      {hasTokensAvailable && (
+                        <Button
+                          className={`${BLUEBUTTONCLASSNAMES} w-full ${
+                            !isFormValid || (!isLoggedIn && !buyerEmail)
+                              ? "cursor-not-allowed opacity-50"
+                              : ""
+                          }`}
+                          disabled={
+                            !isFormValid || (!isLoggedIn && !buyerEmail)
+                          }
+                          onClick={() => {
+                            handleFormSubmit((data) =>
+                              onFormSubmit(data, "cashu")
+                            )();
+                          }}
+                          startContent={<BanknotesIcon className="h-6 w-6" />}
+                        >
+                          Pay with Cashu: {formattedLightningCost}
+                          {getDiscountLabel(bitcoinDiscountPct)}
+                        </Button>
+                      )}
+
+                      {nwcInfo && (
+                        <Button
+                          className={`${BLUEBUTTONCLASSNAMES} w-full ${
+                            !isFormValid || (!isLoggedIn && !buyerEmail)
+                              ? "cursor-not-allowed opacity-50"
+                              : ""
+                          }`}
+                          disabled={
+                            !isFormValid ||
+                            (!isLoggedIn && !buyerEmail) ||
+                            isNwcLoading
+                          }
+                          isLoading={isNwcLoading}
+                          onClick={() => {
+                            handleFormSubmit((data) =>
+                              onFormSubmit(data, "nwc")
+                            )();
+                          }}
+                          startContent={<WalletIcon className="h-6 w-6" />}
+                        >
+                          Pay with {nwcInfo.alias || "NWC"}:{" "}
+                          {formattedLightningCost}
+                          {getDiscountLabel(bitcoinDiscountPct)}
+                        </Button>
+                      )}
+                    </>
                   )}
 
-                  {/* NWC Button */}
-                  {nwcInfo && (
-                    <Button
-                      className={`${BLUEBUTTONCLASSNAMES} w-full ${
-                        !isFormValid || (!isLoggedIn && !buyerEmail)
-                          ? "cursor-not-allowed opacity-50"
-                          : ""
-                      }`}
-                      disabled={
-                        !isFormValid ||
-                        (!isLoggedIn && !buyerEmail) ||
-                        isNwcLoading
-                      }
-                      isLoading={isNwcLoading}
-                      onClick={() => {
-                        handleFormSubmit((data) => onFormSubmit(data, "nwc"))();
-                      }}
-                      startContent={<WalletIcon className="h-6 w-6" />}
-                    >
-                      Pay with {nwcInfo.alias || "NWC"}:{" "}
-                      {formattedLightningCost}
-                      {getDiscountLabel(bitcoinDiscountPct)}
-                    </Button>
-                  )}
-
-                  {isSingleSeller && isStripeMerchant && (
+                  {((isSingleSeller && isStripeMerchant) ||
+                    (!isSingleSeller && allSellersHaveStripe)) && (
                     <Button
                       className={`w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
                         !isFormValid || (!isLoggedIn && !buyerEmail)
@@ -4581,8 +5549,10 @@ export default function CartInvoiceCard({
                     </Button>
                   )}
 
-                  {isSingleSeller &&
-                    Object.keys(fiatPaymentOptions).length > 0 && (
+                  {!hasActiveSubscription &&
+                    (isSingleSeller
+                      ? Object.keys(fiatPaymentOptions).length > 0
+                      : isMultiFiatAvailable) && (
                       <Button
                         className={`w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
                           !isFormValid || (!isLoggedIn && !buyerEmail)
@@ -4601,19 +5571,21 @@ export default function CartInvoiceCard({
                       >
                         Pay with Cash or Payment App:{" "}
                         {(() => {
-                          const fiatKeys = Object.keys(fiatPaymentOptions);
-                          const fiatDiscountVals = fiatKeys.map(
-                            (k) => pmDiscounts[k] || 0
-                          );
-                          const allSame =
-                            fiatDiscountVals.length > 0 &&
-                            fiatDiscountVals.every(
-                              (d) => d === fiatDiscountVals[0]
+                          if (isSingleSeller) {
+                            const fiatKeys = Object.keys(fiatPaymentOptions);
+                            const fiatDiscountVals = fiatKeys.map(
+                              (k) => pmDiscounts[k] || 0
                             );
-                          if (allSame && fiatDiscountVals[0]! > 0) {
-                            return `${getFormattedFiatCost(
-                              fiatKeys[0]!
-                            )}${getDiscountLabel(fiatDiscountVals[0]!)}`;
+                            const allSame =
+                              fiatDiscountVals.length > 0 &&
+                              fiatDiscountVals.every(
+                                (d) => d === fiatDiscountVals[0]
+                              );
+                            if (allSame && fiatDiscountVals[0]! > 0) {
+                              return `${getFormattedFiatCost(
+                                fiatKeys[0]!
+                              )}${getDiscountLabel(fiatDiscountVals[0]!)}`;
+                            }
                           }
                           return formatCartMethodCost(
                             nativeTotalCost,
@@ -4624,10 +5596,10 @@ export default function CartInvoiceCard({
                       </Button>
                     )}
 
-                  {!isSingleSeller && (
+                  {!isSingleSeller && !allSellersHaveStripe && (
                     <p className="mt-2 text-center text-sm text-gray-500">
-                      Only Bitcoin payments are supported for carts with
-                      products from different merchants.
+                      Card payment requires all merchants to have Stripe
+                      enabled. Bitcoin payments are available for all carts.
                     </p>
                   )}
                 </div>
@@ -4658,6 +5630,7 @@ export default function CartInvoiceCard({
             setShowFiatPaymentInstructions(false);
             setFiatPaymentConfirmed(false);
             setSelectedFiatOption("");
+            setMultiFiatConfirmed({});
             setPendingPaymentData(null);
           }}
           classNames={{
@@ -4677,83 +5650,192 @@ export default function CartInvoiceCard({
         >
           <ModalContent>
             <ModalHeader className="flex items-center justify-center text-black">
-              {selectedFiatOption === "cash" ? "Cash Payment" : "Send Payment"}
+              {isSingleSeller
+                ? selectedFiatOption === "cash"
+                  ? "Cash Payment"
+                  : "Send Payment"
+                : "Send Payments"}
             </ModalHeader>
             <ModalBody className="flex flex-col overflow-hidden text-black">
-              {selectedFiatOption === "cash" ? (
-                <>
-                  <p className="mb-4 text-center text-gray-600">
-                    You will need{" "}
-                    <span className="font-semibold text-black">
-                      {nativeTotalCost !== null && cartCurrency
-                        ? `${formatWithCommas(
-                            nativeTotalCost,
-                            cartCurrency
-                          )} (≈ ${formatWithCommas(totalCost, "sats")})`
-                        : formatWithCommas(totalCost, "sats")}
-                    </span>{" "}
-                    in cash for this order.
-                  </p>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id="paymentConfirmedCart"
-                      checked={fiatPaymentConfirmed}
-                      onChange={(e) =>
-                        setFiatPaymentConfirmed(e.target.checked)
-                      }
-                      className="h-4 w-4 rounded border-2 border-black accent-black"
-                    />
-                    <label
-                      htmlFor="paymentConfirmedCart"
-                      className="text-left text-sm text-gray-700"
-                    >
-                      I will have the sufficient cash to complete the order upon
-                      pickup or delivery
-                    </label>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <p className="mb-4 text-center text-gray-600">
-                    Please send{" "}
-                    <span className="font-semibold text-black">
-                      {nativeTotalCost !== null && cartCurrency
-                        ? `${formatWithCommas(
-                            nativeTotalCost,
-                            cartCurrency
-                          )} (≈ ${formatWithCommas(totalCost, "sats")})`
-                        : formatWithCommas(totalCost, "sats")}
-                    </span>{" "}
-                    to:
-                  </p>
-                  <div className="mb-4 rounded-md border-2 border-black bg-gray-50 p-4 shadow-neo">
-                    <p className="text-center font-semibold text-black">
-                      {selectedFiatOption}:{" "}
-                      {singleSellerPubkey &&
-                        (profileContext.profileData.get(singleSellerPubkey)
-                          ?.content?.fiat_options?.[selectedFiatOption] ||
-                          "N/A")}
+              {isSingleSeller ? (
+                selectedFiatOption === "cash" ? (
+                  <>
+                    <p className="mb-4 text-center text-gray-600">
+                      You will need{" "}
+                      <span className="font-semibold text-black">
+                        {nativeTotalCost !== null && cartCurrency
+                          ? `${formatWithCommas(
+                              nativeTotalCost,
+                              cartCurrency
+                            )} (≈ ${formatWithCommas(totalCost, "sats")})`
+                          : formatWithCommas(totalCost, "sats")}
+                      </span>{" "}
+                      in cash for this order.
                     </p>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id="paymentConfirmedCart"
-                      checked={fiatPaymentConfirmed}
-                      onChange={(e) =>
-                        setFiatPaymentConfirmed(e.target.checked)
-                      }
-                      className="h-4 w-4 rounded border-2 border-black accent-black"
-                    />
-                    <label
-                      htmlFor="paymentConfirmedCart"
-                      className="text-sm text-gray-700"
-                    >
-                      I have sent the payment
-                    </label>
-                  </div>
-                </>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="paymentConfirmedCart"
+                        checked={fiatPaymentConfirmed}
+                        onChange={(e) =>
+                          setFiatPaymentConfirmed(e.target.checked)
+                        }
+                        className="h-4 w-4 rounded border-2 border-black accent-black"
+                      />
+                      <label
+                        htmlFor="paymentConfirmedCart"
+                        className="text-left text-sm text-gray-700"
+                      >
+                        I will have the sufficient cash to complete the order
+                        upon pickup or delivery
+                      </label>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="mb-4 text-center text-gray-600">
+                      Please send{" "}
+                      <span className="font-semibold text-black">
+                        {nativeTotalCost !== null && cartCurrency
+                          ? `${formatWithCommas(
+                              nativeTotalCost,
+                              cartCurrency
+                            )} (≈ ${formatWithCommas(totalCost, "sats")})`
+                          : formatWithCommas(totalCost, "sats")}
+                      </span>{" "}
+                      to:
+                    </p>
+                    <div className="mb-4 rounded-md border-2 border-black bg-gray-50 p-4 shadow-neo">
+                      <p className="text-center font-semibold text-black">
+                        {selectedFiatOption}:{" "}
+                        {singleSellerPubkey &&
+                          (profileContext.profileData.get(singleSellerPubkey)
+                            ?.content?.fiat_options?.[selectedFiatOption] ||
+                            "N/A")}
+                      </p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="paymentConfirmedCart"
+                        checked={fiatPaymentConfirmed}
+                        onChange={(e) =>
+                          setFiatPaymentConfirmed(e.target.checked)
+                        }
+                        className="h-4 w-4 rounded border-2 border-black accent-black"
+                      />
+                      <label
+                        htmlFor="paymentConfirmedCart"
+                        className="text-sm text-gray-700"
+                      >
+                        I have sent the payment
+                      </label>
+                    </div>
+                  </>
+                )
+              ) : (
+                <div className="space-y-6">
+                  {sellersWithFiat.map((sellerPubkey) => {
+                    const sellerName = getSellerDisplayName(sellerPubkey);
+                    const breakdown = getSellerCostBreakdown(sellerPubkey);
+                    const sellerFiatOption =
+                      multiFiatSelections[sellerPubkey] || "";
+                    const sellerFiatHandle =
+                      multiFiatOptions[sellerPubkey]?.[sellerFiatOption] || "";
+                    const amountDisplay =
+                      !isSatsCart &&
+                      breakdown.nativeTotal !== null &&
+                      cartCurrency
+                        ? `${formatWithCommas(
+                            breakdown.nativeTotal,
+                            cartCurrency
+                          )} (≈ ${formatWithCommas(
+                            breakdown.satsTotal,
+                            "sats"
+                          )})`
+                        : formatWithCommas(breakdown.satsTotal, "sats");
+
+                    return (
+                      <div
+                        key={sellerPubkey}
+                        className="rounded-md border-2 border-black bg-gray-50 p-4 shadow-neo"
+                      >
+                        <p className="mb-2 font-bold text-black">
+                          {sellerName}
+                        </p>
+                        {sellerFiatOption === "cash" ? (
+                          <>
+                            <p className="mb-2 text-sm text-gray-600">
+                              You will need{" "}
+                              <span className="font-semibold text-black">
+                                {amountDisplay}
+                              </span>{" "}
+                              in cash for this merchant.
+                            </p>
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id={`paymentConfirmed-${sellerPubkey}`}
+                                checked={
+                                  multiFiatConfirmed[sellerPubkey] || false
+                                }
+                                onChange={(e) =>
+                                  setMultiFiatConfirmed((prev) => ({
+                                    ...prev,
+                                    [sellerPubkey]: e.target.checked,
+                                  }))
+                                }
+                                className="h-4 w-4 rounded border-2 border-black accent-black"
+                              />
+                              <label
+                                htmlFor={`paymentConfirmed-${sellerPubkey}`}
+                                className="text-left text-sm text-gray-700"
+                              >
+                                I will have the sufficient cash for this
+                                merchant
+                              </label>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <p className="mb-2 text-sm text-gray-600">
+                              Please send{" "}
+                              <span className="font-semibold text-black">
+                                {amountDisplay}
+                              </span>{" "}
+                              to:
+                            </p>
+                            <p className="mb-3 text-center font-semibold text-black">
+                              {sellerFiatOption}: {sellerFiatHandle || "N/A"}
+                            </p>
+                            <div className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id={`paymentConfirmed-${sellerPubkey}`}
+                                checked={
+                                  multiFiatConfirmed[sellerPubkey] || false
+                                }
+                                onChange={(e) =>
+                                  setMultiFiatConfirmed((prev) => ({
+                                    ...prev,
+                                    [sellerPubkey]: e.target.checked,
+                                  }))
+                                }
+                                className="h-4 w-4 rounded border-2 border-black accent-black"
+                              />
+                              <label
+                                htmlFor={`paymentConfirmed-${sellerPubkey}`}
+                                className="text-sm text-gray-700"
+                              >
+                                I have sent the payment to this merchant
+                              </label>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </ModalBody>
             <ModalFooter className="flex justify-center gap-2">
@@ -4762,6 +5844,7 @@ export default function CartInvoiceCard({
                   setShowFiatPaymentInstructions(false);
                   setFiatPaymentConfirmed(false);
                   setSelectedFiatOption("");
+                  setMultiFiatConfirmed({});
                   setPendingPaymentData(null);
                 }}
                 className="rounded-md border-2 border-black bg-white px-6 py-2 font-bold text-black shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5"
@@ -4770,9 +5853,14 @@ export default function CartInvoiceCard({
               </Button>
               <Button
                 onClick={async () => {
-                  if (fiatPaymentConfirmed) {
+                  const confirmed = isSingleSeller
+                    ? fiatPaymentConfirmed
+                    : allMultiFiatConfirmed;
+                  if (confirmed) {
                     setShowFiatPaymentInstructions(false);
-                    const fiatCosts = getFiatMethodCosts(selectedFiatOption);
+                    const fiatCosts = isSingleSeller
+                      ? getFiatMethodCosts(selectedFiatOption)
+                      : { nativeTotal: nativeTotalCost, satsTotal: totalCost };
                     await handleFiatPayment(
                       fiatCosts.satsTotal,
                       pendingPaymentData || {}
@@ -4780,14 +5868,26 @@ export default function CartInvoiceCard({
                     setPendingPaymentData(null);
                   }
                 }}
-                disabled={!fiatPaymentConfirmed}
+                disabled={
+                  isSingleSeller
+                    ? !fiatPaymentConfirmed
+                    : !allMultiFiatConfirmed
+                }
                 className={`rounded-md border-2 border-black bg-black px-6 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
-                  !fiatPaymentConfirmed ? "cursor-not-allowed opacity-50" : ""
+                  (
+                    isSingleSeller
+                      ? !fiatPaymentConfirmed
+                      : !allMultiFiatConfirmed
+                  )
+                    ? "cursor-not-allowed opacity-50"
+                    : ""
                 }`}
               >
-                {selectedFiatOption === "cash"
-                  ? "Confirm Order"
-                  : "Confirm Payment Sent"}
+                {isSingleSeller
+                  ? selectedFiatOption === "cash"
+                    ? "Confirm Order"
+                    : "Confirm Payment Sent"
+                  : "Confirm All Payments"}
               </Button>
             </ModalFooter>
           </ModalContent>
@@ -4797,13 +5897,17 @@ export default function CartInvoiceCard({
       <Modal
         backdrop="blur"
         isOpen={showFiatTypeOption}
-        onClose={() => setShowFiatTypeOption(false)}
+        onClose={() => {
+          setShowFiatTypeOption(false);
+          setMultiFiatSelections({});
+        }}
         classNames={{
           wrapper: "shadow-neo",
           base: "border-2 border-black rounded-md",
           backdrop: "bg-black/20 backdrop-blur-sm",
           header: "border-b-2 border-black bg-white rounded-t-md text-black",
           body: "py-6 bg-white",
+          footer: "border-t-2 border-black bg-white rounded-b-md",
           closeButton:
             "hover:bg-gray-200 active:bg-gray-300 rounded-md text-black",
         }}
@@ -4814,40 +5918,104 @@ export default function CartInvoiceCard({
       >
         <ModalContent>
           <ModalHeader className="flex items-center justify-center text-black">
-            Select your payment method
+            Select your payment method{!isSingleSeller ? "s" : ""}
           </ModalHeader>
           <ModalBody className="flex flex-col overflow-hidden text-black">
-            <div className="flex items-center justify-center">
-              <Select
-                label="Payment Options"
-                className="max-w-xs"
-                classNames={{
-                  trigger:
-                    "border-2 border-black rounded-md shadow-neo !bg-white hover:!bg-white data-[hover=true]:!bg-white data-[focus=true]:!bg-white",
-                  value: "!text-black",
-                  label: "text-gray-600",
-                  popoverContent: "border-2 border-black rounded-md bg-white",
-                  listbox: "!text-black",
-                }}
-                onChange={(e) => {
-                  setSelectedFiatOption(e.target.value);
+            {isSingleSeller ? (
+              <div className="flex items-center justify-center">
+                <Select
+                  label="Payment Options"
+                  className="max-w-xs"
+                  classNames={{
+                    trigger:
+                      "border-2 border-black rounded-md shadow-neo !bg-white hover:!bg-white data-[hover=true]:!bg-white data-[focus=true]:!bg-white",
+                    value: "!text-black",
+                    label: "text-gray-600",
+                    popoverContent: "border-2 border-black rounded-md bg-white",
+                    listbox: "!text-black",
+                  }}
+                  onChange={(e) => {
+                    setSelectedFiatOption(e.target.value);
+                    setShowFiatTypeOption(false);
+                    setShowFiatPaymentInstructions(true);
+                  }}
+                >
+                  {fiatPaymentOptions &&
+                    Object.keys(fiatPaymentOptions).map((option) => (
+                      <SelectItem
+                        key={option}
+                        value={option}
+                        className="text-black"
+                      >
+                        {option}
+                      </SelectItem>
+                    ))}
+                </Select>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {sellersWithFiat.map((sellerPubkey) => {
+                  const sellerName = getSellerDisplayName(sellerPubkey);
+                  const opts = multiFiatOptions[sellerPubkey] || {};
+                  return (
+                    <div key={sellerPubkey}>
+                      <p className="mb-1 font-bold text-black">{sellerName}</p>
+                      <Select
+                        label="Payment Option"
+                        className="max-w-xs"
+                        classNames={{
+                          trigger:
+                            "border-2 border-black rounded-md shadow-neo !bg-white hover:!bg-white data-[hover=true]:!bg-white data-[focus=true]:!bg-white",
+                          value: "!text-black",
+                          label: "text-gray-600",
+                          popoverContent:
+                            "border-2 border-black rounded-md bg-white",
+                          listbox: "!text-black",
+                        }}
+                        selectedKeys={
+                          multiFiatSelections[sellerPubkey]
+                            ? new Set([multiFiatSelections[sellerPubkey]!])
+                            : new Set<string>()
+                        }
+                        onChange={(e) => {
+                          setMultiFiatSelections((prev) => ({
+                            ...prev,
+                            [sellerPubkey]: e.target.value,
+                          }));
+                        }}
+                      >
+                        {Object.keys(opts).map((option) => (
+                          <SelectItem
+                            key={option}
+                            value={option}
+                            className="text-black"
+                          >
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </Select>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </ModalBody>
+          {!isSingleSeller && (
+            <ModalFooter className="flex justify-center">
+              <Button
+                onClick={() => {
                   setShowFiatTypeOption(false);
                   setShowFiatPaymentInstructions(true);
                 }}
+                disabled={!allMultiFiatSelected}
+                className={`rounded-md border-2 border-black bg-black px-6 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                  !allMultiFiatSelected ? "cursor-not-allowed opacity-50" : ""
+                }`}
               >
-                {fiatPaymentOptions &&
-                  Object.keys(fiatPaymentOptions).map((option) => (
-                    <SelectItem
-                      key={option}
-                      value={option}
-                      className="text-black"
-                    >
-                      {option}
-                    </SelectItem>
-                  ))}
-              </Select>
-            </div>
-          </ModalBody>
+                Continue
+              </Button>
+            </ModalFooter>
+          )}
         </ModalContent>
       </Modal>
 

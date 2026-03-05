@@ -3,7 +3,12 @@ import {
   orderConfirmationEmail,
   sellerNewOrderEmail,
   orderUpdateEmail,
+  subscriptionConfirmationEmail,
+  renewalReminderEmail,
+  addressChangeConfirmationEmail,
+  subscriptionCancellationEmail,
   OrderEmailParams,
+  SubscriptionEmailParams,
 } from "./email-templates";
 
 async function sendEmail(
@@ -55,5 +60,47 @@ export async function sendOrderUpdateToBuyer(
   }
 ): Promise<boolean> {
   const { subject, html } = orderUpdateEmail(params);
+  return sendEmail(buyerEmail, subject, html);
+}
+
+export async function sendSubscriptionConfirmation(
+  buyerEmail: string,
+  params: SubscriptionEmailParams
+): Promise<boolean> {
+  const { subject, html } = subscriptionConfirmationEmail(params);
+  return sendEmail(buyerEmail, subject, html);
+}
+
+export async function sendRenewalReminder(
+  buyerEmail: string,
+  params: SubscriptionEmailParams
+): Promise<boolean> {
+  const { subject, html } = renewalReminderEmail(params);
+  return sendEmail(buyerEmail, subject, html);
+}
+
+export async function sendAddressChangeConfirmation(
+  buyerEmail: string,
+  params: {
+    productTitle: string;
+    newAddress: string;
+    buyerName?: string;
+    subscriptionId?: string;
+  }
+): Promise<boolean> {
+  const { subject, html } = addressChangeConfirmationEmail(params);
+  return sendEmail(buyerEmail, subject, html);
+}
+
+export async function sendSubscriptionCancellation(
+  buyerEmail: string,
+  params: {
+    productTitle: string;
+    buyerName?: string;
+    endDate: string;
+    subscriptionId?: string;
+  }
+): Promise<boolean> {
+  const { subject, html } = subscriptionCancellationEmail(params);
   return sendEmail(buyerEmail, subject, html);
 }
