@@ -355,6 +355,7 @@ export default function ProductInvoiceCard({
             shippingAddress: pendingOrderEmailRef.current.shippingAddress,
             pickupLocation: selectedPickupLocation || undefined,
             sellerPubkey: pendingOrderEmailRef.current.sellerPubkey,
+            isSubscription: isSubscription && !!subscriptionFrequency,
           })
         );
       } catch {}
@@ -1460,6 +1461,7 @@ export default function ProductInvoiceCard({
             shippingAddress: addressTag,
             pickupLocation: selectedPickupLocation || undefined,
             sellerPubkey: pubkey,
+            isSubscription: isSubscription && !!subscriptionFrequency,
           })
         );
       } catch {}
@@ -3494,11 +3496,15 @@ export default function ProductInvoiceCard({
                       Delivery every{" "}
                       {subscriptionFrequency === "weekly"
                         ? "week"
-                        : subscriptionFrequency === "monthly"
-                          ? "month"
-                          : subscriptionFrequency === "quarterly"
-                            ? "3 months"
-                            : subscriptionFrequency}
+                        : subscriptionFrequency === "every_2_weeks"
+                          ? "2 weeks"
+                          : subscriptionFrequency === "monthly"
+                            ? "month"
+                            : subscriptionFrequency === "every_2_months"
+                              ? "2 months"
+                              : subscriptionFrequency === "quarterly"
+                                ? "3 months"
+                                : subscriptionFrequency}
                     </p>
                     {(subscriptionDiscount ?? 0) > 0 && (
                       <p className="text-sm font-medium text-green-600">
@@ -3597,11 +3603,15 @@ export default function ProductInvoiceCard({
                           /
                           {subscriptionFrequency === "weekly"
                             ? "wk"
-                            : subscriptionFrequency === "monthly"
-                              ? "mo"
-                              : subscriptionFrequency === "quarterly"
-                                ? "qtr"
-                                : subscriptionFrequency}
+                            : subscriptionFrequency === "every_2_weeks"
+                              ? "2wk"
+                              : subscriptionFrequency === "monthly"
+                                ? "mo"
+                                : subscriptionFrequency === "every_2_months"
+                                  ? "2mo"
+                                  : subscriptionFrequency === "quarterly"
+                                    ? "qtr"
+                                    : subscriptionFrequency}
                         </span>
                       )}
                       {!isSatsCurrency && satsEstimate != null && (

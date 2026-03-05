@@ -4,7 +4,7 @@ import StripeConnectBanner from "@/components/stripe-connect/StripeConnectBanner
 
 export default function MessageView() {
   const router = useRouter();
-  const { isInquiry } = router.query;
+  const { isInquiry, tab } = router.query;
 
   return (
     <div className="bg-light-bg flex min-h-screen flex-col pt-16">
@@ -18,6 +18,7 @@ export default function MessageView() {
         {...(isInquiry !== undefined
           ? { isInquiry: isInquiry === "true" }
           : {})}
+        {...(typeof tab === "string" ? { initialTab: tab } : {})}
       />
     </div>
   );

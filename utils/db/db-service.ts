@@ -1369,6 +1369,7 @@ export interface SubscriptionRecord {
   buyer_email: string;
   seller_pubkey: string;
   product_event_id: string;
+  product_title: string | null;
   quantity: number;
   variant_info: any;
   frequency: string;
@@ -1399,6 +1400,7 @@ export async function createSubscription(data: {
   buyer_email: string;
   seller_pubkey: string;
   product_event_id: string;
+  product_title?: string | null;
   quantity?: number;
   variant_info?: any;
   frequency: string;
@@ -1419,10 +1421,10 @@ export async function createSubscription(data: {
     const result = await client.query(
       `INSERT INTO subscriptions (
         stripe_subscription_id, stripe_customer_id, buyer_pubkey, buyer_email,
-        seller_pubkey, product_event_id, quantity, variant_info, frequency,
+        seller_pubkey, product_event_id, product_title, quantity, variant_info, frequency,
         discount_percent, base_price, subscription_price, currency,
         shipping_address, status, next_billing_date, next_shipping_date
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
       RETURNING *`,
       [
         data.stripe_subscription_id,
@@ -1431,6 +1433,7 @@ export async function createSubscription(data: {
         data.buyer_email,
         data.seller_pubkey,
         data.product_event_id,
+        data.product_title || null,
         data.quantity || 1,
         data.variant_info ? JSON.stringify(data.variant_info) : null,
         data.frequency,

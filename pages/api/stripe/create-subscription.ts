@@ -210,6 +210,7 @@ export default async function handler(
       buyer_email: customerEmail,
       seller_pubkey: sellerPubkey,
       product_event_id: productEventId,
+      product_title: productTitle || null,
       quantity: quantity || 1,
       variant_info: variantInfo || null,
       frequency,

@@ -94,7 +94,8 @@ export default async function handler(
           : "Upcoming";
 
         await sendRenewalReminder(subscription.buyer_email, {
-          productTitle: subscription.product_event_id,
+          productTitle:
+            subscription.product_title || subscription.product_event_id,
           frequency: subscription.frequency,
           discountPercent: Number(subscription.discount_percent),
           regularPrice: String(subscription.base_price),
@@ -107,7 +108,7 @@ export default async function handler(
 
         if (subscription.buyer_pubkey) {
           const dmMessage = `Reminder: Your subscription for "${
-            subscription.product_event_id
+            subscription.product_title || subscription.product_event_id
           }" will renew on ${nextBillingDate}. You will be charged ${
             subscription.subscription_price
           } ${subscription.currency.toUpperCase()} (${formatFrequencyLabel(
@@ -172,7 +173,7 @@ export default async function handler(
             day: "numeric",
           });
           const dmMessage = `Your subscription payment for "${
-            subscription.product_event_id
+            subscription.product_title || subscription.product_event_id
           }" has been processed. Amount: ${
             subscription.subscription_price
           } ${subscription.currency.toUpperCase()}. Next billing date: ${formattedDate}.`;
@@ -213,14 +214,17 @@ export default async function handler(
               });
 
           await sendSubscriptionCancellation(subscription.buyer_email, {
-            productTitle: subscription.product_event_id,
+            productTitle:
+              subscription.product_title || subscription.product_event_id,
             endDate,
           }).catch((err) =>
             console.error("Failed to send cancellation email:", err)
           );
 
           if (subscription.buyer_pubkey) {
-            const dmMessage = `Your subscription for "${subscription.product_event_id}" has been canceled. You will continue to have access until ${endDate}. No further charges will be made.`;
+            const dmMessage = `Your subscription for "${
+              subscription.product_title || subscription.product_event_id
+            }" has been canceled. You will continue to have access until ${endDate}. No further charges will be made.`;
 
             await sendServerSideNostrDM(
               subscription.buyer_pubkey,

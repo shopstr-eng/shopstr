@@ -39,6 +39,7 @@ interface SubscriptionData {
   buyer_email: string;
   seller_pubkey: string;
   product_event_id: string;
+  product_title: string | null;
   quantity: number;
   variant_info: any;
   frequency: string;
@@ -199,7 +200,9 @@ const SubscriptionManagement = () => {
           body: JSON.stringify({
             type: "cancellation",
             buyerEmail: cancelSubscription.buyer_email,
-            productTitle: cancelSubscription.product_event_id,
+            productTitle:
+              cancelSubscription.product_title ||
+              cancelSubscription.product_event_id,
             endDate:
               cancelSubscription.next_billing_date || new Date().toISOString(),
             subscriptionId: cancelSubscription.stripe_subscription_id,
@@ -343,7 +346,9 @@ const SubscriptionManagement = () => {
           body: JSON.stringify({
             type: "address_change",
             buyerEmail: addressSubscription.buyer_email,
-            productTitle: addressSubscription.product_event_id,
+            productTitle:
+              addressSubscription.product_title ||
+              addressSubscription.product_event_id,
             newAddress: newAddress,
             subscriptionId: addressSubscription.stripe_subscription_id,
           }),
@@ -818,7 +823,10 @@ const SubscriptionManagement = () => {
         }}
         onSubmit={onAddressSubmit}
         isLoading={isUpdatingAddress}
-        productTitle={addressSubscription?.product_event_id}
+        productTitle={
+          addressSubscription?.product_title ||
+          addressSubscription?.product_event_id
+        }
         currentAddress={formatAddress(addressSubscription?.shipping_address)}
         subscriptionId={addressSubscription?.stripe_subscription_id}
       />

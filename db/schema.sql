@@ -219,6 +219,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     buyer_email TEXT NOT NULL,
     seller_pubkey TEXT NOT NULL,
     product_event_id TEXT NOT NULL,
+    product_title TEXT,
     quantity INTEGER NOT NULL DEFAULT 1,
     variant_info JSONB,
     frequency TEXT NOT NULL CHECK (frequency IN ('weekly', 'every_2_weeks', 'monthly', 'every_2_months', 'quarterly')),
