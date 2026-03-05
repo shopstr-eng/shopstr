@@ -53,8 +53,10 @@ const withPWA = withPWAInit({
 });
 
 const nextConfig = {
+  bundlePagesRouterDependencies: true,
   output: "standalone",
   reactStrictMode: true,
+  turbopack: {},
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "www.google.com" },
