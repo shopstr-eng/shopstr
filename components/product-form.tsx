@@ -87,6 +87,9 @@ export default function ProductForm({
     string[]
   >([]);
   const [showStripeConnectModal, setShowStripeConnectModal] = useState(false);
+  const [hasStripeAccount, setHasStripeAccount] = useState<boolean | null>(
+    null
+  );
   const productEventContext = useContext(ProductContext);
   const profileContext = useContext(ProfileMapContext);
   const {
@@ -184,6 +187,35 @@ export default function ProductForm({
       setIsFlashSale(hasLightning);
     } else {
       setIsFlashSale(false);
+    }
+
+    if (showModal && signerPubKey && signer) {
+      (async () => {
+        try {
+          const template = createAuthEventTemplate(signerPubKey);
+          const signedEvent = await signer.sign(template);
+          const res = await fetch("/api/stripe/connect/account-status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pubkey: signerPubKey, signedEvent }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setHasStripeAccount(!!data.chargesEnabled);
+            if (!data.chargesEnabled) {
+              setSubscriptionEnabled(false);
+            }
+          } else {
+            setHasStripeAccount(false);
+            setSubscriptionEnabled(false);
+          }
+        } catch {
+          setHasStripeAccount(false);
+          setSubscriptionEnabled(false);
+        }
+      })();
+    } else {
+      setHasStripeAccount(null);
     }
   }, [showModal, signerPubKey, profileContext]);
 
@@ -1644,6 +1676,42 @@ export default function ProductForm({
                 }}
               />
 
+              <div className="mt-4 flex items-center justify-between rounded-md border-2 border-black bg-white p-3">
+                <div className="flex flex-col">
+                  <span className="text-sm font-semibold text-black">
+                    Offer Subscribe & Save
+                  </span>
+                  <span className="text-tiny text-gray-500">
+                    {hasStripeAccount === false
+                      ? "Requires a Stripe account to accept recurring payments"
+                      : "Let buyers subscribe for recurring delivery at a discount"}
+                  </span>
+                </div>
+                <Switch
+                  isSelected={subscriptionEnabled}
+                  onValueChange={setSubscriptionEnabled}
+                  isDisabled={hasStripeAccount === false}
+                  classNames={{
+                    wrapper: "group-data-[selected=true]:bg-yellow-600",
+                  }}
+                />
+              </div>
+              {hasStripeAccount === false && (
+                <div className="mt-2 rounded-md border-2 border-yellow-300 bg-yellow-50 p-3">
+                  <p className="text-sm text-yellow-800">
+                    To offer subscriptions, you need to{" "}
+                    <button
+                      type="button"
+                      className="font-semibold underline"
+                      onClick={() => setShowStripeConnectModal(true)}
+                    >
+                      set up a Stripe account
+                    </button>{" "}
+                    first.
+                  </p>
+                </div>
+              )}
+
               {/* --- Flash Sale Toggle --- */}
               <div className="mt-4 flex items-center justify-between rounded-lg border border-gray-200 p-3">
                 <div className="flex flex-col">
@@ -1657,24 +1725,6 @@ export default function ProductForm({
                 <Switch
                   isSelected={isFlashSale}
                   onValueChange={setIsFlashSale}
-                  classNames={{
-                    wrapper: "group-data-[selected=true]:bg-yellow-600",
-                  }}
-                />
-              </div>
-
-              <div className="mt-4 flex items-center justify-between rounded-md border-2 border-black bg-white p-3">
-                <div className="flex flex-col">
-                  <span className="text-sm font-semibold text-black">
-                    Offer Subscribe & Save
-                  </span>
-                  <span className="text-tiny text-gray-500">
-                    Let buyers subscribe for recurring delivery at a discount
-                  </span>
-                </div>
-                <Switch
-                  isSelected={subscriptionEnabled}
-                  onValueChange={setSubscriptionEnabled}
                   classNames={{
                     wrapper: "group-data-[selected=true]:bg-yellow-600",
                   }}
