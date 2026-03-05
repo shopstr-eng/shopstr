@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import {
   Button,
@@ -9,6 +9,8 @@ import {
   ModalHeader,
   ModalBody,
   Input,
+  Select,
+  SelectItem,
 } from "@nextui-org/react";
 import {
   PlusIcon,
@@ -18,6 +20,7 @@ import {
   XCircleIcon,
   InformationCircleIcon,
   TruckIcon,
+  ArrowPathIcon,
 } from "@heroicons/react/24/outline";
 import {
   BLUEBUTTONCLASSNAMES,
@@ -79,6 +82,19 @@ function QuantitySelector({
   );
 }
 
+const FREQUENCY_LABELS: Record<string, string> = {
+  weekly: "Weekly",
+  every_2_weeks: "Every 2 Weeks",
+  monthly: "Monthly",
+  every_2_months: "Every 2 Months",
+  quarterly: "Quarterly",
+};
+
+export interface SubscriptionSelection {
+  enabled: boolean;
+  frequency: string;
+}
+
 export default function Component() {
   const shopContext = useContext(ShopMapContext);
   const profileContext = useContext(ProfileMapContext);
@@ -95,6 +111,9 @@ export default function Component() {
   const [cartCurrency, setCartCurrency] = useState<string | null>(null);
   const [shippingTypes, setShippingTypes] = useState<{
     [key: string]: ShippingOptionsType;
+  }>({});
+  const [subscriptionSelections, setSubscriptionSelections] = useState<{
+    [productId: string]: SubscriptionSelection;
   }>({});
 
   // Initialize quantities state
@@ -129,6 +148,95 @@ export default function Component() {
   const [discountErrors, setDiscountErrors] = useState<{
     [pubkey: string]: string;
   }>({});
+
+  const [sellerStripeStatus, setSellerStripeStatus] = useState<
+    Record<string, boolean>
+  >({});
+  const [sellerStripeLoading, setSellerStripeLoading] = useState(false);
+
+  const uniqueSellerPubkeys = useMemo(() => {
+    return [...new Set(products.map((p) => p.pubkey))];
+  }, [products]);
+
+  const sellerPubkeyKey = useMemo(
+    () => uniqueSellerPubkeys.sort().join(","),
+    [uniqueSellerPubkeys]
+  );
+
+  useEffect(() => {
+    if (uniqueSellerPubkeys.length === 0) {
+      setSellerStripeStatus({});
+      setSellerStripeLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setSellerStripeLoading(true);
+    const checkSellers = async () => {
+      const statuses: Record<string, boolean> = {};
+      for (const pubkey of uniqueSellerPubkeys) {
+        if (cancelled) return;
+        if (pubkey === process.env.NEXT_PUBLIC_MILK_MARKET_PK) {
+          statuses[pubkey] = true;
+          continue;
+        }
+        try {
+          const res = await fetch("/api/stripe/connect/seller-status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pubkey }),
+          });
+          if (cancelled) return;
+          if (res.ok) {
+            const data = await res.json();
+            statuses[pubkey] = !!(data.hasStripeAccount && data.chargesEnabled);
+          } else {
+            statuses[pubkey] = false;
+          }
+        } catch {
+          if (cancelled) return;
+          statuses[pubkey] = false;
+        }
+      }
+      if (!cancelled) {
+        setSellerStripeStatus(statuses);
+        setSellerStripeLoading(false);
+      }
+    };
+    checkSellers();
+    return () => {
+      cancelled = true;
+    };
+  }, [sellerPubkeyKey]);
+
+  const allSellersHaveStripe = useMemo(() => {
+    if (uniqueSellerPubkeys.length === 0) return false;
+    return uniqueSellerPubkeys.every((pk) => sellerStripeStatus[pk] === true);
+  }, [uniqueSellerPubkeys, sellerStripeStatus]);
+
+  const hasActiveSubscription = useMemo(() => {
+    return products.some((p) => subscriptionSelections[p.id]?.enabled);
+  }, [products, subscriptionSelections]);
+
+  const sellerStatusKnown = useMemo(() => {
+    if (sellerStripeLoading) return false;
+    return uniqueSellerPubkeys.every((pk) => pk in sellerStripeStatus);
+  }, [sellerStripeLoading, uniqueSellerPubkeys, sellerStripeStatus]);
+
+  const hasSubscriptionStripeConflict = useMemo(() => {
+    if (!hasActiveSubscription) return false;
+    if (!sellerStatusKnown) return false;
+    if (uniqueSellerPubkeys.length <= 1) {
+      const pk = uniqueSellerPubkeys[0];
+      return pk ? sellerStripeStatus[pk] === false : false;
+    }
+    return !allSellersHaveStripe;
+  }, [
+    hasActiveSubscription,
+    sellerStatusKnown,
+    uniqueSellerPubkeys,
+    sellerStripeStatus,
+    allSellersHaveStripe,
+  ]);
 
   // Group products by seller pubkey
   const productsBySeller = products.reduce(
@@ -184,6 +292,9 @@ export default function Component() {
         : [];
       if (cartList && cartList.length > 0) {
         setProducts(cartList);
+        const initialSubSelections: {
+          [productId: string]: SubscriptionSelection;
+        } = {};
         for (const item of cartList as ProductData[]) {
           if (item.selectedQuantity) {
             setQuantities((prev) => ({
@@ -191,7 +302,18 @@ export default function Component() {
               [item.id]: item.selectedQuantity || 1,
             }));
           }
+          if (
+            item.subscriptionEnabled &&
+            item.subscriptionFrequency &&
+            item.subscriptionFrequency.length > 0
+          ) {
+            initialSubSelections[item.id] = {
+              enabled: true,
+              frequency: item.subscriptionFrequency[0]!,
+            };
+          }
         }
+        setSubscriptionSelections(initialSubSelections);
       }
 
       // Load saved discount codes
@@ -220,10 +342,33 @@ export default function Component() {
       let subtotalAmount = 0;
       let nativeSubtotal = 0;
 
-      const currencies = new Set(products.map((p) => p.currency.toUpperCase()));
-      const isSingleCurrency = currencies.size === 1;
-      const commonCurrency = isSingleCurrency
-        ? products[0]?.currency || null
+      const currencyCounts: { [key: string]: number } = {};
+      products.forEach((p) => {
+        const c = p.currency.toUpperCase();
+        currencyCounts[c] = (currencyCounts[c] || 0) + 1;
+      });
+      let commonCurrency: string | null = null;
+      let maxCount = 0;
+      for (const [cur, count] of Object.entries(currencyCounts)) {
+        if (
+          count > maxCount ||
+          (count === maxCount &&
+            commonCurrency &&
+            (cur === "USD"
+              ? true
+              : commonCurrency === "USD"
+                ? false
+                : cur === "SATS" || cur === "SAT"
+                  ? true
+                  : cur < commonCurrency))
+        ) {
+          maxCount = count;
+          commonCurrency = cur;
+        }
+      }
+      const originalCurrency = commonCurrency
+        ? products.find((p) => p.currency.toUpperCase() === commonCurrency)
+            ?.currency || commonCurrency
         : null;
 
       for (const product of products) {
@@ -249,24 +394,49 @@ export default function Component() {
           }
 
           if (discountedPrice !== null || shippingSatPrice !== null) {
-            if (quantities[product.id]) {
-              productSubtotal = Math.ceil(
-                discountedPrice * quantities[product.id]!
-              );
-              productShipping = Math.ceil(
-                shippingSatPrice * quantities[product.id]!
-              );
-              subtotalAmount += productSubtotal;
-              const nativePrice =
-                discount > 0 ? basePrice * (1 - discount / 100) : basePrice;
-              nativeSubtotal += nativePrice * quantities[product.id]!;
+            const qty = quantities[product.id] || 1;
+            productSubtotal = Math.ceil(discountedPrice * qty);
+            productShipping = Math.ceil(shippingSatPrice * qty);
+            subtotalAmount += productSubtotal;
+
+            const nativePrice =
+              discount > 0 ? basePrice * (1 - discount / 100) : basePrice;
+            const productCurrencyUpper = product.currency.toUpperCase();
+            const cartCurrencyUpper = commonCurrency || "";
+            if (productCurrencyUpper === cartCurrencyUpper) {
+              nativeSubtotal += nativePrice * qty;
+            } else if (
+              cartCurrencyUpper === "SATS" ||
+              cartCurrencyUpper === "SAT"
+            ) {
+              nativeSubtotal += priceSats * qty;
+            } else if (
+              productCurrencyUpper === "SATS" ||
+              productCurrencyUpper === "SAT"
+            ) {
+              try {
+                const fiatVal = await fiat.getFiatValue({
+                  satoshi: Math.round(nativePrice * qty),
+                  currency: cartCurrencyUpper,
+                });
+                nativeSubtotal += fiatVal;
+              } catch {
+                nativeSubtotal += nativePrice * qty;
+              }
             } else {
-              productSubtotal = discountedPrice;
-              productShipping = shippingSatPrice;
-              subtotalAmount += discountedPrice;
-              const nativePrice =
-                discount > 0 ? basePrice * (1 - discount / 100) : basePrice;
-              nativeSubtotal += nativePrice;
+              try {
+                const satVal = await fiat.getSatoshiValue({
+                  amount: nativePrice * qty,
+                  currency: product.currency,
+                });
+                const fiatVal = await fiat.getFiatValue({
+                  satoshi: Math.round(satVal),
+                  currency: cartCurrencyUpper,
+                });
+                nativeSubtotal += fiatVal;
+              } catch {
+                nativeSubtotal += nativePrice * qty;
+              }
             }
             prices[product.id] = productSubtotal;
             shipping[product.id] = productShipping;
@@ -285,7 +455,7 @@ export default function Component() {
       setSatPrices(prices);
       setSubtotal(subtotalAmount);
       setSubtotalNative(Math.round(nativeSubtotal * 100) / 100);
-      setCartCurrency(commonCurrency);
+      setCartCurrency(originalCurrency);
       setTotalCostsInSats(totals);
     };
 
@@ -586,6 +756,115 @@ export default function Component() {
                                 </div>
                               </div>
                             </div>
+                            {product.subscriptionEnabled &&
+                              product.subscriptionFrequency &&
+                              product.subscriptionFrequency.length > 0 && (
+                                <div className="mt-4 rounded-md border-2 border-purple-300 bg-purple-50 p-3">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <ArrowPathIcon className="h-5 w-5 text-purple-600" />
+                                      <span className="font-semibold text-purple-700">
+                                        Subscribe & Save
+                                        {product.subscriptionDiscount
+                                          ? ` (${product.subscriptionDiscount}% off)`
+                                          : ""}
+                                      </span>
+                                    </div>
+                                    <button
+                                      onClick={() => {
+                                        setSubscriptionSelections((prev) => ({
+                                          ...prev,
+                                          [product.id]: {
+                                            enabled: !prev[product.id]?.enabled,
+                                            frequency:
+                                              prev[product.id]?.frequency ||
+                                              product.subscriptionFrequency![0]!,
+                                          },
+                                        }));
+                                      }}
+                                      className={`relative inline-flex h-6 w-11 items-center rounded-full border-2 border-black transition-colors ${
+                                        subscriptionSelections[product.id]
+                                          ?.enabled
+                                          ? "bg-purple-600"
+                                          : "bg-gray-300"
+                                      }`}
+                                    >
+                                      <span
+                                        className={`inline-block h-4 w-4 transform rounded-full border border-black bg-white transition-transform ${
+                                          subscriptionSelections[product.id]
+                                            ?.enabled
+                                            ? "translate-x-5"
+                                            : "translate-x-0.5"
+                                        }`}
+                                      />
+                                    </button>
+                                  </div>
+                                  {subscriptionSelections[product.id]
+                                    ?.enabled && (
+                                    <div className="mt-3">
+                                      <Select
+                                        variant="bordered"
+                                        aria-label="Delivery Frequency"
+                                        label={
+                                          <span className="text-sm font-semibold text-purple-700">
+                                            Frequency
+                                          </span>
+                                        }
+                                        labelPlacement="outside"
+                                        size="sm"
+                                        selectedKeys={
+                                          subscriptionSelections[product.id]
+                                            ?.frequency
+                                            ? new Set([
+                                                subscriptionSelections[
+                                                  product.id
+                                                ]!.frequency,
+                                              ])
+                                            : new Set()
+                                        }
+                                        onSelectionChange={(keys) => {
+                                          const key = Array.from(
+                                            keys
+                                          )[0] as string;
+                                          if (key) {
+                                            setSubscriptionSelections(
+                                              (prev) => ({
+                                                ...prev,
+                                                [product.id]: {
+                                                  ...prev[product.id]!,
+                                                  frequency: key,
+                                                },
+                                              })
+                                            );
+                                          }
+                                        }}
+                                        className="w-full max-w-xs"
+                                        classNames={{
+                                          trigger:
+                                            "border-2 border-purple-300 rounded-md bg-white",
+                                          value:
+                                            "text-purple-700 font-semibold",
+                                        }}
+                                      >
+                                        {product.subscriptionFrequency!.map(
+                                          (freq) => (
+                                            <SelectItem
+                                              key={freq}
+                                              value={freq}
+                                              className="font-semibold text-black"
+                                            >
+                                              {FREQUENCY_LABELS[freq] || freq}
+                                            </SelectItem>
+                                          )
+                                        )}
+                                      </Select>
+                                      <p className="mt-2 text-xs text-purple-500">
+                                        Card payment only
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                           </div>
                         ))}
                         {/* Discount code section for this seller */}
@@ -724,6 +1003,37 @@ export default function Component() {
                       </p>
                     </div>
                   )}
+                  {hasSubscriptionStripeConflict && (
+                    <div className="flex items-start rounded-md border-2 border-red-400 bg-red-50 p-4">
+                      <ArrowPathIcon className="mr-3 h-5 w-5 flex-shrink-0 text-red-600" />
+                      <div>
+                        <p className="text-sm font-semibold text-red-700">
+                          Checkout unavailable
+                        </p>
+                        <p className="mt-1 text-sm text-red-600">
+                          Your cart contains subscription products that require
+                          card payment, but{" "}
+                          {uniqueSellerPubkeys.length <= 1
+                            ? "this seller does not have Stripe enabled"
+                            : "not all sellers in your cart have Stripe enabled"}
+                          . Please remove the subscription products or disable
+                          subscriptions to check out with Bitcoin.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {hasActiveSubscription &&
+                    !hasSubscriptionStripeConflict &&
+                    uniqueSellerPubkeys.length > 1 && (
+                      <div className="flex items-start rounded-md border-2 border-purple-400 bg-purple-50 p-4">
+                        <ArrowPathIcon className="mr-3 h-5 w-5 flex-shrink-0 text-purple-600" />
+                        <p className="text-sm text-purple-800">
+                          Subscription items require card payment. All merchants
+                          in your cart have Stripe enabled, so checkout will
+                          proceed with card payment only.
+                        </p>
+                      </div>
+                    )}
                   <div className="flex flex-col items-end gap-4">
                     <p className="text-2xl font-bold">
                       Subtotal ({products.length}{" "}
@@ -742,8 +1052,13 @@ export default function Component() {
                       )}
                     </p>
                     <Button
-                      className={BLUEBUTTONCLASSNAMES}
+                      className={`${BLUEBUTTONCLASSNAMES} ${
+                        hasSubscriptionStripeConflict
+                          ? "cursor-not-allowed opacity-50"
+                          : ""
+                      }`}
                       onClick={toggleCheckout}
+                      disabled={hasSubscriptionStripeConflict}
                       size="lg"
                     >
                       Proceed To Checkout
@@ -791,6 +1106,7 @@ export default function Component() {
                 setInvoiceGenerationFailed={setInvoiceGenerationFailed}
                 setCashuPaymentSent={setCashuPaymentSent}
                 setCashuPaymentFailed={setCashuPaymentFailed}
+                subscriptionSelections={subscriptionSelections}
               />
             </div>
           </div>

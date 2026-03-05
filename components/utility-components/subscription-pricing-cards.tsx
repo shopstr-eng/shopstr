@@ -80,6 +80,7 @@ export default function SubscriptionPricingCards({
           <p className="text-sm text-gray-600">
             You save {savingsFormatted} per delivery
           </p>
+          <p className="mt-1 text-xs text-gray-500">Card payment only</p>
           {isSubscription && frequencies.length > 0 && (
             <div className="mt-3">
               <Select

@@ -599,6 +599,7 @@ export default function ProductInvoiceCard({
           : formType === "shipping"
             ? productData.totalCost
             : productData.price,
+        orderCurrency: productData.currency || undefined,
         orderId,
         productData: {
           ...productData,
@@ -627,6 +628,7 @@ export default function ProductInvoiceCard({
         isOrder: true,
         type: 4,
         orderAmount: messageAmount ? messageAmount : productData.totalCost,
+        orderCurrency: productData.currency || undefined,
         orderId,
         productData: {
           ...productData,
@@ -658,6 +660,7 @@ export default function ProductInvoiceCard({
         isOrder: true,
         type: 1,
         orderAmount: messageAmount ? messageAmount : productData.totalCost,
+        orderCurrency: productData.currency || undefined,
         orderId,
         productData: {
           ...productData,
@@ -862,11 +865,15 @@ export default function ProductInvoiceCard({
               paymentData.shippingPostalCode || ""
             }, ${paymentData.shippingCountry || ""}`
           : undefined;
+      const isSatsProduct =
+        !productData.currency ||
+        productData.currency.toLowerCase() === "sats" ||
+        productData.currency.toLowerCase() === "sat";
       pendingOrderEmailRef.current = {
         orderId: "",
         productTitle: productData.title,
-        amount: String(price),
-        currency: "sats",
+        amount: !isSatsProduct ? String(productData.totalCost) : String(price),
+        currency: productData.currency || "sats",
         paymentMethod: paymentType || "lightning",
         sellerPubkey: productData.pubkey,
         buyerName: paymentData.shippingName || undefined,
@@ -1445,7 +1452,7 @@ export default function ProductInvoiceCard({
             productTitle: title,
             productImage: productData.images[0] || "",
             amount: String(productData.totalCost),
-            currency: productData.currency === "USD" ? "USD" : "sats",
+            currency: productData.currency || "sats",
             paymentMethod: selectedFiatOption || "fiat",
             orderId: orderId || "",
             shippingCost: productData.shippingCost
@@ -1470,7 +1477,7 @@ export default function ProductInvoiceCard({
         orderId: orderId || "",
         productTitle: title,
         amount: String(productData.totalCost),
-        currency: productData.currency === "USD" ? "USD" : "sats",
+        currency: productData.currency || "sats",
         paymentMethod: selectedFiatOption || "fiat",
         sellerPubkey: pubkey,
         buyerName: data.shippingName || data.contactName || undefined,
@@ -4019,54 +4026,48 @@ export default function ProductInvoiceCard({
                 <div className="mt-6 space-y-3 border-t pt-6">
                   <h3 className="mb-4 text-xl font-bold">Payment Method</h3>
 
-                  <Button
-                    className={`w-full rounded-md border-2 border-black bg-primary-blue px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
-                      !isFormValid ||
-                      (!isLoggedIn && !buyerEmail) ||
-                      (isSubscription && !buyerEmail)
-                        ? "cursor-not-allowed opacity-50"
-                        : ""
-                    }`}
-                    disabled={
-                      !isFormValid ||
-                      (!isLoggedIn && !buyerEmail) ||
-                      (isSubscription && !buyerEmail)
-                    }
-                    onClick={() => {
-                      handleFormSubmit((data) =>
-                        onFormSubmit(data, "lightning")
-                      )();
-                    }}
-                    startContent={<BoltIcon className="h-6 w-6" />}
-                  >
-                    Pay with Lightning: {formattedLightningCost}
-                    {getDiscountLabel(bitcoinDiscountPct)}
-                  </Button>
+                  {!(isSubscription && subscriptionFrequency) && (
+                    <>
+                      <Button
+                        className={`w-full rounded-md border-2 border-black bg-primary-blue px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                          !isFormValid || (!isLoggedIn && !buyerEmail)
+                            ? "cursor-not-allowed opacity-50"
+                            : ""
+                        }`}
+                        disabled={!isFormValid || (!isLoggedIn && !buyerEmail)}
+                        onClick={() => {
+                          handleFormSubmit((data) =>
+                            onFormSubmit(data, "lightning")
+                          )();
+                        }}
+                        startContent={<BoltIcon className="h-6 w-6" />}
+                      >
+                        Pay with Lightning: {formattedLightningCost}
+                        {getDiscountLabel(bitcoinDiscountPct)}
+                      </Button>
 
-                  {hasTokensAvailable && (
-                    <Button
-                      className={`w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
-                        !isFormValid ||
-                        (!isLoggedIn && !buyerEmail) ||
-                        (isSubscription && !buyerEmail)
-                          ? "cursor-not-allowed opacity-50"
-                          : ""
-                      }`}
-                      disabled={
-                        !isFormValid ||
-                        (!isLoggedIn && !buyerEmail) ||
-                        (isSubscription && !buyerEmail)
-                      }
-                      onClick={() => {
-                        handleFormSubmit((data) =>
-                          onFormSubmit(data, "cashu")
-                        )();
-                      }}
-                      startContent={<BanknotesIcon className="h-6 w-6" />}
-                    >
-                      Pay with Cashu: {formattedLightningCost}
-                      {getDiscountLabel(bitcoinDiscountPct)}
-                    </Button>
+                      {hasTokensAvailable && (
+                        <Button
+                          className={`w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                            !isFormValid || (!isLoggedIn && !buyerEmail)
+                              ? "cursor-not-allowed opacity-50"
+                              : ""
+                          }`}
+                          disabled={
+                            !isFormValid || (!isLoggedIn && !buyerEmail)
+                          }
+                          onClick={() => {
+                            handleFormSubmit((data) =>
+                              onFormSubmit(data, "cashu")
+                            )();
+                          }}
+                          startContent={<BanknotesIcon className="h-6 w-6" />}
+                        >
+                          Pay with Cashu: {formattedLightningCost}
+                          {getDiscountLabel(bitcoinDiscountPct)}
+                        </Button>
+                      )}
+                    </>
                   )}
 
                   {/* Stripe Payment Button */}
@@ -4104,77 +4105,80 @@ export default function ProductInvoiceCard({
                     </Button>
                   )}
 
-                  {Object.keys(fiatPaymentOptions).length > 0 && (
-                    <Button
-                      className={`w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
-                        !isFormValid ||
-                        (!isLoggedIn && !buyerEmail) ||
-                        (isSubscription && !buyerEmail)
-                          ? "cursor-not-allowed opacity-50"
-                          : ""
-                      }`}
-                      disabled={
-                        !isFormValid ||
-                        (!isLoggedIn && !buyerEmail) ||
-                        (isSubscription && !buyerEmail)
-                      }
-                      onClick={() => {
-                        handleFormSubmit((data) =>
-                          onFormSubmit(data, "fiat")
-                        )();
-                      }}
-                      startContent={<CurrencyDollarIcon className="h-6 w-6" />}
-                    >
-                      Pay with Cash or Payment App:{" "}
-                      {(() => {
-                        const fiatKeys = Object.keys(fiatPaymentOptions);
-                        const fiatDiscounts = fiatKeys.map(
-                          (k) => pmDiscounts[k] || 0
-                        );
-                        const allSame =
-                          fiatDiscounts.length > 0 &&
-                          fiatDiscounts.every((d) => d === fiatDiscounts[0]);
-                        if (allSame && fiatDiscounts[0]! > 0) {
-                          return `${getFormattedFiatCost(
-                            fiatKeys[0]!
-                          )}${getDiscountLabel(fiatDiscounts[0]!)}`;
-                        }
-                        return formatMethodCost(
-                          discountedTotal,
-                          satsEstimate,
-                          usdEstimate,
-                          "card"
-                        );
-                      })()}
-                    </Button>
-                  )}
+                  {!(isSubscription && subscriptionFrequency) && (
+                    <>
+                      {Object.keys(fiatPaymentOptions).length > 0 && (
+                        <Button
+                          className={`w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                            !isFormValid || (!isLoggedIn && !buyerEmail)
+                              ? "cursor-not-allowed opacity-50"
+                              : ""
+                          }`}
+                          disabled={
+                            !isFormValid || (!isLoggedIn && !buyerEmail)
+                          }
+                          onClick={() => {
+                            handleFormSubmit((data) =>
+                              onFormSubmit(data, "fiat")
+                            )();
+                          }}
+                          startContent={
+                            <CurrencyDollarIcon className="h-6 w-6" />
+                          }
+                        >
+                          Pay with Cash or Payment App:{" "}
+                          {(() => {
+                            const fiatKeys = Object.keys(fiatPaymentOptions);
+                            const fiatDiscounts = fiatKeys.map(
+                              (k) => pmDiscounts[k] || 0
+                            );
+                            const allSame =
+                              fiatDiscounts.length > 0 &&
+                              fiatDiscounts.every(
+                                (d) => d === fiatDiscounts[0]
+                              );
+                            if (allSame && fiatDiscounts[0]! > 0) {
+                              return `${getFormattedFiatCost(
+                                fiatKeys[0]!
+                              )}${getDiscountLabel(fiatDiscounts[0]!)}`;
+                            }
+                            return formatMethodCost(
+                              discountedTotal,
+                              satsEstimate,
+                              usdEstimate,
+                              "card"
+                            );
+                          })()}
+                        </Button>
+                      )}
 
-                  {/* NWC Button */}
-                  {nwcInfo && (
-                    <Button
-                      className={`w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
-                        !isFormValid ||
-                        (!isLoggedIn && !buyerEmail) ||
-                        (isSubscription && !buyerEmail)
-                          ? "cursor-not-allowed opacity-50"
-                          : ""
-                      }`}
-                      disabled={
-                        !isFormValid ||
-                        (!isLoggedIn && !buyerEmail) ||
-                        (isSubscription && !buyerEmail) ||
-                        isNwcLoading
-                      }
-                      isLoading={isNwcLoading}
-                      onClick={() => {
-                        handleFormSubmit((data) => onFormSubmit(data, "nwc"))();
-                      }}
-                      startContent={<WalletIcon className="h-6 w-6" />}
-                    >
-                      Pay with {nwcInfo.alias || "NWC"}:{" "}
-                      {formattedLightningCost}
-                      {getDiscountLabel(bitcoinDiscountPct)}
-                    </Button>
+                      {/* NWC Button */}
+                      {nwcInfo && (
+                        <Button
+                          className={`w-full rounded-md border-2 border-black bg-black px-4 py-2 font-bold text-white shadow-neo transition-transform hover:-translate-y-0.5 active:translate-y-0.5 ${
+                            !isFormValid || (!isLoggedIn && !buyerEmail)
+                              ? "cursor-not-allowed opacity-50"
+                              : ""
+                          }`}
+                          disabled={
+                            !isFormValid ||
+                            (!isLoggedIn && !buyerEmail) ||
+                            isNwcLoading
+                          }
+                          isLoading={isNwcLoading}
+                          onClick={() => {
+                            handleFormSubmit((data) =>
+                              onFormSubmit(data, "nwc")
+                            )();
+                          }}
+                          startContent={<WalletIcon className="h-6 w-6" />}
+                        >
+                          Pay with {nwcInfo.alias || "NWC"}:{" "}
+                          {formattedLightningCost}
+                          {getDiscountLabel(bitcoinDiscountPct)}
+                        </Button>
+                      )}
+                    </>
                   )}
                 </div>
               </form>

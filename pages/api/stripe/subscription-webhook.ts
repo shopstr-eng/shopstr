@@ -162,7 +162,10 @@ export default async function handler(
           nextBillingDate
         );
 
-        if (subscription.status === "canceled") {
+        if (
+          subscription.status === "canceled" ||
+          subscription.status === "pending"
+        ) {
           await updateSubscriptionStatus(paidSubscriptionId, "active");
         }
 

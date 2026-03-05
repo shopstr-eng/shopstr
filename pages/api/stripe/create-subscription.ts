@@ -24,6 +24,36 @@ const FREQUENCY_TO_INTERVAL: Record<
   quarterly: { interval: "month", interval_count: 3 },
 };
 
+const ZERO_DECIMAL_CURRENCIES = new Set([
+  "bif",
+  "clp",
+  "djf",
+  "gnf",
+  "jpy",
+  "kmf",
+  "krw",
+  "mga",
+  "pyg",
+  "rwf",
+  "ugx",
+  "vnd",
+  "vuv",
+  "xaf",
+  "xof",
+  "xpf",
+]);
+
+const isCryptoCurrency = (cur: string) => {
+  const c = cur.toLowerCase();
+  return c === "sats" || c === "sat" || c === "btc";
+};
+
+const toSmallestUnit = (amount: number, cur: string) => {
+  return ZERO_DECIMAL_CURRENCIES.has(cur.toLowerCase())
+    ? Math.round(amount)
+    : Math.round(amount * 100);
+};
+
 const satsToUSD = async (sats: number): Promise<number> => {
   try {
     const usdAmount = await fiat.getFiatValue({
@@ -36,6 +66,24 @@ const satsToUSD = async (sats: number): Promise<number> => {
     const btcPrice = 100000;
     return (sats / 100000000) * btcPrice;
   }
+};
+
+const convertToSmallestUnit = async (
+  amount: number,
+  currency: string
+): Promise<{ amountSmallest: number; stripeCurrency: string }> => {
+  if (isCryptoCurrency(currency)) {
+    let sats = currency.toLowerCase() === "btc" ? amount * 100000000 : amount;
+    const usdAmount = await satsToUSD(sats);
+    return {
+      amountSmallest: Math.round(usdAmount * 100),
+      stripeCurrency: "usd",
+    };
+  }
+  return {
+    amountSmallest: toSmallestUnit(amount, currency),
+    stripeCurrency: currency.toLowerCase(),
+  };
 };
 
 export default async function handler(
@@ -80,29 +128,18 @@ export default async function handler(
         .json({ error: "Seller pubkey and product event ID are required" });
     }
 
-    let amountInCents: number;
-    const currencyLower = currency.toLowerCase();
-
-    if (currencyLower === "sats" || currencyLower === "sat") {
-      const usdAmount = await satsToUSD(amount);
-      amountInCents = Math.round(usdAmount * 100);
-    } else if (currencyLower === "btc") {
-      const sats = amount * 100000000;
-      const usdAmount = await satsToUSD(sats);
-      amountInCents = Math.round(usdAmount * 100);
-    } else if (currencyLower === "usd") {
-      amountInCents = Math.round(amount * 100);
-    } else {
-      amountInCents = Math.round(amount * 100);
-    }
-
-    const baseAmountInCents = amountInCents;
-    const discount = discountPercent || 0;
-    const subscriptionAmountInCents = Math.round(
-      amountInCents * (1 - discount / 100)
+    const { amountSmallest, stripeCurrency } = await convertToSmallestUnit(
+      amount,
+      currency
     );
 
-    if (subscriptionAmountInCents < 50) {
+    const baseAmountSmallest = amountSmallest;
+    const discount = discountPercent || 0;
+    const subscriptionAmountSmallest = Math.round(
+      amountSmallest * (1 - discount / 100)
+    );
+
+    if (subscriptionAmountSmallest < 50) {
       return res
         .status(400)
         .json({ error: "Subscription amount too low (minimum $0.50)" });
@@ -163,8 +200,8 @@ export default async function handler(
     const price = await stripe.prices.create(
       {
         product: product.id,
-        unit_amount: subscriptionAmountInCents,
-        currency: "usd",
+        unit_amount: subscriptionAmountSmallest,
+        currency: stripeCurrency,
         recurring: {
           interval: intervalConfig.interval,
           interval_count: intervalConfig.interval_count,
@@ -203,6 +240,8 @@ export default async function handler(
       ? new Date(subscriptionData.current_period_end * 1000)
       : null;
 
+    const divisor = ZERO_DECIMAL_CURRENCIES.has(stripeCurrency) ? 1 : 100;
+
     await createSubscription({
       stripe_subscription_id: subscription.id,
       stripe_customer_id: customer.id,
@@ -215,11 +254,11 @@ export default async function handler(
       variant_info: variantInfo || null,
       frequency,
       discount_percent: discount,
-      base_price: baseAmountInCents / 100,
-      subscription_price: subscriptionAmountInCents / 100,
-      currency: "usd",
+      base_price: baseAmountSmallest / divisor,
+      subscription_price: subscriptionAmountSmallest / divisor,
+      currency: stripeCurrency,
       shipping_address: shippingAddress || null,
-      status: "active",
+      status: "pending",
       next_billing_date: nextBillingDate,
       next_shipping_date: nextBillingDate,
     });

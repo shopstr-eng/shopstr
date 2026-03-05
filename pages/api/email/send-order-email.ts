@@ -34,6 +34,7 @@ export default async function handler(
     selectedVolume,
     selectedWeight,
     selectedBulkOption,
+    subscriptionFrequency,
   } = req.body;
 
   if (!orderId || !productTitle) {
@@ -56,6 +57,7 @@ export default async function handler(
     selectedVolume,
     selectedWeight,
     selectedBulkOption,
+    subscriptionFrequency,
   };
 
   const results: { buyerEmailSent: boolean; sellerEmailSent: boolean } = {

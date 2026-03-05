@@ -7,6 +7,36 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
   apiVersion: "2025-09-30.clover",
 });
 
+const ZERO_DECIMAL_CURRENCIES = new Set([
+  "bif",
+  "clp",
+  "djf",
+  "gnf",
+  "jpy",
+  "kmf",
+  "krw",
+  "mga",
+  "pyg",
+  "rwf",
+  "ugx",
+  "vnd",
+  "vuv",
+  "xaf",
+  "xof",
+  "xpf",
+]);
+
+const isCrypto = (cur: string) => {
+  const c = cur.toLowerCase();
+  return c === "sats" || c === "sat" || c === "btc";
+};
+
+const toSmallestUnit = (amount: number, cur: string) => {
+  return ZERO_DECIMAL_CURRENCIES.has(cur.toLowerCase())
+    ? Math.round(amount)
+    : Math.round(amount * 100);
+};
+
 const satsToUSD = async (sats: number): Promise<number> => {
   try {
     const usdAmount = await fiat.getFiatValue({
@@ -20,6 +50,12 @@ const satsToUSD = async (sats: number): Promise<number> => {
     return (sats / 100000000) * btcPrice;
   }
 };
+
+interface SellerSplit {
+  sellerPubkey: string;
+  amount: number;
+  currency: string;
+}
 
 export default async function handler(
   req: NextApiRequest,
@@ -37,26 +73,127 @@ export default async function handler(
       productTitle,
       productDescription,
       metadata,
+      sellerSplits,
     } = req.body;
 
-    let amountInCents: number;
-    const currencyLower = currency.toLowerCase();
+    let amountInSmallestUnit: number;
+    let stripeCurrency: string;
 
-    if (currencyLower === "sats" || currencyLower === "sat") {
-      const usdAmount = await satsToUSD(amount);
-      amountInCents = Math.round(usdAmount * 100);
-    } else if (currencyLower === "btc") {
-      const sats = amount * 100000000;
+    if (isCrypto(currency)) {
+      let sats = currency.toLowerCase() === "btc" ? amount * 100000000 : amount;
       const usdAmount = await satsToUSD(sats);
-      amountInCents = Math.round(usdAmount * 100);
-    } else if (currencyLower === "usd") {
-      amountInCents = Math.round(amount * 100);
+      amountInSmallestUnit = Math.round(usdAmount * 100);
+      stripeCurrency = "usd";
     } else {
-      amountInCents = Math.round(amount * 100);
+      amountInSmallestUnit = toSmallestUnit(amount, currency);
+      stripeCurrency = currency.toLowerCase();
     }
 
-    if (amountInCents < 50) {
-      amountInCents = 50;
+    if (amountInSmallestUnit < 50) {
+      amountInSmallestUnit = 50;
+    }
+
+    const isMultiMerchant =
+      sellerSplits && Array.isArray(sellerSplits) && sellerSplits.length > 1;
+
+    if (isMultiMerchant) {
+      const transferGroup = `cart_${Date.now()}_${Math.random()
+        .toString(36)
+        .substring(2, 8)}`;
+
+      const splitDetails: {
+        pubkey: string;
+        amountCents: number;
+        accountId: string;
+      }[] = [];
+
+      for (const split of sellerSplits as SellerSplit[]) {
+        const isPlatformAccount =
+          split.sellerPubkey === process.env.NEXT_PUBLIC_MILK_MARKET_PK;
+
+        let accountId = "";
+        if (!isPlatformAccount) {
+          const connectAccount = await getStripeConnectAccount(
+            split.sellerPubkey
+          );
+          if (!connectAccount || !connectAccount.charges_enabled) {
+            return res.status(400).json({
+              error: `Seller ${split.sellerPubkey.substring(
+                0,
+                8
+              )}... does not have Stripe enabled`,
+            });
+          }
+          accountId = connectAccount.stripe_account_id;
+        }
+
+        let splitAmountSmallest: number;
+        if (isCrypto(split.currency)) {
+          let sats =
+            split.currency.toLowerCase() === "btc"
+              ? split.amount * 100000000
+              : split.amount;
+          const usdAmount = await satsToUSD(sats);
+          splitAmountSmallest = Math.round(usdAmount * 100);
+        } else {
+          splitAmountSmallest = toSmallestUnit(split.amount, stripeCurrency);
+        }
+
+        splitDetails.push({
+          pubkey: split.sellerPubkey,
+          amountCents: splitAmountSmallest,
+          accountId,
+        });
+      }
+
+      const description = `${productTitle}${
+        productDescription ? ` - ${productDescription}` : ""
+      }`;
+
+      const paymentIntentParams: Stripe.PaymentIntentCreateParams = {
+        amount: amountInSmallestUnit,
+        currency: stripeCurrency,
+        description,
+        transfer_group: transferGroup,
+        metadata: {
+          ...metadata,
+          originalAmount: amount.toString(),
+          originalCurrency: currency,
+          isMultiMerchant: "true",
+          transferGroup,
+          sellerSplits: JSON.stringify(
+            splitDetails.map((s) => ({
+              pubkey: s.pubkey,
+              amountCents: s.amountCents,
+              accountId: s.accountId,
+            }))
+          ),
+        },
+        automatic_payment_methods: {
+          enabled: true,
+        },
+      };
+
+      if (customerEmail) {
+        paymentIntentParams.receipt_email = customerEmail;
+      }
+
+      const paymentIntent =
+        await stripe.paymentIntents.create(paymentIntentParams);
+
+      return res.status(200).json({
+        success: true,
+        clientSecret: paymentIntent.client_secret,
+        paymentIntentId: paymentIntent.id,
+        connectedAccountId: undefined,
+        isMultiMerchant: true,
+        transferGroup,
+        sellerSplits: splitDetails.map((s) => ({
+          pubkey: s.pubkey,
+          amountCents: s.amountCents,
+          accountId: s.accountId,
+        })),
+      });
     }
 
     const sellerPubkey = metadata?.sellerPubkey;
@@ -83,8 +220,8 @@ export default async function handler(
     }`;
 
     const paymentIntentParams: Stripe.PaymentIntentCreateParams = {
-      amount: amountInCents,
-      currency: "usd",
+      amount: amountInSmallestUnit,
+      currency: stripeCurrency,
       description,
       metadata: {
         ...metadata,

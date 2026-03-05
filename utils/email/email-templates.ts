@@ -104,6 +104,17 @@ function buildDeliverySection(params: {
   return rows.join("");
 }
 
+function formatFrequency(frequency: string): string {
+  const map: Record<string, string> = {
+    weekly: "Weekly",
+    every_2_weeks: "Every 2 Weeks",
+    monthly: "Monthly",
+    every_2_months: "Every 2 Months",
+    quarterly: "Quarterly",
+  };
+  return map[frequency] || frequency;
+}
+
 export interface OrderEmailParams {
   orderId: string;
   productTitle: string;
@@ -118,6 +129,7 @@ export interface OrderEmailParams {
   selectedWeight?: string;
   selectedBulkOption?: string;
   buyerContact?: string;
+  subscriptionFrequency?: string;
 }
 
 export function orderConfirmationEmail(params: OrderEmailParams): {
@@ -130,6 +142,17 @@ export function orderConfirmationEmail(params: OrderEmailParams): {
 
   const deliverySection = buildDeliverySection(params);
   const descriptorsSection = buildProductDescriptors(params);
+
+  const subscriptionSection = params.subscriptionFrequency
+    ? `<tr>
+        <td style="padding:16px 0;border-top:1px solid #e5e7eb;">
+          <p style="margin:0 0 4px;color:#6b7280;font-size:13px;text-transform:uppercase;letter-spacing:0.05em;">Subscription</p>
+          <p style="margin:0;color:#111827;font-size:15px;">${esc(
+            formatFrequency(params.subscriptionFrequency)
+          )} recurring order</p>
+        </td>
+      </tr>`
+    : "";
 
   const body = `
     <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">${greeting}</h2>
@@ -168,6 +191,7 @@ export function orderConfirmationEmail(params: OrderEmailParams): {
           )}</p>
         </td>
       </tr>
+      ${subscriptionSection}
       ${deliverySection}
     </table>
     <p style="margin:0;color:#374151;font-size:15px;line-height:1.6;">The seller has been notified and you'll receive updates about your order via email.</p>`;
@@ -188,6 +212,17 @@ export function sellerNewOrderEmail(params: OrderEmailParams): {
 
   const deliverySection = buildDeliverySection(params);
   const descriptorsSection = buildProductDescriptors(params);
+
+  const subscriptionSection = params.subscriptionFrequency
+    ? `<tr>
+        <td style="padding:16px 0;border-top:1px solid #e5e7eb;">
+          <p style="margin:0 0 4px;color:#6b7280;font-size:13px;text-transform:uppercase;letter-spacing:0.05em;">Subscription</p>
+          <p style="margin:0;color:#111827;font-size:15px;">${esc(
+            formatFrequency(params.subscriptionFrequency)
+          )} recurring order</p>
+        </td>
+      </tr>`
+    : "";
 
   const buyerContactSection = params.buyerContact
     ? `<tr>
@@ -237,6 +272,7 @@ export function sellerNewOrderEmail(params: OrderEmailParams): {
           )}</p>
         </td>
       </tr>
+      ${subscriptionSection}
       ${deliverySection}
       ${buyerContactSection}
     </table>
@@ -262,17 +298,6 @@ export interface SubscriptionEmailParams {
   shippingAddress?: string;
   orderId?: string;
   subscriptionId?: string;
-}
-
-function formatFrequency(frequency: string): string {
-  const map: Record<string, string> = {
-    weekly: "Weekly",
-    every_2_weeks: "Every 2 Weeks",
-    monthly: "Monthly",
-    every_2_months: "Every 2 Months",
-    quarterly: "Quarterly",
-  };
-  return map[frequency] || frequency;
 }
 
 function buildSubscriptionDetailsSection(

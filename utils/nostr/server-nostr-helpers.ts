@@ -6,8 +6,15 @@ import {
   nip19,
   nip44,
 } from "nostr-tools";
+import { useWebSocketImplementation, SimplePool } from "nostr-tools/pool";
 import { NostrEvent } from "@/utils/types/types";
-import { cacheEvent } from "@/utils/db/db-service";
+import { cacheEvent, getDbPool } from "@/utils/db/db-service";
+// @ts-ignore: ws provides the WebSocket implementation for Node.js, passed to nostr-tools
+import WebSocket from "ws";
+
+useWebSocketImplementation(WebSocket);
+
+const RELAY_PUBLISH_TIMEOUT_MS = 21000;
 
 function generateRandomTimestamp(): number {
   const now = Math.floor(Date.now() / 1000);
@@ -23,6 +30,76 @@ function getDefaultRelays(): string[] {
     "wss://purplepag.es",
     "wss://relay.primal.net",
   ];
+}
+
+async function trackFailedRelayPublish(
+  eventId: string,
+  event: NostrEvent,
+  relays: string[]
+): Promise<void> {
+  try {
+    const dbPool = getDbPool();
+    await dbPool.query(`
+      CREATE TABLE IF NOT EXISTS failed_relay_publishes (
+        event_id TEXT PRIMARY KEY,
+        event_data TEXT NOT NULL,
+        relays TEXT NOT NULL,
+        created_at BIGINT NOT NULL,
+        retry_count INTEGER DEFAULT 0
+      )
+    `);
+    const values: (string | number)[] = [
+      eventId,
+      JSON.stringify(event),
+      JSON.stringify(relays),
+      Math.floor(Date.now() / 1000),
+    ];
+    await dbPool.query(
+      `INSERT INTO failed_relay_publishes (event_id, event_data, relays, created_at, retry_count)
+       VALUES ($1, $2, $3, $4, 0)
+       ON CONFLICT (event_id) DO UPDATE SET
+         event_data = EXCLUDED.event_data,
+         relays = EXCLUDED.relays,
+         created_at = EXCLUDED.created_at`,
+      values as any[]
+    );
+  } catch (error) {
+    console.error("Failed to track failed relay publish:", error);
+  }
+}
+
+async function publishToRelays(event: any): Promise<number> {
+  const relays = getDefaultRelays();
+  const pool = new SimplePool();
+  try {
+    const publishPromise = Promise.allSettled(pool.publish(relays, event));
+    const timeoutPromise = new Promise<PromiseSettledResult<string>[]>(
+      (resolve) =>
+        setTimeout(
+          () =>
+            resolve(
+              relays.map(() => ({
+                status: "rejected" as const,
+                reason: "timeout",
+              }))
+            ),
+          RELAY_PUBLISH_TIMEOUT_MS
+        )
+    );
+    const results = await Promise.race([publishPromise, timeoutPromise]);
+    let successCount = 0;
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        successCount++;
+      }
+    }
+    return successCount;
+  } catch (error) {
+    console.error("Failed to publish to relays:", error);
+    return 0;
+  } finally {
+    pool.close(relays);
+  }
 }
 
 export async function sendServerSideNostrDM(
@@ -105,6 +182,21 @@ export async function sendServerSideNostrDM(
     const signedGiftWrap = finalizeEvent(giftWrapEvent, randomPrivkey);
 
     await cacheEvent(signedGiftWrap as NostrEvent);
+
+    const successCount = await publishToRelays(signedGiftWrap);
+    if (successCount === 0) {
+      console.warn(
+        `Relay publish timed out or failed for gift-wrapped message, but event is saved to database. Recipient: ${recipientPubkey.substring(
+          0,
+          8
+        )}...`
+      );
+      await trackFailedRelayPublish(
+        (signedGiftWrap as NostrEvent).id,
+        signedGiftWrap as NostrEvent,
+        defaultRelays
+      ).catch(console.error);
+    }
 
     return true;
   } catch (error) {
