@@ -99,6 +99,10 @@ The platform exposes a Model Context Protocol (MCP) server enabling AI agents to
 
 API keys are created via the `/settings/api-keys` UI page, the `/api/mcp/api-keys` endpoint, or the zero-touch `/api/mcp/onboard` endpoint. Keys use SHA-256 hashing and Bearer token authentication. Two permission levels: `read` (browse only) and `read_write` (browse + purchase). Key prefix: `sk_`.
 
+### Order Address Change
+
+Buyers can change the shipping address for their orders from the Orders Dashboard. The address column shows a "Change Address" link for purchases (non-sale orders) that have an address. Clicking it opens the `AddressChangeModal` (`components/utility-components/address-change-modal.tsx`), which sends a gift-wrapped Nostr DM to the seller with the new address and updates the local order state.
+
 ## External Dependencies
 
 - **Nostr Protocol Libraries**: `nostr-tools`, `@getalby/lightning-tools`.
