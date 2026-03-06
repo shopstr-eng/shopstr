@@ -2,7 +2,7 @@ import { pbkdf2Sync, randomBytes, timingSafeEqual } from "crypto";
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getDbPool } from "@/utils/db/db-service";
 
-export type ApiKeyPermission = "read" | "read_write";
+export type ApiKeyPermission = "read" | "read_write" | "full_access";
 
 export interface ApiKeyRecord {
   id: number;
@@ -14,6 +14,7 @@ export interface ApiKeyRecord {
   created_at: string;
   last_used_at: string | null;
   is_active: boolean;
+  encrypted_nsec?: string | null;
 }
 
 export interface AuthenticatedRequest extends NextApiRequest {
@@ -48,10 +49,11 @@ export async function initializeApiKeysTable(): Promise<void> {
         key_hash TEXT NOT NULL UNIQUE,
         name TEXT NOT NULL,
         pubkey TEXT NOT NULL,
-        permissions TEXT NOT NULL DEFAULT 'read' CHECK (permissions IN ('read', 'read_write')),
+        permissions TEXT NOT NULL DEFAULT 'read' CHECK (permissions IN ('read', 'read_write', 'full_access')),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         last_used_at TIMESTAMP,
-        is_active BOOLEAN DEFAULT TRUE
+        is_active BOOLEAN DEFAULT TRUE,
+        encrypted_nsec TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_mcp_api_keys_key_hash ON mcp_api_keys(key_hash);
       CREATE INDEX IF NOT EXISTS idx_mcp_api_keys_pubkey ON mcp_api_keys(pubkey);
@@ -78,6 +80,21 @@ export async function initializeApiKeysTable(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_mcp_orders_buyer_pubkey ON mcp_orders(buyer_pubkey);
       CREATE INDEX IF NOT EXISTS idx_mcp_orders_api_key_id ON mcp_orders(api_key_id);
     `);
+
+    try {
+      await client.query(
+        `ALTER TABLE mcp_api_keys ADD COLUMN IF NOT EXISTS encrypted_nsec TEXT`
+      );
+    } catch {}
+
+    try {
+      await client.query(
+        `ALTER TABLE mcp_api_keys DROP CONSTRAINT IF EXISTS mcp_api_keys_permissions_check`
+      );
+      await client.query(
+        `ALTER TABLE mcp_api_keys ADD CONSTRAINT mcp_api_keys_permissions_check CHECK (permissions IN ('read', 'read_write', 'full_access'))`
+      );
+    } catch {}
   } catch (error) {
     console.error("Failed to initialize MCP tables:", error);
     throw error;
@@ -89,7 +106,8 @@ export async function initializeApiKeysTable(): Promise<void> {
 export async function createApiKey(
   name: string,
   pubkey: string,
-  permissions: ApiKeyPermission = "read"
+  permissions: ApiKeyPermission = "read",
+  encryptedNsec?: string
 ): Promise<{ key: string; record: ApiKeyRecord }> {
   const { key, prefix } = generateApiKey();
   const keyHash = hashApiKey(key);
@@ -99,14 +117,61 @@ export async function createApiKey(
   try {
     client = await pool.connect();
     const result = await client.query(
-      `INSERT INTO mcp_api_keys (key_prefix, key_hash, name, pubkey, permissions)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO mcp_api_keys (key_prefix, key_hash, name, pubkey, permissions, encrypted_nsec)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [prefix, keyHash, name, pubkey, permissions]
+      [
+        prefix,
+        keyHash,
+        name,
+        pubkey,
+        permissions,
+        encryptedNsec || null,
+      ] as any[]
     );
     return { key, record: result.rows[0] };
   } finally {
     if (client) client.release();
+  }
+}
+
+export async function updateApiKeyNsec(
+  id: number,
+  pubkey: string,
+  encryptedNsec: string,
+  permissions?: ApiKeyPermission
+): Promise<boolean> {
+  const pool = getDbPool();
+  let client;
+  try {
+    client = await pool.connect();
+    const query = permissions
+      ? `UPDATE mcp_api_keys SET encrypted_nsec = $1, permissions = $2 WHERE id = $3 AND pubkey = $4 AND is_active = TRUE`
+      : `UPDATE mcp_api_keys SET encrypted_nsec = $1 WHERE id = $2 AND pubkey = $3 AND is_active = TRUE`;
+    const params = permissions
+      ? [encryptedNsec, permissions, id, pubkey]
+      : [encryptedNsec, id, pubkey];
+    const result = await client.query(query, params as any[]);
+    return (result.rowCount ?? 0) > 0;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function getAgentSigner(
+  apiKey: ApiKeyRecord
+): Promise<{ signer: any; pubkey: string } | null> {
+  if (!apiKey.encrypted_nsec) return null;
+  try {
+    const { decryptNsec, McpNostrSigner } = await import(
+      "@/utils/mcp/nostr-signing"
+    );
+    const nsec = decryptNsec(apiKey.encrypted_nsec);
+    const signer = new McpNostrSigner(nsec);
+    return { signer, pubkey: signer.getPubKey() };
+  } catch (error) {
+    console.error("Failed to create agent signer:", error);
+    return null;
   }
 }
 
@@ -217,11 +282,22 @@ export async function authenticateRequest(
 
   if (
     requiredPermission === "read_write" &&
-    apiKey.permissions !== "read_write"
+    apiKey.permissions !== "read_write" &&
+    apiKey.permissions !== "full_access"
   ) {
     res.status(403).json({
       error:
-        "Insufficient permissions. This action requires read_write access.",
+        "Insufficient permissions. This action requires read_write or full_access.",
+    });
+    return null;
+  }
+
+  if (
+    requiredPermission === "full_access" &&
+    apiKey.permissions !== "full_access"
+  ) {
+    res.status(403).json({
+      error: "Insufficient permissions. This action requires full_access.",
     });
     return null;
   }

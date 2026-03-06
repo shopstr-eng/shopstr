@@ -6,6 +6,7 @@ import {
   initializeApiKeysTable,
   ApiKeyPermission,
 } from "@/utils/mcp/auth";
+import { encryptNsec } from "@/utils/mcp/nostr-signing";
 import { checkOnboardRateLimit } from "@/utils/mcp/metrics";
 
 let tablesReady = false;
@@ -36,7 +37,13 @@ export default async function handler(
     });
   }
 
-  const { name, permissions, contact, pubkey: providedPubkey } = req.body || {};
+  const {
+    name,
+    permissions,
+    contact,
+    pubkey: providedPubkey,
+    nsec: providedNsec,
+  } = req.body || {};
 
   if (!name || typeof name !== "string" || name.trim().length === 0) {
     return res.status(400).json({
@@ -45,11 +52,13 @@ export default async function handler(
         method: "POST",
         body: {
           name: "(required) string - Name for this agent/integration",
-          permissions: '(optional) "read" | "read_write" - defaults to "read"',
+          permissions:
+            '(optional) "read" | "read_write" | "full_access" - defaults to "read"',
           contact:
             "(optional) string - Contact URL or identifier for this agent",
           pubkey:
             "(optional) string - Existing Nostr pubkey (hex or npub1...). If omitted, a new keypair is generated.",
+          nsec: "(optional) string - Nostr secret key (nsec1... or hex). Required for full_access with an existing pubkey. Stored encrypted.",
         },
       },
     });
@@ -83,8 +92,12 @@ export default async function handler(
     }
   }
 
-  const perm: ApiKeyPermission =
-    permissions === "read_write" ? "read_write" : "read";
+  let perm: ApiKeyPermission = "read";
+  if (permissions === "full_access") {
+    perm = "full_access";
+  } else if (permissions === "read_write") {
+    perm = "read_write";
+  }
 
   try {
     await ensureTables();
@@ -92,18 +105,62 @@ export default async function handler(
     const usingExistingKey = !!resolvedPubkey;
     let pubkey: string;
     let skHex: string | null = null;
+    let encryptedNsecValue: string | undefined;
 
     if (resolvedPubkey) {
       pubkey = resolvedPubkey;
+
+      if (providedNsec && typeof providedNsec === "string") {
+        const trimmedNsec = providedNsec.trim();
+        try {
+          let nsecPubkey: string;
+          if (trimmedNsec.startsWith("nsec1")) {
+            const decoded = nip19.decode(trimmedNsec);
+            if (decoded.type !== "nsec") {
+              return res.status(400).json({ error: "Invalid nsec format." });
+            }
+            nsecPubkey = getPublicKey(decoded.data as Uint8Array);
+          } else if (/^[0-9a-f]{64}$/i.test(trimmedNsec)) {
+            nsecPubkey = getPublicKey(hexToBytes(trimmedNsec));
+          } else {
+            return res.status(400).json({
+              error:
+                "Invalid nsec format. Provide an nsec1... bech32 key or 64-char hex private key.",
+            });
+          }
+
+          if (nsecPubkey !== pubkey) {
+            return res.status(400).json({
+              error: "The provided nsec does not match the provided pubkey.",
+            });
+          }
+
+          encryptedNsecValue = encryptNsec(trimmedNsec);
+        } catch (e: any) {
+          return res.status(400).json({
+            error: `Invalid nsec: ${
+              e.message || "Could not decode secret key."
+            }`,
+          });
+        }
+      }
     } else {
       const sk = generateSecretKey();
       pubkey = getPublicKey(sk);
       skHex = bytesToHex(sk);
+
+      const nsecStr = nip19.nsecEncode(sk);
+      encryptedNsecValue = encryptNsec(nsecStr);
     }
 
     const agentName = contact ? `${name.trim()} (${contact})` : name.trim();
 
-    const result = await createApiKey(agentName, pubkey, perm);
+    const result = await createApiKey(
+      agentName,
+      pubkey,
+      perm,
+      encryptedNsecValue
+    );
 
     const baseUrl =
       process.env.NEXT_PUBLIC_BASE_URL || `https://${req.headers.host}`;
@@ -139,7 +196,11 @@ export default async function handler(
         notes: [
           "Store your API key securely — it will not be shown again.",
           `Your permissions are set to "${perm}".${
-            perm === "read" ? ' Upgrade to "read_write" to place orders.' : ""
+            perm === "read"
+              ? ' Upgrade to "read_write" to place orders, or "full_access" for full marketplace participation.'
+              : perm === "read_write"
+                ? ' Upgrade to "full_access" for full marketplace participation (listings, profiles, etc).'
+                : ""
           }`,
         ],
       },
@@ -152,9 +213,23 @@ export default async function handler(
         ...((responseBody.quickStart as Record<string, unknown>)
           .notes as string[]),
         "The nsec (Nostr secret key) is provided for advanced Nostr integrations. Store it securely.",
+        "Your nsec has been securely stored (encrypted) for server-side signing capabilities.",
       ];
     } else {
       responseBody.existingIdentity = true;
+      if (encryptedNsecValue) {
+        (responseBody.quickStart as Record<string, unknown>).notes = [
+          ...((responseBody.quickStart as Record<string, unknown>)
+            .notes as string[]),
+          "Your nsec has been securely stored (encrypted) for server-side signing capabilities.",
+        ];
+      } else {
+        (responseBody.quickStart as Record<string, unknown>).notes = [
+          ...((responseBody.quickStart as Record<string, unknown>)
+            .notes as string[]),
+          "To enable write capabilities (listings, profiles, etc), set your nsec via POST /api/mcp/set-nsec.",
+        ];
+      }
     }
 
     return res.status(201).json(responseBody);
