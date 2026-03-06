@@ -484,7 +484,7 @@ export default async function handler(
       const server = createMcpServer();
       registerPurchaseTools(server, apiKey, token);
       if (apiKey.permissions === "full_access") {
-        registerWriteTools(server, apiKey, token);
+        registerWriteTools(server, apiKey);
       }
 
       await server.connect(transport);

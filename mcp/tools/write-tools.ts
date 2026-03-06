@@ -87,11 +87,7 @@ async function getSigner(apiKey: ApiKeyRecord): Promise<McpNostrSigner | null> {
   return result.signer as McpNostrSigner;
 }
 
-export function registerWriteTools(
-  server: McpServer,
-  apiKey: ApiKeyRecord,
-  token: string
-) {
+export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
   const baseUrl = `http://localhost:${process.env.PORT || 5000}`;
 
   server.tool(
@@ -807,7 +803,6 @@ export function registerWriteTools(
           getEventHash,
           nip44,
         } = await import("nostr-tools");
-        const { bytesToHex } = await import("@noble/hashes/utils");
 
         const senderPubkey = signer.getPubKey();
         const { getDefaultRelays, withBlastr } = await import(
@@ -874,7 +869,7 @@ export function registerWriteTools(
               conversationKey
             );
           } else {
-            encryptedSealContent = signer.encrypt(
+            encryptedSealContent = signer!.encrypt(
               targetPubkey,
               stringifiedInner
             );
@@ -896,7 +891,7 @@ export function registerWriteTools(
           if (useRandomKey) {
             signedSeal = finalizeEvent(sealEvent, randomPrivKey);
           } else {
-            signedSeal = signer.sign(sealEvent);
+            signedSeal = signer!.sign(sealEvent);
           }
 
           const wrapPrivKey = generateSecretKey();
@@ -1551,7 +1546,7 @@ export function registerWriteTools(
 
         return successResponse(
           {
-            paid: meltResult.quote?.paid || true,
+            paid: (meltResult as any).quote?.paid || true,
             amount: meltQuote.amount,
             fee: meltQuote.fee_reserve || 0,
             mintUrl,

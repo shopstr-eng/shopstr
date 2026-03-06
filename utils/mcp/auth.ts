@@ -120,7 +120,14 @@ export async function createApiKey(
       `INSERT INTO mcp_api_keys (key_prefix, key_hash, name, pubkey, permissions, encrypted_nsec)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [prefix, keyHash, name, pubkey, permissions, encryptedNsec || null]
+      [
+        prefix,
+        keyHash,
+        name,
+        pubkey,
+        permissions,
+        encryptedNsec || null,
+      ] as any[]
     );
     return { key, record: result.rows[0] };
   } finally {
