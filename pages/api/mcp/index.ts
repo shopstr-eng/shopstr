@@ -10,6 +10,7 @@ import {
   ApiKeyRecord,
 } from "@/utils/mcp/auth";
 import { recordRequest } from "@/utils/mcp/metrics";
+import { registerWriteTools } from "@/mcp/tools/write-tools";
 
 let tablesReady = false;
 
@@ -86,7 +87,11 @@ function registerPurchaseTools(
       cashuToken,
     }) => {
       const startTime = Date.now();
-      if (apiKey.permissions !== "read_write") return permissionError();
+      if (
+        apiKey.permissions !== "read_write" &&
+        apiKey.permissions !== "full_access"
+      )
+        return permissionError();
 
       try {
         const orderRes = await fetch(`${baseUrl}/api/mcp/create-order`, {
@@ -145,7 +150,11 @@ function registerPurchaseTools(
     },
     async ({ orderId }) => {
       const startTime = Date.now();
-      if (apiKey.permissions !== "read_write") return permissionError();
+      if (
+        apiKey.permissions !== "read_write" &&
+        apiKey.permissions !== "full_access"
+      )
+        return permissionError();
 
       try {
         const orderRes = await fetch(
@@ -201,7 +210,11 @@ function registerPurchaseTools(
     },
     async ({ limit, offset }) => {
       const startTime = Date.now();
-      if (apiKey.permissions !== "read_write") return permissionError();
+      if (
+        apiKey.permissions !== "read_write" &&
+        apiKey.permissions !== "full_access"
+      )
+        return permissionError();
 
       try {
         const l = limit || 50;
@@ -252,7 +265,11 @@ function registerPurchaseTools(
     },
     async ({ orderId }) => {
       const startTime = Date.now();
-      if (apiKey.permissions !== "read_write") return permissionError();
+      if (
+        apiKey.permissions !== "read_write" &&
+        apiKey.permissions !== "full_access"
+      )
+        return permissionError();
 
       try {
         const verifyRes = await fetch(`${baseUrl}/api/mcp/verify-payment`, {
@@ -466,6 +483,9 @@ export default async function handler(
 
       const server = createMcpServer();
       registerPurchaseTools(server, apiKey, token);
+      if (apiKey.permissions === "full_access") {
+        registerWriteTools(server, apiKey, token);
+      }
 
       await server.connect(transport);
       await transport.handleRequest(req as any, res as any, req.body);
