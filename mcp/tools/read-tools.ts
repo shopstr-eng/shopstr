@@ -90,6 +90,16 @@ function parseProductEvent(event: NostrEvent) {
     status: getTagValue(tags, "status"),
     createdAt: event.created_at,
     pricing: buildPricingBlock(price, currency, shippingType, shippingCost),
+    subscription: {
+      enabled: getTagValue(tags, "subscription") === "true",
+      discount: getTagValue(tags, "subscription_discount")
+        ? Number(getTagValue(tags, "subscription_discount"))
+        : undefined,
+      frequencies: (() => {
+        const freqTag = tags.find((t) => t[0] === "subscription_frequency");
+        return freqTag ? freqTag.slice(1) : [];
+      })(),
+    },
   };
 }
 

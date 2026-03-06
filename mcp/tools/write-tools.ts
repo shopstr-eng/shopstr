@@ -7,7 +7,10 @@ import {
 } from "@/utils/mcp/nostr-signing";
 import { ApiKeyRecord, getAgentSigner } from "@/utils/mcp/auth";
 import { EventTemplate } from "nostr-tools";
-import { cacheEvent } from "@/utils/db/db-service";
+import {
+  cacheEvent,
+  getSubscriptionsBySellerPubkey,
+} from "@/utils/db/db-service";
 import { v4 as uuidv4 } from "uuid";
 
 function noSignerError() {
@@ -284,6 +287,20 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .describe(
           "Custom d-tag identifier. If omitted, one is generated from the title."
         ),
+      subscriptionEnabled: z
+        .boolean()
+        .optional()
+        .describe("Enable subscription purchasing for this product"),
+      subscriptionDiscount: z
+        .string()
+        .optional()
+        .describe("Discount percentage for subscribers (e.g. '10' for 10%)"),
+      subscriptionFrequencies: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "Available subscription frequencies (e.g. ['weekly', 'monthly', 'quarterly'])"
+        ),
     },
     async (params) => {
       const startTime = Date.now();
@@ -363,6 +380,22 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         if (params.pickupLocations) {
           for (const loc of params.pickupLocations) {
             tags.push(["pickup_location", loc.trim()]);
+          }
+        }
+
+        if (params.subscriptionEnabled) {
+          tags.push(["subscription", "true"]);
+          if (params.subscriptionDiscount) {
+            tags.push(["subscription_discount", params.subscriptionDiscount]);
+          }
+          if (
+            params.subscriptionFrequencies &&
+            params.subscriptionFrequencies.length > 0
+          ) {
+            tags.push([
+              "subscription_frequency",
+              ...params.subscriptionFrequencies,
+            ]);
           }
         }
 
@@ -451,6 +484,20 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       quantity: z.string().optional().describe("Updated quantity"),
       condition: z.string().optional().describe("Updated condition"),
       status: z.string().optional().describe("Updated status"),
+      subscriptionEnabled: z
+        .boolean()
+        .optional()
+        .describe("Enable or disable subscription purchasing for this product"),
+      subscriptionDiscount: z
+        .string()
+        .optional()
+        .describe("Discount percentage for subscribers (e.g. '10' for 10%)"),
+      subscriptionFrequencies: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "Available subscription frequencies (e.g. ['weekly', 'monthly', 'quarterly'])"
+        ),
     },
     async (params) => {
       const startTime = Date.now();
@@ -501,6 +548,22 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         }
         if (params.status) {
           tags.push(["status", params.status]);
+        }
+
+        if (params.subscriptionEnabled) {
+          tags.push(["subscription", "true"]);
+          if (params.subscriptionDiscount) {
+            tags.push(["subscription_discount", params.subscriptionDiscount]);
+          }
+          if (
+            params.subscriptionFrequencies &&
+            params.subscriptionFrequencies.length > 0
+          ) {
+            tags.push([
+              "subscription_frequency",
+              ...params.subscriptionFrequencies,
+            ]);
+          }
         }
 
         const created_at = Math.floor(Date.now() / 1000);
@@ -1562,6 +1625,69 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       } catch (error) {
         return errorResponse(
           "Failed to send Cashu payment",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  server.tool(
+    "list_seller_subscriptions",
+    "List all subscriptions to your products. Shows subscriber details, frequency, status, pricing, and shipping info for each subscription.",
+    {
+      status: z
+        .string()
+        .optional()
+        .describe(
+          "Filter by subscription status: 'active', 'paused', or 'canceled'"
+        ),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        let subscriptions = await getSubscriptionsBySellerPubkey(pubkey);
+
+        if (params.status) {
+          subscriptions = subscriptions.filter(
+            (s: any) => s.status === params.status
+          );
+        }
+
+        return successResponse(
+          {
+            count: subscriptions.length,
+            subscriptions: subscriptions.map((s: any) => ({
+              id: s.id,
+              stripeSubscriptionId: s.stripe_subscription_id,
+              buyerEmail: s.buyer_email,
+              buyerPubkey: s.buyer_pubkey,
+              productEventId: s.product_event_id,
+              quantity: s.quantity,
+              variantInfo: s.variant_info,
+              frequency: s.frequency,
+              discountPercent: s.discount_percent,
+              basePrice: s.base_price,
+              subscriptionPrice: s.subscription_price,
+              currency: s.currency,
+              shippingAddress: s.shipping_address,
+              status: s.status,
+              nextBillingDate: s.next_billing_date,
+              nextShippingDate: s.next_shipping_date,
+              createdAt: s.created_at,
+              updatedAt: s.updated_at,
+            })),
+          },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to list seller subscriptions",
           error instanceof Error ? error.message : "Unknown error",
           startTime
         );

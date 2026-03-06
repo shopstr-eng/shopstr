@@ -453,6 +453,442 @@ function registerPurchaseTools(
       }
     }
   );
+
+  server.tool(
+    "create_subscription",
+    "Create a subscription order for a product. The product must have subscription enabled. Requires read_write or full_access API key permission.",
+    {
+      productId: z.string().describe("The product event ID to subscribe to"),
+      frequency: z
+        .enum([
+          "weekly",
+          "every_2_weeks",
+          "monthly",
+          "every_2_months",
+          "quarterly",
+        ])
+        .describe("Subscription delivery frequency"),
+      buyerEmail: z
+        .string()
+        .describe("Buyer's email address for the subscription"),
+      quantity: z
+        .number()
+        .optional()
+        .describe("Quantity per delivery (default 1)"),
+      shippingAddress: z
+        .object({
+          name: z.string(),
+          address: z.string(),
+          unit: z.string().optional(),
+          city: z.string(),
+          postalCode: z.string(),
+          stateProvince: z.string(),
+          country: z.string(),
+        })
+        .optional()
+        .describe("Shipping address for subscription deliveries"),
+      variantInfo: z
+        .string()
+        .optional()
+        .describe("Variant information (e.g. size, color)"),
+    },
+    async ({
+      productId,
+      frequency,
+      buyerEmail,
+      quantity,
+      shippingAddress,
+      variantInfo,
+    }) => {
+      const startTime = Date.now();
+      if (
+        apiKey.permissions !== "read_write" &&
+        apiKey.permissions !== "full_access"
+      )
+        return permissionError();
+
+      try {
+        const { fetchAllProductsFromDb } = await import(
+          "@/utils/db/db-service"
+        );
+        const products = await fetchAllProductsFromDb();
+        const product = products.find((p: any) => p.id === productId);
+
+        if (!product) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({
+                  error: "Product not found",
+                  _meta: {
+                    responseTimeMs: Date.now() - startTime,
+                    dataSource: "cached_db",
+                  },
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        let tags: string[][] = [];
+        try {
+          const rawTags = product.tags;
+          tags =
+            typeof rawTags === "string"
+              ? JSON.parse(rawTags)
+              : Array.isArray(rawTags)
+                ? rawTags
+                : [];
+        } catch {}
+
+        const titleTag = tags.find((t) => t[0] === "title" || t[0] === "name");
+        const priceTag = tags.find((t) => t[0] === "price");
+        const subscriptionTag = tags.find((t) => t[0] === "subscription");
+        const discountTag = tags.find((t) => t[0] === "subscription_discount");
+        const freqTag = tags.find((t) => t[0] === "subscription_frequency");
+
+        if (!subscriptionTag || subscriptionTag[1] !== "true") {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({
+                  error: "This product does not have subscriptions enabled",
+                  _meta: {
+                    responseTimeMs: Date.now() - startTime,
+                    dataSource: "cached_db",
+                  },
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        const availableFrequencies = freqTag ? freqTag.slice(1) : [];
+        if (
+          availableFrequencies.length > 0 &&
+          !availableFrequencies.includes(frequency)
+        ) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({
+                  error: `Frequency '${frequency}' is not available for this product`,
+                  availableFrequencies,
+                  _meta: {
+                    responseTimeMs: Date.now() - startTime,
+                    dataSource: "cached_db",
+                  },
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        const productTitle = titleTag?.[1] ?? null;
+        const amount = priceTag?.[1] ? parseFloat(priceTag[1]) : 0;
+        const currency = priceTag?.[2] ?? "usd";
+        const discountPercent = discountTag?.[1]
+          ? parseFloat(discountTag[1])
+          : 0;
+
+        const subRes = await fetch(
+          `${baseUrl}/api/stripe/create-subscription`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              customerEmail: buyerEmail,
+              productTitle,
+              productDescription: product.content || null,
+              amount,
+              currency,
+              frequency,
+              discountPercent,
+              sellerPubkey: product.pubkey,
+              buyerPubkey: apiKey.pubkey || null,
+              productEventId: productId,
+              quantity: quantity || 1,
+              variantInfo: variantInfo || null,
+              shippingAddress: shippingAddress || null,
+            }),
+          }
+        );
+        const data = await subRes.json();
+        data._meta = {
+          responseTimeMs: Date.now() - startTime,
+          dataSource: "live",
+        };
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify(data, null, 2) },
+          ],
+          isError: !data.success,
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({
+                error: "Failed to create subscription",
+                details:
+                  error instanceof Error ? error.message : "Unknown error",
+                _meta: {
+                  responseTimeMs: Date.now() - startTime,
+                  dataSource: "live",
+                },
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "list_subscriptions",
+    "List the buyer's subscriptions. Queries by the API key's associated pubkey or by email. Requires read_write or full_access API key permission.",
+    {
+      email: z
+        .string()
+        .optional()
+        .describe(
+          "Buyer email to look up subscriptions (used if no pubkey is associated with the API key)"
+        ),
+    },
+    async ({ email }) => {
+      const startTime = Date.now();
+      if (
+        apiKey.permissions !== "read_write" &&
+        apiKey.permissions !== "full_access"
+      )
+        return permissionError();
+
+      try {
+        let url: string;
+        if (apiKey.pubkey) {
+          url = `${baseUrl}/api/stripe/get-subscriptions?pubkey=${encodeURIComponent(
+            apiKey.pubkey
+          )}`;
+        } else if (email) {
+          url = `${baseUrl}/api/stripe/get-subscriptions?email=${encodeURIComponent(
+            email
+          )}`;
+        } else {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({
+                  error:
+                    "No pubkey associated with API key and no email provided",
+                  _meta: {
+                    responseTimeMs: Date.now() - startTime,
+                    dataSource: "live",
+                  },
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        const subRes = await fetch(url);
+        const data = await subRes.json();
+        data._meta = {
+          responseTimeMs: Date.now() - startTime,
+          dataSource: "live",
+          resultCount: data.subscriptions?.length || 0,
+        };
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify(data, null, 2) },
+          ],
+          isError: !data.success,
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({
+                error: "Failed to list subscriptions",
+                details:
+                  error instanceof Error ? error.message : "Unknown error",
+                _meta: {
+                  responseTimeMs: Date.now() - startTime,
+                  dataSource: "live",
+                },
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "cancel_subscription",
+    "Cancel an existing subscription. The subscription will remain active until the end of the current billing period. Requires read_write or full_access API key permission.",
+    {
+      subscriptionId: z
+        .string()
+        .describe("The Stripe subscription ID to cancel"),
+      connectedAccountId: z
+        .string()
+        .optional()
+        .describe("The Stripe connected account ID (if applicable)"),
+    },
+    async ({ subscriptionId, connectedAccountId }) => {
+      const startTime = Date.now();
+      if (
+        apiKey.permissions !== "read_write" &&
+        apiKey.permissions !== "full_access"
+      )
+        return permissionError();
+
+      try {
+        const cancelRes = await fetch(
+          `${baseUrl}/api/stripe/cancel-subscription`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              subscriptionId,
+              connectedAccountId: connectedAccountId || undefined,
+            }),
+          }
+        );
+        const data = await cancelRes.json();
+        data._meta = {
+          responseTimeMs: Date.now() - startTime,
+          dataSource: "live",
+        };
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify(data, null, 2) },
+          ],
+          isError: !data.success,
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({
+                error: "Failed to cancel subscription",
+                details:
+                  error instanceof Error ? error.message : "Unknown error",
+                _meta: {
+                  responseTimeMs: Date.now() - startTime,
+                  dataSource: "live",
+                },
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "update_subscription",
+    "Update an existing subscription's shipping address or next billing date. Requires read_write or full_access API key permission.",
+    {
+      subscriptionId: z
+        .string()
+        .describe("The Stripe subscription ID to update"),
+      connectedAccountId: z
+        .string()
+        .optional()
+        .describe("The Stripe connected account ID (if applicable)"),
+      shippingAddress: z
+        .object({
+          name: z.string(),
+          address: z.string(),
+          unit: z.string().optional(),
+          city: z.string(),
+          postalCode: z.string(),
+          stateProvince: z.string(),
+          country: z.string(),
+        })
+        .optional()
+        .describe("New shipping address"),
+      nextBillingDate: z
+        .string()
+        .optional()
+        .describe("New next billing date (ISO 8601 format, e.g. 2025-02-01)"),
+    },
+    async ({
+      subscriptionId,
+      connectedAccountId,
+      shippingAddress,
+      nextBillingDate,
+    }) => {
+      const startTime = Date.now();
+      if (
+        apiKey.permissions !== "read_write" &&
+        apiKey.permissions !== "full_access"
+      )
+        return permissionError();
+
+      try {
+        const updateRes = await fetch(
+          `${baseUrl}/api/stripe/update-subscription`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              subscriptionId,
+              connectedAccountId: connectedAccountId || undefined,
+              shippingAddress: shippingAddress || undefined,
+              nextBillingDate: nextBillingDate || undefined,
+            }),
+          }
+        );
+        const data = await updateRes.json();
+        data._meta = {
+          responseTimeMs: Date.now() - startTime,
+          dataSource: "live",
+        };
+        return {
+          content: [
+            { type: "text" as const, text: JSON.stringify(data, null, 2) },
+          ],
+          isError: !data.success,
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({
+                error: "Failed to update subscription",
+                details:
+                  error instanceof Error ? error.message : "Unknown error",
+                _meta: {
+                  responseTimeMs: Date.now() - startTime,
+                  dataSource: "live",
+                },
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
 }
 
 export default async function handler(

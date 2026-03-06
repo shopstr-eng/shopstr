@@ -126,31 +126,31 @@ The platform exposes a Model Context Protocol (MCP) server enabling AI agents to
 
 **Read Tools (any valid key):**
 
-- `search_products` — Search/filter products by keyword, category, location, price range
-- `get_product_details` — Get full details for a product by ID
+- `search_products` — Search/filter products by keyword, category, location, price range. Responses include subscription availability info (enabled, discount, frequencies)
+- `get_product_details` — Get full details for a product by ID, including subscription settings
 - `list_companies` — List all seller/shop profiles
 - `get_company_details` — Get a company's profile, products, and reviews
 - `get_reviews` — Get reviews for a product or seller
 - `check_discount_code` — Validate a discount code
 - `get_payment_methods` — Get available payment methods for a seller (stripe, lightning, cashu, fiat)
-- `create_order` — Place an order with payment method selection (requires read_write key). Supports: `stripe` (credit card), `lightning` (Bitcoin Lightning invoice), `cashu` (ecash tokens), `fiat` (Venmo, Cash App, Zelle, etc.)
-- `verify_payment` — Verify Lightning invoice payment status (requires read_write key)
-- `get_order_status` — Check order status (requires read_write key)
-- `list_orders` — List orders (requires read_write key)
 
 **Purchase Tools (requires read_write or full_access):**
 
-- `create_order` — Place an order with payment method selection. Supports: `lightning` and `cashu`
+- `create_order` — Place a one-time order with payment method selection. Supports: `stripe` (credit card), `lightning` (Bitcoin Lightning invoice), `cashu` (ecash tokens), `fiat` (Venmo, Cash App, Zelle, etc.)
 - `verify_payment` — Verify Lightning invoice payment status
 - `get_order_status` — Check order status
 - `list_orders` — List orders
+- `create_subscription` — Create a recurring subscription order for a subscription-enabled product. Requires product to have subscription tags. Parameters: productId, frequency (weekly/every_2_weeks/monthly/every_2_months/quarterly), buyerEmail, quantity, shippingAddress, variantInfo. Creates a Stripe Subscription via the seller's connected account.
+- `list_subscriptions` — List buyer's subscriptions by pubkey or email
+- `cancel_subscription` — Cancel an existing subscription (remains active until end of billing period)
+- `update_subscription` — Update subscription shipping address or next billing date
 
 **Write Tools (requires full_access + stored nsec):**
 
 - `set_user_profile` — Create/update Nostr user profile (kind 0)
 - `set_shop_profile` — Create/update shop profile (kind 30019)
-- `create_product_listing` — Publish product listing (kind 30402) with full tag support
-- `update_product_listing` — Update existing listing by d-tag
+- `create_product_listing` — Publish product listing (kind 30402) with full tag support, including subscription settings (subscriptionEnabled, subscriptionDiscount, subscriptionFrequencies)
+- `update_product_listing` — Update existing listing by d-tag, including subscription settings
 - `delete_listing` — Delete events (kind 5)
 - `publish_review` — Publish review (kind 31555) with ratings
 - `create_community_post` — Post to communities (kind 1111), supports replies
@@ -165,6 +165,7 @@ The platform exposes a Model Context Protocol (MCP) server enabling AI agents to
 - `receive_cashu_tokens` — Receive and store Cashu tokens (kind 7375)
 - `set_cashu_mints` — Configure wallet mints (kind 17375)
 - `send_cashu_payment` — Melt tokens to pay Lightning invoices
+- `list_seller_subscriptions` — List all subscriptions to your products with optional status filter (active/paused/canceled)
 
 ### Payment Methods
 
