@@ -98,11 +98,17 @@ async function handleCreateOrder(
     productId,
     quantity = 1,
     shippingAddress,
+    selectedSize,
+    selectedVolume,
+    selectedBulkUnits,
     discountCode,
     paymentMethod = "lightning",
     mintUrl,
     cashuToken,
   } = req.body as CreateOrderInput & {
+    selectedSize?: string;
+    selectedVolume?: string;
+    selectedBulkUnits?: number;
     discountCode?: string;
     paymentMethod?: PaymentMethod;
     mintUrl?: string;
@@ -141,7 +147,25 @@ async function handleCreateOrder(
       return res.status(500).json({ error: "Failed to parse product data" });
     }
 
-    if (product.quantity !== undefined && product.quantity < quantity) {
+    const selectedSpecs: Record<string, any> = {};
+
+    if (selectedSize) {
+      if (!product.sizes || !product.sizes.includes(selectedSize)) {
+        return res.status(400).json({
+          error: `Invalid size selection: "${selectedSize}"`,
+          availableSizes: product.sizes || [],
+        });
+      }
+      const sizeStock = product.sizeQuantities?.get(selectedSize);
+      if (sizeStock !== undefined && sizeStock < quantity) {
+        return res.status(400).json({
+          error: `Insufficient stock for size "${selectedSize}"`,
+          available: sizeStock,
+          requested: quantity,
+        });
+      }
+      selectedSpecs.size = selectedSize;
+    } else if (product.quantity !== undefined && product.quantity < quantity) {
       return res.status(400).json({
         error: "Insufficient stock",
         available: product.quantity,
@@ -149,9 +173,54 @@ async function handleCreateOrder(
       });
     }
 
-    const unitPrice = product.price;
-    let shippingCost = product.shippingCost || 0;
+    let unitPrice = product.price;
     const currency = product.currency || "sats";
+
+    if (selectedVolume) {
+      if (!product.volumes || !product.volumes.includes(selectedVolume)) {
+        return res.status(400).json({
+          error: `Invalid volume selection: "${selectedVolume}"`,
+          availableVolumes: product.volumes || [],
+        });
+      }
+      const volumePrice = product.volumePrices?.get(selectedVolume);
+      if (volumePrice !== undefined) {
+        unitPrice = volumePrice;
+      }
+      selectedSpecs.volume = selectedVolume;
+      selectedSpecs.volumePrice = unitPrice;
+    }
+
+    let effectiveQuantity = quantity;
+    let subtotal: number;
+
+    if (selectedBulkUnits) {
+      if (!product.bulkPrices || !product.bulkPrices.has(selectedBulkUnits)) {
+        return res.status(400).json({
+          error: `Invalid bulk tier: ${selectedBulkUnits} units`,
+          availableBulkTiers: product.bulkPrices
+            ? Array.from(product.bulkPrices.entries()).map(
+                ([units, price]) => ({
+                  units,
+                  totalPrice: price,
+                })
+              )
+            : [],
+        });
+      }
+      const bulkTotalPrice = product.bulkPrices.get(selectedBulkUnits)!;
+      subtotal = bulkTotalPrice * quantity;
+      effectiveQuantity = selectedBulkUnits * quantity;
+      selectedSpecs.bulk = {
+        units: selectedBulkUnits,
+        totalPrice: bulkTotalPrice,
+        bundles: quantity,
+      };
+    } else {
+      subtotal = unitPrice * quantity;
+    }
+
+    let shippingCost = product.shippingCost || 0;
 
     if (
       product.shippingType === "Free" ||
@@ -162,7 +231,6 @@ async function handleCreateOrder(
       shippingCost = 0;
     }
 
-    let subtotal = unitPrice * quantity;
     let discountPercentage = 0;
 
     if (discountCode) {
@@ -190,16 +258,22 @@ async function handleCreateOrder(
     const totalAmount = subtotal + shippingCost;
     const orderId = generateOrderId();
 
-    const pricingBlock = {
+    const pricingBlock: Record<string, any> = {
       unitPrice,
-      quantity,
-      subtotal: unitPrice * quantity,
+      quantity: effectiveQuantity,
+      subtotal: selectedBulkUnits
+        ? product.bulkPrices!.get(selectedBulkUnits)! * quantity
+        : unitPrice * quantity,
       discountPercentage: discountPercentage || undefined,
       discountedSubtotal: discountPercentage ? subtotal : undefined,
       shippingCost,
       total: totalAmount,
       currency,
     };
+
+    if (Object.keys(selectedSpecs).length > 0) {
+      pricingBlock.selectedSpecs = selectedSpecs;
+    }
 
     if (paymentMethod === "cashu") {
       return handleCashuPayment(
@@ -209,7 +283,7 @@ async function handleCreateOrder(
         buyerPubkey,
         product,
         productId,
-        quantity,
+        effectiveQuantity,
         totalAmount,
         currency,
         shippingAddress || null,
@@ -225,7 +299,7 @@ async function handleCreateOrder(
       buyerPubkey,
       product,
       productId,
-      quantity,
+      effectiveQuantity,
       totalAmount,
       currency,
       shippingAddress || null,

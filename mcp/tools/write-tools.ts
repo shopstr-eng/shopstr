@@ -270,6 +270,10 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .array(z.object({ volume: z.string(), price: z.string() }))
         .optional()
         .describe("Volume/variant options with prices"),
+      bulk: z
+        .array(z.object({ units: z.string(), price: z.string() }))
+        .optional()
+        .describe("Bulk/bundle pricing tiers (e.g. 5 units for $100)"),
       pickupLocations: z
         .array(z.string())
         .optional()
@@ -342,6 +346,12 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         if (params.volumes) {
           for (const v of params.volumes) {
             tags.push(["volume", v.volume, v.price]);
+          }
+        }
+
+        if (params.bulk) {
+          for (const b of params.bulk) {
+            tags.push(["bulk", b.units, b.price]);
           }
         }
 
@@ -451,6 +461,26 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       quantity: z.string().optional().describe("Updated quantity"),
       condition: z.string().optional().describe("Updated condition"),
       status: z.string().optional().describe("Updated status"),
+      sizes: z
+        .array(z.object({ size: z.string(), quantity: z.string() }))
+        .optional()
+        .describe("Updated size options with quantities"),
+      volumes: z
+        .array(z.object({ volume: z.string(), price: z.string() }))
+        .optional()
+        .describe("Updated volume/variant options with prices"),
+      bulk: z
+        .array(z.object({ units: z.string(), price: z.string() }))
+        .optional()
+        .describe("Updated bulk/bundle pricing tiers"),
+      pickupLocations: z
+        .array(z.string())
+        .optional()
+        .describe("Updated pickup location addresses"),
+      expiration: z
+        .string()
+        .optional()
+        .describe("Updated expiration date (ISO 8601 format)"),
     },
     async (params) => {
       const startTime = Date.now();
@@ -501,6 +531,32 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         }
         if (params.status) {
           tags.push(["status", params.status]);
+        }
+        if (params.sizes) {
+          for (const s of params.sizes) {
+            tags.push(["size", s.size, s.quantity]);
+          }
+        }
+        if (params.volumes) {
+          for (const v of params.volumes) {
+            tags.push(["volume", v.volume, v.price]);
+          }
+        }
+        if (params.bulk) {
+          for (const b of params.bulk) {
+            tags.push(["bulk", b.units, b.price]);
+          }
+        }
+        if (params.pickupLocations) {
+          for (const loc of params.pickupLocations) {
+            tags.push(["pickup_location", loc.trim()]);
+          }
+        }
+        if (params.expiration) {
+          const unixTime = Math.floor(
+            new Date(params.expiration).getTime() / 1000
+          );
+          tags.push(["valid_until", unixTime.toString()]);
         }
 
         const created_at = Math.floor(Date.now() / 1000);
@@ -953,6 +1009,666 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       } catch (error) {
         return errorResponse(
           "Failed to send direct message",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  server.tool(
+    "update_order_address",
+    "Update the shipping address for an existing order. Sends an encrypted address change request to the seller via NIP-17 gift-wrapped DM and updates the order record.",
+    {
+      orderId: z.string().describe("The order ID to update"),
+      sellerPubkey: z.string().describe("The seller's public key (hex format)"),
+      newAddress: z
+        .string()
+        .describe("The new delivery address as a single string"),
+      productTitle: z
+        .string()
+        .optional()
+        .describe("Product title for context in the message to seller"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const { updateMcpOrderAddress } = await import(
+          "@/mcp/tools/purchase-tools"
+        );
+
+        const updatedOrder = await updateMcpOrderAddress(
+          params.orderId,
+          apiKey.pubkey,
+          { address: params.newAddress }
+        );
+
+        if (!updatedOrder) {
+          return errorResponse(
+            "Order not found",
+            `No order found with ID "${params.orderId}" for your account`,
+            startTime
+          );
+        }
+
+        const message =
+          `Address change request for order ${params.orderId.substring(
+            0,
+            8
+          )}...` +
+          (params.productTitle ? ` (${params.productTitle})` : "") +
+          `\n\nNew Address: ${params.newAddress}`;
+
+        const { generateSecretKey, finalizeEvent, getEventHash, nip44 } =
+          await import("nostr-tools");
+
+        const senderPubkey = signer.getPubKey();
+        const { getDefaultRelays, withBlastr } = await import(
+          "@/utils/nostr/nostr-helper-functions"
+        );
+        const defaultRelays = getDefaultRelays();
+
+        const innerEvent = {
+          pubkey: senderPubkey,
+          created_at: Math.floor(Date.now() / 1000),
+          content: message,
+          kind: 14,
+          tags: [
+            ["p", params.sellerPubkey],
+            ["subject", "address-change"],
+            ["order", params.orderId],
+            ["address", params.newAddress],
+          ] as string[][],
+        };
+
+        const innerEventForHash = { ...innerEvent, id: "", sig: "" };
+        const innerEventId = getEventHash(innerEventForHash as any);
+        const fullInnerEvent = { id: innerEventId, ...innerEvent };
+
+        const randomPrivKey = generateSecretKey();
+
+        async function createAddressChangeWrap(targetPubkey: string) {
+          const stringifiedInner = JSON.stringify(fullInnerEvent);
+          const conversationKey = nip44.getConversationKey(
+            randomPrivKey,
+            targetPubkey
+          );
+          const encryptedSealContent = nip44.encrypt(
+            stringifiedInner,
+            conversationKey
+          );
+
+          const now = Math.floor(Date.now() / 1000);
+          const randomOffset = Math.floor(Math.random() * 172800);
+          const sealTimestamp = now - randomOffset;
+
+          const sealEvent = {
+            created_at: sealTimestamp,
+            kind: 13,
+            tags: [],
+            content: encryptedSealContent,
+          };
+
+          const signedSeal = finalizeEvent(sealEvent, randomPrivKey);
+
+          const wrapPrivKey = generateSecretKey();
+          const wrapConversationKey = nip44.getConversationKey(
+            wrapPrivKey,
+            targetPubkey
+          );
+          const wrapContent = nip44.encrypt(
+            JSON.stringify(signedSeal),
+            wrapConversationKey
+          );
+
+          const wrapTimestamp = now - Math.floor(Math.random() * 172800);
+
+          const wrapEvent = {
+            created_at: wrapTimestamp,
+            kind: 1059,
+            tags: [["p", targetPubkey]],
+            content: wrapContent,
+          };
+
+          return finalizeEvent(wrapEvent, wrapPrivKey);
+        }
+
+        const sellerWrap = await createAddressChangeWrap(params.sellerPubkey);
+
+        const relayManager = new McpRelayManager(withBlastr(defaultRelays));
+
+        try {
+          await cacheEvent(sellerWrap as any);
+          await relayManager.publish(sellerWrap as any);
+        } finally {
+          relayManager.close();
+        }
+
+        return successResponse(
+          {
+            orderId: params.orderId,
+            newAddress: params.newAddress,
+            addressChangeMessageSent: true,
+            sellerPubkey: params.sellerPubkey,
+            orderUpdated: true,
+          },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to update order address",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  server.tool(
+    "send_shipping_update",
+    "Send a shipping update to a buyer via encrypted NIP-17 gift-wrapped DM. Includes tracking number, carrier, and estimated delivery time. Also updates the order status to 'shipped' in the database.",
+    {
+      orderId: z.string().describe("The order ID this shipment is for"),
+      buyerPubkey: z.string().describe("The buyer's public key (hex format)"),
+      trackingNumber: z.string().describe("Shipping tracking number"),
+      shippingCarrier: z
+        .string()
+        .describe("Shipping carrier name (e.g. 'USPS', 'FedEx', 'UPS', 'DHL')"),
+      deliveryDays: z
+        .number()
+        .describe("Estimated number of days until delivery"),
+      productAddress: z
+        .string()
+        .optional()
+        .describe("Product address (format: 30402:pubkey:dTag) for context"),
+      productTitle: z
+        .string()
+        .optional()
+        .describe("Product title for the message text"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const { generateSecretKey, finalizeEvent, getEventHash, nip44 } =
+          await import("nostr-tools");
+        const { getDefaultRelays, withBlastr } = await import(
+          "@/utils/nostr/nostr-helper-functions"
+        );
+
+        const senderPubkey = signer.getPubKey();
+        const defaultRelays = getDefaultRelays();
+        const relayHint: string =
+          defaultRelays.length > 0 ? defaultRelays[0]! : "wss://relay.damus.io";
+
+        const currentTimestamp = Math.floor(Date.now() / 1000);
+        const etaTimestamp =
+          currentTimestamp + params.deliveryDays * 24 * 60 * 60;
+        const humanReadableDate = new Date(
+          etaTimestamp * 1000
+        ).toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        });
+
+        const message = params.productTitle
+          ? `Your order${
+              params.productTitle ? ` of "${params.productTitle}"` : ""
+            } is expected to arrive on ${humanReadableDate}. Your ${
+              params.shippingCarrier
+            } tracking number is: ${params.trackingNumber}`
+          : `Your order is expected to arrive on ${humanReadableDate}. Your ${params.shippingCarrier} tracking number is: ${params.trackingNumber}`;
+
+        const innerTags: string[][] = [
+          ["p", params.buyerPubkey, relayHint],
+          ["subject", "shipping-info"],
+          ["order", params.orderId],
+          ["b", params.buyerPubkey],
+          ["type", "4"],
+          ["status", "shipped"],
+          ["tracking", params.trackingNumber],
+          ["carrier", params.shippingCarrier],
+          ["eta", etaTimestamp.toString()],
+        ];
+
+        if (params.productAddress) {
+          innerTags.push(["item", params.productAddress, "1"]);
+        }
+
+        const innerEvent = {
+          pubkey: senderPubkey,
+          created_at: currentTimestamp,
+          content: message,
+          kind: 14,
+          tags: innerTags,
+        };
+
+        const innerEventForHash = { ...innerEvent, id: "", sig: "" };
+        const innerEventId = getEventHash(innerEventForHash as any);
+        const fullInnerEvent = { id: innerEventId, ...innerEvent };
+
+        const randomPrivKey = generateSecretKey();
+
+        async function createWrap(targetPubkey: string) {
+          const stringifiedInner = JSON.stringify(fullInnerEvent);
+          const conversationKey = nip44.getConversationKey(
+            randomPrivKey,
+            targetPubkey
+          );
+          const encryptedContent = nip44.encrypt(
+            stringifiedInner,
+            conversationKey
+          );
+
+          const now = Math.floor(Date.now() / 1000);
+          const sealEvent = {
+            created_at: now - Math.floor(Math.random() * 172800),
+            kind: 13,
+            tags: [],
+            content: encryptedContent,
+          };
+          const signedSeal = finalizeEvent(sealEvent, randomPrivKey);
+
+          const wrapPrivKey = generateSecretKey();
+          const wrapConversationKey = nip44.getConversationKey(
+            wrapPrivKey,
+            targetPubkey
+          );
+          const wrapContent = nip44.encrypt(
+            JSON.stringify(signedSeal),
+            wrapConversationKey
+          );
+
+          return finalizeEvent(
+            {
+              created_at: now - Math.floor(Math.random() * 172800),
+              kind: 1059,
+              tags: [["p", targetPubkey]],
+              content: wrapContent,
+            },
+            wrapPrivKey
+          );
+        }
+
+        const buyerWrap = await createWrap(params.buyerPubkey);
+
+        const relayManager = new McpRelayManager(withBlastr(defaultRelays));
+
+        try {
+          await cacheEvent(buyerWrap as any);
+          await relayManager.publish(buyerWrap as any);
+        } finally {
+          relayManager.close();
+        }
+
+        const { updateMcpOrderStatus } = await import(
+          "@/mcp/tools/purchase-tools"
+        );
+        await updateMcpOrderStatus(params.orderId, "shipped").catch(
+          console.error
+        );
+
+        return successResponse(
+          {
+            orderId: params.orderId,
+            buyerPubkey: params.buyerPubkey,
+            trackingNumber: params.trackingNumber,
+            carrier: params.shippingCarrier,
+            estimatedDelivery: humanReadableDate,
+            etaTimestamp,
+            status: "shipped",
+            messageSent: true,
+          },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to send shipping update",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  server.tool(
+    "update_order_status",
+    "Update the status of an order and optionally notify the buyer via encrypted DM. Sellers can confirm, ship, or complete orders. Buyers can cancel orders.",
+    {
+      orderId: z.string().describe("The order ID to update"),
+      status: z
+        .enum(["confirmed", "shipped", "delivered", "completed", "cancelled"])
+        .describe("New order status"),
+      buyerPubkey: z
+        .string()
+        .optional()
+        .describe(
+          "Buyer's pubkey (hex format) — required to send a notification DM"
+        ),
+      message: z
+        .string()
+        .optional()
+        .describe(
+          "Custom message to include in the notification DM to the buyer/seller"
+        ),
+      productAddress: z
+        .string()
+        .optional()
+        .describe("Product address for context in the notification"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const { updateMcpOrderStatus } = await import(
+          "@/mcp/tools/purchase-tools"
+        );
+        const updatedOrder = await updateMcpOrderStatus(
+          params.orderId,
+          params.status
+        );
+
+        if (!updatedOrder) {
+          return errorResponse(
+            "Order not found",
+            `No order found with ID "${params.orderId}"`,
+            startTime
+          );
+        }
+
+        let notificationSent = false;
+
+        if (params.buyerPubkey && params.message) {
+          try {
+            const { generateSecretKey, finalizeEvent, getEventHash, nip44 } =
+              await import("nostr-tools");
+            const { getDefaultRelays, withBlastr } = await import(
+              "@/utils/nostr/nostr-helper-functions"
+            );
+
+            const senderPubkey = signer.getPubKey();
+            const defaultRelays = getDefaultRelays();
+            const relayHint: string =
+              defaultRelays.length > 0
+                ? defaultRelays[0]!
+                : "wss://relay.damus.io";
+
+            const subjectMap: Record<string, string> = {
+              confirmed: "order-info",
+              shipped: "shipping-info",
+              delivered: "order-completed",
+              completed: "order-completed",
+              cancelled: "order-info",
+            };
+
+            const innerTags: string[][] = [
+              ["p", params.buyerPubkey, relayHint],
+              ["subject", subjectMap[params.status] || "order-info"],
+              ["order", params.orderId],
+              ["status", params.status],
+              ["b", params.buyerPubkey],
+            ];
+            if (params.productAddress) {
+              innerTags.push(["item", params.productAddress, "1"]);
+            }
+
+            const innerEvent = {
+              pubkey: senderPubkey,
+              created_at: Math.floor(Date.now() / 1000),
+              content: params.message,
+              kind: 14,
+              tags: innerTags,
+            };
+
+            const innerEventForHash = { ...innerEvent, id: "", sig: "" };
+            const innerEventId = getEventHash(innerEventForHash as any);
+            const fullInnerEvent = { id: innerEventId, ...innerEvent };
+
+            const randomPrivKey = generateSecretKey();
+
+            const stringifiedInner = JSON.stringify(fullInnerEvent);
+            const conversationKey = nip44.getConversationKey(
+              randomPrivKey,
+              params.buyerPubkey
+            );
+            const encryptedContent = nip44.encrypt(
+              stringifiedInner,
+              conversationKey
+            );
+
+            const now = Math.floor(Date.now() / 1000);
+            const sealEvent = {
+              created_at: now - Math.floor(Math.random() * 172800),
+              kind: 13,
+              tags: [],
+              content: encryptedContent,
+            };
+            const signedSeal = finalizeEvent(sealEvent, randomPrivKey);
+
+            const wrapPrivKey = generateSecretKey();
+            const wrapConversationKey = nip44.getConversationKey(
+              wrapPrivKey,
+              params.buyerPubkey
+            );
+            const wrapContent = nip44.encrypt(
+              JSON.stringify(signedSeal),
+              wrapConversationKey
+            );
+
+            const wrapEvent = finalizeEvent(
+              {
+                created_at: now - Math.floor(Math.random() * 172800),
+                kind: 1059,
+                tags: [["p", params.buyerPubkey]],
+                content: wrapContent,
+              },
+              wrapPrivKey
+            );
+
+            const relayManager = new McpRelayManager(withBlastr(defaultRelays));
+            try {
+              await cacheEvent(wrapEvent as any);
+              await relayManager.publish(wrapEvent as any);
+              notificationSent = true;
+            } finally {
+              relayManager.close();
+            }
+          } catch (dmError) {
+            console.error("Failed to send status notification DM:", dmError);
+          }
+        }
+
+        return successResponse(
+          {
+            orderId: params.orderId,
+            status: params.status,
+            orderUpdated: true,
+            notificationSent,
+          },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to update order status",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  server.tool(
+    "list_messages",
+    "Fetch and decrypt your incoming messages (NIP-17 gift-wrapped DMs). Returns decrypted message content, sender, subject, and read status. Use to check inquiries, order messages, address changes, and other DMs.",
+    {
+      unreadOnly: z
+        .boolean()
+        .optional()
+        .describe("Only return unread messages (default false)"),
+      subject: z
+        .string()
+        .optional()
+        .describe(
+          "Filter by subject tag: 'listing-inquiry', 'order-payment', 'order-info', 'address-change', 'shipping-info', 'order-completed', or any custom subject"
+        ),
+      limit: z
+        .number()
+        .optional()
+        .describe("Max number of messages to return (default 20)"),
+      senderPubkey: z
+        .string()
+        .optional()
+        .describe("Filter by sender pubkey (hex format)"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const { fetchAllMessagesFromDb } = await import(
+          "@/utils/db/db-service"
+        );
+
+        const allMessages = await fetchAllMessagesFromDb(apiKey.pubkey);
+
+        let filtered = allMessages;
+        if (params.unreadOnly) {
+          filtered = filtered.filter((m) => !m.is_read);
+        }
+
+        const limit = params.limit || 20;
+        filtered = filtered.slice(0, limit * 3);
+
+        const decryptedMessages: any[] = [];
+
+        for (const msg of filtered) {
+          if (decryptedMessages.length >= limit) break;
+
+          try {
+            const innerContent = signer.decrypt(msg.pubkey, msg.content);
+            let sealEvent: any;
+            try {
+              sealEvent = JSON.parse(innerContent);
+            } catch {
+              continue;
+            }
+
+            if (!sealEvent || !sealEvent.content) continue;
+
+            let innerMessage: any;
+            try {
+              const sealContent = signer.decrypt(
+                sealEvent.pubkey,
+                sealEvent.content
+              );
+              innerMessage = JSON.parse(sealContent);
+            } catch {
+              continue;
+            }
+
+            if (!innerMessage) continue;
+
+            const tags = innerMessage.tags || [];
+            const tagsMap = new Map<string, string>();
+            for (const tag of tags) {
+              if (tag.length >= 2) {
+                tagsMap.set(tag[0], tag[1]);
+              }
+            }
+
+            const msgSubject = tagsMap.get("subject") || "general";
+
+            if (params.subject && msgSubject !== params.subject) continue;
+            if (
+              params.senderPubkey &&
+              innerMessage.pubkey !== params.senderPubkey
+            )
+              continue;
+
+            decryptedMessages.push({
+              eventId: msg.id,
+              senderPubkey: innerMessage.pubkey,
+              content: innerMessage.content,
+              subject: msgSubject,
+              orderId: tagsMap.get("order") || null,
+              productAddress: tagsMap.get("a") || null,
+              address: tagsMap.get("address") || null,
+              createdAt: innerMessage.created_at,
+              isRead: msg.is_read,
+            });
+          } catch {
+            continue;
+          }
+        }
+
+        return successResponse(
+          {
+            messages: decryptedMessages,
+            total: decryptedMessages.length,
+            hasMore: filtered.length > limit,
+          },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to list messages",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  server.tool(
+    "mark_messages_read",
+    "Mark specific messages as read by their event IDs.",
+    {
+      messageIds: z
+        .array(z.string())
+        .describe("Array of message event IDs to mark as read"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+
+      try {
+        const { getDbPool } = await import("@/utils/db/db-service");
+        const pool = getDbPool();
+        let client;
+        try {
+          client = await pool.connect();
+          await client.query(
+            `UPDATE message_events SET is_read = TRUE WHERE id = ANY($1)`,
+            [params.messageIds]
+          );
+        } finally {
+          if (client) client.release();
+        }
+
+        return successResponse(
+          {
+            markedRead: params.messageIds.length,
+            messageIds: params.messageIds,
+          },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to mark messages as read",
           error instanceof Error ? error.message : "Unknown error",
           startTime
         );

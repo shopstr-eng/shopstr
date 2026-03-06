@@ -56,10 +56,40 @@ function registerPurchaseTools(
 
   server.tool(
     "create_order",
-    "Place an order for a product. Supports Bitcoin payment methods: lightning (Bitcoin Lightning invoice) or cashu (ecash tokens). Requires read_write API key permission.",
+    "Place an order for a product. Supports Bitcoin payment methods: lightning (Bitcoin Lightning invoice) or cashu (ecash tokens). Supports selecting product specifications (size, volume, bulk bundle) and providing a shipping address. Requires read_write API key permission.",
     {
       productId: z.string().describe("The product event ID to purchase"),
       quantity: z.number().optional().describe("Quantity to order (default 1)"),
+      selectedSize: z
+        .string()
+        .optional()
+        .describe(
+          "Selected size option (must match a size defined on the product)"
+        ),
+      selectedVolume: z
+        .string()
+        .optional()
+        .describe(
+          "Selected volume/variant option (must match a volume defined on the product). Overrides base price."
+        ),
+      selectedBulkUnits: z
+        .number()
+        .optional()
+        .describe(
+          "Selected bulk/bundle tier (number of units). Must match a bulk tier defined on the product."
+        ),
+      shippingAddress: z
+        .object({
+          name: z.string().describe("Recipient name"),
+          address: z.string().describe("Street address"),
+          unit: z.string().optional().describe("Apartment/unit number"),
+          city: z.string().describe("City"),
+          postalCode: z.string().describe("Postal/ZIP code"),
+          stateProvince: z.string().describe("State or province"),
+          country: z.string().describe("Country"),
+        })
+        .optional()
+        .describe("Shipping address for physical goods"),
       discountCode: z.string().optional().describe("Optional discount code"),
       paymentMethod: z
         .enum(["lightning", "cashu"])
@@ -81,6 +111,10 @@ function registerPurchaseTools(
     async ({
       productId,
       quantity,
+      selectedSize,
+      selectedVolume,
+      selectedBulkUnits,
+      shippingAddress,
       discountCode,
       paymentMethod,
       mintUrl,
@@ -103,6 +137,10 @@ function registerPurchaseTools(
           body: JSON.stringify({
             productId,
             quantity: quantity || 1,
+            selectedSize,
+            selectedVolume,
+            selectedBulkUnits,
+            shippingAddress,
             discountCode,
             paymentMethod: paymentMethod || "lightning",
             mintUrl,
@@ -410,6 +448,183 @@ function registerPurchaseTools(
                   responseTimeMs: Date.now() - startTime,
                   dataSource: "cached_db",
                 },
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+  server.tool(
+    "get_notifications",
+    "Check for new activity: unread message count, recent orders as buyer, and recent orders as seller. Use this to detect new inquiries, order updates, and address changes that need attention.",
+    {
+      includeOrders: z
+        .boolean()
+        .optional()
+        .describe("Include recent order summaries (default true)"),
+      orderLimit: z
+        .number()
+        .optional()
+        .describe("Max number of recent orders to return (default 10)"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (
+        apiKey.permissions !== "read_write" &&
+        apiKey.permissions !== "full_access"
+      )
+        return permissionError();
+
+      try {
+        const { getUnreadMessageCount } = await import("@/utils/db/db-service");
+        const { listMcpOrders, listMcpOrdersAsSeller, formatOrderForResponse } =
+          await import("@/mcp/tools/purchase-tools");
+
+        const unreadCount = await getUnreadMessageCount(apiKey.pubkey);
+
+        const result: Record<string, any> = {
+          unreadMessages: unreadCount,
+        };
+
+        if (params.includeOrders !== false) {
+          const limit = params.orderLimit || 10;
+          const buyerOrders = await listMcpOrders(apiKey.pubkey, limit);
+          const sellerOrders = await listMcpOrdersAsSeller(
+            apiKey.pubkey,
+            limit
+          );
+
+          result.ordersAsBuyer = {
+            total: buyerOrders.length,
+            recent: buyerOrders.map(formatOrderForResponse),
+          };
+          result.ordersAsSeller = {
+            total: sellerOrders.length,
+            recent: sellerOrders.map(formatOrderForResponse),
+          };
+
+          const pendingBuyerOrders = buyerOrders.filter(
+            (o) =>
+              o.payment_status === "pending" || o.order_status === "pending"
+          );
+          const pendingSellerOrders = sellerOrders.filter(
+            (o) =>
+              o.order_status === "pending" || o.order_status === "confirmed"
+          );
+
+          result.actionRequired = {
+            pendingPayments: pendingBuyerOrders.length,
+            ordersToFulfill: pendingSellerOrders.length,
+            unreadMessages: unreadCount,
+          };
+        }
+
+        result._meta = {
+          responseTimeMs: Date.now() - startTime,
+          dataSource: "cached_db",
+        };
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({
+                error: "Failed to get notifications",
+                details:
+                  error instanceof Error ? error.message : "Unknown error",
+                _meta: { responseTimeMs: Date.now() - startTime },
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.tool(
+    "list_seller_orders",
+    "List orders where you are the seller. Shows incoming purchases from buyers with payment status, order status, quantities, and shipping addresses.",
+    {
+      limit: z
+        .number()
+        .optional()
+        .describe("Max number of orders to return (default 50)"),
+      offset: z
+        .number()
+        .optional()
+        .describe("Offset for pagination (default 0)"),
+      status: z
+        .string()
+        .optional()
+        .describe(
+          "Filter by order status: pending, confirmed, shipped, delivered, cancelled"
+        ),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (
+        apiKey.permissions !== "read_write" &&
+        apiKey.permissions !== "full_access"
+      )
+        return permissionError();
+
+      try {
+        const { listMcpOrdersAsSeller, formatOrderForResponse } = await import(
+          "@/mcp/tools/purchase-tools"
+        );
+
+        let orders = await listMcpOrdersAsSeller(
+          apiKey.pubkey,
+          params.limit || 50,
+          params.offset || 0
+        );
+
+        if (params.status) {
+          orders = orders.filter((o) => o.order_status === params.status);
+        }
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(
+                {
+                  orders: orders.map(formatOrderForResponse),
+                  total: orders.length,
+                  _meta: {
+                    responseTimeMs: Date.now() - startTime,
+                    dataSource: "cached_db",
+                    resultCount: orders.length,
+                  },
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({
+                error: "Failed to list seller orders",
+                details:
+                  error instanceof Error ? error.message : "Unknown error",
+                _meta: { responseTimeMs: Date.now() - startTime },
               }),
             },
           ],
