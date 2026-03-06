@@ -100,21 +100,31 @@ Preferred communication style: Simple, everyday language.
 
 ## MCP Server (AI Agent Integration)
 
-The platform exposes a Model Context Protocol (MCP) server that allows AI agents to programmatically browse the marketplace and place orders.
+The platform exposes a Model Context Protocol (MCP) server enabling AI agents to programmatically participate in the marketplace as both buyers and sellers. Agents can browse products, place orders, create listings, manage shop profiles, upload media, send encrypted DMs, publish reviews, manage communities, configure relays/blossom servers, handle discount codes, and manage Cashu wallets — all using their Nostr keys for event signing.
 
 ### Architecture
 
 - **MCP Endpoint**: `pages/api/mcp/index.ts` — Streamable HTTP transport endpoint that handles MCP protocol messages
 - **Server Factory**: `mcp/server.ts` — Creates the MCP server with registered tools and resources
 - **Read Tools**: `mcp/tools/read-tools.ts` — Tools for browsing products, companies, reviews, and discount codes
-- **Purchase Tools**: `mcp/tools/purchase-tools.ts` — Database functions for MCP order management
-- **Resources**: `mcp/resources.ts` — MCP resources (product catalog)
-- **Auth Middleware**: `utils/mcp/auth.ts` — API key generation, validation, and request authentication
+- **Write Tools**: `mcp/tools/write-tools.ts` — Tools for full marketplace participation (profiles, listings, reviews, DMs, media, relay/blossom config, discount codes, Cashu wallet)
+- **Purchase Tools**: Inline in `pages/api/mcp/index.ts` — Order creation, status, payment verification
+- **Resources**: `mcp/resources.ts` — MCP resources (product catalog via `shopstr://catalog/products`)
+- **Nostr Signing**: `utils/mcp/nostr-signing.ts` — Server-side Nostr event signing (`McpNostrSigner`), relay management (`McpRelayManager`), encrypted nsec storage, and `signAndPublishEvent()` utility
+- **Auth Middleware**: `utils/mcp/auth.ts` — API key generation, validation, request authentication, nsec storage/retrieval, and `getAgentSigner()` for server-side signing
+- **Metrics**: `utils/mcp/metrics.ts` — Request tracking, latency percentiles, rate limiting
 - **API Key Management**: `pages/api/mcp/api-keys.ts` — CRUD endpoints for API keys
 - **Order API**: `pages/api/mcp/create-order.ts` — Order creation, status, and listing endpoint
+- **Payment Verification**: `pages/api/mcp/verify-payment.ts` — Lightning payment verification
+- **Onboarding**: `pages/api/mcp/onboard.ts` — Zero-touch agent registration with optional nsec storage
+- **Set Nsec**: `pages/api/mcp/set-nsec.ts` — Endpoint for agents to securely set their nsec after onboarding
+- **Status**: `pages/api/mcp/status.ts` — Service health and metrics
+- **Agent Manifest**: `pages/api/.well-known/agent.json.ts` — Machine-readable service description (v2.0.0)
 - **Settings UI**: `pages/settings/api-keys.tsx` — UI page for managing API keys
 
 ### Available MCP Tools
+
+**Read Tools (any valid key):**
 
 - `search_products` — Search/filter products by keyword, category, location, price range
 - `get_product_details` — Get full details for a product by ID
@@ -128,6 +138,34 @@ The platform exposes a Model Context Protocol (MCP) server that allows AI agents
 - `get_order_status` — Check order status (requires read_write key)
 - `list_orders` — List orders (requires read_write key)
 
+**Purchase Tools (requires read_write or full_access):**
+
+- `create_order` — Place an order with payment method selection. Supports: `lightning` and `cashu`
+- `verify_payment` — Verify Lightning invoice payment status
+- `get_order_status` — Check order status
+- `list_orders` — List orders
+
+**Write Tools (requires full_access + stored nsec):**
+
+- `set_user_profile` — Create/update Nostr user profile (kind 0)
+- `set_shop_profile` — Create/update shop profile (kind 30019)
+- `create_product_listing` — Publish product listing (kind 30402) with full tag support
+- `update_product_listing` — Update existing listing by d-tag
+- `delete_listing` — Delete events (kind 5)
+- `publish_review` — Publish review (kind 31555) with ratings
+- `create_community_post` — Post to communities (kind 1111), supports replies
+- `send_direct_message` — Send encrypted NIP-17 gift-wrapped DMs (kind 1059/13/14), supports order messages and listing inquiries
+- `set_relay_list` — Publish relay list (kind 10002, NIP-65)
+- `set_blossom_servers` — Publish blossom server list (kind 10063)
+- `upload_media` — Upload to Blossom servers with signed auth (kind 24242)
+- `create_discount_code` — Create shop discount codes
+- `delete_discount_code` — Delete discount codes
+- `list_discount_codes` — List shop discount codes
+- `get_cashu_balance` — Check Cashu wallet balance from proof events (kind 7375)
+- `receive_cashu_tokens` — Receive and store Cashu tokens (kind 7375)
+- `set_cashu_mints` — Configure wallet mints (kind 17375)
+- `send_cashu_payment` — Melt tokens to pay Lightning invoices
+
 ### Payment Methods
 
 - **Lightning**: Generates a Cashu mint quote (bolt11 invoice) via `@cashu/cashu-ts`. Agent pays the invoice, then calls `verify_payment` to confirm. Default mint: `https://mint.minibits.cash/Bitcoin`.
@@ -136,9 +174,19 @@ The platform exposes a Model Context Protocol (MCP) server that allows AI agents
 - **Fiat**: Returns seller's fiat payment handles (Venmo, Cash App, etc.). Agent sends payment externally and includes order ID in memo. Seller confirms receipt manually.
 - **Payment method discounts**: Sellers can set per-method discounts (e.g., 10% off Bitcoin). Applied automatically in order pricing.
 
-### Database Tables
+#### Permission Levels
 
-- `mcp_api_keys` — API keys with hashed secrets, permissions (read/read_write), and usage tracking
+- `read` — Browse-only access (search products, view profiles/reviews)
+- `read_write` — Browse + purchase (place orders, verify payments)
+- `full_access` — Full marketplace participation (all read/write tools + server-side Nostr event signing). Requires nsec stored during onboarding or via `/api/mcp/set-nsec`.
+
+#### Server-Side Nostr Signing
+
+Agents with `full_access` permission have their Nostr private key (nsec) stored encrypted in the database using AES-256-GCM. The encryption key is configured via the `MCP_ENCRYPTION_KEY` environment variable. The `McpNostrSigner` class provides `sign()`, `encrypt()`, `decrypt()`, and `getPubKey()` methods without browser dependencies. Events are signed server-side, cached to the database, and published to relays via `McpRelayManager` (using `nostr-tools` SimplePool).
+
+#### Database Tables
+
+- `mcp_api_keys` — API keys with hashed secrets, permissions (read/read_write/full_access), usage tracking, and optional encrypted_nsec for server-side signing
 - `mcp_orders` — Orders placed through the MCP/API with payment and status tracking
 
 ### Agentic Commerce Endpoints
@@ -151,4 +199,4 @@ The platform exposes a Model Context Protocol (MCP) server that allows AI agents
 
 ### Authentication
 
-API keys are created via the `/settings/api-keys` UI page, the `/api/mcp/api-keys` endpoint, or the zero-touch `/api/mcp/onboard` endpoint. Keys use SHA-256 hashing and Bearer token authentication. Two permission levels: `read` (browse only) and `read_write` (browse + purchase).
+API keys are created via the `/settings/api-keys` UI page, the `/api/mcp/api-keys` endpoint, or the zero-touch `/api/mcp/onboard` endpoint. Keys use PBKDF2 hashing and Bearer token authentication. Three permission levels: `read` (browse only), `read_write` (browse + purchase), and `full_access` (full marketplace participation with Nostr signing). Key prefix: `sk_`. Agents can set their nsec post-onboarding via `POST /api/mcp/set-nsec`.
