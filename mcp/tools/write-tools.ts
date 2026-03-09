@@ -111,6 +111,16 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .optional()
         .describe("NIP-05 identifier (e.g. user@domain.com)"),
       website: z.string().optional().describe("Website URL"),
+      fiat_options: z
+        .record(z.string(), z.string())
+        .optional()
+        .describe(
+          "Fiat payment handles — object mapping method names (venmo, cashapp, zelle, etc.) to usernames/handles"
+        ),
+      payment_preference: z
+        .enum(["ecash", "lightning", "fiat"])
+        .optional()
+        .describe("Preferred payment method (ecash, lightning, or fiat)"),
     },
     async (params) => {
       const startTime = Date.now();
@@ -119,7 +129,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const content: Record<string, string> = {};
+        const content: Record<string, any> = {};
         if (params.name) content.name = params.name;
         if (params.display_name) content.display_name = params.display_name;
         if (params.about) content.about = params.about;
@@ -128,6 +138,9 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         if (params.lud16) content.lud16 = params.lud16;
         if (params.nip05) content.nip05 = params.nip05;
         if (params.website) content.website = params.website;
+        if (params.fiat_options) content.fiat_options = params.fiat_options;
+        if (params.payment_preference)
+          content.payment_preference = params.payment_preference;
 
         const eventTemplate: EventTemplate = {
           created_at: Math.floor(Date.now() / 1000),
@@ -177,6 +190,12 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .array(z.string())
         .optional()
         .describe("Array of merchant pubkeys associated with this shop"),
+      paymentMethodDiscounts: z
+        .record(z.string(), z.number())
+        .optional()
+        .describe(
+          "Per-method discount percentages — object mapping method keys (bitcoin, stripe, venmo, cash, etc.) to discount percentages"
+        ),
     },
     async (params) => {
       const startTime = Date.now();
@@ -190,6 +209,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         if (params.name) content.name = params.name;
         if (params.about) content.about = params.about;
         if (params.merchants) content.merchants = params.merchants;
+        if (params.paymentMethodDiscounts)
+          content.paymentMethodDiscounts = params.paymentMethodDiscounts;
         const ui: Record<string, any> = {};
         if (params.picture) ui.picture = params.picture;
         if (params.banner) ui.banner = params.banner;
@@ -277,6 +298,20 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .array(z.object({ units: z.string(), price: z.string() }))
         .optional()
         .describe("Bulk/bundle pricing tiers (e.g. 5 units for $100)"),
+      weights: z
+        .array(z.object({ weight: z.string(), price: z.string() }))
+        .optional()
+        .describe(
+          "Weight options with prices (e.g. [{weight: '1lb', price: '10'}, {weight: '5lb', price: '45'}])"
+        ),
+      herdshareAgreement: z
+        .string()
+        .optional()
+        .describe("URL to a herdshare agreement PDF"),
+      requiredCustomerInfo: z
+        .string()
+        .optional()
+        .describe("Required buyer info (e.g. 'Email required')"),
       pickupLocations: z
         .array(z.string())
         .optional()
@@ -370,6 +405,20 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           for (const b of params.bulk) {
             tags.push(["bulk", b.units, b.price]);
           }
+        }
+
+        if (params.weights) {
+          for (const w of params.weights) {
+            tags.push(["weight", w.weight, w.price]);
+          }
+        }
+
+        if (params.herdshareAgreement) {
+          tags.push(["herdshare_agreement", params.herdshareAgreement]);
+        }
+
+        if (params.requiredCustomerInfo) {
+          tags.push(["required_customer_info", params.requiredCustomerInfo]);
         }
 
         if (params.condition) {
@@ -506,6 +555,18 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .array(z.object({ units: z.string(), price: z.string() }))
         .optional()
         .describe("Updated bulk/bundle pricing tiers"),
+      weights: z
+        .array(z.object({ weight: z.string(), price: z.string() }))
+        .optional()
+        .describe("Updated weight options with prices"),
+      herdshareAgreement: z
+        .string()
+        .optional()
+        .describe("Updated URL to a herdshare agreement PDF"),
+      requiredCustomerInfo: z
+        .string()
+        .optional()
+        .describe("Updated required buyer info (e.g. 'Email required')"),
       pickupLocations: z
         .array(z.string())
         .optional()
@@ -593,6 +654,17 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           for (const b of params.bulk) {
             tags.push(["bulk", b.units, b.price]);
           }
+        }
+        if (params.weights) {
+          for (const w of params.weights) {
+            tags.push(["weight", w.weight, w.price]);
+          }
+        }
+        if (params.herdshareAgreement) {
+          tags.push(["herdshare_agreement", params.herdshareAgreement]);
+        }
+        if (params.requiredCustomerInfo) {
+          tags.push(["required_customer_info", params.requiredCustomerInfo]);
         }
         if (params.pickupLocations) {
           for (const loc of params.pickupLocations) {
@@ -2404,6 +2476,113 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       } catch (error) {
         return errorResponse(
           "Failed to list seller subscriptions",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  server.tool(
+    "set_notification_email",
+    "Set or update the notification email for order updates, subscription reminders, etc. Supports both buyer and seller roles.",
+    {
+      email: z.string().describe("Email address for notifications"),
+      role: z
+        .enum(["buyer", "seller"])
+        .describe("Role for the notification email (buyer or seller)"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const response = await fetch(
+          `${baseUrl}/api/email/notification-email`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: params.email,
+              role: params.role,
+              pubkey,
+            }),
+          }
+        );
+
+        const data = await response.json();
+        if (!response.ok) {
+          return errorResponse(
+            "Failed to set notification email",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+
+        return successResponse(
+          {
+            email: params.email,
+            role: params.role,
+            pubkey,
+          },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to set notification email",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  server.tool(
+    "get_notification_email",
+    "Retrieve the notification email configured for a given pubkey and role (buyer or seller).",
+    {
+      role: z
+        .enum(["buyer", "seller"])
+        .optional()
+        .describe(
+          "Role to query (buyer or seller). Defaults to checking both."
+        ),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const roleParam = params.role ? `&role=${params.role}` : "";
+        const response = await fetch(
+          `${baseUrl}/api/email/notification-email?pubkey=${pubkey}${roleParam}`
+        );
+
+        const data = await response.json();
+        if (!response.ok) {
+          return errorResponse(
+            "Failed to get notification email",
+            data.error || "Unknown error",
+            startTime
+          );
+        }
+
+        return successResponse(
+          {
+            email: data.email,
+            pubkey,
+            role: params.role || "any",
+          },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to get notification email",
           error instanceof Error ? error.message : "Unknown error",
           startTime
         );

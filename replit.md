@@ -126,21 +126,21 @@ The platform exposes a Model Context Protocol (MCP) server enabling AI agents to
 
 **Read Tools (any valid key):**
 
-- `search_products` — Search/filter products by keyword, category, location, price range. Responses include subscription availability info (enabled, discount, frequencies)
-- `get_product_details` — Get full details for a product by ID, including subscription settings
-- `list_companies` — List all seller/shop profiles
-- `get_company_details` — Get a company's profile, products, and reviews
+- `search_products` — Search/filter products by keyword, category, location, price range. Responses include subscription info, variant options (sizes, volumes, weights, bulk), herdshare agreements, pickup locations, and required customer info
+- `get_product_details` — Get full details for a product by ID, including all variant options, subscription settings, herdshare agreement URL, and pickup locations
+- `list_companies` — List all seller/shop profiles with fiat options, payment method discounts, and free shipping settings
+- `get_company_details` — Get a company's profile, products, and reviews. Profile includes fiat options, payment preferences, payment method discounts, and free shipping thresholds
 - `get_reviews` — Get reviews for a product or seller
 - `check_discount_code` — Validate a discount code
 - `get_payment_methods` — Get available payment methods for a seller (stripe, lightning, cashu, fiat)
 
 **Purchase Tools (requires read_write or full_access):**
 
-- `create_order` — Place an order with payment method selection (`strip`/`lightning`/`cashu`/`fiat`), product spec selection (`selectedSize`/`selectedVolume`/`selectedBulkUnits`), and optional `shippingAddress`. Supports: `stripe` (credit card), `lightning` (Bitcoin Lightning invoice), `cashu` (ecash tokens), `fiat` (Venmo, Cash App, Zelle, etc.)
+- `create_order` — Place an order with payment method selection (`stripe`/`lightning`/`cashu`/`fiat`), product spec selection (`selectedSize`/`selectedVolume`/`selectedBulkUnits`/`selectedWeight`), and optional `shippingAddress`. Supports: `stripe` (credit card), `lightning` (Bitcoin Lightning invoice), `cashu` (ecash tokens), `fiat` (Venmo, Cash App, Zelle, etc.)
 - `verify_payment` — Verify Lightning invoice payment status
 - `get_order_status` — Check order status
 - `list_orders` — List orders
-- `create_subscription` — Create a recurring subscription order for a subscription-enabled product. Requires product to have subscription tags. Parameters: productId, frequency (weekly/every_2_weeks/monthly/every_2_months/quarterly), buyerEmail, quantity, shippingAddress, variantInfo. Creates a Stripe Subscription via the seller's connected account.
+- `create_subscription` — Create a recurring subscription order for a subscription-enabled product. Requires product to have subscription tags. Parameters: productId, frequency (weekly/every_2_weeks/monthly/every_2_months/quarterly), buyerEmail, quantity, shippingAddress, selectedSize, selectedVolume, selectedWeight. Creates a Stripe Subscription via the seller's connected account.
 - `list_subscriptions` — List buyer's subscriptions by pubkey or email
 - `cancel_subscription` — Cancel an existing subscription (remains active until end of billing period)
 - `update_subscription` — Update subscription shipping address or next billing date
@@ -149,10 +149,12 @@ The platform exposes a Model Context Protocol (MCP) server enabling AI agents to
 
 **Write Tools (requires full_access + stored nsec):**
 
-- `set_user_profile` — Create/update Nostr user profile (kind 0)
-- `set_shop_profile` — Create/update shop profile (kind 30019)
-- `create_product_listing` — Publish product listing (kind 30402) with full tag support, including sizes, volumes, bulk/bundle pricing, pickup locations, expiration, and subscription settings (subscriptionEnabled, subscriptionDiscount, subscriptionFrequencies)
-- `update_product_listing` — Update existing listing by d-tag, supports all fields including sizes, volumes, bulk pricing, pickup locations, expiration, and subscription settings
+- `set_user_profile` — Create/update Nostr user profile (kind 0). Supports fiat_options (object mapping method names to usernames, e.g. `{venmo: "@handle"}`), payment_preference (ecash/lightning/fiat), and standard fields (name, about, picture, banner, lud16, nip05, website)
+- `set_shop_profile` — Create/update shop profile (kind 30019). Supports paymentMethodDiscounts (object mapping method keys like "bitcoin", "stripe", "venmo" to discount percentages), freeShippingThreshold, freeShippingCurrency, and standard fields (name, about, picture, banner, theme, darkMode, merchants)
+- `set_notification_email` — Set notification email address for order updates and communications. Supports both buyer and seller roles
+- `get_notification_email` — Retrieve configured notification email by pubkey and optional role
+- `create_product_listing` — Publish product listing (kind 30402) with full tag support, including sizes, volumes, weights (with per-weight pricing), bulk/bundle pricing, pickup locations, expiration, herdshareAgreement (URL), requiredCustomerInfo, and subscription settings (subscriptionEnabled, subscriptionDiscount, subscriptionFrequencies)
+- `update_product_listing` — Update existing listing by d-tag, supports all fields including sizes, volumes, weights, bulk pricing, pickup locations, expiration, herdshare agreement, required customer info, and subscription settings
 - `delete_listing` — Delete events (kind 5)
 - `publish_review` — Publish review (kind 31555) with ratings
 - `create_community_post` — Post to communities (kind 1111), supports replies

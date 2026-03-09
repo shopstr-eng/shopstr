@@ -70,6 +70,24 @@ function parseProductEvent(event: NostrEvent) {
   const shippingCost =
     shippingTag && shippingTag[2] ? Number(shippingTag[2]) : 0;
 
+  const sizes = tags
+    .filter((t) => t[0] === "size" && t[1])
+    .map((t) => ({ size: t[1]!, quantity: t[2] ? Number(t[2]) : undefined }));
+
+  const volumes = tags
+    .filter((t) => t[0] === "volume" && t[1])
+    .map((t) => ({ volume: t[1]!, price: t[2] ? Number(t[2]) : undefined }));
+
+  const weights = tags
+    .filter((t) => t[0] === "weight" && t[1])
+    .map((t) => ({ weight: t[1]!, price: t[2] ? Number(t[2]) : undefined }));
+
+  const bulk = tags
+    .filter((t) => t[0] === "bulk" && t[1] && t[2])
+    .map((t) => ({ units: Number(t[1]), price: Number(t[2]) }));
+
+  const pickupLocations = getAllTagValues(tags, "pickup_location");
+
   return {
     id: event.id,
     pubkey: event.pubkey,
@@ -88,6 +106,13 @@ function parseProductEvent(event: NostrEvent) {
       : undefined,
     condition: getTagValue(tags, "condition"),
     status: getTagValue(tags, "status"),
+    sizes: sizes.length > 0 ? sizes : undefined,
+    volumes: volumes.length > 0 ? volumes : undefined,
+    weights: weights.length > 0 ? weights : undefined,
+    bulk: bulk.length > 0 ? bulk : undefined,
+    herdshareAgreement: getTagValue(tags, "herdshare_agreement"),
+    pickupLocations: pickupLocations.length > 0 ? pickupLocations : undefined,
+    requiredCustomerInfo: getTagValue(tags, "required_customer_info"),
     createdAt: event.created_at,
     pricing: buildPricingBlock(price, currency, shippingType, shippingCost),
     subscription: {
@@ -111,7 +136,7 @@ function parseProfileEvent(event: NostrEvent) {
     content = {};
   }
 
-  return {
+  const base: Record<string, any> = {
     pubkey: event.pubkey,
     kind: event.kind,
     name: content.name || "",
@@ -122,6 +147,24 @@ function parseProfileEvent(event: NostrEvent) {
     nip05: content.nip05 || "",
     createdAt: event.created_at,
   };
+
+  if (event.kind === 0) {
+    if (content.website) base.website = content.website;
+    if (content.fiat_options) base.fiat_options = content.fiat_options;
+    if (content.payment_preference)
+      base.payment_preference = content.payment_preference;
+  }
+
+  if (event.kind === 30019) {
+    if (content.paymentMethodDiscounts)
+      base.paymentMethodDiscounts = content.paymentMethodDiscounts;
+    if (content.freeShippingThreshold !== undefined)
+      base.freeShippingThreshold = content.freeShippingThreshold;
+    if (content.freeShippingCurrency)
+      base.freeShippingCurrency = content.freeShippingCurrency;
+  }
+
+  return base;
 }
 
 function parseReviewEvent(event: NostrEvent) {

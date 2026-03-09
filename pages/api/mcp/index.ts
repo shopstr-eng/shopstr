@@ -76,6 +76,12 @@ function registerPurchaseTools(
         .describe(
           "Selected volume/variant option (must match a volume defined on the product). Overrides base price."
         ),
+      selectedWeight: z
+        .string()
+        .optional()
+        .describe(
+          "Selected weight option (must match a weight defined on the product). Overrides base price."
+        ),
       selectedBulkUnits: z
         .number()
         .optional()
@@ -124,6 +130,7 @@ function registerPurchaseTools(
       buyerEmail,
       selectedSize,
       selectedVolume,
+      selectedWeight,
       selectedBulkUnits,
       shippingAddress,
       discountCode,
@@ -152,6 +159,7 @@ function registerPurchaseTools(
             buyerEmail,
             selectedSize,
             selectedVolume,
+            selectedWeight,
             selectedBulkUnits,
             shippingAddress,
             discountCode,
@@ -525,10 +533,24 @@ function registerPurchaseTools(
         })
         .optional()
         .describe("Shipping address for subscription deliveries"),
-      variantInfo: z
+      selectedSize: z
         .string()
         .optional()
-        .describe("Variant information (e.g. size, color)"),
+        .describe(
+          "Selected size option (must match a size defined on the product)"
+        ),
+      selectedVolume: z
+        .string()
+        .optional()
+        .describe(
+          "Selected volume/variant option (must match a volume defined on the product)"
+        ),
+      selectedWeight: z
+        .string()
+        .optional()
+        .describe(
+          "Selected weight option (must match a weight defined on the product)"
+        ),
     },
     async ({
       productId,
@@ -536,7 +558,9 @@ function registerPurchaseTools(
       buyerEmail,
       quantity,
       shippingAddress,
-      variantInfo,
+      selectedSize,
+      selectedVolume,
+      selectedWeight,
     }) => {
       const startTime = Date.now();
       if (
@@ -654,7 +678,9 @@ function registerPurchaseTools(
               buyerPubkey: apiKey.pubkey || null,
               productEventId: productId,
               quantity: quantity || 1,
-              variantInfo: variantInfo || null,
+              selectedSize: selectedSize || null,
+              selectedVolume: selectedVolume || null,
+              selectedWeight: selectedWeight || null,
               shippingAddress: shippingAddress || null,
             }),
           }
