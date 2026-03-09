@@ -1,4 +1,4 @@
-import { Pool } from "pg";
+import { Pool, PoolClient } from "pg";
 import { NostrEvent } from "../types/types";
 
 let pool: Pool | null = null;
@@ -7,6 +7,25 @@ let initializingTables = false;
 
 // Queue for serializing cache operations
 let cacheQueue: Promise<void> = Promise.resolve();
+
+export async function ensureFailedRelayPublishesTable(
+  client: PoolClient
+): Promise<void> {
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS failed_relay_publishes (
+      event_id TEXT PRIMARY KEY,
+      event_data TEXT NOT NULL,
+      relays TEXT NOT NULL,
+      created_at BIGINT NOT NULL,
+      retry_count INTEGER DEFAULT 0
+    )
+  `);
+
+  await client.query(`
+    ALTER TABLE failed_relay_publishes
+    ADD COLUMN IF NOT EXISTS event_data TEXT
+  `);
+}
 
 // Initialize the database connection pool
 export function getDbPool(): Pool {
@@ -298,6 +317,8 @@ async function initializeTables(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_message_events_is_read ON message_events(is_read);
       CREATE INDEX IF NOT EXISTS idx_message_events_order_id ON message_events(order_id);
     `);
+
+    await ensureFailedRelayPublishesTable(client);
 
     tablesInitialized = true;
     initializingTables = false;
