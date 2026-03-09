@@ -136,7 +136,7 @@ The platform exposes a Model Context Protocol (MCP) server enabling AI agents to
 
 **Purchase Tools (requires read_write or full_access):**
 
-- `create_order` — Place a one-time order with payment method selection. Supports: `stripe` (credit card), `lightning` (Bitcoin Lightning invoice), `cashu` (ecash tokens), `fiat` (Venmo, Cash App, Zelle, etc.)
+- `create_order` — Place an order with payment method selection (`strip`/`lightning`/`cashu`/`fiat`), product spec selection (`selectedSize`/`selectedVolume`/`selectedBulkUnits`), and optional `shippingAddress`. Supports: `stripe` (credit card), `lightning` (Bitcoin Lightning invoice), `cashu` (ecash tokens), `fiat` (Venmo, Cash App, Zelle, etc.)
 - `verify_payment` — Verify Lightning invoice payment status
 - `get_order_status` — Check order status
 - `list_orders` — List orders
@@ -144,13 +144,15 @@ The platform exposes a Model Context Protocol (MCP) server enabling AI agents to
 - `list_subscriptions` — List buyer's subscriptions by pubkey or email
 - `cancel_subscription` — Cancel an existing subscription (remains active until end of billing period)
 - `update_subscription` — Update subscription shipping address or next billing date
+- - `list_seller_orders` — List incoming orders as seller, with optional status filter
+- `get_notifications` — Check for new activity: unread message count, recent orders as buyer/seller, and `actionRequired` summary (pending payments, orders to fulfill, unread messages)
 
 **Write Tools (requires full_access + stored nsec):**
 
 - `set_user_profile` — Create/update Nostr user profile (kind 0)
 - `set_shop_profile` — Create/update shop profile (kind 30019)
-- `create_product_listing` — Publish product listing (kind 30402) with full tag support, including subscription settings (subscriptionEnabled, subscriptionDiscount, subscriptionFrequencies)
-- `update_product_listing` — Update existing listing by d-tag, including subscription settings
+- `create_product_listing` — Publish product listing (kind 30402) with full tag support, including sizes, volumes, bulk/bundle pricing, pickup locations, expiration, and subscription settings (subscriptionEnabled, subscriptionDiscount, subscriptionFrequencies)
+- `update_product_listing` — Update existing listing by d-tag, supports all fields including sizes, volumes, bulk pricing, pickup locations, expiration, and subscription settings
 - `delete_listing` — Delete events (kind 5)
 - `publish_review` — Publish review (kind 31555) with ratings
 - `create_community_post` — Post to communities (kind 1111), supports replies
@@ -166,6 +168,11 @@ The platform exposes a Model Context Protocol (MCP) server enabling AI agents to
 - `set_cashu_mints` — Configure wallet mints (kind 17375)
 - `send_cashu_payment` — Melt tokens to pay Lightning invoices
 - `list_seller_subscriptions` — List all subscriptions to your products with optional status filter (active/paused/canceled)
+- `update_order_address` — Change shipping address post-purchase, sends encrypted address change DM to seller and updates order record
+- `send_shipping_update` — Send shipping info (tracking number, carrier, ETA) to buyer via encrypted DM and update order status to shipped
+- `update_order_status` — Update order status (confirmed/shipped/delivered/completed/cancelled) with optional notification DM to buyer
+- `list_messages` — Fetch and decrypt incoming NIP-17 DMs with filters for unread, subject type, and sender. Returns decrypted content, subject, order IDs, and read status
+- `mark_messages_read` — Mark specific messages as read by event ID
 
 ### Payment Methods
 
