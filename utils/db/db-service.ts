@@ -1,4 +1,4 @@
-import { Pool } from "pg";
+import { Pool, PoolClient } from "pg";
 import { NostrEvent } from "../types/types";
 
 let pool: Pool | null = null;
@@ -7,6 +7,25 @@ let initializingTables = false;
 
 // Queue for serializing cache operations
 let cacheQueue: Promise<void> = Promise.resolve();
+
+export async function ensureFailedRelayPublishesTable(
+  client: PoolClient
+): Promise<void> {
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS failed_relay_publishes (
+      event_id TEXT PRIMARY KEY,
+      event_data TEXT NOT NULL,
+      relays TEXT NOT NULL,
+      created_at BIGINT NOT NULL,
+      retry_count INTEGER DEFAULT 0
+    )
+  `);
+
+  await client.query(`
+    ALTER TABLE failed_relay_publishes
+    ADD COLUMN IF NOT EXISTS event_data TEXT
+  `);
+}
 
 // Initialize the database connection pool
 export function getDbPool(): Pool {
@@ -214,9 +233,10 @@ async function initializeTables(): Promise<void> {
       END $$;
     `);
 
+    await ensureFailedRelayPublishesTable(client);
+
     tablesInitialized = true;
     initializingTables = false;
-    console.log("Database tables initialized successfully");
   } catch (error) {
     console.error("Failed to initialize tables:", error);
     initializingTables = false;
@@ -405,11 +425,6 @@ export async function cacheEvents(events: NostrEvent[]): Promise<void> {
             if ((isDeadlock || isConnectionError) && attempt < maxRetries - 1) {
               attempt++;
               const delay = 100 * Math.pow(2, attempt);
-              console.log(
-                `Database error detected (${
-                  isDeadlock ? "deadlock" : "connection error"
-                }), retrying in ${delay}ms (attempt ${attempt}/${maxRetries})...`
-              );
               await new Promise((res) => setTimeout(res, delay));
             } else {
               reject(error);
