@@ -1,5 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getDbPool } from "@/utils/db/db-service";
+import {
+  ensureFailedRelayPublishesTable,
+  getDbPool,
+} from "@/utils/db/db-service";
 
 export default async function handler(
   req: NextApiRequest,
@@ -14,6 +17,7 @@ export default async function handler(
 
   try {
     client = await dbPool.connect();
+    await ensureFailedRelayPublishesTable(client);
 
     // Get all failed publishes with retry count < 5 (limit retries)
     const result = await client.query(

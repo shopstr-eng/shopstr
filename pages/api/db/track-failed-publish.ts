@@ -1,5 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getDbPool } from "@/utils/db/db-service";
+import {
+  ensureFailedRelayPublishesTable,
+  getDbPool,
+} from "@/utils/db/db-service";
 
 export default async function handler(
   req: NextApiRequest,
@@ -20,23 +23,7 @@ export default async function handler(
     }
 
     client = await dbPool.connect();
-
-    // Create table if it doesn't exist
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS failed_relay_publishes (
-        event_id TEXT PRIMARY KEY,
-        event_data TEXT NOT NULL,
-        relays TEXT NOT NULL,
-        created_at BIGINT NOT NULL,
-        retry_count INTEGER DEFAULT 0
-      )
-    `);
-
-    // Add event_data column if it doesn't exist (migration for existing tables)
-    await client.query(`
-      ALTER TABLE failed_relay_publishes
-      ADD COLUMN IF NOT EXISTS event_data TEXT
-    `);
+    await ensureFailedRelayPublishesTable(client);
 
     // Insert or update the failed publish record
     await client.query(
