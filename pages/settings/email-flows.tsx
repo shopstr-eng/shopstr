@@ -126,6 +126,7 @@ const EmailFlowsPage = () => {
       const timer = setTimeout(() => setSuccessMessage(null), 4000);
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [successMessage]);
 
   useEffect(() => {
@@ -133,6 +134,7 @@ const EmailFlowsPage = () => {
       const timer = setTimeout(() => setError(null), 6000);
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [error]);
 
   const handleCreate = async () => {
@@ -323,7 +325,7 @@ const EmailFlowsPage = () => {
     );
     const lastDelay =
       editingSteps.length > 0
-        ? editingSteps[editingSteps.length - 1].delay_hours
+        ? editingSteps[editingSteps.length - 1]?.delay_hours ?? 0
         : 0;
     setEditingSteps([
       ...editingSteps,
