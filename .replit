@@ -52,3 +52,7 @@ outputType = "webview"
 [agent]
 expertMode = true
 integrations = ["sendgrid:1.0.0"]
+
+[userenv]
+
+[userenv.shared]

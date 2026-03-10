@@ -458,7 +458,7 @@ export default function CartInvoiceCard({
             buyer_email: email,
             buyer_pubkey: userPubkey || undefined,
             cart_items: sellerProducts.map((p) => ({
-              title: p.title || p.productName,
+              title: p.title,
               id: p.id,
               price: p.price,
               currency: p.currency,
