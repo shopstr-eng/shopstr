@@ -110,7 +110,7 @@ The platform exposes a Model Context Protocol (MCP) server enabling AI agents to
 - **Read Tools**: `mcp/tools/read-tools.ts` — Tools for browsing products, companies, reviews, and discount codes
 - **Write Tools**: `mcp/tools/write-tools.ts` — Tools for full marketplace participation (profiles, listings, reviews, DMs, media, relay/blossom config, discount codes, Cashu wallet)
 - **Purchase Tools**: Inline in `pages/api/mcp/index.ts` — Order creation, status, payment verification
-- **Resources**: `mcp/resources.ts` — MCP resources (product catalog via `shopstr://catalog/products`)
+- **Resources**: `mcp/resources.ts` — MCP resources (product catalog via `milkmarket://catalog/products`)
 - **Nostr Signing**: `utils/mcp/nostr-signing.ts` — Server-side Nostr event signing (`McpNostrSigner`), relay management (`McpRelayManager`), encrypted nsec storage, and `signAndPublishEvent()` utility
 - **Auth Middleware**: `utils/mcp/auth.ts` — API key generation, validation, request authentication, nsec storage/retrieval, and `getAgentSigner()` for server-side signing
 - **Metrics**: `utils/mcp/metrics.ts` — Request tracking, latency percentiles, rate limiting

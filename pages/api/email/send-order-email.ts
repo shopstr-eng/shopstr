@@ -144,7 +144,7 @@ async function autoEnrollInFlows(params: {
   } = params;
 
   const flows = await getEmailFlows(sellerPubkey);
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://shopstr.store";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://milk.market";
   const enrollmentData = {
     order_id: orderId,
     product_title: productTitle,

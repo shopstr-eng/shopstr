@@ -65,7 +65,7 @@ export default async function handler(
         }
 
         const baseUrl =
-          process.env.NEXT_PUBLIC_BASE_URL || "https://shopstr.store";
+          process.env.NEXT_PUBLIC_BASE_URL || "https://milk.market";
 
         const enrollmentData = {
           buyer_name: "",

@@ -395,7 +395,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
             tags.push(["t", cat]);
           }
         }
-        tags.push(["t", "shopstr"]);
+        tags.push(["t", "MilkMarket"]);
 
         if (params.quantity) {
           tags.push(["quantity", params.quantity]);
@@ -484,7 +484,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
         const handlerDTag = uuidv4();
         const origin =
-          process.env.NEXT_PUBLIC_BASE_URL || "https://shopstr.store";
+          process.env.NEXT_PUBLIC_BASE_URL || "https://milk.market";
 
         const handlerEvent: EventTemplate = {
           kind: 31990,
@@ -641,7 +641,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           for (const cat of params.categories) {
             tags.push(["t", cat]);
           }
-          tags.push(["t", "shopstr"]);
+          tags.push(["t", "MilkMarket"]);
         }
         if (params.quantity) {
           tags.push(["quantity", params.quantity]);
