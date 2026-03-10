@@ -30,11 +30,22 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#039;");
 }
 
+const MERGE_TAG_DEFAULTS: Record<string, string> = {
+  buyer_name: "Milk Enjoyer",
+  shop_name: "Milk Market",
+  product_title: "your creamy goodness",
+  order_id: "",
+  product_image: "",
+  shop_url: "",
+};
+
 export function replaceMergeTags(template: string, data: MergeTagData): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+  return template.replace(/\{\{(\w+)\}\}/g, (_match, key) => {
     const value = data[key];
-    if (value === undefined) return match;
-    return escapeHtml(value);
+    if (value !== undefined && value !== "") return escapeHtml(value);
+    const fallback = MERGE_TAG_DEFAULTS[key];
+    if (fallback !== undefined) return escapeHtml(fallback);
+    return "";
   });
 }
 
@@ -89,7 +100,7 @@ export function renderFlowEmail(
 ): { subject: string; html: string } {
   const renderedSubject = replaceMergeTags(subject, data);
   const renderedBody = replaceMergeTags(bodyHtml, data);
-  const shopName = data.shop_name || "Shop";
+  const shopName = data.shop_name || "Milk Market";
 
   return {
     subject: renderedSubject,

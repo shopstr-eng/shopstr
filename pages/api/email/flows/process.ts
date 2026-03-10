@@ -58,7 +58,7 @@ export default async function handler(
           shop_name:
             execution.enrollment_data?.shop_name ||
             execution.from_name ||
-            "Shop",
+            "Milk Market",
         };
 
         const { subject, html } = renderFlowEmail(

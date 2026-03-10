@@ -69,7 +69,7 @@ export default async function handler(
 
         const enrollmentData = {
           buyer_name: "",
-          shop_name: activeFlow.from_name || "Shop",
+          shop_name: activeFlow.from_name || "Milk Market",
           shop_url: `${baseUrl}/${candidate.seller_pubkey}`,
         };
 
