@@ -55,6 +55,10 @@ export default async function handler(
       try {
         const mergeData: MergeTagData = {
           ...(execution.enrollment_data || {}),
+          shop_name:
+            execution.enrollment_data?.shop_name ||
+            execution.from_name ||
+            "Shop",
         };
 
         const { subject, html } = renderFlowEmail(

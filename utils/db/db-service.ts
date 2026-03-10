@@ -1989,8 +1989,28 @@ export async function deleteEmailFlow(id: number): Promise<void> {
 
   try {
     client = await dbPool.connect();
+    await client.query("BEGIN");
+
+    await client.query(
+      `DELETE FROM email_flow_executions WHERE enrollment_id IN (SELECT id FROM email_flow_enrollments WHERE flow_id = $1)`,
+      [id]
+    );
+    await client.query(
+      `DELETE FROM email_flow_enrollments WHERE flow_id = $1`,
+      [id]
+    );
+    await client.query(`DELETE FROM email_flow_steps WHERE flow_id = $1`, [id]);
     await client.query(`DELETE FROM email_flows WHERE id = $1`, [id]);
+
+    await client.query("COMMIT");
   } catch (error) {
+    if (client) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        console.error("Failed to rollback flow deletion:", rollbackError);
+      }
+    }
     console.error("Failed to delete email flow:", error);
     throw error;
   } finally {
@@ -2045,7 +2065,7 @@ export async function getFlowSteps(
     return result.rows;
   } catch (error) {
     console.error("Failed to get flow steps:", error);
-    return [];
+    throw error;
   } finally {
     if (client) client.release();
   }
@@ -2317,7 +2337,7 @@ export async function getPendingExecutions(limit: number = 50): Promise<
     return result.rows;
   } catch (error) {
     console.error("Failed to get pending executions:", error);
-    return [];
+    throw error;
   } finally {
     if (client) client.release();
   }
@@ -2356,6 +2376,95 @@ export async function markExecutionFailed(
     );
   } catch (error) {
     console.error("Failed to mark execution failed:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function getUnenrolledAbandonedCarts(
+  staleMinutes: number = 60
+): Promise<
+  Array<{
+    id: number;
+    seller_pubkey: string;
+    buyer_email: string;
+    buyer_pubkey: string | null;
+    cart_items: any;
+  }>
+> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT id, seller_pubkey, buyer_email, buyer_pubkey, cart_items
+       FROM cart_reports
+       WHERE enrolled = FALSE
+         AND reported_at < NOW() - ($1 || ' minutes')::INTERVAL
+       ORDER BY reported_at ASC
+       LIMIT 100`,
+      [staleMinutes]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error("Failed to get unenrolled abandoned carts:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function markCartEnrolled(cartId: number): Promise<void> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    await client.query(
+      `UPDATE cart_reports SET enrolled = TRUE WHERE id = $1`,
+      [cartId]
+    );
+  } catch (error) {
+    console.error("Failed to mark cart enrolled:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function getWinbackCandidates(inactiveDays: number = 30): Promise<
+  Array<{
+    buyer_email: string;
+    buyer_pubkey: string | null;
+    seller_pubkey: string;
+    last_order_at: string;
+  }>
+> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT
+        ne.email AS buyer_email,
+        ne.pubkey AS buyer_pubkey,
+        me.pubkey AS seller_pubkey,
+        MAX(me.created_at) AS last_order_at
+      FROM notification_emails ne
+      INNER JOIN message_events me ON ne.order_id = me.order_id
+      WHERE ne.role = 'buyer'
+        AND me.created_at < NOW() - ($1 || ' days')::INTERVAL
+      GROUP BY ne.email, ne.pubkey, me.pubkey
+      HAVING MAX(me.created_at) < NOW() - ($1 || ' days')::INTERVAL
+      LIMIT 100`,
+      [inactiveDays]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error("Failed to get winback candidates:", error);
     throw error;
   } finally {
     if (client) client.release();

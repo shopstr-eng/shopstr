@@ -67,11 +67,16 @@ export default async function handler(
       });
     }
 
+    const mergedData = {
+      ...(enrollment_data || {}),
+      shop_name: enrollment_data?.shop_name || activeFlow.from_name || "Shop",
+    };
+
     const enrollment = await enrollInFlow({
       flow_id: activeFlow.id,
       recipient_email,
       recipient_pubkey: recipient_pubkey || null,
-      enrollment_data: enrollment_data || null,
+      enrollment_data: mergedData,
     });
 
     const executions = await scheduleStepExecutions(

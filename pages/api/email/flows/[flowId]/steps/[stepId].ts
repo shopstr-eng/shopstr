@@ -3,6 +3,7 @@ import {
   getEmailFlow,
   updateFlowStep,
   deleteFlowStep,
+  getFlowSteps,
 } from "@/utils/db/db-service";
 
 export default async function handler(
@@ -32,6 +33,11 @@ export default async function handler(
       }
       if (flow.seller_pubkey !== seller_pubkey) {
         return res.status(403).json({ error: "Not authorized" });
+      }
+
+      const steps = await getFlowSteps(flowIdNum);
+      if (!steps.some((s) => s.id === stepIdNum)) {
+        return res.status(404).json({ error: "Step not found in this flow" });
       }
 
       const updated = await updateFlowStep(stepIdNum, {
@@ -66,6 +72,11 @@ export default async function handler(
       }
       if (flow.seller_pubkey !== seller_pubkey) {
         return res.status(403).json({ error: "Not authorized" });
+      }
+
+      const steps = await getFlowSteps(flowIdNum);
+      if (!steps.some((s) => s.id === stepIdNum)) {
+        return res.status(404).json({ error: "Step not found in this flow" });
       }
 
       await deleteFlowStep(stepIdNum);

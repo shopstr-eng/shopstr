@@ -144,24 +144,25 @@ async function autoEnrollInFlows(params: {
   } = params;
 
   const flows = await getEmailFlows(sellerPubkey);
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://shopstr.store";
   const enrollmentData = {
     order_id: orderId,
     product_title: productTitle,
     buyer_name: buyerName || "",
     amount: amount || "N/A",
     currency: currency || "sats",
+    shop_url: `${baseUrl}/${sellerPubkey}`,
   };
 
   const postPurchaseFlow = flows.find(
     (f) => f.flow_type === "post_purchase" && f.status === "active"
   );
   if (postPurchaseFlow) {
-    await tryEnroll(
-      postPurchaseFlow.id,
-      buyerEmail,
-      buyerPubkey,
-      enrollmentData
-    );
+    const flowData = {
+      ...enrollmentData,
+      shop_name: postPurchaseFlow.from_name || "Shop",
+    };
+    await tryEnroll(postPurchaseFlow.id, buyerEmail, buyerPubkey, flowData);
   }
 
   const welcomeFlow = flows.find(
@@ -174,7 +175,11 @@ async function autoEnrollInFlows(params: {
       orderId
     );
     if (isFirstOrder) {
-      await tryEnroll(welcomeFlow.id, buyerEmail, buyerPubkey, enrollmentData);
+      const flowData = {
+        ...enrollmentData,
+        shop_name: welcomeFlow.from_name || "Shop",
+      };
+      await tryEnroll(welcomeFlow.id, buyerEmail, buyerPubkey, flowData);
     }
   }
 }
