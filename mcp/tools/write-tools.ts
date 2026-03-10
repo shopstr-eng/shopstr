@@ -2610,6 +2610,18 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       flow_type: z
         .enum(["welcome_series", "abandoned_cart", "post_purchase", "winback"])
         .describe("Type of email flow"),
+      from_name: z
+        .string()
+        .optional()
+        .describe(
+          "Custom sender display name for emails sent from this flow (e.g. 'Fresh Farm Dairy')"
+        ),
+      reply_to: z
+        .string()
+        .optional()
+        .describe(
+          "Custom reply-to email address for emails sent from this flow"
+        ),
       use_defaults: z
         .boolean()
         .optional()
@@ -2650,6 +2662,13 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           name: params.name,
           flow_type: params.flow_type,
         });
+
+        if (params.from_name || params.reply_to) {
+          await updateEmailFlow(flow.id, {
+            from_name: params.from_name || null,
+            reply_to: params.reply_to || null,
+          });
+        }
 
         let stepsCreated = 0;
 
@@ -2727,10 +2746,20 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
   server.tool(
     "update_email_flow",
-    "Update an email flow's name, steps, or both. Can add, update, or remove individual steps.",
+    "Update an email flow's name, sender settings, steps, or any combination. Can add, update, or remove individual steps.",
     {
       flow_id: z.number().describe("The ID of the flow to update"),
       name: z.string().optional().describe("Updated flow name"),
+      from_name: z
+        .string()
+        .optional()
+        .describe("Custom sender display name (set to empty string to clear)"),
+      reply_to: z
+        .string()
+        .optional()
+        .describe(
+          "Custom reply-to email address (set to empty string to clear)"
+        ),
       steps: z
         .array(
           z.object({
@@ -2776,8 +2805,14 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           );
         }
 
-        if (params.name) {
-          await updateEmailFlow(params.flow_id, { name: params.name });
+        const updateData: any = {};
+        if (params.name !== undefined) updateData.name = params.name;
+        if (params.from_name !== undefined)
+          updateData.from_name = params.from_name || null;
+        if (params.reply_to !== undefined)
+          updateData.reply_to = params.reply_to || null;
+        if (Object.keys(updateData).length > 0) {
+          await updateEmailFlow(params.flow_id, updateData);
         }
 
         let stepsUpdated = 0;
@@ -2785,7 +2820,13 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         let stepsDeleted = 0;
 
         if (params.steps) {
+          const existingSteps = await getFlowSteps(params.flow_id);
+          const existingStepIds = new Set(existingSteps.map((s) => s.id));
+
           for (const step of params.steps) {
+            if (step.id && !existingStepIds.has(step.id)) {
+              continue;
+            }
             if (step.delete && step.id) {
               await deleteFlowStep(step.id);
               stepsDeleted++;
