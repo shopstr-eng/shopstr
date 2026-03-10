@@ -60,6 +60,7 @@ Preferred communication style: Simple, everyday language.
 
 - **Order Summary Page**: Dedicated page post-purchase, displaying product details, cost, payment, and shipping.
 - **Email Notifications & Guest Checkout**: Transactional emails via SendGrid for order confirmations, seller alerts, and shipping updates; allows purchases without sign-in using an email.
+- **Custom Email Flows**: Sellers can draft and manage automated email sequences (welcome series, abandoned cart, post-purchase, winback). Each flow contains timed steps with customizable subject lines and HTML body content. Supports merge tags (`{{buyer_name}}`, `{{shop_name}}`, `{{product_title}}`, `{{order_id}}`, `{{product_image}}`, `{{shop_url}}`). Default templates provided for all 4 flow types. Post-purchase and welcome series flows auto-trigger on order placement. Abandoned cart flow triggered via cart reporting endpoint. Winback flow for re-engaging inactive customers. A processor endpoint handles sending pending emails in batches. Database tables: `email_flows`, `email_flow_steps`, `email_flow_enrollments`, `email_flow_executions`, `cart_reports`. API routes under `pages/api/email/flows/`. Flow templates and merge tag rendering in `utils/email/flow-email-templates.ts`. Visual email builder component at `components/settings/flow-step-editor.tsx` with formatting toolbar (heading, paragraph, bold, italic, image upload via Blossom, link, CTA button, divider), raw HTML toggle, live preview, and clickable merge tag insertion. Per-flow sender settings: custom "From Name" (display name on sent emails) and "Reply-To" email address stored in `from_name` and `reply_to` columns on `email_flows` table. The processor uses these to customize the SendGrid `from` field (name + platform email) and `replyTo` header per flow. MCP tools: `create_email_flow`, `list_email_flows`, `update_email_flow`, `delete_email_flow`, `toggle_email_flow`, `get_email_flow_stats`. Processor endpoint (`pages/api/email/flows/process.ts`) secured with `FLOW_PROCESSOR_SECRET` env var.
 - **Landing Page Optimization**: Redesigned following YC best practices for improved conversion with a clear CTA, outcome-first headline, social proof, and simplified sections.
 - **Herdshare Agreement Management**: Column in orders dashboard for signing and viewing herdshare agreements using PDFAnnotator.
 - **Stripe Connect Integration**: Full Stripe Connect Express flow for sellers to accept credit card payments via their own connected accounts.
@@ -175,6 +176,12 @@ The platform exposes a Model Context Protocol (MCP) server enabling AI agents to
 - `update_order_status` — Update order status (confirmed/shipped/delivered/completed/cancelled) with optional notification DM to buyer
 - `list_messages` — Fetch and decrypt incoming NIP-17 DMs with filters for unread, subject type, and sender. Returns decrypted content, subject, order IDs, and read status
 - `mark_messages_read` — Mark specific messages as read by event ID
+- `create_email_flow` — Create an automated email flow (welcome_series, abandoned_cart, post_purchase, winback) with optional default template steps or custom steps
+- `list_email_flows` — List all email flows for the authenticated seller
+- `update_email_flow` — Update a flow's name and/or steps (add, update, or delete steps)
+- `delete_email_flow` — Delete a flow and all associated data
+- `toggle_email_flow` — Toggle a flow between active and paused status
+- `get_email_flow_stats` — Get enrollment and per-step execution statistics for a flow
 
 ### Payment Methods
 

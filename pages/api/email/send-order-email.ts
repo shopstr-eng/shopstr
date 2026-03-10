@@ -7,6 +7,11 @@ import {
   saveNotificationEmail,
   getSellerNotificationEmail,
   getUserAuthEmail,
+  getEmailFlows,
+  enrollInFlow,
+  scheduleStepExecutions,
+  getFlowEnrollments,
+  getDbPool,
 } from "@/utils/db/db-service";
 
 export default async function handler(
@@ -93,9 +98,132 @@ export default async function handler(
       }
     }
 
+    if (buyerEmail && sellerPubkey) {
+      try {
+        await autoEnrollInFlows({
+          buyerEmail,
+          buyerPubkey,
+          sellerPubkey,
+          orderId,
+          productTitle,
+          amount,
+          currency,
+          buyerName,
+        });
+      } catch (enrollError) {
+        console.error("Error auto-enrolling in email flows:", enrollError);
+      }
+    }
+
     return res.status(200).json({ success: true, ...results });
   } catch (error) {
     console.error("Error sending order emails:", error);
     return res.status(500).json({ error: "Failed to send order emails" });
+  }
+}
+
+async function autoEnrollInFlows(params: {
+  buyerEmail: string;
+  buyerPubkey?: string;
+  sellerPubkey: string;
+  orderId: string;
+  productTitle: string;
+  amount?: string;
+  currency?: string;
+  buyerName?: string;
+}) {
+  const {
+    buyerEmail,
+    buyerPubkey,
+    sellerPubkey,
+    orderId,
+    productTitle,
+    amount,
+    currency,
+    buyerName,
+  } = params;
+
+  const flows = await getEmailFlows(sellerPubkey);
+  const enrollmentData = {
+    order_id: orderId,
+    product_title: productTitle,
+    buyer_name: buyerName || "",
+    amount: amount || "N/A",
+    currency: currency || "sats",
+  };
+
+  const postPurchaseFlow = flows.find(
+    (f) => f.flow_type === "post_purchase" && f.status === "active"
+  );
+  if (postPurchaseFlow) {
+    await tryEnroll(
+      postPurchaseFlow.id,
+      buyerEmail,
+      buyerPubkey,
+      enrollmentData
+    );
+  }
+
+  const welcomeFlow = flows.find(
+    (f) => f.flow_type === "welcome_series" && f.status === "active"
+  );
+  if (welcomeFlow) {
+    const isFirstOrder = await checkIsFirstOrderFromSeller(
+      buyerEmail,
+      sellerPubkey,
+      orderId
+    );
+    if (isFirstOrder) {
+      await tryEnroll(welcomeFlow.id, buyerEmail, buyerPubkey, enrollmentData);
+    }
+  }
+}
+
+async function tryEnroll(
+  flowId: number,
+  recipientEmail: string,
+  recipientPubkey?: string,
+  enrollmentData?: any
+) {
+  const existingEnrollments = await getFlowEnrollments(flowId);
+  const alreadyEnrolled = existingEnrollments.some(
+    (e) => e.recipient_email === recipientEmail && e.status === "active"
+  );
+  if (alreadyEnrolled) return;
+
+  const enrollment = await enrollInFlow({
+    flow_id: flowId,
+    recipient_email: recipientEmail,
+    recipient_pubkey: recipientPubkey || null,
+    enrollment_data: enrollmentData,
+  });
+
+  await scheduleStepExecutions(enrollment.id, flowId);
+}
+
+async function checkIsFirstOrderFromSeller(
+  buyerEmail: string,
+  sellerPubkey: string,
+  currentOrderId: string
+): Promise<boolean> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT COUNT(*) as count FROM notification_emails ne
+       INNER JOIN message_events me ON ne.order_id = me.order_id
+       WHERE ne.email = $1 AND ne.role = 'buyer'
+       AND ne.order_id != $2
+       AND me.pubkey = $3`,
+      [buyerEmail, currentOrderId, sellerPubkey]
+    );
+    return parseInt(result.rows[0].count, 10) === 0;
+  } catch (error) {
+    console.error("Error checking first order:", error);
+    return true;
+  } finally {
+    if (client) client.release();
   }
 }

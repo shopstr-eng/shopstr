@@ -337,7 +337,7 @@ export default function StandaloneLanding() {
 
           <p className="mx-auto mb-4 max-w-xl text-lg text-zinc-600">
             Find local farmers selling raw milk, cheese, and dairy products. Pay
-            directly. Pick up fresh.
+            directly. Pick up fresh or have delivered.
           </p>
 
           <p className="mb-6 inline-block rounded-full border-2 border-black bg-primary-yellow px-4 py-1 text-sm font-bold">

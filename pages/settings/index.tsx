@@ -7,6 +7,7 @@ import {
   ArrowRightStartOnRectangleIcon,
   BanknotesIcon,
   KeyIcon,
+  EnvelopeIcon,
 } from "@heroicons/react/24/outline";
 import { LogOut } from "@/utils/nostr/nostr-helper-functions";
 
@@ -53,6 +54,14 @@ const SettingsPage = () => {
       icon: BanknotesIcon,
       iconBg: "bg-slate-600",
       route: "/settings/nwc",
+    },
+    {
+      id: "email-flows",
+      title: "Email Flows",
+      description: "Create automated email sequences for your customers",
+      icon: EnvelopeIcon,
+      iconBg: "bg-slate-600",
+      route: "/settings/email-flows",
     },
     {
       id: "api-keys",

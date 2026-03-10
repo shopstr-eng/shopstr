@@ -253,3 +253,79 @@ CREATE TABLE IF NOT EXISTS subscription_notifications (
 
 CREATE INDEX IF NOT EXISTS idx_subscription_notifications_subscription_id ON subscription_notifications(subscription_id);
 CREATE INDEX IF NOT EXISTS idx_subscription_notifications_type ON subscription_notifications(type);
+
+-- Email flow definitions
+CREATE TABLE IF NOT EXISTS email_flows (
+    id SERIAL PRIMARY KEY,
+    seller_pubkey TEXT NOT NULL,
+    name TEXT NOT NULL,
+    flow_type TEXT NOT NULL CHECK (flow_type IN ('welcome_series', 'abandoned_cart', 'post_purchase', 'winback')),
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'paused')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_flows_seller_pubkey ON email_flows(seller_pubkey);
+CREATE INDEX IF NOT EXISTS idx_email_flows_flow_type ON email_flows(flow_type);
+CREATE INDEX IF NOT EXISTS idx_email_flows_status ON email_flows(status);
+
+-- Individual steps in an email flow
+CREATE TABLE IF NOT EXISTS email_flow_steps (
+    id SERIAL PRIMARY KEY,
+    flow_id INTEGER NOT NULL REFERENCES email_flows(id) ON DELETE CASCADE,
+    step_order INTEGER NOT NULL,
+    subject TEXT NOT NULL,
+    body_html TEXT NOT NULL,
+    delay_hours INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_flow_steps_flow_id ON email_flow_steps(flow_id);
+
+-- Tracks who is enrolled in an email flow
+CREATE TABLE IF NOT EXISTS email_flow_enrollments (
+    id SERIAL PRIMARY KEY,
+    flow_id INTEGER NOT NULL REFERENCES email_flows(id) ON DELETE CASCADE,
+    recipient_email TEXT NOT NULL,
+    recipient_pubkey TEXT,
+    enrollment_data JSONB,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'completed', 'cancelled')),
+    enrolled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_flow_enrollments_flow_id ON email_flow_enrollments(flow_id);
+CREATE INDEX IF NOT EXISTS idx_email_flow_enrollments_recipient_email ON email_flow_enrollments(recipient_email);
+CREATE INDEX IF NOT EXISTS idx_email_flow_enrollments_status ON email_flow_enrollments(status);
+
+-- Tracks which steps have been sent for each enrollment
+CREATE TABLE IF NOT EXISTS email_flow_executions (
+    id SERIAL PRIMARY KEY,
+    enrollment_id INTEGER NOT NULL REFERENCES email_flow_enrollments(id) ON DELETE CASCADE,
+    step_id INTEGER NOT NULL REFERENCES email_flow_steps(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'failed', 'skipped')),
+    scheduled_for TIMESTAMP NOT NULL,
+    sent_at TIMESTAMP,
+    error_message TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_flow_executions_enrollment_id ON email_flow_executions(enrollment_id);
+CREATE INDEX IF NOT EXISTS idx_email_flow_executions_step_id ON email_flow_executions(step_id);
+CREATE INDEX IF NOT EXISTS idx_email_flow_executions_status ON email_flow_executions(status);
+CREATE INDEX IF NOT EXISTS idx_email_flow_executions_scheduled_for ON email_flow_executions(scheduled_for);
+
+-- Cart activity reports for abandoned cart flow triggers
+CREATE TABLE IF NOT EXISTS cart_reports (
+    id SERIAL PRIMARY KEY,
+    seller_pubkey TEXT NOT NULL,
+    buyer_email TEXT NOT NULL,
+    buyer_pubkey TEXT,
+    cart_items JSONB NOT NULL,
+    reported_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    enrolled BOOLEAN DEFAULT FALSE,
+    UNIQUE(seller_pubkey, buyer_email)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cart_reports_reported_at ON cart_reports(reported_at);
+CREATE INDEX IF NOT EXISTS idx_cart_reports_enrolled ON cart_reports(enrolled);
