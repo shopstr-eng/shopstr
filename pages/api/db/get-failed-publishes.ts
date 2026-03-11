@@ -40,7 +40,7 @@ export default async function handler(
             retryCount: row.retry_count,
           };
         } catch (e) {
-          console.error('Failed to parse row:', row.event_id, e);
+          console.error("Failed to parse row:", row.event_id, e);
           return null;
         }
       })
