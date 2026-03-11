@@ -19,16 +19,6 @@ export default async function handler(
     client = await dbPool.connect();
     await ensureFailedRelayPublishesTable(client);
 
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS failed_relay_publishes (
-        event_id TEXT PRIMARY KEY,
-        relays TEXT NOT NULL,
-        event_data TEXT,
-        created_at BIGINT NOT NULL,
-        retry_count INTEGER DEFAULT 0
-      )
-    `);
-
     // Get all failed publishes with retry count < 5 (limit retries)
     const result = await client.query(
       `SELECT event_id, event_data, relays, retry_count
