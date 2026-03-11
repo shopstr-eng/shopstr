@@ -32,7 +32,6 @@ export default async function handler(
        ON CONFLICT (event_id) DO UPDATE SET
          event_data = EXCLUDED.event_data,
          relays = EXCLUDED.relays,
-         event_data = EXCLUDED.event_data,
          created_at = EXCLUDED.created_at`,
       [
         eventId,
