@@ -25,11 +25,6 @@ export default async function handler(
       )
     `);
 
-    await client.query(`
-      ALTER TABLE failed_relay_publishes
-      ADD COLUMN IF NOT EXISTS event_data TEXT
-    `);
-
     // Get all failed publishes with retry count < 5 (limit retries)
     const result = await client.query(
       `SELECT event_id, relays, retry_count, event_data
