@@ -35,7 +35,7 @@ export default async function handler(
          created_at = EXCLUDED.created_at`,
       [
         eventId,
-        JSON.stringify(event),
+        event ? JSON.stringify(event) : null,
         JSON.stringify(relays),
         Math.floor(Date.now() / 1000),
       ]

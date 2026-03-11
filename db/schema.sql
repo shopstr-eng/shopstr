@@ -125,6 +125,18 @@ CREATE TABLE IF NOT EXISTS discount_codes (
 CREATE INDEX IF NOT EXISTS idx_discount_codes_pubkey ON discount_codes(pubkey);
 CREATE INDEX IF NOT EXISTS idx_discount_codes_code ON discount_codes(code);
 
+-- Failed relay publish tracking table
+CREATE TABLE IF NOT EXISTS failed_relay_publishes (
+    event_id TEXT PRIMARY KEY,
+    event_data TEXT,
+    relays TEXT NOT NULL,
+    created_at BIGINT NOT NULL,
+    retry_count INTEGER DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_failed_relay_publishes_created_at ON failed_relay_publishes(created_at ASC);
+CREATE INDEX IF NOT EXISTS idx_failed_relay_publishes_retry_count ON failed_relay_publishes(retry_count);
+
 -- MCP API Keys table
 CREATE TABLE IF NOT EXISTS mcp_api_keys (
     id SERIAL PRIMARY KEY,

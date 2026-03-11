@@ -24,18 +24,27 @@ export default async function handler(
       `SELECT event_id, event_data, relays, retry_count
        FROM failed_relay_publishes
        WHERE retry_count < 5
+         AND event_data IS NOT NULL
        ORDER BY created_at ASC
        LIMIT 50`
     );
 
     const failedPublishes = result.rows
       .filter((row: any) => row.event_data)
-      .map((row: any) => ({
-        eventId: row.event_id,
-        relays: JSON.parse(row.relays),
-        event: JSON.parse(row.event_data),
-        retryCount: row.retry_count,
-      }));
+      .map((row: any) => {
+        try {
+          return {
+            eventId: row.event_id,
+            relays: JSON.parse(row.relays),
+            event: JSON.parse(row.event_data),
+            retryCount: row.retry_count,
+          };
+        } catch (e) {
+          console.error('Failed to parse row:', row.event_id, e);
+          return null;
+        }
+      })
+      .filter(Boolean);
 
     return res.status(200).json(failedPublishes);
   } catch (error) {
