@@ -30,6 +30,7 @@ export default async function handler(
     );
 
     const failedPublishes = result.rows
+      .filter((row: any) => row.event_data)
       .map((row: any) => {
         try {
           return {
@@ -38,7 +39,8 @@ export default async function handler(
             event: JSON.parse(row.event_data),
             retryCount: row.retry_count,
           };
-        } catch {
+        } catch (e) {
+          console.error('Failed to parse row:', row.event_id, e);
           return null;
         }
       })
