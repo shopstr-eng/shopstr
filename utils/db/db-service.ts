@@ -222,13 +222,6 @@ async function initializeTables(): Promise<void> {
           ALTER TABLE message_events ADD COLUMN order_id TEXT DEFAULT NULL;
           CREATE INDEX IF NOT EXISTS idx_message_events_order_id ON message_events(order_id);
         END IF;
-
-        IF NOT EXISTS (
-          SELECT 1 FROM information_schema.columns 
-          WHERE table_name = 'failed_relay_publishes' AND column_name = 'event_data'
-        ) THEN
-          ALTER TABLE failed_relay_publishes ADD COLUMN event_data TEXT;
-        END IF;
       END $$;
     `);
 
