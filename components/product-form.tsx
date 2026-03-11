@@ -262,7 +262,6 @@ export default function ProductForm({
     (data["Category"] as string).split(",").forEach((category) => {
       tags.push(["t", category]);
     });
-    tags.push(["t", "shopstr"]);
     tags.push(["t", "MilkMarket"]);
     tags.push(["t", "FREEMILK"]);
 

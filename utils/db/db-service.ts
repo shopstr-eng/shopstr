@@ -285,6 +285,84 @@ async function initializeTables(): Promise<void> {
 
       CREATE INDEX IF NOT EXISTS idx_subscription_notifications_subscription_id ON subscription_notifications(subscription_id);
       CREATE INDEX IF NOT EXISTS idx_subscription_notifications_type ON subscription_notifications(type);
+
+      -- Email flow definitions
+      CREATE TABLE IF NOT EXISTS email_flows (
+          id SERIAL PRIMARY KEY,
+          seller_pubkey TEXT NOT NULL,
+          name TEXT NOT NULL,
+          flow_type TEXT NOT NULL CHECK (flow_type IN ('welcome_series', 'abandoned_cart', 'post_purchase', 'winback')),
+          status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'paused')),
+          from_name TEXT,
+          reply_to TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_email_flows_seller_pubkey ON email_flows(seller_pubkey);
+      CREATE INDEX IF NOT EXISTS idx_email_flows_flow_type ON email_flows(flow_type);
+      CREATE INDEX IF NOT EXISTS idx_email_flows_status ON email_flows(status);
+
+      -- Individual steps in an email flow
+      CREATE TABLE IF NOT EXISTS email_flow_steps (
+          id SERIAL PRIMARY KEY,
+          flow_id INTEGER NOT NULL REFERENCES email_flows(id) ON DELETE CASCADE,
+          step_order INTEGER NOT NULL,
+          subject TEXT NOT NULL,
+          body_html TEXT NOT NULL,
+          delay_hours INTEGER NOT NULL DEFAULT 0,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_email_flow_steps_flow_id ON email_flow_steps(flow_id);
+
+      -- Tracks who is enrolled in an email flow
+      CREATE TABLE IF NOT EXISTS email_flow_enrollments (
+          id SERIAL PRIMARY KEY,
+          flow_id INTEGER NOT NULL REFERENCES email_flows(id) ON DELETE CASCADE,
+          recipient_email TEXT NOT NULL,
+          recipient_pubkey TEXT,
+          enrollment_data JSONB,
+          status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'completed', 'cancelled')),
+          enrolled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          completed_at TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_email_flow_enrollments_flow_id ON email_flow_enrollments(flow_id);
+      CREATE INDEX IF NOT EXISTS idx_email_flow_enrollments_recipient_email ON email_flow_enrollments(recipient_email);
+      CREATE INDEX IF NOT EXISTS idx_email_flow_enrollments_status ON email_flow_enrollments(status);
+
+      -- Tracks which steps have been sent for each enrollment
+      CREATE TABLE IF NOT EXISTS email_flow_executions (
+          id SERIAL PRIMARY KEY,
+          enrollment_id INTEGER NOT NULL REFERENCES email_flow_enrollments(id) ON DELETE CASCADE,
+          step_id INTEGER NOT NULL REFERENCES email_flow_steps(id) ON DELETE CASCADE,
+          status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'failed', 'skipped')),
+          scheduled_for TIMESTAMP NOT NULL,
+          sent_at TIMESTAMP,
+          error_message TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_email_flow_executions_enrollment_id ON email_flow_executions(enrollment_id);
+      CREATE INDEX IF NOT EXISTS idx_email_flow_executions_step_id ON email_flow_executions(step_id);
+      CREATE INDEX IF NOT EXISTS idx_email_flow_executions_status ON email_flow_executions(status);
+      CREATE INDEX IF NOT EXISTS idx_email_flow_executions_scheduled_for ON email_flow_executions(scheduled_for);
+
+      -- Cart activity reports for abandoned cart flow triggers
+      CREATE TABLE IF NOT EXISTS cart_reports (
+          id SERIAL PRIMARY KEY,
+          seller_pubkey TEXT NOT NULL,
+          buyer_email TEXT NOT NULL,
+          buyer_pubkey TEXT,
+          cart_items JSONB NOT NULL,
+          reported_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          enrolled BOOLEAN DEFAULT FALSE,
+          UNIQUE(seller_pubkey, buyer_email)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_cart_reports_reported_at ON cart_reports(reported_at);
+      CREATE INDEX IF NOT EXISTS idx_cart_reports_enrolled ON cart_reports(enrolled);
       
       -- MCP API Keys table
       CREATE TABLE IF NOT EXISTS mcp_api_keys (
@@ -360,6 +438,24 @@ async function initializeTables(): Promise<void> {
     `);
 
     await ensureFailedRelayPublishesTable(client);
+
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'email_flows' AND column_name = 'from_name'
+        ) THEN
+          ALTER TABLE email_flows ADD COLUMN from_name TEXT;
+        END IF;
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'email_flows' AND column_name = 'reply_to'
+        ) THEN
+          ALTER TABLE email_flows ADD COLUMN reply_to TEXT;
+        END IF;
+      END $$;
+    `);
 
     tablesInitialized = true;
     initializingTables = false;
@@ -1756,6 +1852,680 @@ export async function getSubscriptionNotifications(
   } catch (error) {
     console.error("Failed to get subscription notifications:", error);
     return [];
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export interface EmailFlowRecord {
+  id: number;
+  seller_pubkey: string;
+  name: string;
+  flow_type: string;
+  status: string;
+  from_name: string | null;
+  reply_to: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmailFlowStepRecord {
+  id: number;
+  flow_id: number;
+  step_order: number;
+  subject: string;
+  body_html: string;
+  delay_hours: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EmailFlowEnrollmentRecord {
+  id: number;
+  flow_id: number;
+  recipient_email: string;
+  recipient_pubkey: string | null;
+  enrollment_data: any;
+  status: string;
+  enrolled_at: string;
+  completed_at: string | null;
+}
+
+export interface EmailFlowExecutionRecord {
+  id: number;
+  enrollment_id: number;
+  step_id: number;
+  status: string;
+  scheduled_for: string;
+  sent_at: string | null;
+  error_message: string | null;
+}
+
+export async function createEmailFlow(data: {
+  seller_pubkey: string;
+  name: string;
+  flow_type: string;
+}): Promise<EmailFlowRecord> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `INSERT INTO email_flows (seller_pubkey, name, flow_type)
+       VALUES ($1, $2, $3) RETURNING *`,
+      [data.seller_pubkey, data.name, data.flow_type] as any[]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error("Failed to create email flow:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function getEmailFlows(
+  sellerPubkey: string
+): Promise<EmailFlowRecord[]> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT * FROM email_flows WHERE seller_pubkey = $1 ORDER BY created_at DESC`,
+      [sellerPubkey]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error("Failed to get email flows:", error);
+    return [];
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function getEmailFlow(
+  id: number
+): Promise<EmailFlowRecord | null> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT * FROM email_flows WHERE id = $1`,
+      [id]
+    );
+    if (result.rows.length === 0) return null;
+    return result.rows[0];
+  } catch (error) {
+    console.error("Failed to get email flow:", error);
+    return null;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function updateEmailFlow(
+  id: number,
+  data: {
+    name?: string;
+    status?: string;
+    from_name?: string | null;
+    reply_to?: string | null;
+  }
+): Promise<EmailFlowRecord | null> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const setClauses: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    if (data.name !== undefined) {
+      setClauses.push(`name = $${paramIndex++}`);
+      values.push(data.name);
+    }
+    if (data.status !== undefined) {
+      setClauses.push(`status = $${paramIndex++}`);
+      values.push(data.status);
+    }
+    if (data.from_name !== undefined) {
+      setClauses.push(`from_name = $${paramIndex++}`);
+      values.push(data.from_name || null);
+    }
+    if (data.reply_to !== undefined) {
+      setClauses.push(`reply_to = $${paramIndex++}`);
+      values.push(data.reply_to || null);
+    }
+
+    if (setClauses.length === 0) return await getEmailFlow(id);
+
+    setClauses.push(`updated_at = CURRENT_TIMESTAMP`);
+    values.push(id);
+
+    const result = await client.query(
+      `UPDATE email_flows SET ${setClauses.join(
+        ", "
+      )} WHERE id = $${paramIndex} RETURNING *`,
+      values
+    );
+    if (result.rows.length === 0) return null;
+    return result.rows[0];
+  } catch (error) {
+    console.error("Failed to update email flow:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function deleteEmailFlow(id: number): Promise<void> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    await client.query("BEGIN");
+
+    await client.query(
+      `DELETE FROM email_flow_executions WHERE enrollment_id IN (SELECT id FROM email_flow_enrollments WHERE flow_id = $1)`,
+      [id]
+    );
+    await client.query(
+      `DELETE FROM email_flow_enrollments WHERE flow_id = $1`,
+      [id]
+    );
+    await client.query(`DELETE FROM email_flow_steps WHERE flow_id = $1`, [id]);
+    await client.query(`DELETE FROM email_flows WHERE id = $1`, [id]);
+
+    await client.query("COMMIT");
+  } catch (error) {
+    if (client) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        console.error("Failed to rollback flow deletion:", rollbackError);
+      }
+    }
+    console.error("Failed to delete email flow:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function createFlowStep(data: {
+  flow_id: number;
+  step_order: number;
+  subject: string;
+  body_html: string;
+  delay_hours: number;
+}): Promise<EmailFlowStepRecord> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `INSERT INTO email_flow_steps (flow_id, step_order, subject, body_html, delay_hours)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [
+        data.flow_id,
+        data.step_order,
+        data.subject,
+        data.body_html,
+        data.delay_hours,
+      ] as any[]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error("Failed to create flow step:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function getFlowSteps(
+  flowId: number
+): Promise<EmailFlowStepRecord[]> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT * FROM email_flow_steps WHERE flow_id = $1 ORDER BY step_order ASC`,
+      [flowId]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error("Failed to get flow steps:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function updateFlowStep(
+  id: number,
+  data: {
+    subject?: string;
+    body_html?: string;
+    delay_hours?: number;
+    step_order?: number;
+  }
+): Promise<EmailFlowStepRecord | null> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const setClauses: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+
+    if (data.subject !== undefined) {
+      setClauses.push(`subject = $${paramIndex++}`);
+      values.push(data.subject);
+    }
+    if (data.body_html !== undefined) {
+      setClauses.push(`body_html = $${paramIndex++}`);
+      values.push(data.body_html);
+    }
+    if (data.delay_hours !== undefined) {
+      setClauses.push(`delay_hours = $${paramIndex++}`);
+      values.push(data.delay_hours);
+    }
+    if (data.step_order !== undefined) {
+      setClauses.push(`step_order = $${paramIndex++}`);
+      values.push(data.step_order);
+    }
+
+    if (setClauses.length === 0) return null;
+
+    setClauses.push(`updated_at = CURRENT_TIMESTAMP`);
+    values.push(id);
+
+    const result = await client.query(
+      `UPDATE email_flow_steps SET ${setClauses.join(
+        ", "
+      )} WHERE id = $${paramIndex} RETURNING *`,
+      values
+    );
+    if (result.rows.length === 0) return null;
+    return result.rows[0];
+  } catch (error) {
+    console.error("Failed to update flow step:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function deleteFlowStep(id: number): Promise<void> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    await client.query(`DELETE FROM email_flow_steps WHERE id = $1`, [id]);
+  } catch (error) {
+    console.error("Failed to delete flow step:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function reorderFlowSteps(
+  flowId: number,
+  stepIds: number[]
+): Promise<void> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    await client.query("BEGIN");
+
+    for (let i = 0; i < stepIds.length; i++) {
+      await client.query(
+        `UPDATE email_flow_steps SET step_order = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND flow_id = $3`,
+        [i + 1, stepIds[i], flowId] as any[]
+      );
+    }
+
+    await client.query("COMMIT");
+  } catch (error) {
+    if (client) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        console.error("Failed to rollback reorder:", rollbackError);
+      }
+    }
+    console.error("Failed to reorder flow steps:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function enrollInFlow(data: {
+  flow_id: number;
+  recipient_email: string;
+  recipient_pubkey?: string | null;
+  enrollment_data?: any;
+}): Promise<EmailFlowEnrollmentRecord> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `INSERT INTO email_flow_enrollments (flow_id, recipient_email, recipient_pubkey, enrollment_data)
+       VALUES ($1, $2, $3, $4) RETURNING *`,
+      [
+        data.flow_id,
+        data.recipient_email,
+        data.recipient_pubkey || null,
+        data.enrollment_data ? JSON.stringify(data.enrollment_data) : null,
+      ] as any[]
+    );
+    return result.rows[0];
+  } catch (error) {
+    console.error("Failed to enroll in flow:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function getFlowEnrollments(
+  flowId: number
+): Promise<EmailFlowEnrollmentRecord[]> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT * FROM email_flow_enrollments WHERE flow_id = $1 ORDER BY enrolled_at DESC`,
+      [flowId]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error("Failed to get flow enrollments:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function cancelEnrollment(id: number): Promise<void> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    await client.query("BEGIN");
+
+    await client.query(
+      `UPDATE email_flow_enrollments SET status = 'cancelled', completed_at = CURRENT_TIMESTAMP WHERE id = $1`,
+      [id]
+    );
+
+    await client.query(
+      `UPDATE email_flow_executions SET status = 'skipped' WHERE enrollment_id = $1 AND status = 'pending'`,
+      [id]
+    );
+
+    await client.query("COMMIT");
+  } catch (error) {
+    if (client) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (rollbackError) {
+        console.error("Failed to rollback cancellation:", rollbackError);
+      }
+    }
+    console.error("Failed to cancel enrollment:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function scheduleStepExecutions(
+  enrollmentId: number,
+  flowId: number
+): Promise<EmailFlowExecutionRecord[]> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const steps = await client.query(
+      `SELECT * FROM email_flow_steps WHERE flow_id = $1 ORDER BY step_order ASC`,
+      [flowId]
+    );
+
+    if (steps.rows.length === 0) return [];
+
+    const executions: EmailFlowExecutionRecord[] = [];
+
+    for (const step of steps.rows) {
+      const result = await client.query(
+        `INSERT INTO email_flow_executions (enrollment_id, step_id, status, scheduled_for)
+         VALUES ($1, $2, 'pending', NOW() + ($3 || ' hours')::INTERVAL) RETURNING *`,
+        [enrollmentId, step.id, step.delay_hours] as any[]
+      );
+      executions.push(result.rows[0]);
+    }
+
+    return executions;
+  } catch (error) {
+    console.error("Failed to schedule step executions:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function getPendingExecutions(limit: number = 50): Promise<
+  (EmailFlowExecutionRecord & {
+    recipient_email: string;
+    recipient_pubkey: string | null;
+    enrollment_data: any;
+    subject: string;
+    body_html: string;
+    flow_id: number;
+    seller_pubkey: string;
+    flow_type: string;
+    from_name: string | null;
+    reply_to: string | null;
+  })[]
+> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT
+        exe.id, exe.enrollment_id, exe.step_id, exe.status, exe.scheduled_for, exe.sent_at, exe.error_message,
+        enr.recipient_email, enr.recipient_pubkey, enr.enrollment_data,
+        s.subject, s.body_html, s.flow_id,
+        f.seller_pubkey, f.flow_type, f.from_name, f.reply_to
+      FROM email_flow_executions exe
+      JOIN email_flow_enrollments enr ON exe.enrollment_id = enr.id
+      JOIN email_flow_steps s ON exe.step_id = s.id
+      JOIN email_flows f ON s.flow_id = f.id
+      WHERE exe.status = 'pending'
+        AND exe.scheduled_for <= NOW()
+        AND enr.status = 'active'
+        AND f.status = 'active'
+      ORDER BY exe.scheduled_for ASC
+      LIMIT $1`,
+      [limit]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error("Failed to get pending executions:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function markExecutionSent(id: number): Promise<void> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    await client.query(
+      `UPDATE email_flow_executions SET status = 'sent', sent_at = CURRENT_TIMESTAMP WHERE id = $1`,
+      [id]
+    );
+
+    const enrollmentResult = await client.query(
+      `SELECT enrollment_id FROM email_flow_executions WHERE id = $1`,
+      [id]
+    );
+    if (enrollmentResult.rows.length > 0) {
+      const enrollmentId = enrollmentResult.rows[0].enrollment_id;
+      const remaining = await client.query(
+        `SELECT COUNT(*) as count FROM email_flow_executions
+         WHERE enrollment_id = $1 AND status IN ('pending')`,
+        [enrollmentId]
+      );
+      if (parseInt(remaining.rows[0].count, 10) === 0) {
+        await client.query(
+          `UPDATE email_flow_enrollments SET status = 'completed', completed_at = CURRENT_TIMESTAMP WHERE id = $1 AND status = 'active'`,
+          [enrollmentId]
+        );
+      }
+    }
+  } catch (error) {
+    console.error("Failed to mark execution sent:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function markExecutionFailed(
+  id: number,
+  errorMessage: string
+): Promise<void> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    await client.query(
+      `UPDATE email_flow_executions SET status = 'failed', error_message = $1 WHERE id = $2`,
+      [errorMessage, id] as any[]
+    );
+  } catch (error) {
+    console.error("Failed to mark execution failed:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function getUnenrolledAbandonedCarts(
+  staleMinutes: number = 60
+): Promise<
+  Array<{
+    id: number;
+    seller_pubkey: string;
+    buyer_email: string;
+    buyer_pubkey: string | null;
+    cart_items: any;
+  }>
+> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT id, seller_pubkey, buyer_email, buyer_pubkey, cart_items
+       FROM cart_reports
+       WHERE enrolled = FALSE
+         AND reported_at < NOW() - ($1 || ' minutes')::INTERVAL
+       ORDER BY reported_at ASC
+       LIMIT 100`,
+      [staleMinutes]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error("Failed to get unenrolled abandoned carts:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function markCartEnrolled(cartId: number): Promise<void> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    await client.query(
+      `UPDATE cart_reports SET enrolled = TRUE WHERE id = $1`,
+      [cartId]
+    );
+  } catch (error) {
+    console.error("Failed to mark cart enrolled:", error);
+    throw error;
+  } finally {
+    if (client) client.release();
+  }
+}
+
+export async function getWinbackCandidates(inactiveDays: number = 30): Promise<
+  Array<{
+    buyer_email: string;
+    buyer_pubkey: string | null;
+    seller_pubkey: string;
+    last_order_at: string;
+  }>
+> {
+  const dbPool = getDbPool();
+  let client;
+
+  try {
+    client = await dbPool.connect();
+    const result = await client.query(
+      `SELECT
+        ne.email AS buyer_email,
+        ne.pubkey AS buyer_pubkey,
+        me.pubkey AS seller_pubkey,
+        MAX(me.created_at) AS last_order_at
+      FROM notification_emails ne
+      INNER JOIN message_events me ON ne.order_id = me.order_id
+      WHERE ne.role = 'buyer'
+        AND me.created_at < NOW() - ($1 || ' days')::INTERVAL
+      GROUP BY ne.email, ne.pubkey, me.pubkey
+      HAVING MAX(me.created_at) < NOW() - ($1 || ' days')::INTERVAL
+      LIMIT 100`,
+      [inactiveDays]
+    );
+    return result.rows;
+  } catch (error) {
+    console.error("Failed to get winback candidates:", error);
+    throw error;
   } finally {
     if (client) client.release();
   }

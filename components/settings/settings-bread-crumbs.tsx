@@ -9,6 +9,7 @@ const pathMap: { [key: string]: string } = {
   community: "Community Management",
   nwc: "Nostr Wallet Connect",
   "api-keys": "API Keys",
+  "email-flows": "Email Flows",
 };
 
 export const SettingsBreadCrumbs = () => {

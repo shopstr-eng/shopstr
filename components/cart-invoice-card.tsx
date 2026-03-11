@@ -429,6 +429,53 @@ export default function CartInvoiceCard({
     }
   }, [isLoggedIn, userPubkey, buyerEmailAutoFilled]);
 
+  const cartReportedRef = useRef(false);
+
+  const reportCartActivity = async (email: string) => {
+    if (!email || cartReportedRef.current) return;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) return;
+
+    cartReportedRef.current = true;
+
+    const productsBySeller: { [pubkey: string]: typeof products } = {};
+    for (const p of products) {
+      if (!productsBySeller[p.pubkey]) {
+        productsBySeller[p.pubkey] = [];
+      }
+      productsBySeller[p.pubkey]!.push(p);
+    }
+
+    for (const [sellerPubkey, sellerProducts] of Object.entries(
+      productsBySeller
+    )) {
+      try {
+        await fetch("/api/email/flows/report-cart", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            seller_pubkey: sellerPubkey,
+            buyer_email: email,
+            buyer_pubkey: userPubkey || undefined,
+            cart_items: sellerProducts.map((p) => ({
+              title: p.title,
+              id: p.id,
+              price: p.price,
+              currency: p.currency,
+              quantity: quantities[p.id] || 1,
+            })),
+          }),
+        });
+      } catch {}
+    }
+  };
+
+  useEffect(() => {
+    if (buyerEmail && buyerEmailAutoFilled && products.length > 0) {
+      reportCartActivity(buyerEmail);
+    }
+  }, [buyerEmailAutoFilled, buyerEmail, products.length]);
+
   const walletContext = useContext(CashuWalletContext);
 
   const { isOpen, onOpen, onClose } = useDisclosure();
@@ -1403,6 +1450,10 @@ export default function CartInvoiceCard({
     paymentType?: "lightning" | "cashu" | "nwc" | "stripe" | "fiat"
   ) => {
     try {
+      if (buyerEmail) {
+        reportCartActivity(buyerEmail);
+      }
+
       const methodCosts =
         paymentType === "lightning" ||
         paymentType === "cashu" ||

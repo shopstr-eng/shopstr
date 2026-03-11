@@ -10,7 +10,19 @@ import { EventTemplate } from "nostr-tools";
 import {
   cacheEvent,
   getSubscriptionsBySellerPubkey,
+  createEmailFlow,
+  getEmailFlows,
+  getEmailFlow,
+  updateEmailFlow,
+  deleteEmailFlow,
+  createFlowStep,
+  getFlowSteps,
+  updateFlowStep,
+  deleteFlowStep,
+  getFlowEnrollments,
+  getDbPool,
 } from "@/utils/db/db-service";
+import { getDefaultFlowSteps } from "@/utils/email/flow-email-templates";
 import { v4 as uuidv4 } from "uuid";
 
 function noSignerError() {
@@ -383,7 +395,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
             tags.push(["t", cat]);
           }
         }
-        tags.push(["t", "shopstr"]);
+        tags.push(["t", "MilkMarket"]);
 
         if (params.quantity) {
           tags.push(["quantity", params.quantity]);
@@ -472,7 +484,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
         const handlerDTag = uuidv4();
         const origin =
-          process.env.NEXT_PUBLIC_BASE_URL || "https://shopstr.store";
+          process.env.NEXT_PUBLIC_BASE_URL || "https://milk.market";
 
         const handlerEvent: EventTemplate = {
           kind: 31990,
@@ -629,7 +641,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           for (const cat of params.categories) {
             tags.push(["t", cat]);
           }
-          tags.push(["t", "shopstr"]);
+          tags.push(["t", "MilkMarket"]);
         }
         if (params.quantity) {
           tags.push(["quantity", params.quantity]);
@@ -2583,6 +2595,480 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       } catch (error) {
         return errorResponse(
           "Failed to get notification email",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  server.tool(
+    "create_email_flow",
+    "Create an automated email flow (welcome series, abandoned cart, post-purchase, or winback). Optionally include default template steps or provide custom steps.",
+    {
+      name: z.string().describe("Name for the email flow"),
+      flow_type: z
+        .enum(["welcome_series", "abandoned_cart", "post_purchase", "winback"])
+        .describe("Type of email flow"),
+      from_name: z
+        .string()
+        .optional()
+        .describe(
+          "Custom sender display name for emails sent from this flow (e.g. 'Fresh Farm Dairy')"
+        ),
+      reply_to: z
+        .string()
+        .optional()
+        .describe(
+          "Custom reply-to email address for emails sent from this flow"
+        ),
+      use_defaults: z
+        .boolean()
+        .optional()
+        .describe(
+          "Whether to populate the flow with default template steps (default true)"
+        ),
+      steps: z
+        .array(
+          z.object({
+            step_order: z.number().describe("Order of the step (1-based)"),
+            subject: z
+              .string()
+              .describe(
+                "Email subject line (supports merge tags like {{shop_name}}, {{buyer_name}})"
+              ),
+            body_html: z
+              .string()
+              .describe("Email body HTML (supports merge tags)"),
+            delay_hours: z
+              .number()
+              .describe("Hours to delay after enrollment or previous step"),
+          })
+        )
+        .optional()
+        .describe("Custom steps to add to the flow (overrides use_defaults)"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+
+        const flow = await createEmailFlow({
+          seller_pubkey: pubkey,
+          name: params.name,
+          flow_type: params.flow_type,
+        });
+
+        if (params.from_name || params.reply_to) {
+          await updateEmailFlow(flow.id, {
+            from_name: params.from_name || null,
+            reply_to: params.reply_to || null,
+          });
+        }
+
+        let stepsCreated = 0;
+
+        if (params.steps && params.steps.length > 0) {
+          for (const step of params.steps) {
+            await createFlowStep({
+              flow_id: flow.id,
+              step_order: step.step_order,
+              subject: step.subject,
+              body_html: step.body_html,
+              delay_hours: step.delay_hours,
+            });
+            stepsCreated++;
+          }
+        } else if (params.use_defaults !== false) {
+          const defaultSteps = getDefaultFlowSteps(params.flow_type);
+          for (const step of defaultSteps) {
+            await createFlowStep({
+              flow_id: flow.id,
+              step_order: step.step_order,
+              subject: step.subject,
+              body_html: step.body_html,
+              delay_hours: step.delay_hours,
+            });
+            stepsCreated++;
+          }
+        }
+
+        return successResponse(
+          {
+            flow,
+            stepsCreated,
+          },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to create email flow",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  server.tool(
+    "list_email_flows",
+    "List all email flows for your shop. Returns flow definitions with their type, status, and metadata.",
+    {},
+    async () => {
+      const startTime = Date.now();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const flows = await getEmailFlows(pubkey);
+
+        return successResponse(
+          {
+            flows,
+            total: flows.length,
+          },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to list email flows",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  server.tool(
+    "update_email_flow",
+    "Update an email flow's name, sender settings, steps, or any combination. Can add, update, or remove individual steps.",
+    {
+      flow_id: z.number().describe("The ID of the flow to update"),
+      name: z.string().optional().describe("Updated flow name"),
+      from_name: z
+        .string()
+        .optional()
+        .describe("Custom sender display name (set to empty string to clear)"),
+      reply_to: z
+        .string()
+        .optional()
+        .describe(
+          "Custom reply-to email address (set to empty string to clear)"
+        ),
+      steps: z
+        .array(
+          z.object({
+            id: z
+              .number()
+              .optional()
+              .describe("Step ID (omit to create a new step)"),
+            step_order: z.number().describe("Order of the step (1-based)"),
+            subject: z.string().describe("Email subject line"),
+            body_html: z.string().describe("Email body HTML"),
+            delay_hours: z.number().describe("Hours to delay"),
+            delete: z
+              .boolean()
+              .optional()
+              .describe("Set to true to delete this step (requires id)"),
+          })
+        )
+        .optional()
+        .describe("Steps to add, update, or delete"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+
+        const flow = await getEmailFlow(params.flow_id);
+        if (!flow) {
+          return errorResponse(
+            "Flow not found",
+            `No flow found with ID ${params.flow_id}`,
+            startTime
+          );
+        }
+        if (flow.seller_pubkey !== pubkey) {
+          return errorResponse(
+            "Not authorized",
+            "You do not own this flow",
+            startTime
+          );
+        }
+
+        const updateData: any = {};
+        if (params.name !== undefined) updateData.name = params.name;
+        if (params.from_name !== undefined)
+          updateData.from_name = params.from_name || null;
+        if (params.reply_to !== undefined)
+          updateData.reply_to = params.reply_to || null;
+        if (Object.keys(updateData).length > 0) {
+          await updateEmailFlow(params.flow_id, updateData);
+        }
+
+        let stepsUpdated = 0;
+        let stepsCreated = 0;
+        let stepsDeleted = 0;
+
+        if (params.steps) {
+          const existingSteps = await getFlowSteps(params.flow_id);
+          const existingStepIds = new Set(existingSteps.map((s) => s.id));
+
+          for (const step of params.steps) {
+            if (step.id && !existingStepIds.has(step.id)) {
+              continue;
+            }
+            if (step.delete && step.id) {
+              await deleteFlowStep(step.id);
+              stepsDeleted++;
+            } else if (step.id) {
+              await updateFlowStep(step.id, {
+                step_order: step.step_order,
+                subject: step.subject,
+                body_html: step.body_html,
+                delay_hours: step.delay_hours,
+              });
+              stepsUpdated++;
+            } else {
+              await createFlowStep({
+                flow_id: params.flow_id,
+                step_order: step.step_order,
+                subject: step.subject,
+                body_html: step.body_html,
+                delay_hours: step.delay_hours,
+              });
+              stepsCreated++;
+            }
+          }
+        }
+
+        const updatedFlow = await getEmailFlow(params.flow_id);
+        const updatedSteps = await getFlowSteps(params.flow_id);
+
+        return successResponse(
+          {
+            flow: updatedFlow,
+            steps: updatedSteps,
+            stepsCreated,
+            stepsUpdated,
+            stepsDeleted,
+          },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to update email flow",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  server.tool(
+    "delete_email_flow",
+    "Delete an email flow and all its steps, enrollments, and executions.",
+    {
+      flow_id: z.number().describe("The ID of the flow to delete"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+
+        const flow = await getEmailFlow(params.flow_id);
+        if (!flow) {
+          return errorResponse(
+            "Flow not found",
+            `No flow found with ID ${params.flow_id}`,
+            startTime
+          );
+        }
+        if (flow.seller_pubkey !== pubkey) {
+          return errorResponse(
+            "Not authorized",
+            "You do not own this flow",
+            startTime
+          );
+        }
+
+        await deleteEmailFlow(params.flow_id);
+
+        return successResponse(
+          {
+            deletedFlowId: params.flow_id,
+            deletedFlowName: flow.name,
+            deletedFlowType: flow.flow_type,
+          },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to delete email flow",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  server.tool(
+    "toggle_email_flow",
+    "Activate or pause an email flow. Active flows will process enrollments and send emails. Paused flows stop sending.",
+    {
+      flow_id: z.number().describe("The ID of the flow to toggle"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+
+        const flow = await getEmailFlow(params.flow_id);
+        if (!flow) {
+          return errorResponse(
+            "Flow not found",
+            `No flow found with ID ${params.flow_id}`,
+            startTime
+          );
+        }
+        if (flow.seller_pubkey !== pubkey) {
+          return errorResponse(
+            "Not authorized",
+            "You do not own this flow",
+            startTime
+          );
+        }
+
+        const newStatus = flow.status === "active" ? "paused" : "active";
+        const updated = await updateEmailFlow(params.flow_id, {
+          status: newStatus,
+        });
+
+        return successResponse(
+          {
+            flow: updated,
+            previousStatus: flow.status,
+            newStatus,
+          },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to toggle email flow",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  server.tool(
+    "get_email_flow_stats",
+    "Get enrollment and send statistics for an email flow, including total enrollments, active/completed/cancelled counts, and per-step send/fail/pending counts.",
+    {
+      flow_id: z.number().describe("The ID of the flow to get stats for"),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+
+        const flow = await getEmailFlow(params.flow_id);
+        if (!flow) {
+          return errorResponse(
+            "Flow not found",
+            `No flow found with ID ${params.flow_id}`,
+            startTime
+          );
+        }
+        if (flow.seller_pubkey !== pubkey) {
+          return errorResponse(
+            "Not authorized",
+            "You do not own this flow",
+            startTime
+          );
+        }
+
+        const enrollments = await getFlowEnrollments(params.flow_id);
+        const steps = await getFlowSteps(params.flow_id);
+
+        const enrollmentStats = {
+          total: enrollments.length,
+          active: enrollments.filter((e) => e.status === "active").length,
+          completed: enrollments.filter((e) => e.status === "completed").length,
+          cancelled: enrollments.filter((e) => e.status === "cancelled").length,
+        };
+
+        const dbPool = getDbPool();
+        let client;
+        let stepStats: any[] = [];
+
+        try {
+          client = await dbPool.connect();
+          for (const step of steps) {
+            const result = await client.query(
+              `SELECT 
+                COUNT(*) FILTER (WHERE status = 'sent') as sent,
+                COUNT(*) FILTER (WHERE status = 'failed') as failed,
+                COUNT(*) FILTER (WHERE status = 'pending') as pending,
+                COUNT(*) FILTER (WHERE status = 'skipped') as skipped,
+                COUNT(*) as total
+              FROM email_flow_executions WHERE step_id = $1`,
+              [step.id]
+            );
+            const row = result.rows[0] || {};
+            stepStats.push({
+              step_id: step.id,
+              step_order: step.step_order,
+              subject: step.subject,
+              delay_hours: step.delay_hours,
+              sent: parseInt(row.sent || "0"),
+              failed: parseInt(row.failed || "0"),
+              pending: parseInt(row.pending || "0"),
+              skipped: parseInt(row.skipped || "0"),
+              total: parseInt(row.total || "0"),
+            });
+          }
+        } finally {
+          if (client) client.release();
+        }
+
+        return successResponse(
+          {
+            flow: {
+              id: flow.id,
+              name: flow.name,
+              flow_type: flow.flow_type,
+              status: flow.status,
+            },
+            enrollments: enrollmentStats,
+            steps: stepStats,
+          },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to get email flow stats",
           error instanceof Error ? error.message : "Unknown error",
           startTime
         );
