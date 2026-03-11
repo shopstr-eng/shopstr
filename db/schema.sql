@@ -128,8 +128,8 @@ CREATE INDEX IF NOT EXISTS idx_discount_codes_code ON discount_codes(code);
 -- Failed relay publish tracking table
 CREATE TABLE IF NOT EXISTS failed_relay_publishes (
     event_id TEXT PRIMARY KEY,
-    relays TEXT NOT NULL,
     event_data TEXT,
+    relays TEXT NOT NULL,
     created_at BIGINT NOT NULL,
     retry_count INTEGER DEFAULT 0
 );
