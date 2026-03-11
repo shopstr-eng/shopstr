@@ -230,21 +230,27 @@ function Shopstr({ props }: { props: AppProps }) {
 
   const markAllMessagesAsRead = useCallback(async (): Promise<string[]> => {
     const unreadMessageIds: string[] = [];
+    const wrappedEventIds: string[] = [];
 
     for (const [_, messages] of chatsMap) {
       for (const message of messages as NostrMessageEvent[]) {
         if (!message.read) {
           unreadMessageIds.push(message.id);
+          if (message.wrappedEventId) {
+            wrappedEventIds.push(message.wrappedEventId);
+          }
         }
       }
     }
 
     if (unreadMessageIds.length > 0) {
       try {
+        const idsForDb =
+          wrappedEventIds.length > 0 ? wrappedEventIds : unreadMessageIds;
         await fetch("/api/db/mark-messages-read", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messageIds: unreadMessageIds }),
+          body: JSON.stringify({ messageIds: idsForDb }),
         });
 
         setNewOrderIds(new Set(unreadMessageIds));
@@ -681,6 +687,7 @@ function Shopstr({ props }: { props: AppProps }) {
       <DynamicHead
         productEvents={productContext.productEvents}
         shopEvents={shopContext.shopData}
+        profileData={profileContext.profileData}
       />
       <CommunityContext.Provider value={communityContext}>
         <RelaysContext.Provider value={relaysContext}>

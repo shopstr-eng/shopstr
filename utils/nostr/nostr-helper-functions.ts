@@ -475,8 +475,8 @@ export async function sendGiftWrappedMessageEvent(
     const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
     await trackFailedRelayPublish(
       giftWrappedMessageEvent.id,
-      allWriteRelays,
-      giftWrappedMessageEvent
+      giftWrappedMessageEvent,
+      allWriteRelays
     ).catch(console.error);
   }
 }
@@ -1009,8 +1009,8 @@ export async function finalizeAndSendNostrEvent(
       const { trackFailedRelayPublish } = await import("@/utils/db/db-client");
       await trackFailedRelayPublish(
         signedEvent.id,
-        allWriteRelays,
-        signedEvent
+        signedEvent,
+        allWriteRelays
       ).catch(console.error);
     }
 
@@ -1038,7 +1038,17 @@ export async function blossomUploadImages(
     throw new Error("Only images are supported");
 
   const arrayBuffer = await image.arrayBuffer();
-  const wordArray = CryptoJS.lib.WordArray.create(arrayBuffer);
+  const uint8Array = new Uint8Array(arrayBuffer);
+  const words: number[] = [];
+  for (let i = 0; i < uint8Array.length; i += 4) {
+    words.push(
+      ((uint8Array[i] || 0) << 24) |
+        ((uint8Array[i + 1] || 0) << 16) |
+        ((uint8Array[i + 2] || 0) << 8) |
+        (uint8Array[i + 3] || 0)
+    );
+  }
+  const wordArray = CryptoJS.lib.WordArray.create(words, uint8Array.length);
   const hash = CryptoJS.SHA256(wordArray).toString(CryptoJS.enc.Hex);
 
   const event = {
@@ -1062,21 +1072,51 @@ export async function blossomUploadImages(
     CryptoJS.enc.Utf8.parse(JSON.stringify(signedEvent))
   )}`;
 
+  const validServers = servers
+    .map((s) => {
+      let server = (s || "").trim();
+      if (!server) return null;
+      if (!server.match(/^https?:\/\//i)) {
+        server = `https://${server}`;
+      }
+      try {
+        new URL(server);
+        return server;
+      } catch {
+        return null;
+      }
+    })
+    .filter((s): s is string => s !== null);
+
+  if (validServers.length === 0) {
+    throw new Error(
+      "No valid Blossom servers configured. Please check your media server settings."
+    );
+  }
+
   let tags: string[][] = [];
   let responseUrl: string = "";
-  for (let i = 0; i < servers.length; i++) {
-    const server = servers[i];
+  for (let i = 0; i < validServers.length; i++) {
+    const server = validServers[i];
+
     if (i == 0) {
       const url = new URL("/upload", server);
 
-      const response = await fetch(url, {
+      const res = await fetch(url, {
         method: "PUT",
         body: image,
         headers: {
           authorization,
           "content-type": image.type,
         },
-      }).then((res) => res.json());
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => "Unknown server error");
+        throw new Error(`Upload failed (${res.status}): ${errorText}`);
+      }
+
+      const response = await res.json();
 
       responseUrl = response.url;
 

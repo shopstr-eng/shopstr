@@ -1,4 +1,4 @@
-import { Pool } from "pg";
+import { Pool, PoolClient } from "pg";
 import { NostrEvent } from "../types/types";
 
 let pool: Pool | null = null;
@@ -7,6 +7,25 @@ let initializingTables = false;
 
 // Queue for serializing cache operations
 let cacheQueue: Promise<void> = Promise.resolve();
+
+export async function ensureFailedRelayPublishesTable(
+  client: PoolClient
+): Promise<void> {
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS failed_relay_publishes (
+      event_id TEXT PRIMARY KEY,
+      event_data TEXT NOT NULL,
+      relays TEXT NOT NULL,
+      created_at BIGINT NOT NULL,
+      retry_count INTEGER DEFAULT 0
+    )
+  `);
+
+  await client.query(`
+    ALTER TABLE failed_relay_publishes
+    ADD COLUMN IF NOT EXISTS event_data TEXT
+  `);
+}
 
 // Initialize the database connection pool
 export function getDbPool(): Pool {
@@ -105,6 +124,7 @@ async function initializeTables(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_message_events_created_at ON message_events(created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_message_events_is_read ON message_events(is_read);
       CREATE INDEX IF NOT EXISTS idx_message_events_order_id ON message_events(order_id);
+      CREATE INDEX IF NOT EXISTS idx_message_events_tags_p ON message_events USING gin (tags jsonb_path_ops);
 
       -- Profile events (kind 0 - user profile, kind 30019 - shop profile)
       CREATE TABLE IF NOT EXISTS profile_events (
@@ -225,9 +245,10 @@ async function initializeTables(): Promise<void> {
       END $$;
     `);
 
+    await ensureFailedRelayPublishesTable(client);
+
     tablesInitialized = true;
     initializingTables = false;
-    console.log("Database tables initialized successfully");
   } catch (error) {
     console.error("Failed to initialize tables:", error);
     initializingTables = false;
@@ -416,11 +437,6 @@ export async function cacheEvents(events: NostrEvent[]): Promise<void> {
             if ((isDeadlock || isConnectionError) && attempt < maxRetries - 1) {
               attempt++;
               const delay = 100 * Math.pow(2, attempt);
-              console.log(
-                `Database error detected (${
-                  isDeadlock ? "deadlock" : "connection error"
-                }), retrying in ${delay}ms (attempt ${attempt}/${maxRetries})...`
-              );
               await new Promise((res) => setTimeout(res, delay));
             } else {
               reject(error);
@@ -760,7 +776,7 @@ export async function fetchAllMessagesFromDb(
     let paramIndex = 1;
 
     if (pubkey) {
-      query += ` AND pubkey = $${paramIndex++}`;
+      query += ` AND EXISTS (SELECT 1 FROM jsonb_array_elements(tags) elem WHERE elem->>0 = 'p' AND elem->>1 = $${paramIndex++})`;
       params.push(pubkey);
     }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import { useState, useEffect, useContext } from "react";
 import { useRouter } from "next/router";
 import {
   Modal,
@@ -28,6 +28,7 @@ import {
   RawEventModal,
   EventIdModal,
 } from "../../components/utility-components/modals/event-modals";
+import { findProductBySlug, getListingSlug } from "@/utils/url-slugs";
 
 const Listing = () => {
   const router = useRouter();
@@ -40,8 +41,6 @@ const Listing = () => {
   const [showRawEventModal, setShowRawEventModal] = useState(false);
   const [showEventIdModal, setShowEventIdModal] = useState(false);
 
-  const [fiatOrderIsPlaced, setFiatOrderIsPlaced] = useState(false);
-  const [fiatOrderFailed, setFiatOrderFailed] = useState(false);
   const [invoiceIsPaid, setInvoiceIsPaid] = useState(false);
   const [invoiceGenerationFailed, setInvoiceGenerationFailed] = useState(false);
   const [cashuPaymentSent, setCashuPaymentSent] = useState(false);
@@ -55,16 +54,29 @@ const Listing = () => {
       const productIdString = productId ? productId[0] : "";
       setProductIdString(productIdString!);
       if (!productIdString) {
-        router.push("/marketplace"); // if there isn't a productId, redirect to home page
+        router.push("/marketplace");
       }
     }
   }, [router]);
 
   useEffect(() => {
     if (!productContext.isLoading && productContext.productEvents) {
-      const matchingEvent = productContext.productEvents.find(
-        (event: Event) => {
-          // check for matching naddr
+      const allParsed = productContext.productEvents
+        .filter((e: Event) => e.kind !== 1)
+        .map((e: Event) => parseTags(e))
+        .filter((p: ProductData | undefined): p is ProductData => !!p);
+
+      let matchingEvent: Event | undefined;
+
+      const slugMatch = findProductBySlug(productIdString, allParsed);
+      if (slugMatch) {
+        matchingEvent = productContext.productEvents.find(
+          (e: Event) => e.id === slugMatch.id
+        );
+      }
+
+      if (!matchingEvent) {
+        matchingEvent = productContext.productEvents.find((event: Event) => {
           const naddrMatch =
             nip19.naddrEncode({
               identifier:
@@ -73,15 +85,13 @@ const Listing = () => {
               kind: event.kind,
             }) === productIdString;
 
-          // Check for matching d tag
           const dTagMatch =
             event.tags.find((tag: string[]) => tag[0] === "d")?.[1] ===
             productIdString;
-          // Check for matching event id
           const idMatch = event.id === productIdString;
           return naddrMatch || dTagMatch || idMatch;
-        }
-      );
+        });
+      }
 
       if (matchingEvent) {
         setRawEvent(matchingEvent);
@@ -94,6 +104,15 @@ const Listing = () => {
           setIsZapsnag(false);
         }
         setProductData(parsed);
+
+        if (parsed && parsed.title && matchingEvent.kind !== 1) {
+          const canonicalSlug = getListingSlug(parsed, allParsed);
+          if (canonicalSlug && productIdString !== canonicalSlug) {
+            router.replace(`/listing/${canonicalSlug}`, undefined, {
+              shallow: true,
+            });
+          }
+        }
       }
     }
   }, [productContext.isLoading, productContext.productEvents, productIdString]);
@@ -162,8 +181,6 @@ const Listing = () => {
           ) : (
             <CheckoutCard
               productData={productData}
-              setFiatOrderIsPlaced={setFiatOrderIsPlaced}
-              setFiatOrderFailed={setFiatOrderFailed}
               setInvoiceIsPaid={setInvoiceIsPaid}
               setInvoiceGenerationFailed={setInvoiceGenerationFailed}
               setCashuPaymentSent={setCashuPaymentSent}
@@ -171,18 +188,16 @@ const Listing = () => {
               rawEvent={rawEvent}
             />
           ))}
-        {fiatOrderIsPlaced || invoiceIsPaid || cashuPaymentSent ? (
+        {invoiceIsPaid || cashuPaymentSent ? (
           <>
             <Modal
               backdrop="blur"
-              isOpen={fiatOrderIsPlaced || invoiceIsPaid || cashuPaymentSent}
+              isOpen={invoiceIsPaid || cashuPaymentSent}
               onClose={() => {
-                setFiatOrderIsPlaced(false);
                 setInvoiceIsPaid(false);
                 setCashuPaymentSent(false);
-                router.push("/orders");
+                router.push("/order-summary");
               }}
-              // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
               classNames={{
                 body: "py-6 ",
                 backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
@@ -269,40 +284,6 @@ const Listing = () => {
                 <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
                   <div className="flex items-center justify-center">
                     You didn&apos;t have enough balance in your wallet to pay.
-                  </div>
-                </ModalBody>
-              </ModalContent>
-            </Modal>
-          </>
-        ) : null}
-        {fiatOrderFailed ? (
-          <>
-            <Modal
-              backdrop="blur"
-              isOpen={fiatOrderFailed}
-              onClose={() => setFiatOrderFailed(false)}
-              // className="bg-light-fg dark:bg-dark-fg text-black dark:text-white"
-              classNames={{
-                body: "py-6 ",
-                backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-                header: "border-b-[1px] border-[#292f46]",
-                footer: "border-t-[1px] border-[#292f46]",
-                closeButton: "hover:bg-black/5 active:bg-white/10",
-              }}
-              isDismissable={true}
-              scrollBehavior={"normal"}
-              placement={"center"}
-              size="2xl"
-            >
-              <ModalContent>
-                <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
-                  <XCircleIcon className="h-6 w-6 text-red-500" />
-                  <div className="ml-2">Order failed!</div>
-                </ModalHeader>
-                <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
-                  <div className="flex items-center justify-center">
-                    Your order information was not delivered to the seller.
-                    Please try again.
                   </div>
                 </ModalBody>
               </ModalContent>

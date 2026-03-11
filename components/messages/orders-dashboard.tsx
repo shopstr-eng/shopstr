@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useContext } from "react";
+import { useEffect, useState, useContext } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { nip19 } from "nostr-tools";
 import {
@@ -26,6 +26,7 @@ import ShopstrSpinner from "../utility-components/shopstr-spinner";
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
 import ClaimButton from "@/components/utility-components/claim-button";
 import DisplayProductModal from "@/components/display-product-modal";
+import AddressChangeModal from "@/components/utility-components/address-change-modal";
 import parseTags, {
   ProductData,
 } from "@/utils/parsers/product-parser-functions";
@@ -92,6 +93,7 @@ interface OrderData {
   currency?: string;
   donationAmount?: number;
   donationPercentage?: number;
+  sellerPubkey?: string;
 }
 
 const OrdersDashboard = () => {
@@ -138,6 +140,11 @@ const OrdersDashboard = () => {
   const [currencyRates, setCurrencyRates] = useState<Record<string, number>>(
     {}
   );
+
+  const [showAddressChangeModal, setShowAddressChangeModal] = useState(false);
+  const [addressChangeOrder, setAddressChangeOrder] =
+    useState<OrderData | null>(null);
+  const [isSendingAddressChange, setIsSendingAddressChange] = useState(false);
 
   const {
     signer,
@@ -406,50 +413,19 @@ const OrdersDashboard = () => {
                 case "lightning":
                   paymentMethod = "Lightning";
                   break;
-                case "cashapp":
-                case "cash app":
-                  paymentMethod = "CashApp";
-                  break;
-                case "venmo":
-                  paymentMethod = "Venmo";
-                  break;
-                case "zelle":
-                  paymentMethod = "Zelle";
-                  break;
-                case "paypal":
-                  paymentMethod = "PayPal";
-                  break;
-                case "applepay":
-                case "apple pay":
-                  paymentMethod = "Apple Pay";
-                  break;
-                case "cash":
-                  paymentMethod = "Cash";
-                  break;
                 default:
                   paymentMethod =
                     paymentType.charAt(0).toUpperCase() + paymentType.slice(1);
               }
             } else if (messageEvent.content) {
               const content = messageEvent.content.toLowerCase();
-              if (content.includes("cashapp") || content.includes("cash app")) {
-                paymentMethod = "CashApp";
-              } else if (
-                content.includes("lightning") ||
-                content.includes("lnurl")
-              ) {
+              if (content.includes("lightning") || content.includes("lnurl")) {
                 paymentMethod = "Lightning";
               } else if (
                 content.includes("cashu") ||
                 content.includes("ecash")
               ) {
                 paymentMethod = "Cashu";
-              } else if (content.includes("cash")) {
-                paymentMethod = "Cash";
-              } else if (content.includes("venmo")) {
-                paymentMethod = "Venmo";
-              } else if (content.includes("paypal")) {
-                paymentMethod = "PayPal";
               }
             }
 
@@ -477,6 +453,7 @@ const OrdersDashboard = () => {
               currency: productCurrency,
               donationAmount,
               donationPercentage,
+              sellerPubkey: merchantPubkey || undefined,
             });
           }
         }
@@ -981,6 +958,90 @@ const OrdersDashboard = () => {
     );
   };
 
+  const handleOpenAddressChangeModal = (order: OrderData) => {
+    setAddressChangeOrder(order);
+    setShowAddressChangeModal(true);
+  };
+
+  const handleCloseAddressChangeModal = () => {
+    setShowAddressChangeModal(false);
+    setAddressChangeOrder(null);
+  };
+
+  const onAddressChangeSubmit = async (newAddress: string) => {
+    if (!addressChangeOrder || !signer || !nostr) return;
+
+    setIsSendingAddressChange(true);
+
+    try {
+      const decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
+      const decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
+      const decodedRandomPubkeyForReceiver = nip19.decode(
+        randomNpubForReceiver
+      );
+      const decodedRandomPrivkeyForReceiver = nip19.decode(
+        randomNsecForReceiver
+      );
+
+      const sellerPubkey =
+        addressChangeOrder.sellerPubkey ||
+        addressChangeOrder.productAddress.split(":")[1];
+
+      if (!sellerPubkey) return;
+
+      const message =
+        `Address change request for order ${addressChangeOrder.orderId.substring(
+          0,
+          8
+        )}...` + `\n\nNew Address: ${newAddress}`;
+
+      const giftWrappedMessageEvent = await constructGiftWrappedEvent(
+        decodedRandomPubkeyForSender.data as string,
+        sellerPubkey,
+        message,
+        "address-change",
+        {
+          productAddress: addressChangeOrder.productAddress,
+          type: 4,
+          isOrder: true,
+          orderId: addressChangeOrder.orderId,
+          buyerPubkey: addressChangeOrder.buyerPubkey,
+        }
+      );
+
+      const sealedEvent = await constructMessageSeal(
+        signer,
+        giftWrappedMessageEvent,
+        decodedRandomPubkeyForSender.data as string,
+        sellerPubkey,
+        decodedRandomPrivkeyForSender.data as Uint8Array
+      );
+
+      const giftWrappedEvent = await constructMessageGiftWrap(
+        sealedEvent,
+        decodedRandomPubkeyForReceiver.data as string,
+        decodedRandomPrivkeyForReceiver.data as Uint8Array,
+        sellerPubkey
+      );
+
+      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent);
+
+      setOrders((prevOrders) =>
+        prevOrders.map((order) =>
+          order.orderId === addressChangeOrder.orderId
+            ? { ...order, address: newAddress }
+            : order
+        )
+      );
+
+      handleCloseAddressChangeModal();
+    } catch (error) {
+      console.error("Error sending address change:", error);
+    } finally {
+      setIsSendingAddressChange(false);
+    }
+  };
+
   if (isLoading || !chatsContext || chatsContext.isLoading) {
     return (
       <div className="flex h-[66vh] items-center justify-center">
@@ -1233,11 +1294,23 @@ const OrdersDashboard = () => {
                           ).toLocaleDateString()}
                         </td>
                         <td className="max-w-xs px-4 py-4 text-sm text-light-text dark:text-dark-text">
-                          <div
-                            className="truncate"
-                            title={order.address || "N/A"}
-                          >
-                            {order.address || "N/A"}
+                          <div className="flex flex-col gap-1">
+                            <div
+                              className="truncate"
+                              title={order.address || "N/A"}
+                            >
+                              {order.address || "N/A"}
+                            </div>
+                            {order.address && !order.isSale && (
+                              <button
+                                onClick={() =>
+                                  handleOpenAddressChangeModal(order)
+                                }
+                                className="cursor-pointer text-left text-xs text-shopstr-purple-light underline hover:text-shopstr-purple dark:text-shopstr-yellow-light dark:hover:text-shopstr-yellow"
+                              >
+                                Change Address
+                              </button>
+                            )}
                           </div>
                         </td>
                         <td className="max-w-xs px-4 py-4 text-sm text-light-text dark:text-dark-text">
@@ -1616,6 +1689,15 @@ const OrdersDashboard = () => {
           </form>
         </ModalContent>
       </Modal>
+      <AddressChangeModal
+        isOpen={showAddressChangeModal}
+        onClose={handleCloseAddressChangeModal}
+        onSubmit={onAddressChangeSubmit}
+        isLoading={isSendingAddressChange}
+        orderId={addressChangeOrder?.orderId}
+        productTitle={addressChangeOrder?.productTitle}
+        currentAddress={addressChangeOrder?.address}
+      />
     </div>
   );
 };

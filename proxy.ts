@@ -2,8 +2,14 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { nip19 } from "nostr-tools";
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (pathname === "/.well-known/agent.json") {
+    return NextResponse.rewrite(
+      new URL("/api/.well-known/agent.json", request.url)
+    );
+  }
 
   // Handle npub redirects, but ignore if already in marketplace page route
   if (

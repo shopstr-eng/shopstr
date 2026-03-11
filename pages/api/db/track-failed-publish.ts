@@ -1,5 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getDbPool } from "@/utils/db/db-service";
+import {
+  ensureFailedRelayPublishesTable,
+  getDbPool,
+} from "@/utils/db/db-service";
 
 export default async function handler(
   req: NextApiRequest,
@@ -13,37 +16,28 @@ export default async function handler(
   let client;
 
   try {
-    const { eventId, relays, event } = req.body;
+    const { eventId, event, relays } = req.body;
 
-    if (!eventId || !relays || !Array.isArray(relays)) {
+    if (!eventId || !event || !relays || !Array.isArray(relays)) {
       return res.status(400).json({ error: "Invalid request body" });
     }
 
     client = await dbPool.connect();
-
-    // Create table if it doesn't exist
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS failed_relay_publishes (
-        event_id TEXT PRIMARY KEY,
-        relays TEXT NOT NULL,
-        event_data TEXT,
-        created_at BIGINT NOT NULL,
-        retry_count INTEGER DEFAULT 0
-      )
-    `);
+    await ensureFailedRelayPublishesTable(client);
 
     // Insert or update the failed publish record
     await client.query(
-      `INSERT INTO failed_relay_publishes (event_id, relays, event_data, created_at, retry_count)
+      `INSERT INTO failed_relay_publishes (event_id, event_data, relays, created_at, retry_count)
        VALUES ($1, $2, $3, $4, 0)
        ON CONFLICT (event_id) DO UPDATE SET
+         event_data = EXCLUDED.event_data,
          relays = EXCLUDED.relays,
          event_data = EXCLUDED.event_data,
          created_at = EXCLUDED.created_at`,
       [
         eventId,
-        JSON.stringify(relays),
         event ? JSON.stringify(event) : null,
+        JSON.stringify(relays),
         Math.floor(Date.now() / 1000),
       ]
     );

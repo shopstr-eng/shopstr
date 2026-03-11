@@ -1,5 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { getDbPool } from "@/utils/db/db-service";
+import {
+  ensureFailedRelayPublishesTable,
+  getDbPool,
+} from "@/utils/db/db-service";
 
 export default async function handler(
   req: NextApiRequest,
@@ -14,6 +17,7 @@ export default async function handler(
 
   try {
     client = await dbPool.connect();
+    await ensureFailedRelayPublishesTable(client);
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS failed_relay_publishes (
@@ -27,7 +31,7 @@ export default async function handler(
 
     // Get all failed publishes with retry count < 5 (limit retries)
     const result = await client.query(
-      `SELECT event_id, relays, retry_count, event_data
+      `SELECT event_id, event_data, relays, retry_count
        FROM failed_relay_publishes
        WHERE retry_count < 5
          AND event_data IS NOT NULL
