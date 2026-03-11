@@ -32,11 +32,6 @@ export default async function handler(
       )
     `);
 
-    await client.query(`
-      ALTER TABLE failed_relay_publishes
-      ADD COLUMN IF NOT EXISTS event_data TEXT
-    `);
-
     // Insert or update the failed publish record
     await client.query(
       `INSERT INTO failed_relay_publishes (event_id, relays, event_data, created_at, retry_count)
