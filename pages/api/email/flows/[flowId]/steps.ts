@@ -106,11 +106,18 @@ export default async function handler(
       }
 
       if (Array.isArray(steps)) {
-        const hasReorder = steps.every(
+        const existingSteps = await getFlowSteps(id);
+        const existingStepIds = new Set(existingSteps.map((s) => s.id));
+
+        const validSteps = steps.filter(
+          (s: any) => !s.id || existingStepIds.has(s.id)
+        );
+
+        const hasReorder = validSteps.every(
           (s: any) => s.id !== undefined && s.step_order !== undefined
         );
         if (hasReorder) {
-          const sortedSteps = [...steps].sort(
+          const sortedSteps = [...validSteps].sort(
             (a: any, b: any) => a.step_order - b.step_order
           );
           await reorderFlowSteps(
@@ -120,7 +127,7 @@ export default async function handler(
         }
 
         const updatedSteps = [];
-        for (const stepData of steps) {
+        for (const stepData of validSteps) {
           if (stepData.id) {
             const updated = await updateFlowStep(stepData.id, {
               subject: stepData.subject,

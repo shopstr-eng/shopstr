@@ -2221,7 +2221,7 @@ export async function getFlowEnrollments(
     return result.rows;
   } catch (error) {
     console.error("Failed to get flow enrollments:", error);
-    return [];
+    throw error;
   } finally {
     if (client) client.release();
   }
@@ -2353,6 +2353,25 @@ export async function markExecutionSent(id: number): Promise<void> {
       `UPDATE email_flow_executions SET status = 'sent', sent_at = CURRENT_TIMESTAMP WHERE id = $1`,
       [id]
     );
+
+    const enrollmentResult = await client.query(
+      `SELECT enrollment_id FROM email_flow_executions WHERE id = $1`,
+      [id]
+    );
+    if (enrollmentResult.rows.length > 0) {
+      const enrollmentId = enrollmentResult.rows[0].enrollment_id;
+      const remaining = await client.query(
+        `SELECT COUNT(*) as count FROM email_flow_executions
+         WHERE enrollment_id = $1 AND status IN ('pending')`,
+        [enrollmentId]
+      );
+      if (parseInt(remaining.rows[0].count, 10) === 0) {
+        await client.query(
+          `UPDATE email_flow_enrollments SET status = 'completed', completed_at = CURRENT_TIMESTAMP WHERE id = $1 AND status = 'active'`,
+          [enrollmentId]
+        );
+      }
+    }
   } catch (error) {
     console.error("Failed to mark execution sent:", error);
     throw error;
