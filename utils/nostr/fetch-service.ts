@@ -380,11 +380,16 @@ export const fetchProfile = async (
 
       const dbProfileMap = new Map<string, any>();
       try {
-        const response = await fetch("/api/db/fetch-profiles");
-        if (response.ok) {
-          const profilesFromDb = await response.json();
-          for (const event of profilesFromDb) {
-            if (pubkeyProfilesToFetch.includes(event.pubkey)) {
+          const response = await fetch("/api/db/fetch-profiles");
+          if (response.ok) {
+            const profilesFromDb = await response.json();
+            for (const event of profilesFromDb) {
+              if (event.kind !== 0) continue;
+              if (!pubkeyProfilesToFetch.includes(event.pubkey)) continue;
+
+              const existing = dbProfileMap.get(event.pubkey);
+              if (existing && existing.created_at >= event.created_at) continue;
+
               try {
                 const content = JSON.parse(event.content);
                 const profile = {
@@ -407,11 +412,10 @@ export const fetchProfile = async (
                 );
               }
             }
+            if (dbProfileMap.size > 0) {
+              editProfileContext(dbProfileMap, false);
+            }
           }
-          if (dbProfileMap.size > 0) {
-            editProfileContext(dbProfileMap, false);
-          }
-        }
       } catch (error) {
         console.error("Failed to fetch profiles from database: ", error);
       }
@@ -585,7 +589,8 @@ export const fetchGiftWrappedChatsAndMessages = async (
             subject !== "payment-change" &&
             subject !== "order-receipt" &&
             subject !== "shipping-info" &&
-            subject !== "zapsnag-order"
+            subject !== "zapsnag-order" &&
+            subject !== "digital-content-delivery"
           ) {
             continue;
           }

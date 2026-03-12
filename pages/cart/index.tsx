@@ -22,7 +22,10 @@ import {
   SHOPSTRBUTTONCLASSNAMES,
   ShippingOptionsType,
 } from "@/utils/STATIC-VARIABLES";
-import { ProductData } from "@/utils/parsers/product-parser-functions";
+import {
+  ProductData,
+  resolveEffectiveUnitPrice,
+} from "@/utils/parsers/product-parser-functions";
 import CartInvoiceCard from "../../components/cart-invoice-card";
 import { fiat } from "@getalby/lightning-tools";
 import currencySelection from "../../public/currencySelection.json";
@@ -155,12 +158,7 @@ export default function Component() {
     const sellerProducts = productsBySeller[sellerPubkey] || [];
     let total = 0;
     for (const product of sellerProducts) {
-      const basePrice =
-        product.bulkPrice !== undefined
-          ? product.bulkPrice
-          : product.volumePrice !== undefined
-            ? product.volumePrice
-            : product.price;
+      const basePrice = resolveEffectiveUnitPrice(product);
       const qty = quantities[product.id] || 1;
       const discount = appliedDiscounts[product.pubkey] || 0;
       const discountedPrice =
@@ -382,12 +380,7 @@ export default function Component() {
   };
 
   const convertPriceToSats = async (product: ProductData): Promise<number> => {
-    const basePrice =
-      product.bulkPrice !== undefined
-        ? product.bulkPrice
-        : product.volumePrice !== undefined
-          ? product.volumePrice
-          : product.price;
+    const basePrice = resolveEffectiveUnitPrice(product);
 
     if (
       product.currency.toLowerCase() === "sats" ||
@@ -491,7 +484,9 @@ export default function Component() {
                                         ? `${product.bulkPrice} ${product.currency}`
                                         : product.volumePrice !== undefined
                                           ? `${product.volumePrice} ${product.currency}`
-                                          : `${product.price} ${product.currency}`}
+                                          : product.weightPrice !== undefined
+                                            ? `${product.weightPrice} ${product.currency}`
+                                            : `${product.price} ${product.currency}`}
                                     </p>
                                     {product.currency.toLowerCase() !==
                                       "sats" &&
@@ -512,6 +507,11 @@ export default function Component() {
                                 {product.selectedBulkOption && (
                                   <p className="text-sm text-purple-600 dark:text-yellow-400">
                                     Bundle: {product.selectedBulkOption} units
+                                  </p>
+                                )}
+                                {product.selectedWeight && (
+                                  <p className="text-sm text-purple-600 dark:text-yellow-400">
+                                    Weight: {product.selectedWeight}
                                   </p>
                                 )}
                                 {product.quantity && (

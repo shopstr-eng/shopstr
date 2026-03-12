@@ -65,6 +65,7 @@ export default function ProductInvoiceCard({
   setCashuPaymentFailed,
   selectedSize,
   selectedVolume,
+  selectedWeight,
   selectedBulkOption,
   discountCode,
   discountPercentage,
@@ -78,6 +79,7 @@ export default function ProductInvoiceCard({
   setCashuPaymentFailed: (cashuPaymentFailed: boolean) => void;
   selectedSize?: string;
   selectedVolume?: string;
+  selectedWeight?: string;
   selectedBulkOption?: number;
   discountCode?: string;
   discountPercentage?: number;
@@ -390,6 +392,7 @@ export default function ProductInvoiceCard({
           ...productData,
           selectedSize,
           selectedVolume,
+          selectedWeight,
           selectedBulkOption,
         },
         paymentType,
@@ -399,6 +402,7 @@ export default function ProductInvoiceCard({
         pickup,
         selectedSize,
         selectedVolume,
+        selectedWeight,
         selectedBulkOption,
         buyerPubkey,
         donationAmount: donationAmountValue,
@@ -415,6 +419,7 @@ export default function ProductInvoiceCard({
           ...productData,
           selectedSize,
           selectedVolume,
+          selectedWeight,
           selectedBulkOption,
         },
         status: "confirmed",
@@ -425,6 +430,7 @@ export default function ProductInvoiceCard({
         pickup,
         selectedSize,
         selectedVolume,
+        selectedWeight,
         selectedBulkOption,
         buyerPubkey,
         donationAmount: donationAmountValue,
@@ -443,6 +449,7 @@ export default function ProductInvoiceCard({
           ...productData,
           selectedSize,
           selectedVolume,
+          selectedWeight,
           selectedBulkOption,
         },
         quantity: 1,
@@ -451,6 +458,7 @@ export default function ProductInvoiceCard({
         pickup,
         selectedSize,
         selectedVolume,
+        selectedWeight,
         selectedBulkOption,
         buyerPubkey,
         donationAmount: donationAmountValue,
@@ -1040,6 +1048,13 @@ export default function ProductInvoiceCard({
               productDetails += " in a " + selectedVolume;
             }
           }
+          if (selectedWeight) {
+            if (productDetails) {
+              productDetails += " and weight " + selectedWeight;
+            } else {
+              productDetails += " in weight " + selectedWeight;
+            }
+          }
           if (selectedBulkOption) {
             if (productDetails) {
               productDetails += " (bulk: " + selectedBulkOption + " units)";
@@ -1307,6 +1322,13 @@ export default function ProductInvoiceCard({
             productDetails += " in a " + selectedVolume;
           }
         }
+        if (selectedWeight) {
+          if (productDetails) {
+            productDetails += " and weight " + selectedWeight;
+          } else {
+            productDetails += " in weight " + selectedWeight;
+          }
+        }
         if (selectedBulkOption) {
           if (productDetails) {
             productDetails += " (bulk: " + selectedBulkOption + " units)";
@@ -1428,6 +1450,13 @@ export default function ProductInvoiceCard({
           productDetails += " and a " + selectedVolume;
         } else {
           productDetails += " in a " + selectedVolume;
+        }
+      }
+      if (selectedWeight) {
+        if (productDetails) {
+          productDetails += " and weight " + selectedWeight;
+        } else {
+          productDetails += " in weight " + selectedWeight;
         }
       }
       if (selectedBulkOption) {
@@ -2002,6 +2031,12 @@ export default function ProductInvoiceCard({
                   </p>
                 )}
 
+                {selectedWeight && (
+                  <p className="mb-1 text-gray-600 dark:text-gray-400">
+                    Weight: {selectedWeight}
+                  </p>
+                )}
+
                 {selectedBulkOption && (
                   <p className="mb-1 text-gray-600 dark:text-gray-400">
                     Bundle: {selectedBulkOption} units
@@ -2209,6 +2244,12 @@ export default function ProductInvoiceCard({
               {selectedVolume && (
                 <p className="mb-1 text-gray-600 dark:text-gray-400">
                   Volume: {selectedVolume}
+                </p>
+              )}
+
+              {selectedWeight && (
+                <p className="mb-1 text-gray-600 dark:text-gray-400">
+                  Weight: {selectedWeight}
                 </p>
               )}
 
