@@ -158,12 +158,7 @@ export default function Component() {
     const sellerProducts = productsBySeller[sellerPubkey] || [];
     let total = 0;
     for (const product of sellerProducts) {
-      const basePrice =
-        product.bulkPrice !== undefined
-          ? product.bulkPrice
-          : product.volumePrice !== undefined
-            ? product.volumePrice
-            : product.price;
+      const basePrice = resolveEffectiveUnitPrice(product);
       const qty = quantities[product.id] || 1;
       const discount = appliedDiscounts[product.pubkey] || 0;
       const discountedPrice =

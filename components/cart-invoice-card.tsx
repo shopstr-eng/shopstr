@@ -228,12 +228,7 @@ export default function CartInvoiceCard({
       let sellerSubtotal = 0;
       sellerProducts.forEach((product) => {
         const discount = appliedDiscounts[pubkey] || 0;
-        const basePrice =
-          product.bulkPrice !== undefined
-            ? product.bulkPrice
-            : product.volumePrice !== undefined
-              ? product.volumePrice
-              : product.price;
+        const basePrice = resolveEffectiveUnitPrice(product);
         const qty = quantities[product.id] || 1;
         const discountedPrice =
           discount > 0 ? basePrice * (1 - discount / 100) : basePrice;
