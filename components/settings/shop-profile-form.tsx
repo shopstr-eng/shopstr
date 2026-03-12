@@ -170,6 +170,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     "classic" | "hero" | "minimal"
   >("hero");
   const [customDomain, setCustomDomain] = useState("");
+  const [domainError, setDomainError] = useState("");
   const [domainInfo, setDomainInfo] = useState<{
     domain: string;
     verified: boolean;
@@ -367,6 +368,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
 
   const handleSaveCustomDomain = async () => {
     if (!customDomain || !userPubkey) return;
+    setDomainError("");
     try {
       const res = await fetch("/api/storefront/custom-domain", {
         method: "POST",
@@ -376,8 +378,12 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       const data = await res.json();
       if (res.ok) {
         setDomainInfo({ domain: data.domain, verified: data.verified });
+      } else {
+        setDomainError(data.error || "Failed to connect domain");
       }
-    } catch {}
+    } catch {
+      setDomainError("Failed to connect domain");
+    }
   };
 
   const onSubmit = async (data: { [x: string]: string }) => {
@@ -1306,6 +1312,9 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                     </Button>
                   )}
                 </div>
+                {domainError && (
+                  <p className="mt-1 text-sm text-red-600">{domainError}</p>
+                )}
                 {!shopSlug && customDomain && (
                   <p className="mt-1 text-xs text-orange-600">
                     Set a shop URL slug first before connecting a domain.
