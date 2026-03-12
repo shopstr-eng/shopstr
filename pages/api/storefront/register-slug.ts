@@ -1,5 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { pool } from "@/utils/db/db-service";
+import { getDbPool } from "@/utils/db/db-service";
+
+const pool = getDbPool();
 
 function sanitizeSlug(input: string): string {
   return input
@@ -39,6 +41,23 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
+  if (req.method === "DELETE") {
+    const { pubkey } = req.body;
+    if (!pubkey) {
+      return res.status(400).json({ error: "pubkey is required" });
+    }
+    try {
+      await pool.query("DELETE FROM shop_slugs WHERE pubkey = $1", [pubkey]);
+      await pool.query("DELETE FROM custom_domains WHERE pubkey = $1", [
+        pubkey,
+      ]);
+      return res.status(200).json({ success: true });
+    } catch (error) {
+      console.error("Delete slug error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  }
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }

@@ -260,6 +260,62 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     }
   };
 
+  const handleRemoveStorefront = async () => {
+    if (!userPubkey) return;
+    const confirmed = window.confirm(
+      "Are you sure you want to remove your storefront? This will delete your shop URL, custom domain, and reset all storefront settings."
+    );
+    if (!confirmed) return;
+
+    try {
+      await fetch("/api/storefront/register-slug", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pubkey: userPubkey }),
+      });
+
+      setShopSlug("");
+      setCustomDomain("");
+      setDomainInfo(null);
+      setColorScheme(DEFAULT_COLORS);
+      setProductLayout("grid");
+      setLandingPageStyle("hero");
+      setSlugStatus("idle");
+      setSlugError("");
+
+      const shopMap = shopContext.shopData;
+      const shop = shopMap.has(userPubkey)
+        ? shopMap.get(userPubkey)
+        : undefined;
+      if (shop) {
+        const updatedContent = { ...shop.content };
+        delete updatedContent.storefront;
+        const contentStr = JSON.stringify(updatedContent);
+        await createNostrShopEvent(nostr!, signer!, contentStr);
+        shopContext.updateShopData({
+          pubkey: userPubkey,
+          content: updatedContent,
+          created_at: 0,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to remove storefront:", error);
+    }
+  };
+
+  const handleRemoveCustomDomain = async () => {
+    if (!userPubkey) return;
+    try {
+      await fetch("/api/storefront/custom-domain", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pubkey: userPubkey }),
+      });
+      setCustomDomain("");
+      setDomainInfo(null);
+    } catch {}
+  };
+
   const handleSaveCustomDomain = async () => {
     if (!customDomain || !userPubkey) return;
     try {
@@ -305,14 +361,16 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     if (Object.keys(parsedDiscounts).length > 0) {
       transformedData.paymentMethodDiscounts = parsedDiscounts;
     }
-    const storefrontConfig: StorefrontConfig = {
-      colorScheme,
-      productLayout,
-      landingPageStyle,
-      shopSlug: shopSlug || undefined,
-      customDomain: customDomain || undefined,
-    };
-    transformedData.storefront = storefrontConfig;
+    if (shopSlug) {
+      const storefrontConfig: StorefrontConfig = {
+        colorScheme,
+        productLayout,
+        landingPageStyle,
+        shopSlug,
+        customDomain: customDomain || undefined,
+      };
+      transformedData.storefront = storefrontConfig;
+    }
 
     await createNostrShopEvent(
       nostr!,
@@ -892,6 +950,15 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   >
                     {domainInfo ? "Update" : "Connect"}
                   </Button>
+                  {domainInfo && (
+                    <Button
+                      className="border-3 border-red-500 bg-white font-bold text-red-500 hover:bg-red-50"
+                      type="button"
+                      onPress={handleRemoveCustomDomain}
+                    >
+                      Remove
+                    </Button>
+                  )}
                 </div>
                 {!shopSlug && customDomain && (
                   <p className="mt-1 text-xs text-orange-600">
@@ -936,6 +1003,22 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   >
                     /shop/{shopSlug}
                   </a>
+                </div>
+              )}
+
+              {shopSlug && (
+                <div className="mt-6 border-t-2 border-dashed border-gray-300 pt-4">
+                  <Button
+                    className="border-3 border-red-500 bg-white font-bold text-red-500 hover:bg-red-50"
+                    type="button"
+                    onPress={handleRemoveStorefront}
+                  >
+                    Remove Storefront
+                  </Button>
+                  <p className="mt-1 text-xs text-gray-400">
+                    This will delete your shop URL, custom domain, and reset all
+                    storefront customization.
+                  </p>
                 </div>
               )}
             </div>

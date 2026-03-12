@@ -201,7 +201,7 @@ const TopNav = ({
               src={shopLogoURL != "" ? shopLogoURL : "/milk-market.png"}
               width={40}
             />
-            <span className="ml-2 text-xl text-white md:flex">
+            <span className="ml-2 text-xl text-white md:hidden lg:flex">
               {shopName != "" ? shopName : "Milk Market"}
             </span>
           </Button>

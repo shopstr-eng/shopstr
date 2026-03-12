@@ -302,12 +302,19 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
   server.tool(
     "register_shop_slug",
-    "Register or update your shop's URL slug for the storefront. The slug becomes part of your shop URL (e.g. milk.market/shop/your-slug). Slug must be lowercase alphanumeric with hyphens, 3-50 characters. Reserved words (shop, admin, api, etc.) are not allowed.",
+    "Register, update, or delete your shop's URL slug for the storefront. The slug becomes part of your shop URL (e.g. milk.market/shop/your-slug). Slug must be lowercase alphanumeric with hyphens, 3-50 characters. Reserved words (shop, admin, api, etc.) are not allowed. To delete, set action to 'delete'.",
     {
       slug: z
         .string()
+        .optional()
         .describe(
-          "URL slug for the storefront (e.g. 'fresh-farm'). Must be lowercase, alphanumeric with hyphens, 3-50 characters."
+          "URL slug for the storefront (e.g. 'fresh-farm'). Must be lowercase, alphanumeric with hyphens, 3-50 characters. Required for register/update, not needed for delete."
+        ),
+      action: z
+        .enum(["register", "delete"])
+        .optional()
+        .describe(
+          "Action to perform: 'register' (default) to create/update the slug, 'delete' to remove the slug and any associated custom domain."
         ),
     },
     async (params) => {
@@ -318,6 +325,26 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
       try {
         const pubkey = signer.getPubKey();
+
+        if (params.action === "delete") {
+          const dbPool = getDbPool();
+          await dbPool.query("DELETE FROM shop_slugs WHERE pubkey = $1", [
+            pubkey,
+          ]);
+          await dbPool.query("DELETE FROM custom_domains WHERE pubkey = $1", [
+            pubkey,
+          ]);
+          return successResponse({ deleted: true, pubkey }, startTime);
+        }
+
+        if (!params.slug) {
+          return errorResponse(
+            "Missing slug",
+            "A slug is required when registering. Provide a slug or set action to 'delete'.",
+            startTime
+          );
+        }
+
         const slug = params.slug.toLowerCase().trim();
 
         const slugRegex = /^[a-z0-9][a-z0-9-]*[a-z0-9]$/;
