@@ -1,4 +1,5 @@
 import { nip44, nip19, generateSecretKey, getPublicKey } from "nostr-tools";
+import type { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 
 const MAX_CHUNK_SIZE = 60000;
 
@@ -10,6 +11,14 @@ export interface DigitalContentPublicPayloadV1 {
 }
 
 export interface DigitalContentPublicPayloadV2 {
+  v: 2;
+  url: string;
+  sellerEncryptedFileNsec: string;
+  mimeType?: string;
+  fileName?: string;
+}
+
+interface LegacyDigitalContentPublicPayloadV2 {
   v: 2;
   url: string;
   keyEnvelope: string;
@@ -47,6 +56,18 @@ export function isDigitalContentPublicPayloadV2(
     payload !== null &&
     "v" in payload &&
     payload.v === 2 &&
+    "sellerEncryptedFileNsec" in payload
+  );
+}
+
+function isLegacyDigitalContentPublicPayloadV2(
+  payload: unknown
+): payload is LegacyDigitalContentPublicPayloadV2 {
+  return (
+    typeof payload === "object" &&
+    payload !== null &&
+    "v" in payload &&
+    (payload as LegacyDigitalContentPublicPayloadV2).v === 2 &&
     "keyEnvelope" in payload
   );
 }
@@ -63,7 +84,10 @@ export function isDigitalContentDeliveryPayloadV2(
   );
 }
 
-export async function encryptFileWithNip44(file: File): Promise<{ encryptedFile: File; fileNsec: string }> {
+export async function encryptFileWithNip44(
+  file: File
+): Promise<{ encryptedFile: File; fileNsec: string }> {
+  // Each upload gets its own file key instead of sharing one app-wide nsec.
   const sk = generateSecretKey();
   const pk = getPublicKey(sk);
   const fileNsec = nip19.nsecEncode(sk);
@@ -72,7 +96,8 @@ export async function encryptFileWithNip44(file: File): Promise<{ encryptedFile:
 
   const base64Data = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve((reader.result as string).split(",")[1] as string);
+    reader.onload = () =>
+      resolve((reader.result as string).split(",")[1] as string);
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
@@ -89,7 +114,10 @@ export async function encryptFileWithNip44(file: File): Promise<{ encryptedFile:
     originalSize: file.size,
     chunkSize: MAX_CHUNK_SIZE,
   };
-  const encryptedMetadata = nip44.encrypt(JSON.stringify(metadata), conversationKey);
+  const encryptedMetadata = nip44.encrypt(
+    JSON.stringify(metadata),
+    conversationKey
+  );
 
   const encryptedData = {
     header: "Encrypted Shopstr Digital Content",
@@ -103,13 +131,62 @@ export async function encryptFileWithNip44(file: File): Promise<{ encryptedFile:
   const encryptedFile = new File(
     [new Blob([binaryData])],
     `encrypted-${file.name}.enc`,
-    { type: "application/octet-stream" }
+    {
+      type: "application/octet-stream",
+    }
   );
 
   return { encryptedFile, fileNsec };
 }
 
-export async function decryptFileWithNip44(encryptedData: ArrayBuffer, fileNsec: string): Promise<Blob> {
+export async function createDigitalContentPublicPayload({
+  url,
+  fileNsec,
+  mimeType,
+  fileName,
+  sellerPubkey,
+  signer,
+}: {
+  url: string;
+  fileNsec: string;
+  mimeType?: string;
+  fileName?: string;
+  sellerPubkey: string;
+  signer: Pick<NostrSigner, "encrypt">;
+}): Promise<DigitalContentPublicPayloadV2> {
+  // The listing keeps only the seller-encrypted copy of the file key.
+  const sellerEncryptedFileNsec = await signer.encrypt(sellerPubkey, fileNsec);
+
+  return {
+    v: 2,
+    url,
+    sellerEncryptedFileNsec,
+    mimeType,
+    fileName,
+  };
+}
+
+export async function unwrapDigitalContentSellerKey({
+  payload,
+  signer,
+  sellerPubkey,
+}: {
+  payload: DigitalContentPublicPayload;
+  signer: Pick<NostrSigner, "decrypt">;
+  sellerPubkey: string;
+}): Promise<string> {
+  if (!isDigitalContentPublicPayloadV2(payload)) {
+    return payload.nsec;
+  }
+
+  // The raw file key only gets handed to the buyer in the delivery message.
+  return await signer.decrypt(sellerPubkey, payload.sellerEncryptedFileNsec);
+}
+
+export async function decryptFileWithNip44(
+  encryptedData: ArrayBuffer,
+  fileNsec: string
+): Promise<Blob> {
   try {
     const { data: sk } = nip19.decode(fileNsec);
     const pk = getPublicKey(sk as Uint8Array);
@@ -185,7 +262,19 @@ export function decodeDigitalContentPayload(
   encodedPayload: string
 ): DigitalContentPublicPayload {
   const jsonString = decodeUtf8Base64(encodedPayload);
-  return JSON.parse(jsonString) as DigitalContentPublicPayload;
+  const parsedPayload = JSON.parse(jsonString) as
+    | DigitalContentPublicPayload
+    | LegacyDigitalContentPublicPayloadV2;
+
+  if (isLegacyDigitalContentPublicPayloadV2(parsedPayload)) {
+    const { keyEnvelope, ...rest } = parsedPayload;
+    return {
+      ...rest,
+      sellerEncryptedFileNsec: keyEnvelope,
+    };
+  }
+
+  return parsedPayload as DigitalContentPublicPayload;
 }
 
 export function encodeDigitalContentDeliveryPayload(

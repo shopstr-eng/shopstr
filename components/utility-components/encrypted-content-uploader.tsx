@@ -6,6 +6,7 @@ import {
 } from "@/utils/nostr/nostr-helper-functions";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import {
+  createDigitalContentPublicPayload,
   encodeDigitalContentPayload,
   decodeDigitalContentPayload,
   encryptFileWithNip44,
@@ -27,14 +28,18 @@ export default function EncryptedContentUploader({
   const [failureText, setFailureText] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { signer, isLoggedIn, pubkey: signerPubkey } = useContext(SignerContext);
+  const {
+    signer,
+    isLoggedIn,
+    pubkey: signerPubkey,
+  } = useContext(SignerContext);
   const { blossomServers } = getLocalStorageData() || {};
 
   const fileInfo = useMemo(() => {
     if (!currentPayload) return null;
     try {
       return decodeDigitalContentPayload(currentPayload);
-    } catch (e) {
+    } catch {
       return null;
     }
   }, [currentPayload]);
@@ -56,13 +61,12 @@ export default function EncryptedContentUploader({
 
     try {
       setIsUploading(true);
-      const { encryptedFile, fileNsec } = await encryptFileWithNip44(selectedFile);
+      const { encryptedFile, fileNsec } =
+        await encryptFileWithNip44(selectedFile);
       const sellerPubkey = signerPubkey || (await signer.getPubKey?.());
       if (!sellerPubkey) {
         throw new Error("Unable to resolve seller public key for encryption.");
       }
-      const keyEnvelope = await signer.encrypt(sellerPubkey, fileNsec);
-
       const fallbackServers = [
         "https://blossom.primal.net",
         "https://satellite.earth",
@@ -100,13 +104,16 @@ export default function EncryptedContentUploader({
         );
       }
 
-      const encodedPayload = encodeDigitalContentPayload({
-        v: 2,
+      // The listing only keeps a seller-readable copy of the per-file key.
+      const publicPayload = await createDigitalContentPublicPayload({
         url: uploadedUrl,
-        keyEnvelope,
+        fileNsec,
         mimeType: selectedFile.type,
         fileName: selectedFile.name,
+        sellerPubkey,
+        signer,
       });
+      const encodedPayload = encodeDigitalContentPayload(publicPayload);
 
       onUploadComplete(encodedPayload);
     } catch (uploadError: any) {

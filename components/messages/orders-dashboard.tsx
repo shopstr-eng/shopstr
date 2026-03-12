@@ -33,7 +33,7 @@ import parseTags, {
 import {
   decodeDigitalContentPayload,
   encodeDigitalContentDeliveryPayload,
-  isDigitalContentPublicPayloadV2,
+  unwrapDigitalContentSellerKey,
 } from "@/utils/encryption/file-encryption";
 import {
   constructGiftWrappedEvent,
@@ -746,7 +746,9 @@ const OrdersDashboard = () => {
     },
   };
 
-  const getProductDataByAddress = (productAddress: string): ProductData | null => {
+  const getProductDataByAddress = (
+    productAddress: string
+  ): ProductData | null => {
     if (!productAddress || !productContext?.productEvents) return null;
 
     const productEvent = productContext.productEvents.find((event: any) => {
@@ -950,27 +952,24 @@ const OrdersDashboard = () => {
       const keyBundle = await ensureRandomKeys();
       const decodedRandomPubkeyForSender = nip19.decode(keyBundle.senderNpub);
       const decodedRandomPrivkeyForSender = nip19.decode(keyBundle.senderNsec);
-      const decodedRandomPubkeyForReceiver = nip19.decode(keyBundle.receiverNpub);
-      const decodedRandomPrivkeyForReceiver = nip19.decode(keyBundle.receiverNsec);
+      const decodedRandomPubkeyForReceiver = nip19.decode(
+        keyBundle.receiverNpub
+      );
+      const decodedRandomPrivkeyForReceiver = nip19.decode(
+        keyBundle.receiverNsec
+      );
 
       const decodedPayload = decodeDigitalContentPayload(encodedPublicPayload);
-      let deliveryNsec = "";
-      let deliveryUrl = "";
-      let deliveryMimeType = "";
-      let deliveryFileName = "";
-
-      if (isDigitalContentPublicPayloadV2(decodedPayload)) {
-        const sellerPubkey = await signer.getPubKey();
-        deliveryNsec = await signer.decrypt(sellerPubkey, decodedPayload.keyEnvelope);
-        deliveryUrl = decodedPayload.url;
-        deliveryMimeType = decodedPayload.mimeType || "";
-        deliveryFileName = decodedPayload.fileName || "";
-      } else {
-        deliveryNsec = decodedPayload.nsec;
-        deliveryUrl = decodedPayload.url;
-        deliveryMimeType = decodedPayload.mimeType || "";
-        deliveryFileName = decodedPayload.fileName || "";
-      }
+      const sellerPubkey = await signer.getPubKey();
+      // The seller unwraps the per-file key here and only then sends it to the buyer.
+      const deliveryNsec = await unwrapDigitalContentSellerKey({
+        payload: decodedPayload,
+        signer,
+        sellerPubkey,
+      });
+      const deliveryUrl = decodedPayload.url;
+      const deliveryMimeType = decodedPayload.mimeType || "";
+      const deliveryFileName = decodedPayload.fileName || "";
 
       if (!deliveryNsec || !deliveryUrl) {
         throw new Error("Missing decrypted key or file URL.");
@@ -1039,7 +1038,10 @@ const OrdersDashboard = () => {
             : "Failed to send digital content.",
       }));
     } finally {
-      setIsSendingDigitalContent((prev) => ({ ...prev, [order.orderId]: false }));
+      setIsSendingDigitalContent((prev) => ({
+        ...prev,
+        [order.orderId]: false,
+      }));
     }
   };
 
@@ -1490,19 +1492,27 @@ const OrdersDashboard = () => {
                               </button>
                             )}
                             {order.isSale &&
-                              (order.subject === "order-payment" || order.subject === "order-info" || order.subject === "order-completed") &&
+                              (order.subject === "order-payment" ||
+                                order.subject === "order-info" ||
+                                order.subject === "order-completed") &&
                               (order.hasDigitalContent ||
                                 !!order.digitalContentPayload) && (
                                 <>
-                                  {digitalContentDeliveredOrders.has(order.orderId) ? (
+                                  {digitalContentDeliveredOrders.has(
+                                    order.orderId
+                                  ) ? (
                                     <span className="text-xs text-green-600 dark:text-green-400">
                                       Digital Content Sent
                                     </span>
                                   ) : (
                                     <button
-                                      onClick={() => handleSendDigitalContent(order)}
+                                      onClick={() =>
+                                        handleSendDigitalContent(order)
+                                      }
                                       className="cursor-pointer text-left text-xs text-shopstr-purple-light underline hover:text-shopstr-purple disabled:cursor-not-allowed disabled:opacity-60 dark:text-shopstr-yellow-light dark:hover:text-shopstr-yellow"
-                                      disabled={!!isSendingDigitalContent[order.orderId]}
+                                      disabled={
+                                        !!isSendingDigitalContent[order.orderId]
+                                      }
                                     >
                                       {isSendingDigitalContent[order.orderId]
                                         ? "Sending Digital Content..."
