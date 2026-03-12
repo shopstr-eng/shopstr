@@ -421,6 +421,18 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         )
         .optional()
         .describe("Top navigation bar links"),
+      showCommunityPage: z
+        .boolean()
+        .optional()
+        .describe(
+          "Enable a community page on the storefront. When true, a 'Community' link is auto-added to the nav and /shop/{slug}/community shows the seller's community feed."
+        ),
+      showWalletPage: z
+        .boolean()
+        .optional()
+        .describe(
+          "Enable a Bitcoin wallet page on the storefront for Cashu ecash payments. When true, a 'Wallet' link is auto-added to the nav and /shop/{slug}/wallet shows the wallet UI."
+        ),
     },
     async (params) => {
       const startTime = Date.now();
@@ -466,6 +478,10 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           storefront.footer = params.storefrontFooter;
         if (params.storefrontNavLinks)
           storefront.navLinks = params.storefrontNavLinks;
+        if (params.showCommunityPage !== undefined)
+          storefront.showCommunityPage = params.showCommunityPage;
+        if (params.showWalletPage !== undefined)
+          storefront.showWalletPage = params.showWalletPage;
         if (Object.keys(storefront).length > 0) content.storefront = storefront;
 
         const eventTemplate: EventTemplate = {
