@@ -204,7 +204,13 @@ const Listing = () => {
                 setFiatOrderIsPlaced(false);
                 setInvoiceIsPaid(false);
                 setCashuPaymentSent(false);
-                router.push("/order-summary");
+                const sfSlug = sessionStorage.getItem("sf_shop_slug");
+                const sfPk = sessionStorage.getItem("sf_seller_pubkey");
+                if (sfPk && sfSlug) {
+                  router.push(`/shop/${sfSlug}/order-confirmation`);
+                } else {
+                  router.push("/order-summary");
+                }
               }}
               classNames={{
                 body: "py-6 bg-white",

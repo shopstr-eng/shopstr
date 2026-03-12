@@ -37,6 +37,7 @@ import StorefrontCommunity from "./storefront-community";
 import StorefrontOrders from "./storefront-orders";
 import StorefrontWallet from "./storefront-wallet";
 import StorefrontMyListings from "./storefront-my-listings";
+import StorefrontOrderConfirmation from "./storefront-order-confirmation";
 
 const DEFAULT_COLORS: StorefrontColorScheme = {
   primary: "#FFD23F",
@@ -130,7 +131,10 @@ export default function StorefrontLayout({
     if (shopPubkey) {
       sessionStorage.setItem("sf_seller_pubkey", shopPubkey);
     }
-  }, [shopPubkey]);
+    if (shopSlug) {
+      sessionStorage.setItem("sf_shop_slug", shopSlug);
+    }
+  }, [shopPubkey, shopSlug]);
 
   useEffect(() => {
     const sync = () => {
@@ -479,7 +483,16 @@ export default function StorefrontLayout({
           )}
         </nav>
 
-        {currentPage === "my-listings" ? (
+        {currentPage === "order-confirmation" ? (
+          <div className="pt-14">
+            <StorefrontOrderConfirmation
+              colors={colors}
+              shopName={shopName}
+              shopSlug={shopSlug}
+              shopPubkey={shopPubkey}
+            />
+          </div>
+        ) : currentPage === "my-listings" ? (
           <div className="pt-14">
             <StorefrontMyListings shopPubkey={shopPubkey} colors={colors} />
           </div>
