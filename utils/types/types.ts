@@ -46,6 +46,22 @@ export interface CommunityPost extends NostrEvent {
   approvedBy?: string;
 }
 
+export interface StorefrontColorScheme {
+  primary: string;
+  secondary: string;
+  accent: string;
+  background: string;
+  text: string;
+}
+
+export interface StorefrontConfig {
+  colorScheme?: StorefrontColorScheme;
+  productLayout?: "grid" | "list" | "featured";
+  landingPageStyle?: "classic" | "hero" | "minimal";
+  shopSlug?: string;
+  customDomain?: string;
+}
+
 export interface ShopProfile {
   pubkey: string;
   content: {
@@ -61,6 +77,7 @@ export interface ShopProfile {
     freeShippingThreshold?: number;
     freeShippingCurrency?: string;
     paymentMethodDiscounts?: { [method: string]: number };
+    storefront?: StorefrontConfig;
   };
   created_at: number;
   event?: NostrEvent;

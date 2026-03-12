@@ -12,25 +12,41 @@ export function proxy(request: NextRequest) {
     );
   }
 
-  // Handle subdomain redirects to base domain
   if (hostname.includes("milk.market")) {
-    // Redirect www.milk.market to milk.market
     if (hostname === "www.milk.market") {
       const url = new URL(request.url);
       url.hostname = "milk.market";
       return NextResponse.redirect(url, 301);
     }
 
-    // Redirect any other subdomain (*.milk.market) to milk.market
-    // But exclude the base domain itself
     if (hostname !== "milk.market" && hostname.endsWith(".milk.market")) {
-      const url = new URL(request.url);
-      url.hostname = "milk.market";
-      return NextResponse.redirect(url, 301);
+      const subdomain = hostname.replace(".milk.market", "");
+      if (subdomain !== "www" && subdomain !== "api") {
+        const url = new URL(`/shop/${subdomain}${pathname === "/" ? "" : pathname}`, request.url);
+        url.hostname = "milk.market";
+        return NextResponse.rewrite(url);
+      }
     }
   }
 
-  // Handle npub redirects, but ignore if already in marketplace page route
+  if (
+    hostname &&
+    !hostname.includes("milk.market") &&
+    !hostname.includes("localhost") &&
+    !hostname.includes("replit") &&
+    !hostname.includes("127.0.0.1")
+  ) {
+    if (!pathname.startsWith("/api/") && !pathname.startsWith("/_next/")) {
+      const url = new URL(request.url);
+      url.pathname = `/api/storefront/resolve-domain`;
+      url.searchParams.set("domain", hostname);
+      url.searchParams.set("originalPath", pathname);
+      return NextResponse.rewrite(
+        new URL(`/shop/_custom-domain?domain=${encodeURIComponent(hostname)}&path=${encodeURIComponent(pathname)}`, request.url)
+      );
+    }
+  }
+
   if (
     pathname.match(/^\/npub[a-zA-Z0-9]+$/) &&
     !pathname.startsWith("/marketplace/")
@@ -39,7 +55,6 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Handle naddr redirects, but ignore if already in listing page route
   if (
     pathname.match(/^\/naddr[a-zA-Z0-9]+$/) &&
     !pathname.startsWith("/listing/")
@@ -48,7 +63,6 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Handle community naddr redirects
   if (pathname.startsWith("/naddr") && !pathname.startsWith("/communities/")) {
     try {
       const decoded = nip19.decode(pathname.substring(1));
@@ -62,7 +76,6 @@ export function proxy(request: NextRequest) {
     }
   }
 
-  // Continue with the request and remove X-Powered-By header
   const response = NextResponse.next();
   response.headers.delete("X-Powered-By");
 

@@ -431,6 +431,18 @@ function MarketplacePage({
               >
                 Message
               </Button>
+              {(() => {
+                const shopData = shopMapContext.shopData.get(focusedPubkey);
+                const shopSlug = shopData?.content?.storefront?.shopSlug;
+                return shopSlug ? (
+                  <Button
+                    className="bg-transparent text-lg font-bold text-primary-blue hover:text-primary-yellow sm:text-xl"
+                    onClick={() => router.push(`/shop/${shopSlug}`)}
+                  >
+                    Storefront ↗
+                  </Button>
+                ) : null;
+              })()}
               {rawEvent && (
                 <Dropdown>
                   <DropdownTrigger>
