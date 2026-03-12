@@ -116,6 +116,26 @@ export default function CartInvoiceCard({
   const { nostr } = useContext(NostrContext);
   const shopContext = useContext(ShopMapContext);
 
+  const clearPurchasedFromCart = () => {
+    const sfPubkey =
+      typeof window !== "undefined"
+        ? sessionStorage.getItem("sf_seller_pubkey")
+        : null;
+    if (sfPubkey) {
+      const fullCart = localStorage.getItem("cart");
+      if (fullCart) {
+        const allItems = JSON.parse(fullCart) as ProductData[];
+        const purchasedIds = new Set(products.map((p) => p.id));
+        const remaining = allItems.filter((item) => !purchasedIds.has(item.id));
+        localStorage.setItem("cart", JSON.stringify(remaining));
+      } else {
+        localStorage.setItem("cart", JSON.stringify([]));
+      }
+    } else {
+      localStorage.setItem("cart", JSON.stringify([]));
+    }
+  };
+
   const [showInvoiceCard, setShowInvoiceCard] = useState(false);
 
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
@@ -2282,7 +2302,7 @@ export default function CartInvoiceCard({
       await sendInquiryDM(product.pubkey, product.title);
     }
 
-    localStorage.setItem("cart", JSON.stringify([]));
+    clearPurchasedFromCart();
     setPaymentConfirmed(true);
     setOrderConfirmed(true);
     if (setInvoiceIsPaid) {
@@ -2682,7 +2702,7 @@ export default function CartInvoiceCard({
         await sendInquiryDM(product.pubkey, product.title);
       }
 
-      localStorage.setItem("cart", JSON.stringify([]));
+      clearPurchasedFromCart();
       setPaymentConfirmed(true);
       setOrderConfirmed(true);
       if (setInvoiceIsPaid) {
@@ -2769,7 +2789,7 @@ export default function CartInvoiceCard({
             const proofs = await wallet.mintProofs(convertedPrice, hash);
             if (proofs && proofs.length > 0) {
               await sendTokens(wallet, proofs, data);
-              localStorage.setItem("cart", JSON.stringify([]));
+              clearPurchasedFromCart();
               setPaymentConfirmed(true);
               if (setInvoiceIsPaid) {
                 setInvoiceIsPaid(true);
@@ -2784,7 +2804,7 @@ export default function CartInvoiceCard({
               mintError.message.includes("issued")
             ) {
               // Quote was already processed, consider it successful
-              localStorage.setItem("cart", JSON.stringify([]));
+              clearPurchasedFromCart();
               setPaymentConfirmed(true);
               setQrCodeUrl(null);
               setFailureText(
@@ -2802,7 +2822,7 @@ export default function CartInvoiceCard({
           continue;
         } else if (quoteState.state === "ISSUED") {
           // Quote was already processed successfully
-          localStorage.setItem("cart", JSON.stringify([]));
+          clearPurchasedFromCart();
           setPaymentConfirmed(true);
           setQrCodeUrl(null);
           setFailureText(
@@ -4039,7 +4059,7 @@ export default function CartInvoiceCard({
         price.toString(),
         deletedEventIds
       );
-      localStorage.setItem("cart", JSON.stringify([]));
+      clearPurchasedFromCart();
       setOrderConfirmed(true);
       setPaymentConfirmed(true);
       if (setCashuPaymentSent) {

@@ -88,12 +88,21 @@ export default function StorefrontThemeWrapper({
   useEffect(() => {
     const sync = () => {
       const cart = localStorage.getItem("cart");
-      setCartQuantity(cart ? JSON.parse(cart).length : 0);
+      if (!cart) {
+        setCartQuantity(0);
+        return;
+      }
+      const items = JSON.parse(cart) as { pubkey?: string }[];
+      setCartQuantity(
+        sellerPubkey
+          ? items.filter((p) => p.pubkey === sellerPubkey).length
+          : items.length
+      );
     };
     sync();
     const interval = setInterval(sync, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [sellerPubkey]);
 
   useEffect(() => {
     if (!storefront) return;

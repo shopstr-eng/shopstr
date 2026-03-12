@@ -139,7 +139,16 @@ export default function StorefrontLayout({
   useEffect(() => {
     const sync = () => {
       const cart = localStorage.getItem("cart");
-      setCartQuantity(cart ? JSON.parse(cart).length : 0);
+      if (!cart) {
+        setCartQuantity(0);
+        return;
+      }
+      const items = JSON.parse(cart) as { pubkey?: string }[];
+      setCartQuantity(
+        shopPubkey
+          ? items.filter((p) => p.pubkey === shopPubkey).length
+          : items.length
+      );
     };
     sync();
     const interval = setInterval(sync, 1000);
