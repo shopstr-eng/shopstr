@@ -1,0 +1,758 @@
+import { useState } from "react";
+import { Input, Textarea, Select, SelectItem, Button } from "@nextui-org/react";
+import {
+  StorefrontSection,
+  StorefrontSectionType,
+  StorefrontFaqItem,
+  StorefrontTestimonial,
+  StorefrontIngredientItem,
+  StorefrontComparisonColumn,
+  StorefrontTimelineItem,
+} from "@/utils/types/types";
+import { FileUploaderButton } from "@/components/utility-components/file-uploader";
+
+interface SectionEditorProps {
+  section: StorefrontSection;
+  onChange: (updated: StorefrontSection) => void;
+  onRemove: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  isFirst: boolean;
+  isLast: boolean;
+}
+
+const SECTION_LABELS: Record<StorefrontSectionType, string> = {
+  hero: "Hero",
+  about: "About",
+  story: "Our Story",
+  products: "Products",
+  testimonials: "Testimonials",
+  faq: "FAQ",
+  ingredients: "Ingredients / Sourcing",
+  comparison: "Comparison",
+  text: "Text Block",
+  image: "Image",
+  contact: "Contact",
+  reviews: "Customer Reviews",
+};
+
+const inputWrapperClass =
+  "border-2 border-gray-300 rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-black";
+
+export default function SectionEditor({
+  section,
+  onChange,
+  onRemove,
+  onMoveUp,
+  onMoveDown,
+  isFirst,
+  isLast,
+}: SectionEditorProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const update = (fields: Partial<StorefrontSection>) => {
+    onChange({ ...section, ...fields });
+  };
+
+  return (
+    <div className="rounded-lg border-2 border-gray-200 bg-white">
+      <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-1">
+            <button
+              type="button"
+              onClick={onMoveUp}
+              disabled={isFirst}
+              className="text-xs text-gray-400 hover:text-black disabled:opacity-30"
+            >
+              ▲
+            </button>
+            <button
+              type="button"
+              onClick={onMoveDown}
+              disabled={isLast}
+              className="text-xs text-gray-400 hover:text-black disabled:opacity-30"
+            >
+              ▼
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="flex items-center gap-2 text-sm font-bold text-black"
+          >
+            <span className="text-xs">{isExpanded ? "▾" : "▸"}</span>
+            {SECTION_LABELS[section.type] || section.type}
+            {section.heading && (
+              <span className="font-normal text-gray-400">
+                — {section.heading}
+              </span>
+            )}
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-1 text-xs text-gray-500">
+            <input
+              type="checkbox"
+              checked={section.enabled !== false}
+              onChange={(e) => update({ enabled: e.target.checked })}
+            />
+            Visible
+          </label>
+          <button
+            type="button"
+            onClick={onRemove}
+            className="text-xs text-red-500 hover:text-red-700"
+          >
+            Remove
+          </button>
+        </div>
+      </div>
+
+      {isExpanded && (
+        <div className="space-y-4 border-t border-gray-100 px-4 py-4">
+          {section.type !== "reviews" && (
+            <Input
+              label="Heading"
+              classNames={{ inputWrapper: inputWrapperClass }}
+              variant="bordered"
+              value={section.heading || ""}
+              onChange={(e) => update({ heading: e.target.value })}
+            />
+          )}
+
+          {["hero", "products"].includes(section.type) && (
+            <Input
+              label="Subheading"
+              classNames={{ inputWrapper: inputWrapperClass }}
+              variant="bordered"
+              value={section.subheading || ""}
+              onChange={(e) => update({ subheading: e.target.value })}
+            />
+          )}
+
+          {["about", "story", "text", "ingredients", "contact"].includes(
+            section.type
+          ) && (
+            <Textarea
+              label="Body Text"
+              classNames={{ inputWrapper: inputWrapperClass }}
+              variant="bordered"
+              minRows={3}
+              value={section.body || ""}
+              onChange={(e) => update({ body: e.target.value })}
+            />
+          )}
+
+          {["hero", "about", "image"].includes(section.type) && (
+            <div className="flex items-center gap-3">
+              <Input
+                label="Image URL"
+                classNames={{ inputWrapper: inputWrapperClass }}
+                variant="bordered"
+                value={section.image || ""}
+                onChange={(e) => update({ image: e.target.value })}
+                className="flex-1"
+              />
+              <FileUploaderButton
+                className="mt-5 rounded-lg border-2 border-black bg-white px-3 py-2 text-sm font-bold text-black"
+                imgCallbackOnUpload={(url) => update({ image: url })}
+              >
+                Upload
+              </FileUploaderButton>
+            </div>
+          )}
+
+          {section.type === "about" && (
+            <Select
+              label="Image Position"
+              classNames={{ trigger: inputWrapperClass }}
+              variant="bordered"
+              selectedKeys={[section.imagePosition || "right"]}
+              onChange={(e) =>
+                update({ imagePosition: e.target.value as "left" | "right" })
+              }
+            >
+              <SelectItem key="left" value="left" className="text-black">
+                Left
+              </SelectItem>
+              <SelectItem key="right" value="right" className="text-black">
+                Right
+              </SelectItem>
+            </Select>
+          )}
+
+          {section.type === "hero" && (
+            <>
+              <Input
+                label="Button Text"
+                classNames={{ inputWrapper: inputWrapperClass }}
+                variant="bordered"
+                value={section.ctaText || ""}
+                onChange={(e) => update({ ctaText: e.target.value })}
+              />
+              <Input
+                label="Button Link"
+                classNames={{ inputWrapper: inputWrapperClass }}
+                variant="bordered"
+                value={section.ctaLink || ""}
+                onChange={(e) => update({ ctaLink: e.target.value })}
+                placeholder="#products"
+              />
+              <div>
+                <label className="mb-1 block text-xs text-gray-500">
+                  Overlay Opacity:{" "}
+                  {Math.round((section.overlayOpacity ?? 0.6) * 100)}%
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={Math.round((section.overlayOpacity ?? 0.6) * 100)}
+                  onChange={(e) =>
+                    update({ overlayOpacity: parseInt(e.target.value) / 100 })
+                  }
+                  className="w-full"
+                />
+              </div>
+            </>
+          )}
+
+          {section.type === "image" && (
+            <>
+              <Input
+                label="Caption"
+                classNames={{ inputWrapper: inputWrapperClass }}
+                variant="bordered"
+                value={section.caption || ""}
+                onChange={(e) => update({ caption: e.target.value })}
+              />
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={section.fullWidth || false}
+                  onChange={(e) => update({ fullWidth: e.target.checked })}
+                />
+                Full width
+              </label>
+            </>
+          )}
+
+          {section.type === "products" && (
+            <>
+              <Select
+                label="Product Layout"
+                classNames={{ trigger: inputWrapperClass }}
+                variant="bordered"
+                selectedKeys={[section.productLayout || "grid"]}
+                onChange={(e) =>
+                  update({
+                    productLayout: e.target.value as
+                      | "grid"
+                      | "list"
+                      | "featured",
+                  })
+                }
+              >
+                <SelectItem key="grid" value="grid" className="text-black">
+                  Grid
+                </SelectItem>
+                <SelectItem key="list" value="list" className="text-black">
+                  List
+                </SelectItem>
+                <SelectItem
+                  key="featured"
+                  value="featured"
+                  className="text-black"
+                >
+                  Featured
+                </SelectItem>
+              </Select>
+              <Input
+                label="Product Limit (optional)"
+                classNames={{ inputWrapper: inputWrapperClass }}
+                variant="bordered"
+                type="number"
+                min="1"
+                value={section.productLimit ? String(section.productLimit) : ""}
+                onChange={(e) =>
+                  update({
+                    productLimit: e.target.value
+                      ? parseInt(e.target.value)
+                      : undefined,
+                  })
+                }
+                placeholder="Show all"
+              />
+            </>
+          )}
+
+          {section.type === "contact" && (
+            <>
+              <Input
+                label="Email"
+                classNames={{ inputWrapper: inputWrapperClass }}
+                variant="bordered"
+                value={section.email || ""}
+                onChange={(e) => update({ email: e.target.value })}
+              />
+              <Input
+                label="Phone"
+                classNames={{ inputWrapper: inputWrapperClass }}
+                variant="bordered"
+                value={section.phone || ""}
+                onChange={(e) => update({ phone: e.target.value })}
+              />
+              <Textarea
+                label="Address"
+                classNames={{ inputWrapper: inputWrapperClass }}
+                variant="bordered"
+                minRows={2}
+                value={section.address || ""}
+                onChange={(e) => update({ address: e.target.value })}
+              />
+            </>
+          )}
+
+          {section.type === "faq" && (
+            <FaqEditor
+              items={section.items || []}
+              onChange={(items) => update({ items })}
+            />
+          )}
+
+          {section.type === "testimonials" && (
+            <TestimonialEditor
+              testimonials={section.testimonials || []}
+              onChange={(testimonials) => update({ testimonials })}
+            />
+          )}
+
+          {section.type === "ingredients" && (
+            <IngredientEditor
+              items={section.ingredientItems || []}
+              onChange={(ingredientItems) => update({ ingredientItems })}
+            />
+          )}
+
+          {section.type === "story" && (
+            <TimelineEditor
+              items={section.timelineItems || []}
+              onChange={(timelineItems) => update({ timelineItems })}
+            />
+          )}
+
+          {section.type === "comparison" && (
+            <ComparisonEditor
+              features={section.comparisonFeatures || []}
+              columns={section.comparisonColumns || []}
+              onFeaturesChange={(comparisonFeatures) =>
+                update({ comparisonFeatures })
+              }
+              onColumnsChange={(comparisonColumns) =>
+                update({ comparisonColumns })
+              }
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FaqEditor({
+  items,
+  onChange,
+}: {
+  items: StorefrontFaqItem[];
+  onChange: (items: StorefrontFaqItem[]) => void;
+}) {
+  const add = () => onChange([...items, { question: "", answer: "" }]);
+  const remove = (idx: number) => onChange(items.filter((_, i) => i !== idx));
+  const edit = (idx: number, field: keyof StorefrontFaqItem, value: string) => {
+    const updated = [...items];
+    updated[idx] = { ...updated[idx], [field]: value };
+    onChange(updated);
+  };
+
+  return (
+    <div className="space-y-3">
+      <label className="block text-sm font-bold text-gray-700">FAQ Items</label>
+      {items.map((item, idx) => (
+        <div key={idx} className="rounded border border-gray-200 p-3">
+          <div className="flex items-start justify-between">
+            <div className="flex-1 space-y-2">
+              <Input
+                label="Question"
+                size="sm"
+                classNames={{ inputWrapper: inputWrapperClass }}
+                variant="bordered"
+                value={item.question}
+                onChange={(e) => edit(idx, "question", e.target.value)}
+              />
+              <Textarea
+                label="Answer"
+                size="sm"
+                classNames={{ inputWrapper: inputWrapperClass }}
+                variant="bordered"
+                minRows={2}
+                value={item.answer}
+                onChange={(e) => edit(idx, "answer", e.target.value)}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => remove(idx)}
+              className="ml-2 text-xs text-red-500"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={add}
+        className="text-sm font-bold text-blue-600 hover:underline"
+      >
+        + Add FAQ Item
+      </button>
+    </div>
+  );
+}
+
+function TestimonialEditor({
+  testimonials,
+  onChange,
+}: {
+  testimonials: StorefrontTestimonial[];
+  onChange: (testimonials: StorefrontTestimonial[]) => void;
+}) {
+  const add = () => onChange([...testimonials, { quote: "", author: "" }]);
+  const remove = (idx: number) =>
+    onChange(testimonials.filter((_, i) => i !== idx));
+  const edit = (idx: number, fields: Partial<StorefrontTestimonial>) => {
+    const updated = [...testimonials];
+    updated[idx] = { ...updated[idx], ...fields };
+    onChange(updated);
+  };
+
+  return (
+    <div className="space-y-3">
+      <label className="block text-sm font-bold text-gray-700">
+        Testimonials
+      </label>
+      {testimonials.map((t, idx) => (
+        <div key={idx} className="rounded border border-gray-200 p-3">
+          <div className="flex items-start justify-between">
+            <div className="flex-1 space-y-2">
+              <Textarea
+                label="Quote"
+                size="sm"
+                classNames={{ inputWrapper: inputWrapperClass }}
+                variant="bordered"
+                minRows={2}
+                value={t.quote}
+                onChange={(e) => edit(idx, { quote: e.target.value })}
+              />
+              <div className="flex gap-2">
+                <Input
+                  label="Author"
+                  size="sm"
+                  classNames={{ inputWrapper: inputWrapperClass }}
+                  variant="bordered"
+                  value={t.author}
+                  onChange={(e) => edit(idx, { author: e.target.value })}
+                  className="flex-1"
+                />
+                <Input
+                  label="Rating (1-5)"
+                  size="sm"
+                  classNames={{ inputWrapper: inputWrapperClass }}
+                  variant="bordered"
+                  type="number"
+                  min="1"
+                  max="5"
+                  value={t.rating ? String(t.rating) : ""}
+                  onChange={(e) =>
+                    edit(idx, {
+                      rating: e.target.value
+                        ? parseInt(e.target.value)
+                        : undefined,
+                    })
+                  }
+                  className="w-24"
+                />
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => remove(idx)}
+              className="ml-2 text-xs text-red-500"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={add}
+        className="text-sm font-bold text-blue-600 hover:underline"
+      >
+        + Add Testimonial
+      </button>
+    </div>
+  );
+}
+
+function IngredientEditor({
+  items,
+  onChange,
+}: {
+  items: StorefrontIngredientItem[];
+  onChange: (items: StorefrontIngredientItem[]) => void;
+}) {
+  const add = () => onChange([...items, { name: "" }]);
+  const remove = (idx: number) => onChange(items.filter((_, i) => i !== idx));
+  const edit = (idx: number, fields: Partial<StorefrontIngredientItem>) => {
+    const updated = [...items];
+    updated[idx] = { ...updated[idx], ...fields };
+    onChange(updated);
+  };
+
+  return (
+    <div className="space-y-3">
+      <label className="block text-sm font-bold text-gray-700">
+        Ingredient Items
+      </label>
+      {items.map((item, idx) => (
+        <div
+          key={idx}
+          className="flex items-center gap-2 rounded border border-gray-200 p-2"
+        >
+          <Input
+            label="Name"
+            size="sm"
+            classNames={{ inputWrapper: inputWrapperClass }}
+            variant="bordered"
+            value={item.name}
+            onChange={(e) => edit(idx, { name: e.target.value })}
+            className="flex-1"
+          />
+          <Input
+            label="Description"
+            size="sm"
+            classNames={{ inputWrapper: inputWrapperClass }}
+            variant="bordered"
+            value={item.description || ""}
+            onChange={(e) => edit(idx, { description: e.target.value })}
+            className="flex-1"
+          />
+          <button
+            type="button"
+            onClick={() => remove(idx)}
+            className="text-xs text-red-500"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={add}
+        className="text-sm font-bold text-blue-600 hover:underline"
+      >
+        + Add Item
+      </button>
+    </div>
+  );
+}
+
+function TimelineEditor({
+  items,
+  onChange,
+}: {
+  items: StorefrontTimelineItem[];
+  onChange: (items: StorefrontTimelineItem[]) => void;
+}) {
+  const add = () => onChange([...items, { heading: "", body: "" }]);
+  const remove = (idx: number) => onChange(items.filter((_, i) => i !== idx));
+  const edit = (idx: number, fields: Partial<StorefrontTimelineItem>) => {
+    const updated = [...items];
+    updated[idx] = { ...updated[idx], ...fields };
+    onChange(updated);
+  };
+
+  return (
+    <div className="space-y-3">
+      <label className="block text-sm font-bold text-gray-700">
+        Timeline Items
+      </label>
+      {items.map((item, idx) => (
+        <div key={idx} className="rounded border border-gray-200 p-3">
+          <div className="flex items-start justify-between">
+            <div className="flex-1 space-y-2">
+              <Input
+                label="Year / Label"
+                size="sm"
+                classNames={{ inputWrapper: inputWrapperClass }}
+                variant="bordered"
+                value={item.year || ""}
+                onChange={(e) => edit(idx, { year: e.target.value })}
+              />
+              <Input
+                label="Heading"
+                size="sm"
+                classNames={{ inputWrapper: inputWrapperClass }}
+                variant="bordered"
+                value={item.heading}
+                onChange={(e) => edit(idx, { heading: e.target.value })}
+              />
+              <Textarea
+                label="Body"
+                size="sm"
+                classNames={{ inputWrapper: inputWrapperClass }}
+                variant="bordered"
+                minRows={2}
+                value={item.body}
+                onChange={(e) => edit(idx, { body: e.target.value })}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => remove(idx)}
+              className="ml-2 text-xs text-red-500"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={add}
+        className="text-sm font-bold text-blue-600 hover:underline"
+      >
+        + Add Timeline Entry
+      </button>
+    </div>
+  );
+}
+
+function ComparisonEditor({
+  features,
+  columns,
+  onFeaturesChange,
+  onColumnsChange,
+}: {
+  features: string[];
+  columns: StorefrontComparisonColumn[];
+  onFeaturesChange: (features: string[]) => void;
+  onColumnsChange: (columns: StorefrontComparisonColumn[]) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="mb-2 block text-sm font-bold text-gray-700">
+          Features (Rows)
+        </label>
+        {features.map((f, idx) => (
+          <div key={idx} className="mb-2 flex items-center gap-2">
+            <Input
+              size="sm"
+              classNames={{ inputWrapper: inputWrapperClass }}
+              variant="bordered"
+              value={f}
+              onChange={(e) => {
+                const updated = [...features];
+                updated[idx] = e.target.value;
+                onFeaturesChange(updated);
+              }}
+              className="flex-1"
+            />
+            <button
+              type="button"
+              onClick={() =>
+                onFeaturesChange(features.filter((_, i) => i !== idx))
+              }
+              className="text-xs text-red-500"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => onFeaturesChange([...features, ""])}
+          className="text-sm font-bold text-blue-600 hover:underline"
+        >
+          + Add Feature
+        </button>
+      </div>
+      <div>
+        <label className="mb-2 block text-sm font-bold text-gray-700">
+          Columns
+        </label>
+        {columns.map((col, colIdx) => (
+          <div key={colIdx} className="mb-3 rounded border border-gray-200 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <Input
+                label="Column Heading"
+                size="sm"
+                classNames={{ inputWrapper: inputWrapperClass }}
+                variant="bordered"
+                value={col.heading}
+                onChange={(e) => {
+                  const updated = [...columns];
+                  updated[colIdx] = {
+                    ...updated[colIdx],
+                    heading: e.target.value,
+                  };
+                  onColumnsChange(updated);
+                }}
+                className="flex-1"
+              />
+              <button
+                type="button"
+                onClick={() =>
+                  onColumnsChange(columns.filter((_, i) => i !== colIdx))
+                }
+                className="ml-2 text-xs text-red-500"
+              >
+                ✕
+              </button>
+            </div>
+            {features.map((f, rowIdx) => (
+              <Input
+                key={rowIdx}
+                label={f || `Row ${rowIdx + 1}`}
+                size="sm"
+                classNames={{ inputWrapper: inputWrapperClass }}
+                variant="bordered"
+                value={col.values[rowIdx] || ""}
+                onChange={(e) => {
+                  const updated = [...columns];
+                  const vals = [...(updated[colIdx].values || [])];
+                  vals[rowIdx] = e.target.value;
+                  updated[colIdx] = { ...updated[colIdx], values: vals };
+                  onColumnsChange(updated);
+                }}
+                className="mb-1"
+              />
+            ))}
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() =>
+            onColumnsChange([...columns, { heading: "", values: [] }])
+          }
+          className="text-sm font-bold text-blue-600 hover:underline"
+        >
+          + Add Column
+        </button>
+      </div>
+    </div>
+  );
+}

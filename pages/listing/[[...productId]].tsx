@@ -29,6 +29,7 @@ import {
   EventIdModal,
 } from "../../components/utility-components/modals/event-modals";
 import { findProductBySlug, getListingSlug } from "@/utils/url-slugs";
+import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wrapper";
 
 const Listing = () => {
   const router = useRouter();
@@ -119,7 +120,9 @@ const Listing = () => {
     }
   }, [productContext.isLoading, productContext.productEvents, productIdString]);
 
-  return (
+  const sellerPubkey = productData?.pubkey || "";
+
+  const listingContent = (
     <>
       <div className="flex h-full min-h-screen flex-col bg-white pt-20">
         {productData &&
@@ -335,6 +338,16 @@ const Listing = () => {
       </div>
     </>
   );
+
+  if (sellerPubkey) {
+    return (
+      <StorefrontThemeWrapper sellerPubkey={sellerPubkey}>
+        {listingContent}
+      </StorefrontThemeWrapper>
+    );
+  }
+
+  return listingContent;
 };
 
 export default Listing;

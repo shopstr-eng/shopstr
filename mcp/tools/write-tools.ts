@@ -236,6 +236,191 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .describe(
           "URL slug for the storefront (e.g. 'fresh-farm' for milk.market/shop/fresh-farm). Must be lowercase alphanumeric with hyphens."
         ),
+      storefrontFontHeading: z
+        .string()
+        .optional()
+        .describe("Google Font name for headings (e.g. 'Playfair Display')"),
+      storefrontFontBody: z
+        .string()
+        .optional()
+        .describe("Google Font name for body text (e.g. 'Inter')"),
+      storefrontSections: z
+        .array(
+          z.object({
+            id: z.string().describe("Unique section ID"),
+            type: z
+              .enum([
+                "hero",
+                "about",
+                "story",
+                "products",
+                "testimonials",
+                "faq",
+                "ingredients",
+                "comparison",
+                "text",
+                "image",
+                "contact",
+                "reviews",
+              ])
+              .describe("Section type"),
+            enabled: z
+              .boolean()
+              .optional()
+              .describe("Whether section is visible"),
+            heading: z.string().optional().describe("Section heading"),
+            subheading: z.string().optional().describe("Section subheading"),
+            body: z.string().optional().describe("Section body text"),
+            image: z.string().optional().describe("Section image URL"),
+            imagePosition: z
+              .enum(["left", "right"])
+              .optional()
+              .describe("Image position for about sections"),
+            fullWidth: z
+              .boolean()
+              .optional()
+              .describe("Full-width toggle for image sections"),
+            ctaText: z
+              .string()
+              .optional()
+              .describe("Call-to-action button text"),
+            ctaLink: z
+              .string()
+              .optional()
+              .describe("Call-to-action button link"),
+            overlayOpacity: z
+              .number()
+              .optional()
+              .describe("Hero overlay opacity 0-1"),
+            items: z
+              .array(z.object({ question: z.string(), answer: z.string() }))
+              .optional()
+              .describe("FAQ items"),
+            testimonials: z
+              .array(
+                z.object({
+                  quote: z.string(),
+                  author: z.string(),
+                  image: z.string().optional(),
+                  rating: z.number().optional(),
+                })
+              )
+              .optional()
+              .describe("Testimonial items"),
+            ingredientItems: z
+              .array(
+                z.object({
+                  name: z.string(),
+                  description: z.string().optional(),
+                  image: z.string().optional(),
+                })
+              )
+              .optional()
+              .describe("Ingredient items"),
+            comparisonFeatures: z
+              .array(z.string())
+              .optional()
+              .describe("Comparison row labels"),
+            comparisonColumns: z
+              .array(
+                z.object({ heading: z.string(), values: z.array(z.string()) })
+              )
+              .optional()
+              .describe("Comparison columns"),
+            timelineItems: z
+              .array(
+                z.object({
+                  year: z.string().optional(),
+                  heading: z.string(),
+                  body: z.string(),
+                  image: z.string().optional(),
+                })
+              )
+              .optional()
+              .describe("Timeline items for story sections"),
+            productLayout: z
+              .enum(["grid", "list", "featured"])
+              .optional()
+              .describe("Product layout for product sections"),
+            productLimit: z
+              .number()
+              .optional()
+              .describe("Max products to show"),
+            email: z.string().optional().describe("Contact email"),
+            phone: z.string().optional().describe("Contact phone"),
+            address: z.string().optional().describe("Contact address"),
+            caption: z.string().optional().describe("Image caption"),
+          })
+        )
+        .optional()
+        .describe(
+          "Ordered array of homepage sections for the section-based page builder"
+        ),
+      storefrontPages: z
+        .array(
+          z.object({
+            id: z.string().describe("Page ID"),
+            title: z.string().describe("Page title"),
+            slug: z.string().describe("URL slug for the page"),
+            sections: z
+              .array(z.any())
+              .describe(
+                "Array of sections (same schema as storefrontSections)"
+              ),
+          })
+        )
+        .optional()
+        .describe("Additional storefront pages (About, Contact, etc.)"),
+      storefrontFooter: z
+        .object({
+          text: z.string().optional().describe("Footer text"),
+          socialLinks: z
+            .array(
+              z.object({
+                platform: z.enum([
+                  "instagram",
+                  "x",
+                  "facebook",
+                  "youtube",
+                  "tiktok",
+                  "telegram",
+                  "website",
+                  "email",
+                  "other",
+                ]),
+                url: z.string(),
+                label: z.string().optional(),
+              })
+            )
+            .optional()
+            .describe("Social media links"),
+          navLinks: z
+            .array(
+              z.object({
+                label: z.string(),
+                href: z.string(),
+                isPage: z.boolean().optional(),
+              })
+            )
+            .optional()
+            .describe("Footer navigation links"),
+          showPoweredBy: z
+            .boolean()
+            .optional()
+            .describe("Show 'Powered by Milk Market' in footer"),
+        })
+        .optional()
+        .describe("Footer configuration"),
+      storefrontNavLinks: z
+        .array(
+          z.object({
+            label: z.string(),
+            href: z.string(),
+            isPage: z.boolean().optional(),
+          })
+        )
+        .optional()
+        .describe("Top navigation bar links"),
     },
     async (params) => {
       const startTime = Date.now();
@@ -270,6 +455,17 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         if (params.storefrontLandingPageStyle)
           storefront.landingPageStyle = params.storefrontLandingPageStyle;
         if (params.shopSlug) storefront.shopSlug = params.shopSlug;
+        if (params.storefrontFontHeading)
+          storefront.fontHeading = params.storefrontFontHeading;
+        if (params.storefrontFontBody)
+          storefront.fontBody = params.storefrontFontBody;
+        if (params.storefrontSections)
+          storefront.sections = params.storefrontSections;
+        if (params.storefrontPages) storefront.pages = params.storefrontPages;
+        if (params.storefrontFooter)
+          storefront.footer = params.storefrontFooter;
+        if (params.storefrontNavLinks)
+          storefront.navLinks = params.storefrontNavLinks;
         if (Object.keys(storefront).length > 0) content.storefront = storefront;
 
         const eventTemplate: EventTemplate = {

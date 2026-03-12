@@ -84,7 +84,7 @@ export default function StorefrontProductGrid({
                 </span>
               </div>
               <a
-                href={`/listing/${getListingSlug(featuredProduct)}`}
+                href={`/listing/${getListingSlug(featuredProduct, products)}`}
                 className="mt-6 inline-block rounded-lg px-6 py-3 text-center font-bold transition-transform hover:-translate-y-0.5"
                 style={{
                   backgroundColor: colors.primary,
@@ -106,7 +106,7 @@ export default function StorefrontProductGrid({
         }
       >
         {remainingProducts.map((product) => {
-          const slug = getListingSlug(product);
+          const slug = getListingSlug(product, products);
           const href = `/listing/${slug}`;
           return (
             <div key={product.id || product.d}>

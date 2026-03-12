@@ -23,7 +23,19 @@ import { createNostrShopEvent } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import MilkMarketSpinner from "@/components/utility-components/mm-spinner";
 import currencySelection from "@/public/currencySelection.json";
-import { StorefrontConfig, StorefrontColorScheme } from "@/utils/types/types";
+import {
+  StorefrontConfig,
+  StorefrontColorScheme,
+  StorefrontSection,
+  StorefrontSectionType,
+  StorefrontPage,
+  StorefrontFooter,
+  StorefrontNavLink,
+} from "@/utils/types/types";
+import SectionEditor from "./storefront/section-editor";
+import FooterEditor from "./storefront/footer-editor";
+import PageEditor from "./storefront/page-editor";
+import StorefrontPreviewModal from "./storefront/storefront-preview-modal";
 
 interface ShopProfileFormProps {
   isOnboarding?: boolean;
@@ -112,6 +124,24 @@ const COLOR_PRESETS: { name: string; colors: StorefrontColorScheme }[] = [
   },
 ];
 
+const GOOGLE_FONT_OPTIONS = [
+  "Inter",
+  "Roboto",
+  "Open Sans",
+  "Lato",
+  "Montserrat",
+  "Poppins",
+  "Playfair Display",
+  "Merriweather",
+  "Raleway",
+  "Nunito",
+  "Oswald",
+  "Source Sans 3",
+  "PT Serif",
+  "Bitter",
+  "Crimson Text",
+];
+
 const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   const router = useRouter();
   const { nostr } = useContext(NostrContext);
@@ -144,6 +174,17 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     domain: string;
     verified: boolean;
   } | null>(null);
+  const [fontHeading, setFontHeading] = useState("");
+  const [fontBody, setFontBody] = useState("");
+  const [sections, setSections] = useState<StorefrontSection[]>([]);
+  const [pages, setPages] = useState<StorefrontPage[]>([]);
+  const [footer, setFooter] = useState<StorefrontFooter>({
+    showPoweredBy: true,
+  });
+  const [navLinks, setNavLinks] = useState<StorefrontNavLink[]>([]);
+  const [showCommunityPage, setShowCommunityPage] = useState(false);
+  const [showWalletPage, setShowWalletPage] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
 
@@ -204,6 +245,14 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
           setColorScheme({ ...DEFAULT_COLORS, ...sf.colorScheme });
         if (sf.productLayout) setProductLayout(sf.productLayout);
         if (sf.landingPageStyle) setLandingPageStyle(sf.landingPageStyle);
+        if (sf.fontHeading) setFontHeading(sf.fontHeading);
+        if (sf.fontBody) setFontBody(sf.fontBody);
+        if (sf.sections) setSections(sf.sections);
+        if (sf.pages) setPages(sf.pages);
+        if (sf.footer) setFooter(sf.footer);
+        if (sf.navLinks) setNavLinks(sf.navLinks);
+        if (sf.showCommunityPage) setShowCommunityPage(sf.showCommunityPage);
+        if (sf.showWalletPage) setShowWalletPage(sf.showWalletPage);
       }
     }
     setIsFetchingShop(false);
@@ -368,6 +417,14 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         landingPageStyle,
         shopSlug,
         customDomain: customDomain || undefined,
+        fontHeading: fontHeading || undefined,
+        fontBody: fontBody || undefined,
+        sections: sections.length > 0 ? sections : undefined,
+        pages: pages.length > 0 ? pages : undefined,
+        footer,
+        navLinks: navLinks.length > 0 ? navLinks : undefined,
+        showCommunityPage: showCommunityPage || undefined,
+        showWalletPage: showWalletPage || undefined,
       };
       transformedData.storefront = storefrontConfig;
     }
@@ -921,6 +978,295 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
 
               <div className="mb-6">
                 <label className="mb-2 block text-base font-bold text-black">
+                  Fonts
+                </label>
+                <p className="mb-3 text-sm text-gray-500">
+                  Choose Google Fonts for your storefront headings and body
+                  text.
+                </p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <Select
+                    label="Heading Font"
+                    classNames={{
+                      trigger:
+                        "border-2 border-gray-300 rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-black",
+                    }}
+                    variant="bordered"
+                    selectedKeys={fontHeading ? [fontHeading] : []}
+                    onChange={(e) => setFontHeading(e.target.value)}
+                  >
+                    {GOOGLE_FONT_OPTIONS.map((f) => (
+                      <SelectItem key={f} value={f} className="text-black">
+                        {f}
+                      </SelectItem>
+                    ))}
+                  </Select>
+                  <Select
+                    label="Body Font"
+                    classNames={{
+                      trigger:
+                        "border-2 border-gray-300 rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-black",
+                    }}
+                    variant="bordered"
+                    selectedKeys={fontBody ? [fontBody] : []}
+                    onChange={(e) => setFontBody(e.target.value)}
+                  >
+                    {GOOGLE_FONT_OPTIONS.map((f) => (
+                      <SelectItem key={f} value={f} className="text-black">
+                        {f}
+                      </SelectItem>
+                    ))}
+                  </Select>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <label className="mb-2 block text-base font-bold text-black">
+                  Navigation Links
+                </label>
+                <p className="mb-3 text-sm text-gray-500">
+                  Define the top navigation bar links for your storefront. Leave
+                  empty to hide the nav bar.
+                </p>
+                <div className="space-y-2">
+                  {navLinks.map((link, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <Input
+                        classNames={{
+                          inputWrapper:
+                            "border-2 border-gray-300 rounded-lg bg-white shadow-none",
+                        }}
+                        variant="bordered"
+                        value={link.label}
+                        onChange={(e) => {
+                          const updated = [...navLinks];
+                          updated[idx] = {
+                            ...updated[idx],
+                            label: e.target.value,
+                          };
+                          setNavLinks(updated);
+                        }}
+                        placeholder="Label"
+                        className="w-32"
+                      />
+                      <Input
+                        classNames={{
+                          inputWrapper:
+                            "border-2 border-gray-300 rounded-lg bg-white shadow-none",
+                        }}
+                        variant="bordered"
+                        value={link.href}
+                        onChange={(e) => {
+                          const updated = [...navLinks];
+                          updated[idx] = {
+                            ...updated[idx],
+                            href: e.target.value,
+                          };
+                          setNavLinks(updated);
+                        }}
+                        placeholder="URL or page slug"
+                        className="flex-1"
+                      />
+                      <label className="flex items-center gap-1 whitespace-nowrap text-xs text-gray-500">
+                        <input
+                          type="checkbox"
+                          checked={link.isPage || false}
+                          onChange={(e) => {
+                            const updated = [...navLinks];
+                            updated[idx] = {
+                              ...updated[idx],
+                              isPage: e.target.checked,
+                            };
+                            setNavLinks(updated);
+                          }}
+                        />
+                        Page
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setNavLinks(navLinks.filter((_, i) => i !== idx))
+                        }
+                        className="text-xs text-red-500"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setNavLinks([...navLinks, { label: "", href: "" }])
+                  }
+                  className="mt-2 text-sm font-bold text-blue-600 hover:underline"
+                >
+                  + Add Nav Link
+                </button>
+              </div>
+
+              <div className="mb-6">
+                <label className="mb-2 flex items-center gap-3 text-base font-bold text-black">
+                  <input
+                    type="checkbox"
+                    checked={showCommunityPage}
+                    onChange={(e) => setShowCommunityPage(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  Show Community Page
+                </label>
+                <p className="ml-7 text-sm text-gray-500">
+                  Enable a community page on your storefront that displays your
+                  community feed. A &quot;Community&quot; link will be added to
+                  your storefront navigation bar.
+                </p>
+              </div>
+
+              <div className="mb-6">
+                <label className="mb-2 flex items-center gap-3 text-base font-bold text-black">
+                  <input
+                    type="checkbox"
+                    checked={showWalletPage}
+                    onChange={(e) => setShowWalletPage(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  Show Bitcoin Wallet Page
+                </label>
+                <p className="ml-7 text-sm text-gray-500">
+                  Enable a Bitcoin wallet page on your storefront for Cashu
+                  ecash payments. A &quot;Wallet&quot; link will be added to
+                  your storefront navigation bar.
+                </p>
+              </div>
+
+              <div className="mb-6">
+                <label className="mb-2 block text-base font-bold text-black">
+                  Homepage Sections
+                </label>
+                <p className="mb-3 text-sm text-gray-500">
+                  Build your storefront homepage by adding and arranging content
+                  sections. If no sections are added, the landing page style
+                  above is used instead.
+                </p>
+                <div className="space-y-2">
+                  {sections.map((section, idx) => (
+                    <SectionEditor
+                      key={section.id}
+                      section={section}
+                      onChange={(updated) => {
+                        const newSections = [...sections];
+                        newSections[idx] = updated;
+                        setSections(newSections);
+                      }}
+                      onRemove={() =>
+                        setSections(sections.filter((_, i) => i !== idx))
+                      }
+                      onMoveUp={() => {
+                        if (idx === 0) return;
+                        const newSections = [...sections];
+                        [newSections[idx - 1], newSections[idx]] = [
+                          newSections[idx],
+                          newSections[idx - 1],
+                        ];
+                        setSections(newSections);
+                      }}
+                      onMoveDown={() => {
+                        if (idx === sections.length - 1) return;
+                        const newSections = [...sections];
+                        [newSections[idx], newSections[idx + 1]] = [
+                          newSections[idx + 1],
+                          newSections[idx],
+                        ];
+                        setSections(newSections);
+                      }}
+                      isFirst={idx === 0}
+                      isLast={idx === sections.length - 1}
+                    />
+                  ))}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {(
+                    [
+                      { type: "hero" as StorefrontSectionType, label: "Hero" },
+                      {
+                        type: "about" as StorefrontSectionType,
+                        label: "About",
+                      },
+                      {
+                        type: "story" as StorefrontSectionType,
+                        label: "Our Story",
+                      },
+                      {
+                        type: "products" as StorefrontSectionType,
+                        label: "Products",
+                      },
+                      {
+                        type: "testimonials" as StorefrontSectionType,
+                        label: "Testimonials",
+                      },
+                      { type: "faq" as StorefrontSectionType, label: "FAQ" },
+                      {
+                        type: "ingredients" as StorefrontSectionType,
+                        label: "Ingredients",
+                      },
+                      {
+                        type: "comparison" as StorefrontSectionType,
+                        label: "Comparison",
+                      },
+                      { type: "text" as StorefrontSectionType, label: "Text" },
+                      {
+                        type: "image" as StorefrontSectionType,
+                        label: "Image",
+                      },
+                      {
+                        type: "contact" as StorefrontSectionType,
+                        label: "Contact",
+                      },
+                      {
+                        type: "reviews" as StorefrontSectionType,
+                        label: "Reviews",
+                      },
+                    ] as const
+                  ).map((st) => (
+                    <button
+                      key={st.type}
+                      type="button"
+                      onClick={() =>
+                        setSections([
+                          ...sections,
+                          {
+                            id: `section-${Date.now()}-${Math.random()
+                              .toString(36)
+                              .slice(2, 6)}`,
+                            type: st.type,
+                            enabled: true,
+                          },
+                        ])
+                      }
+                      className="rounded border border-gray-300 px-2 py-1 text-xs font-medium text-gray-600 hover:border-black hover:text-black"
+                    >
+                      + {st.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <PageEditor pages={pages} onChange={setPages} />
+              </div>
+
+              <div className="mb-6">
+                <label className="mb-2 block text-base font-bold text-black">
+                  Footer
+                </label>
+                <p className="mb-3 text-sm text-gray-500">
+                  Customize the footer at the bottom of your storefront.
+                </p>
+                <FooterEditor footer={footer} onChange={setFooter} />
+              </div>
+
+              <div className="mb-6">
+                <label className="mb-2 block text-base font-bold text-black">
                   Custom Domain
                 </label>
                 <p className="mb-2 text-sm text-gray-500">
@@ -990,21 +1336,31 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                 )}
               </div>
 
-              {shopSlug && (
-                <div className="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-4">
-                  <p className="text-sm font-medium text-gray-700">
-                    Preview your storefront:
-                  </p>
-                  <a
-                    href={`/shop/${shopSlug}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-1 inline-block text-sm font-bold text-primary-blue underline"
+              <div className="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-4">
+                <div className="flex items-center gap-3">
+                  <Button
+                    className="border-3 border-black bg-black font-bold text-white hover:bg-gray-800"
+                    type="button"
+                    onPress={() => setIsPreviewOpen(true)}
                   >
-                    /shop/{shopSlug}
-                  </a>
+                    Preview Page
+                  </Button>
+                  {shopSlug && (
+                    <a
+                      href={`/shop/${shopSlug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-bold text-primary-blue underline"
+                    >
+                      Open live storefront (/shop/{shopSlug})
+                    </a>
+                  )}
                 </div>
-              )}
+                <p className="mt-2 text-xs text-gray-400">
+                  Preview shows your current unsaved settings with placeholder
+                  products. Use it to tweak your design before saving.
+                </p>
+              </div>
 
               {shopSlug && (
                 <div className="mt-6 border-t-2 border-dashed border-gray-300 pt-4">
@@ -1041,6 +1397,25 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
           Save Shop
         </Button>
       </form>
+
+      <StorefrontPreviewModal
+        isOpen={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        shopName={watch("name")}
+        shopAbout={watch("about")}
+        pictureUrl={watch("picture")}
+        bannerUrl={watch("banner")}
+        colors={colorScheme}
+        productLayout={productLayout}
+        landingPageStyle={landingPageStyle}
+        fontHeading={fontHeading}
+        fontBody={fontBody}
+        sections={sections}
+        pages={pages}
+        footer={footer}
+        navLinks={navLinks}
+        shopSlug={shopSlug}
+      />
     </>
   );
 };

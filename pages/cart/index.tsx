@@ -32,6 +32,7 @@ import { fiat } from "@getalby/lightning-tools";
 import currencySelection from "../../public/currencySelection.json";
 import { ShopMapContext, ProfileMapContext } from "@/utils/context/context";
 import { nip19 } from "nostr-tools";
+import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wrapper";
 
 interface QuantitySelectorProps {
   value: number;
@@ -98,6 +99,13 @@ export interface SubscriptionSelection {
 export default function Component() {
   const shopContext = useContext(ShopMapContext);
   const profileContext = useContext(ProfileMapContext);
+
+  const [sfSellerPubkey, setSfSellerPubkey] = useState("");
+
+  useEffect(() => {
+    const stored = sessionStorage.getItem("sf_seller_pubkey");
+    if (stored) setSfSellerPubkey(stored);
+  }, []);
 
   const [products, setProducts] = useState<ProductData[]>([]);
   const [satPrices, setSatPrices] = useState<{ [key: string]: number | null }>(
@@ -653,7 +661,7 @@ export default function Component() {
     return cost;
   };
 
-  return (
+  const cartContent = (
     <>
       {!isBeingPaid ? (
         <div className="flex min-h-screen flex-col bg-white p-4 text-black">
@@ -1226,4 +1234,14 @@ export default function Component() {
       ) : null}
     </>
   );
+
+  if (sfSellerPubkey) {
+    return (
+      <StorefrontThemeWrapper sellerPubkey={sfSellerPubkey}>
+        {cartContent}
+      </StorefrontThemeWrapper>
+    );
+  }
+
+  return cartContent;
 }
