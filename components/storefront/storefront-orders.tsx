@@ -2,8 +2,6 @@ import { useContext } from "react";
 import { StorefrontColorScheme } from "@/utils/types/types";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import OrdersDashboard from "@/components/messages/orders-dashboard";
-import MilkMarketSpinner from "@/components/utility-components/mm-spinner";
-
 interface StorefrontOrdersProps {
   colors: StorefrontColorScheme;
 }

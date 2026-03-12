@@ -141,13 +141,23 @@ export default function StorefrontWallet({ colors }: StorefrontWalletProps) {
           >
             {totalBalance} sats
           </h1>
-          <p
-            className="mb-6 cursor-pointer break-words text-center text-sm transition-colors hover:opacity-80"
-            style={{ color: colors.accent }}
-            onClick={handleMintClick}
-          >
-            {mint}: {walletBalance} sats
-          </p>
+          {mint ? (
+            <p
+              className="mb-6 cursor-pointer break-words text-center text-sm transition-colors hover:opacity-80"
+              style={{ color: colors.accent }}
+              onClick={handleMintClick}
+            >
+              {mint}: {walletBalance} sats
+            </p>
+          ) : (
+            <p
+              className="mb-6 cursor-pointer break-words text-center text-sm transition-colors hover:opacity-80"
+              style={{ color: colors.accent }}
+              onClick={handleMintClick}
+            >
+              No mint configured — tap to set up
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
             <div className="flex items-center justify-center">
               <ReceiveButton />

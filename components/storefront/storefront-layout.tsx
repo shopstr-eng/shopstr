@@ -201,9 +201,14 @@ export default function StorefrontLayout({
   }, [showCommunity, shopPubkey, communityContext.communities]);
 
   const defaultNavLinks: StorefrontNavLink[] = useMemo(() => {
-    const links: StorefrontNavLink[] = hasNav
+    let links: StorefrontNavLink[] = hasNav
       ? [...storefront.navLinks!]
       : [{ label: "Shop", href: "" }];
+    if (!isShopOwner) {
+      links = links.filter(
+        (l) => l.href !== "my-listings" && l.href !== "/my-listings"
+      );
+    }
     const alreadyHasOrders = links.some(
       (l) => l.href === "orders" || l.href === "/orders"
     );
@@ -333,7 +338,7 @@ export default function StorefrontLayout({
               </span>
             </Link>
 
-            {(hasNav || showCommunity) && (
+            {defaultNavLinks.length > 0 && (
               <div className="hidden items-center gap-1 lg:flex">
                 {defaultNavLinks.map((link, idx) => {
                   const href = resolveNavHref(link);
@@ -428,7 +433,7 @@ export default function StorefrontLayout({
                 borderColor: colors.primary + "22",
               }}
             >
-              {(hasNav || showCommunity) &&
+              {defaultNavLinks.length > 0 &&
                 defaultNavLinks.map((link, idx) => {
                   const href = resolveNavHref(link);
                   return (
@@ -482,18 +487,52 @@ export default function StorefrontLayout({
           <div className="pt-14">
             <StorefrontOrders colors={colors} />
           </div>
-        ) : currentPage === "wallet" && showWallet ? (
+        ) : currentPage === "wallet" ? (
           <div className="pt-14">
-            <StorefrontWallet colors={colors} />
+            {showWallet ? (
+              <StorefrontWallet colors={colors} />
+            ) : (
+              <div className="flex min-h-screen flex-col items-center justify-center py-24 text-center">
+                <h2
+                  className="font-heading text-2xl font-bold"
+                  style={{ color: colors.text }}
+                >
+                  Page Not Found
+                </h2>
+                <p
+                  className="mt-2 text-sm"
+                  style={{ color: colors.text + "99" }}
+                >
+                  This page doesn&apos;t exist.
+                </p>
+              </div>
+            )}
           </div>
-        ) : currentPage === "community" && showCommunity ? (
+        ) : currentPage === "community" ? (
           <div className="pt-14">
-            <StorefrontCommunity
-              shopPubkey={shopPubkey}
-              community={sellerCommunity}
-              colors={colors}
-              isLoading={communityContext.isLoading}
-            />
+            {showCommunity ? (
+              <StorefrontCommunity
+                shopPubkey={shopPubkey}
+                community={sellerCommunity}
+                colors={colors}
+                isLoading={communityContext.isLoading}
+              />
+            ) : (
+              <div className="flex min-h-screen flex-col items-center justify-center py-24 text-center">
+                <h2
+                  className="font-heading text-2xl font-bold"
+                  style={{ color: colors.text }}
+                >
+                  Page Not Found
+                </h2>
+                <p
+                  className="mt-2 text-sm"
+                  style={{ color: colors.text + "99" }}
+                >
+                  This page doesn&apos;t exist.
+                </p>
+              </div>
+            )}
           </div>
         ) : hasSections && activeSections.length > 0 ? (
           <div className="pt-14">
