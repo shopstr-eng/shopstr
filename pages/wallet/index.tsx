@@ -14,12 +14,37 @@ const Wallet = () => {
   const [mint, setMint] = useState("");
   const [wallet, setWallet] = useState<CashuWallet>();
   const [mintKeySetIds, setMintKeySetIds] = useState<MintKeyset[]>([]);
+  const [walletStorage, setWalletStorage] = useState(() => getLocalStorageData());
   const router = useRouter();
 
-  const localStorageData = useMemo(() => getLocalStorageData(), []);
-  const { mints, tokens } = localStorageData;
+  const { mints, tokens } = walletStorage;
 
   useEffect(() => {
+    const refreshWalletStorage = () => {
+      setWalletStorage(getLocalStorageData());
+    };
+
+    refreshWalletStorage();
+    window.addEventListener("storage", refreshWalletStorage);
+    window.addEventListener("shopstr:storage", refreshWalletStorage as EventListener);
+    window.addEventListener("focus", refreshWalletStorage);
+
+    return () => {
+      window.removeEventListener("storage", refreshWalletStorage);
+      window.removeEventListener(
+        "shopstr:storage",
+        refreshWalletStorage as EventListener
+      );
+      window.removeEventListener("focus", refreshWalletStorage);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!mints || mints.length === 0) {
+      setMint("");
+      setWallet(undefined);
+      return;
+    }
     const currentMint = new CashuMint(mints[0]!);
     setMint(mints[0]!);
     const cashuWallet = new CashuWallet(currentMint);
@@ -63,38 +88,6 @@ const Wallet = () => {
         : 0;
     setWalletBalance(walletTotal);
   }, [tokens, filteredProofs]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const { tokens: newTokens } = getLocalStorageData();
-      if (newTokens) {
-        const tokensTotal =
-          newTokens.length >= 1
-            ? newTokens.reduce(
-                (acc: number, token: Proof) => acc + token.amount,
-                0
-              )
-            : 0;
-        setTotalBalance(tokensTotal);
-
-        if (mintKeySetIds) {
-          const newFilteredProofs = newTokens.filter((p: Proof) =>
-            mintKeySetIds.some((keysetId: MintKeyset) => keysetId.id === p.id)
-          );
-          const newWalletTotal =
-            newFilteredProofs.length >= 1
-              ? newFilteredProofs.reduce(
-                  (acc: number, p: Proof) => acc + p.amount,
-                  0
-                )
-              : 0;
-          setWalletBalance(newWalletTotal);
-        }
-      }
-    }, 2100);
-
-    return () => clearInterval(interval);
-  }, [mintKeySetIds]);
 
   const handleMintClick = () => {
     router.push("/settings/preferences");

@@ -1,12 +1,14 @@
-import { Filter } from "nostr-tools";
+import { Filter, nip19 } from "nostr-tools";
 import {
   NostrEvent,
   NostrMessageEvent,
   ShopProfile,
   Community,
+  ProfileData,
+  CommunityPost,
 } from "@/utils/types/types";
 import { CashuMint, CashuWallet, Proof } from "@cashu/cashu-ts";
-import { ChatsMap } from "@/utils/context/context";
+import { ChatsMap, CashuProofEvent } from "@/utils/context/context";
 import {
   getLocalStorageData,
   deleteEvent,
@@ -15,6 +17,7 @@ import {
 import {
   ProductData,
   parseTags,
+  parseProductEventsWithLookup,
 } from "@/utils/parsers/product-parser-functions";
 import { parseCommunityEvent } from "../parsers/community-parser-functions";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
@@ -22,6 +25,29 @@ import { hashToCurve } from "@cashu/crypto/modules/common";
 import { NostrManager } from "@/utils/nostr/nostr-manager";
 import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { cacheEventsToDatabase } from "@/utils/db/db-client";
+import { buildProductSlugIndexes, findProductBySlug } from "@/utils/url-slugs";
+
+const INITIAL_PRODUCT_PAGE_SIZE = 2000;
+
+type ProductBackfillMode = "none" | "background" | "until-match";
+
+type ProductPageCursor = {
+  created_at: number;
+  id: string;
+};
+
+type FetchAllPostsOptions = {
+  backfillMode?: ProductBackfillMode;
+  targetProductId?: string;
+  signal?: AbortSignal;
+  onBackgroundProductsMerged?: (
+    deltaProducts: NostrEvent[],
+    allProducts: NostrEvent[],
+    signal: AbortSignal
+  ) => Promise<void> | void;
+};
+
+let activeProductBackfillController: AbortController | undefined;
 
 function getUniqueProofs(proofs: Proof[]): Proof[] {
   const uniqueProofs = new Set<string>();
@@ -39,25 +65,357 @@ function isHexString(value: string): boolean {
   return /^[0-9a-fA-F]{64}$/.test(value);
 }
 
+function toCsv(values: Array<string | number>): string {
+  return values
+    .filter(
+      (value) => value !== undefined && value !== null && `${value}` !== ""
+    )
+    .join(",");
+}
+
+function compareProductsDesc(a: NostrEvent, b: NostrEvent): number {
+  if (b.created_at !== a.created_at) {
+    return b.created_at - a.created_at;
+  }
+
+  return b.id.localeCompare(a.id);
+}
+
+function sortProductEvents(productEvents: NostrEvent[]): NostrEvent[] {
+  return [...productEvents].sort(compareProductsDesc);
+}
+
+function getProductEventKey(event: NostrEvent): string {
+  if (event.kind === 30402) {
+    const dTag = event.tags?.find((tag: string[]) => tag[0] === "d")?.[1];
+    if (dTag) {
+      return `${event.pubkey}:${dTag}`;
+    }
+  }
+
+  return event.id;
+}
+
+function mergeProductEvents(
+  existingProductsMap: Map<string, NostrEvent>,
+  incomingEvents: NostrEvent[]
+): {
+  mergedProductsMap: Map<string, NostrEvent>;
+  addedProducts: NostrEvent[];
+  didChange: boolean;
+} {
+  const mergedProductsMap = new Map(existingProductsMap);
+  const addedProducts: NostrEvent[] = [];
+  let didChange = false;
+
+  for (const event of incomingEvents) {
+    if (!event?.id) continue;
+
+    const key = getProductEventKey(event);
+    const existing = mergedProductsMap.get(key);
+
+    if (!existing) {
+      mergedProductsMap.set(key, event);
+      addedProducts.push(event);
+      didChange = true;
+      continue;
+    }
+
+    const isNewer =
+      event.created_at > existing.created_at ||
+      (event.created_at === existing.created_at &&
+        event.id.localeCompare(existing.id) > 0);
+
+    if (isNewer) {
+      mergedProductsMap.set(key, event);
+      didChange = true;
+    }
+  }
+
+  return {
+    mergedProductsMap,
+    addedProducts,
+    didChange,
+  };
+}
+
+function getPageCursor(
+  productEvents: NostrEvent[]
+): ProductPageCursor | undefined {
+  if (productEvents.length === 0) return undefined;
+
+  const lastEvent = productEvents[productEvents.length - 1];
+  if (!lastEvent) return undefined;
+
+  return {
+    created_at: lastEvent.created_at,
+    id: lastEvent.id,
+  };
+}
+
+function setActiveProductBackfillController(
+  signal?: AbortSignal
+): AbortController {
+  activeProductBackfillController?.abort();
+
+  const controller = new AbortController();
+  if (signal) {
+    if (signal.aborted) {
+      controller.abort();
+    } else {
+      signal.addEventListener("abort", () => controller.abort(), {
+        once: true,
+      });
+    }
+  }
+
+  activeProductBackfillController = controller;
+  return controller;
+}
+
+function clearActiveProductBackfillController(
+  controller: AbortController
+): void {
+  if (activeProductBackfillController === controller) {
+    activeProductBackfillController = undefined;
+  }
+}
+
+async function fetchProductsPageFromDb({
+  limit = INITIAL_PRODUCT_PAGE_SIZE,
+  cursor,
+  signal,
+}: {
+  limit?: number;
+  cursor?: ProductPageCursor;
+  signal?: AbortSignal;
+}): Promise<NostrEvent[]> {
+  if (signal?.aborted) {
+    return [];
+  }
+
+  const query = new URLSearchParams();
+  query.set("limit", String(limit));
+
+  if (cursor) {
+    query.set("cursorCreatedAt", String(cursor.created_at));
+    query.set("cursorId", cursor.id);
+  }
+
+  const response = await fetch(`/api/db/fetch-products?${query.toString()}`, {
+    signal,
+  });
+  if (!response.ok) {
+    throw new Error("Failed to fetch products from database");
+  }
+
+  const products = await response.json();
+  return Array.isArray(products) ? products : [];
+}
+
+function mergedProductsContainTarget(
+  productsMap: Map<string, NostrEvent>,
+  targetProductId?: string
+): boolean {
+  if (!targetProductId) return false;
+
+  for (const event of productsMap.values()) {
+    if (!event?.id) continue;
+
+    if (event.id === targetProductId) {
+      return true;
+    }
+
+    const dTag = event.tags?.find((tag: string[]) => tag[0] === "d")?.[1];
+    if (dTag === targetProductId) {
+      return true;
+    }
+
+    if (event.kind === 30402 && dTag) {
+      try {
+        const naddr = nip19.naddrEncode({
+          identifier: dTag,
+          pubkey: event.pubkey,
+          kind: event.kind,
+        });
+        if (naddr === targetProductId) {
+          return true;
+        }
+      } catch {
+        // Ignore malformed events while matching targets.
+      }
+    }
+  }
+
+  const listingEvents = Array.from(productsMap.values()).filter(
+    (event) => event.kind !== 1
+  );
+  const { parsedProducts } = parseProductEventsWithLookup(listingEvents);
+  const productSlugIndexes = buildProductSlugIndexes(parsedProducts);
+
+  return !!findProductBySlug(
+    targetProductId,
+    parsedProducts,
+    productSlugIndexes
+  );
+}
+
+function yieldToBrowser(signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    if (typeof window !== "undefined" && "requestAnimationFrame" in window) {
+      const frameId = window.requestAnimationFrame(() => resolve());
+      signal?.addEventListener(
+        "abort",
+        () => {
+          window.cancelAnimationFrame(frameId);
+          resolve();
+        },
+        { once: true }
+      );
+      return;
+    }
+
+    const timeoutId = setTimeout(resolve, 0);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timeoutId);
+        resolve();
+      },
+      { once: true }
+    );
+  });
+}
+
+async function backfillProductsFromDb({
+  initialProductsMap,
+  initialCursor,
+  mode,
+  targetProductId,
+  editProductContext,
+  onBackgroundProductsMerged,
+  signal,
+}: {
+  initialProductsMap: Map<string, NostrEvent>;
+  initialCursor: ProductPageCursor;
+  mode: ProductBackfillMode;
+  targetProductId?: string;
+  editProductContext: (productEvents: NostrEvent[], isLoading: boolean) => void;
+  onBackgroundProductsMerged?: (
+    deltaProducts: NostrEvent[],
+    allProducts: NostrEvent[],
+    signal: AbortSignal
+  ) => Promise<void> | void;
+  signal: AbortSignal;
+}): Promise<Map<string, NostrEvent>> {
+  let mergedProductsMap = new Map(initialProductsMap);
+  let cursor: ProductPageCursor | undefined = initialCursor;
+
+  if (mode === "background") {
+    await yieldToBrowser(signal);
+  }
+
+  while (!signal.aborted && cursor) {
+    const nextPage = await fetchProductsPageFromDb({
+      limit: INITIAL_PRODUCT_PAGE_SIZE,
+      cursor,
+      signal,
+    });
+
+    if (signal.aborted || nextPage.length === 0) {
+      break;
+    }
+
+    const {
+      mergedProductsMap: nextMergedProductsMap,
+      addedProducts,
+      didChange,
+    } = mergeProductEvents(mergedProductsMap, nextPage);
+
+    mergedProductsMap = nextMergedProductsMap;
+
+    if (didChange) {
+      const mergedProductArray = sortProductEvents(
+        Array.from(mergedProductsMap.values())
+      );
+      editProductContext(mergedProductArray, false);
+
+      if (
+        mode === "background" &&
+        addedProducts.length > 0 &&
+        onBackgroundProductsMerged
+      ) {
+        await onBackgroundProductsMerged(
+          addedProducts,
+          mergedProductArray,
+          signal
+        );
+        if (signal.aborted) {
+          break;
+        }
+      }
+    }
+
+    if (
+      mode === "until-match" &&
+      mergedProductsContainTarget(mergedProductsMap, targetProductId)
+    ) {
+      break;
+    }
+
+    const nextCursor = getPageCursor(nextPage);
+    if (
+      !nextCursor ||
+      (nextCursor.created_at === cursor.created_at &&
+        nextCursor.id === cursor.id)
+    ) {
+      break;
+    }
+
+    cursor = nextCursor;
+
+    if (mode === "background") {
+      await yieldToBrowser(signal);
+    }
+  }
+
+  return mergedProductsMap;
+}
+
 export const fetchAllPosts = async (
   nostr: NostrManager,
   relays: string[],
-  editProductContext: (productEvents: NostrEvent[], isLoading: boolean) => void
+  editProductContext: (productEvents: NostrEvent[], isLoading: boolean) => void,
+  options: FetchAllPostsOptions = {}
 ): Promise<{
   productEvents: NostrEvent[];
   profileSetFromProducts: Set<string>;
 }> => {
   return new Promise(async function (resolve, reject) {
+    activeProductBackfillController?.abort();
+
     try {
-      // First, load from database to immediately populate the UI
-      let productArrayFromDb: NostrEvent[] = [];
+      if (options.signal?.aborted) {
+        resolve({ productEvents: [], profileSetFromProducts: new Set() });
+        return;
+      }
+
+      let initialDbProducts: NostrEvent[] = [];
+      let initialDbCursor: ProductPageCursor | undefined;
+
       try {
-        const response = await fetch("/api/db/fetch-products");
-        if (response.ok) {
-          productArrayFromDb = await response.json();
-          if (productArrayFromDb.length > 0) {
-            editProductContext(productArrayFromDb, false);
-          }
+        initialDbProducts = await fetchProductsPageFromDb({
+          limit: INITIAL_PRODUCT_PAGE_SIZE,
+          signal: options.signal,
+        });
+        initialDbCursor = getPageCursor(initialDbProducts);
+
+        if (!options.signal?.aborted && initialDbProducts.length > 0) {
+          editProductContext(sortProductEvents(initialDbProducts), false);
         }
       } catch (error) {
         console.error("Failed to fetch products from database: ", error);
@@ -73,9 +431,10 @@ export const fetchAllPosts = async (
       };
 
       const profileSetFromProducts: Set<string> = new Set();
-
-      productArrayFromDb.forEach((event) => {
-        if (event.pubkey) profileSetFromProducts.add(event.pubkey);
+      initialDbProducts.forEach((event) => {
+        if (event.pubkey) {
+          profileSetFromProducts.add(event.pubkey);
+        }
       });
 
       const fetchedEvents = await nostr.fetch(
@@ -87,9 +446,12 @@ export const fetchAllPosts = async (
         console.error("No products found with filter: ", filter);
       }
 
-      // Cache valid product events to database
       const validProductEvents = fetchedEvents.filter(
-        (e) => e.id && e.sig && e.pubkey && (e.kind === 30402 || e.kind === 1)
+        (event) =>
+          event.id &&
+          event.sig &&
+          event.pubkey &&
+          (event.kind === 30402 || event.kind === 1)
       );
       if (validProductEvents.length > 0) {
         cacheEventsToDatabase(validProductEvents).catch((error) =>
@@ -97,45 +459,81 @@ export const fetchAllPosts = async (
         );
       }
 
-      const getEventKey = (event: NostrEvent): string => {
-        if (event.kind === 30402) {
-          const dTag = event.tags?.find((tag: string[]) => tag[0] === "d")?.[1];
-          if (dTag) return `${event.pubkey}:${dTag}`;
-        }
-        return event.id;
-      };
+      let mergedProductsMap = new Map<string, NostrEvent>();
+      ({ mergedProductsMap } = mergeProductEvents(
+        mergedProductsMap,
+        initialDbProducts
+      ));
+      ({ mergedProductsMap } = mergeProductEvents(
+        mergedProductsMap,
+        fetchedEvents
+      ));
 
-      const mergedProductsMap = new Map<string, NostrEvent>();
-
-      for (const event of productArrayFromDb) {
-        if (event && event.id) {
-          mergedProductsMap.set(getEventKey(event), event);
+      for (const event of mergedProductsMap.values()) {
+        if (event.pubkey) {
+          profileSetFromProducts.add(event.pubkey);
         }
       }
 
-      for (const event of fetchedEvents) {
-        if (!event || !event.id) continue;
-
-        const key = getEventKey(event);
-        const existing = mergedProductsMap.get(key);
-        if (!existing || event.created_at >= existing.created_at) {
-          mergedProductsMap.set(key, event);
-        }
-        profileSetFromProducts.add(event.pubkey);
-      }
-
-      const mergedProductArray = Array.from(mergedProductsMap.values());
-
-      editProductContext(mergedProductArray, false);
-
-      // Cache fetched products to database via API (only valid events with signatures)
-      const validProducts = fetchedEvents.filter(
-        (e) => e.id && e.sig && e.pubkey
+      let mergedProductArray = sortProductEvents(
+        Array.from(mergedProductsMap.values())
       );
-      if (validProducts.length > 0) {
-        cacheEventsToDatabase(validProducts).catch((error) =>
-          console.error("Failed to cache products to database:", error)
+      if (!options.signal?.aborted) {
+        editProductContext(mergedProductArray, false);
+      }
+
+      const shouldAttemptBackfill =
+        initialDbProducts.length === INITIAL_PRODUCT_PAGE_SIZE &&
+        !!initialDbCursor;
+      const backfillMode = options.backfillMode ?? "none";
+
+      if (
+        shouldAttemptBackfill &&
+        backfillMode === "until-match" &&
+        options.targetProductId &&
+        !mergedProductsContainTarget(mergedProductsMap, options.targetProductId)
+      ) {
+        const controller = setActiveProductBackfillController(options.signal);
+        try {
+          mergedProductsMap = await backfillProductsFromDb({
+            initialProductsMap: mergedProductsMap,
+            initialCursor: initialDbCursor!,
+            mode: "until-match",
+            targetProductId: options.targetProductId,
+            editProductContext,
+            signal: controller.signal,
+          });
+        } finally {
+          clearActiveProductBackfillController(controller);
+        }
+
+        mergedProductArray = sortProductEvents(
+          Array.from(mergedProductsMap.values())
         );
+        profileSetFromProducts.clear();
+        mergedProductArray.forEach((event) => {
+          if (event.pubkey) {
+            profileSetFromProducts.add(event.pubkey);
+          }
+        });
+      } else if (shouldAttemptBackfill && backfillMode === "background") {
+        const controller = setActiveProductBackfillController(options.signal);
+        void backfillProductsFromDb({
+          initialProductsMap: mergedProductsMap,
+          initialCursor: initialDbCursor!,
+          mode: "background",
+          editProductContext,
+          onBackgroundProductsMerged: options.onBackgroundProductsMerged,
+          signal: controller.signal,
+        })
+          .catch((error) => {
+            if (!controller.signal.aborted) {
+              console.error("Failed to backfill product history:", error);
+            }
+          })
+          .finally(() => {
+            clearActiveProductBackfillController(controller);
+          });
       }
 
       resolve({
@@ -248,9 +646,7 @@ export const fetchShopProfile = async (
     try {
       const shopEvents: NostrEvent[] = [];
 
-      const shopProfile: Map<string, ShopProfile | any> = new Map(
-        pubkeyShopProfileToFetch.map((pubkey) => [pubkey, null])
-      );
+      const shopProfile = new Map<string, ShopProfile>();
 
       if (pubkeyShopProfileToFetch.length === 0) {
         editShopContext(new Map(), false);
@@ -260,7 +656,12 @@ export const fetchShopProfile = async (
 
       // First load from database
       try {
-        const response = await fetch("/api/db/fetch-profiles");
+        const profileQuery = new URLSearchParams({
+          kinds: "30019",
+          pubkeys: toCsv(pubkeyShopProfileToFetch),
+          limit: String(Math.max(pubkeyShopProfileToFetch.length * 4, 200)),
+        });
+        const response = await fetch(`/api/db/fetch-profiles?${profileQuery}`);
         if (response.ok) {
           const profilesFromDb = await response.json();
           const shopProfilesFromDb = profilesFromDb.filter(
@@ -366,9 +767,12 @@ export const fetchProfile = async (
   nostr: NostrManager,
   relays: string[],
   pubkeyProfilesToFetch: string[],
-  editProfileContext: (productEvents: Map<any, any>, isLoading: boolean) => void
+  editProfileContext: (
+    profileEvents: Map<string, ProfileData>,
+    isLoading: boolean
+  ) => void
 ): Promise<{
-  profileMap: Map<string, any>;
+  profileMap: Map<string, ProfileData>;
 }> => {
   return new Promise(async function (resolve, reject) {
     try {
@@ -378,16 +782,21 @@ export const fetchProfile = async (
         return;
       }
 
-      const dbProfileMap = new Map<string, any>();
+      const dbProfileMap = new Map<string, ProfileData>();
       try {
-        const response = await fetch("/api/db/fetch-profiles");
+        const profileQuery = new URLSearchParams({
+          kinds: "0",
+          pubkeys: toCsv(pubkeyProfilesToFetch),
+          limit: String(Math.max(pubkeyProfilesToFetch.length * 4, 200)),
+        });
+        const response = await fetch(`/api/db/fetch-profiles?${profileQuery}`);
         if (response.ok) {
           const profilesFromDb = await response.json();
           for (const event of profilesFromDb) {
             if (pubkeyProfilesToFetch.includes(event.pubkey)) {
               try {
                 const content = JSON.parse(event.content);
-                const profile = {
+                const profile: ProfileData = {
                   pubkey: event.pubkey,
                   created_at: event.created_at,
                   content: content,
@@ -421,25 +830,16 @@ export const fetchProfile = async (
         authors: Array.from(pubkeyProfilesToFetch),
       };
 
-      const profileMap: Map<string, any> = new Map(
-        Array.from(pubkeyProfilesToFetch).map((pubkey) => [
-          pubkey,
-          dbProfileMap.get(pubkey) || null,
-        ])
-      );
+      const profileMap = new Map<string, ProfileData>(dbProfileMap);
 
       const fetchedEvents = await nostr.fetch([subParams], {}, relays);
 
       for (const event of fetchedEvents) {
         const existing = profileMap.get(event.pubkey);
-        if (
-          existing === null ||
-          !existing ||
-          event.created_at > existing.created_at
-        ) {
+        if (!existing || event.created_at > existing.created_at) {
           try {
             const content = JSON.parse(event.content);
-            const profile = {
+            const profile: ProfileData = {
               pubkey: event.pubkey,
               created_at: event.created_at,
               content: content,
@@ -601,7 +1001,7 @@ export const fetchGiftWrappedChatsAndMessages = async (
             );
             return;
           }
-          let cachedMessage = chatMessagesFromCache.get(event.id);
+          const cachedMessage = chatMessagesFromCache.get(event.id);
           let chatMessage: NostrMessageEvent;
           if (cachedMessage) {
             chatMessage = {
@@ -749,7 +1149,13 @@ export const fetchReviews = async (
 
       // First load from database
       try {
-        const response = await fetch("/api/db/fetch-reviews");
+        const reviewQuery = new URLSearchParams({
+          limit: String(Math.max(addresses.length * 8, 300)),
+        });
+        if (addresses.length > 0) {
+          reviewQuery.set("addresses", toCsv(addresses));
+        }
+        const response = await fetch(`/api/db/fetch-reviews?${reviewQuery}`);
         if (!response.ok) throw new Error("Failed to fetch reviews");
         const reviewsFromDb = await response.json();
 
@@ -1195,13 +1601,13 @@ export const fetchCashuWallet = async (
   signer: NostrSigner | undefined,
   relays: string[],
   editCashuWalletContext: (
-    proofEvents: any[],
+    proofEvents: CashuProofEvent[],
     cashuMints: string[],
     cashuProofs: Proof[],
     isLoading: boolean
   ) => void
 ): Promise<{
-  proofEvents: any[];
+  proofEvents: CashuProofEvent[];
   cashuMints: string[];
   cashuProofs: Proof[];
 }> => {
@@ -1221,7 +1627,7 @@ export const fetchCashuWallet = async (
     try {
       const enc = new TextEncoder();
       let mostRecentWalletEvent: NostrEvent | null = null;
-      const proofEvents: any[] = [];
+      const proofEvents: CashuProofEvent[] = [];
       const cashuRelays: string[] = [];
       const cashuMints: string[] = [];
       const cashuMintSet: Set<string> = new Set();
@@ -1230,9 +1636,12 @@ export const fetchCashuWallet = async (
 
       // Load wallet events from database first
       try {
-        const response = await fetch(
-          `/api/db/fetch-wallet?pubkey=${userPubkey}`
-        );
+        const walletQuery = new URLSearchParams({
+          pubkey: userPubkey,
+          kinds: "17375,37375,7375,7376",
+          limit: "2000",
+        });
+        const response = await fetch(`/api/db/fetch-wallet?${walletQuery}`);
         if (!response.ok) throw new Error("Failed to fetch wallet events");
         const walletEventsFromDb = await response.json();
 
@@ -1696,7 +2105,7 @@ export const fetchCommunityPosts = async (
   nostr: NostrManager,
   community: Community,
   limit: number = 20
-): Promise<NostrEvent[]> => {
+): Promise<CommunityPost[]> => {
   return new Promise(async (resolve, reject) => {
     if (!community) {
       resolve([]);
@@ -1791,9 +2200,9 @@ export const fetchCommunityPosts = async (
       }
 
       // Annotate posts with approval metadata where available
-      const annotatedPosts = postEvents.map((post) => {
+      const annotatedPosts: CommunityPost[] = postEvents.map((post) => {
         const approval = approvalByPostId.get(post.id);
-        const annotated: any = { ...post };
+        const annotated: CommunityPost = { ...post };
         if (approval) {
           annotated.approved = true;
           annotated.approvalEventId = approval.approvalId;
@@ -1801,7 +2210,7 @@ export const fetchCommunityPosts = async (
         } else {
           annotated.approved = false;
         }
-        return annotated as NostrEvent;
+        return annotated;
       });
 
       // Sort posts by creation date, newest first.

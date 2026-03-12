@@ -21,9 +21,15 @@ import {
 import { webln } from "@getalby/sdk";
 import { formatWithCommas } from "@/components/utility-components/display-monetary-info";
 
+interface NwcWalletInfo {
+  alias?: string;
+  methods: string[];
+  [key: string]: unknown;
+}
+
 const NWCSettingsPage = () => {
   const [nwcString, setNwcString] = useState("");
-  const [walletInfo, setWalletInfo] = useState<any>(null);
+  const [walletInfo, setWalletInfo] = useState<NwcWalletInfo | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +45,7 @@ const NWCSettingsPage = () => {
       }
       if (savedInfo) {
         try {
-          const info = JSON.parse(savedInfo);
+          const info = JSON.parse(savedInfo) as NwcWalletInfo;
           setWalletInfo(info);
           if (info.methods.includes("get_balance") && savedString) {
             fetchBalance(savedString);
@@ -103,7 +109,7 @@ const NWCSettingsPage = () => {
 
       nwc = new webln.NostrWebLNProvider({ nostrWalletConnectUrl: nwcString });
       await nwc.enable();
-      const info = await nwc.getInfo();
+      const info = (await nwc.getInfo()) as NwcWalletInfo;
 
       // Save successful connection
       saveNWCString(nwcString);
@@ -115,11 +121,11 @@ const NWCSettingsPage = () => {
       if (info.methods && info.methods.includes("get_balance")) {
         await fetchBalance(nwcString);
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("Failed to validate or connect NWC wallet:", e);
       setError(
         `Failed to connect: ${
-          e.message ||
+          (e instanceof Error ? e.message : "") ||
           "Please check the connection string and wallet permissions."
         }`
       );

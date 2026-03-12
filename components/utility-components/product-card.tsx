@@ -6,6 +6,7 @@ import {
   DropdownMenu,
   DropdownItem,
   Button,
+  Image,
 } from "@nextui-org/react";
 import Link from "next/link";
 import {
@@ -27,10 +28,12 @@ export default function ProductCard({
   productData,
   onProductClick,
   href,
+  compactMedia = false,
 }: {
   productData: ProductData;
   onProductClick?: (productId: ProductData, e?: React.MouseEvent) => void;
   href?: string | null;
+  compactMedia?: boolean;
 }) {
   const [showRawEventModal, setShowRawEventModal] = useState(false);
   const [showEventIdModal, setShowEventIdModal] = useState(false);
@@ -48,6 +51,7 @@ export default function ProductCard({
   const isExpired = productData.expiration
     ? Date.now() / 1000 > productData.expiration
     : false;
+  const shouldUseCompactMedia = compactMedia || router.pathname === "/";
 
   const handleNjumpClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -77,11 +81,21 @@ export default function ProductCard({
       }}
     >
       <div>
-        <ImageCarousel
-          images={productData.images}
-          classname="w-full h-[300px] rounded-t-2xl"
-          showThumbs={false}
-        />
+        {shouldUseCompactMedia ? (
+          <Image
+            src={productData.images?.[0] || "/no-image-placeholder.png"}
+            alt={productData.title || "Product image"}
+            loading="lazy"
+            decoding="async"
+            className="h-[300px] w-full rounded-t-2xl object-cover"
+          />
+        ) : (
+          <ImageCarousel
+            images={productData.images}
+            classname="w-full h-[300px] rounded-t-2xl"
+            showThumbs={false}
+          />
+        )}
       </div>
       <div className="flex flex-col p-4">
         {router.pathname !== "/" && (

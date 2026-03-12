@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from "react";
+import { useState, useEffect, useContext, useCallback } from "react";
 import { nip19 } from "nostr-tools";
 import { useRouter } from "next/router";
 import { Button, useDisclosure } from "@nextui-org/react";
@@ -73,6 +73,108 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
     setIsClient(true);
   }, []);
 
+  const getDecryptedChatsFromContext = useCallback(async (): Promise<
+    Map<string, ChatObject>
+  > => {
+    const decryptedChats: Map<string, ChatObject> = new Map(); //  entry: [chatPubkey, chat]
+    if (!chatsContext?.chatsMap) {
+      return decryptedChats;
+    }
+
+    for (const entry of chatsContext.chatsMap) {
+      const chatPubkey = entry[0] as string;
+      const chat = entry[1] as NostrMessageEvent[];
+      const decryptedChat: NostrMessageEvent[] = [];
+      const unreadCount = 0;
+
+      for (const messageEvent of chat) {
+        let plainText;
+        let tagsMap: Map<string, string> = new Map();
+        if (messageEvent.kind === 14) {
+          plainText = messageEvent.content;
+          tagsMap = new Map(
+            messageEvent.tags
+              .filter((tag): tag is [string, string] => tag.length === 2)
+              .map(([k, v]) => [k, v])
+          );
+        }
+        const subject = tagsMap.get("subject") ? tagsMap.get("subject") : null;
+        if (
+          (isPayment &&
+            subject &&
+            (subject === "order-payment" ||
+              subject === "order-info" ||
+              subject === "payment-change" ||
+              subject === "order-receipt" ||
+              subject === "shipping-info" ||
+              subject === "zapsnag-order")) ||
+          (!isPayment && subject && subject === "listing-inquiry")
+        ) {
+          plainText &&
+            decryptedChat.push({ ...messageEvent, content: plainText });
+        }
+      }
+      if (decryptedChat.length > 0) {
+        decryptedChats.set(chatPubkey, { unreadCount, decryptedChat });
+      }
+    }
+    return decryptedChats;
+  }, [chatsContext, isPayment]);
+
+  const markAllMessagesAsReadInChatRoom = useCallback(
+    (pubkeyOfChat: string) => {
+      if (!chatsContext?.chatsMap) return;
+
+      setChatsMap((prevChatMap) => {
+        const updatedChat = prevChatMap.get(pubkeyOfChat) as ChatObject;
+        if (updatedChat) {
+          updatedChat.unreadCount = 0;
+          const encryptedChat = chatsContext.chatsMap.get(
+            pubkeyOfChat
+          ) as NostrMessageEvent[];
+          if (!encryptedChat) return prevChatMap;
+          const wrappedIdsToMark: string[] = [];
+          encryptedChat.forEach((message) => {
+            if (!message.read) {
+              message.read = true;
+              if (message.wrappedEventId) {
+                wrappedIdsToMark.push(message.wrappedEventId);
+              }
+            }
+          });
+          if (wrappedIdsToMark.length > 0) {
+            fetch("/api/db/mark-messages-read", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ messageIds: wrappedIdsToMark }),
+            }).catch((err) =>
+              console.error("Failed to mark messages as read:", err)
+            );
+          }
+          const newChatMap = new Map(prevChatMap);
+          newChatMap.set(pubkeyOfChat, updatedChat);
+          return newChatMap;
+        }
+        return prevChatMap;
+      });
+    },
+    [chatsContext]
+  );
+
+  const enterChat = useCallback(
+    (pubkeyOfChat: string) => {
+      setCurrentChatPubkey(pubkeyOfChat as string);
+      // mark all messages in chat as read
+      markAllMessagesAsReadInChatRoom(pubkeyOfChat as string);
+    },
+    [markAllMessagesAsReadInChatRoom]
+  );
+
+  const goBackFromChatRoom = useCallback(() => {
+    // used when in chatroom on smaller devices
+    setCurrentChatPubkey("");
+  }, []);
+
   useEffect(() => {
     async function loadChats() {
       if (!chatsContext) {
@@ -103,7 +205,15 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
       }
     }
     loadChats();
-  }, [chatsContext, isPayment]);
+  }, [
+    chatsContext,
+    isPayment,
+    currentChatPubkey,
+    enterChat,
+    getDecryptedChatsFromContext,
+    markAllMessagesAsReadInChatRoom,
+    router.query.pk,
+  ]);
 
   useEffect(() => {
     const sortedChatsByLastMessage = Array.from(chatsMap.entries()).sort(
@@ -150,97 +260,17 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
     if (escapePressed) {
       goBackFromChatRoom();
     }
-  }, [arrowUpPressed, arrowDownPressed, escapePressed]);
-
-  const getDecryptedChatsFromContext: () => Promise<
-    Map<string, ChatObject>
-  > = async () => {
-    const decryptedChats: Map<string, ChatObject> = new Map(); //  entry: [chatPubkey, chat]
-    for (const entry of chatsContext.chatsMap) {
-      const chatPubkey = entry[0] as string;
-      const chat = entry[1] as NostrMessageEvent[];
-      const decryptedChat: NostrMessageEvent[] = [];
-      const unreadCount = 0;
-
-      for (const messageEvent of chat) {
-        let plainText;
-        let tagsMap: Map<string, string> = new Map();
-        if (messageEvent.kind === 14) {
-          plainText = messageEvent.content;
-          tagsMap = new Map(
-            messageEvent.tags
-              .filter((tag): tag is [string, string] => tag.length === 2)
-              .map(([k, v]) => [k, v])
-          );
-        }
-        const subject = tagsMap.get("subject") ? tagsMap.get("subject") : null;
-        if (
-          (isPayment &&
-            subject &&
-            (subject === "order-payment" ||
-              subject === "order-info" ||
-              subject === "payment-change" ||
-              subject === "order-receipt" ||
-              subject === "shipping-info" ||
-              subject === "zapsnag-order")) ||
-          (!isPayment && subject && subject === "listing-inquiry")
-        ) {
-          plainText &&
-            decryptedChat.push({ ...messageEvent, content: plainText });
-        }
-      }
-      if (decryptedChat.length > 0) {
-        decryptedChats.set(chatPubkey, { unreadCount, decryptedChat });
-      }
-    }
-    return decryptedChats;
-  };
-
-  const markAllMessagesAsReadInChatRoom = (pubkeyOfChat: string) => {
-    setChatsMap((prevChatMap) => {
-      const updatedChat = prevChatMap.get(pubkeyOfChat) as ChatObject;
-      if (updatedChat) {
-        updatedChat.unreadCount = 0;
-        const encryptedChat = chatsContext.chatsMap.get(
-          pubkeyOfChat
-        ) as NostrMessageEvent[];
-        if (!encryptedChat) return prevChatMap;
-        const wrappedIdsToMark: string[] = [];
-        encryptedChat.forEach((message) => {
-          if (!message.read) {
-            message.read = true;
-            if (message.wrappedEventId) {
-              wrappedIdsToMark.push(message.wrappedEventId);
-            }
-          }
-        });
-        if (wrappedIdsToMark.length > 0) {
-          fetch("/api/db/mark-messages-read", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ messageIds: wrappedIdsToMark }),
-          }).catch((err) =>
-            console.error("Failed to mark messages as read:", err)
-          );
-        }
-        const newChatMap = new Map(prevChatMap);
-        newChatMap.set(pubkeyOfChat, updatedChat);
-        return newChatMap;
-      }
-      return prevChatMap;
-    });
-  };
-
-  const enterChat = (pubkeyOfChat: string) => {
-    setCurrentChatPubkey(pubkeyOfChat as string);
-    // mark all messages in chat as read
-    markAllMessagesAsReadInChatRoom(pubkeyOfChat as string);
-  };
-
-  const goBackFromChatRoom = () => {
-    // used when in chatroom on smaller devices
-    setCurrentChatPubkey("");
-  };
+  }, [
+    arrowUpPressed,
+    arrowDownPressed,
+    escapePressed,
+    chatsMap.size,
+    currentChatPubkey,
+    enterChat,
+    isChatsLoading,
+    sortedChatsByLastMessage,
+    goBackFromChatRoom,
+  ]);
 
   const handleSendGiftWrappedMessage = async (message: string) => {
     setIsSendingDMLoading(true);

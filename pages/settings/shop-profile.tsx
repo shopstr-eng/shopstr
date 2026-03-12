@@ -1,5 +1,5 @@
 import { useEffect, useState, useContext } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, type SubmitHandler } from "react-hook-form";
 import { Button, Textarea, Input, Image } from "@nextui-org/react";
 
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
@@ -13,6 +13,13 @@ import { createNostrShopEvent } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 
+interface ShopProfileFormValues {
+  banner: string;
+  picture: string;
+  name: string;
+  about: string;
+}
+
 const ShopProfilePage = () => {
   const { nostr } = useContext(NostrContext);
   const [isUploadingShopProfile, setIsUploadingShopProfile] = useState(false);
@@ -21,7 +28,8 @@ const ShopProfilePage = () => {
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
 
   const shopContext = useContext(ShopMapContext);
-  const { handleSubmit, control, reset, watch, setValue } = useForm({
+  const { handleSubmit, control, reset, watch, setValue } =
+    useForm<ShopProfileFormValues>({
     defaultValues: {
       banner: "",
       picture: "",
@@ -51,9 +59,9 @@ const ShopProfilePage = () => {
       reset(mappedContent);
     }
     setIsFetchingShop(false);
-  }, [shopContext, userPubkey, userPubkey]);
+  }, [shopContext, userPubkey, reset]);
 
-  const onSubmit = async (data: { [x: string]: string }) => {
+  const onSubmit: SubmitHandler<ShopProfileFormValues> = async (data) => {
     setIsUploadingShopProfile(true);
     const transformedData = {
       name: data.name || "",
@@ -132,7 +140,7 @@ const ShopProfilePage = () => {
                 </div>
               </div>
 
-              <form onSubmit={handleSubmit(onSubmit as any)}>
+              <form onSubmit={handleSubmit(onSubmit)}>
                 <Controller
                   name="name"
                   control={control}
@@ -217,7 +225,7 @@ const ShopProfilePage = () => {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault(); // Prevent default to avoid submitting the form again
-                      handleSubmit(onSubmit as any)(); // Programmatic submit
+                      handleSubmit(onSubmit)(); // Programmatic submit
                     }
                   }}
                   isDisabled={isUploadingShopProfile}

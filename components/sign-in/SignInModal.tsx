@@ -77,7 +77,7 @@ export default function SignInModal({
     setShowBunkerSignIn(false);
     setShowNsecSignIn(false);
     try {
-      const signer = newSigner!("nip07", {});
+      const signer = await newSigner!("nip07", {});
       await signer.getPubKey();
       saveSigner(signer);
       onClose();
@@ -91,7 +91,7 @@ export default function SignInModal({
   const startBunkerLogin = async () => {
     setIsBunkerConnecting(true);
     try {
-      const signer = newSigner!("nip46", { bunker: bunkerToken });
+      const signer = await newSigner!("nip46", { bunker: bunkerToken });
       await signer.connect();
       saveSigner(signer);
       setIsBunkerConnecting(false);
@@ -133,7 +133,7 @@ export default function SignInModal({
           onClose(); // avoids tree walker issue by closing modal
         }, 500);
 
-        const signer = newSigner!("nsec", {
+        const signer = await newSigner!("nsec", {
           encryptedPrivKey: encryptedPrivKey,
           pubkey,
         });

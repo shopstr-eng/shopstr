@@ -78,7 +78,7 @@ const Keys = () => {
         privateKey,
         passphrase
       );
-      const signer = newSigner!("nsec", {
+      const signer = await newSigner!("nsec", {
         encryptedPrivKey: encryptedPrivKey,
         pubkey,
       });

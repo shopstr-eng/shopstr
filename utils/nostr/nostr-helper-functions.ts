@@ -1217,7 +1217,7 @@ export const setLocalStorageDataOnSignIn = ({
   bunkerRemotePubkey?: string;
   bunkerRelays?: string[];
   bunkerSecret?: string;
-  signer?: NostrSigner;
+  signer?: NostrSigner | { [key: string]: unknown };
   migrationComplete?: boolean;
 }) => {
   if (encryptedPrivateKey) {
@@ -1303,7 +1303,7 @@ export interface LocalStorageInterface {
   bunkerRemotePubkey?: string;
   bunkerRelays?: string[];
   bunkerSecret?: string;
-  signer?: { [key: string]: string };
+  signer?: { [key: string]: unknown };
   nwcString?: string | null;
   nwcInfo?: string | null;
   migrationComplete?: boolean;

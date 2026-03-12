@@ -40,10 +40,12 @@ const OnboardingWallet = () => {
       localStorage.setItem("nwcInfo", JSON.stringify(info));
 
       handleNext();
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error("NWC Connection failed:", e);
       setError(
-        e.message || "Failed to connect. Please check your connection string."
+        e instanceof Error
+          ? e.message
+          : "Failed to connect. Please check your connection string."
       );
     } finally {
       setIsLoading(false);

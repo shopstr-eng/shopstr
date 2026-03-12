@@ -9,7 +9,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { ProductContext } from "@/utils/context/context";
 import ProductCard from "@/components/utility-components/product-card";
@@ -25,30 +25,27 @@ export default function Landing() {
   const router = useRouter();
   const productEventContext = useContext(ProductContext);
 
-  const [parsedProducts, setParsedProducts] = useState<ProductData[]>([]);
-
   const signerContext = useContext(SignerContext);
   useEffect(() => {
     if (router.pathname === "/" && signerContext.isLoggedIn) {
       router.push("/marketplace");
     }
-  }, [router.pathname, signerContext]);
+  }, [router, router.pathname, signerContext.isLoggedIn]);
 
-  useEffect(() => {
-    const parsedProductsArray: ProductData[] = [];
-    const products = productEventContext.productEvents;
-    products.forEach((product: NostrEvent) => {
-      const parsedProduct = parseTags(product) as ProductData;
-      if (
-        parsedProduct.images.length > 0 &&
-        parsedProduct.currency &&
-        !parsedProduct.contentWarning
-      ) {
-        parsedProductsArray.push(parsedProduct);
-      }
-    });
-    setParsedProducts(parsedProductsArray);
-  }, [productEventContext.productEvents]);
+  const parsedProducts: ProductData[] = useMemo(
+    (): ProductData[] =>
+      (productEventContext.productEvents || [])
+        .map((product: NostrEvent) => parseTags(product))
+        .filter((product: ProductData | undefined): product is ProductData => {
+          if (!product) return false;
+          return (
+            product.images.length > 0 &&
+            !!product.currency &&
+            !product.contentWarning
+          );
+        }),
+    [productEventContext.productEvents]
+  );
 
   return (
     <div className="min-h-screen w-full bg-light-bg bg-gradient-to-b from-light-bg to-light-fg dark:bg-dark-bg dark:from-dark-bg dark:to-dark-fg">
@@ -99,7 +96,9 @@ export default function Landing() {
             }}
           >
             <div className="flex gap-4 md:gap-8">
-              {parsedProducts.slice(0, 21).map((product, index) => (
+              {parsedProducts
+                .slice(0, 21)
+                .map((product: ProductData, index: number) => (
                 <div
                   key={`${product.id}-${index}`}
                   className="min-w-[270px] transform duration-300 transition-transform hover:scale-105 md:min-w-[300px]"
@@ -107,6 +106,7 @@ export default function Landing() {
                   <ProductCard
                     key={product.id + "-" + index}
                     productData={product}
+                    compactMedia
                     onProductClick={() =>
                       router.push(
                         `/listing/${nip19.naddrEncode({
@@ -118,7 +118,7 @@ export default function Landing() {
                     }
                   />
                 </div>
-              ))}
+                ))}
             </div>
           </motion.div>
         </div>

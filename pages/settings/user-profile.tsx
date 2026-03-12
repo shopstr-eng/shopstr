@@ -1,7 +1,7 @@
 import { useEffect, useState, useContext, useMemo } from "react";
 import { SettingsBreadCrumbs } from "@/components/settings/settings-bread-crumbs";
 import { ProfileMapContext } from "@/utils/context/context";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, type SubmitHandler } from "react-hook-form";
 import {
   Button,
   Textarea,
@@ -26,6 +26,19 @@ import { createNostrProfileEvent } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 
+interface UserProfileFormValues {
+  banner: string;
+  picture: string;
+  display_name: string;
+  name: string;
+  nip05: string;
+  about: string;
+  website: string;
+  lud16: string;
+  payment_preference: string;
+  shopstr_donation: number;
+}
+
 const UserProfilePage = () => {
   const { nostr } = useContext(NostrContext);
   const [isUploadingProfile, setIsUploadingProfile] = useState(false);
@@ -41,7 +54,8 @@ const UserProfilePage = () => {
   const [viewState, setViewState] = useState<"shown" | "hidden">("hidden");
 
   const profileContext = useContext(ProfileMapContext);
-  const { handleSubmit, control, reset, watch, setValue } = useForm({
+  const { handleSubmit, control, reset, watch, setValue } =
+    useForm<UserProfileFormValues>({
     defaultValues: {
       banner: "",
       picture: "",
@@ -87,7 +101,7 @@ const UserProfilePage = () => {
     }
   }, [profileContext, userPubkey, signer, reset]);
 
-  const onSubmit = async (data: { [x: string]: string }) => {
+  const onSubmit: SubmitHandler<UserProfileFormValues> = async (data) => {
     if (!userPubkey) throw new Error("pubkey is undefined");
     setIsUploadingProfile(true);
     await createNostrProfileEvent(nostr!, signer!, JSON.stringify(data));
@@ -233,7 +247,7 @@ const UserProfilePage = () => {
                 <div className="mb-12" />
               )}
 
-              <form onSubmit={handleSubmit(onSubmit as any)}>
+              <form onSubmit={handleSubmit(onSubmit)}>
                 <Controller
                   name="display_name"
                   control={control}
@@ -482,7 +496,10 @@ const UserProfilePage = () => {
                       fullWidth
                       label="Shopstr donation (%)"
                       labelPlacement="outside"
-                      onChange={onChange}
+                      onChange={(e) => {
+                        const nextDonation = Number(e.target.value);
+                        onChange(Number.isNaN(nextDonation) ? 0 : nextDonation);
+                      }}
                       onBlur={onBlur}
                       value={value.toString()}
                     />
@@ -495,7 +512,7 @@ const UserProfilePage = () => {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault(); // Prevent default to avoid submitting the form again
-                      handleSubmit(onSubmit as any)(); // Programmatic submit
+                      handleSubmit(onSubmit)(); // Programmatic submit
                     }
                   }}
                   isDisabled={isUploadingProfile}

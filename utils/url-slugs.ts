@@ -2,6 +2,11 @@ import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { ProfileData } from "@/utils/types/types";
 import { nip19 } from "nostr-tools";
 
+export type ProductSlugIndexes = {
+  slugByProductId: Map<string, string>;
+  productBySlug: Map<string, ProductData>;
+};
+
 export function titleToSlug(title: string): string {
   if (!title) return "";
   return title
@@ -14,8 +19,13 @@ export function titleToSlug(title: string): string {
 
 export function getListingSlug(
   product: ProductData,
-  allProducts: ProductData[]
+  allProducts: ProductData[],
+  indexes?: ProductSlugIndexes
 ): string {
+  if (indexes?.slugByProductId.has(product.id)) {
+    return indexes.slugByProductId.get(product.id)!;
+  }
+
   const baseSlug = titleToSlug(product.title);
   if (!baseSlug) {
     return product.id;
@@ -34,8 +44,13 @@ export function getListingSlug(
 
 export function findProductBySlug(
   slug: string,
-  allProducts: ProductData[]
+  allProducts: ProductData[],
+  indexes?: ProductSlugIndexes
 ): ProductData | undefined {
+  if (indexes?.productBySlug.has(slug)) {
+    return indexes.productBySlug.get(slug);
+  }
+
   const pubkeySuffixMatch = slug.match(/^(.+)-([a-f0-9]{8})$/);
   if (pubkeySuffixMatch) {
     const baseSlug = pubkeySuffixMatch[1]!;
@@ -57,6 +72,54 @@ export function findProductBySlug(
   }
 
   return undefined;
+}
+
+export function buildProductSlugIndexes(
+  allProducts: ProductData[]
+): ProductSlugIndexes {
+  const productsByBaseSlug = new Map<string, ProductData[]>();
+
+  for (const product of allProducts) {
+    const baseSlug = titleToSlug(product.title);
+    if (!baseSlug) continue;
+    if (!productsByBaseSlug.has(baseSlug)) {
+      productsByBaseSlug.set(baseSlug, []);
+    }
+    productsByBaseSlug.get(baseSlug)!.push(product);
+  }
+
+  const slugByProductId = new Map<string, string>();
+  const productBySlug = new Map<string, ProductData>();
+
+  for (const product of allProducts) {
+    const baseSlug = titleToSlug(product.title);
+    if (!baseSlug) {
+      slugByProductId.set(product.id, product.id);
+      if (!productBySlug.has(product.id)) {
+        productBySlug.set(product.id, product);
+      }
+      continue;
+    }
+
+    const collisions = productsByBaseSlug.get(baseSlug) || [];
+    const slug =
+      collisions.length <= 1
+        ? baseSlug
+        : `${baseSlug}-${product.pubkey.substring(0, 8)}`;
+    slugByProductId.set(product.id, slug);
+
+    if (!productBySlug.has(slug)) {
+      productBySlug.set(slug, product);
+    }
+    if (!productBySlug.has(baseSlug)) {
+      productBySlug.set(baseSlug, product);
+    }
+  }
+
+  return {
+    slugByProductId,
+    productBySlug,
+  };
 }
 
 export function profileNameToSlug(name: string): string {

@@ -10,13 +10,13 @@ export class NostrNIP07Signer implements NostrSigner {
     this.checkExtension();
   }
 
-  public toJSON(): { [key: string]: any } {
+  public toJSON(): { [key: string]: unknown } {
     return {
       type: "nip07",
     };
   }
 
-  private checkExtension(): any {
+  private checkExtension(): void {
     if (!window?.nostr) throw new Error("Nostr extension not found");
     if (!window?.nostr?.nip44) {
       throw new Error(
@@ -26,7 +26,7 @@ export class NostrNIP07Signer implements NostrSigner {
   }
 
   public static fromJSON(
-    json: { [key: string]: any },
+    json: { [key: string]: unknown },
     _challengeHandler: ChallengeHandler
   ): NostrNIP07Signer | undefined {
     if (json.type !== "nip07") return undefined;

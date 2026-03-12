@@ -93,7 +93,7 @@ export class NostrNIP46Signer implements NostrSigner {
     );
   }
 
-  public toJSON(): { [key: string]: any } {
+  public toJSON(): { [key: string]: unknown } {
     return {
       type: "nip46",
       bunker: this.bunker.url,
@@ -102,14 +102,17 @@ export class NostrNIP46Signer implements NostrSigner {
   }
 
   public static fromJSON(
-    json: { [key: string]: any },
+    json: { [key: string]: unknown },
     challengeHandler: ChallengeHandler
   ): NostrNIP46Signer | undefined {
-    if (json.type !== "nip46" || !json.bunker) return undefined;
+    if (json.type !== "nip46" || typeof json.bunker !== "string") return undefined;
     return new NostrNIP46Signer(
       {
         bunker: json.bunker,
-        appPrivKey: hexToBytes(json.appPrivKey),
+        appPrivKey:
+          typeof json.appPrivKey === "string"
+            ? hexToBytes(json.appPrivKey)
+            : undefined,
       },
       challengeHandler
     );
@@ -121,11 +124,13 @@ export class NostrNIP46Signer implements NostrSigner {
       event.pubkey
     );
     event.content = nip44.decrypt(event.content, conversationKey);
-    const content: any = JSON.parse(event.content);
+    const content = JSON.parse(event.content) as {
+      id?: string;
+      error?: string;
+      result?: string;
+    };
 
-    const id = content.id;
-    const error = content.error;
-    const result = content.result;
+    const { id, error, result } = content;
     if (!id) throw new Error("invalid event content");
 
     if (result === "auth_url") {
@@ -134,7 +139,7 @@ export class NostrNIP46Signer implements NostrSigner {
       this.pendingChallenges.set(id, abortController);
       await this.challengeHandler(
         result,
-        error,
+        error ?? "",
         () => {
           abortController.abort();
           this.pendingChallenges.delete(id);
@@ -165,7 +170,7 @@ export class NostrNIP46Signer implements NostrSigner {
     }
   }
 
-  public async connect() {
+  public async connect(): Promise<string> {
     const args: string[] = [];
     args.push(this.bunker.bunkerPubkey);
     args.push(this.bunker.secret || "");
@@ -217,7 +222,7 @@ export class NostrNIP46Signer implements NostrSigner {
     });
   }
 
-  private async sendRPC(method: string, params: any): Promise<any> {
+  private async sendRPC(method: string, params: unknown): Promise<string> {
     const requestId = this.getNewRequestId();
     const remotePubKey = this.bunker.bunkerPubkey;
 
@@ -249,7 +254,7 @@ export class NostrNIP46Signer implements NostrSigner {
     await this.nostr.publish(signedEvent);
 
     const resp: NostrEvent = await respPromise; // now we wait for the response
-    const content = JSON.parse(resp.content);
-    return content.result;
+    const content = JSON.parse(resp.content) as { result?: unknown };
+    return typeof content.result === "string" ? content.result : "";
   }
 }

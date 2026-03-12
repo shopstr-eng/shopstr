@@ -1,14 +1,7 @@
 import { useEffect, useState, useContext } from "react";
 import { useRouter } from "next/router";
-import { useForm, Controller } from "react-hook-form";
-import {
-  Button,
-  Textarea,
-  Input,
-  Image,
-  Select,
-  SelectItem,
-} from "@nextui-org/react";
+import { useForm, Controller, type SubmitHandler } from "react-hook-form";
+import { Button, Textarea, Input, Image, Select, SelectItem } from "@nextui-org/react";
 
 import { ShopMapContext } from "@/utils/context/context";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
@@ -26,6 +19,12 @@ interface ShopProfileFormProps {
 }
 
 const CURRENCY_OPTIONS = Object.keys(currencySelection);
+interface ShopProfileFormValues {
+  banner: string;
+  picture: string;
+  name: string;
+  about: string;
+}
 
 const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   const router = useRouter();
@@ -40,7 +39,8 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
 
   const shopContext = useContext(ShopMapContext);
-  const { handleSubmit, control, reset, watch, setValue } = useForm({
+  const { handleSubmit, control, reset, watch, setValue } =
+    useForm<ShopProfileFormValues>({
     defaultValues: {
       banner: "",
       picture: "",
@@ -81,12 +81,24 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     setIsFetchingShop(false);
   }, [shopContext, userPubkey, reset]);
 
-  const onSubmit = async (data: { [x: string]: string }) => {
+  const onSubmit: SubmitHandler<ShopProfileFormValues> = async (data) => {
     setIsUploadingShopProfile(true);
     const thresholdValue = freeShippingThreshold
       ? parseFloat(freeShippingThreshold)
       : undefined;
-    const transformedData: any = {
+    const transformedData: {
+      name: string;
+      about: string;
+      ui: {
+        picture: string;
+        banner: string;
+        theme: string;
+        darkMode: boolean;
+      };
+      merchants: string[];
+      freeShippingThreshold?: number;
+      freeShippingCurrency?: string;
+    } = {
       name: data.name || "",
       about: data.about || "",
       ui: {
@@ -166,7 +178,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit as any)}>
+      <form onSubmit={handleSubmit(onSubmit)}>
         <Controller
           name="name"
           control={control}
@@ -295,7 +307,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
-              handleSubmit(onSubmit as any)();
+              handleSubmit(onSubmit)();
             }
           }}
           isDisabled={isUploadingShopProfile}

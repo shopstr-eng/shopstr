@@ -54,7 +54,23 @@ import {
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
 import { ShippingFormData, ContactFormData } from "@/utils/types/types";
+import { NostrSigner } from "@/utils/nostr/signers/nostr-signer";
 import { Controller } from "react-hook-form";
+
+type PaymentFormPayload = {
+  [key: string]: string | undefined;
+  additionalInfo?: string;
+  shippingName?: string;
+  shippingAddress?: string;
+  shippingUnitNo?: string;
+  shippingCity?: string;
+  shippingPostalCode?: string;
+  shippingState?: string;
+  shippingCountry?: string;
+  contact?: string;
+  contactType?: string;
+  contactInstructions?: string;
+};
 
 export default function ProductInvoiceCard({
   productData,
@@ -213,11 +229,25 @@ export default function ProductInvoiceCard({
   };
 
   const [isNwcLoading, setIsNwcLoading] = useState(false);
-  const [nwcInfo, setNwcInfo] = useState<any | null>(null);
+  const [nwcInfo, setNwcInfo] = useState<Record<string, unknown> | null>(null);
 
   // State for failure modal
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [failureText, setFailureText] = useState("");
+
+  const [isFormValid, setIsFormValid] = useState(false);
+
+  const {
+    handleSubmit: handleFormSubmit,
+    control: formControl,
+    watch,
+  } = useForm();
+
+  // Watch form values to validate completion
+  const watchedValues = watch();
+  const [selectedPickupLocation, setSelectedPickupLocation] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     if (paymentConfirmed && pendingOrderRef.current) {
@@ -245,22 +275,18 @@ export default function ProductInvoiceCard({
           })
         );
       } catch {}
+
+      pendingOrderRef.current = null;
     }
-  }, [paymentConfirmed]);
-
-  const [isFormValid, setIsFormValid] = useState(false);
-
-  const {
-    handleSubmit: handleFormSubmit,
-    control: formControl,
-    watch,
-  } = useForm();
-
-  // Watch form values to validate completion
-  const watchedValues = watch();
-  const [selectedPickupLocation, setSelectedPickupLocation] = useState<
-    string | null
-  >(null);
+  }, [
+    paymentConfirmed,
+    productData.images,
+    productData.shippingCost,
+    selectedBulkOption,
+    selectedPickupLocation,
+    selectedSize,
+    selectedVolume,
+  ]);
 
   // Check if product requires pickup location selection (pickup-type shipping with pickup locations defined)
   const requiresPickupLocation =
@@ -374,7 +400,7 @@ export default function ProductInvoiceCard({
       : (decodedRandomPubkeyForSender.data as string);
 
     let messageSubject = "";
-    let messageOptions: any = {};
+    let messageOptions: Parameters<typeof constructGiftWrappedEvent>[4] = {};
     if (isPayment) {
       messageSubject = "order-payment";
       messageOptions = {
@@ -468,7 +494,7 @@ export default function ProductInvoiceCard({
           messageOptions
         );
         const sealedEvent = await constructMessageSeal(
-          signer || ({} as any),
+          signer as unknown as NostrSigner,
           giftWrappedMessageEvent,
           decodedRandomPubkeyForSender.data as string,
           pubkeyToReceiveMessage,
@@ -518,7 +544,7 @@ export default function ProductInvoiceCard({
 
   const validatePaymentData = (
     price: number,
-    data?: ShippingFormData | ContactFormData
+    data?: ShippingFormData | ContactFormData | PaymentFormPayload
   ) => {
     if (price < 1) {
       throw new Error("Payment amount must be greater than 0 sats");
@@ -595,7 +621,7 @@ export default function ProductInvoiceCard({
         additionalInfo: data["Required"],
       };
 
-      let paymentData: any = commonData;
+      let paymentData: PaymentFormPayload = commonData;
 
       if (formType === "shipping") {
         paymentData = {
@@ -654,11 +680,13 @@ export default function ProductInvoiceCard({
     }
   };
 
-  const handleNWCError = (error: any) => {
+  const handleNWCError = (error: unknown) => {
     console.error("NWC Payment failed:", error);
     let message = "Payment failed. Please try again.";
     if (error && typeof error === "object" && "code" in error) {
-      switch (error.code) {
+      const errorCode =
+        typeof error.code === "string" ? error.code : "UNKNOWN_ERROR";
+      switch (errorCode) {
         case "INSUFFICIENT_BALANCE":
           message = "Payment failed: Insufficient balance in your wallet.";
           break;
@@ -675,7 +703,10 @@ export default function ProductInvoiceCard({
             "You are sending payments too quickly. Please wait a moment.";
           break;
         default:
-          message = error.message || "An unknown wallet error occurred.";
+          message =
+            "message" in error && typeof error.message === "string"
+              ? error.message
+              : "An unknown wallet error occurred.";
       }
     } else if (error instanceof Error) {
       message = error.message;
@@ -684,7 +715,10 @@ export default function ProductInvoiceCard({
     setShowFailureModal(true);
   };
 
-  const handleNWCPayment = async (convertedPrice: number, data: any) => {
+  const handleNWCPayment = async (
+    convertedPrice: number,
+    data: PaymentFormPayload
+  ) => {
     setIsNwcLoading(true);
     let nwc: webln.NostrWebLNProvider | null = null;
 
@@ -736,7 +770,7 @@ export default function ProductInvoiceCard({
         data.shippingCountry ? data.shippingCountry : undefined,
         data.additionalInfo ? data.additionalInfo : undefined
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       handleNWCError(error);
     } finally {
       nwc?.close();
@@ -744,7 +778,10 @@ export default function ProductInvoiceCard({
     }
   };
 
-  const handleLightningPayment = async (convertedPrice: number, data: any) => {
+  const handleLightningPayment = async (
+    convertedPrice: number,
+    data: PaymentFormPayload
+  ) => {
     try {
       if (
         data.shippingName ||
@@ -791,15 +828,23 @@ export default function ProductInvoiceCard({
           console.error("ERROR", err);
         });
 
-      if (typeof window.webln !== "undefined") {
+      const browserWebLn = window.webln as
+        | {
+            enable: () => Promise<void>;
+            isEnabled: () => Promise<boolean>;
+            sendPayment: (invoice: string) => Promise<unknown>;
+          }
+        | null
+        | undefined;
+      if (browserWebLn) {
         try {
-          await window.webln.enable();
-          const isEnabled = await window.webln.isEnabled();
+          await browserWebLn.enable();
+          const isEnabled = await browserWebLn.isEnabled();
           if (!isEnabled) {
             throw new Error("WebLN is not enabled");
           }
           try {
-            const res = await window.webln.sendPayment(pr);
+            const res = await browserWebLn.sendPayment(pr);
             if (!res) {
               throw new Error("Payment failed");
             }
@@ -1541,8 +1586,13 @@ export default function ProductInvoiceCard({
     formType === "shipping" ? productData.totalCost : productData.price,
     productData.currency
   );
+  const nwcAlias =
+    nwcInfo && typeof nwcInfo.alias === "string" ? nwcInfo.alias : "NWC";
 
-  const handleCashuPayment = async (price: number, data: any) => {
+  const handleCashuPayment = async (
+    price: number,
+    data: PaymentFormPayload
+  ) => {
     try {
       if (!mints || mints.length === 0) {
         throw new Error("No Cashu mint available");
@@ -2445,7 +2495,7 @@ export default function ProductInvoiceCard({
                       }}
                       startContent={<WalletIcon className="h-6 w-6" />}
                     >
-                      Pay with {nwcInfo.alias || "NWC"}: {formattedTotalCost}
+                      Pay with {nwcAlias}: {formattedTotalCost}
                     </Button>
                   )}
                 </div>

@@ -62,7 +62,7 @@ export const countNumberOfUnreadMessagesFromChatsContext = async (
 export const constructTags = (
   subject: string,
   productAddress: string,
-  additionalData: { [key: string]: any }
+  additionalData: { [key: string]: unknown }
 ) => {
   const tags: string[][] = [
     ["subject", subject],

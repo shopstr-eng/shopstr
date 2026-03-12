@@ -22,7 +22,7 @@ export const locationAvatar = (location: string) => {
   ) : null;
 };
 
-const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
+const LocationDropdown = ({ value, ...props }: { [x: string]: unknown }) => {
   const locationOptions = useMemo(() => {
     const headingClasses =
       "flex w-full sticky top-1 z-20 py-1.5 px-2 dark:bg-dark-bg bg-light-bg shadow-small rounded-small";
@@ -106,7 +106,7 @@ const LocationDropdown = ({ value, ...props }: { [x: string]: any }) => {
 
   return (
     <Select
-      startContent={locationAvatar(value)}
+      startContent={locationAvatar(typeof value === "string" ? value : "")}
       {...props}
       className="mt-2 text-light-text dark:text-dark-text"
     >

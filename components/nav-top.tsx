@@ -43,7 +43,7 @@ const TopNav = ({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    const fetchAndUpdateCartQuantity = async () => {
+    const fetchAndUpdateCartQuantity = () => {
       const cartList = localStorage.getItem("cart")
         ? JSON.parse(localStorage.getItem("cart") as string)
         : [];
@@ -54,11 +54,30 @@ const TopNav = ({
 
     fetchAndUpdateCartQuantity();
 
-    const interval = setInterval(() => {
+    const handleStorageUpdate = (
+      event?: Event & { detail?: { key?: string } }
+    ) => {
+      if (event?.detail?.key && event.detail.key !== "cart") {
+        return;
+      }
       fetchAndUpdateCartQuantity();
-    }, 1000);
+    };
 
-    return () => clearInterval(interval);
+    window.addEventListener("storage", handleStorageUpdate);
+    window.addEventListener(
+      "shopstr:storage",
+      handleStorageUpdate as EventListener
+    );
+    window.addEventListener("focus", fetchAndUpdateCartQuantity);
+
+    return () => {
+      window.removeEventListener("storage", handleStorageUpdate);
+      window.removeEventListener(
+        "shopstr:storage",
+        handleStorageUpdate as EventListener
+      );
+      window.removeEventListener("focus", fetchAndUpdateCartQuantity);
+    };
   }, []);
 
   useEffect(() => {
@@ -69,7 +88,7 @@ const TopNav = ({
       setUnreadMsgCount(unreadMsgCount);
     };
     getUnreadMessages();
-  }, [chatsContext]);
+  }, [chatsContext.chatsMap, chatsContext.isLoading]);
 
   useEffect(() => {
     const npub = router.pathname

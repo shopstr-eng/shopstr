@@ -22,6 +22,7 @@ import {
   Spinner,
   Divider,
   Chip,
+  Image,
 } from "@nextui-org/react";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import {
@@ -61,7 +62,7 @@ const RenderContent = ({
         {parts.map((part, index) => {
           if (isImage(part)) {
             return (
-              <img
+              <Image
                 key={index}
                 src={sanitizeUrl(part)}
                 alt="User content"
@@ -100,7 +101,7 @@ const RenderContent = ({
       {taggedImages.length > 0 && (
         <div className="pt-2">
           {taggedImages.map((url, index) => (
-            <img
+            <Image
               key={index}
               src={sanitizeUrl(url)}
               alt="Tagged media"

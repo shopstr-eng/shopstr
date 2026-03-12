@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useContext } from "react";
+import { useEffect, useState, useContext, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { useForm, Controller } from "react-hook-form";
 import { nip19 } from "nostr-tools";
 import {
@@ -46,27 +47,9 @@ import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { calculateWeightedScore } from "@/utils/parsers/review-parser-functions";
 import { fiat } from "@getalby/lightning-tools";
 import currencySelection from "@/public/currencySelection.json";
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-} from "chart.js";
-import { Line } from "react-chartjs-2";
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend
-);
+const OrdersValueChart = dynamic(() => import("./orders-value-chart"), {
+  ssr: false,
+});
 
 interface OrderData {
   orderId: string;
@@ -153,6 +136,17 @@ const OrdersDashboard = () => {
   } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
   const reviewsContext = useContext(ReviewsContext);
+  const productDataByAddress = useMemo(() => {
+    const productMap = new Map<string, ProductData>();
+    for (const event of productContext?.productEvents || []) {
+      const dTag = event.tags.find((tag: string[]) => tag[0] === "d")?.[1];
+      if (!dTag) continue;
+      const parsedProduct = parseTags(event);
+      if (!parsedProduct) continue;
+      productMap.set(`30402:${event.pubkey}:${dTag}`, parsedProduct);
+    }
+    return productMap;
+  }, [productContext?.productEvents]);
 
   const {
     handleSubmit: handleShippingSubmit,
@@ -253,7 +247,7 @@ const OrdersDashboard = () => {
   useEffect(() => {
     if (!chatsContext || chatsContext.isLoading) return;
     chatsContext.markAllMessagesAsRead();
-  }, [chatsContext?.isLoading]);
+  }, [chatsContext, chatsContext?.isLoading]);
 
   useEffect(() => {
     async function loadCachedStatuses() {
@@ -299,7 +293,7 @@ const OrdersDashboard = () => {
     }
 
     loadCachedStatuses();
-  }, [chatsContext?.isLoading, chatsContext?.chatsMap]);
+  }, [chatsContext, chatsContext?.isLoading, chatsContext?.chatsMap]);
 
   useEffect(() => {
     async function loadOrders() {
@@ -386,20 +380,13 @@ const OrdersDashboard = () => {
             if (merchantPubkey && merchantPubkey === userPubkey) {
               isSale = true;
             }
-            if (productAddress && productContext?.productEvents) {
-              const productEvent = productContext.productEvents.find(
-                (event: any) => {
-                  const eventAddress = `30402:${event.pubkey}:${event.tags.find(
-                    (tag: any) => tag[0] === "d"
-                  )?.[1]}`;
-                  return productAddress.includes(eventAddress);
-                }
-              );
-              if (productEvent) {
-                const productData = parseTags(productEvent);
-                productTitle = productData?.title || "Unknown Product";
-                productCurrency = productData?.currency || "sats";
-                productPrice = productData?.price || 0;
+            if (productAddress) {
+              const mappedAddress = productAddress.split(":").slice(0, 3).join(":");
+              const productData = productDataByAddress.get(mappedAddress);
+              if (productData) {
+                productTitle = productData.title || "Unknown Product";
+                productCurrency = productData.currency || "sats";
+                productPrice = productData.price || 0;
               }
             }
             const finalAmount = amount > 0 ? amount : productPrice * quantity;
@@ -588,7 +575,7 @@ const OrdersDashboard = () => {
     }
 
     loadOrders();
-  }, [chatsContext, productContext, cachedStatuses]);
+  }, [chatsContext, cachedStatuses, userPubkey, productDataByAddress]);
 
   const convertToSats = (amount: number, currency: string): number => {
     const curr = currency?.toLowerCase() || "sats";
@@ -671,7 +658,7 @@ const OrdersDashboard = () => {
       datasets: [
         {
           label: displayCurrency === "sats" ? "Satoshi Value" : "USD Value",
-          data: sortedDates.map((date) => valueByDate[date]),
+          data: sortedDates.map((date) => valueByDate[date] ?? 0),
           borderColor: "rgb(147, 51, 234)",
           backgroundColor: "rgba(147, 51, 234, 0.5)",
           tension: 0.3,
@@ -698,21 +685,11 @@ const OrdersDashboard = () => {
   };
 
   const handleProductClick = (productAddress: string) => {
-    if (!productContext?.productEvents) return;
-
-    const productEvent = productContext.productEvents.find((event: any) => {
-      const eventAddress = `30402:${event.pubkey}:${event.tags.find(
-        (tag: any) => tag[0] === "d"
-      )?.[1]}`;
-      return productAddress.includes(eventAddress);
-    });
-
-    if (productEvent) {
-      const productData = parseTags(productEvent);
-      if (productData) {
-        setSelectedProduct(productData);
-        setShowProductModal(true);
-      }
+    const mappedAddress = productAddress.split(":").slice(0, 3).join(":");
+    const productData = productDataByAddress.get(mappedAddress);
+    if (productData) {
+      setSelectedProduct(productData);
+      setShowProductModal(true);
     }
   };
 
@@ -1128,7 +1105,7 @@ const OrdersDashboard = () => {
         {orders.length > 0 && (
           <div className="mb-8 rounded-lg bg-white p-6 shadow-md dark:bg-gray-800">
             <div style={{ height: "300px" }}>
-              <Line options={chartOptions} data={getChartData()} />
+              <OrdersValueChart options={chartOptions} data={getChartData()} />
             </div>
           </div>
         )}

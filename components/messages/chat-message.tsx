@@ -75,7 +75,7 @@ const ChatMessage = ({
     );
     setProductAddress?.(productAddress as string);
     setOrderId?.(orderId as string);
-  }, [messageEvent]);
+  }, [messageEvent, setCanReview, setOrderId, setProductAddress]);
 
   const cashuMatch = messageEvent.content.match(/cashu[A-Za-z]/);
   const cashuPrefix = cashuMatch ? cashuMatch[0] : null;

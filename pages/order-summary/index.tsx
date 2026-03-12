@@ -1,6 +1,6 @@
 import { useEffect, useState, useContext } from "react";
 import { useRouter } from "next/router";
-import { Button } from "@nextui-org/react";
+import { Button, Image } from "@nextui-org/react";
 import {
   CheckCircleIcon,
   ShoppingBagIcon,
@@ -151,7 +151,7 @@ export default function OrderSummary() {
                     key={index}
                     className="flex items-center gap-4 rounded-md border border-gray-200 p-3 dark:border-gray-700"
                   >
-                    <img
+                    <Image
                       src={item.image}
                       alt={item.title}
                       className="h-16 w-16 rounded-md object-cover"
@@ -192,7 +192,7 @@ export default function OrderSummary() {
               </h2>
               <div className="flex items-start gap-4 rounded-md border border-gray-200 p-4 dark:border-gray-700">
                 {orderData.productImage && (
-                  <img
+                  <Image
                     src={orderData.productImage}
                     alt={orderData.productTitle}
                     className="h-24 w-24 rounded-md object-cover"

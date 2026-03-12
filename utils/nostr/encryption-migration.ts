@@ -66,7 +66,7 @@ export async function migrateToNip49(passphrase: string): Promise<boolean> {
 
     if (inSigner && signer) {
       setLocalStorageDataOnSignIn({
-        signer: { ...signer, encryptedPrivKey } as any,
+        signer: { ...signer, encryptedPrivKey },
         migrationComplete: true,
       });
     } else {

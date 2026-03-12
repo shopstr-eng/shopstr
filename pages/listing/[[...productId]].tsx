@@ -1,10 +1,12 @@
-import { useState, useEffect, useContext } from "react";
+import { useState, useEffect, useContext, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/router";
 import {
   Modal,
   ModalContent,
   ModalHeader,
   ModalBody,
+  Image,
   Dropdown,
   DropdownTrigger,
   DropdownMenu,
@@ -18,17 +20,28 @@ import {
 } from "@heroicons/react/24/outline";
 import parseTags, {
   ProductData,
+  parseProductEventsWithLookup,
 } from "@/utils/parsers/product-parser-functions";
 import { parseZapsnagNote } from "@/utils/parsers/zapsnag-parser";
-import CheckoutCard from "../../components/utility-components/checkout-card";
-import ZapsnagButton from "../../components/ZapsnagButton";
 import { ProductContext } from "../../utils/context/context";
 import { Event, nip19 } from "nostr-tools";
 import {
   RawEventModal,
   EventIdModal,
 } from "../../components/utility-components/modals/event-modals";
-import { findProductBySlug, getListingSlug } from "@/utils/url-slugs";
+import {
+  findProductBySlug,
+  getListingSlug,
+  buildProductSlugIndexes,
+} from "@/utils/url-slugs";
+
+const CheckoutCard = dynamic(
+  () => import("../../components/utility-components/checkout-card"),
+  { ssr: false }
+);
+const ZapsnagButton = dynamic(() => import("../../components/ZapsnagButton"), {
+  ssr: false,
+});
 
 const Listing = () => {
   const router = useRouter();
@@ -47,6 +60,21 @@ const Listing = () => {
   const [cashuPaymentFailed, setCashuPaymentFailed] = useState(false);
 
   const productContext = useContext(ProductContext);
+  const listingEvents = useMemo(
+    () =>
+      (productContext.productEvents || []).filter(
+        (event: Event) => event.kind !== 1
+      ),
+    [productContext.productEvents]
+  );
+  const { parsedProducts, byEventId } = useMemo(
+    () => parseProductEventsWithLookup(listingEvents),
+    [listingEvents]
+  );
+  const productSlugIndexes = useMemo(
+    () => buildProductSlugIndexes(parsedProducts),
+    [parsedProducts]
+  );
 
   useEffect(() => {
     if (router.isReady) {
@@ -61,18 +89,15 @@ const Listing = () => {
 
   useEffect(() => {
     if (!productContext.isLoading && productContext.productEvents) {
-      const allParsed = productContext.productEvents
-        .filter((e: Event) => e.kind !== 1)
-        .map((e: Event) => parseTags(e))
-        .filter((p: ProductData | undefined): p is ProductData => !!p);
-
       let matchingEvent: Event | undefined;
 
-      const slugMatch = findProductBySlug(productIdString, allParsed);
+      const slugMatch = findProductBySlug(
+        productIdString,
+        parsedProducts,
+        productSlugIndexes
+      );
       if (slugMatch) {
-        matchingEvent = productContext.productEvents.find(
-          (e: Event) => e.id === slugMatch.id
-        );
+        matchingEvent = byEventId.get(slugMatch.id)?.rawEvent;
       }
 
       if (!matchingEvent) {
@@ -106,7 +131,11 @@ const Listing = () => {
         setProductData(parsed);
 
         if (parsed && parsed.title && matchingEvent.kind !== 1) {
-          const canonicalSlug = getListingSlug(parsed, allParsed);
+          const canonicalSlug = getListingSlug(
+            parsed,
+            parsedProducts,
+            productSlugIndexes
+          );
           if (canonicalSlug && productIdString !== canonicalSlug) {
             router.replace(`/listing/${canonicalSlug}`, undefined, {
               shallow: true,
@@ -115,7 +144,15 @@ const Listing = () => {
         }
       }
     }
-  }, [productContext.isLoading, productContext.productEvents, productIdString]);
+  }, [
+    router,
+    productContext.isLoading,
+    productContext.productEvents,
+    productIdString,
+    parsedProducts,
+    productSlugIndexes,
+    byEventId,
+  ]);
 
   return (
     <>
@@ -124,8 +161,9 @@ const Listing = () => {
           (isZapsnag ? (
             <div className="mx-auto w-full max-w-2xl p-6">
               <div className="overflow-hidden rounded-xl bg-white shadow-lg dark:bg-neutral-900">
-                <img
+                <Image
                   src={productData.images[0]}
+                  alt={productData.title || "Listing image"}
                   className="h-96 w-full object-cover"
                 />
                 <div className="p-6">

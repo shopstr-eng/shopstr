@@ -1,8 +1,8 @@
-import "tailwindcss/tailwind.css";
 import type { AppProps } from "next/app";
 import "../styles/globals.css";
 import { useState, useEffect, useCallback, useContext } from "react";
 import { useRouter } from "next/router";
+import dynamic from "next/dynamic";
 import {
   ProfileMapContext,
   ProfileContextInterface,
@@ -22,38 +22,21 @@ import {
   BlossomContextInterface,
   BlossomContext,
   CashuWalletContext,
+  CashuProofEvent,
   CashuWalletContextInterface,
   CommunityContext,
   CommunityContextInterface,
 } from "../utils/context/context";
-import {
-  getLocalStorageData,
-  getDefaultRelays,
-  LogOut,
-} from "@/utils/nostr/nostr-helper-functions";
 import { NextUIProvider } from "@nextui-org/react";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
-import {
-  fetchAllPosts,
-  fetchReviews,
-  fetchShopProfile,
-  fetchProfile,
-  fetchAllFollows,
-  fetchAllRelays,
-  fetchAllBlossomServers,
-  fetchCashuWallet,
-  fetchAllCommunities,
-  fetchGiftWrappedChatsAndMessages,
-} from "@/utils/nostr/fetch-service";
-import {
+import type {
   NostrEvent,
   Community,
   ProfileData,
   NostrMessageEvent,
   ShopProfile,
 } from "../utils/types/types";
-import { Proof } from "@cashu/cashu-ts";
-import TopNav from "@/components/nav-top";
+import type { Proof } from "@cashu/cashu-ts";
 import DynamicHead from "../components/dynamic-meta-head";
 import {
   NostrContextProvider,
@@ -61,8 +44,74 @@ import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
-import { retryFailedRelayPublishes } from "@/utils/nostr/retry-service";
-import { NostrManager } from "@/utils/nostr/nostr-manager";
+
+const TopNav = dynamic(() => import("@/components/nav-top"), {
+  ssr: false,
+});
+
+type RouteBootstrapFlags = {
+  loadCatalog: boolean;
+  loadChats: boolean;
+  loadFollows: boolean;
+  loadCommunities: boolean;
+  loadWallet: boolean;
+};
+
+const STATIC_CONTENT_ROUTES = new Set(["/faq", "/privacy", "/terms", "/404"]);
+
+function getRouteBootstrapFlags(pathname: string): RouteBootstrapFlags {
+  const isStaticContent = STATIC_CONTENT_ROUTES.has(pathname);
+  const isLanding = pathname === "/";
+  const isOrders = pathname.startsWith("/orders");
+  const isMarketplace = pathname.startsWith("/marketplace");
+  const isCommunities =
+    pathname.startsWith("/communities") ||
+    pathname.startsWith("/settings/community");
+  const isWalletHeavy =
+    pathname.startsWith("/wallet") ||
+    pathname.startsWith("/cart") ||
+    pathname.startsWith("/listing") ||
+    pathname.startsWith("/order-summary");
+  const isSettings = pathname.startsWith("/settings");
+
+  if (isStaticContent) {
+    return {
+      loadCatalog: false,
+      loadChats: false,
+      loadFollows: false,
+      loadCommunities: false,
+      loadWallet: false,
+    };
+  }
+
+  return {
+    loadCatalog: true,
+    loadChats: isOrders,
+    loadFollows: isMarketplace,
+    loadCommunities: isCommunities,
+    loadWallet:
+      isWalletHeavy || isOrders || isSettings || (!isLanding && isMarketplace),
+  };
+}
+
+type CatalogBackfillMode = "none" | "background" | "until-match";
+
+function getCatalogBackfillConfig(
+  pathname: string,
+  targetProductId?: string
+): { mode: CatalogBackfillMode; targetProductId?: string } {
+  if (pathname === "/" || pathname.startsWith("/marketplace")) {
+    return { mode: "background" };
+  }
+
+  if (pathname.startsWith("/listing")) {
+    return targetProductId
+      ? { mode: "until-match", targetProductId }
+      : { mode: "none" };
+  }
+
+  return { mode: "none" };
+}
 
 function Shopstr({ props }: { props: AppProps }) {
   const { Component, pageProps } = props;
@@ -73,7 +122,7 @@ function Shopstr({ props }: { props: AppProps }) {
     {
       productEvents: [],
       isLoading: true,
-      addNewlyCreatedProductEvent: (productEvent: any) => {
+      addNewlyCreatedProductEvent: (productEvent: NostrEvent) => {
         setProductContext((productContext) => {
           const productEvents = [...productContext.productEvents, productEvent];
           return {
@@ -365,7 +414,7 @@ function Shopstr({ props }: { props: AppProps }) {
   };
 
   const editProfileContext = (
-    profileData: Map<string, any>,
+    profileData: Map<string, ProfileData>,
     isLoading: boolean
   ) => {
     setProfileContext((profileContext) => {
@@ -427,7 +476,7 @@ function Shopstr({ props }: { props: AppProps }) {
   };
 
   const editCashuWalletContext = (
-    proofEvents: any[],
+    proofEvents: CashuProofEvent[],
     cashuMints: string[],
     cashuProofs: Proof[],
     isLoading: boolean
@@ -445,242 +494,134 @@ function Shopstr({ props }: { props: AppProps }) {
 
   const router = useRouter();
 
-  /** FETCH initial FOLLOWS, RELAYS, PRODUCTS, and PROFILES **/
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if (window.__shopstrStoragePatched) return;
+    window.__shopstrStoragePatched = true;
+
+    const storage = window.localStorage;
+    const originalSetItem = storage.setItem.bind(storage);
+    const originalRemoveItem = storage.removeItem.bind(storage);
+
+    storage.setItem = function setItem(key: string, value: string) {
+      originalSetItem(key, value);
+      window.dispatchEvent(
+        new CustomEvent("shopstr:storage", { detail: { key } })
+      );
+    };
+
+    storage.removeItem = function removeItem(key: string) {
+      originalRemoveItem(key);
+      window.dispatchEvent(
+        new CustomEvent("shopstr:storage", { detail: { key } })
+      );
+    };
+
+    return () => {
+      storage.setItem = originalSetItem;
+      storage.removeItem = originalRemoveItem;
+      delete window.__shopstrStoragePatched;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (router.pathname.startsWith("/listing") && !router.isReady) {
+      return;
+    }
+
+    let isCancelled = false;
+    const abortController = new AbortController();
+
+    const resetAllContextsToLoaded = () => {
+      editProductContext([], false);
+      editReviewsContext(new Map(), new Map(), false);
+      editShopContext(new Map(), false);
+      editProfileContext(new Map(), false);
+      editChatContext(new Map(), false);
+      editFollowsContext([], 0, false);
+      editRelaysContext([], [], [], false);
+      editBlossomContext([], false);
+      editCashuWalletContext([], [], [], false);
+      editCommunityContext(new Map(), false);
+    };
+
     async function fetchData() {
       try {
-        // Check login status
-        if (getLocalStorageData().signInMethod === "amber") {
-          LogOut();
+        if (!nostr || abortController.signal.aborted) return;
+
+        const flags = getRouteBootstrapFlags(router.pathname);
+        const listingProductId =
+          router.pathname.startsWith("/listing") &&
+          Array.isArray(router.query.productId)
+            ? router.query.productId[0]
+            : undefined;
+        const { mode: catalogBackfillMode, targetProductId: catalogTargetId } =
+          getCatalogBackfillConfig(router.pathname, listingProductId);
+
+        if (
+          !flags.loadCatalog &&
+          !flags.loadChats &&
+          !flags.loadFollows &&
+          !flags.loadCommunities &&
+          !flags.loadWallet
+        ) {
+          resetAllContextsToLoaded();
           return;
         }
 
-        if (
-          getLocalStorageData().signInMethod === "extension" ||
-          getLocalStorageData().signer?.type === "nip07"
-        ) {
-          if (!window.nostr?.nip44) {
-            LogOut();
-            return;
-          }
-        }
-
-        // Initialize relays
-        const relays = getLocalStorageData().relays || [];
-        const readRelays = getLocalStorageData().readRelays || [];
-        let allRelays = [...relays, ...readRelays];
-
-        if (allRelays.length === 0) {
-          allRelays = getDefaultRelays();
-          localStorage.setItem("relays", JSON.stringify(allRelays));
-        }
-
-        // Sequential fetch for critical data with individual error handling
-        try {
-          const { relayList, readRelayList, writeRelayList } =
-            await fetchAllRelays(nostr!, signer!, allRelays, editRelaysContext);
-
-          if (relayList.length !== 0) {
-            localStorage.setItem("relays", JSON.stringify(relayList));
-            localStorage.setItem("readRelays", JSON.stringify(readRelayList));
-            localStorage.setItem("writeRelays", JSON.stringify(writeRelayList));
-            allRelays = [...relayList, ...readRelayList];
-          }
-        } catch (error) {
-          console.error("Error fetching relays:", error);
-          editRelaysContext([], [], [], false);
-        }
-
-        try {
-          const { blossomServers } = await fetchAllBlossomServers(
-            nostr!,
-            signer!,
-            allRelays,
-            editBlossomContext
-          );
-
-          if (blossomServers.length != 0) {
-            localStorage.setItem(
-              "blossomServers",
-              JSON.stringify(blossomServers)
-            );
-          }
-        } catch (error) {
-          console.error("Error fetching blossom servers:", error);
-          editBlossomContext([], false);
-        }
-
-        // Fetch products and collect profile pubkeys
-        let productEvents: NostrEvent[] = [];
-        let profileSetFromProducts = new Set<string>();
-        try {
-          const result = await fetchAllPosts(
-            nostr!,
-            allRelays,
-            editProductContext
-          );
-          productEvents = result.productEvents;
-          profileSetFromProducts = result.profileSetFromProducts;
-        } catch (error) {
-          console.error("Error fetching products:", error);
-          editProductContext([], false);
-        }
-
-        // Handle profile fetching
-        let pubkeysToFetchProfilesFor = [...profileSetFromProducts];
-        const userPubkey = (await signer?.getPubKey()) || undefined;
-        const profileSetFromChats = new Set<string>();
-
-        if (isLoggedIn) {
-          try {
-            const { profileSetFromChats: newProfileSetFromChats } =
-              await fetchGiftWrappedChatsAndMessages(
-                nostr!,
-                signer!,
-                allRelays,
-                editChatContext,
-                userPubkey
-              );
-
-            newProfileSetFromChats.forEach((profile) =>
-              profileSetFromChats.add(profile)
-            );
-          } catch (error) {
-            console.error("Error fetching chats:", error);
-            editChatContext(new Map(), false);
-          }
-        }
-
-        if (userPubkey && profileSetFromChats.size != 0) {
-          pubkeysToFetchProfilesFor = [
-            userPubkey as string,
-            ...pubkeysToFetchProfilesFor,
-            ...profileSetFromChats,
-          ];
-        } else if (userPubkey) {
-          pubkeysToFetchProfilesFor = [
-            userPubkey as string,
-            ...pubkeysToFetchProfilesFor,
-          ];
-        }
-
-        try {
-          await fetchProfile(
-            nostr!,
-            allRelays,
-            pubkeysToFetchProfilesFor,
-            editProfileContext
-          );
-        } catch (error) {
-          console.error("Error fetching profiles:", error);
-          editProfileContext(new Map(), false);
-        }
-
-        try {
-          await fetchShopProfile(
-            nostr!,
-            allRelays,
-            pubkeysToFetchProfilesFor,
-            editShopContext
-          );
-        } catch (error) {
-          console.error("Error fetching shop profiles:", error);
-          editShopContext(new Map(), false);
-        }
-
-        try {
-          await fetchReviews(
-            nostr!,
-            allRelays,
-            productEvents,
-            editReviewsContext
-          );
-        } catch (error) {
-          console.error("Error fetching reviews:", error);
-          editReviewsContext(new Map(), new Map(), false);
-        }
-
-        try {
-          await fetchAllCommunities(nostr!, allRelays, editCommunityContext);
-        } catch (error) {
-          console.error("Error fetching communities:", error);
-          editCommunityContext(new Map(), false);
-        }
-
-        // Fetch wallet if logged in
-        if (isLoggedIn) {
-          try {
-            const { cashuMints, cashuProofs } = await fetchCashuWallet(
-              nostr!,
-              signer!,
-              allRelays,
-              editCashuWalletContext
-            );
-
-            if (cashuMints.length !== 0 && cashuProofs) {
-              localStorage.setItem("mints", JSON.stringify(cashuMints));
-              localStorage.setItem("tokens", JSON.stringify(cashuProofs));
-            }
-          } catch (error) {
-            console.error("Error fetching wallet:", error);
-            editCashuWalletContext([], [], [], false);
-          }
-        }
-
-        try {
-          await fetchAllFollows(
-            nostr!,
-            allRelays,
-            editFollowsContext,
-            userPubkey
-          );
-        } catch (error) {
-          console.error("Error fetching follows:", error);
-          editFollowsContext([], 0, false);
-        }
-
-        // After all fetching operations complete, retry failed relay publishes
-        try {
-          const { relays, writeRelays } = getLocalStorageData();
-          const retryNostr = new NostrManager([...relays, ...writeRelays]);
-          await retryFailedRelayPublishes(retryNostr);
-        } catch (error) {
-          console.error("Failed to retry relay publishes:", error);
-        }
+        const { runRouteBootstrap } = await import("@/utils/route-bootstrap");
+        await runRouteBootstrap({
+          flags,
+          nostr,
+          signer,
+          isLoggedIn,
+          catalogBackfillMode,
+          catalogTargetId,
+          signal: abortController.signal,
+          editProductContext,
+          editReviewsContext,
+          editShopContext,
+          editProfileContext,
+          editChatContext,
+          editFollowsContext,
+          editRelaysContext,
+          editBlossomContext,
+          editCashuWalletContext,
+          editCommunityContext,
+        });
       } catch (error) {
         console.error("Critical error during app initialization:", error);
-        editProductContext([], false);
-        editReviewsContext(new Map(), new Map(), false);
-        editShopContext(new Map(), false);
-        editProfileContext(new Map(), false);
-        editChatContext(new Map(), false);
-        editFollowsContext([], 0, false);
-        editRelaysContext([], [], [], false);
-        editBlossomContext([], false);
-        editCashuWalletContext([], [], [], false);
-        editCommunityContext(new Map(), false);
+        if (!isCancelled) {
+          resetAllContextsToLoaded();
+        }
       }
     }
 
-    fetchData();
-    window.addEventListener("storage", fetchData);
-    return () => window.removeEventListener("storage", fetchData);
-  }, [nostr, signer, isLoggedIn]);
+    void fetchData();
 
-  useEffect(() => {
-    if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
-        navigator.serviceWorker
-          .register("/service-worker.js")
-          .catch((registrationError) => {
-            console.error(
-              "Service Worker registration failed: ",
-              registrationError
-            );
-          });
-      });
-    }
-  }, []);
+    const handleStorage = () => {
+      if (!isCancelled) {
+        void fetchData();
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      isCancelled = true;
+      abortController.abort();
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [
+    nostr,
+    signer,
+    isLoggedIn,
+    router.pathname,
+    router.asPath,
+    router.isReady,
+    router.query.productId,
+  ]);
 
   return (
     <>
