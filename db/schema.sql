@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS product_events (
 
 CREATE INDEX IF NOT EXISTS idx_product_events_pubkey ON product_events(pubkey);
 CREATE INDEX IF NOT EXISTS idx_product_events_created_at ON product_events(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_product_events_created_at_id ON product_events(created_at DESC, id DESC);
 
 -- Reviews table (kind 31555)
 CREATE TABLE IF NOT EXISTS review_events (

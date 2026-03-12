@@ -65,7 +65,8 @@ function getRouteBootstrapFlags(pathname: string): RouteBootstrapFlags {
   const isOrders = pathname.startsWith("/orders");
   const isMarketplace = pathname.startsWith("/marketplace");
   const isCommunities =
-    pathname.startsWith("/communities") || pathname.startsWith("/settings/community");
+    pathname.startsWith("/communities") ||
+    pathname.startsWith("/settings/community");
   const isWalletHeavy =
     pathname.startsWith("/wallet") ||
     pathname.startsWith("/cart") ||
@@ -84,15 +85,32 @@ function getRouteBootstrapFlags(pathname: string): RouteBootstrapFlags {
   }
 
   return {
-    // Keep catalog data for most app routes, including landing.
     loadCatalog: true,
-    // Messages data is only needed on Orders route.
     loadChats: isOrders,
-    // Follows are only needed for marketplace trust filters.
     loadFollows: isMarketplace,
     loadCommunities: isCommunities,
-    loadWallet: isWalletHeavy || isOrders || isSettings || (!isLanding && isMarketplace),
+    loadWallet:
+      isWalletHeavy || isOrders || isSettings || (!isLanding && isMarketplace),
   };
+}
+
+type CatalogBackfillMode = "none" | "background" | "until-match";
+
+function getCatalogBackfillConfig(
+  pathname: string,
+  targetProductId?: string
+): { mode: CatalogBackfillMode; targetProductId?: string } {
+  if (pathname === "/" || pathname.startsWith("/marketplace")) {
+    return { mode: "background" };
+  }
+
+  if (pathname.startsWith("/listing")) {
+    return targetProductId
+      ? { mode: "until-match", targetProductId }
+      : { mode: "none" };
+  }
+
+  return { mode: "none" };
 }
 
 function Shopstr({ props }: { props: AppProps }) {
@@ -476,7 +494,6 @@ function Shopstr({ props }: { props: AppProps }) {
 
   const router = useRouter();
 
-  // Emit same-tab storage updates so components can react without polling.
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -489,12 +506,16 @@ function Shopstr({ props }: { props: AppProps }) {
 
     storage.setItem = function setItem(key: string, value: string) {
       originalSetItem(key, value);
-      window.dispatchEvent(new CustomEvent("shopstr:storage", { detail: { key } }));
+      window.dispatchEvent(
+        new CustomEvent("shopstr:storage", { detail: { key } })
+      );
     };
 
     storage.removeItem = function removeItem(key: string) {
       originalRemoveItem(key);
-      window.dispatchEvent(new CustomEvent("shopstr:storage", { detail: { key } }));
+      window.dispatchEvent(
+        new CustomEvent("shopstr:storage", { detail: { key } })
+      );
     };
 
     return () => {
@@ -504,9 +525,13 @@ function Shopstr({ props }: { props: AppProps }) {
     };
   }, []);
 
-  /** FETCH route-scoped data **/
   useEffect(() => {
+    if (router.pathname.startsWith("/listing") && !router.isReady) {
+      return;
+    }
+
     let isCancelled = false;
+    const abortController = new AbortController();
 
     const resetAllContextsToLoaded = () => {
       editProductContext([], false);
@@ -523,9 +548,16 @@ function Shopstr({ props }: { props: AppProps }) {
 
     async function fetchData() {
       try {
-        if (!nostr) return;
+        if (!nostr || abortController.signal.aborted) return;
 
         const flags = getRouteBootstrapFlags(router.pathname);
+        const listingProductId =
+          router.pathname.startsWith("/listing") &&
+          Array.isArray(router.query.productId)
+            ? router.query.productId[0]
+            : undefined;
+        const { mode: catalogBackfillMode, targetProductId: catalogTargetId } =
+          getCatalogBackfillConfig(router.pathname, listingProductId);
 
         if (
           !flags.loadCatalog &&
@@ -544,6 +576,9 @@ function Shopstr({ props }: { props: AppProps }) {
           nostr,
           signer,
           isLoggedIn,
+          catalogBackfillMode,
+          catalogTargetId,
+          signal: abortController.signal,
           editProductContext,
           editReviewsContext,
           editShopContext,
@@ -575,9 +610,18 @@ function Shopstr({ props }: { props: AppProps }) {
 
     return () => {
       isCancelled = true;
+      abortController.abort();
       window.removeEventListener("storage", handleStorage);
     };
-  }, [nostr, signer, isLoggedIn, router.pathname]);
+  }, [
+    nostr,
+    signer,
+    isLoggedIn,
+    router.pathname,
+    router.asPath,
+    router.isReady,
+    router.query.productId,
+  ]);
 
   return (
     <>

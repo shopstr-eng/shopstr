@@ -88,6 +88,7 @@ async function initializeTables(): Promise<void> {
 
       CREATE INDEX IF NOT EXISTS idx_product_events_pubkey ON product_events(pubkey);
       CREATE INDEX IF NOT EXISTS idx_product_events_created_at ON product_events(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_product_events_created_at_id ON product_events(created_at DESC, id DESC);
 
       -- Reviews table (kind 31555)
       CREATE TABLE IF NOT EXISTS review_events (
@@ -795,6 +796,8 @@ export async function fetchAllProductsFromDb(filters?: {
   since?: number;
   until?: number;
   limit?: number;
+  cursorCreatedAt?: number;
+  cursorId?: string;
 }): Promise<NostrEvent[]> {
   const dbPool = getDbPool();
   let client;
@@ -811,19 +814,24 @@ export async function fetchAllProductsFromDb(filters?: {
       params.push(filters.pubkeys);
     }
 
-    if (filters?.since) {
+    if (filters?.since !== undefined) {
       query += ` AND created_at >= $${paramIndex++}`;
       params.push(filters.since);
     }
 
-    if (filters?.until) {
+    if (filters?.until !== undefined) {
       query += ` AND created_at <= $${paramIndex++}`;
       params.push(filters.until);
     }
 
-    query += " ORDER BY created_at DESC";
+    if (filters?.cursorCreatedAt !== undefined && filters.cursorId) {
+      query += ` AND (created_at, id) < ($${paramIndex++}, $${paramIndex++})`;
+      params.push(filters.cursorCreatedAt, filters.cursorId);
+    }
 
-    if (filters?.limit) {
+    query += " ORDER BY created_at DESC, id DESC";
+
+    if (filters?.limit !== undefined) {
       query += ` LIMIT $${paramIndex++}`;
       params.push(filters.limit);
     }
@@ -1222,7 +1230,12 @@ export async function addDiscountCode(
              ON CONFLICT (code, pubkey) DO UPDATE SET
                discount_percentage = EXCLUDED.discount_percentage,
                expiration = EXCLUDED.expiration`,
-      values: [code, pubkey, discountPercentage, expiration || null] as unknown[],
+      values: [
+        code,
+        pubkey,
+        discountPercentage,
+        expiration || null,
+      ] as unknown[],
     };
     await client.query(query);
   } catch (error) {
