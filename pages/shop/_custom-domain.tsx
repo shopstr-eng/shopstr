@@ -16,7 +16,7 @@ export default function CustomDomainPage() {
     const lookupDomain = async () => {
       try {
         const res = await fetch(
-          `/api/storefront/lookup?domain=${encodeURIComponent(domain)}`,
+          `/api/storefront/lookup?domain=${encodeURIComponent(domain)}`
         );
         if (res.ok) {
           const data = await res.json();

@@ -22,7 +22,10 @@ export function proxy(request: NextRequest) {
     if (hostname !== "milk.market" && hostname.endsWith(".milk.market")) {
       const subdomain = hostname.replace(".milk.market", "");
       if (subdomain !== "www" && subdomain !== "api") {
-        const url = new URL(`/shop/${subdomain}${pathname === "/" ? "" : pathname}`, request.url);
+        const url = new URL(
+          `/shop/${subdomain}${pathname === "/" ? "" : pathname}`,
+          request.url
+        );
         url.hostname = "milk.market";
         return NextResponse.rewrite(url);
       }
@@ -42,7 +45,12 @@ export function proxy(request: NextRequest) {
       url.searchParams.set("domain", hostname);
       url.searchParams.set("originalPath", pathname);
       return NextResponse.rewrite(
-        new URL(`/shop/_custom-domain?domain=${encodeURIComponent(hostname)}&path=${encodeURIComponent(pathname)}`, request.url)
+        new URL(
+          `/shop/_custom-domain?domain=${encodeURIComponent(
+            hostname
+          )}&path=${encodeURIComponent(pathname)}`,
+          request.url
+        )
       );
     }
   }

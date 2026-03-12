@@ -37,7 +37,7 @@ const RESERVED_SLUGS = [
 
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse,
+  res: NextApiResponse
 ) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -66,15 +66,13 @@ export default async function handler(
       `INSERT INTO shop_slugs (pubkey, slug) 
        VALUES ($1, $2) 
        ON CONFLICT (pubkey) DO UPDATE SET slug = $2, updated_at = NOW()`,
-      [pubkey, sanitized],
+      [pubkey, sanitized]
     );
 
     return res.status(200).json({ slug: sanitized });
   } catch (error: any) {
     if (error?.code === "23505") {
-      return res
-        .status(409)
-        .json({ error: "This shop name is already taken" });
+      return res.status(409).json({ error: "This shop name is already taken" });
     }
     console.error("Register slug error:", error);
     return res.status(500).json({ error: "Internal server error" });

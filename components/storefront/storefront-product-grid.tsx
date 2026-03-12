@@ -22,10 +22,15 @@ export default function StorefrontProductGrid({
 
   const totalPages = Math.ceil(products.length / ITEMS_PER_PAGE);
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const visibleProducts = products.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  const visibleProducts = products.slice(
+    startIndex,
+    startIndex + ITEMS_PER_PAGE
+  );
 
-  const featuredProduct = layout === "featured" && products.length > 0 ? products[0] : null;
-  const remainingProducts = layout === "featured" ? visibleProducts.slice(1) : visibleProducts;
+  const featuredProduct =
+    layout === "featured" && products.length > 0 ? products[0] : null;
+  const remainingProducts =
+    layout === "featured" ? visibleProducts.slice(1) : visibleProducts;
 
   if (products.length === 0) {
     return (
@@ -38,7 +43,10 @@ export default function StorefrontProductGrid({
   return (
     <div id="products">
       {layout === "featured" && featuredProduct && (
-        <div className="mb-8 overflow-hidden rounded-xl border-2" style={{ borderColor: colors.primary + "33" }}>
+        <div
+          className="mb-8 overflow-hidden rounded-xl border-2"
+          style={{ borderColor: colors.primary + "33" }}
+        >
           <div className="md:flex">
             {featuredProduct.images && featuredProduct.images.length > 0 && (
               <div className="md:w-1/2">
@@ -56,21 +64,32 @@ export default function StorefrontProductGrid({
               >
                 Featured
               </span>
-              <h2 className="text-2xl font-bold md:text-3xl">{featuredProduct.title}</h2>
+              <h2 className="text-2xl font-bold md:text-3xl">
+                {featuredProduct.title}
+              </h2>
               {featuredProduct.summary && (
                 <p className="mt-3 opacity-70">{featuredProduct.summary}</p>
               )}
               <div className="mt-4">
-                <span className="text-2xl font-bold" style={{ color: colors.accent }}>
-                  {featuredProduct.currency === "sat" || featuredProduct.currency === "sats"
+                <span
+                  className="text-2xl font-bold"
+                  style={{ color: colors.accent }}
+                >
+                  {featuredProduct.currency === "sat" ||
+                  featuredProduct.currency === "sats"
                     ? `${featuredProduct.totalCost} sats`
-                    : `${featuredProduct.totalCost} ${featuredProduct.currency?.toUpperCase() || "USD"}`}
+                    : `${featuredProduct.totalCost} ${
+                        featuredProduct.currency?.toUpperCase() || "USD"
+                      }`}
                 </span>
               </div>
               <a
                 href={`/listing/${getListingSlug(featuredProduct)}`}
                 className="mt-6 inline-block rounded-lg px-6 py-3 text-center font-bold transition-transform hover:-translate-y-0.5"
-                style={{ backgroundColor: colors.primary, color: colors.secondary }}
+                style={{
+                  backgroundColor: colors.primary,
+                  color: colors.secondary,
+                }}
               >
                 View Product
               </a>

@@ -208,6 +208,34 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .describe(
           "Per-method discount percentages — object mapping method keys (bitcoin, stripe, venmo, cash, etc.) to discount percentages"
         ),
+      storefrontColorScheme: z
+        .object({
+          primary: z.string().describe("Primary color hex (e.g. '#4a7c59')"),
+          secondary: z.string().describe("Secondary color hex"),
+          accent: z.string().describe("Accent color hex"),
+          background: z.string().describe("Background color hex"),
+          text: z.string().describe("Text color hex"),
+        })
+        .optional()
+        .describe("Custom color scheme for the seller's storefront page"),
+      storefrontProductLayout: z
+        .enum(["grid", "list", "featured"])
+        .optional()
+        .describe(
+          "Product layout style for the storefront: grid, list, or featured"
+        ),
+      storefrontLandingPageStyle: z
+        .enum(["classic", "hero", "minimal"])
+        .optional()
+        .describe(
+          "Landing page style for the storefront: classic, hero, or minimal"
+        ),
+      shopSlug: z
+        .string()
+        .optional()
+        .describe(
+          "URL slug for the storefront (e.g. 'fresh-farm' for milk.market/shop/fresh-farm). Must be lowercase alphanumeric with hyphens."
+        ),
     },
     async (params) => {
       const startTime = Date.now();
@@ -234,6 +262,16 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         if (params.freeShippingCurrency)
           content.freeShippingCurrency = params.freeShippingCurrency;
 
+        const storefront: Record<string, any> = {};
+        if (params.storefrontColorScheme)
+          storefront.colorScheme = params.storefrontColorScheme;
+        if (params.storefrontProductLayout)
+          storefront.productLayout = params.storefrontProductLayout;
+        if (params.storefrontLandingPageStyle)
+          storefront.landingPageStyle = params.storefrontLandingPageStyle;
+        if (params.shopSlug) storefront.shopSlug = params.shopSlug;
+        if (Object.keys(storefront).length > 0) content.storefront = storefront;
+
         const eventTemplate: EventTemplate = {
           created_at: Math.floor(Date.now() / 1000),
           content: JSON.stringify(content),
@@ -255,6 +293,109 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       } catch (error) {
         return errorResponse(
           "Failed to set shop profile",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  server.tool(
+    "register_shop_slug",
+    "Register or update your shop's URL slug for the storefront. The slug becomes part of your shop URL (e.g. milk.market/shop/your-slug). Slug must be lowercase alphanumeric with hyphens, 3-50 characters. Reserved words (shop, admin, api, etc.) are not allowed.",
+    {
+      slug: z
+        .string()
+        .describe(
+          "URL slug for the storefront (e.g. 'fresh-farm'). Must be lowercase, alphanumeric with hyphens, 3-50 characters."
+        ),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+        const slug = params.slug.toLowerCase().trim();
+
+        const slugRegex = /^[a-z0-9][a-z0-9-]*[a-z0-9]$/;
+        if (slug.length < 3 || slug.length > 50 || !slugRegex.test(slug)) {
+          return errorResponse(
+            "Invalid slug",
+            "Slug must be 3-50 characters, lowercase alphanumeric with hyphens, and cannot start or end with a hyphen.",
+            startTime
+          );
+        }
+
+        const reserved = [
+          "shop",
+          "admin",
+          "api",
+          "www",
+          "mail",
+          "ftp",
+          "app",
+          "dashboard",
+          "settings",
+          "marketplace",
+          "login",
+          "signup",
+          "auth",
+          "checkout",
+          "orders",
+          "cart",
+          "help",
+          "support",
+          "about",
+          "contact",
+          "blog",
+          "news",
+          "terms",
+          "privacy",
+          "legal",
+        ];
+        if (reserved.includes(slug)) {
+          return errorResponse(
+            "Reserved slug",
+            `The slug '${slug}' is reserved and cannot be used.`,
+            startTime
+          );
+        }
+
+        const dbPool = getDbPool();
+        const existing = await dbPool.query(
+          "SELECT pubkey FROM shop_slugs WHERE slug = $1 AND pubkey != $2",
+          [slug, pubkey]
+        );
+
+        if (existing.rows.length > 0 && existing.rows[0].pubkey !== pubkey) {
+          return errorResponse(
+            "Slug taken",
+            `The slug '${slug}' is already registered to another seller.`,
+            startTime
+          );
+        }
+
+        await dbPool.query(
+          `INSERT INTO shop_slugs (pubkey, slug, created_at)
+           VALUES ($1, $2, NOW())
+           ON CONFLICT (pubkey) DO UPDATE SET slug = $2`,
+          [pubkey, slug]
+        );
+
+        return successResponse(
+          {
+            slug,
+            storefrontUrl: `/shop/${slug}`,
+            pubkey,
+          },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to register shop slug",
           error instanceof Error ? error.message : "Unknown error",
           startTime
         );

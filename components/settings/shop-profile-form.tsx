@@ -40,13 +40,76 @@ const DEFAULT_COLORS: StorefrontColorScheme = {
 };
 
 const COLOR_PRESETS: { name: string; colors: StorefrontColorScheme }[] = [
-  { name: "Default", colors: { primary: "#FFD23F", secondary: "#1E293B", accent: "#3B82F6", background: "#FFFFFF", text: "#000000" } },
-  { name: "Forest", colors: { primary: "#22C55E", secondary: "#14532D", accent: "#86EFAC", background: "#F0FDF4", text: "#14532D" } },
-  { name: "Ocean", colors: { primary: "#0EA5E9", secondary: "#0C4A6E", accent: "#38BDF8", background: "#F0F9FF", text: "#0C4A6E" } },
-  { name: "Sunset", colors: { primary: "#F97316", secondary: "#7C2D12", accent: "#FB923C", background: "#FFF7ED", text: "#431407" } },
-  { name: "Berry", colors: { primary: "#A855F7", secondary: "#3B0764", accent: "#C084FC", background: "#FAF5FF", text: "#3B0764" } },
-  { name: "Earth", colors: { primary: "#A16207", secondary: "#422006", accent: "#CA8A04", background: "#FEFCE8", text: "#422006" } },
-  { name: "Dark", colors: { primary: "#FFD23F", secondary: "#111827", accent: "#60A5FA", background: "#1F2937", text: "#F9FAFB" } },
+  {
+    name: "Default",
+    colors: {
+      primary: "#FFD23F",
+      secondary: "#1E293B",
+      accent: "#3B82F6",
+      background: "#FFFFFF",
+      text: "#000000",
+    },
+  },
+  {
+    name: "Forest",
+    colors: {
+      primary: "#22C55E",
+      secondary: "#14532D",
+      accent: "#86EFAC",
+      background: "#F0FDF4",
+      text: "#14532D",
+    },
+  },
+  {
+    name: "Ocean",
+    colors: {
+      primary: "#0EA5E9",
+      secondary: "#0C4A6E",
+      accent: "#38BDF8",
+      background: "#F0F9FF",
+      text: "#0C4A6E",
+    },
+  },
+  {
+    name: "Sunset",
+    colors: {
+      primary: "#F97316",
+      secondary: "#7C2D12",
+      accent: "#FB923C",
+      background: "#FFF7ED",
+      text: "#431407",
+    },
+  },
+  {
+    name: "Berry",
+    colors: {
+      primary: "#A855F7",
+      secondary: "#3B0764",
+      accent: "#C084FC",
+      background: "#FAF5FF",
+      text: "#3B0764",
+    },
+  },
+  {
+    name: "Earth",
+    colors: {
+      primary: "#A16207",
+      secondary: "#422006",
+      accent: "#CA8A04",
+      background: "#FEFCE8",
+      text: "#422006",
+    },
+  },
+  {
+    name: "Dark",
+    colors: {
+      primary: "#FFD23F",
+      secondary: "#111827",
+      accent: "#60A5FA",
+      background: "#1F2937",
+      text: "#F9FAFB",
+    },
+  },
 ];
 
 const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
@@ -64,13 +127,23 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   }>({});
 
   const [shopSlug, setShopSlug] = useState("");
-  const [slugStatus, setSlugStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [slugStatus, setSlugStatus] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
   const [slugError, setSlugError] = useState("");
-  const [colorScheme, setColorScheme] = useState<StorefrontColorScheme>(DEFAULT_COLORS);
-  const [productLayout, setProductLayout] = useState<"grid" | "list" | "featured">("grid");
-  const [landingPageStyle, setLandingPageStyle] = useState<"classic" | "hero" | "minimal">("hero");
+  const [colorScheme, setColorScheme] =
+    useState<StorefrontColorScheme>(DEFAULT_COLORS);
+  const [productLayout, setProductLayout] = useState<
+    "grid" | "list" | "featured"
+  >("grid");
+  const [landingPageStyle, setLandingPageStyle] = useState<
+    "classic" | "hero" | "minimal"
+  >("hero");
   const [customDomain, setCustomDomain] = useState("");
-  const [domainInfo, setDomainInfo] = useState<{ domain: string; verified: boolean } | null>(null);
+  const [domainInfo, setDomainInfo] = useState<{
+    domain: string;
+    verified: boolean;
+  } | null>(null);
 
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
 
@@ -127,7 +200,8 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       if (shop.content.storefront) {
         const sf = shop.content.storefront;
         if (sf.shopSlug) setShopSlug(sf.shopSlug);
-        if (sf.colorScheme) setColorScheme({ ...DEFAULT_COLORS, ...sf.colorScheme });
+        if (sf.colorScheme)
+          setColorScheme({ ...DEFAULT_COLORS, ...sf.colorScheme });
         if (sf.productLayout) setProductLayout(sf.productLayout);
         if (sf.landingPageStyle) setLandingPageStyle(sf.landingPageStyle);
       }
@@ -578,9 +652,12 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         {!isOnboarding && (
           <>
             <div className="border-t-4 border-black pt-6">
-              <h2 className="mb-4 text-xl font-bold text-black">Storefront Settings</h2>
+              <h2 className="mb-4 text-xl font-bold text-black">
+                Storefront Settings
+              </h2>
               <p className="mb-6 text-sm text-gray-500">
-                Customize your standalone shop page. Buyers can visit your storefront directly for a branded shopping experience.
+                Customize your standalone shop page. Buyers can visit your
+                storefront directly for a branded shopping experience.
               </p>
 
               <div className="mb-6">
@@ -600,10 +677,18 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                       placeholder="my-farm-shop"
                       value={shopSlug}
                       onChange={(e) => {
-                        setShopSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"));
+                        setShopSlug(
+                          e.target.value
+                            .toLowerCase()
+                            .replace(/[^a-z0-9-]/g, "-")
+                        );
                         setSlugStatus("idle");
                       }}
-                      startContent={<span className="text-sm text-gray-400">milk.market/shop/</span>}
+                      startContent={
+                        <span className="text-sm text-gray-400">
+                          milk.market/shop/
+                        </span>
+                      }
                     />
                   </div>
                 </div>
@@ -631,32 +716,59 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                       type="button"
                       onClick={() => setColorScheme(preset.colors)}
                       className={`flex items-center gap-2 rounded-lg border-2 px-3 py-2 text-sm font-medium transition-all ${
-                        JSON.stringify(colorScheme) === JSON.stringify(preset.colors)
+                        JSON.stringify(colorScheme) ===
+                        JSON.stringify(preset.colors)
                           ? "border-black shadow-neo"
                           : "border-gray-300 hover:border-black"
                       }`}
                     >
                       <div className="flex gap-1">
-                        <div className="h-4 w-4 rounded-full border" style={{ backgroundColor: preset.colors.primary }} />
-                        <div className="h-4 w-4 rounded-full border" style={{ backgroundColor: preset.colors.secondary }} />
-                        <div className="h-4 w-4 rounded-full border" style={{ backgroundColor: preset.colors.accent }} />
+                        <div
+                          className="h-4 w-4 rounded-full border"
+                          style={{ backgroundColor: preset.colors.primary }}
+                        />
+                        <div
+                          className="h-4 w-4 rounded-full border"
+                          style={{ backgroundColor: preset.colors.secondary }}
+                        />
+                        <div
+                          className="h-4 w-4 rounded-full border"
+                          style={{ backgroundColor: preset.colors.accent }}
+                        />
                       </div>
                       {preset.name}
                     </button>
                   ))}
                 </div>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-                  {(["primary", "secondary", "accent", "background", "text"] as const).map((key) => (
+                  {(
+                    [
+                      "primary",
+                      "secondary",
+                      "accent",
+                      "background",
+                      "text",
+                    ] as const
+                  ).map((key) => (
                     <div key={key}>
-                      <label className="mb-1 block text-xs font-medium capitalize text-gray-500">{key}</label>
+                      <label className="mb-1 block text-xs font-medium capitalize text-gray-500">
+                        {key}
+                      </label>
                       <div className="flex items-center gap-2">
                         <input
                           type="color"
                           value={colorScheme[key]}
-                          onChange={(e) => setColorScheme((prev) => ({ ...prev, [key]: e.target.value }))}
+                          onChange={(e) =>
+                            setColorScheme((prev) => ({
+                              ...prev,
+                              [key]: e.target.value,
+                            }))
+                          }
                           className="h-8 w-8 cursor-pointer rounded border-2 border-black"
                         />
-                        <span className="text-xs text-gray-400">{colorScheme[key]}</span>
+                        <span className="text-xs text-gray-400">
+                          {colorScheme[key]}
+                        </span>
                       </div>
                     </div>
                   ))}
@@ -668,11 +780,23 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   Landing Page Style
                 </label>
                 <div className="flex flex-wrap gap-3">
-                  {([
-                    { value: "hero" as const, label: "Hero", desc: "Large banner with shop info overlay" },
-                    { value: "classic" as const, label: "Classic", desc: "Banner image with info below" },
-                    { value: "minimal" as const, label: "Minimal", desc: "Clean, simple header" },
-                  ]).map((style) => (
+                  {[
+                    {
+                      value: "hero" as const,
+                      label: "Hero",
+                      desc: "Large banner with shop info overlay",
+                    },
+                    {
+                      value: "classic" as const,
+                      label: "Classic",
+                      desc: "Banner image with info below",
+                    },
+                    {
+                      value: "minimal" as const,
+                      label: "Minimal",
+                      desc: "Clean, simple header",
+                    },
+                  ].map((style) => (
                     <button
                       key={style.value}
                       type="button"
@@ -683,8 +807,12 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                           : "border-gray-300 hover:border-black"
                       }`}
                     >
-                      <span className="block text-sm font-bold text-black">{style.label}</span>
-                      <span className="block text-xs text-gray-500">{style.desc}</span>
+                      <span className="block text-sm font-bold text-black">
+                        {style.label}
+                      </span>
+                      <span className="block text-xs text-gray-500">
+                        {style.desc}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -695,11 +823,23 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   Product Layout
                 </label>
                 <div className="flex flex-wrap gap-3">
-                  {([
-                    { value: "grid" as const, label: "Grid", desc: "Products in a grid" },
-                    { value: "list" as const, label: "List", desc: "Products in a list" },
-                    { value: "featured" as const, label: "Featured", desc: "Hero product + grid" },
-                  ]).map((layout) => (
+                  {[
+                    {
+                      value: "grid" as const,
+                      label: "Grid",
+                      desc: "Products in a grid",
+                    },
+                    {
+                      value: "list" as const,
+                      label: "List",
+                      desc: "Products in a list",
+                    },
+                    {
+                      value: "featured" as const,
+                      label: "Featured",
+                      desc: "Hero product + grid",
+                    },
+                  ].map((layout) => (
                     <button
                       key={layout.value}
                       type="button"
@@ -710,8 +850,12 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                           : "border-gray-300 hover:border-black"
                       }`}
                     >
-                      <span className="block text-sm font-bold text-black">{layout.label}</span>
-                      <span className="block text-xs text-gray-500">{layout.desc}</span>
+                      <span className="block text-sm font-bold text-black">
+                        {layout.label}
+                      </span>
+                      <span className="block text-xs text-gray-500">
+                        {layout.desc}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -722,7 +866,8 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   Custom Domain
                 </label>
                 <p className="mb-2 text-sm text-gray-500">
-                  Connect your own domain to your shop. Add a CNAME record pointing to milk.market.
+                  Connect your own domain to your shop. Add a CNAME record
+                  pointing to milk.market.
                 </p>
                 <div className="flex gap-3">
                   <div className="flex-1">
@@ -749,19 +894,29 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   </Button>
                 </div>
                 {!shopSlug && customDomain && (
-                  <p className="mt-1 text-xs text-orange-600">Set a shop URL slug first before connecting a domain.</p>
+                  <p className="mt-1 text-xs text-orange-600">
+                    Set a shop URL slug first before connecting a domain.
+                  </p>
                 )}
                 {domainInfo && (
                   <div className="mt-2 rounded-lg border-2 border-gray-200 bg-gray-50 p-3">
                     <div className="flex items-center gap-2">
-                      <span className={`inline-block h-2 w-2 rounded-full ${domainInfo.verified ? "bg-green-500" : "bg-yellow-500"}`} />
+                      <span
+                        className={`inline-block h-2 w-2 rounded-full ${
+                          domainInfo.verified ? "bg-green-500" : "bg-yellow-500"
+                        }`}
+                      />
                       <span className="text-sm font-medium">
-                        {domainInfo.domain} - {domainInfo.verified ? "Verified" : "Pending verification"}
+                        {domainInfo.domain} -{" "}
+                        {domainInfo.verified
+                          ? "Verified"
+                          : "Pending verification"}
                       </span>
                     </div>
                     {!domainInfo.verified && (
                       <p className="mt-2 text-xs text-gray-500">
-                        Add a CNAME record: <strong>{domainInfo.domain}</strong> → <strong>milk.market</strong>
+                        Add a CNAME record: <strong>{domainInfo.domain}</strong>{" "}
+                        → <strong>milk.market</strong>
                       </p>
                     )}
                   </div>
@@ -770,7 +925,9 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
 
               {shopSlug && (
                 <div className="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-4">
-                  <p className="text-sm font-medium text-gray-700">Preview your storefront:</p>
+                  <p className="text-sm font-medium text-gray-700">
+                    Preview your storefront:
+                  </p>
                   <a
                     href={`/shop/${shopSlug}`}
                     target="_blank"

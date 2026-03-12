@@ -3,7 +3,7 @@ import { pool } from "@/utils/db/db-service";
 
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse,
+  res: NextApiResponse
 ) {
   if (req.method === "POST") {
     const { pubkey, domain } = req.body;
@@ -16,7 +16,7 @@ export default async function handler(
 
     const slugResult = await pool.query(
       "SELECT slug FROM shop_slugs WHERE pubkey = $1",
-      [pubkey],
+      [pubkey]
     );
     if (slugResult.rows.length === 0) {
       return res
@@ -29,7 +29,7 @@ export default async function handler(
         `INSERT INTO custom_domains (pubkey, domain, shop_slug, verified) 
          VALUES ($1, $2, $3, false) 
          ON CONFLICT (pubkey) DO UPDATE SET domain = $2, shop_slug = $3, verified = false, updated_at = NOW()`,
-        [pubkey, cleanDomain, slugResult.rows[0].slug],
+        [pubkey, cleanDomain, slugResult.rows[0].slug]
       );
 
       return res.status(200).json({
@@ -62,7 +62,7 @@ export default async function handler(
     try {
       const result = await pool.query(
         "SELECT domain, verified, created_at FROM custom_domains WHERE pubkey = $1",
-        [pubkey],
+        [pubkey]
       );
       if (result.rows.length > 0) {
         return res.status(200).json(result.rows[0]);

@@ -106,9 +106,7 @@ export const ProfileWithDropdown = ({
       color: "default",
       className:
         "!text-black hover:!bg-blue-400 hover:!text-white font-bold data-[hover=true]:!bg-blue-400 data-[hover=true]:!text-white",
-      startContent: (
-        <GlobeAltIcon className={"h-5 w-5 !text-black"} />
-      ),
+      startContent: <GlobeAltIcon className={"h-5 w-5 !text-black"} />,
       onClick: () => {
         const shopData = shopMapContext.shopData.get(pubkey);
         const shopSlug = shopData?.content?.storefront?.shopSlug;

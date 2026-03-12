@@ -21,7 +21,10 @@ export default function StorefrontHero({
   reviewCount,
 }: StorefrontHeroProps) {
   return (
-    <div className="relative overflow-hidden" style={{ backgroundColor: colors.secondary }}>
+    <div
+      className="relative overflow-hidden"
+      style={{ backgroundColor: colors.secondary }}
+    >
       {bannerUrl && (
         <div className="absolute inset-0">
           <img
@@ -29,7 +32,12 @@ export default function StorefrontHero({
             alt=""
             className="h-full w-full object-cover opacity-30"
           />
-          <div className="absolute inset-0" style={{ background: `linear-gradient(to bottom, ${colors.secondary}99, ${colors.secondary})` }} />
+          <div
+            className="absolute inset-0"
+            style={{
+              background: `linear-gradient(to bottom, ${colors.secondary}99, ${colors.secondary})`,
+            }}
+          />
         </div>
       )}
 
@@ -59,13 +67,28 @@ export default function StorefrontHero({
           </p>
         )}
 
-        <div className="mt-6 flex items-center gap-6 text-sm" style={{ color: colors.background + "99" }}>
+        <div
+          className="mt-6 flex items-center gap-6 text-sm"
+          style={{ color: colors.background + "99" }}
+        >
           <span className="flex items-center gap-1">
-            <span className="text-lg font-bold" style={{ color: colors.primary }}>{productCount}</span> products
+            <span
+              className="text-lg font-bold"
+              style={{ color: colors.primary }}
+            >
+              {productCount}
+            </span>{" "}
+            products
           </span>
           {reviewCount > 0 && (
             <span className="flex items-center gap-1">
-              <span className="text-lg font-bold" style={{ color: colors.primary }}>{reviewCount}</span> reviews
+              <span
+                className="text-lg font-bold"
+                style={{ color: colors.primary }}
+              >
+                {reviewCount}
+              </span>{" "}
+              reviews
             </span>
           )}
         </div>

@@ -6,6 +6,7 @@ import {
   fetchCachedEvents,
   validateDiscountCode,
   getStripeConnectAccount,
+  getDbPool,
 } from "@/utils/db/db-service";
 import { NostrEvent } from "@/utils/types/types";
 
@@ -162,6 +163,11 @@ function parseProfileEvent(event: NostrEvent) {
       base.freeShippingThreshold = content.freeShippingThreshold;
     if (content.freeShippingCurrency)
       base.freeShippingCurrency = content.freeShippingCurrency;
+    if (content.storefront) {
+      base.storefront = content.storefront;
+      if (content.storefront.shopSlug)
+        base.storefrontUrl = `/shop/${content.storefront.shopSlug}`;
+    }
   }
 
   return base;
@@ -529,6 +535,205 @@ export function registerReadTools(server: McpServer) {
           },
         ],
       };
+    }
+  );
+
+  server.tool(
+    "get_storefront",
+    "Look up a seller's storefront by shop slug or pubkey. Returns storefront configuration, products, and shop profile for rendering a seller's standalone shop page.",
+    {
+      slug: z
+        .string()
+        .optional()
+        .describe(
+          "Shop URL slug (e.g. 'fresh-farm' for milk.market/shop/fresh-farm)"
+        ),
+      pubkey: z
+        .string()
+        .optional()
+        .describe("Seller's public key (hex). Use if slug is not known."),
+    },
+    async ({ slug, pubkey }) => {
+      const startTime = Date.now();
+
+      if (!slug && !pubkey) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({
+                error: "Either slug or pubkey is required",
+                _meta: {
+                  responseTimeMs: Date.now() - startTime,
+                  dataSource: "cached_db",
+                },
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      try {
+        let resolvedPubkey = pubkey;
+
+        if (slug && !pubkey) {
+          const dbPool = getDbPool();
+          const slugResult = await dbPool.query(
+            "SELECT pubkey FROM shop_slugs WHERE slug = $1",
+            [slug.toLowerCase()]
+          );
+          if (slugResult.rows.length === 0) {
+            return {
+              content: [
+                {
+                  type: "text" as const,
+                  text: JSON.stringify({
+                    error: `Shop with slug '${slug}' not found`,
+                    _meta: {
+                      responseTimeMs: Date.now() - startTime,
+                      dataSource: "cached_db",
+                    },
+                  }),
+                },
+              ],
+              isError: true,
+            };
+          }
+          resolvedPubkey = slugResult.rows[0].pubkey;
+        }
+
+        const [profileEvents, productEvents] = await Promise.all([
+          fetchAllProfilesFromDb(),
+          fetchAllProductsFromDb(),
+        ]);
+
+        const shopProfile = profileEvents
+          .filter((e) => e.kind === 30019 && e.pubkey === resolvedPubkey)
+          .map(parseProfileEvent)[0];
+
+        const userProfile = profileEvents
+          .filter((e) => e.kind === 0 && e.pubkey === resolvedPubkey)
+          .map(parseProfileEvent)[0];
+
+        if (!shopProfile && !userProfile) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify({
+                  error: "Seller not found",
+                  _meta: {
+                    responseTimeMs: Date.now() - startTime,
+                    dataSource: "cached_db",
+                  },
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        const products = productEvents
+          .filter((e) => e.pubkey === resolvedPubkey)
+          .map(parseProductEvent);
+
+        let stripeConnectAccount = null;
+        try {
+          stripeConnectAccount = await getStripeConnectAccount(resolvedPubkey!);
+        } catch {}
+
+        const hasStripe = !!(
+          stripeConnectAccount && stripeConnectAccount.charges_enabled
+        );
+        const acceptedPaymentMethods = determinePaymentMethods(
+          resolvedPubkey!,
+          hasStripe
+        );
+
+        const productsWithPricing = products.map((p) => ({
+          ...p,
+          pricing: buildPricingBlock(
+            p.price,
+            p.currency,
+            p.shippingType,
+            p.shippingCost,
+            1,
+            acceptedPaymentMethods
+          ),
+        }));
+
+        const storefront = shopProfile?.storefront || {};
+
+        let customDomain = null;
+        try {
+          const dbPool = getDbPool();
+          const domainResult = await dbPool.query(
+            "SELECT domain, verified FROM custom_domains WHERE pubkey = $1",
+            [resolvedPubkey]
+          );
+          if (domainResult.rows.length > 0) {
+            customDomain = {
+              domain: domainResult.rows[0].domain,
+              verified: domainResult.rows[0].verified,
+            };
+          }
+        } catch {}
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(
+                {
+                  pubkey: resolvedPubkey,
+                  shopProfile: shopProfile || null,
+                  userProfile: userProfile || null,
+                  storefront: {
+                    ...storefront,
+                    storefrontUrl: storefront.shopSlug
+                      ? `/shop/${storefront.shopSlug}`
+                      : null,
+                    customDomain,
+                  },
+                  products: {
+                    count: productsWithPricing.length,
+                    items: productsWithPricing,
+                  },
+                  paymentInfo: {
+                    acceptedPaymentMethods,
+                    hasStripeConnect: hasStripe,
+                  },
+                  _meta: {
+                    responseTimeMs: Date.now() - startTime,
+                    dataSource: "cached_db",
+                  },
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify({
+                error: "Failed to fetch storefront",
+                details:
+                  error instanceof Error ? error.message : "Unknown error",
+                _meta: {
+                  responseTimeMs: Date.now() - startTime,
+                  dataSource: "cached_db",
+                },
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
     }
   );
 

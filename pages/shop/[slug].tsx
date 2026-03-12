@@ -27,7 +27,7 @@ export default function ShopPage() {
 
       try {
         const res = await fetch(
-          `/api/storefront/lookup?slug=${encodeURIComponent(slug)}`,
+          `/api/storefront/lookup?slug=${encodeURIComponent(slug)}`
         );
         if (res.ok) {
           const data = await res.json();

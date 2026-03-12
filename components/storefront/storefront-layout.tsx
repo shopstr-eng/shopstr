@@ -1,7 +1,16 @@
 import { useContext, useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/router";
-import { ShopMapContext, ProductContext, ProfileMapContext, ReviewsContext } from "@/utils/context/context";
-import { ShopProfile, StorefrontConfig, StorefrontColorScheme } from "@/utils/types/types";
+import {
+  ShopMapContext,
+  ProductContext,
+  ProfileMapContext,
+  ReviewsContext,
+} from "@/utils/context/context";
+import {
+  ShopProfile,
+  StorefrontConfig,
+  StorefrontColorScheme,
+} from "@/utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import DisplayProducts from "@/components/display-products";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
@@ -25,7 +34,9 @@ interface StorefrontLayoutProps {
   shopPubkey: string;
 }
 
-export default function StorefrontLayout({ shopPubkey }: StorefrontLayoutProps) {
+export default function StorefrontLayout({
+  shopPubkey,
+}: StorefrontLayoutProps) {
   const shopMapContext = useContext(ShopMapContext);
   const productContext = useContext(ProductContext);
   const profileContext = useContext(ProfileMapContext);
@@ -66,7 +77,8 @@ export default function StorefrontLayout({ shopPubkey }: StorefrontLayoutProps) 
   const shopName = shop?.content?.name || profile?.content?.name || "Shop";
   const shopAbout = shop?.content?.about || profile?.content?.about || "";
   const bannerUrl = shop?.content?.ui?.banner || "";
-  const pictureUrl = shop?.content?.ui?.picture || profile?.content?.picture || "";
+  const pictureUrl =
+    shop?.content?.ui?.picture || profile?.content?.picture || "";
   const layout = storefront.productLayout || "grid";
   const landingStyle = storefront.landingPageStyle || "hero";
 
@@ -80,11 +92,21 @@ export default function StorefrontLayout({ shopPubkey }: StorefrontLayoutProps) 
 
   const merchantReviewData = reviewsContext.merchantReviewsData.get(shopPubkey);
   const reviewCount = merchantReviewData
-    ? Array.from(merchantReviewData.values()).reduce((sum, arr) => sum + arr.length, 0)
+    ? Array.from(merchantReviewData.values()).reduce(
+        (sum, arr) => sum + arr.length,
+        0
+      )
     : 0;
 
   return (
-    <div className="min-h-screen" style={{ ...cssVars, backgroundColor: "var(--sf-bg)", color: "var(--sf-text)" }}>
+    <div
+      className="min-h-screen"
+      style={{
+        ...cssVars,
+        backgroundColor: "var(--sf-bg)",
+        color: "var(--sf-text)",
+      }}
+    >
       {landingStyle === "hero" && (
         <StorefrontHero
           shopName={shopName}
@@ -108,7 +130,10 @@ export default function StorefrontLayout({ shopPubkey }: StorefrontLayoutProps) 
               />
             </div>
           )}
-          <div className="border-b px-6 py-8" style={{ borderColor: colors.primary + "33" }}>
+          <div
+            className="border-b px-6 py-8"
+            style={{ borderColor: colors.primary + "33" }}
+          >
             <div className="mx-auto flex max-w-6xl items-center gap-6">
               {pictureUrl && (
                 <img
@@ -119,8 +144,15 @@ export default function StorefrontLayout({ shopPubkey }: StorefrontLayoutProps) 
                 />
               )}
               <div>
-                <h1 className="text-3xl font-bold" style={{ color: "var(--sf-text)" }}>{shopName}</h1>
-                {shopAbout && <p className="mt-2 max-w-2xl opacity-70">{shopAbout}</p>}
+                <h1
+                  className="text-3xl font-bold"
+                  style={{ color: "var(--sf-text)" }}
+                >
+                  {shopName}
+                </h1>
+                {shopAbout && (
+                  <p className="mt-2 max-w-2xl opacity-70">{shopAbout}</p>
+                )}
                 <div className="mt-2 flex items-center gap-3 text-sm opacity-60">
                   <span>{sellerProducts.length} products</span>
                   {reviewCount > 0 && <span>{reviewCount} reviews</span>}
@@ -144,7 +176,9 @@ export default function StorefrontLayout({ shopPubkey }: StorefrontLayoutProps) 
               )}
               <div>
                 <h1 className="text-2xl font-bold">{shopName}</h1>
-                <p className="text-sm opacity-60">{sellerProducts.length} products</p>
+                <p className="text-sm opacity-60">
+                  {sellerProducts.length} products
+                </p>
               </div>
             </div>
           </div>
@@ -159,8 +193,20 @@ export default function StorefrontLayout({ shopPubkey }: StorefrontLayoutProps) 
         />
       </div>
 
-      <footer className="border-t px-6 py-8 text-center text-sm opacity-50" style={{ borderColor: colors.text + "1A" }}>
-        <p>{shopName} &middot; Powered by <Link href="/" className="underline" style={{ color: "var(--sf-accent)" }}>Milk Market</Link></p>
+      <footer
+        className="border-t px-6 py-8 text-center text-sm opacity-50"
+        style={{ borderColor: colors.text + "1A" }}
+      >
+        <p>
+          {shopName} &middot; Powered by{" "}
+          <Link
+            href="/"
+            className="underline"
+            style={{ color: "var(--sf-accent)" }}
+          >
+            Milk Market
+          </Link>
+        </p>
       </footer>
     </div>
   );
