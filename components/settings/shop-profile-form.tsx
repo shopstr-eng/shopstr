@@ -227,14 +227,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   const [landingPageStyle, setLandingPageStyle] = useState<
     "classic" | "hero" | "minimal"
   >("hero");
-  const [customDomain, setCustomDomain] = useState("");
-  const [domainError, setDomainError] = useState("");
-  const [domainInfo, setDomainInfo] = useState<{
-    domain: string;
-    verified: boolean;
-  } | null>(null);
-  const [domainVerifying, setDomainVerifying] = useState(false);
-  const [domainVerifyMessage, setDomainVerifyMessage] = useState("");
   const [fontHeading, setFontHeading] = useState("");
   const [fontBody, setFontBody] = useState("");
   const [sections, setSections] = useState<StorefrontSection[]>([]);
@@ -321,20 +313,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
 
   useEffect(() => {
     if (userPubkey) {
-      fetch(`/api/storefront/custom-domain?pubkey=${userPubkey}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data && data.domain) {
-            setCustomDomain(data.domain);
-            setDomainInfo(data);
-          }
-        })
-        .catch(() => {});
-    }
-  }, [userPubkey]);
-
-  useEffect(() => {
-    if (userPubkey) {
       fetch(`/api/email/notification-email?pubkey=${userPubkey}&role=seller`)
         .then((res) => res.json())
         .then((data) => {
@@ -385,8 +363,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       });
 
       setShopSlug("");
-      setCustomDomain("");
-      setDomainInfo(null);
       setColorScheme(DEFAULT_COLORS);
       setProductLayout("grid");
       setLandingPageStyle("hero");
@@ -410,60 +386,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       }
     } catch (error) {
       console.error("Failed to remove storefront:", error);
-    }
-  };
-
-  const handleRemoveCustomDomain = async () => {
-    if (!userPubkey) return;
-    try {
-      await fetch("/api/storefront/custom-domain", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pubkey: userPubkey }),
-      });
-      setCustomDomain("");
-      setDomainInfo(null);
-    } catch {}
-  };
-
-  const handleVerifyDomain = async () => {
-    if (!userPubkey) return;
-    setDomainVerifying(true);
-    setDomainVerifyMessage("");
-    try {
-      const res = await fetch("/api/storefront/verify-domain", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pubkey: userPubkey }),
-      });
-      const data = await res.json();
-      if (data.verified) {
-        setDomainInfo((prev) => (prev ? { ...prev, verified: true } : prev));
-      }
-      setDomainVerifyMessage(data.message || "Verification check complete.");
-    } catch {
-      setDomainVerifyMessage("Verification check failed. Please try again.");
-    }
-    setDomainVerifying(false);
-  };
-
-  const handleSaveCustomDomain = async () => {
-    if (!customDomain || !userPubkey) return;
-    setDomainError("");
-    try {
-      const res = await fetch("/api/storefront/custom-domain", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pubkey: userPubkey, domain: customDomain }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setDomainInfo({ domain: data.domain, verified: data.verified });
-      } else {
-        setDomainError(data.error || "Failed to connect domain");
-      }
-    } catch {
-      setDomainError("Failed to connect domain");
     }
   };
 
@@ -503,7 +425,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         productLayout,
         landingPageStyle,
         shopSlug,
-        customDomain: customDomain || undefined,
         fontHeading: fontHeading || undefined,
         fontBody: fontBody || undefined,
         sections: sections.length > 0 ? sections : undefined,
@@ -1427,108 +1348,15 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                       Custom Domain
                     </label>
                     <p className="mb-2 text-sm text-gray-500">
-                      Connect your own domain to your shop. Add a CNAME record
-                      pointing to <strong>milk-market.replit.app</strong>, then
-                      add the domain in your Replit deployment settings.
+                      Want to use your own domain (e.g., shop.yourdomain.com)
+                      for your storefront? We can help set that up for you.
                     </p>
-                    <div className="flex gap-3">
-                      <div className="flex-1">
-                        <Input
-                          classNames={{
-                            inputWrapper:
-                              "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-4 group-data-[focus=true]:border-black",
-                            input: "text-base",
-                          }}
-                          variant="bordered"
-                          fullWidth={true}
-                          placeholder="shop.yourdomain.com"
-                          value={customDomain}
-                          onChange={(e) => setCustomDomain(e.target.value)}
-                        />
-                      </div>
-                      <Button
-                        className={WHITEBUTTONCLASSNAMES}
-                        type="button"
-                        onPress={handleSaveCustomDomain}
-                        isDisabled={!customDomain || !shopSlug}
-                      >
-                        {domainInfo ? "Update" : "Connect"}
-                      </Button>
-                      {domainInfo && (
-                        <Button
-                          className="border-3 border-red-500 bg-white font-bold text-red-500 hover:bg-red-50"
-                          type="button"
-                          onPress={handleRemoveCustomDomain}
-                        >
-                          Remove
-                        </Button>
-                      )}
-                    </div>
-                    {domainError && (
-                      <p className="mt-1 text-sm text-red-600">{domainError}</p>
-                    )}
-                    {!shopSlug && customDomain && (
-                      <p className="mt-1 text-xs text-orange-600">
-                        Set a shop URL slug first before connecting a domain.
-                      </p>
-                    )}
-                    {domainInfo && (
-                      <div className="mt-2 rounded-lg border-2 border-gray-200 bg-gray-50 p-3">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`inline-block h-2 w-2 rounded-full ${
-                              domainInfo.verified
-                                ? "bg-green-500"
-                                : "bg-yellow-500"
-                            }`}
-                          />
-                          <span className="text-sm font-medium">
-                            {domainInfo.domain} -{" "}
-                            {domainInfo.verified
-                              ? "Verified"
-                              : "Pending verification"}
-                          </span>
-                          {!domainInfo.verified && (
-                            <Button
-                              className="ml-auto border-2 border-black bg-white text-xs font-bold text-black hover:bg-gray-100"
-                              type="button"
-                              size="sm"
-                              onPress={handleVerifyDomain}
-                              isLoading={domainVerifying}
-                              isDisabled={domainVerifying}
-                            >
-                              Verify DNS
-                            </Button>
-                          )}
-                        </div>
-                        {!domainInfo.verified && (
-                          <div className="mt-2 space-y-1">
-                            <p className="text-xs text-gray-500">
-                              <strong>Step 1:</strong> Add a CNAME record at
-                              your DNS provider:{" "}
-                              <strong>{domainInfo.domain}</strong> →{" "}
-                              <strong>milk-market.replit.app</strong>
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              <strong>Step 2:</strong> Add{" "}
-                              <strong>{domainInfo.domain}</strong> as a custom
-                              domain in your Replit deployment settings.
-                            </p>
-                          </div>
-                        )}
-                        {domainVerifyMessage && (
-                          <p
-                            className={`mt-2 text-xs font-medium ${
-                              domainInfo.verified
-                                ? "text-green-600"
-                                : "text-orange-600"
-                            }`}
-                          >
-                            {domainVerifyMessage}
-                          </p>
-                        )}
-                      </div>
-                    )}
+                    <a
+                      href="mailto:support@milk.market?subject=Custom%20Domain%20Request&body=Hi%2C%20I%27d%20like%20to%20set%20up%20a%20custom%20domain%20for%20my%20storefront.%0A%0AShop%20URL%3A%20milk.market%2Fshop%2F%0ADomain%3A%20"
+                      className="inline-block rounded-lg border-3 border-black bg-white px-4 py-2 text-sm font-bold text-black hover:bg-gray-100"
+                    >
+                      Contact Us
+                    </a>
                   </div>
 
                   <div className="rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-4">

@@ -12,24 +12,10 @@ export function proxy(request: NextRequest) {
     );
   }
 
-  if (hostname.includes("milk.market")) {
-    if (hostname === "www.milk.market") {
-      const url = new URL(request.url);
-      url.hostname = "milk.market";
-      return NextResponse.redirect(url, 301);
-    }
-
-    if (hostname !== "milk.market" && hostname.endsWith(".milk.market")) {
-      const subdomain = hostname.replace(".milk.market", "");
-      if (subdomain !== "www" && subdomain !== "api") {
-        const url = new URL(
-          `/shop/${subdomain}${pathname === "/" ? "" : pathname}`,
-          request.url
-        );
-        url.hostname = "milk.market";
-        return NextResponse.rewrite(url);
-      }
-    }
+  if (hostname === "www.milk.market") {
+    const url = new URL(request.url);
+    url.hostname = "milk.market";
+    return NextResponse.redirect(url, 301);
   }
 
   if (
@@ -39,20 +25,42 @@ export function proxy(request: NextRequest) {
     !hostname.includes("replit") &&
     !hostname.includes("127.0.0.1")
   ) {
-    if (!pathname.startsWith("/api/") && !pathname.startsWith("/_next/")) {
-      const url = new URL(request.url);
-      url.pathname = `/api/storefront/resolve-domain`;
-      url.searchParams.set("domain", hostname);
-      url.searchParams.set("originalPath", pathname);
-      return NextResponse.rewrite(
-        new URL(
-          `/shop/_custom-domain?domain=${encodeURIComponent(
-            hostname
-          )}&path=${encodeURIComponent(pathname)}`,
-          request.url
-        )
-      );
+    if (pathname.startsWith("/_next/")) {
+      return NextResponse.next();
     }
+
+    const allowedApiPrefixes = [
+      "/api/storefront/",
+      "/api/db/fetch-products",
+      "/api/db/fetch-profiles",
+      "/api/db/fetch-reviews",
+      "/api/db/fetch-communities",
+      "/api/nostr/",
+      "/api/lightning/",
+      "/api/cashu/",
+      "/api/stripe/checkout",
+    ];
+    if (pathname.startsWith("/api/")) {
+      const isAllowed = allowedApiPrefixes.some((prefix) =>
+        pathname.startsWith(prefix)
+      );
+      if (!isAllowed) {
+        return NextResponse.json(
+          { error: "Not available on this domain" },
+          { status: 403 }
+        );
+      }
+      return NextResponse.next();
+    }
+
+    return NextResponse.rewrite(
+      new URL(
+        `/shop/_custom-domain?domain=${encodeURIComponent(
+          hostname
+        )}&path=${encodeURIComponent(pathname)}`,
+        request.url
+      )
+    );
   }
 
   if (
