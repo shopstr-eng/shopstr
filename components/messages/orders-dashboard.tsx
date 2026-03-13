@@ -107,6 +107,9 @@ interface OrderData {
   isSubscription?: boolean;
   subscriptionFrequency?: string;
   subscriptionId?: string;
+  returnRequestSent?: boolean;
+  hasReturnRequest?: boolean;
+  returnRequestType?: string;
 }
 
 const OrdersDashboard = () => {
@@ -158,6 +161,15 @@ const OrdersDashboard = () => {
   const [addressChangeOrder, setAddressChangeOrder] =
     useState<OrderData | null>(null);
   const [isSendingAddressChange, setIsSendingAddressChange] = useState(false);
+
+  const [showReturnRequestModal, setShowReturnRequestModal] = useState(false);
+  const [returnRequestOrder, setReturnRequestOrder] =
+    useState<OrderData | null>(null);
+  const [returnRequestType, setReturnRequestType] = useState<
+    "return" | "refund" | "exchange"
+  >("return");
+  const [returnRequestMessage, setReturnRequestMessage] = useState("");
+  const [isSendingReturnRequest, setIsSendingReturnRequest] = useState(false);
 
   const [showHerdshareModal, setShowHerdshareModal] = useState(false);
   const [currentPdfUrl, setCurrentPdfUrl] = useState("");
@@ -580,6 +592,28 @@ const OrdersDashboard = () => {
         }
       }
 
+      const returnRequestOrderIds = new Set<string>();
+      const returnRequestTypes = new Map<string, string>();
+      for (const entry of chatsContext.chatsMap) {
+        const chat = entry[1] as NostrMessageEvent[];
+        for (const messageEvent of chat) {
+          const tagsMap = new Map(
+            messageEvent.tags
+              .filter((tag): tag is [string, string] => tag.length === 2)
+              .map(([k, v]) => [k, v])
+          );
+          const subject = tagsMap.get("subject");
+          if (subject === "return-request") {
+            const orderId = tagsMap.get("order") || "";
+            if (orderId) {
+              returnRequestOrderIds.add(orderId);
+              const reqType = tagsMap.get("status") || "return";
+              returnRequestTypes.set(orderId, reqType);
+            }
+          }
+        }
+      }
+
       const consolidatedOrdersMap = new Map<string, OrderData>();
 
       for (const order of ordersList) {
@@ -694,6 +728,17 @@ const OrdersDashboard = () => {
             } else if (herdshareData.unsigned) {
               order.unsignedHerdshareUrl = herdshareData.unsigned;
             }
+          }
+        }
+      }
+
+      for (const order of consolidatedOrders) {
+        if (returnRequestOrderIds.has(order.orderId)) {
+          order.hasReturnRequest = true;
+          order.returnRequestType =
+            returnRequestTypes.get(order.orderId) || "return";
+          if (!order.isSale) {
+            order.returnRequestSent = true;
           }
         }
       }
@@ -1117,6 +1162,170 @@ const OrdersDashboard = () => {
       order.subject === "shipping-info" ||
       order.subject === "order-receipt"
     );
+  };
+
+  const canShowReturnButton = (order: OrderData) => {
+    if (order.isSale) return false;
+    if (order.returnRequestSent) return false;
+    if (!order.productAddress || !order.productAddress.includes(":"))
+      return false;
+    const merchantPubkey = order.productAddress.split(":")[1];
+    if (merchantPubkey && merchantPubkey === userPubkey) return false;
+    return (
+      order.status === "completed" ||
+      order.status === "shipped" ||
+      order.status === "confirmed" ||
+      order.subject === "shipping-info" ||
+      order.subject === "order-receipt"
+    );
+  };
+
+  const getDefaultReturnMessage = (
+    type: "return" | "refund" | "exchange",
+    productTitle?: string
+  ) => {
+    const product = productTitle || "the product";
+    switch (type) {
+      case "return":
+        return `Hi, I would like to request a return for ${product}. Please let me know the return process and any details I need to follow.`;
+      case "refund":
+        return `Hi, I would like to request a refund for ${product}. Please let me know how to proceed.`;
+      case "exchange":
+        return `Hi, I would like to request an exchange for ${product}. Please let me know the available options and how to proceed.`;
+    }
+  };
+
+  const handleOpenReturnRequestModal = (order: OrderData) => {
+    setReturnRequestOrder(order);
+    setReturnRequestType("return");
+    setReturnRequestMessage(
+      getDefaultReturnMessage("return", order.productTitle)
+    );
+    setShowReturnRequestModal(true);
+  };
+
+  const handleCloseReturnRequestModal = () => {
+    setShowReturnRequestModal(false);
+    setReturnRequestOrder(null);
+    setReturnRequestType("return");
+    setReturnRequestMessage("");
+  };
+
+  const handleReturnRequestTypeChange = (
+    type: "return" | "refund" | "exchange"
+  ) => {
+    setReturnRequestType(type);
+    setReturnRequestMessage(
+      getDefaultReturnMessage(type, returnRequestOrder?.productTitle)
+    );
+  };
+
+  const handleSubmitReturnRequest = async () => {
+    if (
+      !returnRequestOrder ||
+      !signer ||
+      !nostr ||
+      !returnRequestMessage.trim()
+    )
+      return;
+
+    setIsSendingReturnRequest(true);
+
+    try {
+      const decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
+      const decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
+      const decodedRandomPubkeyForReceiver = nip19.decode(
+        randomNpubForReceiver
+      );
+      const decodedRandomPrivkeyForReceiver = nip19.decode(
+        randomNsecForReceiver
+      );
+
+      const sellerPubkey =
+        returnRequestOrder.sellerPubkey ||
+        returnRequestOrder.productAddress.split(":")[1];
+
+      if (!sellerPubkey) {
+        setFailureText("Could not determine seller for this order.");
+        setShowFailureModal(true);
+        return;
+      }
+
+      const typeLabel =
+        returnRequestType === "return"
+          ? "Return"
+          : returnRequestType === "refund"
+            ? "Refund"
+            : "Exchange";
+
+      const message = `${typeLabel} Request for order #${returnRequestOrder.orderId.slice(
+        0,
+        8
+      )}\nProduct: ${
+        returnRequestOrder.productTitle || "Unknown Product"
+      }\n\n${returnRequestMessage}`;
+
+      const giftWrappedMessageEvent = await constructGiftWrappedEvent(
+        decodedRandomPubkeyForSender.data as string,
+        sellerPubkey,
+        message,
+        "return-request",
+        {
+          productAddress: returnRequestOrder.productAddress,
+          type: 4,
+          isOrder: true,
+          orderId: returnRequestOrder.orderId,
+          buyerPubkey: userPubkey,
+          status: returnRequestType,
+        }
+      );
+
+      const sealedEvent = await constructMessageSeal(
+        signer,
+        giftWrappedMessageEvent,
+        decodedRandomPubkeyForSender.data as string,
+        sellerPubkey,
+        decodedRandomPrivkeyForSender.data as Uint8Array
+      );
+
+      const giftWrappedEvent = await constructMessageGiftWrap(
+        sealedEvent,
+        decodedRandomPubkeyForReceiver.data as string,
+        decodedRandomPrivkeyForReceiver.data as Uint8Array,
+        sellerPubkey
+      );
+
+      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent);
+
+      setOrders((prevOrders) =>
+        prevOrders.map((order) =>
+          order.orderId === returnRequestOrder.orderId
+            ? { ...order, returnRequestSent: true, returnRequestType }
+            : order
+        )
+      );
+
+      fetch("/api/email/send-return-request-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: returnRequestOrder.orderId,
+          productTitle: returnRequestOrder.productTitle || "Unknown Product",
+          requestType: returnRequestType,
+          message: returnRequestMessage,
+          sellerPubkey,
+          buyerName: userNPub,
+        }),
+      }).catch(() => {});
+
+      handleCloseReturnRequestModal();
+    } catch (error) {
+      console.error("Error sending return request:", error);
+      setFailureText("Failed to send return request. Please try again.");
+      setShowFailureModal(true);
+    } finally {
+      setIsSendingReturnRequest(false);
+    }
   };
 
   const handleSignHerdshare = async (order: OrderData) => {
@@ -1632,6 +1841,20 @@ const OrdersDashboard = () => {
                                 Leave Review
                               </button>
                             ) : null}
+                            {order.returnRequestSent && !order.isSale ? (
+                              <span className="text-xs text-orange-500">
+                                Return Requested
+                              </span>
+                            ) : canShowReturnButton(order) ? (
+                              <button
+                                onClick={() =>
+                                  handleOpenReturnRequestModal(order)
+                                }
+                                className="cursor-pointer text-left text-xs text-orange-500 underline hover:text-orange-700"
+                              >
+                                Request Return
+                              </button>
+                            ) : null}
                           </div>
                         </td>
                         <td className="whitespace-nowrap px-4 py-4 text-sm">
@@ -1700,6 +1923,17 @@ const OrdersDashboard = () => {
                               >
                                 Send Shipping Update
                               </button>
+                            )}
+                            {order.hasReturnRequest && order.isSale && (
+                              <span className="inline-flex items-center gap-1 rounded-md border border-orange-300 bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">
+                                {(order.returnRequestType || "return")
+                                  .charAt(0)
+                                  .toUpperCase() +
+                                  (order.returnRequestType || "return").slice(
+                                    1
+                                  )}{" "}
+                                Request
+                              </span>
                             )}
                           </div>
                         </td>
@@ -2214,6 +2448,87 @@ const OrdersDashboard = () => {
           </ModalContent>
         </Modal>
       )}
+
+      <Modal
+        backdrop="blur"
+        isOpen={showReturnRequestModal}
+        onClose={handleCloseReturnRequestModal}
+        classNames={{
+          wrapper: "shadow-neo",
+          base: "border-2 border-black rounded-md",
+          backdrop: "bg-black/20 backdrop-blur-sm",
+          header: "border-b-2 border-black bg-white rounded-t-md text-black",
+          body: "bg-white text-black",
+          footer: "border-t-2 border-black bg-white rounded-b-md",
+        }}
+      >
+        <ModalContent>
+          <ModalHeader>
+            <span>Request Return / Refund / Exchange</span>
+          </ModalHeader>
+          <ModalBody>
+            <div className="flex flex-col gap-4">
+              <div>
+                <p className="mb-1 text-sm font-semibold text-black">
+                  Order: {returnRequestOrder?.orderId?.substring(0, 8)}...
+                </p>
+                <p className="text-sm text-gray-600">
+                  Product: {returnRequestOrder?.productTitle || "Unknown"}
+                </p>
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-black">
+                  Request Type
+                </label>
+                <div className="flex gap-3">
+                  {(["return", "refund", "exchange"] as const).map((type) => (
+                    <button
+                      key={type}
+                      onClick={() => handleReturnRequestTypeChange(type)}
+                      className={`rounded-md border-2 px-3 py-1.5 text-sm font-bold transition-colors ${
+                        returnRequestType === type
+                          ? "border-black bg-orange-200 text-black"
+                          : "border-gray-300 bg-white text-gray-600 hover:border-black"
+                      }`}
+                    >
+                      {type.charAt(0).toUpperCase() + type.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-black">
+                  Message to Seller
+                </label>
+                <textarea
+                  value={returnRequestMessage}
+                  onChange={(e) => setReturnRequestMessage(e.target.value)}
+                  rows={5}
+                  className="w-full rounded-md border-2 border-gray-300 bg-white p-3 text-sm text-black focus:border-black focus:outline-none"
+                  placeholder="Describe the reason for your request..."
+                />
+              </div>
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              color="danger"
+              variant="light"
+              onClick={handleCloseReturnRequestModal}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="border-2 border-black bg-orange-200 font-bold text-black hover:bg-orange-300"
+              onClick={handleSubmitReturnRequest}
+              isLoading={isSendingReturnRequest}
+              disabled={isSendingReturnRequest || !returnRequestMessage.trim()}
+            >
+              {isSendingReturnRequest ? "Sending..." : "Submit Request"}
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
 
       <AddressChangeModal
         isOpen={showAddressChangeModal}

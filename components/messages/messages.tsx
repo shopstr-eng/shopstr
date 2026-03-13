@@ -10,7 +10,7 @@ import {
   decryptNpub,
   generateKeys,
 } from "@/utils/nostr/nostr-helper-functions";
-import { ChatsContext } from "../../utils/context/context";
+import { ChatsContext, ProfileMapContext } from "../../utils/context/context";
 import MilkMarketSpinner from "../utility-components/mm-spinner";
 import ChatPanel from "./chat-panel";
 import ChatButton from "./chat-button";
@@ -42,6 +42,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
   const [isSendingDMLoading, setIsSendingDMLoading] = useState(false);
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
   const { nostr } = useContext(NostrContext);
+  const profileContext = useContext(ProfileMapContext);
 
   const [isClient, setIsClient] = useState(false);
 
@@ -293,6 +294,27 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         },
         true
       );
+
+      const senderProfile = userPubkey
+        ? profileContext?.profileData?.get(userPubkey)
+        : null;
+      const senderDisplayName =
+        senderProfile?.content?.name ||
+        senderProfile?.content?.display_name ||
+        (userPubkey
+          ? nip19.npubEncode(userPubkey).slice(0, 16) + "..."
+          : "A user");
+
+      fetch("/api/email/send-inquiry-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          senderPubkey: userPubkey,
+          recipientPubkey: currentChatPubkey,
+          message,
+          senderName: senderDisplayName,
+        }),
+      }).catch(() => {});
 
       setIsSendingDMLoading(false);
     } catch (_) {

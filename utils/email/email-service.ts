@@ -7,6 +7,8 @@ import {
   renewalReminderEmail,
   addressChangeConfirmationEmail,
   subscriptionCancellationEmail,
+  returnRequestEmail,
+  inquiryNotificationEmail,
   OrderEmailParams,
   SubscriptionEmailParams,
 } from "./email-templates";
@@ -14,16 +16,21 @@ import {
 async function sendEmail(
   to: string,
   subject: string,
-  html: string
+  html: string,
+  replyTo?: string
 ): Promise<boolean> {
   try {
     const { client, fromEmail } = await getUncachableSendGridClient();
-    await client.send({
+    const msg: any = {
       to,
       from: fromEmail,
       subject,
       html,
-    });
+    };
+    if (replyTo) {
+      msg.replyTo = replyTo;
+    }
+    await client.send(msg);
     return true;
   } catch (error) {
     console.error("Failed to send email:", error);
@@ -103,4 +110,35 @@ export async function sendSubscriptionCancellation(
 ): Promise<boolean> {
   const { subject, html } = subscriptionCancellationEmail(params);
   return sendEmail(buyerEmail, subject, html);
+}
+
+export async function sendInquiryNotification(
+  recipientEmail: string,
+  params: {
+    senderName: string;
+    message: string;
+    senderHasEmail: boolean;
+    senderEmail?: string;
+  }
+): Promise<boolean> {
+  const { subject, html } = inquiryNotificationEmail({
+    senderName: params.senderName,
+    message: params.message,
+    senderHasEmail: params.senderHasEmail,
+  });
+  return sendEmail(recipientEmail, subject, html, params.senderEmail);
+}
+
+export async function sendReturnRequestToSeller(
+  sellerEmail: string,
+  params: {
+    orderId: string;
+    productTitle: string;
+    requestType: "return" | "refund" | "exchange";
+    message: string;
+    buyerName?: string;
+  }
+): Promise<boolean> {
+  const { subject, html } = returnRequestEmail(params);
+  return sendEmail(sellerEmail, subject, html);
 }

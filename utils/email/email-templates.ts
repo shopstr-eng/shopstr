@@ -522,3 +522,88 @@ export function orderUpdateEmail(params: {
     html: baseTemplate(updateTitle, body),
   };
 }
+
+export function returnRequestEmail(params: {
+  orderId: string;
+  productTitle: string;
+  requestType: "return" | "refund" | "exchange";
+  message: string;
+  buyerName?: string;
+}): { subject: string; html: string } {
+  const typeLabel =
+    params.requestType === "return"
+      ? "Return"
+      : params.requestType === "refund"
+        ? "Refund"
+        : "Exchange";
+
+  const buyerInfo = esc(params.buyerName || "A buyer");
+
+  const body = `
+    <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">${typeLabel} Request Received</h2>
+    <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.6;">${buyerInfo} has requested a <strong>${typeLabel.toLowerCase()}</strong> for an order.</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:20px;margin-bottom:24px;">
+      <tr>
+        <td>
+          <p style="margin:0 0 8px;color:#92400e;font-size:14px;font-weight:600;">${typeLabel} Details</p>
+          <p style="margin:0 0 4px;color:#374151;font-size:14px;"><strong>Order ID:</strong> ${esc(
+            params.orderId
+          )}</p>
+          <p style="margin:0 0 4px;color:#374151;font-size:14px;"><strong>Product:</strong> ${esc(
+            params.productTitle
+          )}</p>
+          <p style="margin:0 0 4px;color:#374151;font-size:14px;"><strong>Type:</strong> ${typeLabel}</p>
+        </td>
+      </tr>
+    </table>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border-radius:8px;padding:20px;margin-bottom:24px;">
+      <tr>
+        <td>
+          <p style="margin:0 0 8px;color:#6b7280;font-size:13px;text-transform:uppercase;letter-spacing:0.05em;">Buyer's Message</p>
+          <p style="margin:0;color:#111827;font-size:15px;line-height:1.6;white-space:pre-wrap;">${esc(
+            params.message
+          )}</p>
+        </td>
+      </tr>
+    </table>
+    <p style="margin:0;color:#374151;font-size:15px;line-height:1.6;">Please respond to this request by messaging the buyer directly through ${BRAND_NAME}.</p>`;
+
+  return {
+    subject: `${typeLabel} Request - ${esc(params.productTitle)} (#${esc(
+      params.orderId.slice(0, 8)
+    )})`,
+    html: baseTemplate(`${typeLabel} Request`, body),
+  };
+}
+
+export function inquiryNotificationEmail(params: {
+  senderName: string;
+  message: string;
+  senderHasEmail: boolean;
+}): { subject: string; html: string } {
+  const replyNote = params.senderHasEmail
+    ? `<p style="margin:16px 0 0;color:#374151;font-size:15px;line-height:1.6;">You can reply directly to this email to respond, or message them through ${BRAND_NAME}.</p>`
+    : `<p style="margin:16px 0 0;color:#374151;font-size:15px;line-height:1.6;">This person does not have an email on file. To reply, please message them directly through the <strong>Inquiries</strong> chat on ${BRAND_NAME}.</p>`;
+
+  const body = `
+    <h2 style="margin:0 0 16px;color:#111827;font-size:20px;">New Message</h2>
+    <p style="margin:0 0 24px;color:#374151;font-size:15px;line-height:1.6;">You have a new inquiry from <strong>${esc(
+      params.senderName
+    )}</strong>.</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f9fafb;border-radius:8px;padding:20px;margin-bottom:24px;">
+      <tr>
+        <td>
+          <p style="margin:0 0 8px;color:#6b7280;font-size:13px;text-transform:uppercase;letter-spacing:0.05em;">Message</p>
+          <p style="margin:0;color:#111827;font-size:15px;line-height:1.6;white-space:pre-wrap;">${esc(
+            params.message
+          )}</p>
+        </td>
+      </tr>
+    </table>
+    ${replyNote}`;
+
+  return {
+    subject: `New inquiry from ${esc(params.senderName)} on ${BRAND_NAME}`,
+    html: baseTemplate("New Inquiry", body),
+  };
+}
