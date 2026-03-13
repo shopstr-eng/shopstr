@@ -29,6 +29,7 @@ import {
   EventIdModal,
 } from "../../components/utility-components/modals/event-modals";
 import { findProductBySlug, getListingSlug } from "@/utils/url-slugs";
+import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wrapper";
 
 const Listing = () => {
   const router = useRouter();
@@ -119,7 +120,9 @@ const Listing = () => {
     }
   }, [productContext.isLoading, productContext.productEvents, productIdString]);
 
-  return (
+  const sellerPubkey = productData?.pubkey || "";
+
+  const listingContent = (
     <>
       <div className="flex h-full min-h-screen flex-col bg-white pt-20">
         {productData &&
@@ -201,7 +204,13 @@ const Listing = () => {
                 setFiatOrderIsPlaced(false);
                 setInvoiceIsPaid(false);
                 setCashuPaymentSent(false);
-                router.push("/order-summary");
+                const sfSlug = sessionStorage.getItem("sf_shop_slug");
+                const sfPk = sessionStorage.getItem("sf_seller_pubkey");
+                if (sfPk && sfSlug) {
+                  router.push(`/shop/${sfSlug}/order-confirmation`);
+                } else {
+                  router.push("/order-summary");
+                }
               }}
               classNames={{
                 body: "py-6 bg-white",
@@ -335,6 +344,16 @@ const Listing = () => {
       </div>
     </>
   );
+
+  if (sellerPubkey) {
+    return (
+      <StorefrontThemeWrapper sellerPubkey={sellerPubkey}>
+        {listingContent}
+      </StorefrontThemeWrapper>
+    );
+  }
+
+  return listingContent;
 };
 
 export default Listing;

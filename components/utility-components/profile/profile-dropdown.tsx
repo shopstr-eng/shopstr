@@ -1,5 +1,5 @@
 import { LogOut } from "@/utils/nostr/nostr-helper-functions";
-import { ProfileMapContext } from "@/utils/context/context";
+import { ProfileMapContext, ShopMapContext } from "@/utils/context/context";
 import {
   Dropdown,
   DropdownItem,
@@ -25,9 +25,12 @@ import { useRouter } from "next/router";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import SignInModal from "../../sign-in/SignInModal";
 
+import { GlobeAltIcon } from "@heroicons/react/24/outline";
+
 type DropDownKeys =
   | "shop"
   | "shop_profile"
+  | "storefront"
   | "inquiry"
   | "settings"
   | "user_profile"
@@ -52,6 +55,7 @@ export const ProfileWithDropdown = ({
   const [isNPubCopied, setIsNPubCopied] = useState(false);
   const [isNip05Verified, setIsNip05Verified] = useState(false);
   const profileContext = useContext(ProfileMapContext);
+  const shopMapContext = useContext(ShopMapContext);
   const npub = pubkey ? nip19.npubEncode(pubkey) : "";
   const router = useRouter();
   const { isLoggedIn } = useContext(SignerContext);
@@ -96,6 +100,24 @@ export const ProfileWithDropdown = ({
         router.push(`/marketplace/${slug}`);
       },
       label: "Visit Seller",
+    },
+    storefront: {
+      key: "storefront",
+      color: "default",
+      className:
+        "!text-black hover:!bg-blue-400 hover:!text-white font-bold data-[hover=true]:!bg-blue-400 data-[hover=true]:!text-white",
+      startContent: <GlobeAltIcon className={"h-5 w-5 !text-black"} />,
+      onClick: () => {
+        const shopData = shopMapContext.shopData.get(pubkey);
+        const shopSlug = shopData?.content?.storefront?.shopSlug;
+        if (shopSlug) {
+          router.push(`/shop/${shopSlug}`);
+        } else {
+          const slug = getProfileSlug(pubkey, profileContext.profileData);
+          router.push(`/marketplace/${slug}`);
+        }
+      },
+      label: "Visit Storefront",
     },
     shop_profile: {
       key: "shop_profile",

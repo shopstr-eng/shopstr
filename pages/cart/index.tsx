@@ -32,6 +32,7 @@ import { fiat } from "@getalby/lightning-tools";
 import currencySelection from "../../public/currencySelection.json";
 import { ShopMapContext, ProfileMapContext } from "@/utils/context/context";
 import { nip19 } from "nostr-tools";
+import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wrapper";
 
 interface QuantitySelectorProps {
   value: number;
@@ -98,6 +99,16 @@ export interface SubscriptionSelection {
 export default function Component() {
   const shopContext = useContext(ShopMapContext);
   const profileContext = useContext(ProfileMapContext);
+
+  const [sfSellerPubkey, setSfSellerPubkey] = useState("");
+  const [sfShopSlug, setSfShopSlug] = useState("");
+
+  useEffect(() => {
+    const stored = sessionStorage.getItem("sf_seller_pubkey");
+    if (stored) setSfSellerPubkey(stored);
+    const storedSlug = sessionStorage.getItem("sf_shop_slug");
+    if (storedSlug) setSfShopSlug(storedSlug);
+  }, []);
 
   const [products, setProducts] = useState<ProductData[]>([]);
   const [satPrices, setSatPrices] = useState<{ [key: string]: number | null }>(
@@ -285,17 +296,29 @@ export default function Component() {
 
   const router = useRouter();
 
+  const [excludedItemCount, setExcludedItemCount] = useState(0);
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       const cartList = localStorage.getItem("cart")
         ? JSON.parse(localStorage.getItem("cart") as string)
         : [];
       if (cartList && cartList.length > 0) {
-        setProducts(cartList);
+        let filteredList = cartList as ProductData[];
+        if (sfSellerPubkey) {
+          const excluded = filteredList.filter(
+            (p: ProductData) => p.pubkey !== sfSellerPubkey
+          );
+          setExcludedItemCount(excluded.length);
+          filteredList = filteredList.filter(
+            (p: ProductData) => p.pubkey === sfSellerPubkey
+          );
+        }
+        setProducts(filteredList);
         const initialSubSelections: {
           [productId: string]: SubscriptionSelection;
         } = {};
-        for (const item of cartList as ProductData[]) {
+        for (const item of filteredList) {
           if (item.selectedQuantity) {
             setQuantities((prev) => ({
               ...prev,
@@ -332,7 +355,7 @@ export default function Component() {
         setAppliedDiscounts(applied);
       }
     }
-  }, []);
+  }, [sfSellerPubkey]);
 
   useEffect(() => {
     const fetchSatPrices = async () => {
@@ -501,8 +524,18 @@ export default function Component() {
       const updatedCart = cartContent.filter(
         (obj: ProductData) => obj.id !== productId
       );
-      setProducts(updatedCart);
       localStorage.setItem("cart", JSON.stringify(updatedCart));
+      if (sfSellerPubkey) {
+        setProducts(
+          updatedCart.filter((p: ProductData) => p.pubkey === sfSellerPubkey)
+        );
+        setExcludedItemCount(
+          updatedCart.filter((p: ProductData) => p.pubkey !== sfSellerPubkey)
+            .length
+        );
+      } else {
+        setProducts(updatedCart);
+      }
     }
   };
 
@@ -653,7 +686,7 @@ export default function Component() {
     return cost;
   };
 
-  return (
+  const cartContent = (
     <>
       {!isBeingPaid ? (
         <div className="flex min-h-screen flex-col bg-white p-4 text-black">
@@ -661,6 +694,30 @@ export default function Component() {
             <div className="mb-8">
               <h1 className="text-4xl font-bold">Shopping Cart</h1>
             </div>
+            {sfSellerPubkey && excludedItemCount > 0 && (
+              <div className="mb-4 flex items-start rounded-md border-2 border-black bg-yellow-50 p-4">
+                <InformationCircleIcon className="mr-3 h-5 w-5 flex-shrink-0 text-yellow-600" />
+                <p className="text-sm text-black">
+                  You have {excludedItemCount} other{" "}
+                  {excludedItemCount === 1 ? "item" : "items"} from other
+                  sellers in your cart.{" "}
+                  <a
+                    href="/cart"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      sessionStorage.removeItem("sf_seller_pubkey");
+                      sessionStorage.removeItem("sf_shop_slug");
+                      setSfSellerPubkey("");
+                      setSfShopSlug("");
+                      setExcludedItemCount(0);
+                    }}
+                    className="font-semibold underline"
+                  >
+                    View full cart
+                  </a>
+                </p>
+              </div>
+            )}
             {products.length > 0 ? (
               <>
                 <div className="space-y-4">
@@ -1080,7 +1137,13 @@ export default function Component() {
                 <Button
                   className={BLUEBUTTONCLASSNAMES}
                   size="lg"
-                  onClick={() => router.push("/marketplace")}
+                  onClick={() =>
+                    router.push(
+                      sfSellerPubkey && sfShopSlug
+                        ? `/shop/${sfShopSlug}`
+                        : "/marketplace"
+                    )
+                  }
                 >
                   Continue Shopping
                 </Button>
@@ -1122,7 +1185,11 @@ export default function Component() {
             onClose={() => {
               setInvoiceIsPaid(false);
               setCashuPaymentSent(false);
-              router.push("/order-summary");
+              if (sfSellerPubkey && sfShopSlug) {
+                router.push(`/shop/${sfShopSlug}/order-confirmation`);
+              } else {
+                router.push("/order-summary");
+              }
             }}
             classNames={{
               body: "py-6 bg-white",
@@ -1226,4 +1293,14 @@ export default function Component() {
       ) : null}
     </>
   );
+
+  if (sfSellerPubkey) {
+    return (
+      <StorefrontThemeWrapper sellerPubkey={sfSellerPubkey}>
+        {cartContent}
+      </StorefrontThemeWrapper>
+    );
+  }
+
+  return cartContent;
 }

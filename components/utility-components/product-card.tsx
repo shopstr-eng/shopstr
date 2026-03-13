@@ -106,7 +106,7 @@ export default function ProductCard({
               dropDownKeys={
                 productData.pubkey === userPubkey
                   ? ["shop_profile"]
-                  : ["shop", "inquiry", "copy_npub"]
+                  : ["shop", "storefront", "inquiry", "copy_npub"]
               }
               bg="light"
             />

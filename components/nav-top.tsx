@@ -187,7 +187,10 @@ const TopNav = ({
   );
 
   return (
-    <div className="fixed top-0 z-50 w-full border-b-2 border-black bg-primary-blue shadow-lg">
+    <div
+      data-main-nav
+      className="fixed top-0 z-50 w-full border-b-2 border-black bg-primary-blue shadow-lg"
+    >
       <div className="flex items-center justify-between py-2 pr-4">
         <div className="flex flex-shrink-0 items-center">
           <Button
@@ -201,7 +204,7 @@ const TopNav = ({
               src={shopLogoURL != "" ? shopLogoURL : "/milk-market.png"}
               width={40}
             />
-            <span className="ml-2 text-xl text-white md:flex">
+            <span className="ml-2 text-xl text-white md:hidden lg:flex">
               {shopName != "" ? shopName : "Milk Market"}
             </span>
           </Button>
