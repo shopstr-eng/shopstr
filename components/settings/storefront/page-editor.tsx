@@ -1,4 +1,4 @@
-import { Input, Button } from "@nextui-org/react";
+import { Input } from "@nextui-org/react";
 import {
   StorefrontPage,
   StorefrontSection,
@@ -153,8 +153,8 @@ export default function PageEditor({ pages, onChange }: PageEditorProps) {
                       if (idx === 0) return;
                       const sections = [...page.sections];
                       [sections[idx - 1], sections[idx]] = [
-                        sections[idx],
-                        sections[idx - 1],
+                        sections[idx]!,
+                        sections[idx - 1]!,
                       ];
                       updatePageSections(page.id, sections);
                     }}
@@ -162,8 +162,8 @@ export default function PageEditor({ pages, onChange }: PageEditorProps) {
                       if (idx === page.sections.length - 1) return;
                       const sections = [...page.sections];
                       [sections[idx], sections[idx + 1]] = [
-                        sections[idx + 1],
-                        sections[idx],
+                        sections[idx + 1]!,
+                        sections[idx]!,
                       ];
                       updatePageSections(page.id, sections);
                     }}

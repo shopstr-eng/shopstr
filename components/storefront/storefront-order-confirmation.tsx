@@ -9,7 +9,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { StorefrontColorScheme } from "@/utils/types/types";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
-import { ProductContext, ShopMapContext } from "@/utils/context/context";
+import { ProductContext } from "@/utils/context/context";
 import parseTags, {
   ProductData,
 } from "@/utils/parsers/product-parser-functions";

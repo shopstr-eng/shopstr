@@ -5,7 +5,7 @@ interface SectionTextProps {
   colors: StorefrontColorScheme;
 }
 
-export default function SectionText({ section, colors }: SectionTextProps) {
+export default function SectionText({ section }: SectionTextProps) {
   return (
     <div className="mx-auto max-w-4xl px-4 py-16 md:px-6">
       {section.heading && (

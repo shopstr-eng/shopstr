@@ -40,7 +40,7 @@ export default function FooterEditor({ footer, onChange }: FooterEditorProps) {
 
   const updateSocial = (idx: number, fields: Partial<StorefrontSocialLink>) => {
     const updated = [...socialLinks];
-    updated[idx] = { ...updated[idx], ...fields };
+    updated[idx] = { ...updated[idx]!, ...fields };
     onChange({ ...footer, socialLinks: updated });
   };
 
@@ -60,7 +60,7 @@ export default function FooterEditor({ footer, onChange }: FooterEditorProps) {
 
   const updateNav = (idx: number, fields: Partial<StorefrontNavLink>) => {
     const updated = [...navLinks];
-    updated[idx] = { ...updated[idx], ...fields };
+    updated[idx] = { ...updated[idx]!, ...fields };
     onChange({ ...footer, navLinks: updated });
   };
 

@@ -23,7 +23,6 @@ import {
   StorefrontColorScheme,
   StorefrontNavLink,
   StorefrontFooter,
-  StorefrontSection,
 } from "@/utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
@@ -127,6 +126,8 @@ export default function StorefrontLayout({
     };
   }, [colors]);
 
+  const shopSlug = storefront.shopSlug || "";
+
   useEffect(() => {
     if (shopPubkey) {
       sessionStorage.setItem("sf_seller_pubkey", shopPubkey);
@@ -169,7 +170,6 @@ export default function StorefrontLayout({
   const bannerUrl = shop?.content?.ui?.banner || "";
   const pictureUrl =
     shop?.content?.ui?.picture || profile?.content?.picture || "";
-  const shopSlug = storefront.shopSlug || "";
 
   const fontHeading = storefront.fontHeading || "";
   const fontBody = storefront.fontBody || "";
@@ -195,10 +195,7 @@ export default function StorefrontLayout({
 
   const merchantReviewData = reviewsContext.merchantReviewsData.get(shopPubkey);
   const reviewCount = merchantReviewData
-    ? Array.from(merchantReviewData.values()).reduce(
-        (sum, arr) => sum + arr.length,
-        0
-      )
+    ? Array.from(merchantReviewData.values()).flat().length
     : 0;
 
   const showCommunity = !!storefront.showCommunityPage;

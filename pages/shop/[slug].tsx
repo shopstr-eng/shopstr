@@ -1,6 +1,6 @@
 import { useEffect, useState, useContext } from "react";
 import { useRouter } from "next/router";
-import { ShopMapContext, ProfileMapContext } from "@/utils/context/context";
+import { ShopMapContext } from "@/utils/context/context";
 import StorefrontLayout from "@/components/storefront/storefront-layout";
 import MilkMarketSpinner from "@/components/utility-components/mm-spinner";
 
@@ -8,7 +8,6 @@ export default function ShopPage() {
   const router = useRouter();
   const { slug } = router.query;
   const shopMapContext = useContext(ShopMapContext);
-  const profileContext = useContext(ProfileMapContext);
   const [shopPubkey, setShopPubkey] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);

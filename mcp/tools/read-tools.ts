@@ -670,7 +670,7 @@ export function registerReadTools(server: McpServer) {
           const dbPool = getDbPool();
           const domainResult = await dbPool.query(
             "SELECT domain, verified FROM custom_domains WHERE pubkey = $1",
-            [resolvedPubkey]
+            [resolvedPubkey!]
           );
           if (domainResult.rows.length > 0) {
             customDomain = {

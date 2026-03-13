@@ -6,7 +6,7 @@ interface SectionImageProps {
   colors: StorefrontColorScheme;
 }
 
-export default function SectionImage({ section, colors }: SectionImageProps) {
+export default function SectionImage({ section }: SectionImageProps) {
   if (!section.image) return null;
 
   return (

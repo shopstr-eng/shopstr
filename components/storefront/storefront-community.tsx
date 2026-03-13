@@ -12,7 +12,6 @@ interface StorefrontCommunityProps {
 }
 
 export default function StorefrontCommunity({
-  shopPubkey,
   community,
   colors,
   isLoading,

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Input, Textarea, Select, SelectItem, Button } from "@nextui-org/react";
+import { Input, Textarea, Select, SelectItem } from "@nextui-org/react";
 import {
   StorefrontSection,
   StorefrontSectionType,
@@ -380,7 +380,7 @@ function FaqEditor({
   const remove = (idx: number) => onChange(items.filter((_, i) => i !== idx));
   const edit = (idx: number, field: keyof StorefrontFaqItem, value: string) => {
     const updated = [...items];
-    updated[idx] = { ...updated[idx], [field]: value };
+    updated[idx] = { ...updated[idx]!, [field]: value };
     onChange(updated);
   };
 
@@ -442,7 +442,7 @@ function TestimonialEditor({
     onChange(testimonials.filter((_, i) => i !== idx));
   const edit = (idx: number, fields: Partial<StorefrontTestimonial>) => {
     const updated = [...testimonials];
-    updated[idx] = { ...updated[idx], ...fields };
+    updated[idx] = { ...updated[idx]!, ...fields };
     onChange(updated);
   };
 
@@ -526,7 +526,7 @@ function IngredientEditor({
   const remove = (idx: number) => onChange(items.filter((_, i) => i !== idx));
   const edit = (idx: number, fields: Partial<StorefrontIngredientItem>) => {
     const updated = [...items];
-    updated[idx] = { ...updated[idx], ...fields };
+    updated[idx] = { ...updated[idx]!, ...fields };
     onChange(updated);
   };
 
@@ -589,7 +589,7 @@ function TimelineEditor({
   const remove = (idx: number) => onChange(items.filter((_, i) => i !== idx));
   const edit = (idx: number, fields: Partial<StorefrontTimelineItem>) => {
     const updated = [...items];
-    updated[idx] = { ...updated[idx], ...fields };
+    updated[idx] = { ...updated[idx]!, ...fields };
     onChange(updated);
   };
 
@@ -715,7 +715,7 @@ function ComparisonEditor({
                 onChange={(e) => {
                   const updated = [...columns];
                   updated[colIdx] = {
-                    ...updated[colIdx],
+                    ...updated[colIdx]!,
                     heading: e.target.value,
                   };
                   onColumnsChange(updated);
@@ -742,9 +742,9 @@ function ComparisonEditor({
                 value={col.values[rowIdx] || ""}
                 onChange={(e) => {
                   const updated = [...columns];
-                  const vals = [...(updated[colIdx].values || [])];
+                  const vals = [...(updated[colIdx]!.values || [])];
                   vals[rowIdx] = e.target.value;
-                  updated[colIdx] = { ...updated[colIdx], values: vals };
+                  updated[colIdx] = { ...updated[colIdx]!, values: vals };
                   onColumnsChange(updated);
                 }}
                 className="mb-1"

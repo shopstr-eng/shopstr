@@ -1,7 +1,6 @@
 import { StorefrontSection, StorefrontColorScheme } from "@/utils/types/types";
 import { useContext } from "react";
-import { ReviewsContext, ProfileMapContext } from "@/utils/context/context";
-import { nip19 } from "nostr-tools";
+import { ReviewsContext } from "@/utils/context/context";
 
 interface SectionReviewsProps {
   section: StorefrontSection;
@@ -15,7 +14,6 @@ export default function SectionReviews({
   shopPubkey,
 }: SectionReviewsProps) {
   const reviewsContext = useContext(ReviewsContext);
-  const profileContext = useContext(ProfileMapContext);
 
   const merchantReviewData =
     reviewsContext?.merchantReviewsData?.get(shopPubkey);

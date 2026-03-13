@@ -1,8 +1,4 @@
-import {
-  StorefrontColorScheme,
-  StorefrontFooter,
-  StorefrontSocialLink,
-} from "@/utils/types/types";
+import { StorefrontColorScheme, StorefrontFooter } from "@/utils/types/types";
 import Link from "next/link";
 
 interface StorefrontFooterProps {

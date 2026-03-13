@@ -1166,7 +1166,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                             onChange={(e) => {
                               const updated = [...navLinks];
                               updated[idx] = {
-                                ...updated[idx],
+                                ...link,
                                 label: e.target.value,
                               };
                               setNavLinks(updated);
@@ -1184,7 +1184,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                             onChange={(e) => {
                               const updated = [...navLinks];
                               updated[idx] = {
-                                ...updated[idx],
+                                ...link,
                                 href: e.target.value,
                               };
                               setNavLinks(updated);
@@ -1199,7 +1199,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                               onChange={(e) => {
                                 const updated = [...navLinks];
                                 updated[idx] = {
-                                  ...updated[idx],
+                                  ...link,
                                   isPage: e.target.checked,
                                 };
                                 setNavLinks(updated);
@@ -1290,8 +1290,8 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                             if (idx === 0) return;
                             const newSections = [...sections];
                             [newSections[idx - 1], newSections[idx]] = [
-                              newSections[idx],
-                              newSections[idx - 1],
+                              newSections[idx]!,
+                              newSections[idx - 1]!,
                             ];
                             setSections(newSections);
                           }}
@@ -1299,8 +1299,8 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                             if (idx === sections.length - 1) return;
                             const newSections = [...sections];
                             [newSections[idx], newSections[idx + 1]] = [
-                              newSections[idx + 1],
-                              newSections[idx],
+                              newSections[idx + 1]!,
+                              newSections[idx]!,
                             ];
                             setSections(newSections);
                           }}

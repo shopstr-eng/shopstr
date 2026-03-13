@@ -80,10 +80,10 @@ export default function StorefrontThemeWrapper({
     if (sellerPubkey) {
       sessionStorage.setItem("sf_seller_pubkey", sellerPubkey);
     }
-    if (storefrontConfig?.shopSlug) {
-      sessionStorage.setItem("sf_shop_slug", storefrontConfig.shopSlug);
+    if (storefront?.shopSlug) {
+      sessionStorage.setItem("sf_shop_slug", storefront.shopSlug);
     }
-  }, [sellerPubkey, storefrontConfig?.shopSlug]);
+  }, [sellerPubkey, storefront?.shopSlug]);
 
   useEffect(() => {
     const sync = () => {

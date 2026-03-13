@@ -6,7 +6,7 @@ interface SectionAboutProps {
   colors: StorefrontColorScheme;
 }
 
-export default function SectionAbout({ section, colors }: SectionAboutProps) {
+export default function SectionAbout({ section }: SectionAboutProps) {
   const imagePos = section.imagePosition || "right";
 
   return (

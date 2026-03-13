@@ -8,7 +8,6 @@ import {
 } from "@/utils/types/types";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import SectionRenderer from "@/components/storefront/section-renderer";
-import StorefrontNav from "@/components/storefront/storefront-nav";
 import StorefrontFooterComponent from "@/components/storefront/storefront-footer";
 import StorefrontHero from "@/components/storefront/storefront-hero";
 
@@ -324,7 +323,7 @@ const MOCK_PRODUCTS: ProductData[] = [
     summary:
       "Pure, unprocessed whole milk from grass-fed cows. Rich in natural enzymes and beneficial bacteria.",
     publishedAt: "",
-    images: [PLACEHOLDER_IMAGES[0]],
+    images: [PLACEHOLDER_IMAGES[0]!],
     categories: ["dairy"],
     location: "Local Farm",
     price: 12,
@@ -339,7 +338,7 @@ const MOCK_PRODUCTS: ProductData[] = [
     summary:
       "Pasture-raised eggs from happy hens. Deep orange yolks with exceptional flavor.",
     publishedAt: "",
-    images: [PLACEHOLDER_IMAGES[1]],
+    images: [PLACEHOLDER_IMAGES[1]!],
     categories: ["eggs"],
     location: "Local Farm",
     price: 8,
@@ -354,7 +353,7 @@ const MOCK_PRODUCTS: ProductData[] = [
     summary:
       "Handcrafted aged cheddar made from our own raw milk. 6-month aged for complex flavor.",
     publishedAt: "",
-    images: [PLACEHOLDER_IMAGES[2]],
+    images: [PLACEHOLDER_IMAGES[2]!],
     categories: ["dairy"],
     location: "Local Farm",
     price: 18,
@@ -369,7 +368,7 @@ const MOCK_PRODUCTS: ProductData[] = [
     summary:
       "Unfiltered, unpasteurized honey from our own apiaries. Seasonal wildflower blend.",
     publishedAt: "",
-    images: [PLACEHOLDER_IMAGES[3]],
+    images: [PLACEHOLDER_IMAGES[3]!],
     categories: ["honey"],
     location: "Local Farm",
     price: 15,
@@ -384,7 +383,7 @@ const MOCK_PRODUCTS: ProductData[] = [
     summary:
       "Mixed cuts of 100% grass-fed, grass-finished beef. No hormones or antibiotics.",
     publishedAt: "",
-    images: [PLACEHOLDER_IMAGES[4]],
+    images: [PLACEHOLDER_IMAGES[4]!],
     categories: ["meat"],
     location: "Local Farm",
     price: 85,
@@ -399,7 +398,7 @@ const MOCK_PRODUCTS: ProductData[] = [
     summary:
       "Probiotic-rich naturally fermented seasonal vegetables. Small-batch, live culture.",
     publishedAt: "",
-    images: [PLACEHOLDER_IMAGES[5]],
+    images: [PLACEHOLDER_IMAGES[5]!],
     categories: ["fermented"],
     location: "Local Farm",
     price: 10,
