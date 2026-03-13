@@ -40,8 +40,8 @@ export default async function handler(
         instructions: {
           type: "CNAME",
           host: cleanDomain,
-          value: "milk.market",
-          note: "Add a CNAME record pointing your domain to milk.market. Verification may take up to 24 hours after DNS propagation.",
+          value: "milk-market.replit.app",
+          note: "Add a CNAME record pointing your domain to milk-market.replit.app. Then add the domain in your Replit deployment settings. Verification may take up to 48 hours after DNS propagation.",
         },
       });
     } catch (error: any) {

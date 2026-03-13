@@ -233,6 +233,8 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     domain: string;
     verified: boolean;
   } | null>(null);
+  const [domainVerifying, setDomainVerifying] = useState(false);
+  const [domainVerifyMessage, setDomainVerifyMessage] = useState("");
   const [fontHeading, setFontHeading] = useState("");
   const [fontBody, setFontBody] = useState("");
   const [sections, setSections] = useState<StorefrontSection[]>([]);
@@ -422,6 +424,27 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       setCustomDomain("");
       setDomainInfo(null);
     } catch {}
+  };
+
+  const handleVerifyDomain = async () => {
+    if (!userPubkey) return;
+    setDomainVerifying(true);
+    setDomainVerifyMessage("");
+    try {
+      const res = await fetch("/api/storefront/verify-domain", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pubkey: userPubkey }),
+      });
+      const data = await res.json();
+      if (data.verified) {
+        setDomainInfo((prev) => (prev ? { ...prev, verified: true } : prev));
+      }
+      setDomainVerifyMessage(data.message || "Verification check complete.");
+    } catch {
+      setDomainVerifyMessage("Verification check failed. Please try again.");
+    }
+    setDomainVerifying(false);
   };
 
   const handleSaveCustomDomain = async () => {
@@ -1405,7 +1428,8 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                     </label>
                     <p className="mb-2 text-sm text-gray-500">
                       Connect your own domain to your shop. Add a CNAME record
-                      pointing to milk.market.
+                      pointing to <strong>milk-market.replit.app</strong>, then
+                      add the domain in your Replit deployment settings.
                     </p>
                     <div className="flex gap-3">
                       <div className="flex-1">
@@ -1464,12 +1488,43 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                               ? "Verified"
                               : "Pending verification"}
                           </span>
+                          {!domainInfo.verified && (
+                            <Button
+                              className="ml-auto border-2 border-black bg-white text-xs font-bold text-black hover:bg-gray-100"
+                              type="button"
+                              size="sm"
+                              onPress={handleVerifyDomain}
+                              isLoading={domainVerifying}
+                              isDisabled={domainVerifying}
+                            >
+                              Verify DNS
+                            </Button>
+                          )}
                         </div>
                         {!domainInfo.verified && (
-                          <p className="mt-2 text-xs text-gray-500">
-                            Add a CNAME record:{" "}
-                            <strong>{domainInfo.domain}</strong> →{" "}
-                            <strong>milk.market</strong>
+                          <div className="mt-2 space-y-1">
+                            <p className="text-xs text-gray-500">
+                              <strong>Step 1:</strong> Add a CNAME record at
+                              your DNS provider:{" "}
+                              <strong>{domainInfo.domain}</strong> →{" "}
+                              <strong>milk-market.replit.app</strong>
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              <strong>Step 2:</strong> Add{" "}
+                              <strong>{domainInfo.domain}</strong> as a custom
+                              domain in your Replit deployment settings.
+                            </p>
+                          </div>
+                        )}
+                        {domainVerifyMessage && (
+                          <p
+                            className={`mt-2 text-xs font-medium ${
+                              domainInfo.verified
+                                ? "text-green-600"
+                                : "text-orange-600"
+                            }`}
+                          >
+                            {domainVerifyMessage}
                           </p>
                         )}
                       </div>
