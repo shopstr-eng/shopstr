@@ -1,13 +1,18 @@
-import { Input, Select, SelectItem } from "@nextui-org/react";
+import { useState } from "react";
+import { Input, Select, SelectItem, Textarea } from "@nextui-org/react";
 import {
   StorefrontFooter,
   StorefrontSocialLink,
   StorefrontNavLink,
+  StorefrontPolicies,
+  StorefrontPolicy,
 } from "@/utils/types/types";
+import { POLICY_LABELS, getDefaultPolicies } from "@/utils/storefront-policies";
 
 interface FooterEditorProps {
   footer: StorefrontFooter;
   onChange: (footer: StorefrontFooter) => void;
+  shopName?: string;
 }
 
 const SOCIAL_PLATFORMS = [
@@ -34,9 +39,53 @@ const selectClassNames = {
   label: "text-black",
 };
 
-export default function FooterEditor({ footer, onChange }: FooterEditorProps) {
+const POLICY_KEYS: (keyof StorefrontPolicies)[] = [
+  "returnPolicy",
+  "termsOfService",
+  "privacyPolicy",
+  "cancellationPolicy",
+];
+
+export default function FooterEditor({
+  footer,
+  onChange,
+  shopName,
+}: FooterEditorProps) {
   const socialLinks = footer.socialLinks || [];
   const navLinks = footer.navLinks || [];
+  const [expandedPolicy, setExpandedPolicy] = useState<string | null>(null);
+
+  const policies = footer.policies || {};
+  const defaults = getDefaultPolicies(shopName || "");
+
+  const getPolicy = (key: keyof StorefrontPolicies): StorefrontPolicy => {
+    return policies[key] || defaults[key]!;
+  };
+
+  const updatePolicy = (
+    key: keyof StorefrontPolicies,
+    updates: Partial<StorefrontPolicy>
+  ) => {
+    const current = getPolicy(key);
+    onChange({
+      ...footer,
+      policies: {
+        ...policies,
+        [key]: { ...current, ...updates },
+      },
+    });
+  };
+
+  const resetPolicyToDefault = (key: keyof StorefrontPolicies) => {
+    const defaultPolicy = defaults[key]!;
+    onChange({
+      ...footer,
+      policies: {
+        ...policies,
+        [key]: { ...defaultPolicy },
+      },
+    });
+  };
 
   const updateSocial = (idx: number, fields: Partial<StorefrontSocialLink>) => {
     const updated = [...socialLinks];
@@ -89,6 +138,80 @@ export default function FooterEditor({ footer, onChange }: FooterEditorProps) {
           onChange={(e) => onChange({ ...footer, text: e.target.value })}
           placeholder="e.g. Fresh from our farm to your table"
         />
+      </div>
+
+      <div>
+        <label className="mb-2 block text-sm font-bold text-gray-700">
+          Store Policies
+        </label>
+        <p className="mb-3 text-xs text-gray-500">
+          These policies are shown as links in your storefront footer. Each
+          opens its own page. Toggle them on or off, and edit the content to
+          match your business.
+        </p>
+        <div className="space-y-2">
+          {POLICY_KEYS.map((key) => {
+            const policy = getPolicy(key);
+            const isExpanded = expandedPolicy === key;
+            return (
+              <div
+                key={key}
+                className="rounded-lg border-2 border-gray-200 bg-gray-50"
+              >
+                <div className="flex items-center gap-3 p-3">
+                  <input
+                    type="checkbox"
+                    checked={policy.enabled}
+                    onChange={(e) =>
+                      updatePolicy(key, { enabled: e.target.checked })
+                    }
+                    className="h-4 w-4"
+                  />
+                  <span className="flex-1 text-sm font-medium text-black">
+                    {POLICY_LABELS[key]}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedPolicy(isExpanded ? null : key)}
+                    className="text-xs font-bold text-blue-600 hover:underline"
+                  >
+                    {isExpanded ? "Collapse" : "Edit"}
+                  </button>
+                </div>
+                {isExpanded && (
+                  <div className="border-t border-gray-200 p-3">
+                    <Textarea
+                      classNames={{
+                        inputWrapper: inputWrapperClass,
+                        input: "text-sm",
+                      }}
+                      variant="bordered"
+                      value={policy.content}
+                      onChange={(e) =>
+                        updatePolicy(key, { content: e.target.value })
+                      }
+                      minRows={10}
+                      maxRows={30}
+                      placeholder="Enter your policy content (Markdown supported)"
+                    />
+                    <div className="mt-2 flex items-center justify-between">
+                      <p className="text-xs text-gray-400">
+                        Supports Markdown formatting (headings, bold, lists)
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => resetPolicyToDefault(key)}
+                        className="text-xs font-bold text-orange-600 hover:underline"
+                      >
+                        Reset to Default
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div>

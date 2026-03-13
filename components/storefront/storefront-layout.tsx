@@ -37,6 +37,9 @@ import StorefrontOrders from "./storefront-orders";
 import StorefrontWallet from "./storefront-wallet";
 import StorefrontMyListings from "./storefront-my-listings";
 import StorefrontOrderConfirmation from "./storefront-order-confirmation";
+import StorefrontPolicyPage from "./storefront-policy-page";
+import { POLICY_SLUGS, getDefaultPolicies } from "@/utils/storefront-policies";
+import { StorefrontPolicies } from "@/utils/types/types";
 
 const DEFAULT_COLORS: StorefrontColorScheme = {
   primary: "#FFD23F",
@@ -189,6 +192,20 @@ export default function StorefrontLayout({
     }
     return [];
   }, [currentPage, storefront.pages, storefront.sections]);
+
+  const policyPageData = useMemo(() => {
+    if (!currentPage) return null;
+    const footerPolicies = storefront.footer?.policies || {};
+    const defaults = getDefaultPolicies(shopName);
+    const policyKeys = Object.keys(
+      POLICY_SLUGS
+    ) as (keyof StorefrontPolicies)[];
+    const matchedKey = policyKeys.find((k) => POLICY_SLUGS[k] === currentPage);
+    if (!matchedKey) return null;
+    const policy = footerPolicies[matchedKey] || defaults[matchedKey];
+    if (!policy || !policy.enabled) return null;
+    return policy;
+  }, [currentPage, storefront.footer?.policies, shopName]);
 
   const layout = storefront.productLayout || "grid";
   const landingStyle = storefront.landingPageStyle || "hero";
@@ -552,6 +569,10 @@ export default function StorefrontLayout({
                 </p>
               </div>
             )}
+          </div>
+        ) : policyPageData ? (
+          <div className="pt-14">
+            <StorefrontPolicyPage policy={policyPageData} colors={colors} />
           </div>
         ) : hasSections && activeSections.length > 0 ? (
           <div className="pt-14">

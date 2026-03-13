@@ -75,11 +75,24 @@ export interface StorefrontNavLink {
   isPage?: boolean;
 }
 
+export interface StorefrontPolicy {
+  enabled: boolean;
+  content: string;
+}
+
+export interface StorefrontPolicies {
+  returnPolicy?: StorefrontPolicy;
+  termsOfService?: StorefrontPolicy;
+  privacyPolicy?: StorefrontPolicy;
+  cancellationPolicy?: StorefrontPolicy;
+}
+
 export interface StorefrontFooter {
   text?: string;
   socialLinks?: StorefrontSocialLink[];
   navLinks?: StorefrontNavLink[];
   showPoweredBy?: boolean;
+  policies?: StorefrontPolicies;
 }
 
 export interface StorefrontTestimonial {

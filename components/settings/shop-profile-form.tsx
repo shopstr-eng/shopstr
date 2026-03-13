@@ -1340,7 +1340,11 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                     <p className="mb-3 text-sm text-gray-500">
                       Customize the footer at the bottom of your storefront.
                     </p>
-                    <FooterEditor footer={footer} onChange={setFooter} />
+                    <FooterEditor
+                      footer={footer}
+                      onChange={setFooter}
+                      shopName={watch("name")}
+                    />
                   </div>
 
                   <div className="mb-6">
