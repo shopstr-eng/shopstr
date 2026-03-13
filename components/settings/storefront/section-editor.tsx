@@ -37,7 +37,16 @@ const SECTION_LABELS: Record<StorefrontSectionType, string> = {
 };
 
 const inputWrapperClass =
-  "border-2 border-gray-300 rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-black";
+  "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white";
+
+const selectClassNames = {
+  trigger:
+    "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white",
+  value: "text-base !text-black",
+  popoverContent: "border-2 border-black rounded-lg bg-white",
+  listbox: "!text-black",
+  label: "text-black",
+};
 
 export default function SectionEditor({
   section,
@@ -166,7 +175,7 @@ export default function SectionEditor({
           {section.type === "about" && (
             <Select
               label="Image Position"
-              classNames={{ trigger: inputWrapperClass }}
+              classNames={selectClassNames}
               variant="bordered"
               selectedKeys={[section.imagePosition || "right"]}
               onChange={(e) =>
@@ -242,7 +251,7 @@ export default function SectionEditor({
             <>
               <Select
                 label="Product Layout"
-                classNames={{ trigger: inputWrapperClass }}
+                classNames={selectClassNames}
                 variant="bordered"
                 selectedKeys={[section.productLayout || "grid"]}
                 onChange={(e) =>

@@ -23,7 +23,16 @@ const SOCIAL_PLATFORMS = [
 ] as const;
 
 const inputWrapperClass =
-  "border-2 border-gray-300 rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white group-data-[focus=true]:border-black";
+  "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white";
+
+const selectClassNames = {
+  trigger:
+    "border-3 border-black rounded-lg bg-white shadow-none hover:bg-white data-[hover=true]:bg-white",
+  value: "text-base !text-black",
+  popoverContent: "border-2 border-black rounded-lg bg-white",
+  listbox: "!text-black",
+  label: "text-black",
+};
 
 export default function FooterEditor({ footer, onChange }: FooterEditorProps) {
   const socialLinks = footer.socialLinks || [];
@@ -90,7 +99,10 @@ export default function FooterEditor({ footer, onChange }: FooterEditorProps) {
           {socialLinks.map((link, idx) => (
             <div key={idx} className="flex items-center gap-2">
               <Select
-                classNames={{ trigger: inputWrapperClass + " w-36" }}
+                classNames={{
+                  ...selectClassNames,
+                  trigger: selectClassNames.trigger + " w-36",
+                }}
                 variant="bordered"
                 selectedKeys={[link.platform]}
                 onChange={(e) => {
