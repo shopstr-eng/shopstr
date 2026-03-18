@@ -12,6 +12,7 @@ const useNavigation = () => {
   const [isMyListingsActive, setIsMyListingsActive] = useState(false);
   const [isProfileActive, setIsProfileActive] = useState(false);
   const [isCommunitiesActive, setIsCommunitiesActive] = useState(false);
+  const [isCartActive, setIsCartActive] = useState(false);
 
   useEffect(() => {
     if (!pathname) return;
@@ -21,6 +22,7 @@ const useNavigation = () => {
     setIsMyListingsActive(false);
     setIsProfileActive(false);
     setIsCommunitiesActive(false);
+    setIsCartActive(false);
 
     if (pathname.startsWith("/communities")) {
       setIsCommunitiesActive(true);
@@ -41,6 +43,9 @@ const useNavigation = () => {
         case "/settings":
           setIsProfileActive(true);
           break;
+        case "/cart":
+          setIsCartActive(true);
+          break;
       }
     }
   }, [pathname]);
@@ -52,6 +57,7 @@ const useNavigation = () => {
     isMyListingsActive,
     isProfileActive,
     isCommunitiesActive,
+    isCartActive,
   };
 };
 

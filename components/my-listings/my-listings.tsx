@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import router from "next/router";
-import React, { useContext, useState, useEffect, useRef } from "react";
+import { useContext, useState, useEffect, useRef } from "react";
 import DisplayProducts from "../display-products";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import { Button, useDisclosure } from "@nextui-org/react";
@@ -12,6 +12,7 @@ import { ShopMapContext } from "@/utils/context/context";
 import { ShopProfile } from "../../utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import SideShopNav from "../home/side-shop-nav";
+import DiscountCodes from "./discount-codes";
 
 const MyListingsPage = () => {
   const { pubkey: usersPubkey } = useContext(SignerContext);
@@ -111,6 +112,15 @@ const MyListingsPage = () => {
         <Button
           className="w-full bg-transparent px-4 py-2 text-left text-sm text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
           onClick={() => {
+            setSelectedSection("Discounts");
+            setIsMobileMenuOpen(false);
+          }}
+        >
+          Discounts
+        </Button>
+        <Button
+          className="w-full bg-transparent px-4 py-2 text-left text-sm text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+          onClick={() => {
             setSelectedSection("About");
             setIsMobileMenuOpen(false);
           }}
@@ -171,6 +181,12 @@ const MyListingsPage = () => {
                   </Button>
                   <Button
                     className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                    onClick={() => setSelectedSection("Discounts")}
+                  >
+                    Discounts
+                  </Button>
+                  <Button
+                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
                     onClick={() => setSelectedSection("About")}
                   >
                     About
@@ -224,6 +240,12 @@ const MyListingsPage = () => {
                     onClick={() => setSelectedSection("Listings")}
                   >
                     Listings
+                  </Button>
+                  <Button
+                    className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                    onClick={() => setSelectedSection("Discounts")}
+                  >
+                    Discounts
                   </Button>
                   <Button
                     className="bg-transparent text-xl text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
@@ -305,6 +327,7 @@ const MyListingsPage = () => {
               </div>
             </div>
           )}
+          {usersPubkey && selectedSection === "Discounts" && <DiscountCodes />}
         </div>
       </div>
       <SignInModal isOpen={isOpen} onClose={onClose} />

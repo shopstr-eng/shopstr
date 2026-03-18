@@ -9,10 +9,7 @@ const originalError = console.error;
 
 const warnSpy = jest.spyOn(console, "warn").mockImplementation((...args) => {
   const warnString = args.toString();
-  if (
-    warnString.includes("IndexedDB is not available") ||
-    warnString.includes("Invoice check warning")
-  ) {
+  if (warnString.includes("Invoice check warning")) {
     return;
   }
   originalWarn(...args);

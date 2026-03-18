@@ -16,10 +16,12 @@ import { useRouter } from "next/router";
 import parseTags, {
   ProductData,
 } from "@/utils/parsers/product-parser-functions";
+import { parseZapsnagNote } from "@/utils/parsers/zapsnag-parser";
 import {
   NostrContext,
   SignerContext,
 } from "@/components/utility-components/nostr-context-provider";
+import { getListingSlug } from "@/utils/url-slugs";
 
 const DisplayProducts = ({
   focusedPubkey,
@@ -93,12 +95,25 @@ const DisplayProducts = ({
           if (!followsContext.isLoading && followsContext.followList) {
             const followList = followsContext.followList;
             if (followList.length > 0 && followList.includes(event.pubkey)) {
-              const parsedData = parseTags(event);
-              if (parsedData) parsedProductData.push(parsedData);
+              let parsedData;
+              if (event.kind === 1) {
+                parsedData = parseZapsnagNote(event);
+              } else {
+                parsedData = parseTags(event);
+              }
+              if (parsedData) {
+                parsedData.rawEvent = event;
+                parsedProductData.push(parsedData);
+              }
             }
           }
         } else {
-          const parsedData = parseTags(event);
+          let parsedData;
+          if (event.kind === 1) {
+            parsedData = parseZapsnagNote(event);
+          } else {
+            parsedData = parseTags(event);
+          }
           if (parsedData) parsedProductData.push(parsedData);
         }
       });
@@ -215,22 +230,24 @@ const DisplayProducts = ({
 
   const getProductHref = (product: ProductData) => {
     if (product.pubkey === userPubkey) {
-      return null; // Will show modal instead
+      return null;
     }
 
-    const naddr = nip19.naddrEncode({
-      identifier: product.d as string,
-      pubkey: product.pubkey,
-      kind: 30402,
-    });
-
-    if (naddr) {
-      return `/listing/${naddr}`;
-    } else if (product.d !== undefined) {
-      return `/listing/${product.d}`;
-    } else {
+    if (product.d === "zapsnag" || product.categories?.includes("zapsnag")) {
       return `/listing/${product.id}`;
     }
+
+    const allParsed = productEventContext.productEvents
+      .filter((e: NostrEvent) => e.kind !== 1)
+      .map((e: NostrEvent) => parseTags(e))
+      .filter((p: ProductData | undefined): p is ProductData => !!p);
+
+    const slug = getListingSlug(product, allParsed);
+    if (slug) {
+      return `/listing/${slug}`;
+    }
+
+    return `/listing/${product.id}`;
   };
 
   const onProductClick = (product: ProductData, e?: React.MouseEvent) => {

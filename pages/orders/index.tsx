@@ -1,4 +1,3 @@
-import React from "react";
 import { useRouter } from "next/router";
 import MessageFeed from "@/components/messages/message-feed";
 

@@ -30,9 +30,14 @@ export type ProductData = {
   selectedQuantity?: number;
   selectedVolume?: string;
   volumePrice?: number;
+  bulkPrices?: Map<number, number>;
+  selectedBulkOption?: number;
+  bulkPrice?: number;
   required?: string;
   restrictions?: string;
   pickupLocations?: string[];
+  expiration?: number;
+  rawEvent?: NostrEvent;
 };
 
 export const parseTags = (productEvent: NostrEvent) => {
@@ -49,6 +54,7 @@ export const parseTags = (productEvent: NostrEvent) => {
     price: 0,
     currency: "",
     totalCost: 0,
+    rawEvent: productEvent,
   };
   parsedData.pubkey = productEvent.pubkey;
   parsedData.id = productEvent.id;
@@ -146,6 +152,14 @@ export const parseTags = (productEvent: NostrEvent) => {
           }
         }
         break;
+      case "bulk":
+        if (!parsedData.bulkPrices) {
+          parsedData.bulkPrices = new Map<number, number>();
+        }
+        if (values[0] && values[1]) {
+          parsedData.bulkPrices.set(parseInt(values[0]), parseFloat(values[1]));
+        }
+        break;
       case "condition":
         parsedData.condition = values[0];
         break;
@@ -162,6 +176,9 @@ export const parseTags = (productEvent: NostrEvent) => {
         if (parsedData.pickupLocations === undefined)
           parsedData.pickupLocations = [];
         parsedData.pickupLocations.push(values[0]!);
+        break;
+      case "valid_until":
+        parsedData.expiration = Number(values[0]);
         break;
       default:
         return;

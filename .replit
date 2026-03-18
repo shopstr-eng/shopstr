@@ -1,13 +1,13 @@
 run = "npm run dev"
-modules = ["nodejs-18:v20-20231025-d04a94d", "postgresql-16"]
+modules = ["nodejs-20", "postgresql-16"]
 
 [nix]
 channel = "stable-22_11"
 
 [deployment]
-run = ["npm", "start"]
 deploymentTarget = "autoscale"
 build = ["npm", "run", "build"]
+run = ["npm", "start"]
 
 [[ports]]
 localPort = 3000
@@ -19,19 +19,10 @@ externalPort = 3001
 
 [[ports]]
 localPort = 5000
-externalPort = 80
+externalPort = 5000
 
 [workflows]
 runButton = "Project"
-
-[[workflows.workflow]]
-name = "Run"
-author = 20519411
-mode = "sequential"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npm run dev"
 
 [[workflows.workflow]]
 name = "Project"

@@ -15,13 +15,12 @@ import ShopstrSpinner from "../utility-components/shopstr-spinner";
 import ChatPanel from "./chat-panel";
 import ChatButton from "./chat-button";
 import { NostrMessageEvent, ChatObject } from "../../utils/types/types";
-import {
-  addChatMessagesToCache,
-  fetchChatMessagesFromCache,
-} from "@/utils/nostr/cache-service";
 import { useKeyPress } from "@/utils/keypress-handler";
 import FailureModal from "../utility-components/failure-modal";
-import { SignerContext } from "@/components/utility-components/nostr-context-provider";
+import {
+  NostrContext,
+  SignerContext,
+} from "@/components/utility-components/nostr-context-provider";
 import SignInModal from "../sign-in/SignInModal";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 
@@ -42,6 +41,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
   const [isChatsLoading, setIsChatsLoading] = useState(true);
   const [isSendingDMLoading, setIsSendingDMLoading] = useState(false);
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
+  const { nostr } = useContext(NostrContext);
 
   const [isClient, setIsClient] = useState(false);
 
@@ -156,13 +156,11 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
     Map<string, ChatObject>
   > = async () => {
     const decryptedChats: Map<string, ChatObject> = new Map(); //  entry: [chatPubkey, chat]
-    const chatMessagesFromCache: Map<string, NostrMessageEvent> =
-      await fetchChatMessagesFromCache();
     for (const entry of chatsContext.chatsMap) {
       const chatPubkey = entry[0] as string;
       const chat = entry[1] as NostrMessageEvent[];
       const decryptedChat: NostrMessageEvent[] = [];
-      let unreadCount = 0;
+      const unreadCount = 0;
 
       for (const messageEvent of chat) {
         let plainText;
@@ -183,14 +181,12 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
               subject === "order-info" ||
               subject === "payment-change" ||
               subject === "order-receipt" ||
-              subject === "shipping-info")) ||
+              subject === "shipping-info" ||
+              subject === "zapsnag-order")) ||
           (!isPayment && subject && subject === "listing-inquiry")
         ) {
           plainText &&
             decryptedChat.push({ ...messageEvent, content: plainText });
-          if (chatMessagesFromCache.get(messageEvent.id)?.read === false) {
-            unreadCount++;
-          }
         }
       }
       if (decryptedChat.length > 0) {
@@ -209,12 +205,26 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
           pubkeyOfChat
         ) as NostrMessageEvent[];
         if (!encryptedChat) return prevChatMap;
+        const wrappedIdsToMark: string[] = [];
         encryptedChat.forEach((message) => {
-          message.read = true;
+          if (!message.read) {
+            message.read = true;
+            if (message.wrappedEventId) {
+              wrappedIdsToMark.push(message.wrappedEventId);
+            }
+          }
         });
+        if (wrappedIdsToMark.length > 0) {
+          fetch("/api/db/mark-messages-read", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ messageIds: wrappedIdsToMark }),
+          }).catch((err) =>
+            console.error("Failed to mark messages as read:", err)
+          );
+        }
         const newChatMap = new Map(prevChatMap);
         newChatMap.set(pubkeyOfChat, updatedChat);
-        addChatMessagesToCache(encryptedChat);
         return newChatMap;
       }
       return prevChatMap;
@@ -273,8 +283,8 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         decodedRandomPrivkeyForReceiver.data as Uint8Array,
         currentChatPubkey
       );
-      await sendGiftWrappedMessageEvent(senderGiftWrappedEvent);
-      await sendGiftWrappedMessageEvent(receiverGiftWrappedEvent);
+      await sendGiftWrappedMessageEvent(nostr!, senderGiftWrappedEvent);
+      await sendGiftWrappedMessageEvent(nostr!, receiverGiftWrappedEvent);
       chatsContext.addNewlyCreatedMessageEvent(
         {
           ...giftWrappedMessageEvent,
@@ -283,9 +293,7 @@ const Messages = ({ isPayment }: { isPayment: boolean }) => {
         },
         true
       );
-      addChatMessagesToCache([
-        { ...giftWrappedMessageEvent, sig: "", read: true },
-      ]);
+
       setIsSendingDMLoading(false);
     } catch (_) {
       setFailureText("Error sending inquiry.");

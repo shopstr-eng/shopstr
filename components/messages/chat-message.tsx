@@ -70,7 +70,8 @@ const ChatMessage = ({
     setCanReview?.(
       subject === "order-info" ||
         subject === "order-receipt" ||
-        subject === "shipping-info"
+        subject === "shipping-info" ||
+        subject === "zapsnag-order"
     );
     setProductAddress?.(productAddress as string);
     setOrderId?.(orderId as string);
@@ -87,6 +88,16 @@ const ChatMessage = ({
   const contentBeforeCashu = cashuPrefix
     ? messageEvent.content.split(cashuPrefix)[0]
     : messageEvent.content;
+
+  let orderData = null;
+  try {
+    if (messageEvent.content.trim().startsWith("{")) {
+      const parsed = JSON.parse(messageEvent.content);
+      if (parsed.type === "zapsnag_order" && parsed.shipping) {
+        orderData = parsed;
+      }
+    }
+  } catch (e) {}
 
   const handleCopyToken = (token: string) => {
     navigator.clipboard.writeText(token);
@@ -158,6 +169,22 @@ const ChatMessage = ({
                 )}
               </div>
             </>
+          ) : orderData ? (
+            <div className="flex flex-col gap-2 border-l-4 border-shopstr-purple pl-3 dark:border-shopstr-yellow">
+              <span className="text-sm font-bold uppercase opacity-70">
+                ⚡ Zapsnag Order
+              </span>
+              <div className="font-semibold">{orderData.shipping.name}</div>
+              <div className="text-sm">{orderData.shipping.address}</div>
+              <div className="text-sm">
+                {orderData.shipping.city}, {orderData.shipping.state}{" "}
+                {orderData.shipping.zip}
+              </div>
+              <div className="text-sm">{orderData.shipping.country}</div>
+              <div className="mt-1 text-xs opacity-50">
+                Order ID: {orderData.orderId.slice(0, 8)}...
+              </div>
+            </div>
           ) : (
             renderMessageContent(messageEvent.content)
           )}

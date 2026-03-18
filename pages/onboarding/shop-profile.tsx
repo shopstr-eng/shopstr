@@ -1,4 +1,3 @@
-import React from "react";
 import { useRouter } from "next/router";
 import { Card, CardBody, Button, Image } from "@nextui-org/react";
 import { ArrowLeftEndOnRectangleIcon } from "@heroicons/react/24/outline";
@@ -31,7 +30,7 @@ const OnboardingShopProfile = () => {
             </div>
             <div className="mb-4 text-center">
               <h2 className="text-2xl font-bold text-light-text dark:text-dark-text">
-                Step 3: Setup Your Shop
+                Step 4: Setup Your Shop
               </h2>
               <p className="text-light-text dark:text-dark-text">
                 Set up your shop details or, if you&apos;re not a seller, skip

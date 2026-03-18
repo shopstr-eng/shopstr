@@ -1,4 +1,3 @@
-import React from "react";
 import { useRouter } from "next/router";
 import { Card, CardBody, Button, Image } from "@nextui-org/react";
 import { ArrowLongRightIcon } from "@heroicons/react/24/outline";
@@ -9,7 +8,7 @@ const OnboardingUserProfile = () => {
   const router = useRouter();
 
   const handleNext = () => {
-    router.push("/onboarding/shop-profile");
+    router.push("/onboarding/wallet");
   };
 
   return (

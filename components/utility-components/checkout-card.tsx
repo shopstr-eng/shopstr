@@ -1,52 +1,77 @@
 /* eslint-disable @next/next/no-img-element */
 
-import React, { useContext, useEffect, useRef, useState } from "react";
-import { nip19 } from "nostr-tools";
-import { ProductData } from "@/utils/parsers/product-parser-functions";
+import { useContext, useEffect, useRef, useState } from "react";
+import { Event, nip19 } from "nostr-tools";
+import parseTags, {
+  ProductData,
+} from "@/utils/parsers/product-parser-functions";
+import { getListingSlug } from "@/utils/url-slugs";
 import { ProfileWithDropdown } from "./profile/profile-dropdown";
 import { DisplayCheckoutCost } from "./display-monetary-info";
 import ProductInvoiceCard from "../product-invoice-card";
 import { useRouter } from "next/router";
 import { SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
-import { Button, Chip, useDisclosure } from "@nextui-org/react";
+import {
+  Button,
+  Chip,
+  Input,
+  useDisclosure,
+  Dropdown,
+  DropdownTrigger,
+  DropdownMenu,
+  DropdownItem,
+} from "@nextui-org/react";
 import { locationAvatar } from "./dropdowns/location-dropdown";
 import {
   FaceFrownIcon,
   FaceSmileIcon,
   ArrowLongDownIcon,
   ArrowLongUpIcon,
+  EllipsisVerticalIcon,
 } from "@heroicons/react/24/outline";
-import { ReviewsContext } from "@/utils/context/context";
+import {
+  ReviewsContext,
+  ProductContext,
+  ShopMapContext,
+} from "@/utils/context/context";
+import FreeShippingNotification from "../free-shipping-notification";
 import FailureModal from "../utility-components/failure-modal";
 import SuccessModal from "../utility-components/success-modal";
 import SignInModal from "../sign-in/SignInModal";
 import currencySelection from "../../public/currencySelection.json";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
 import VolumeSelector from "./volume-selector";
+import BulkSelector from "./bulk-selector";
+import ZapsnagButton from "@/components/ZapsnagButton";
+import { RawEventModal, EventIdModal } from "./modals/event-modals";
 
 const SUMMARY_CHARACTER_LIMIT = 100;
 
 export default function CheckoutCard({
   productData,
-  setFiatOrderIsPlaced,
-  setFiatOrderFailed,
   setInvoiceIsPaid,
   setInvoiceGenerationFailed,
   setCashuPaymentSent,
   setCashuPaymentFailed,
   uniqueKey,
+  rawEvent,
 }: {
   productData: ProductData;
-  setFiatOrderIsPlaced?: (fiatOrderIsPlaced: boolean) => void;
-  setFiatOrderFailed?: (fiatOrderFailed: boolean) => void;
-  setInvoiceIsPaid?: (invoiceIsPaid: boolean) => void;
-  setInvoiceGenerationFailed?: (invoiceGenerationFailed: boolean) => void;
-  setCashuPaymentSent?: (cashuPaymentSent: boolean) => void;
-  setCashuPaymentFailed?: (cashuPaymentFailed: boolean) => void;
+  setInvoiceIsPaid: (invoiceIsPaid: boolean) => void;
+  setInvoiceGenerationFailed: (invoiceGenerationFailed: boolean) => void;
+  setCashuPaymentSent: (cashuPaymentSent: boolean) => void;
+  setCashuPaymentFailed: (cashuPaymentFailed: boolean) => void;
   uniqueKey?: string;
+  rawEvent?: Event;
 }) {
   const { pubkey: userPubkey, isLoggedIn } = useContext(SignerContext);
+  const productEventContext = useContext(ProductContext);
+  const shopMapContext = useContext(ShopMapContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const [showFreeShippingNotification, setShowFreeShippingNotification] =
+    useState(false);
+  const [showRawEventModal, setShowRawEventModal] = useState(false);
+  const [showEventIdModal, setShowEventIdModal] = useState(false);
 
   const router = useRouter();
 
@@ -74,14 +99,38 @@ export default function CheckoutCard({
 
   const [cart, setCart] = useState<ProductData[]>([]);
   const [selectedVolume, setSelectedVolume] = useState<string>("");
+  const [selectedBulkOption, setSelectedBulkOption] = useState<string>("1");
   const [currentPrice, setCurrentPrice] = useState(productData.price);
+  const [discountCode, setDiscountCode] = useState("");
+  const [appliedDiscount, setAppliedDiscount] = useState<number>(0);
+  const [discountError, setDiscountError] = useState("");
 
   const reviewsContext = useContext(ReviewsContext);
 
   const hasVolumes = productData.volumes && productData.volumes.length > 0;
+  const hasBulkPrices =
+    productData.bulkPrices && productData.bulkPrices.size > 0;
+
+  const isExpired = productData.expiration
+    ? Date.now() / 1000 > productData.expiration
+    : false;
+
+  const isZapsnag =
+    productData.d === "zapsnag" || productData.categories?.includes("zapsnag");
 
   useEffect(() => {
-    if (selectedVolume && productData.volumePrices) {
+    if (
+      selectedBulkOption &&
+      selectedBulkOption !== "1" &&
+      productData.bulkPrices
+    ) {
+      const bulkPrice = productData.bulkPrices.get(
+        parseInt(selectedBulkOption)
+      );
+      if (bulkPrice !== undefined) {
+        setCurrentPrice(bulkPrice);
+      }
+    } else if (selectedVolume && productData.volumePrices) {
       const volumePrice = productData.volumePrices.get(selectedVolume);
       if (volumePrice !== undefined) {
         setCurrentPrice(volumePrice);
@@ -89,7 +138,13 @@ export default function CheckoutCard({
     } else {
       setCurrentPrice(productData.price);
     }
-  }, [selectedVolume, productData.price, productData.volumePrices]);
+  }, [
+    selectedVolume,
+    selectedBulkOption,
+    productData.price,
+    productData.volumePrices,
+    productData.bulkPrices,
+  ]);
 
   const toggleExpand = () => {
     setIsExpanded(!isExpanded);
@@ -237,7 +292,6 @@ export default function CheckoutCard({
       }
       if (selectedVolume) {
         productToAdd.selectedVolume = selectedVolume;
-        // Set the volume price if one exists
         if (productData.volumePrices) {
           const volumePrice = productData.volumePrices.get(selectedVolume);
           if (volumePrice !== undefined) {
@@ -245,34 +299,63 @@ export default function CheckoutCard({
           }
         }
       }
+      if (selectedBulkOption && selectedBulkOption !== "1") {
+        productToAdd.selectedBulkOption = parseInt(selectedBulkOption);
+        if (productData.bulkPrices) {
+          const bulkPrice = productData.bulkPrices.get(
+            parseInt(selectedBulkOption)
+          );
+          if (bulkPrice !== undefined) {
+            productToAdd.bulkPrice = bulkPrice;
+          }
+        }
+      }
 
       updatedCart = [...cart, productToAdd];
       setCart(updatedCart);
       localStorage.setItem("cart", JSON.stringify(updatedCart));
+
+      const sellerShop = shopMapContext.shopData.get(productData.pubkey);
+      if (
+        sellerShop &&
+        sellerShop.content.freeShippingThreshold &&
+        sellerShop.content.freeShippingThreshold > 0
+      ) {
+        setShowFreeShippingNotification(true);
+      }
+
+      // Store discount code if applied
+      if (appliedDiscount > 0 && discountCode) {
+        const storedDiscounts = localStorage.getItem("cartDiscounts");
+        const discounts = storedDiscounts ? JSON.parse(storedDiscounts) : {};
+        discounts[productData.pubkey] = {
+          code: discountCode,
+          percentage: appliedDiscount,
+        };
+        localStorage.setItem("cartDiscounts", JSON.stringify(discounts));
+      }
     } else {
       onOpen();
     }
   };
 
   const handleShare = async () => {
-    const naddr = nip19.naddrEncode({
-      identifier: productData.d as string,
-      pubkey: productData.pubkey,
-      kind: 30402,
-    });
-    // The content you want to share
+    const allParsed = productEventContext.productEvents
+      .filter((e: Event) => e.kind !== 1)
+      .map((e: Event) => parseTags(e))
+      .filter((p: ProductData | undefined): p is ProductData => !!p);
+
+    const slug = getListingSlug(productData, allParsed);
+    const listingPath = slug || productData.id;
     const shareData = {
       title: productData.title,
-      url: `${window.location.origin}/listing/${naddr}`,
+      url: `${window.location.origin}/listing/${listingPath}`,
     };
-    // Check if the Web Share API is available
     if (navigator.share) {
-      // Use the share API
       await navigator.share(shareData);
     } else {
-      // Fallback for browsers that do not support the Web Share API
       navigator.clipboard.writeText(
-        `${window.location.origin}/listing/${naddr}`
+        `${window.location.origin}/listing/${listingPath}`
       );
       setShowSuccessModal(true);
     }
@@ -287,6 +370,46 @@ export default function CheckoutCard({
     } else {
       onOpen();
     }
+  };
+
+  const handleApplyDiscount = async () => {
+    if (!discountCode.trim()) {
+      setDiscountError("Please enter a discount code");
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `/api/db/discount-codes?validate=true&code=${encodeURIComponent(
+          discountCode
+        )}&pubkey=${productData.pubkey}`
+      );
+
+      if (!response.ok) {
+        setDiscountError("Failed to validate discount code");
+        return;
+      }
+
+      const result = await response.json();
+
+      if (result.valid && result.discount_percentage) {
+        setAppliedDiscount(result.discount_percentage);
+        setDiscountError("");
+      } else {
+        setDiscountError("Invalid or expired discount code");
+        setAppliedDiscount(0);
+      }
+    } catch (error) {
+      console.error("Failed to apply discount:", error);
+      setDiscountError("Failed to apply discount code");
+      setAppliedDiscount(0);
+    }
+  };
+
+  const handleRemoveDiscount = () => {
+    setDiscountCode("");
+    setAppliedDiscount(0);
+    setDiscountError("");
   };
 
   const renderSizeGrid = () => {
@@ -311,16 +434,40 @@ export default function CheckoutCard({
     );
   };
 
-  // Create updated product data with selected volume price
+  // Calculate discounted price with proper rounding
+  const discountAmount =
+    appliedDiscount > 0
+      ? Math.ceil(((currentPrice * appliedDiscount) / 100) * 100) / 100
+      : 0;
+
+  const discountedPrice =
+    appliedDiscount > 0 ? currentPrice - discountAmount : currentPrice;
+
+  const discountedTotal = discountedPrice + (productData.shippingCost ?? 0);
+
   const updatedProductData = {
     ...productData,
-    price: currentPrice,
-    totalCost: currentPrice + (productData.shippingCost ?? 0),
+    price: discountedPrice,
+    totalCost: discountedTotal,
+    originalPrice: currentPrice,
+    discountPercentage: appliedDiscount,
+    volumePrice:
+      selectedVolume && productData.volumePrices
+        ? productData.volumePrices.get(selectedVolume)
+        : undefined,
+    selectedBulkOption:
+      selectedBulkOption && selectedBulkOption !== "1"
+        ? parseInt(selectedBulkOption)
+        : undefined,
+    bulkPrice:
+      selectedBulkOption && selectedBulkOption !== "1" && productData.bulkPrices
+        ? productData.bulkPrices.get(parseInt(selectedBulkOption))
+        : undefined,
   };
 
   return (
     <div className="flex w-full items-center justify-center bg-light-bg dark:bg-dark-bg">
-      <div className="flex flex-col">
+      <div className="mx-auto flex w-full flex-col">
         {!isBeingPaid ? (
           <>
             <div className="max-w-screen pt-4">
@@ -426,9 +573,56 @@ export default function CheckoutCard({
                       )}
                     </div>
                   </div>
-                  <h2 className="mt-4 w-full text-left text-2xl font-bold text-light-text dark:text-dark-text">
-                    {productData.title}
-                  </h2>
+                  <div className="mt-4 flex w-full items-start justify-between">
+                    <h2 className="text-left text-2xl font-bold text-light-text dark:text-dark-text">
+                      {productData.title}
+                      {isExpired && (
+                        <Chip color="warning" variant="flat" className="ml-2">
+                          Outdated
+                        </Chip>
+                      )}
+                    </h2>
+                    {rawEvent && (
+                      <Dropdown>
+                        <DropdownTrigger>
+                          <Button
+                            isIconOnly
+                            variant="light"
+                            size="sm"
+                            className="min-w-8 h-8"
+                          >
+                            <EllipsisVerticalIcon className="h-6 w-6 text-gray-500" />
+                          </Button>
+                        </DropdownTrigger>
+                        <DropdownMenu aria-label="Event Actions">
+                          <DropdownItem
+                            key="view-raw"
+                            onPress={() => setShowRawEventModal(true)}
+                          >
+                            View Raw Event
+                          </DropdownItem>
+                          <DropdownItem
+                            key="view-id"
+                            onPress={() => setShowEventIdModal(true)}
+                          >
+                            View Event ID
+                          </DropdownItem>
+                        </DropdownMenu>
+                      </Dropdown>
+                    )}
+                  </div>
+                  {productData.expiration && (
+                    <p
+                      className={`mt-1 text-left text-sm ${
+                        isExpired ? "font-medium text-red-500" : "text-gray-500"
+                      }`}
+                    >
+                      {isExpired ? "Expired on: " : "Valid until: "}{" "}
+                      {new Date(
+                        productData.expiration * 1000
+                      ).toLocaleDateString()}
+                    </p>
+                  )}
                   {productData.condition && (
                     <div className="text-left text-xs text-light-text dark:text-dark-text">
                       <span>Condition: {productData.condition}</span>
@@ -465,79 +659,145 @@ export default function CheckoutCard({
                       isRequired={true}
                     />
                   )}
+                  {hasBulkPrices && (
+                    <BulkSelector
+                      bulkPrices={productData.bulkPrices!}
+                      basePrice={productData.price}
+                      currency={productData.currency}
+                      selectedBulkOption={selectedBulkOption}
+                      onBulkChange={setSelectedBulkOption}
+                    />
+                  )}
                   <div className="mt-4">
                     <DisplayCheckoutCost monetaryInfo={updatedProductData} />
+                    {selectedBulkOption && selectedBulkOption !== "1" && (
+                      <p className="mt-1 text-sm text-light-text dark:text-dark-text">
+                        Bundle: {selectedBulkOption} units
+                      </p>
+                    )}
                   </div>
-                  <div className="pb-1">
-                    <Chip
-                      key={productData.location}
-                      startContent={locationAvatar(productData.location)}
-                      className="min-h-fit max-w-full"
-                      classNames={{
-                        base: "h-auto py-1",
-                        content: "whitespace-normal break-words text-wrap",
-                      }}
-                    >
-                      {productData.location}
-                    </Chip>
-                  </div>
-                  {renderSizeGrid()}
-                  <div className="flex w-full flex-col gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {productData.status !== "sold" ? (
-                        <>
-                          <Button
-                            className={`min-w-fit bg-gradient-to-tr from-purple-700 via-purple-500 to-purple-700 text-dark-text shadow-lg dark:from-yellow-700 dark:via-yellow-500 dark:to-yellow-700 dark:text-light-text ${
-                              (hasSizes && !selectedSize) ||
-                              (hasVolumes && !selectedVolume)
-                                ? "cursor-not-allowed opacity-50"
-                                : ""
-                            }`}
-                            onClick={toggleBuyNow}
-                            disabled={
-                              (hasSizes && !selectedSize) ||
-                              (hasVolumes && !selectedVolume)
-                            }
-                          >
-                            Buy Now
-                          </Button>
-                          <Button
-                            className={`${SHOPSTRBUTTONCLASSNAMES} ${
-                              isAdded ||
-                              (hasSizes && !selectedSize) ||
-                              (hasVolumes && !selectedVolume)
-                                ? "cursor-not-allowed opacity-50"
-                                : ""
-                            }`}
-                            onClick={handleAddToCart}
-                            disabled={
-                              isAdded ||
-                              (hasSizes && !selectedSize) ||
-                              (hasVolumes && !selectedVolume)
-                            }
-                          >
-                            Add To Cart
-                          </Button>
-                        </>
-                      ) : (
-                        <>
-                          <Button
-                            className={`${SHOPSTRBUTTONCLASSNAMES} cursor-not-allowed opacity-50`}
-                            disabled
-                          >
-                            Sold Out
-                          </Button>
-                        </>
-                      )}
-                      <Button
-                        type="submit"
-                        className={SHOPSTRBUTTONCLASSNAMES}
-                        onClick={handleShare}
-                      >
-                        Share
-                      </Button>
+
+                  {isZapsnag ? (
+                    <div className="mt-4">
+                      <ZapsnagButton product={productData} />
                     </div>
-                  </div>
+                  ) : (
+                    <>
+                      {productData.pubkey !== userPubkey && (
+                        <div className="mt-4 space-y-2">
+                          <div className="flex gap-2">
+                            <Input
+                              label="Discount Code"
+                              placeholder="Enter code"
+                              value={discountCode}
+                              onChange={(e) =>
+                                setDiscountCode(e.target.value.toUpperCase())
+                              }
+                              className="flex-1 text-light-text dark:text-dark-text"
+                              disabled={appliedDiscount > 0}
+                              isInvalid={!!discountError}
+                              errorMessage={discountError}
+                            />
+                            {appliedDiscount > 0 ? (
+                              <Button
+                                color="warning"
+                                onClick={handleRemoveDiscount}
+                              >
+                                Remove
+                              </Button>
+                            ) : (
+                              <Button
+                                className={SHOPSTRBUTTONCLASSNAMES}
+                                onClick={handleApplyDiscount}
+                              >
+                                Apply
+                              </Button>
+                            )}
+                          </div>
+                          {appliedDiscount > 0 && (
+                            <p className="text-sm text-green-600 dark:text-green-400">
+                              {appliedDiscount}% discount applied! You save{" "}
+                              {Math.ceil((discountAmount / 100) * 100) / 100}{" "}
+                              {productData.currency}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="pb-1">
+                        <Chip
+                          key={productData.location}
+                          startContent={locationAvatar(productData.location)}
+                          className="min-h-fit max-w-full"
+                          classNames={{
+                            base: "h-auto py-1",
+                            content: "whitespace-normal break-words text-wrap",
+                          }}
+                        >
+                          {productData.location}
+                        </Chip>
+                      </div>
+                      {renderSizeGrid()}
+                      <div className="flex w-full flex-col gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {productData.status !== "sold" ? (
+                            <>
+                              <Button
+                                className={`min-w-fit bg-gradient-to-tr from-purple-700 via-purple-500 to-purple-700 text-dark-text shadow-lg dark:from-yellow-700 dark:via-yellow-500 dark:to-yellow-700 dark:text-light-text ${
+                                  (hasSizes && !selectedSize) ||
+                                  (hasVolumes && !selectedVolume)
+                                    ? "cursor-not-allowed opacity-50"
+                                    : ""
+                                }`}
+                                onClick={toggleBuyNow}
+                                disabled={
+                                  (hasSizes && !selectedSize) ||
+                                  (hasVolumes && !selectedVolume) ||
+                                  isExpired
+                                }
+                              >
+                                Buy Now
+                              </Button>
+                              <Button
+                                className={`${SHOPSTRBUTTONCLASSNAMES} ${
+                                  isAdded ||
+                                  (hasSizes && !selectedSize) ||
+                                  (hasVolumes && !selectedVolume)
+                                    ? "cursor-not-allowed opacity-50"
+                                    : ""
+                                }`}
+                                onClick={handleAddToCart}
+                                disabled={
+                                  isAdded ||
+                                  (hasSizes && !selectedSize) ||
+                                  (hasVolumes && !selectedVolume) ||
+                                  isExpired
+                                }
+                              >
+                                Add To Cart
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button
+                                className={`${SHOPSTRBUTTONCLASSNAMES} cursor-not-allowed opacity-50`}
+                                disabled
+                              >
+                                Sold Out
+                              </Button>
+                            </>
+                          )}
+                          <Button
+                            type="submit"
+                            className={SHOPSTRBUTTONCLASSNAMES}
+                            onClick={handleShare}
+                          >
+                            Share
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  )}
                   {productData.pubkey !== userPubkey && (
                     <span
                       onClick={() => {
@@ -673,15 +933,21 @@ export default function CheckoutCard({
           <div className="flex flex-col items-center">
             <ProductInvoiceCard
               productData={updatedProductData}
-              setFiatOrderIsPlaced={setFiatOrderIsPlaced}
-              setFiatOrderFailed={setFiatOrderFailed}
+              setIsBeingPaid={setIsBeingPaid}
               setInvoiceIsPaid={setInvoiceIsPaid}
               setInvoiceGenerationFailed={setInvoiceGenerationFailed}
               setCashuPaymentSent={setCashuPaymentSent}
               setCashuPaymentFailed={setCashuPaymentFailed}
               selectedSize={selectedSize}
               selectedVolume={selectedVolume}
-              setIsBeingPaid={setIsBeingPaid}
+              selectedBulkOption={
+                selectedBulkOption ? parseInt(selectedBulkOption) : undefined
+              }
+              discountCode={appliedDiscount > 0 ? discountCode : undefined}
+              discountPercentage={
+                appliedDiscount > 0 ? appliedDiscount : undefined
+              }
+              originalPrice={currentPrice}
             />
           </div>
         )}
@@ -695,6 +961,22 @@ export default function CheckoutCard({
           bodyText="Listing URL copied to clipboard!"
           isOpen={showSuccessModal}
           onClose={() => setShowSuccessModal(false)}
+        />
+        <RawEventModal
+          isOpen={showRawEventModal}
+          onClose={() => setShowRawEventModal(false)}
+          rawEvent={rawEvent}
+        />
+        <EventIdModal
+          isOpen={showEventIdModal}
+          onClose={() => setShowEventIdModal(false)}
+          rawEvent={rawEvent}
+        />
+        <FreeShippingNotification
+          isVisible={showFreeShippingNotification}
+          onClose={() => setShowFreeShippingNotification(false)}
+          shopData={shopMapContext.shopData}
+          cart={cart}
         />
       </div>
     </div>

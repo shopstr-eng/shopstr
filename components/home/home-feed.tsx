@@ -2,7 +2,7 @@
 
 "use client";
 
-import React, { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { ShopMapContext } from "@/utils/context/context";
 import { ShopProfile } from "../../utils/types/types";
 import { sanitizeUrl } from "@braintree/sanitize-url";

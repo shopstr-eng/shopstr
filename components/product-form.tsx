@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from "react";
+import { useEffect, useState, useContext } from "react";
 import CryptoJS from "crypto-js";
 import { useRouter } from "next/router";
 import { useForm, Controller } from "react-hook-form";
@@ -16,6 +16,7 @@ import {
   SelectSection,
   Chip,
   Image,
+  Switch,
 } from "@nextui-org/react";
 import {
   ChevronLeftIcon,
@@ -34,11 +35,11 @@ import {
 import {
   PostListing,
   getLocalStorageData,
+  finalizeAndSendNostrEvent,
 } from "@/utils/nostr/nostr-helper-functions";
 import LocationDropdown from "./utility-components/dropdowns/location-dropdown";
 import ConfirmActionDropdown from "./utility-components/dropdowns/confirm-action-dropdown";
 import { ProductContext, ProfileMapContext } from "../utils/context/context";
-import { addProductToCache } from "@/utils/nostr/cache-service";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import { buildSrcSet } from "@/utils/images";
 import { FileUploaderButton } from "./utility-components/file-uploader";
@@ -76,6 +77,7 @@ export default function ProductForm({
   const [isPostingOrUpdatingProduct, setIsPostingOrUpdatingProduct] =
     useState(false);
   const [showOptionalTags, setShowOptionalTags] = useState(false);
+  const [isFlashSale, setIsFlashSale] = useState(false);
   const productEventContext = useContext(ProductContext);
   const profileContext = useContext(ProfileMapContext);
   const {
@@ -106,10 +108,19 @@ export default function ProductForm({
           "Volume Prices": oldValues.volumePrices
             ? oldValues.volumePrices
             : new Map<string, number>(),
+          "Bulk Pricing Enabled": oldValues.bulkPrices
+            ? oldValues.bulkPrices.size > 0
+            : false,
+          "Bulk Prices": oldValues.bulkPrices
+            ? oldValues.bulkPrices
+            : new Map<number, number>(),
           Condition: oldValues.condition ? oldValues.condition : "",
           Status: oldValues.status ? oldValues.status : "",
           Required: oldValues.required ? oldValues.required : "",
           Restrictions: oldValues.restrictions ? oldValues.restrictions : "",
+          Expiration: oldValues.expiration
+            ? new Date(oldValues.expiration * 1000).toISOString().slice(0, 16)
+            : "",
         }
       : {
           Currency: "SAT",
@@ -130,7 +141,16 @@ export default function ProductForm({
   useEffect(() => {
     setImages(oldValues?.images || []);
     setIsEdit(oldValues ? true : false);
-  }, [showModal]);
+    if (showModal && !oldValues && signerPubKey) {
+      const profile = profileContext.profileData.get(signerPubKey);
+      const hasLightning = !!(
+        profile?.content?.lud16 || profile?.content?.lnurl
+      );
+      setIsFlashSale(hasLightning);
+    } else {
+      setIsFlashSale(false);
+    }
+  }, [showModal, signerPubKey, profileContext]);
 
   const onSubmit = async (data: {
     [x: string]: string | Map<string, number> | string[];
@@ -203,6 +223,15 @@ export default function ProductForm({
       });
     }
 
+    if (data["Bulk Pricing Enabled"] && data["Bulk Prices"]) {
+      const bulkPrices = data["Bulk Prices"] as unknown as Map<number, number>;
+      bulkPrices.forEach((price, units) => {
+        if (units > 0 && price > 0) {
+          tags.push(["bulk", units.toString(), price.toString()]);
+        }
+      });
+    }
+
     if (data["Condition"]) {
       tags.push(["condition", data["Condition"] as string]);
     }
@@ -217,6 +246,14 @@ export default function ProductForm({
 
     if (data["Restrictions"]) {
       tags.push(["restrictions", data["Restrictions"] as string]);
+    }
+
+    if (data["Expiration"]) {
+      const dateObj = new Date(data["Expiration"] as string);
+      if (!isNaN(dateObj.getTime())) {
+        const unixTime = Math.floor(dateObj.getTime() / 1000);
+        tags.push(["valid_until", unixTime.toString()]);
+      }
     }
 
     // Add pickup locations if they exist and shipping involves pickup
@@ -235,6 +272,33 @@ export default function ProductForm({
 
     const newListing = await PostListing(tags, signer!, isLoggedIn!, nostr!);
 
+    //Handle Flash Sale (Zapsnag) Publication
+    if (isFlashSale) {
+      try {
+        const finalContent = `${data["Description"]}\n\nPrice: ${
+          data["Price"]
+        } ${data["Currency"]}\n\n#zapsnag\n${images[0] || ""}`;
+        const flashSaleEvent = {
+          kind: 1,
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [
+            ["t", "zapsnag"],
+            ["t", "shopstr-zapsnag"],
+            ["d", "zapsnag"],
+          ],
+          content: finalContent,
+        };
+
+        if (data["Quantity"]) {
+          flashSaleEvent.tags.push(["quantity", data["Quantity"].toString()]);
+        }
+        if (images[0]) flashSaleEvent.tags.push(["image", images[0]]);
+        await finalizeAndSendNostrEvent(signer!, nostr!, flashSaleEvent);
+      } catch (e) {
+        console.error("Failed to publish flash sale note", e);
+      }
+    }
+
     if (isEdit) {
       if (handleDelete && oldValues?.id) {
         handleDelete(oldValues.id);
@@ -243,7 +307,6 @@ export default function ProductForm({
 
     clear();
     productEventContext.addNewlyCreatedProductEvent(newListing);
-    addProductToCache(newListing);
     setIsPostingOrUpdatingProduct(false);
     if (onSubmitCallback) {
       onSubmitCallback();
@@ -864,6 +927,182 @@ export default function ProductForm({
                 );
               }}
             />
+
+            <Controller
+              name="Bulk Pricing Enabled"
+              control={control}
+              render={({ field: { onChange, value } }) => (
+                <div className="mt-4 flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-semibold text-light-text dark:text-dark-text">
+                      Bulk/Bundle Pricing
+                    </span>
+                    <span className="text-tiny text-gray-500">
+                      Offer discounted pricing for multiple units
+                    </span>
+                  </div>
+                  <Switch
+                    isSelected={!!value}
+                    onValueChange={onChange}
+                    classNames={{
+                      wrapper:
+                        "group-data-[selected=true]:bg-shopstr-purple dark:group-data-[selected=true]:bg-shopstr-yellow",
+                    }}
+                  />
+                </div>
+              )}
+            />
+
+            <Controller
+              name="Bulk Prices"
+              control={control}
+              render={({
+                field: { onChange, value = new Map<number, number>() },
+              }) => {
+                const bulkEnabled = watch("Bulk Pricing Enabled");
+                if (!bulkEnabled) return <></>;
+
+                const handleAddTier = () => {
+                  const newPrices = new Map(value);
+                  newPrices.set(0, 0);
+                  onChange(newPrices);
+                };
+
+                const handleRemoveTier = (units: number) => {
+                  const newPrices = new Map(value);
+                  newPrices.delete(units);
+                  onChange(newPrices);
+                };
+
+                const handleUnitsChange = (
+                  oldUnits: number,
+                  newUnits: number
+                ) => {
+                  const newPrices = new Map<number, number>();
+                  value.forEach((price: number, units: number) => {
+                    if (units === oldUnits) {
+                      newPrices.set(newUnits, price);
+                    } else {
+                      newPrices.set(units, price);
+                    }
+                  });
+                  onChange(newPrices);
+                };
+
+                const handlePriceChange = (units: number, price: number) => {
+                  const newPrices = new Map(value);
+                  newPrices.set(units, price);
+                  onChange(newPrices);
+                };
+
+                const entries = Array.from(value.entries()).sort(
+                  (a: [number, number], b: [number, number]) => a[0] - b[0]
+                );
+
+                return (
+                  <div className="mt-2 space-y-3">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      Set prices for different unit quantities. These prices
+                      override the single-unit price.
+                    </p>
+                    {entries.map(
+                      ([units, price]: [number, number], index: number) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            min="1"
+                            label="Units"
+                            labelPlacement="inside"
+                            value={units > 0 ? units.toString() : ""}
+                            onChange={(e) =>
+                              handleUnitsChange(
+                                units,
+                                parseInt(e.target.value) || 0
+                              )
+                            }
+                            className="w-24"
+                          />
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            label="Total Price"
+                            labelPlacement="inside"
+                            value={price > 0 ? price.toString() : ""}
+                            onChange={(e) =>
+                              handlePriceChange(
+                                units,
+                                parseFloat(e.target.value) || 0
+                              )
+                            }
+                            className="flex-1"
+                            endContent={
+                              <span className="text-small text-default-400">
+                                {watchCurrency}
+                              </span>
+                            }
+                          />
+                          <Button
+                            isIconOnly
+                            color="danger"
+                            variant="light"
+                            onClick={() => handleRemoveTier(units)}
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )
+                    )}
+                    {theme === "dark" ? (
+                      <Button
+                        variant="bordered"
+                        color="warning"
+                        className="w-full"
+                        onClick={handleAddTier}
+                      >
+                        Add Bulk Tier
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="bordered"
+                        color="secondary"
+                        className="w-full"
+                        onClick={handleAddTier}
+                      >
+                        Add Bulk Tier
+                      </Button>
+                    )}
+                    {entries.length > 0 && (
+                      <div className="w-full text-xs text-light-text opacity-75 dark:text-dark-text">
+                        Note: Bulk prices override the single-unit price when a
+                        buyer selects a bundle option.
+                      </div>
+                    )}
+                  </div>
+                );
+              }}
+            />
+
+            {/* --- Flash Sale Toggle --- */}
+            <div className="mt-4 flex items-center justify-between rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+              <div className="flex flex-col">
+                <span className="text-sm font-semibold text-light-text dark:text-dark-text">
+                  Post as Flash Sale
+                </span>
+                <span className="text-tiny text-gray-500">
+                  Also broadcast to Global Feed (Nostr)
+                </span>
+              </div>
+              <Switch
+                isSelected={isFlashSale}
+                onValueChange={setIsFlashSale}
+                classNames={{
+                  wrapper:
+                    "group-data-[selected=true]:bg-shopstr-purple dark:group-data-[selected=true]:bg-shopstr-yellow",
+                }}
+              />
+            </div>
+
             <div className="w-full max-w-xs">
               <Button
                 className="mb-2 mt-4 w-full justify-start rounded-md pl-2 text-shopstr-purple-light dark:text-shopstr-yellow-light"
@@ -1325,6 +1564,44 @@ export default function ProductForm({
               </>
             )}
 
+            {showOptionalTags && (
+              <Controller
+                name="Expiration"
+                control={control}
+                render={({
+                  field: { onChange, onBlur, value },
+                  fieldState: { error },
+                }) => {
+                  const isErrored = error !== undefined;
+                  const errorMessage = error?.message || "";
+                  return (
+                    <div className="mt-4">
+                      <Input
+                        type="datetime-local"
+                        min={new Date().toISOString().slice(0, 16)}
+                        variant="bordered"
+                        label="Valid Until (Optional)"
+                        labelPlacement="inside"
+                        placeholder="Select a date to mark listing as stale"
+                        isInvalid={isErrored}
+                        errorMessage={errorMessage}
+                        onChange={onChange}
+                        onBlur={onBlur}
+                        value={value as string}
+                        className="text-light-text dark:text-dark-text"
+                      />
+                      <p className="mt-1 text-tiny text-gray-500">
+                        Listing will remain visible but marked as
+                        &quot;Outdated&quot; after this date. Leave empty if
+                        product has no expiration. Buyers won&apos;t be able to
+                        purchase after expiration.
+                      </p>
+                    </div>
+                  );
+                }}
+              />
+            )}
+
             <div className="mx-4 my-2 flex items-center justify-center text-center">
               <InformationCircleIcon className="h-6 w-6 text-light-text dark:text-dark-text" />
               <p className="ml-2 text-xs text-light-text dark:text-dark-text">
@@ -1332,10 +1609,7 @@ export default function ProductForm({
                 {profileContext.profileData.get(pubkey)?.content
                   ?.payment_preference === "lightning"
                   ? "Lightning"
-                  : profileContext.profileData.get(pubkey)?.content
-                        ?.payment_preference === "fiat"
-                    ? "Fiat"
-                    : "Cashu"}
+                  : "Cashu"}
                 . You can modify this in your{" "}
                 <span
                   className="cursor-pointer underline hover:text-purple-500 dark:hover:text-yellow-500"

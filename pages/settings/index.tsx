@@ -5,6 +5,8 @@ import {
   Cog6ToothIcon,
   UserIcon,
   UserGroupIcon,
+  BanknotesIcon,
+  KeyIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
 import { LogOut } from "@/utils/nostr/nostr-helper-functions";
@@ -75,6 +77,28 @@ const SettingsPage = () => {
               }}
             >
               Preferences
+            </ListboxItem>
+            <ListboxItem
+              key="wallet"
+              description="Connect your NIP-47 Nostr Wallet"
+              classNames={listBoxClassnames}
+              startContent={<BanknotesIcon className={startIconClassnames} />}
+              onClick={() => {
+                router.push("/settings/wallet");
+              }}
+            >
+              Nostr Wallet Connect
+            </ListboxItem>
+            <ListboxItem
+              key="api-keys"
+              description="Manage API keys for MCP and AI agent access"
+              classNames={listBoxClassnames}
+              startContent={<KeyIcon className={startIconClassnames} />}
+              onClick={() => {
+                router.push("/settings/api-keys");
+              }}
+            >
+              API Keys
             </ListboxItem>
           </ListboxSection>
           <ListboxSection title="Log out" classNames={listBoxSectionClassnames}>

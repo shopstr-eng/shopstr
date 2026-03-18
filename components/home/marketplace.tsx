@@ -7,30 +7,49 @@ import {
   SelectSection,
   Input,
   useDisclosure,
+  Dropdown,
+  DropdownTrigger,
+  DropdownMenu,
+  DropdownItem,
 } from "@nextui-org/react";
 import {
   FaceFrownIcon,
   FaceSmileIcon,
   PlusIcon,
+  EllipsisVerticalIcon,
 } from "@heroicons/react/24/outline";
 import { useRouter } from "next/router";
-import { nip19 } from "nostr-tools";
-import React, { useContext, useEffect, useState, useRef } from "react";
+import { nip19, Event } from "nostr-tools";
+import { useContext, useEffect, useState, useRef } from "react";
 import {
   ReviewsContext,
   ShopMapContext,
   FollowsContext,
+  ProductContext,
+  ProfileMapContext,
 } from "@/utils/context/context";
 import DisplayProducts from "../display-products";
 import LocationDropdown from "../utility-components/dropdowns/location-dropdown";
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
 import { CATEGORIES, SHOPSTRBUTTONCLASSNAMES } from "@/utils/STATIC-VARIABLES";
 import { SignerContext } from "@/components/utility-components/nostr-context-provider";
-import { ProductData } from "@/utils/parsers/product-parser-functions";
+import parseTags, {
+  ProductData,
+} from "@/utils/parsers/product-parser-functions";
 import SignInModal from "../sign-in/SignInModal";
 import ShopstrSwitch from "../utility-components/shopstr-switch";
 import { ShopProfile } from "../../utils/types/types";
 import SideShopNav from "./side-shop-nav";
+import {
+  RawEventModal,
+  EventIdModal,
+} from "../utility-components/modals/event-modals";
+import {
+  getListingSlug,
+  getProfileSlug,
+  findPubkeyByProfileSlug,
+  isNpub,
+} from "@/utils/url-slugs";
 
 function MarketplacePage({
   focusedPubkey,
@@ -64,6 +83,9 @@ function MarketplacePage({
   const [shopBannerURL, setShopBannerURL] = useState("");
   const [shopAbout, setShopAbout] = useState("");
   const [isFetchingShop, setIsFetchingShop] = useState(false);
+  const [rawEvent, setRawEvent] = useState<Event | undefined>(undefined);
+  const [showRawEventModal, setShowRawEventModal] = useState(false);
+  const [showEventIdModal, setShowEventIdModal] = useState(false);
 
   const [isFetchingFollows, setIsFetchingFollows] = useState(false);
 
@@ -72,6 +94,8 @@ function MarketplacePage({
   const reviewsContext = useContext(ReviewsContext);
   const shopMapContext = useContext(ShopMapContext);
   const followsContext = useContext(FollowsContext);
+  const productEventContext = useContext(ProductContext);
+  const profileMapContext = useContext(ProfileMapContext);
 
   const { pubkey: userPubkey, isLoggedIn: loggedIn } =
     useContext(SignerContext);
@@ -81,11 +105,49 @@ function MarketplacePage({
   useEffect(() => {
     const npub = router.query.npub;
     if (npub && typeof npub[0] === "string") {
-      const { data } = nip19.decode(npub[0]);
-      setFocusedPubkey(data as string);
-      setSelectedSection("shop");
+      const slug = npub[0];
+      let pubkey: string | undefined;
+
+      if (isNpub(slug)) {
+        try {
+          const { data } = nip19.decode(slug);
+          pubkey = data as string;
+        } catch {
+          return;
+        }
+      } else {
+        pubkey = findPubkeyByProfileSlug(slug, profileMapContext.profileData);
+      }
+
+      if (pubkey) {
+        setFocusedPubkey(pubkey);
+        setSelectedSection("shop");
+      }
     }
-  }, [router.query.npub]);
+  }, [router.query.npub, profileMapContext.profileData]);
+
+  useEffect(() => {
+    if (
+      focusedPubkey &&
+      !profileMapContext.isLoading &&
+      router.query.npub?.[0]
+    ) {
+      const currentSlug = router.query.npub[0] as string;
+      const canonicalSlug = getProfileSlug(
+        focusedPubkey,
+        profileMapContext.profileData
+      );
+      if (canonicalSlug && currentSlug !== canonicalSlug) {
+        router.replace(`/marketplace/${canonicalSlug}`, undefined, {
+          shallow: true,
+        });
+      }
+    }
+  }, [
+    focusedPubkey,
+    profileMapContext.isLoading,
+    profileMapContext.profileData,
+  ]);
 
   useEffect(() => {
     setIsFetchingReviews(true);
@@ -140,6 +202,7 @@ function MarketplacePage({
       if (shopProfile) {
         setShopBannerURL(shopProfile.content.ui.banner);
         setShopAbout(shopProfile.content.about);
+        setRawEvent(shopProfile.event);
       }
     }
     setIsFetchingShop(false);
@@ -175,13 +238,23 @@ function MarketplacePage({
     }
   };
 
-  const handleTitleClick = (productId: string, productPubkey: string) => {
-    const naddr = nip19.naddrEncode({
-      identifier: productId,
-      pubkey: productPubkey,
-      kind: 30402,
-    });
-    router.push(`/listing/${naddr}`);
+  const handleTitleClick = (product: ProductData) => {
+    if (product.d === "zapsnag" || product.categories?.includes("zapsnag")) {
+      router.push(`/listing/${product.id}`);
+      return;
+    }
+
+    const allParsed = productEventContext.productEvents
+      .filter((e: Event) => e.kind !== 1)
+      .map((e: Event) => parseTags(e))
+      .filter((p: ProductData | undefined): p is ProductData => !!p);
+
+    const slug = getListingSlug(product, allParsed);
+    if (slug) {
+      router.push(`/listing/${slug}`);
+    } else {
+      router.push(`/listing/${product.id}`);
+    }
   };
 
   const renderProductScores = () => {
@@ -191,6 +264,9 @@ function MarketplacePage({
           const productReviews = product.d
             ? productReviewMap.get(product.d)
             : undefined;
+          const isExpired = product.expiration
+            ? Date.now() / 1000 > product.expiration
+            : false;
 
           if (!productReviews || productReviews.size === 0) return null;
 
@@ -198,12 +274,20 @@ function MarketplacePage({
             <div key={product.id} className="mt-4 p-4 pt-4">
               <h3 className="mb-3 text-lg font-semibold text-light-text dark:text-dark-text">
                 <div
-                  onClick={() =>
-                    handleTitleClick(product.d as string, product.pubkey)
-                  }
+                  onClick={() => handleTitleClick(product)}
                   className="cursor-pointer hover:underline"
                 >
                   {product.title}
+                  {isExpired && (
+                    <Chip
+                      color="warning"
+                      size="sm"
+                      variant="flat"
+                      className="ml-2"
+                    >
+                      Outdated
+                    </Chip>
+                  )}
                 </div>
               </h3>
               <div className="space-y-3">
@@ -337,6 +421,33 @@ function MarketplacePage({
               >
                 Message
               </Button>
+              {rawEvent && (
+                <Dropdown>
+                  <DropdownTrigger>
+                    <Button
+                      isIconOnly
+                      variant="light"
+                      className="text-light-text hover:text-purple-700 dark:text-dark-text dark:hover:text-accent-dark-text"
+                    >
+                      <EllipsisVerticalIcon className="h-6 w-6" />
+                    </Button>
+                  </DropdownTrigger>
+                  <DropdownMenu aria-label="Event Actions">
+                    <DropdownItem
+                      key="view-raw"
+                      onPress={() => setShowRawEventModal(true)}
+                    >
+                      View Raw Event
+                    </DropdownItem>
+                    <DropdownItem
+                      key="view-id"
+                      onPress={() => setShowEventIdModal(true)}
+                    >
+                      View Event ID
+                    </DropdownItem>
+                  </DropdownMenu>
+                </Dropdown>
+              )}
             </div>
           </div>
         ) : (
@@ -491,6 +602,16 @@ function MarketplacePage({
           </Button>
         )}
       <SignInModal isOpen={isOpen} onClose={onClose} />
+      <RawEventModal
+        isOpen={showRawEventModal}
+        onClose={() => setShowRawEventModal(false)}
+        rawEvent={rawEvent}
+      />
+      <EventIdModal
+        isOpen={showEventIdModal}
+        onClose={() => setShowEventIdModal(false)}
+        rawEvent={rawEvent}
+      />
     </div>
   );
 }

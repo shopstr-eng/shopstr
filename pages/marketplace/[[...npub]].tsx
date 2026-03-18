@@ -1,6 +1,5 @@
 /* eslint-disable @next/next/no-img-element */
 
-import React from "react";
 import HomeFeed from "@/components/home/home-feed";
 
 export default function SellerView({
