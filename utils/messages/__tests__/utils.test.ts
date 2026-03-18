@@ -1,9 +1,4 @@
-import {
-  timeSinceMessageDisplayText,
-  countNumberOfUnreadMessagesFromChatsContext,
-} from "../utils";
-import { ChatsMap } from "@/utils/context/context";
-import { NostrMessageEvent } from "@/utils/types/types";
+import { timeSinceMessageDisplayText } from "../utils";
 
 describe("timeSinceMessageDisplayText", () => {
   jest.useFakeTimers();

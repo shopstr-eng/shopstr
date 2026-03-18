@@ -98,7 +98,7 @@ export default function SignInModal({
       await signer.getPubKey();
       onClose();
       router.push("/onboarding/user-profile");
-    } catch (error) {
+    } catch {
       setFailureText("Bunker sign-in failed!");
       setShowFailureModal(true);
       setIsBunkerConnecting(false);
