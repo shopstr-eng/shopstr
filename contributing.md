@@ -110,11 +110,11 @@ This application requires a PostgreSQL database. You can run it locally using Do
    docker-compose down -v
    ```
 
-The application will be available at `http://localhost:3000`
+The application will be available at `http://localhost:5000`
 
 ### 4. Verify Installation
 
-- Open your browser to `http://localhost:3000`
+- Open your browser to `http://localhost:5000`
 - Check that the application loads without errors
 - Check the browser console for any warnings or errors
 
