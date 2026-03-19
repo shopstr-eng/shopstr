@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+export default function handler(_req: NextApiRequest, res: NextApiResponse) {
   const baseUrl = "https://milk.market";
   const currentDate = new Date().toISOString().split("T")[0];
 

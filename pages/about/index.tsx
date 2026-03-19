@@ -1,7 +1,6 @@
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { Image } from "@nextui-org/react";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import {
   PRIMARYBUTTONCLASSNAMES,
