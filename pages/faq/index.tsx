@@ -28,7 +28,7 @@ export default function Faq() {
         {
           title: "What payment methods are accepted?",
           content:
-            "Milk Market currently supports Bitcoin payments through the Lightning Network, Cashu, and Nostr Wallet Connect. These methods facilitate fast, low-fee transactions while maintaining privacy.",
+            "Milk Market supports Bitcoin payments through the Lightning Network, Cashu, and Nostr Wallet Connect, as well as credit and debit card payments via Stripe and other fiat options such as Cash App, Venmo, and PayPal. Buyers and sellers can also arrange cash payments directly during pickup or delivery.",
         },
         {
           title: "How do I claim a Cashu payment?",
@@ -53,7 +53,7 @@ export default function Faq() {
         {
           title: "How do I start selling on Milk Market?",
           content:
-            "To start selling, you'll simply need to: 1) Create a Nostr account or sign in with existing keys, 2) Set up your profile in settings, 3) List your products with descriptions and images, 4) Start receiving orders!",
+            "To start selling, you'll simply need to: 1) Sign in with your email, Google account, or existing Nostr keys, 2) Set up your profile in settings, 3) List your products with descriptions and images, 4) Start receiving orders!",
         },
         {
           title: "What types of items can I sell?",
@@ -106,14 +106,14 @@ export default function Faq() {
       title: "Account & Privacy",
       items: [
         {
-          title: "How can I sign in with an existing Nostr account?",
+          title: "How do I create an account or sign in?",
           content:
-            "It is recommended that you sign in using an extension (Alby, nos2x, etc.) or bunker application ( Amber, nsec.app, etc.) in order to keep your private key secure. It is also possible to sign in by pasting your nsec and setting a passphrase to encrypt and store it in your browser, but it is not recommended as it could potentially leak your private key.",
+            "Milk Market offers multiple ways to sign in. You can sign in with your email address or Google account for a familiar experience — no Nostr knowledge required. If you already have a Nostr account, you can sign in using a browser extension (Alby, nos2x, etc.) or bunker application (Amber, nsec.app, etc.) to keep your private key secure. It is also possible to sign in by pasting your nsec and setting a passphrase, but this is not recommended as it could potentially leak your private key.",
         },
         {
           title: "How are my messages and data kept private?",
           content:
-            "All messages are encrypted using Nostr's encrypted messaging protocol, specifically NIP-17. No one but the parties involved in a transaction can see what is happening. Your data is stored on your selected relays and isn't accessible by third parties.",
+            "All messages are encrypted using Nostr's encrypted messaging protocol, specifically NIP-17. No one but the parties involved in a transaction can see what is happening. Email notifications are also delivered alongside Nostr DMs so you never miss an important update, even if you're not actively using the app. Your data is stored on your selected relays and isn't accessible by third parties.",
         },
         {
           title: "Why am I unable to view my messages?",
@@ -133,7 +133,7 @@ export default function Faq() {
         {
           title: "How do I contact a seller?",
           content:
-            "You can contact sellers through Milk Market's encrypted messaging system. Simply navigate to a listing and click on the merchant profile to send a secure message to the seller.",
+            "You can contact sellers through Milk Market's encrypted messaging system. Simply navigate to a listing and click on the merchant profile to send a secure message. Messages are sent as encrypted Nostr DMs, and email notifications are also delivered so the seller is alerted even if they're offline. If you signed in with email or Google, all of this works seamlessly without needing a separate Nostr client.",
         },
         {
           title: "Am I able to return an item?",

@@ -229,10 +229,11 @@ export default function StandaloneLanding() {
         <div className="flex items-center space-x-2">
           <Image
             src="/milk-market.png"
-            alt="Milk Market"
+            alt="Milk Market logo - farm-fresh dairy marketplace"
             width={32}
             height={32}
             className="h-8 w-8"
+            loading="eager"
           />
           <span className="text-xl font-bold">Milk Market</span>
         </div>
@@ -294,6 +295,7 @@ export default function StandaloneLanding() {
             width={80}
             height={80}
             className="h-20 w-20"
+            loading="lazy"
           />
         </div>
         <div className="pointer-events-none absolute right-[12%] top-[20%] opacity-[0.05]">
@@ -303,6 +305,7 @@ export default function StandaloneLanding() {
             width={100}
             height={100}
             className="h-25 w-25"
+            loading="lazy"
           />
         </div>
         <div className="pointer-events-none absolute bottom-[20%] left-[8%] opacity-[0.07]">
@@ -312,6 +315,7 @@ export default function StandaloneLanding() {
             width={90}
             height={90}
             className="h-22 w-22"
+            loading="lazy"
           />
         </div>
         <div className="pointer-events-none absolute bottom-[15%] right-[15%] opacity-[0.05]">
@@ -321,6 +325,7 @@ export default function StandaloneLanding() {
             width={70}
             height={70}
             className="h-18 w-18"
+            loading="lazy"
           />
         </div>
 
@@ -340,18 +345,13 @@ export default function StandaloneLanding() {
             directly. Pick up fresh or have delivered.
           </p>
 
-          <p className="mb-6 inline-block rounded-full border-2 border-black bg-primary-yellow px-4 py-1 text-sm font-bold">
-            Dairy-direct home delivery available for the greater Seattle area
-          </p>
-
           <div className="mb-8 flex flex-wrap items-center justify-center gap-4 text-sm text-zinc-500">
             <span className="flex items-center gap-1">
               <span className="text-green-500">&#10003;</span> Local farms near
               you
             </span>
             <span className="flex items-center gap-1">
-              <span className="text-green-500">&#10003;</span> Zero platform
-              fees
+              <span className="text-green-500">&#10003;</span> No mandatory fees
             </span>
             <span className="flex items-center gap-1">
               <span className="text-green-500">&#10003;</span> Direct payments
@@ -389,7 +389,7 @@ export default function StandaloneLanding() {
           </div>
           <div>
             <span className="block text-2xl font-black">0%</span>
-            <span className="text-sm text-zinc-600">Platform Fees</span>
+            <span className="text-sm text-zinc-600">Mandatory Fees</span>
           </div>
           <div>
             <span className="block text-2xl font-black">100%</span>
@@ -441,7 +441,8 @@ export default function StandaloneLanding() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-green-500">&#10003;</span>
-                  Zero platform fees means lower prices
+                  No mandatory fees &mdash; farmers can optionally donate to
+                  support the site
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-green-500">&#10003;</span>
@@ -468,6 +469,7 @@ export default function StandaloneLanding() {
             width={95}
             height={95}
             className="h-24 w-24"
+            loading="lazy"
           />
         </div>
         <div className="pointer-events-none absolute bottom-[15%] right-[10%] opacity-[0.05]">
@@ -477,6 +479,7 @@ export default function StandaloneLanding() {
             width={85}
             height={85}
             className="h-21 w-21"
+            loading="lazy"
           />
         </div>
 
@@ -539,14 +542,30 @@ export default function StandaloneLanding() {
             <h2 className="mb-4 text-3xl font-black md:text-4xl">
               Why Farmers and Buyers Choose Us
             </h2>
+            <p className="mx-auto max-w-2xl text-zinc-600">
+              Direct food sales from farms reached{" "}
+              <a
+                href="https://www.ers.usda.gov/data-products/charts-of-note/chart-detail?chartId=108821"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-bold text-blue-700 underline"
+              >
+                $17.5 billion in 2022
+              </a>
+              , up 25% since 2017 according to the USDA Census of Agriculture
+              &mdash; reflecting surging demand for fresh, traceable food sold
+              direct from local farms.
+            </p>
           </div>
 
           <div className="grid gap-8 md:grid-cols-3">
             <div className="rounded-lg border-2 border-black bg-white p-8 text-center shadow-neo">
               <span className="mb-4 block text-4xl">0%</span>
-              <h3 className="mb-2 text-xl font-bold">Zero Fees</h3>
+              <h3 className="mb-2 text-xl font-bold">No Mandatory Fees</h3>
               <p className="text-zinc-600">
-                We never take a cut. Every dollar goes straight to the farmer.
+                We never take a mandatory cut. Farmers can choose to set an
+                optional donation rate to support the platform, but it&apos;s
+                always their choice.
               </p>
             </div>
             <div className="rounded-lg border-2 border-black bg-white p-8 text-center shadow-neo">
@@ -565,6 +584,19 @@ export default function StandaloneLanding() {
               </p>
             </div>
           </div>
+
+          <blockquote className="mx-auto mt-10 max-w-3xl rounded-lg border-2 border-black bg-white p-6 text-center shadow-neo">
+            <p className="mb-3 text-lg italic text-zinc-700">
+              &ldquo;The shorter the chain between raw food and fork, the
+              fresher it is and the more transparent the system is.&rdquo;
+            </p>
+            <cite className="text-sm font-bold not-italic text-black">
+              &mdash; Joel Salatin,{" "}
+              <span className="font-normal italic">
+                Everything I Want To Do Is Illegal
+              </span>
+            </cite>
+          </blockquote>
         </div>
       </section>
 
@@ -584,7 +616,7 @@ export default function StandaloneLanding() {
             />
             <FAQItem
               question="How do I pay the farmer?"
-              answer="You pay the farmer directly using whatever method you both agree on - Bitcoin, cash, or other digital payment methods. There are no middlemen and zero platform fees."
+              answer="You pay the farmer directly using whatever method you both agree on - Bitcoin, cash, or other digital payment methods. There are no mandatory platform fees. Farmers may choose to set an optional donation rate to help support the site, but that's entirely up to them."
             />
             <FAQItem
               question="Is my information private?"
@@ -614,6 +646,7 @@ export default function StandaloneLanding() {
             width={90}
             height={90}
             className="h-22 w-22"
+            loading="lazy"
           />
         </div>
         <div className="pointer-events-none absolute bottom-[20%] right-[8%] opacity-[0.05]">
@@ -623,6 +656,7 @@ export default function StandaloneLanding() {
             width={80}
             height={80}
             className="h-20 w-20"
+            loading="lazy"
           />
         </div>
 
@@ -798,15 +832,24 @@ export default function StandaloneLanding() {
             <div className="mb-6 flex items-center justify-center space-x-2">
               <Image
                 src="/milk-market.png"
-                alt="Milk Market"
+                alt="Milk Market logo - decentralized dairy marketplace"
+                width={32}
+                height={32}
                 className="h-8 w-8"
+                loading="lazy"
               />
               <span className="text-xl font-bold">Milk Market</span>
             </div>
             <p className="mb-6 text-lg font-bold">
               The Milk Revolution Won&apos;t Be Pasteurized. Join Us.
             </p>
-            <div className="mb-6 flex items-center justify-center gap-6">
+            <div className="mb-6 flex flex-wrap items-center justify-center gap-6">
+              <Link href="/about" className="text-sm hover:underline">
+                About Us
+              </Link>
+              <Link href="/contact" className="text-sm hover:underline">
+                Contact
+              </Link>
               <Link href="/faq" className="text-sm hover:underline">
                 FAQ
               </Link>
@@ -816,12 +859,6 @@ export default function StandaloneLanding() {
               <Link href="/privacy" className="text-sm hover:underline">
                 Privacy
               </Link>
-              <a
-                href="mailto:freemilk@milk.market"
-                className="text-sm hover:underline"
-              >
-                Contact
-              </a>
             </div>
             <div className="mb-6 flex flex-wrap items-center justify-center gap-6">
               <a
@@ -832,18 +869,11 @@ export default function StandaloneLanding() {
               >
                 <Image
                   src="/github-mark-white.png"
-                  alt="GitHub"
+                  alt="Milk Market open source code on GitHub"
                   width={24}
                   height={24}
+                  loading="lazy"
                 />
-              </a>
-              <a
-                href="https://x.com/milkmarketmedia"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="transition-transform hover:scale-110"
-              >
-                <Image src="/x-logo-white.png" alt="X" width={24} height={24} />
               </a>
               <a
                 href="https://njump.me/milkmarket@milk.market"
@@ -853,9 +883,24 @@ export default function StandaloneLanding() {
               >
                 <Image
                   src="/nostr-icon-white-transparent-256x256.png"
-                  alt="Nostr"
+                  alt="Milk Market on Nostr decentralized network"
                   width={32}
                   height={32}
+                  loading="lazy"
+                />
+              </a>
+              <a
+                href="https://x.com/milkmarketmedia"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="transition-transform hover:scale-110"
+              >
+                <Image
+                  src="/x-logo-white.png"
+                  alt="Follow Milk Market on X (Twitter)"
+                  width={24}
+                  height={24}
+                  loading="lazy"
                 />
               </a>
               <a
@@ -866,9 +911,10 @@ export default function StandaloneLanding() {
               >
                 <Image
                   src="/youtube-icon.png"
-                  alt="YouTube"
+                  alt="Milk Market YouTube channel - dairy farming videos"
                   width={24}
                   height={24}
+                  loading="lazy"
                 />
               </a>
               <a
@@ -879,9 +925,10 @@ export default function StandaloneLanding() {
               >
                 <Image
                   src="/instagram-icon.png"
-                  alt="Instagram"
+                  alt="Milk Market on Instagram"
                   width={24}
                   height={24}
+                  loading="lazy"
                 />
               </a>
               <a
@@ -892,14 +939,15 @@ export default function StandaloneLanding() {
               >
                 <Image
                   src="/tiktok-icon.png"
-                  alt="TikTok"
+                  alt="Milk Market on TikTok"
                   width={24}
                   height={24}
+                  loading="lazy"
                 />
               </a>
             </div>
             <p className="text-sm text-zinc-500">
-              &copy; {new Date().getFullYear()} Milk Market. All rights
+              &copy; {new Date().getFullYear()} Milk Market LLC. All rights
               reserved.
             </p>
           </div>

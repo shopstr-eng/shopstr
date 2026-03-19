@@ -56,6 +56,14 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   turbopack: {},
+  async rewrites() {
+    return [
+      {
+        source: "/sitemap.xml",
+        destination: "/api/sitemap.xml",
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "www.google.com" },

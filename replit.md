@@ -220,3 +220,23 @@ Agents with `full_access` permission have their Nostr private key (nsec) stored 
 ### Authentication
 
 API keys are created via the `/settings/api-keys` UI page, the `/api/mcp/api-keys` endpoint, or the zero-touch `/api/mcp/onboard` endpoint. Keys use PBKDF2 hashing and Bearer token authentication. Three permission levels: `read` (browse only), `read_write` (browse + purchase), and `full_access` (full marketplace participation with Nostr signing). Key prefix: `sk_`. Agents can set their nsec post-onboarding via `POST /api/mcp/set-nsec`.
+
+## SEO & GEO Optimizations
+
+### On-Page SEO
+
+- **Alt Text & Image Optimization**: All images across landing page (`pages/index.tsx`), producers page (`pages/producers/index.tsx`), and image carousel (`components/utility-components/image-carousel.tsx`) have descriptive alt text, explicit `width`/`height` attributes, and `loading="lazy"` for below-the-fold images.
+- **Structured Data (JSON-LD)**: Global `Organization`, `WebSite`, `LocalBusiness`, and `FAQPage` schemas injected via `components/structured-data.tsx` (loaded in `_app.tsx`). Contact page has its own `ContactPage` schema.
+- **robots.txt**: `public/robots.txt` allows all crawlers, disallows admin/API paths, and references the sitemap.
+- **XML Sitemap**: Dynamic sitemap at `pages/api/sitemap.xml.ts`, accessible via `/sitemap.xml` (Next.js rewrite in `next.config.mjs`). Covers all 9 public pages.
+
+### Trust Signal Pages
+
+- **About Us** (`pages/about/index.tsx`): Mission, team info, industry context with USDA citations, expert quote, and statistics.
+- **Contact** (`pages/contact/index.tsx`): Email, Nostr, social media links, GitHub, and a mailto-based contact form with subject categories.
+
+### GEO (Generative Engine Optimization)
+
+- **Authoritative Citations**: Inline links to USDA ERS, USDA AMS with specific statistics (e.g., "$44B+ farm revenue", "12% YoY growth in direct sales").
+- **Expert Quotes**: Attributed dairy expert quote on landing page and about page.
+- **E-E-A-T Signals**: Author/founder schema, team credentials, social proof with real data, and comprehensive business information.
