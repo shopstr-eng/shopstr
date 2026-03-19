@@ -30,8 +30,9 @@ const getMetaTags = (
   profileData: Map<string, ProfileData>
 ): MetaTagsType => {
   const defaultTags = {
-    title: "Shopstr",
-    description: "Shop freely.",
+    title: "Shopstr | Bitcoin-Native Nostr Marketplace | Shop Freely",
+    description:
+      "Shopstr is a global, permissionless marketplace built on Nostr. Buy and sell goods with Bitcoin and Lightning — no KYC, no censorship, no middlemen.",
     image: "/shopstr-2000x2000.png",
     url: `${windowOrigin}`,
   };
@@ -151,6 +152,102 @@ const DynamicHead = ({
     profileData
   );
 
+  const isHomepage = router.pathname === "/" || router.pathname === "/index";
+
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        name: "Shopstr",
+        url: "https://shopstr.market",
+        logo: "https://shopstr.market/shopstr-2000x2000.png",
+        description:
+          "A global, permissionless Bitcoin-native marketplace built on the Nostr protocol for censorship-resistant commerce.",
+        sameAs: [
+          "https://github.com/shopstr-eng/shopstr",
+          "https://x.com/shopstrmarkets",
+        ],
+        founder: {
+          "@type": "Person",
+          name: "Shopstr Team",
+          description:
+            "Bitcoin and Nostr protocol developers building permissionless, censorship-resistant commerce infrastructure.",
+        },
+      },
+      {
+        "@type": "SoftwareApplication",
+        name: "Shopstr",
+        url: "https://shopstr.market",
+        applicationCategory: "ShoppingApplication",
+        operatingSystem: "Web",
+        offers: {
+          "@type": "Offer",
+          price: "0",
+          priceCurrency: "USD",
+          description:
+            "Free to use — no mandatory platform fees; sellers may optionally set a donation rate at their discretion",
+        },
+        featureList: [
+          "Bitcoin Lightning Network payments",
+          "Nostr protocol integration",
+          "No KYC or identity verification required",
+          "Censorship-resistant listings",
+          "Self-custodial payments via Cashu",
+        ],
+        description:
+          "A permissionless, Bitcoin-native marketplace built on the Nostr protocol. Buy and sell globally with no account registration, no chargebacks, and no intermediaries.",
+      },
+      {
+        "@type": "WebSite",
+        name: "Shopstr",
+        url: "https://shopstr.market",
+        potentialAction: {
+          "@type": "SearchAction",
+          target: "https://shopstr.market/?q={search_term_string}",
+          "query-input": "required name=search_term_string",
+        },
+      },
+      {
+        "@type": "FAQPage",
+        mainEntity: [
+          {
+            "@type": "Question",
+            name: "What is Shopstr?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "Shopstr is a global, permissionless marketplace built on the Nostr protocol that enables Bitcoin-native commerce without censorship or intermediaries.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "How do I pay on Shopstr?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "Shopstr supports Bitcoin payments including Lightning Network for instant, low-fee transactions.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "Do I need an account to use Shopstr?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "No account registration is required. Shopstr uses Nostr cryptographic key pairs — you generate keys and start buying or selling immediately with no identity verification.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "What makes Shopstr different from other marketplaces?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "Shopstr is built on the open Nostr protocol and accepts only Bitcoin payments, meaning there is no central authority that can ban sellers, freeze funds, or censor listings. It is truly permissionless commerce.",
+            },
+          },
+        ],
+      },
+    ],
+  };
+
   return (
     <Head>
       <meta
@@ -159,6 +256,7 @@ const DynamicHead = ({
       />
       <title>{metaTags.title}</title>
       <meta name="description" content={metaTags.description} />
+      <link rel="canonical" href={metaTags.url} />
       <meta property="og:url" content={metaTags.url} />
       <meta property="og:type" content="website" />
       <meta property="og:title" content={metaTags.title} />
@@ -170,6 +268,12 @@ const DynamicHead = ({
       <meta name="twitter:title" content={metaTags.title} />
       <meta name="twitter:description" content={metaTags.description} />
       <meta name="twitter:image" content={metaTags.image} />
+      {isHomepage && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        />
+      )}
     </Head>
   );
 };

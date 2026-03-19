@@ -55,6 +55,7 @@ import {
 import { Proof } from "@cashu/cashu-ts";
 import TopNav from "@/components/nav-top";
 import DynamicHead from "../components/dynamic-meta-head";
+import StructuredData from "../components/structured-data";
 import {
   NostrContextProvider,
   SignerContextProvider,
@@ -689,6 +690,7 @@ function Shopstr({ props }: { props: AppProps }) {
         shopEvents={shopContext.shopData}
         profileData={profileContext.profileData}
       />
+      <StructuredData />
       <CommunityContext.Provider value={communityContext}>
         <RelaysContext.Provider value={relaysContext}>
           <BlossomContext.Provider value={blossomContext}>
@@ -710,7 +712,14 @@ function Shopstr({ props }: { props: AppProps }) {
                             } as ChatsContextInterface
                           }
                         >
-                          {router.pathname !== "/" && (
+                          {![
+                            "/",
+                            "/about",
+                            "/contact",
+                            "/faq",
+                            "/terms",
+                            "/privacy",
+                          ].includes(router.pathname) && (
                             <TopNav
                               setFocusedPubkey={setFocusedPubkey}
                               setSelectedSection={setSelectedSection}

@@ -8,6 +8,7 @@ import { PREVNEXTBUTTONSTYLES } from "@/utils/STATIC-VARIABLES";
 
 interface ImageCarouselProps {
   images: string[];
+  productTitle?: string;
   classname?: string;
   showThumbs?: boolean;
   fixedHeight?: boolean;
@@ -15,6 +16,7 @@ interface ImageCarouselProps {
 
 export default function ImageCarousel({
   images,
+  productTitle = "",
   classname = "",
   showThumbs = false,
   fixedHeight = true,
@@ -46,7 +48,11 @@ export default function ImageCarousel({
           src={image}
           srcSet={buildSrcSet(image)}
           className={imageClass}
-          alt={image || `Product image ${index + 1}`}
+          alt={
+            productTitle
+              ? `${productTitle} — image ${index + 1}`
+              : `Product image ${index + 1}`
+          }
           radius="none"
           style={{
             width: "100%",

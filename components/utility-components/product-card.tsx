@@ -79,6 +79,7 @@ export default function ProductCard({
       <div>
         <ImageCarousel
           images={productData.images}
+          productTitle={productData.title}
           classname="w-full h-[300px] rounded-t-2xl"
           showThumbs={false}
         />

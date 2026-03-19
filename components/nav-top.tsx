@@ -187,7 +187,7 @@ const TopNav = ({
               width={40}
             />
             <span
-              className={`ml-2 text-xl md:flex ${
+              className={`ml-2 text-xl md:hidden lg:flex ${
                 isHomeActive ? "font-bold" : ""
               }`}
             >

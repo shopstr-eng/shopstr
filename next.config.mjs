@@ -51,7 +51,20 @@ const nextConfig = {
   bundlePagesRouterDependencies: true,
   output: "standalone",
   reactStrictMode: true,
+  poweredByHeader: false,
   turbopack: {},
+  async rewrites() {
+    return [
+      {
+        source: "/sitemap.xml",
+        destination: "/api/sitemap.xml",
+      },
+      {
+        source: "/robots.txt",
+        destination: "/api/robots.txt",
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "www.google.com" },

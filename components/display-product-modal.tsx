@@ -155,6 +155,7 @@ export default function DisplayProductModal({
             {productData.images ? (
               <ImageCarousel
                 images={productData.images}
+                productTitle={productData.title}
                 showThumbs={productData.images.length > 1}
                 classname="max-h-[80vh]"
               />
