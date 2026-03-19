@@ -13,7 +13,7 @@ export default function Document() {
           rel="preload"
           as="image"
           href="/shopstr-2000x2000.png"
-          fetchpriority="high"
+          fetchPriority="high"
         />
       </Head>
       <body>
