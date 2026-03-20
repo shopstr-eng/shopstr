@@ -11,6 +11,18 @@
 # next.js
 /.next/
 /out/
+/.turbo
+
+# expo / react native
+/apps/mobile/.expo
+/apps/mobile/.expo-shared
+/apps/mobile/.turbo
+/apps/mobile/dist
+/apps/mobile/web-build
+/apps/mobile/node_modules
+/apps/mobile/ios
+/apps/mobile/android
+/packages/*/.turbo
 
 # production
 /build
@@ -23,6 +35,7 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 
 # local env files
 .env*.local

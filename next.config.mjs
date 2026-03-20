@@ -55,6 +55,11 @@ const nextConfig = {
   output: "standalone",
   reactStrictMode: true,
   poweredByHeader: false,
+  transpilePackages: [
+    "@milk-market/domain",
+    "@milk-market/nostr",
+    "@milk-market/api-client",
+  ],
   turbopack: {},
   images: {
     remotePatterns: [

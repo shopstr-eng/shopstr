@@ -1,37 +1,11 @@
-export const CATEGORIES = [
-  "Milk",
-  "Cheese",
-  "Beef",
-  "Eggs",
-  "Yogurt",
-  "Butter",
-  "Ghee",
-  "Cream",
-  "Pets",
-  "Health",
-  "Food",
-  "Cow",
-  "Goat",
-  "Herdshare",
-  "Bundle",
-];
+import {
+  CATEGORIES,
+  SHIPPING_OPTIONS,
+  type ShippingOptionsType,
+} from "@milk-market/domain";
 
-export type ShippingOptionsType =
-  | "Pickup"
-  | "Free"
-  | "Added Cost"
-  | "Free/Pickup"
-  | "Added Cost/Pickup"
-  | "N/A";
-
-export const SHIPPING_OPTIONS = [
-  "Pickup",
-  "Free",
-  "Added Cost",
-  "Free/Pickup",
-  "Added Cost/Pickup",
-  "N/A",
-];
+export { CATEGORIES, SHIPPING_OPTIONS };
+export type { ShippingOptionsType };
 
 // Base styles for all neo-brutalist buttons with slight rounded corners
 const NEO_BUTTON_BASE =

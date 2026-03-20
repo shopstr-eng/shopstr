@@ -3,18 +3,28 @@
   "version": "0.10.3",
   "type": "module",
   "private": true,
+  "packageManager": "pnpm@9.15.9",
   "engines": {
-    "node": ">=18.17.0",
-    "npm": ">=9.6.7"
+    "node": ">=20.0.0",
+    "pnpm": ">=9.15.9"
   },
   "scripts": {
     "dev": "next dev -p 5000",
+    "dev:web": "pnpm run dev",
+    "dev:mobile": "pnpm --filter @milk-market/mobile dev",
     "build": "next build",
+    "build:web": "next build",
+    "build:all": "turbo run build --filter=@milk-market/mobile --filter=@milk-market/domain --filter=@milk-market/nostr --filter=@milk-market/api-client",
     "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
-    "lint": "eslint . --ext .ts,.tsx",
-    "type-check": "tsc --noEmit",
-    "lint-all": "npm run type-check && npm run lint",
+    "lint": "pnpm run lint:web && turbo run lint --filter=@milk-market/mobile --filter=@milk-market/domain --filter=@milk-market/nostr --filter=@milk-market/api-client",
+    "lint:web": "eslint . --ext .ts,.tsx",
+    "type-check": "tsc --noEmit --incremental false",
+    "typecheck": "pnpm run typecheck:web && turbo run typecheck --filter=@milk-market/mobile --filter=@milk-market/domain --filter=@milk-market/nostr --filter=@milk-market/api-client",
+    "typecheck:web": "tsc --noEmit --incremental false",
+    "lint-all": "pnpm run typecheck:web && pnpm run lint:web",
     "test": "jest",
+    "test:web": "jest",
+    "test:all": "pnpm run test:web && turbo run test --filter=@milk-market/mobile --filter=@milk-market/domain --filter=@milk-market/nostr --filter=@milk-market/api-client",
     "test:watch": "jest --watch"
   },
   "dependencies": {
@@ -57,7 +67,10 @@
     "stripe": "19.0.0",
     "tailwindcss": "3.3.1",
     "uuid": "9.0.0",
-    "ws": "8.19.0"
+    "ws": "8.19.0",
+    "@milk-market/domain": "workspace:*",
+    "@milk-market/nostr": "workspace:*",
+    "@milk-market/api-client": "workspace:*"
   },
   "devDependencies": {
     "@testing-library/dom": "10.4.0",
@@ -78,6 +91,7 @@
     "jest-environment-jsdom": "30.2.0",
     "prettier": "3.1.0",
     "prettier-plugin-tailwindcss": "0.5.7",
+    "turbo": "2.5.8",
     "typescript": "5.2.2"
   },
   "overrides": {
