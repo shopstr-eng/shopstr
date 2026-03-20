@@ -29,6 +29,7 @@ import {
   EventIdModal,
 } from "../../components/utility-components/modals/event-modals";
 import { findProductBySlug, getListingSlug } from "@/utils/url-slugs";
+import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wrapper";
 
 const Listing = () => {
   const router = useRouter();
@@ -40,6 +41,7 @@ const Listing = () => {
   const [rawEvent, setRawEvent] = useState<Event | undefined>(undefined);
   const [showRawEventModal, setShowRawEventModal] = useState(false);
   const [showEventIdModal, setShowEventIdModal] = useState(false);
+  const [sfSellerPubkey, setSfSellerPubkey] = useState("");
 
   const [invoiceIsPaid, setInvoiceIsPaid] = useState(false);
   const [invoiceGenerationFailed, setInvoiceGenerationFailed] = useState(false);
@@ -47,6 +49,13 @@ const Listing = () => {
   const [cashuPaymentFailed, setCashuPaymentFailed] = useState(false);
 
   const productContext = useContext(ProductContext);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const pk = sessionStorage.getItem("sf_seller_pubkey");
+      if (pk) setSfSellerPubkey(pk);
+    }
+  }, []);
 
   useEffect(() => {
     if (router.isReady) {
@@ -118,7 +127,7 @@ const Listing = () => {
   }, [productContext.isLoading, productContext.productEvents, productIdString]);
 
   return (
-    <>
+    <StorefrontThemeWrapper sellerPubkey={sfSellerPubkey}>
       <div className="flex h-full min-h-screen flex-col bg-light-bg pt-20 dark:bg-dark-bg">
         {productData &&
           (isZapsnag ? (
@@ -291,7 +300,7 @@ const Listing = () => {
           </>
         ) : null}
       </div>
-    </>
+    </StorefrontThemeWrapper>
   );
 };
 

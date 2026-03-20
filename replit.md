@@ -149,6 +149,70 @@ API keys are created via the `/settings/api-keys` UI page, the `/api/mcp/api-key
 
 Buyers can change the shipping address for their orders from the Orders Dashboard. The address column shows a "Change Address" link for purchases (non-sale orders) that have an address. Clicking it opens the `AddressChangeModal` (`components/utility-components/address-change-modal.tsx`), which sends a gift-wrapped Nostr DM to the seller with the new address and updates the local order state.
 
+### Subdomain Shop / Storefront System
+
+Sellers can configure branded storefronts accessible at `/shop/[slug]` URLs. The system allows full customization of the buyer's shopping experience.
+
+#### Architecture
+
+- **Storefront Routes**: `pages/shop/[slug].tsx` (shop home), `pages/shop/[...shopPath].tsx` (sub-pages: orders, wallet, community, custom pages)
+- **Storefront Layout**: `components/storefront/storefront-layout.tsx` — Full-featured storefront with navbar, hero, product grid, sections, and footer. Applies CSS variables for theming and adds `sf-active` class to body to hide the global Shopstr nav.
+- **Theme Wrapper**: `components/storefront/storefront-theme-wrapper.tsx` — Wraps existing pages (like `/listing`) when visited from a storefront context. Uses `sessionStorage` key `sf_seller_pubkey` to detect the active storefront.
+- **Proxy/Middleware**: `proxy.ts` — Extended with subdomain routing: `*.shopstr.store` subdomains rewrite to `/shop/[subdomain]`.
+
+#### Storefront Config (stored in ShopProfile.content.storefront)
+
+- `colorScheme` — Custom colors (primary, secondary, accent, background, text)
+- `productLayout` — `grid` | `list` | `featured`
+- `landingPageStyle` — `hero` | `classic` | `minimal`
+- `shopSlug` — URL slug (registered via `/api/storefront/register-slug`)
+- `customDomain` — Custom domain (configured via `/api/storefront/custom-domain`)
+- `fontHeading` / `fontBody` — Google Fonts selection
+- `sections` — Ordered list of landing page sections
+- `pages` — Custom pages with own sections
+- `footer` — Footer config (text, social links, nav links, Powered by Shopstr)
+- `navLinks` — Custom navigation links
+- `showCommunityPage` / `showWalletPage` — Toggle pages
+
+#### Section Types
+
+12 section types in `components/storefront/sections/`: `hero`, `about`, `story`, `products`, `testimonials`, `faq`, `ingredients`, `comparison`, `text`, `image`, `contact`, `reviews`. Rendered by `components/storefront/section-renderer.tsx`.
+
+#### Helper Components
+
+- `storefront-hero.tsx` — Full-width hero with banner, picture, and CTA
+- `storefront-footer.tsx` — Customizable footer with social links, "Powered by Shopstr"
+- `storefront-product-grid.tsx` — Paginated product grid/list/featured layout
+- `storefront-community.tsx` — Community feed for the shop's NIP-72 community
+- `storefront-wallet.tsx` — Embedded Cashu wallet page
+- `storefront-orders.tsx` — Embedded orders page (dynamic import)
+- `storefront-my-listings.tsx` — Seller's own listings (visible to shop owner)
+- `storefront-order-confirmation.tsx` — Post-purchase confirmation with upsells
+- `section-renderer.tsx` — Dispatches to correct section component by type
+
+#### API Routes
+
+- `GET /api/storefront/lookup?slug=` — Look up pubkey by shop slug
+- `POST /api/storefront/register-slug` — Register/update a shop slug
+- `POST /api/storefront/custom-domain` — Register custom domain + return DNS instructions
+- `GET/DELETE /api/storefront/custom-domain?pubkey=` — Get or remove custom domain
+
+#### Database Tables
+
+- `shop_slugs` — Maps pubkey → slug (one per seller, unique constraint on slug)
+- `custom_domains` — Maps pubkey → custom domain (verified flag)
+
+#### Settings UI
+
+Shop profile settings (`/settings/shop-profile`) now uses `ShopProfileForm` component from `components/settings/shop-profile-form.tsx` with two tabs:
+
+1. **Basic Info** — Name, about, banner, picture, free shipping threshold
+2. **Storefront** — Shop URL slug, landing page style, product layout, color scheme, typography, pages toggle (community/wallet), custom domain
+
+#### Profile Dropdown
+
+`components/utility-components/profile/profile-dropdown.tsx` updated to add `storefront` key (GlobeAltIcon) that links to the seller's storefront if configured, with neo-brutalist styling.
+
 ## External Dependencies
 
 - **Nostr Protocol Libraries**: `nostr-tools`, `@getalby/lightning-tools`.

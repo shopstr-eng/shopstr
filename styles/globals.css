@@ -62,3 +62,7 @@ body {
   word-wrap: break-word;
   overflow-wrap: break-word;
 }
+
+body.sf-active [data-main-nav] {
+  display: none !important;
+}

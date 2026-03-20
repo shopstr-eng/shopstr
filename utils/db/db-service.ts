@@ -243,6 +243,28 @@ async function initializeTables(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_mcp_orders_buyer_pubkey ON mcp_orders(buyer_pubkey);
       CREATE INDEX IF NOT EXISTS idx_mcp_orders_seller_pubkey ON mcp_orders(seller_pubkey);
       CREATE INDEX IF NOT EXISTS idx_mcp_orders_api_key_id ON mcp_orders(api_key_id);
+
+      -- Shop slugs table (storefront URL slugs)
+      CREATE TABLE IF NOT EXISTS shop_slugs (
+          pubkey TEXT PRIMARY KEY,
+          slug TEXT NOT NULL UNIQUE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_shop_slugs_slug ON shop_slugs(slug);
+
+      -- Custom domains table (storefront custom domains)
+      CREATE TABLE IF NOT EXISTS custom_domains (
+          pubkey TEXT PRIMARY KEY,
+          domain TEXT NOT NULL UNIQUE,
+          shop_slug TEXT NOT NULL,
+          verified BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_custom_domains_domain ON custom_domains(domain);
     `);
 
     // Migration: Add is_read, order_status, order_id columns to existing message_events tables

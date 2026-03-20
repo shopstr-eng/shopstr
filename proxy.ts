@@ -4,6 +4,7 @@ import { nip19 } from "nostr-tools";
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const hostname = request.headers.get("host") || "";
 
   if (pathname === "/.well-known/agent.json") {
     return NextResponse.rewrite(
@@ -11,7 +12,48 @@ export function proxy(request: NextRequest) {
     );
   }
 
-  // Handle npub redirects, but ignore if already in marketplace page route
+  if (hostname.includes("shopstr.store")) {
+    if (hostname === "www.shopstr.store") {
+      const url = new URL(request.url);
+      url.hostname = "shopstr.store";
+      return NextResponse.redirect(url, 301);
+    }
+
+    if (hostname !== "shopstr.store" && hostname.endsWith(".shopstr.store")) {
+      const subdomain = hostname.replace(".shopstr.store", "");
+      if (subdomain !== "www" && subdomain !== "api") {
+        const url = new URL(
+          `/shop/${subdomain}${pathname === "/" ? "" : pathname}`,
+          request.url
+        );
+        url.hostname = "shopstr.store";
+        return NextResponse.rewrite(url);
+      }
+    }
+  }
+
+  if (
+    hostname &&
+    !hostname.includes("shopstr.store") &&
+    !hostname.includes("localhost") &&
+    !hostname.includes("replit") &&
+    !hostname.includes("127.0.0.1") &&
+    !hostname.includes(".repl.co") &&
+    !hostname.includes(".replit.dev") &&
+    !hostname.includes(".replit.app")
+  ) {
+    if (!pathname.startsWith("/api/") && !pathname.startsWith("/_next/")) {
+      return NextResponse.rewrite(
+        new URL(
+          `/shop/_custom-domain?domain=${encodeURIComponent(
+            hostname
+          )}&path=${encodeURIComponent(pathname)}`,
+          request.url
+        )
+      );
+    }
+  }
+
   if (
     pathname.match(/^\/npub[a-zA-Z0-9]+$/) &&
     !pathname.startsWith("/marketplace/")
@@ -20,7 +62,6 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Handle naddr redirects, but ignore if already in listing page route
   if (
     pathname.match(/^\/naddr[a-zA-Z0-9]+$/) &&
     !pathname.startsWith("/listing/")
@@ -29,7 +70,6 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Handle community naddr redirects
   if (pathname.startsWith("/naddr") && !pathname.startsWith("/communities/")) {
     try {
       const decoded = nip19.decode(pathname.substring(1));
@@ -43,5 +83,8 @@ export function proxy(request: NextRequest) {
     }
   }
 
-  return NextResponse.next();
+  const response = NextResponse.next();
+  response.headers.delete("X-Powered-By");
+
+  return response;
 }
