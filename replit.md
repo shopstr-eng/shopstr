@@ -85,6 +85,7 @@ The platform exposes a Model Context Protocol (MCP) server enabling AI agents to
 - `get_reviews` — Get reviews for a product or seller
 - `check_discount_code` — Validate a discount code
 - `get_payment_methods` — Get available Bitcoin payment methods for a seller
+- `get_storefront` — Look up a seller's storefront by slug or pubkey; returns storefront config, products, and custom domain info
 
 **Purchase Tools (requires read_write or full_access):**
 
@@ -97,8 +98,9 @@ The platform exposes a Model Context Protocol (MCP) server enabling AI agents to
 
 **Write Tools (requires full_access + stored nsec):**
 
-- `set_user_profile` — Create/update Nostr user profile (kind 0)
-- `set_shop_profile` — Create/update shop profile (kind 30019)
+- `set_user_profile` — Create/update Nostr user profile (kind 0) including `fiat_options` and `payment_preference`
+- `set_shop_profile` — Create/update shop profile (kind 30019) with full storefront config (colors, layout, fonts, sections, pages, footer, nav, slug)
+- `register_shop_slug` — Register, update, or delete the seller's shop URL slug in the DB
 - `create_product_listing` — Publish product listing (kind 30402) with full tag support including sizes, volumes, bulk/bundle pricing, pickup locations, and expiration
 - `update_product_listing` — Update existing listing by d-tag, supports all fields including sizes, volumes, bulk pricing, pickup locations, and expiration
 - `delete_listing` — Delete events (kind 5)

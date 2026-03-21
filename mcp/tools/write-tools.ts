@@ -7,7 +7,7 @@ import {
 } from "@/utils/mcp/nostr-signing";
 import { ApiKeyRecord, getAgentSigner } from "@/utils/mcp/auth";
 import { EventTemplate } from "nostr-tools";
-import { cacheEvent } from "@/utils/db/db-service";
+import { cacheEvent, getDbPool } from "@/utils/db/db-service";
 import { v4 as uuidv4 } from "uuid";
 
 function noSignerError() {
@@ -108,6 +108,16 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .optional()
         .describe("NIP-05 identifier (e.g. user@domain.com)"),
       website: z.string().optional().describe("Website URL"),
+      fiat_options: z
+        .record(z.string(), z.string())
+        .optional()
+        .describe(
+          "Fiat payment handles — object mapping method names (venmo, cashapp, zelle, etc.) to usernames/handles"
+        ),
+      payment_preference: z
+        .enum(["ecash", "lightning", "fiat"])
+        .optional()
+        .describe("Preferred payment method (ecash, lightning, or fiat)"),
     },
     async (params) => {
       const startTime = Date.now();
@@ -116,7 +126,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       if (!signer) return noSignerError();
 
       try {
-        const content: Record<string, string> = {};
+        const content: Record<string, any> = {};
         if (params.name) content.name = params.name;
         if (params.display_name) content.display_name = params.display_name;
         if (params.about) content.about = params.about;
@@ -125,6 +135,9 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         if (params.lud16) content.lud16 = params.lud16;
         if (params.nip05) content.nip05 = params.nip05;
         if (params.website) content.website = params.website;
+        if (params.fiat_options) content.fiat_options = params.fiat_options;
+        if (params.payment_preference)
+          content.payment_preference = params.payment_preference;
 
         const eventTemplate: EventTemplate = {
           created_at: Math.floor(Date.now() / 1000),
@@ -154,7 +167,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
   server.tool(
     "set_shop_profile",
-    "Create or update your shop profile (kind 30019). Sets shop metadata like name, about, picture, banner, and settings.",
+    "Create or update your shop profile (kind 30019). Sets shop metadata like name, about, picture, banner, settings, and storefront configuration.",
     {
       name: z.string().optional().describe("Shop name"),
       about: z.string().optional().describe("Shop description"),
@@ -174,6 +187,212 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .array(z.string())
         .optional()
         .describe("Array of merchant pubkeys associated with this shop"),
+      paymentMethodDiscounts: z
+        .record(z.string(), z.number())
+        .optional()
+        .describe(
+          "Per-method discount percentages — object mapping method keys (bitcoin, venmo, cash, etc.) to discount percentages"
+        ),
+      storefrontColorScheme: z
+        .object({
+          primary: z.string().describe("Primary color hex (e.g. '#4a7c59')"),
+          secondary: z.string().describe("Secondary color hex"),
+          accent: z.string().describe("Accent color hex"),
+          background: z.string().describe("Background color hex"),
+          text: z.string().describe("Text color hex"),
+        })
+        .optional()
+        .describe("Custom color scheme for the seller's storefront page"),
+      storefrontProductLayout: z
+        .enum(["grid", "list", "featured"])
+        .optional()
+        .describe(
+          "Product layout style for the storefront: grid, list, or featured"
+        ),
+      storefrontLandingPageStyle: z
+        .enum(["classic", "hero", "minimal"])
+        .optional()
+        .describe(
+          "Landing page style for the storefront: classic, hero, or minimal"
+        ),
+      shopSlug: z
+        .string()
+        .optional()
+        .describe(
+          "URL slug for the storefront (e.g. 'fresh-farm' for shopstr.store/shop/fresh-farm). Must be lowercase alphanumeric with hyphens."
+        ),
+      storefrontFontHeading: z
+        .string()
+        .optional()
+        .describe("Google Font name for headings (e.g. 'Playfair Display')"),
+      storefrontFontBody: z
+        .string()
+        .optional()
+        .describe("Google Font name for body text (e.g. 'Inter')"),
+      storefrontSections: z
+        .array(
+          z.object({
+            id: z.string().describe("Unique section ID"),
+            type: z
+              .enum([
+                "hero",
+                "about",
+                "story",
+                "products",
+                "testimonials",
+                "faq",
+                "ingredients",
+                "comparison",
+                "text",
+                "image",
+                "contact",
+                "reviews",
+              ])
+              .describe("Section type"),
+            enabled: z
+              .boolean()
+              .optional()
+              .describe("Whether section is visible"),
+            heading: z.string().optional().describe("Section heading"),
+            subheading: z.string().optional().describe("Section subheading"),
+            body: z.string().optional().describe("Section body text"),
+            image: z.string().optional().describe("Section image URL"),
+            imagePosition: z
+              .enum(["left", "right"])
+              .optional()
+              .describe("Image position for about sections"),
+            fullWidth: z.boolean().optional().describe("Full-width toggle"),
+            ctaText: z
+              .string()
+              .optional()
+              .describe("Call-to-action button text"),
+            ctaLink: z
+              .string()
+              .optional()
+              .describe("Call-to-action button link"),
+            overlayOpacity: z
+              .number()
+              .optional()
+              .describe("Hero overlay opacity 0-1"),
+            items: z
+              .array(z.object({ question: z.string(), answer: z.string() }))
+              .optional()
+              .describe("FAQ items"),
+            testimonials: z
+              .array(
+                z.object({
+                  quote: z.string(),
+                  author: z.string(),
+                  image: z.string().optional(),
+                  rating: z.number().optional(),
+                })
+              )
+              .optional()
+              .describe("Testimonial items"),
+            timelineItems: z
+              .array(
+                z.object({
+                  year: z.string().optional(),
+                  heading: z.string(),
+                  body: z.string(),
+                  image: z.string().optional(),
+                })
+              )
+              .optional()
+              .describe("Timeline items for story sections"),
+            productLayout: z
+              .enum(["grid", "list", "featured"])
+              .optional()
+              .describe("Product layout for product sections"),
+            productLimit: z
+              .number()
+              .optional()
+              .describe("Max products to show"),
+            email: z.string().optional().describe("Contact email"),
+            phone: z.string().optional().describe("Contact phone"),
+            address: z.string().optional().describe("Contact address"),
+            caption: z.string().optional().describe("Image caption"),
+          })
+        )
+        .optional()
+        .describe("Ordered array of homepage sections for the page builder"),
+      storefrontPages: z
+        .array(
+          z.object({
+            id: z.string().describe("Page ID"),
+            title: z.string().describe("Page title"),
+            slug: z.string().describe("URL slug for the page"),
+            sections: z
+              .array(z.any())
+              .describe(
+                "Array of sections (same schema as storefrontSections)"
+              ),
+          })
+        )
+        .optional()
+        .describe("Additional storefront pages (About, Contact, etc.)"),
+      storefrontFooter: z
+        .object({
+          text: z.string().optional().describe("Footer text"),
+          socialLinks: z
+            .array(
+              z.object({
+                platform: z.enum([
+                  "instagram",
+                  "x",
+                  "facebook",
+                  "youtube",
+                  "tiktok",
+                  "telegram",
+                  "website",
+                  "email",
+                  "other",
+                ]),
+                url: z.string(),
+                label: z.string().optional(),
+              })
+            )
+            .optional()
+            .describe("Social media links"),
+          navLinks: z
+            .array(
+              z.object({
+                label: z.string(),
+                href: z.string(),
+                isPage: z.boolean().optional(),
+              })
+            )
+            .optional()
+            .describe("Footer navigation links"),
+          showPoweredBy: z
+            .boolean()
+            .optional()
+            .describe("Show 'Powered by Shopstr' in footer"),
+        })
+        .optional()
+        .describe("Footer configuration"),
+      storefrontNavLinks: z
+        .array(
+          z.object({
+            label: z.string(),
+            href: z.string(),
+            isPage: z.boolean().optional(),
+          })
+        )
+        .optional()
+        .describe("Top navigation bar links"),
+      showCommunityPage: z
+        .boolean()
+        .optional()
+        .describe(
+          "Enable a community page on the storefront. When true, a 'Community' link is auto-added to the nav and /shop/{slug}/community shows the seller's community feed."
+        ),
+      showWalletPage: z
+        .boolean()
+        .optional()
+        .describe(
+          "Enable a Bitcoin wallet page on the storefront for Cashu ecash payments. When true, a 'Wallet' link is auto-added to the nav and /shop/{slug}/wallet shows the wallet UI."
+        ),
     },
     async (params) => {
       const startTime = Date.now();
@@ -187,6 +406,8 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         if (params.name) content.name = params.name;
         if (params.about) content.about = params.about;
         if (params.merchants) content.merchants = params.merchants;
+        if (params.paymentMethodDiscounts)
+          content.paymentMethodDiscounts = params.paymentMethodDiscounts;
         const ui: Record<string, any> = {};
         if (params.picture) ui.picture = params.picture;
         if (params.banner) ui.banner = params.banner;
@@ -197,6 +418,31 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
           content.freeShippingThreshold = params.freeShippingThreshold;
         if (params.freeShippingCurrency)
           content.freeShippingCurrency = params.freeShippingCurrency;
+
+        const storefront: Record<string, any> = {};
+        if (params.storefrontColorScheme)
+          storefront.colorScheme = params.storefrontColorScheme;
+        if (params.storefrontProductLayout)
+          storefront.productLayout = params.storefrontProductLayout;
+        if (params.storefrontLandingPageStyle)
+          storefront.landingPageStyle = params.storefrontLandingPageStyle;
+        if (params.shopSlug) storefront.shopSlug = params.shopSlug;
+        if (params.storefrontFontHeading)
+          storefront.fontHeading = params.storefrontFontHeading;
+        if (params.storefrontFontBody)
+          storefront.fontBody = params.storefrontFontBody;
+        if (params.storefrontSections)
+          storefront.sections = params.storefrontSections;
+        if (params.storefrontPages) storefront.pages = params.storefrontPages;
+        if (params.storefrontFooter)
+          storefront.footer = params.storefrontFooter;
+        if (params.storefrontNavLinks)
+          storefront.navLinks = params.storefrontNavLinks;
+        if (params.showCommunityPage !== undefined)
+          storefront.showCommunityPage = params.showCommunityPage;
+        if (params.showWalletPage !== undefined)
+          storefront.showWalletPage = params.showWalletPage;
+        if (Object.keys(storefront).length > 0) content.storefront = storefront;
 
         const eventTemplate: EventTemplate = {
           created_at: Math.floor(Date.now() / 1000),
@@ -219,6 +465,130 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
       } catch (error) {
         return errorResponse(
           "Failed to set shop profile",
+          error instanceof Error ? error.message : "Unknown error",
+          startTime
+        );
+      }
+    }
+  );
+
+  server.tool(
+    "register_shop_slug",
+    "Register, update, or delete your shop's URL slug for the storefront. The slug becomes part of your shop URL (e.g. shopstr.store/shop/your-slug). Slug must be lowercase alphanumeric with hyphens, 3-50 characters. Reserved words are not allowed. Set action to 'delete' to remove the slug.",
+    {
+      slug: z
+        .string()
+        .optional()
+        .describe(
+          "URL slug for the storefront (e.g. 'fresh-farm'). Must be lowercase alphanumeric with hyphens, 3-50 characters. Required for register, not needed for delete."
+        ),
+      action: z
+        .enum(["register", "delete"])
+        .optional()
+        .describe(
+          "Action to perform: 'register' (default) to create/update the slug, 'delete' to remove the slug and any associated custom domain."
+        ),
+    },
+    async (params) => {
+      const startTime = Date.now();
+      if (apiKey.permissions !== "full_access") return permissionError();
+      const signer = await getSigner(apiKey);
+      if (!signer) return noSignerError();
+
+      try {
+        const pubkey = signer.getPubKey();
+
+        if (params.action === "delete") {
+          const dbPool = getDbPool();
+          await dbPool.query("DELETE FROM shop_slugs WHERE pubkey = $1", [
+            pubkey,
+          ]);
+          await dbPool.query("DELETE FROM custom_domains WHERE pubkey = $1", [
+            pubkey,
+          ]);
+          return successResponse({ deleted: true, pubkey }, startTime);
+        }
+
+        if (!params.slug) {
+          return errorResponse(
+            "Missing slug",
+            "A slug is required when registering. Provide a slug or set action to 'delete'.",
+            startTime
+          );
+        }
+
+        const slug = params.slug.toLowerCase().trim();
+        const slugRegex = /^[a-z0-9][a-z0-9-]*[a-z0-9]$/;
+        if (slug.length < 3 || slug.length > 50 || !slugRegex.test(slug)) {
+          return errorResponse(
+            "Invalid slug",
+            "Slug must be 3-50 characters, lowercase alphanumeric with hyphens, and cannot start or end with a hyphen.",
+            startTime
+          );
+        }
+
+        const reserved = [
+          "shop",
+          "admin",
+          "api",
+          "www",
+          "mail",
+          "ftp",
+          "app",
+          "dashboard",
+          "settings",
+          "marketplace",
+          "login",
+          "signup",
+          "auth",
+          "checkout",
+          "orders",
+          "cart",
+          "help",
+          "support",
+          "about",
+          "contact",
+          "blog",
+          "news",
+          "terms",
+          "privacy",
+          "legal",
+        ];
+        if (reserved.includes(slug)) {
+          return errorResponse(
+            "Reserved slug",
+            `The slug '${slug}' is reserved and cannot be used.`,
+            startTime
+          );
+        }
+
+        const dbPool = getDbPool();
+        const existing = await dbPool.query(
+          "SELECT pubkey FROM shop_slugs WHERE slug = $1 AND pubkey != $2",
+          [slug, pubkey]
+        );
+        if (existing.rows.length > 0) {
+          return errorResponse(
+            "Slug taken",
+            `The slug '${slug}' is already registered to another seller.`,
+            startTime
+          );
+        }
+
+        await dbPool.query(
+          `INSERT INTO shop_slugs (pubkey, slug, created_at)
+           VALUES ($1, $2, NOW())
+           ON CONFLICT (pubkey) DO UPDATE SET slug = $2`,
+          [pubkey, slug]
+        );
+
+        return successResponse(
+          { slug, storefrontUrl: `/shop/${slug}`, pubkey },
+          startTime
+        );
+      } catch (error) {
+        return errorResponse(
+          "Failed to register shop slug",
           error instanceof Error ? error.message : "Unknown error",
           startTime
         );
