@@ -59,11 +59,6 @@ export const ProfileWithDropdown = ({
   const router = useRouter();
   const { isLoggedIn } = useContext(SignerContext);
   const { isOpen, onOpen, onClose } = useDisclosure();
-  const {
-    isOpen: isDropdownOpen,
-    onClose: onDropdownClose,
-    onOpenChange: onDropdownOpenChange,
-  } = useDisclosure();
 
   useEffect(() => {
     const profileMap = profileContext.profileData;
@@ -73,7 +68,7 @@ export const ProfileWithDropdown = ({
       if (profile?.content?.nip05 && profile.nip05Verified) {
         name = profile.content.nip05;
       }
-      name = name.length > 10 ? name.slice(0, 10) + "..." : name;
+      name = name.length > 15 ? name.slice(0, 15) + "..." : name;
       return name;
     });
     setPfp(
@@ -90,11 +85,8 @@ export const ProfileWithDropdown = ({
     shop: {
       key: "shop",
       color: "default",
-      className:
-        "!text-black hover:!bg-blue-400 hover:!text-white font-bold data-[hover=true]:!bg-blue-400 data-[hover=true]:!text-white",
-      startContent: (
-        <BuildingStorefrontIcon className={"h-5 w-5 !text-black"} />
-      ),
+      className: "text-light-text dark:text-dark-text",
+      startContent: <BuildingStorefrontIcon className={"h-5 w-5"} />,
       onClick: () => {
         const slug = getProfileSlug(pubkey, profileContext.profileData);
         router.push(`/marketplace/${slug}`);
@@ -104,9 +96,8 @@ export const ProfileWithDropdown = ({
     storefront: {
       key: "storefront",
       color: "default",
-      className:
-        "!text-black hover:!bg-blue-400 hover:!text-white font-bold data-[hover=true]:!bg-blue-400 data-[hover=true]:!text-white",
-      startContent: <GlobeAltIcon className={"h-5 w-5 !text-black"} />,
+      className: "text-light-text dark:text-dark-text",
+      startContent: <GlobeAltIcon className={"h-5 w-5"} />,
       onClick: () => {
         const shopData = shopMapContext.shopData.get(pubkey);
         const shopSlug = shopData?.content?.storefront?.shopSlug;
@@ -122,13 +113,9 @@ export const ProfileWithDropdown = ({
     shop_profile: {
       key: "shop_profile",
       color: "default",
-      className:
-        "!text-black hover:!bg-blue-400 hover:!text-white font-bold data-[hover=true]:!bg-blue-400 data-[hover=true]:!text-white",
-      startContent: (
-        <BuildingStorefrontIcon className={"h-5 w-5 !text-black"} />
-      ),
+      className: "text-light-text dark:text-dark-text",
+      startContent: <BuildingStorefrontIcon className={"h-5 w-5"} />,
       onClick: () => {
-        onDropdownClose();
         router.push("/settings/shop-profile");
       },
       label: "Shop Profile",
@@ -136,13 +123,9 @@ export const ProfileWithDropdown = ({
     inquiry: {
       key: "inquiry",
       color: "default",
-      className:
-        "!text-black hover:!bg-blue-400 hover:!text-white font-bold data-[hover=true]:!bg-blue-400 data-[hover=true]:!text-white",
-      startContent: (
-        <ChatBubbleBottomCenterIcon className={"h-5 w-5 !text-black"} />
-      ),
+      className: "text-light-text dark:text-dark-text",
+      startContent: <ChatBubbleBottomCenterIcon className={"h-5 w-5"} />,
       onClick: () => {
-        onDropdownClose();
         if (isLoggedIn) {
           router.push({
             pathname: "/orders",
@@ -157,11 +140,9 @@ export const ProfileWithDropdown = ({
     user_profile: {
       key: "user_profile",
       color: "default",
-      className:
-        "!text-black hover:!bg-blue-400 hover:!text-white font-bold data-[hover=true]:!bg-blue-400 data-[hover=true]:!text-white",
-      startContent: <UserIcon className={"h-5 w-5 !text-black"} />,
+      className: "text-light-text dark:text-dark-text",
+      startContent: <UserIcon className={"h-5 w-5"} />,
       onClick: () => {
-        onDropdownClose();
         router.push("/settings/user-profile");
       },
       label: "Profile",
@@ -169,11 +150,9 @@ export const ProfileWithDropdown = ({
     settings: {
       key: "settings",
       color: "default",
-      className:
-        "!text-black hover:!bg-blue-400 hover:!text-white font-bold data-[hover=true]:!bg-blue-400 data-[hover=true]:!text-white",
-      startContent: <Cog6ToothIcon className={"h-5 w-5 !text-black"} />,
+      className: "text-light-text dark:text-dark-text",
+      startContent: <Cog6ToothIcon className={"h-5 w-5"} />,
       onClick: () => {
-        onDropdownClose();
         router.push("/settings");
       },
       label: "Settings",
@@ -181,15 +160,9 @@ export const ProfileWithDropdown = ({
     logout: {
       key: "logout",
       color: "danger",
-      className:
-        "!text-red-600 hover:!bg-red-600 hover:!text-white font-bold data-[hover=true]:!bg-red-600 data-[hover=true]:!text-white",
-      startContent: (
-        <ArrowRightStartOnRectangleIcon
-          className={"h-5 w-5 !text-red-600 group-hover:!text-white"}
-        />
-      ),
+      className: "text-light-text dark:text-dark-text",
+      startContent: <ArrowRightStartOnRectangleIcon className={"h-5 w-5"} />,
       onClick: () => {
-        onDropdownClose();
         LogOut();
         router.push("/marketplace");
       },
@@ -198,12 +171,11 @@ export const ProfileWithDropdown = ({
     copy_npub: {
       key: "copy_npub",
       color: "default",
-      className:
-        "!text-black hover:!bg-blue-400 hover:!text-white font-bold data-[hover=true]:!bg-blue-400 data-[hover=true]:!text-white",
+      className: "text-light-text dark:text-dark-text",
       startContent: isNPubCopied ? (
-        <CheckIcon className="h-5 w-5 !text-green-600" />
+        <CheckIcon className="h-5 w-5 text-shopstr-purple dark:text-shopstr-yellow" />
       ) : (
-        <ClipboardIcon className="h-5 w-5 !text-black" />
+        <ClipboardIcon className="h-5 w-5" />
       ),
       onClick: () => {
         const npub = nip19.npubEncode(pubkey);
@@ -219,34 +191,19 @@ export const ProfileWithDropdown = ({
 
   return (
     <>
-      <Dropdown
-        isOpen={isDropdownOpen}
-        onOpenChange={onDropdownOpenChange}
-        className="rounded-md border-4 border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]"
-        placement="bottom-start"
-        classNames={{
-          content:
-            "bg-white border-4 border-black rounded-md p-0 min-w-[200px]",
-        }}
-      >
+      <Dropdown placement="bottom-start">
         <DropdownTrigger>
           <User
             as="button"
-            data-slot="trigger"
             avatarProps={{
               src: pfp,
-              className: "border-2 border-black",
             }}
             className={"transition-transform"}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
             classNames={{
-              name: `overflow-hidden text-ellipsis whitespace-nowrap ${
-                bg && bg === "dark" ? "text-white" : "text-black"
-              } hidden ${nameClassname} ${
-                isNip05Verified ? "text-primary-yellow" : ""
+              name: `overflow-hidden text-ellipsis whitespace-nowrap text-light-text dark:text-dark-text hidden ${nameClassname} ${
+                isNip05Verified
+                  ? "text-shopstr-purple dark:text-shopstr-yellow"
+                  : ""
               }`,
               base: `${baseClassname}`,
             }}
@@ -257,13 +214,6 @@ export const ProfileWithDropdown = ({
           aria-label="User Actions"
           variant="flat"
           items={dropDownKeys.map((key) => DropDownItems[key])}
-          classNames={{
-            base: "bg-white p-1",
-            list: "bg-white gap-1",
-          }}
-          itemClasses={{
-            base: "!text-black data-[hover=true]:!bg-blue-400 data-[hover=true]:!text-white rounded-md",
-          }}
         >
           {(item) => {
             return (

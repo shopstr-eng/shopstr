@@ -2,6 +2,15 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { nip19 } from "nostr-tools";
 
+const SHOPSTR_DOMAINS = ["shopstr.market", "shopstr.store"];
+
+function getShopstrBaseDomain(hostname: string): string | null {
+  for (const domain of SHOPSTR_DOMAINS) {
+    if (hostname.includes(domain)) return domain;
+  }
+  return null;
+}
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const hostname = request.headers.get("host") || "";
@@ -12,21 +21,23 @@ export function proxy(request: NextRequest) {
     );
   }
 
-  if (hostname.includes("shopstr.store")) {
-    if (hostname === "www.shopstr.store") {
+  const baseDomain = getShopstrBaseDomain(hostname);
+
+  if (baseDomain) {
+    if (hostname === `www.${baseDomain}`) {
       const url = new URL(request.url);
-      url.hostname = "shopstr.store";
+      url.hostname = baseDomain;
       return NextResponse.redirect(url, 301);
     }
 
-    if (hostname !== "shopstr.store" && hostname.endsWith(".shopstr.store")) {
-      const subdomain = hostname.replace(".shopstr.store", "");
+    if (hostname !== baseDomain && hostname.endsWith(`.${baseDomain}`)) {
+      const subdomain = hostname.replace(`.${baseDomain}`, "");
       if (subdomain !== "www" && subdomain !== "api") {
         const url = new URL(
           `/shop/${subdomain}${pathname === "/" ? "" : pathname}`,
           request.url
         );
-        url.hostname = "shopstr.store";
+        url.hostname = baseDomain;
         return NextResponse.rewrite(url);
       }
     }
@@ -34,7 +45,7 @@ export function proxy(request: NextRequest) {
 
   if (
     hostname &&
-    !hostname.includes("shopstr.store") &&
+    !baseDomain &&
     !hostname.includes("localhost") &&
     !hostname.includes("replit") &&
     !hostname.includes("127.0.0.1") &&
@@ -42,16 +53,42 @@ export function proxy(request: NextRequest) {
     !hostname.includes(".replit.dev") &&
     !hostname.includes(".replit.app")
   ) {
-    if (!pathname.startsWith("/api/") && !pathname.startsWith("/_next/")) {
-      return NextResponse.rewrite(
-        new URL(
-          `/shop/_custom-domain?domain=${encodeURIComponent(
-            hostname
-          )}&path=${encodeURIComponent(pathname)}`,
-          request.url
-        )
-      );
+    if (pathname.startsWith("/_next/")) {
+      return NextResponse.next();
     }
+
+    if (pathname.startsWith("/api/")) {
+      const allowedApiPrefixes = [
+        "/api/storefront/",
+        "/api/db/fetch-products",
+        "/api/db/fetch-profiles",
+        "/api/db/fetch-reviews",
+        "/api/db/fetch-communities",
+        "/api/nostr/",
+        "/api/lightning/",
+        "/api/cashu/",
+        "/api/stripe/checkout",
+      ];
+      const isAllowed = allowedApiPrefixes.some((prefix) =>
+        pathname.startsWith(prefix)
+      );
+      if (!isAllowed) {
+        return NextResponse.json(
+          { error: "Not available on this domain" },
+          { status: 403 }
+        );
+      }
+      return NextResponse.next();
+    }
+
+    return NextResponse.rewrite(
+      new URL(
+        `/shop/_custom-domain?domain=${encodeURIComponent(
+          hostname
+        )}&path=${encodeURIComponent(pathname)}`,
+        request.url
+      )
+    );
   }
 
   if (

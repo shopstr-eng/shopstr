@@ -23,7 +23,10 @@ import {
   StorefrontColorScheme,
   StorefrontNavLink,
   StorefrontFooter,
+  StorefrontPolicies,
 } from "@/utils/types/types";
+import { POLICY_SLUGS, getDefaultPolicies } from "@/utils/storefront-policies";
+import { nip19 } from "nostr-tools";
 import { sanitizeUrl } from "@braintree/sanitize-url";
 import { ProductData } from "@/utils/parsers/product-parser-functions";
 import parseTags from "@/utils/parsers/product-parser-functions";
@@ -37,13 +40,14 @@ import StorefrontOrders from "./storefront-orders";
 import StorefrontWallet from "./storefront-wallet";
 import StorefrontMyListings from "./storefront-my-listings";
 import StorefrontOrderConfirmation from "./storefront-order-confirmation";
+import StorefrontPolicyPage from "./storefront-policy-page";
 
 const DEFAULT_COLORS: StorefrontColorScheme = {
-  primary: "#FFD23F",
-  secondary: "#1E293B",
-  accent: "#3B82F6",
-  background: "#FFFFFF",
-  text: "#000000",
+  primary: "#a438ba",
+  secondary: "#212121",
+  accent: "#a655f7",
+  background: "#ffffff",
+  text: "#212121",
 };
 
 interface StorefrontLayoutProps {
@@ -172,6 +176,20 @@ export default function StorefrontLayout({
     return [];
   }, [currentPage, storefront.pages, storefront.sections]);
 
+  const policyPageData = useMemo(() => {
+    if (!currentPage) return null;
+    const footerPolicies = storefront.footer?.policies || {};
+    const defaults = getDefaultPolicies(shopName);
+    const policyKeys = Object.keys(
+      POLICY_SLUGS
+    ) as (keyof StorefrontPolicies)[];
+    const matchedKey = policyKeys.find((k) => POLICY_SLUGS[k] === currentPage);
+    if (!matchedKey) return null;
+    const policy = footerPolicies[matchedKey] || defaults[matchedKey];
+    if (!policy || !policy.enabled) return null;
+    return policy;
+  }, [currentPage, storefront.footer?.policies, shopName]);
+
   const layout = storefront.productLayout || "grid";
   const landingStyle = storefront.landingPageStyle || "hero";
 
@@ -181,6 +199,24 @@ export default function StorefrontLayout({
   const showCommunity = !!storefront.showCommunityPage;
   const showWallet = !!storefront.showWalletPage;
   const isShopOwner = isLoggedIn && userPubkey === shopPubkey;
+
+  const sellerNpub = useMemo(() => {
+    try {
+      return nip19.npubEncode(shopPubkey);
+    } catch {
+      return "";
+    }
+  }, [shopPubkey]);
+
+  const contactNavLink: StorefrontNavLink | null = storefront.contactEmail
+    ? { label: "Contact", href: `mailto:${storefront.contactEmail}` }
+    : sellerNpub
+      ? {
+          label: "Contact",
+          href: `orders?pk=${sellerNpub}&isInquiry=true`,
+          isPage: true,
+        }
+      : null;
 
   const sellerCommunity = useMemo(() => {
     if (!showCommunity || !shopPubkey) return null;
@@ -229,8 +265,23 @@ export default function StorefrontLayout({
         links.push({ label: "Community", href: "community", isPage: true });
       }
     }
+    if (contactNavLink) {
+      const alreadyHasContact = links.some(
+        (l) => l.label?.toLowerCase() === "contact"
+      );
+      if (!alreadyHasContact) {
+        links.push(contactNavLink);
+      }
+    }
     return links;
-  }, [hasNav, storefront.navLinks, showCommunity, showWallet, isShopOwner]);
+  }, [
+    hasNav,
+    storefront.navLinks,
+    showCommunity,
+    showWallet,
+    isShopOwner,
+    contactNavLink,
+  ]);
 
   const cssVars = {
     "--sf-primary": colors.primary,
@@ -255,10 +306,17 @@ export default function StorefrontLayout({
 
   const resolveNavHref = (link: StorefrontNavLink) => {
     if (link.isPage) return `/shop/${shopSlug}/${link.href}`;
-    if (link.href.startsWith("/") || link.href.startsWith("http"))
+    if (
+      link.href.startsWith("/") ||
+      link.href.startsWith("http") ||
+      link.href.startsWith("mailto:")
+    )
       return link.href;
     return `/shop/${shopSlug}/${link.href}`;
   };
+
+  const isExternalNavHref = (href: string) =>
+    href.startsWith("http") || href.startsWith("mailto:");
 
   const themedCss = `
     body.sf-active [data-overlay-container] .border-black { border-color: var(--sf-secondary) !important; }
@@ -335,16 +393,35 @@ export default function StorefrontLayout({
                   const isActive = currentPage
                     ? link.href === currentPage
                     : link.href === "" || link.href === "/";
+                  const linkStyle = {
+                    color: isActive ? colors.primary : colors.background + "CC",
+                  };
+                  const linkClass =
+                    "rounded-md px-3 py-2 text-sm font-medium transition-colors";
+                  if (isExternalNavHref(href)) {
+                    return (
+                      <a
+                        key={idx}
+                        href={href}
+                        target={href.startsWith("http") ? "_blank" : undefined}
+                        rel={
+                          href.startsWith("http")
+                            ? "noopener noreferrer"
+                            : undefined
+                        }
+                        className={linkClass}
+                        style={linkStyle}
+                      >
+                        {link.label}
+                      </a>
+                    );
+                  }
                   return (
                     <Link
                       key={idx}
                       href={href}
-                      className="rounded-md px-3 py-2 text-sm font-medium transition-colors"
-                      style={{
-                        color: isActive
-                          ? colors.primary
-                          : colors.background + "CC",
-                      }}
+                      className={linkClass}
+                      style={linkStyle}
                     >
                       {link.label}
                     </Link>
@@ -426,12 +503,33 @@ export default function StorefrontLayout({
               {defaultNavLinks.length > 0 &&
                 defaultNavLinks.map((link, idx) => {
                   const href = resolveNavHref(link);
+                  const mobileClass = "block px-6 py-3 text-sm font-medium";
+                  const mobileStyle = { color: colors.background + "CC" };
+                  if (isExternalNavHref(href)) {
+                    return (
+                      <a
+                        key={idx}
+                        href={href}
+                        target={href.startsWith("http") ? "_blank" : undefined}
+                        rel={
+                          href.startsWith("http")
+                            ? "noopener noreferrer"
+                            : undefined
+                        }
+                        className={mobileClass}
+                        style={mobileStyle}
+                        onClick={() => setMobileMenuOpen(false)}
+                      >
+                        {link.label}
+                      </a>
+                    );
+                  }
                   return (
                     <Link
                       key={idx}
                       href={href}
-                      className="block px-6 py-3 text-sm font-medium"
-                      style={{ color: colors.background + "CC" }}
+                      className={mobileClass}
+                      style={mobileStyle}
                       onClick={() => setMobileMenuOpen(false)}
                     >
                       {link.label}
@@ -532,6 +630,10 @@ export default function StorefrontLayout({
                 </p>
               </div>
             )}
+          </div>
+        ) : policyPageData ? (
+          <div className="pt-14">
+            <StorefrontPolicyPage policy={policyPageData} colors={colors} />
           </div>
         ) : hasSections && activeSections.length > 0 ? (
           <div className="pt-14">

@@ -36,7 +36,7 @@ jest.mock("@/utils/parsers/product-parser-functions", () => ({
 const mockParseTags = parseTags as jest.Mock;
 
 describe("DynamicHead", () => {
-  const mockOrigin = "https://test.shopstr.store";
+  const mockOrigin = "https://test.shopstr.market";
 
   const getMetaContent = (name: string) => {
     const element = document.querySelector(

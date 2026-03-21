@@ -19,11 +19,11 @@ import {
 import StorefrontFooterComponent from "./storefront-footer";
 
 const DEFAULT_COLORS: StorefrontColorScheme = {
-  primary: "#FFD23F",
-  secondary: "#1E293B",
-  accent: "#3B82F6",
-  background: "#FFFFFF",
-  text: "#000000",
+  primary: "#a438ba",
+  secondary: "#212121",
+  accent: "#a655f7",
+  background: "#ffffff",
+  text: "#212121",
 };
 
 const GOOGLE_FONT_OPTIONS = [

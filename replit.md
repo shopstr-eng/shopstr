@@ -160,7 +160,7 @@ Sellers can configure branded storefronts accessible at `/shop/[slug]` URLs. The
 - **Storefront Routes**: `pages/shop/[slug].tsx` (shop home), `pages/shop/[...shopPath].tsx` (sub-pages: orders, wallet, community, custom pages)
 - **Storefront Layout**: `components/storefront/storefront-layout.tsx` — Full-featured storefront with navbar, hero, product grid, sections, and footer. Applies CSS variables for theming and adds `sf-active` class to body to hide the global Shopstr nav.
 - **Theme Wrapper**: `components/storefront/storefront-theme-wrapper.tsx` — Wraps existing pages (like `/listing`) when visited from a storefront context. Uses `sessionStorage` key `sf_seller_pubkey` to detect the active storefront.
-- **Proxy/Middleware**: `proxy.ts` — Extended with subdomain routing: `*.shopstr.store` subdomains rewrite to `/shop/[subdomain]`.
+- **Proxy/Middleware**: `proxy.ts` — Extended with subdomain routing: `*.shopstr.market` subdomains rewrite to `/shop/[subdomain]`.
 
 #### Storefront Config (stored in ShopProfile.content.storefront)
 
@@ -209,7 +209,22 @@ Sellers can configure branded storefronts accessible at `/shop/[slug]` URLs. The
 Shop profile settings (`/settings/shop-profile`) now uses `ShopProfileForm` component from `components/settings/shop-profile-form.tsx` with two tabs:
 
 1. **Basic Info** — Name, about, banner, picture, free shipping threshold
-2. **Storefront** — Shop URL slug, landing page style, product layout, color scheme, typography, pages toggle (community/wallet), custom domain
+2. **Storefront** — Shop URL slug, landing page style, product layout, color scheme (with 7 presets), typography, navigation links, homepage sections builder, custom pages, community/wallet toggles, footer editor, custom domain, preview modal, remove storefront
+
+Storefront editor sub-components (in `components/settings/storefront/`):
+
+- `section-editor.tsx` — Accordion-style editor for all 12 section types with type-specific fields
+- `footer-editor.tsx` — Footer text, social links, nav links, "Powered by Shopstr" toggle
+- `page-editor.tsx` — Custom page management with slug auto-generation
+- `storefront-preview-modal.tsx` — Approximate live preview modal with all color/font/layout settings
+
+#### Cart Page Storefront Integration
+
+`pages/cart/index.tsx` wrapped in `StorefrontThemeWrapper` — reads `sf_seller_pubkey` from sessionStorage, filters cart items to only show the active storefront seller's items, shows a banner if other sellers' items were excluded, and wraps the full page with the storefront nav/footer.
+
+#### Custom Domain Page
+
+`pages/shop/_custom-domain.tsx` — Shopstr-branded landing page for custom domains; looks up shop by domain via `/api/storefront/lookup?domain=`, shows `ShopstrSpinner` while loading, falls back to "Visit Shopstr" link if domain not found.
 
 #### Profile Dropdown
 

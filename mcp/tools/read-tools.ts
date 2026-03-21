@@ -636,7 +636,7 @@ export function registerReadTools(server: McpServer) {
         .string()
         .optional()
         .describe(
-          "Shop URL slug (e.g. 'fresh-farm' for shopstr.store/shop/fresh-farm)"
+          "Shop URL slug (e.g. 'fresh-farm' for shopstr.market/shop/fresh-farm)"
         ),
       pubkey: z
         .string()

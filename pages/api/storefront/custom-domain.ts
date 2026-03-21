@@ -40,8 +40,8 @@ export default async function handler(
         instructions: {
           type: "CNAME",
           host: cleanDomain,
-          value: "shopstr.store",
-          note: "Add a CNAME record pointing your domain to shopstr.store. Verification may take up to 24 hours after DNS propagation.",
+          value: "shopstr.market",
+          note: "Add a CNAME record pointing your domain to shopstr.market. Verification may take up to 24 hours after DNS propagation.",
         },
       });
     } catch (error: any) {

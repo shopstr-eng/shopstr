@@ -219,7 +219,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
         .string()
         .optional()
         .describe(
-          "URL slug for the storefront (e.g. 'fresh-farm' for shopstr.store/shop/fresh-farm). Must be lowercase alphanumeric with hyphens."
+          "URL slug for the storefront (e.g. 'fresh-farm' for shopstr.market/shop/fresh-farm). Must be lowercase alphanumeric with hyphens."
         ),
       storefrontFontHeading: z
         .string()
@@ -474,7 +474,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
   server.tool(
     "register_shop_slug",
-    "Register, update, or delete your shop's URL slug for the storefront. The slug becomes part of your shop URL (e.g. shopstr.store/shop/your-slug). Slug must be lowercase alphanumeric with hyphens, 3-50 characters. Reserved words are not allowed. Set action to 'delete' to remove the slug.",
+    "Register, update, or delete your shop's URL slug for the storefront. The slug becomes part of your shop URL (e.g. shopstr.market/shop/your-slug). Slug must be lowercase alphanumeric with hyphens, 3-50 characters. Reserved words are not allowed. Set action to 'delete' to remove the slug.",
     {
       slug: z
         .string()
@@ -760,7 +760,7 @@ export function registerWriteTools(server: McpServer, apiKey: ApiKeyRecord) {
 
         const handlerDTag = uuidv4();
         const origin =
-          process.env.NEXT_PUBLIC_BASE_URL || "https://shopstr.store";
+          process.env.NEXT_PUBLIC_BASE_URL || "https://shopstr.market";
 
         const handlerEvent: EventTemplate = {
           kind: 31990,

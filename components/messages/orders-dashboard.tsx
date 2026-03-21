@@ -23,6 +23,7 @@ import {
 } from "../../utils/context/context";
 import { NostrMessageEvent } from "../../utils/types/types";
 import ShopstrSpinner from "../utility-components/shopstr-spinner";
+import FailureModal from "../utility-components/failure-modal";
 import { ProfileWithDropdown } from "@/components/utility-components/profile/profile-dropdown";
 import ClaimButton from "@/components/utility-components/claim-button";
 import DisplayProductModal from "@/components/display-product-modal";
@@ -80,6 +81,7 @@ interface OrderData {
   pickupLocation?: string;
   selectedSize?: string;
   selectedVolume?: string;
+  selectedWeight?: string;
   selectedBulkOption?: number;
   paymentToken?: string;
   paymentMethod?: string;
@@ -94,6 +96,12 @@ interface OrderData {
   donationAmount?: number;
   donationPercentage?: number;
   sellerPubkey?: string;
+  isSubscription?: boolean;
+  subscriptionFrequency?: string;
+  subscriptionId?: string;
+  returnRequestSent?: boolean;
+  hasReturnRequest?: boolean;
+  returnRequestType?: string;
 }
 
 const OrdersDashboard = () => {
@@ -145,6 +153,18 @@ const OrdersDashboard = () => {
   const [addressChangeOrder, setAddressChangeOrder] =
     useState<OrderData | null>(null);
   const [isSendingAddressChange, setIsSendingAddressChange] = useState(false);
+
+  const [showReturnRequestModal, setShowReturnRequestModal] = useState(false);
+  const [returnRequestOrder, setReturnRequestOrder] =
+    useState<OrderData | null>(null);
+  const [returnRequestType, setReturnRequestType] = useState<
+    "return" | "refund" | "exchange"
+  >("return");
+  const [returnRequestMessage, setReturnRequestMessage] = useState("");
+  const [isSendingReturnRequest, setIsSendingReturnRequest] = useState(false);
+
+  const [showFailureModal, setShowFailureModal] = useState(false);
+  const [failureText, setFailureText] = useState("");
 
   const {
     signer,
@@ -343,6 +363,22 @@ const OrdersDashboard = () => {
             const pickupLocation = tagsMap.get("pickup");
             const selectedSize = tagsMap.get("size");
             const selectedVolume = tagsMap.get("volume");
+            const selectedWeight = tagsMap.get("weight");
+            const subscriptionTagArray = messageEvent.tags.find(
+              (tag: string[]) => tag[0] === "subscription"
+            );
+            const isSubscription =
+              subscriptionTagArray &&
+              (subscriptionTagArray[1] === "yes" ||
+                subscriptionTagArray[1] === "true");
+            const subscriptionFrequency =
+              subscriptionTagArray && subscriptionTagArray[2]
+                ? subscriptionTagArray[2]
+                : undefined;
+            const subscriptionId =
+              subscriptionTagArray && subscriptionTagArray[3]
+                ? subscriptionTagArray[3]
+                : undefined;
             const bulkTag = messageEvent.tags.find((tag) => tag[0] === "bulk");
             const selectedBulkOption =
               bulkTag && bulkTag[1] ? parseInt(bulkTag[1]) : undefined;
@@ -441,6 +477,7 @@ const OrdersDashboard = () => {
               pickupLocation,
               selectedSize,
               selectedVolume,
+              selectedWeight,
               selectedBulkOption,
               paymentToken,
               paymentMethod,
@@ -454,6 +491,9 @@ const OrdersDashboard = () => {
               donationAmount,
               donationPercentage,
               sellerPubkey: merchantPubkey || undefined,
+              isSubscription: !!isSubscription,
+              subscriptionFrequency,
+              subscriptionId,
             });
           }
         }
@@ -515,6 +555,7 @@ const OrdersDashboard = () => {
             pickupLocation: order.pickupLocation || existing.pickupLocation,
             selectedSize: order.selectedSize || existing.selectedSize,
             selectedVolume: order.selectedVolume || existing.selectedVolume,
+            selectedWeight: order.selectedWeight || existing.selectedWeight,
             selectedBulkOption:
               order.selectedBulkOption || existing.selectedBulkOption,
             paymentToken: order.paymentToken || existing.paymentToken,
@@ -545,12 +586,48 @@ const OrdersDashboard = () => {
             donationAmount: order.donationAmount ?? existing.donationAmount,
             donationPercentage:
               order.donationPercentage ?? existing.donationPercentage,
+            isSubscription: order.isSubscription || existing.isSubscription,
+            subscriptionFrequency:
+              order.subscriptionFrequency || existing.subscriptionFrequency,
+            subscriptionId: order.subscriptionId || existing.subscriptionId,
           });
         }
       }
 
       const consolidatedOrders = Array.from(consolidatedOrdersMap.values());
       consolidatedOrders.sort((a, b) => b.timestamp - a.timestamp);
+
+      const returnRequestOrderIds = new Set<string>();
+      const returnRequestTypes = new Map<string, string>();
+      for (const entry of chatsContext.chatsMap) {
+        const chat = entry[1] as NostrMessageEvent[];
+        for (const messageEvent of chat) {
+          const tagsMap = new Map(
+            messageEvent.tags
+              .filter((tag): tag is [string, string] => tag.length === 2)
+              .map(([k, v]) => [k, v])
+          );
+          const subject = tagsMap.get("subject");
+          if (subject === "return-request") {
+            const orderId = tagsMap.get("order") || "";
+            if (orderId) {
+              returnRequestOrderIds.add(orderId);
+              const reqType = tagsMap.get("status") || "return";
+              returnRequestTypes.set(orderId, reqType);
+            }
+          }
+        }
+      }
+      for (const order of consolidatedOrders) {
+        if (returnRequestOrderIds.has(order.orderId)) {
+          order.hasReturnRequest = true;
+          order.returnRequestType =
+            returnRequestTypes.get(order.orderId) || "return";
+          if (!order.isSale) {
+            order.returnRequestSent = true;
+          }
+        }
+      }
 
       setOrders(consolidatedOrders);
       setTotalOrders(consolidatedOrders.length);
@@ -958,6 +1035,157 @@ const OrdersDashboard = () => {
     );
   };
 
+  const canShowReturnButton = (order: OrderData) => {
+    if (order.isSale) return false;
+    if (order.returnRequestSent) return false;
+    if (!order.productAddress || !order.productAddress.includes(":"))
+      return false;
+    const merchantPubkey = order.productAddress.split(":")[1];
+    if (merchantPubkey && merchantPubkey === userPubkey) return false;
+    return (
+      order.status === "completed" ||
+      order.status === "shipped" ||
+      order.status === "confirmed" ||
+      order.subject === "shipping-info" ||
+      order.subject === "order-receipt"
+    );
+  };
+
+  const getDefaultReturnMessage = (
+    type: "return" | "refund" | "exchange",
+    productTitle?: string
+  ) => {
+    const product = productTitle || "the product";
+    switch (type) {
+      case "return":
+        return `Hi, I would like to request a return for ${product}. Please let me know the return process and any details I need to follow.`;
+      case "refund":
+        return `Hi, I would like to request a refund for ${product}. Please let me know how to proceed.`;
+      case "exchange":
+        return `Hi, I would like to request an exchange for ${product}. Please let me know the available options and how to proceed.`;
+    }
+  };
+
+  const handleOpenReturnRequestModal = (order: OrderData) => {
+    setReturnRequestOrder(order);
+    setReturnRequestType("return");
+    setReturnRequestMessage(
+      getDefaultReturnMessage("return", order.productTitle)
+    );
+    setShowReturnRequestModal(true);
+  };
+
+  const handleCloseReturnRequestModal = () => {
+    setShowReturnRequestModal(false);
+    setReturnRequestOrder(null);
+    setReturnRequestType("return");
+    setReturnRequestMessage("");
+  };
+
+  const handleReturnRequestTypeChange = (
+    type: "return" | "refund" | "exchange"
+  ) => {
+    setReturnRequestType(type);
+    setReturnRequestMessage(
+      getDefaultReturnMessage(type, returnRequestOrder?.productTitle)
+    );
+  };
+
+  const handleSubmitReturnRequest = async () => {
+    if (
+      !returnRequestOrder ||
+      !signer ||
+      !nostr ||
+      !returnRequestMessage.trim()
+    )
+      return;
+
+    setIsSendingReturnRequest(true);
+
+    try {
+      const decodedRandomPubkeyForSender = nip19.decode(randomNpubForSender);
+      const decodedRandomPrivkeyForSender = nip19.decode(randomNsecForSender);
+      const decodedRandomPubkeyForReceiver = nip19.decode(
+        randomNpubForReceiver
+      );
+      const decodedRandomPrivkeyForReceiver = nip19.decode(
+        randomNsecForReceiver
+      );
+
+      const sellerPubkey =
+        returnRequestOrder.sellerPubkey ||
+        returnRequestOrder.productAddress.split(":")[1];
+
+      if (!sellerPubkey) {
+        setFailureText("Could not determine seller for this order.");
+        setShowFailureModal(true);
+        return;
+      }
+
+      const typeLabel =
+        returnRequestType === "return"
+          ? "Return"
+          : returnRequestType === "refund"
+            ? "Refund"
+            : "Exchange";
+
+      const message = `${typeLabel} Request for order #${returnRequestOrder.orderId.slice(
+        0,
+        8
+      )}\nProduct: ${
+        returnRequestOrder.productTitle || "Unknown Product"
+      }\n\n${returnRequestMessage}`;
+
+      const giftWrappedMessageEvent = await constructGiftWrappedEvent(
+        decodedRandomPubkeyForSender.data as string,
+        sellerPubkey,
+        message,
+        "return-request",
+        {
+          productAddress: returnRequestOrder.productAddress,
+          type: 4,
+          isOrder: true,
+          orderId: returnRequestOrder.orderId,
+          buyerPubkey: userPubkey,
+          status: returnRequestType,
+        }
+      );
+
+      const sealedEvent = await constructMessageSeal(
+        signer,
+        giftWrappedMessageEvent,
+        decodedRandomPubkeyForSender.data as string,
+        sellerPubkey,
+        decodedRandomPrivkeyForSender.data as Uint8Array
+      );
+
+      const giftWrappedEvent = await constructMessageGiftWrap(
+        sealedEvent,
+        decodedRandomPubkeyForReceiver.data as string,
+        decodedRandomPrivkeyForReceiver.data as Uint8Array,
+        sellerPubkey
+      );
+
+      await sendGiftWrappedMessageEvent(nostr, giftWrappedEvent);
+
+      setOrders((prevOrders) =>
+        prevOrders.map((order) =>
+          order.orderId === returnRequestOrder.orderId
+            ? { ...order, returnRequestSent: true, returnRequestType }
+            : order
+        )
+      );
+
+      handleCloseReturnRequestModal();
+    } catch (error) {
+      console.error("Error sending return request:", error);
+      setFailureText("Failed to send return request. Please try again.");
+      setShowFailureModal(true);
+    } finally {
+      setIsSendingReturnRequest(false);
+    }
+  };
+
   const handleOpenAddressChangeModal = (order: OrderData) => {
     setAddressChangeOrder(order);
     setShowAddressChangeModal(true);
@@ -1215,6 +1443,20 @@ const OrdersDashboard = () => {
                                 Leave Review
                               </button>
                             ) : null}
+                            {order.returnRequestSent && !order.isSale ? (
+                              <span className="text-xs text-orange-500">
+                                Return Requested
+                              </span>
+                            ) : canShowReturnButton(order) ? (
+                              <button
+                                onClick={() =>
+                                  handleOpenReturnRequestModal(order)
+                                }
+                                className="cursor-pointer text-left text-xs text-orange-500 underline hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
+                              >
+                                Request Return
+                              </button>
+                            ) : null}
                           </div>
                         </td>
                         <td className="whitespace-nowrap px-4 py-4 text-sm">
@@ -1286,6 +1528,17 @@ const OrdersDashboard = () => {
                                 Send Shipping Update
                               </button>
                             )}
+                            {order.hasReturnRequest && order.isSale && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700 dark:bg-orange-900 dark:text-orange-300">
+                                {(order.returnRequestType || "return")
+                                  .charAt(0)
+                                  .toUpperCase() +
+                                  (order.returnRequestType || "return").slice(
+                                    1
+                                  )}{" "}
+                                Request
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="whitespace-nowrap px-4 py-4 text-sm text-light-text dark:text-dark-text">
@@ -1328,6 +1581,8 @@ const OrdersDashboard = () => {
                               specs.push(`Size: ${order.selectedSize}`);
                             if (order.selectedVolume)
                               specs.push(`Volume: ${order.selectedVolume}`);
+                            if (order.selectedWeight)
+                              specs.push(`Weight: ${order.selectedWeight}`);
                             if (order.selectedBulkOption)
                               specs.push(
                                 `Bundle: ${order.selectedBulkOption} units`
@@ -1689,6 +1944,89 @@ const OrdersDashboard = () => {
           </form>
         </ModalContent>
       </Modal>
+      <Modal
+        backdrop="blur"
+        isOpen={showReturnRequestModal}
+        onClose={handleCloseReturnRequestModal}
+        classNames={{
+          body: "py-6",
+          backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+          header: "border-b-[1px] border-[#292f46]",
+          footer: "border-t-[1px] border-[#292f46]",
+          closeButton: "hover:bg-black/5 active:bg-white/10",
+        }}
+      >
+        <ModalContent>
+          <ModalHeader>
+            <span className="text-light-text dark:text-dark-text">
+              Request Return / Refund / Exchange
+            </span>
+          </ModalHeader>
+          <ModalBody>
+            <div className="flex flex-col gap-4">
+              <div>
+                <p className="mb-1 text-sm font-semibold text-light-text dark:text-dark-text">
+                  Order: {returnRequestOrder?.orderId?.substring(0, 8)}...
+                </p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Product: {returnRequestOrder?.productTitle || "Unknown"}
+                </p>
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-light-text dark:text-dark-text">
+                  Request Type
+                </label>
+                <div className="flex gap-3">
+                  {(["return", "refund", "exchange"] as const).map((type) => (
+                    <button
+                      key={type}
+                      onClick={() => handleReturnRequestTypeChange(type)}
+                      className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                        returnRequestType === type
+                          ? "border-shopstr-purple bg-shopstr-purple/10 text-shopstr-purple dark:border-shopstr-yellow dark:bg-shopstr-yellow/10 dark:text-shopstr-yellow"
+                          : "border-gray-300 bg-transparent text-gray-600 hover:border-shopstr-purple dark:border-gray-600 dark:text-gray-400"
+                      }`}
+                    >
+                      {type.charAt(0).toUpperCase() + type.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-light-text dark:text-dark-text">
+                  Message to Seller
+                </label>
+                <textarea
+                  value={returnRequestMessage}
+                  onChange={(e) => setReturnRequestMessage(e.target.value)}
+                  rows={5}
+                  className="w-full rounded-md border border-gray-300 bg-light-bg p-3 text-sm text-light-text focus:border-shopstr-purple focus:outline-none dark:border-gray-600 dark:bg-dark-bg dark:text-dark-text dark:focus:border-shopstr-yellow"
+                  placeholder="Describe the reason for your request..."
+                />
+              </div>
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              color="danger"
+              variant="light"
+              onClick={handleCloseReturnRequestModal}
+            >
+              Cancel
+            </Button>
+            <Button
+              className={SHOPSTRBUTTONCLASSNAMES}
+              onClick={handleSubmitReturnRequest}
+              isLoading={isSendingReturnRequest}
+              isDisabled={
+                isSendingReturnRequest || !returnRequestMessage.trim()
+              }
+            >
+              Submit Request
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
       <AddressChangeModal
         isOpen={showAddressChangeModal}
         onClose={handleCloseAddressChangeModal}
@@ -1697,6 +2035,14 @@ const OrdersDashboard = () => {
         orderId={addressChangeOrder?.orderId}
         productTitle={addressChangeOrder?.productTitle}
         currentAddress={addressChangeOrder?.address}
+      />
+      <FailureModal
+        bodyText={failureText}
+        isOpen={showFailureModal}
+        onClose={() => {
+          setShowFailureModal(false);
+          setFailureText("");
+        }}
       />
     </div>
   );

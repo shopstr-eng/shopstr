@@ -1,4 +1,14 @@
-import { StorefrontColorScheme, StorefrontFooter } from "@/utils/types/types";
+import {
+  StorefrontColorScheme,
+  StorefrontFooter,
+  StorefrontPolicies,
+} from "@/utils/types/types";
+import {
+  POLICY_LABELS,
+  POLICY_KEYS,
+  POLICY_SLUGS,
+  getDefaultPolicies,
+} from "@/utils/storefront-policies";
 import Link from "next/link";
 
 interface StorefrontFooterProps {
@@ -29,6 +39,14 @@ export default function StorefrontFooterComponent({
   const socialLinks = footer.socialLinks || [];
   const navLinks = footer.navLinks || [];
   const showPoweredBy = footer.showPoweredBy !== false;
+
+  const policies = footer.policies || {};
+  const defaults = getDefaultPolicies(shopName);
+
+  const enabledPolicies = POLICY_KEYS.filter((key) => {
+    const policy = policies[key] || defaults[key];
+    return policy && policy.enabled;
+  });
 
   return (
     <footer
@@ -92,10 +110,34 @@ export default function StorefrontFooterComponent({
           )}
         </div>
 
+        {enabledPolicies.length > 0 && (
+          <div
+            className="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-2 border-t pt-6"
+            style={{ borderColor: colors.background + "11" }}
+          >
+            {enabledPolicies.map((key) => (
+              <Link
+                key={key}
+                href={`/shop/${shopSlug}/${POLICY_SLUGS[key]}`}
+                className="font-body text-xs opacity-40 transition-opacity hover:opacity-80"
+                style={{ color: colors.background }}
+              >
+                {POLICY_LABELS[key]}
+              </Link>
+            ))}
+          </div>
+        )}
+
         {showPoweredBy && (
           <div
-            className="mt-8 border-t pt-6 text-center text-sm opacity-40"
-            style={{ borderColor: colors.background + "11" }}
+            className={`${
+              enabledPolicies.length > 0 ? "mt-4" : "mt-8 border-t pt-6"
+            } text-center text-sm opacity-40`}
+            style={
+              enabledPolicies.length > 0
+                ? {}
+                : { borderColor: colors.background + "11" }
+            }
           >
             Powered by{" "}
             <Link

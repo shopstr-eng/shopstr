@@ -28,6 +28,7 @@ import { fiat } from "@getalby/lightning-tools";
 import currencySelection from "../../public/currencySelection.json";
 import { ShopMapContext, ProfileMapContext } from "@/utils/context/context";
 import { nip19 } from "nostr-tools";
+import StorefrontThemeWrapper from "@/components/storefront/storefront-theme-wrapper";
 
 interface QuantitySelectorProps {
   value: number;
@@ -111,6 +112,9 @@ export default function Component() {
     [key: string]: boolean;
   }>(Object.fromEntries(products.map((product) => [product.id, false])));
   const [isBeingPaid, setIsBeingPaid] = useState(false);
+  const [sfSellerPubkey, setSfSellerPubkey] = useState("");
+  const [sfShopSlug, setSfShopSlug] = useState("");
+  const [excludedItemCount, setExcludedItemCount] = useState(0);
 
   const [invoiceIsPaid, setInvoiceIsPaid] = useState(false);
   const [invoiceGenerationFailed, setInvoiceGenerationFailed] = useState(false);
@@ -173,10 +177,26 @@ export default function Component() {
   const router = useRouter();
 
   useEffect(() => {
+    const stored = sessionStorage.getItem("sf_seller_pubkey");
+    if (stored) setSfSellerPubkey(stored);
+    const storedSlug = sessionStorage.getItem("sf_shop_slug");
+    if (storedSlug) setSfShopSlug(storedSlug);
+  }, []);
+
+  useEffect(() => {
     if (typeof window !== "undefined") {
-      const cartList = localStorage.getItem("cart")
+      const sfPk = sessionStorage.getItem("sf_seller_pubkey") || "";
+      const fullCart: ProductData[] = localStorage.getItem("cart")
         ? JSON.parse(localStorage.getItem("cart") as string)
         : [];
+
+      let cartList = fullCart;
+      if (sfPk) {
+        const filtered = fullCart.filter((item) => item.pubkey === sfPk);
+        setExcludedItemCount(fullCart.length - filtered.length);
+        cartList = filtered;
+      }
+
       if (cartList && cartList.length > 0) {
         setProducts(cartList);
         for (const item of cartList as ProductData[]) {
@@ -454,403 +474,425 @@ export default function Component() {
   };
 
   return (
-    <>
-      {!isBeingPaid ? (
-        <div className="flex min-h-screen flex-col bg-light-bg p-4 text-light-text dark:bg-dark-bg dark:text-dark-text">
-          <div className="mx-auto w-full max-w-4xl pt-20">
-            <div className="mb-6 flex items-center">
-              <h1 className="w-full text-left text-2xl font-bold">
-                Shopping Cart
-              </h1>
+    <StorefrontThemeWrapper sellerPubkey={sfSellerPubkey}>
+      <>
+        {excludedItemCount > 0 && sfSellerPubkey && (
+          <div className="mx-auto mt-20 max-w-4xl px-4">
+            <div className="rounded-lg border-2 border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800 dark:border-yellow-600 dark:bg-yellow-900/20 dark:text-yellow-200">
+              {excludedItemCount} item(s) from other sellers are not shown
+              because you are checking out from a storefront. Visit your{" "}
+              <a href="/cart" className="font-bold underline">
+                full cart
+              </a>{" "}
+              to see all items.
             </div>
-            {products.length > 0 ? (
-              <>
-                <div className="space-y-6">
-                  {Object.entries(productsBySeller).map(
-                    ([sellerPubkey, sellerProducts]) => (
-                      <div key={sellerPubkey} className="space-y-4">
-                        {sellerProducts.map((product) => (
-                          <div
-                            key={product.id}
-                            className="flex flex-col rounded-lg border border-gray-300 p-4 shadow-sm dark:border-gray-700 md:flex-row md:items-start md:justify-between"
-                          >
-                            <div className="flex w-full md:w-auto">
-                              <img
-                                src={product.images[0]}
-                                alt={product.title}
-                                className="mr-4 h-24 w-24 rounded-md object-cover"
-                              />
-                              <div className="flex-1">
-                                <div className="flex flex-col md:flex-row md:items-start md:justify-between md:gap-5">
-                                  <h2 className="mb-2 text-lg md:mb-0">
-                                    {product.title}
-                                  </h2>
-                                  <div className="flex flex-col items-end">
-                                    <p className="text-lg font-bold">
-                                      {product.bulkPrice !== undefined
-                                        ? `${product.bulkPrice} ${product.currency}`
-                                        : product.volumePrice !== undefined
-                                          ? `${product.volumePrice} ${product.currency}`
-                                          : `${product.price} ${product.currency}`}
+          </div>
+        )}
+        {!isBeingPaid ? (
+          <div className="flex min-h-screen flex-col bg-light-bg p-4 text-light-text dark:bg-dark-bg dark:text-dark-text">
+            <div className="mx-auto w-full max-w-4xl pt-20">
+              <div className="mb-6 flex items-center">
+                <h1 className="w-full text-left text-2xl font-bold">
+                  Shopping Cart
+                </h1>
+              </div>
+              {products.length > 0 ? (
+                <>
+                  <div className="space-y-6">
+                    {Object.entries(productsBySeller).map(
+                      ([sellerPubkey, sellerProducts]) => (
+                        <div key={sellerPubkey} className="space-y-4">
+                          {sellerProducts.map((product) => (
+                            <div
+                              key={product.id}
+                              className="flex flex-col rounded-lg border border-gray-300 p-4 shadow-sm dark:border-gray-700 md:flex-row md:items-start md:justify-between"
+                            >
+                              <div className="flex w-full md:w-auto">
+                                <img
+                                  src={product.images[0]}
+                                  alt={product.title}
+                                  className="mr-4 h-24 w-24 rounded-md object-cover"
+                                />
+                                <div className="flex-1">
+                                  <div className="flex flex-col md:flex-row md:items-start md:justify-between md:gap-5">
+                                    <h2 className="mb-2 text-lg md:mb-0">
+                                      {product.title}
+                                    </h2>
+                                    <div className="flex flex-col items-end">
+                                      <p className="text-lg font-bold">
+                                        {product.bulkPrice !== undefined
+                                          ? `${product.bulkPrice} ${product.currency}`
+                                          : product.volumePrice !== undefined
+                                            ? `${product.volumePrice} ${product.currency}`
+                                            : `${product.price} ${product.currency}`}
+                                      </p>
+                                      {product.currency.toLowerCase() !==
+                                        "sats" &&
+                                        product.currency.toLowerCase() !==
+                                          "sat" && (
+                                          <p className="text-sm text-gray-500">
+                                            {satPrices[product.id] !== undefined
+                                              ? satPrices[product.id] !== null
+                                                ? `≈ ${
+                                                    satPrices[product.id]
+                                                  } sats`
+                                                : ""
+                                              : "Loading..."}
+                                          </p>
+                                        )}
+                                    </div>
+                                  </div>
+                                  {product.selectedBulkOption && (
+                                    <p className="text-sm text-purple-600 dark:text-yellow-400">
+                                      Bundle: {product.selectedBulkOption} units
                                     </p>
-                                    {product.currency.toLowerCase() !==
-                                      "sats" &&
-                                      product.currency.toLowerCase() !==
-                                        "sat" && (
-                                        <p className="text-sm text-gray-500">
-                                          {satPrices[product.id] !== undefined
-                                            ? satPrices[product.id] !== null
-                                              ? `≈ ${
-                                                  satPrices[product.id]
-                                                } sats`
-                                              : ""
-                                            : "Loading..."}
+                                  )}
+                                  {product.quantity && (
+                                    <div className="mt-2">
+                                      <p className="mb-2 text-sm text-green-600">
+                                        {product.quantity} in stock
+                                      </p>
+                                      <QuantitySelector
+                                        value={quantities[product.id] || 1}
+                                        onDecrease={() =>
+                                          handleQuantityChange(
+                                            product.id,
+                                            (quantities[product.id] || 1) - 1
+                                          )
+                                        }
+                                        onIncrease={() =>
+                                          handleQuantityChange(
+                                            product.id,
+                                            (quantities[product.id] || 1) + 1
+                                          )
+                                        }
+                                        onChange={(newVal) =>
+                                          handleQuantityChange(
+                                            product.id,
+                                            newVal
+                                          )
+                                        }
+                                        min={1}
+                                        max={parseInt(String(product.quantity))}
+                                      />
+                                      {hasReachedMax[product.id] && (
+                                        <p className="mt-1 text-xs text-red-500">
+                                          Maximum quantity reached
                                         </p>
                                       )}
-                                  </div>
+                                    </div>
+                                  )}
                                 </div>
-                                {product.selectedBulkOption && (
-                                  <p className="text-sm text-purple-600 dark:text-yellow-400">
-                                    Bundle: {product.selectedBulkOption} units
-                                  </p>
-                                )}
-                                {product.quantity && (
-                                  <div className="mt-2">
-                                    <p className="mb-2 text-sm text-green-600">
-                                      {product.quantity} in stock
-                                    </p>
-                                    <QuantitySelector
-                                      value={quantities[product.id] || 1}
-                                      onDecrease={() =>
-                                        handleQuantityChange(
-                                          product.id,
-                                          (quantities[product.id] || 1) - 1
-                                        )
-                                      }
-                                      onIncrease={() =>
-                                        handleQuantityChange(
-                                          product.id,
-                                          (quantities[product.id] || 1) + 1
-                                        )
-                                      }
-                                      onChange={(newVal) =>
-                                        handleQuantityChange(product.id, newVal)
-                                      }
-                                      min={1}
-                                      max={parseInt(String(product.quantity))}
-                                    />
-                                    {hasReachedMax[product.id] && (
-                                      <p className="mt-1 text-xs text-red-500">
-                                        Maximum quantity reached
-                                      </p>
-                                    )}
-                                  </div>
-                                )}
+                              </div>
+                              <div className="mt-4 flex md:mt-0 md:items-center">
+                                <Button
+                                  size="sm"
+                                  color="danger"
+                                  variant="light"
+                                  className="ml-auto"
+                                  onClick={() =>
+                                    handleRemoveFromCart(product.id)
+                                  }
+                                >
+                                  Remove
+                                </Button>
                               </div>
                             </div>
-                            <div className="mt-4 flex md:mt-0 md:items-center">
-                              <Button
-                                size="sm"
-                                color="danger"
-                                variant="light"
-                                className="ml-auto"
-                                onClick={() => handleRemoveFromCart(product.id)}
-                              >
-                                Remove
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
+                          ))}
 
-                        {/* Discount code section for this seller */}
-                        <div className="rounded-lg border border-gray-300 p-4 shadow-sm dark:border-gray-700">
-                          <h3 className="mb-3 font-semibold">
-                            Have a discount code from this seller?
-                          </h3>
-                          <div className="flex gap-2">
-                            <Input
-                              label="Discount Code"
-                              placeholder="Enter code"
-                              value={discountCodes[sellerPubkey] || ""}
-                              onChange={(e) =>
-                                setDiscountCodes({
-                                  ...discountCodes,
-                                  [sellerPubkey]: e.target.value.toUpperCase(),
-                                })
-                              }
-                              className="flex-1 text-light-text dark:text-dark-text"
-                              disabled={appliedDiscounts[sellerPubkey]! > 0}
-                              isInvalid={!!discountErrors[sellerPubkey]}
-                              errorMessage={discountErrors[sellerPubkey]}
-                            />
-                            {appliedDiscounts[sellerPubkey]! > 0 ? (
-                              <Button
-                                color="warning"
-                                onClick={() =>
-                                  handleRemoveDiscount(sellerPubkey)
+                          {/* Discount code section for this seller */}
+                          <div className="rounded-lg border border-gray-300 p-4 shadow-sm dark:border-gray-700">
+                            <h3 className="mb-3 font-semibold">
+                              Have a discount code from this seller?
+                            </h3>
+                            <div className="flex gap-2">
+                              <Input
+                                label="Discount Code"
+                                placeholder="Enter code"
+                                value={discountCodes[sellerPubkey] || ""}
+                                onChange={(e) =>
+                                  setDiscountCodes({
+                                    ...discountCodes,
+                                    [sellerPubkey]:
+                                      e.target.value.toUpperCase(),
+                                  })
                                 }
-                              >
-                                Remove
-                              </Button>
-                            ) : (
-                              <Button
-                                className={SHOPSTRBUTTONCLASSNAMES}
-                                onClick={() =>
-                                  handleApplyDiscount(sellerPubkey)
-                                }
-                              >
-                                Apply
-                              </Button>
+                                className="flex-1 text-light-text dark:text-dark-text"
+                                disabled={appliedDiscounts[sellerPubkey]! > 0}
+                                isInvalid={!!discountErrors[sellerPubkey]}
+                                errorMessage={discountErrors[sellerPubkey]}
+                              />
+                              {appliedDiscounts[sellerPubkey]! > 0 ? (
+                                <Button
+                                  color="warning"
+                                  onClick={() =>
+                                    handleRemoveDiscount(sellerPubkey)
+                                  }
+                                >
+                                  Remove
+                                </Button>
+                              ) : (
+                                <Button
+                                  className={SHOPSTRBUTTONCLASSNAMES}
+                                  onClick={() =>
+                                    handleApplyDiscount(sellerPubkey)
+                                  }
+                                >
+                                  Apply
+                                </Button>
+                              )}
+                            </div>
+                            {appliedDiscounts[sellerPubkey]! > 0 && (
+                              <p className="mt-2 text-sm text-green-600 dark:text-green-400">
+                                {appliedDiscounts[sellerPubkey]}% discount
+                                applied to all items from this seller!
+                              </p>
                             )}
                           </div>
-                          {appliedDiscounts[sellerPubkey]! > 0 && (
-                            <p className="mt-2 text-sm text-green-600 dark:text-green-400">
-                              {appliedDiscounts[sellerPubkey]}% discount applied
-                              to all items from this seller!
-                            </p>
-                          )}
+                          {(() => {
+                            const shopProfile =
+                              shopContext.shopData.get(sellerPubkey);
+                            const threshold =
+                              shopProfile?.content?.freeShippingThreshold;
+                            const thresholdCurrency =
+                              shopProfile?.content?.freeShippingCurrency ||
+                              "USD";
+                            if (!threshold || threshold <= 0) return null;
+                            const sellerSubtotal =
+                              getSellerSubtotalInCurrency(sellerPubkey);
+                            const progress = Math.min(
+                              (sellerSubtotal / threshold) * 100,
+                              100
+                            );
+                            const remaining = Math.max(
+                              threshold - sellerSubtotal,
+                              0
+                            );
+                            const isFreeShipping = sellerSubtotal >= threshold;
+                            const sellerName = getSellerName(sellerPubkey);
+                            return (
+                              <div className="rounded-lg border border-gray-300 bg-light-fg p-4 shadow-sm dark:border-gray-700 dark:bg-dark-fg">
+                                <div className="mb-2 flex items-center gap-2">
+                                  <TruckIcon className="h-5 w-5 text-shopstr-purple dark:text-shopstr-yellow" />
+                                  {isFreeShipping ? (
+                                    <p className="text-sm font-bold text-green-600 dark:text-green-400">
+                                      Free shipping from {sellerName}!
+                                    </p>
+                                  ) : (
+                                    <p className="text-sm font-bold text-light-text dark:text-dark-text">
+                                      You&apos;re {remaining.toFixed(2)}{" "}
+                                      {thresholdCurrency} away from free
+                                      shipping from {sellerName}!
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="h-3 w-full overflow-hidden rounded-full border border-gray-300 bg-gray-200 dark:border-gray-600 dark:bg-gray-700">
+                                  <div
+                                    className={`h-full rounded-full duration-500 transition-all ${
+                                      isFreeShipping
+                                        ? "bg-green-500"
+                                        : "bg-shopstr-purple dark:bg-shopstr-yellow"
+                                    }`}
+                                    style={{ width: `${progress}%` }}
+                                  />
+                                </div>
+                                <div className="mt-2 flex items-center justify-between">
+                                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                                    {sellerSubtotal.toFixed(2)} /{" "}
+                                    {threshold.toFixed(2)} {thresholdCurrency}
+                                  </p>
+                                  {!isFreeShipping && (
+                                    <Button
+                                      size="sm"
+                                      className={
+                                        SHOPSTRBUTTONCLASSNAMES + " text-xs"
+                                      }
+                                      onClick={() =>
+                                        router.push(
+                                          `/marketplace/${getSellerNpub(
+                                            sellerPubkey
+                                          )}`
+                                        )
+                                      }
+                                    >
+                                      Shop More from {sellerName}
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
-                        {(() => {
-                          const shopProfile =
-                            shopContext.shopData.get(sellerPubkey);
-                          const threshold =
-                            shopProfile?.content?.freeShippingThreshold;
-                          const thresholdCurrency =
-                            shopProfile?.content?.freeShippingCurrency || "USD";
-                          if (!threshold || threshold <= 0) return null;
-                          const sellerSubtotal =
-                            getSellerSubtotalInCurrency(sellerPubkey);
-                          const progress = Math.min(
-                            (sellerSubtotal / threshold) * 100,
-                            100
-                          );
-                          const remaining = Math.max(
-                            threshold - sellerSubtotal,
-                            0
-                          );
-                          const isFreeShipping = sellerSubtotal >= threshold;
-                          const sellerName = getSellerName(sellerPubkey);
-                          return (
-                            <div className="rounded-lg border border-gray-300 bg-light-fg p-4 shadow-sm dark:border-gray-700 dark:bg-dark-fg">
-                              <div className="mb-2 flex items-center gap-2">
-                                <TruckIcon className="h-5 w-5 text-shopstr-purple dark:text-shopstr-yellow" />
-                                {isFreeShipping ? (
-                                  <p className="text-sm font-bold text-green-600 dark:text-green-400">
-                                    Free shipping from {sellerName}!
-                                  </p>
-                                ) : (
-                                  <p className="text-sm font-bold text-light-text dark:text-dark-text">
-                                    You&apos;re {remaining.toFixed(2)}{" "}
-                                    {thresholdCurrency} away from free shipping
-                                    from {sellerName}!
-                                  </p>
-                                )}
-                              </div>
-                              <div className="h-3 w-full overflow-hidden rounded-full border border-gray-300 bg-gray-200 dark:border-gray-600 dark:bg-gray-700">
-                                <div
-                                  className={`h-full rounded-full duration-500 transition-all ${
-                                    isFreeShipping
-                                      ? "bg-green-500"
-                                      : "bg-shopstr-purple dark:bg-shopstr-yellow"
-                                  }`}
-                                  style={{ width: `${progress}%` }}
-                                />
-                              </div>
-                              <div className="mt-2 flex items-center justify-between">
-                                <p className="text-xs text-gray-500 dark:text-gray-400">
-                                  {sellerSubtotal.toFixed(2)} /{" "}
-                                  {threshold.toFixed(2)} {thresholdCurrency}
-                                </p>
-                                {!isFreeShipping && (
-                                  <Button
-                                    size="sm"
-                                    className={
-                                      SHOPSTRBUTTONCLASSNAMES + " text-xs"
-                                    }
-                                    onClick={() =>
-                                      router.push(
-                                        `/marketplace/${getSellerNpub(
-                                          sellerPubkey
-                                        )}`
-                                      )
-                                    }
-                                  >
-                                    Shop More from {sellerName}
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    )
-                  )}
-                </div>
-                <div className="mt-6 flex flex-col items-end border-t border-gray-300 pt-4 dark:border-gray-700">
-                  <p className="mb-4 text-xl font-bold">
-                    Subtotal ({products.length}{" "}
-                    {products.length === 1 ? "item" : "items"}): {subtotal} sats
+                      )
+                    )}
+                  </div>
+                  <div className="mt-6 flex flex-col items-end border-t border-gray-300 pt-4 dark:border-gray-700">
+                    <p className="mb-4 text-xl font-bold">
+                      Subtotal ({products.length}{" "}
+                      {products.length === 1 ? "item" : "items"}): {subtotal}{" "}
+                      sats
+                    </p>
+                    <Button
+                      className={SHOPSTRBUTTONCLASSNAMES}
+                      onClick={toggleCheckout}
+                      size="lg"
+                    >
+                      Proceed To Checkout
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex min-h-[60vh] flex-col items-center justify-center rounded-lg border border-gray-300 py-16 shadow-sm dark:border-gray-700 dark:shadow-none">
+                  <div className="mb-8 flex items-center justify-center rounded-full border border-gray-300 bg-gray-100 p-6 dark:border-gray-600 dark:bg-gray-700">
+                    <ShoppingBagIcon className="h-16 w-16 text-gray-800 dark:text-gray-200" />
+                  </div>
+                  <h2 className="mb-2 text-center text-3xl font-bold text-light-text dark:text-dark-text">
+                    Your cart is empty . . .
+                  </h2>
+                  <p className="mb-6 max-w-md text-center text-gray-500 dark:text-gray-400">
+                    Go add some items to your cart!
                   </p>
                   <Button
                     className={SHOPSTRBUTTONCLASSNAMES}
-                    onClick={toggleCheckout}
                     size="lg"
+                    onClick={() => router.push("/marketplace")}
                   >
-                    Proceed To Checkout
+                    Continue Shopping
                   </Button>
                 </div>
-              </>
-            ) : (
-              <div className="flex min-h-[60vh] flex-col items-center justify-center rounded-lg border border-gray-300 py-16 shadow-sm dark:border-gray-700 dark:shadow-none">
-                <div className="mb-8 flex items-center justify-center rounded-full border border-gray-300 bg-gray-100 p-6 dark:border-gray-600 dark:bg-gray-700">
-                  <ShoppingBagIcon className="h-16 w-16 text-gray-800 dark:text-gray-200" />
-                </div>
-                <h2 className="mb-2 text-center text-3xl font-bold text-light-text dark:text-dark-text">
-                  Your cart is empty . . .
-                </h2>
-                <p className="mb-6 max-w-md text-center text-gray-500 dark:text-gray-400">
-                  Go add some items to your cart!
-                </p>
-                <Button
-                  className={SHOPSTRBUTTONCLASSNAMES}
-                  size="lg"
-                  onClick={() => router.push("/marketplace")}
-                >
-                  Continue Shopping
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="flex min-h-screen w-full bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text sm:items-center sm:justify-center">
-          <div className="mx-auto flex w-full flex-col pt-20">
-            <div className="flex flex-col items-center">
-              <CartInvoiceCard
-                products={products}
-                quantities={quantities}
-                shippingTypes={shippingTypes}
-                totalCostsInSats={totalCostsInSats}
-                subtotalCost={subtotal}
-                appliedDiscounts={appliedDiscounts}
-                discountCodes={discountCodes}
-                shopProfiles={shopContext.shopData}
-                onBackToCart={toggleCheckout}
-                setInvoiceIsPaid={setInvoiceIsPaid}
-                setInvoiceGenerationFailed={setInvoiceGenerationFailed}
-                setCashuPaymentSent={setCashuPaymentSent}
-                setCashuPaymentFailed={setCashuPaymentFailed}
-              />
+              )}
             </div>
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="flex min-h-screen w-full bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text sm:items-center sm:justify-center">
+            <div className="mx-auto flex w-full flex-col pt-20">
+              <div className="flex flex-col items-center">
+                <CartInvoiceCard
+                  products={products}
+                  quantities={quantities}
+                  shippingTypes={shippingTypes}
+                  totalCostsInSats={totalCostsInSats}
+                  subtotalCost={subtotal}
+                  appliedDiscounts={appliedDiscounts}
+                  discountCodes={discountCodes}
+                  shopProfiles={shopContext.shopData}
+                  onBackToCart={toggleCheckout}
+                  setInvoiceIsPaid={setInvoiceIsPaid}
+                  setInvoiceGenerationFailed={setInvoiceGenerationFailed}
+                  setCashuPaymentSent={setCashuPaymentSent}
+                  setCashuPaymentFailed={setCashuPaymentFailed}
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
-      {/* Success Modal */}
-      {invoiceIsPaid || cashuPaymentSent ? (
-        <>
-          <Modal
-            backdrop="blur"
-            isOpen={invoiceIsPaid || cashuPaymentSent}
-            onClose={() => {
-              setInvoiceIsPaid(false);
-              setCashuPaymentSent(false);
-              router.push("/order-summary");
-            }}
-            classNames={{
-              body: "py-6 ",
-              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-              header: "border-b-[1px] border-[#292f46]",
-              footer: "border-t-[1px] border-[#292f46]",
-              closeButton: "hover:bg-black/5 active:bg-white/10",
-            }}
-            isDismissable={true}
-            scrollBehavior={"normal"}
-            placement={"center"}
-            size="2xl"
-          >
-            <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
-                <CheckCircleIcon className="h-6 w-6 text-green-500" />
-                <div className="ml-2">Order successful!</div>
-              </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
-                <div className="flex items-center justify-center">
-                  The seller will receive a message with your order details.
-                </div>
-              </ModalBody>
-            </ModalContent>
-          </Modal>
-        </>
-      ) : null}
+        {/* Success Modal */}
+        {invoiceIsPaid || cashuPaymentSent ? (
+          <>
+            <Modal
+              backdrop="blur"
+              isOpen={invoiceIsPaid || cashuPaymentSent}
+              onClose={() => {
+                setInvoiceIsPaid(false);
+                setCashuPaymentSent(false);
+                router.push("/order-summary");
+              }}
+              classNames={{
+                body: "py-6 ",
+                backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+                header: "border-b-[1px] border-[#292f46]",
+                footer: "border-t-[1px] border-[#292f46]",
+                closeButton: "hover:bg-black/5 active:bg-white/10",
+              }}
+              isDismissable={true}
+              scrollBehavior={"normal"}
+              placement={"center"}
+              size="2xl"
+            >
+              <ModalContent>
+                <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                  <CheckCircleIcon className="h-6 w-6 text-green-500" />
+                  <div className="ml-2">Order successful!</div>
+                </ModalHeader>
+                <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                  <div className="flex items-center justify-center">
+                    The seller will receive a message with your order details.
+                  </div>
+                </ModalBody>
+              </ModalContent>
+            </Modal>
+          </>
+        ) : null}
 
-      {/* Invoice Generation Failed Modal */}
-      {invoiceGenerationFailed ? (
-        <>
-          <Modal
-            backdrop="blur"
-            isOpen={invoiceGenerationFailed}
-            onClose={() => setInvoiceGenerationFailed(false)}
-            classNames={{
-              body: "py-6 ",
-              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-              header: "border-b-[1px] border-[#292f46]",
-              footer: "border-t-[1px] border-[#292f46]",
-              closeButton: "hover:bg-black/5 active:bg-white/10",
-            }}
-            isDismissable={true}
-            scrollBehavior={"normal"}
-            placement={"center"}
-            size="2xl"
-          >
-            <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
-                <XCircleIcon className="h-6 w-6 text-red-500" />
-                <div className="ml-2">Invoice generation failed!</div>
-              </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
-                <div className="flex items-center justify-center">
-                  The price and/or currency set for this listing was invalid.
-                </div>
-              </ModalBody>
-            </ModalContent>
-          </Modal>
-        </>
-      ) : null}
+        {/* Invoice Generation Failed Modal */}
+        {invoiceGenerationFailed ? (
+          <>
+            <Modal
+              backdrop="blur"
+              isOpen={invoiceGenerationFailed}
+              onClose={() => setInvoiceGenerationFailed(false)}
+              classNames={{
+                body: "py-6 ",
+                backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+                header: "border-b-[1px] border-[#292f46]",
+                footer: "border-t-[1px] border-[#292f46]",
+                closeButton: "hover:bg-black/5 active:bg-white/10",
+              }}
+              isDismissable={true}
+              scrollBehavior={"normal"}
+              placement={"center"}
+              size="2xl"
+            >
+              <ModalContent>
+                <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                  <XCircleIcon className="h-6 w-6 text-red-500" />
+                  <div className="ml-2">Invoice generation failed!</div>
+                </ModalHeader>
+                <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                  <div className="flex items-center justify-center">
+                    The price and/or currency set for this listing was invalid.
+                  </div>
+                </ModalBody>
+              </ModalContent>
+            </Modal>
+          </>
+        ) : null}
 
-      {/* Cashu Payment Failed Modal */}
-      {cashuPaymentFailed ? (
-        <>
-          <Modal
-            backdrop="blur"
-            isOpen={cashuPaymentFailed}
-            onClose={() => setCashuPaymentFailed(false)}
-            classNames={{
-              body: "py-6 ",
-              backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
-              header: "border-b-[1px] border-[#292f46]",
-              footer: "border-t-[1px] border-[#292f46]",
-              closeButton: "hover:bg-black/5 active:bg-white/10",
-            }}
-            isDismissable={true}
-            scrollBehavior={"normal"}
-            placement={"center"}
-            size="2xl"
-          >
-            <ModalContent>
-              <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
-                <XCircleIcon className="h-6 w-6 text-red-500" />
-                <div className="ml-2">Purchase failed!</div>
-              </ModalHeader>
-              <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
-                <div className="flex items-center justify-center">
-                  You didn&apos;t have enough balance in your wallet to pay.
-                </div>
-              </ModalBody>
-            </ModalContent>
-          </Modal>
-        </>
-      ) : null}
-    </>
+        {/* Cashu Payment Failed Modal */}
+        {cashuPaymentFailed ? (
+          <>
+            <Modal
+              backdrop="blur"
+              isOpen={cashuPaymentFailed}
+              onClose={() => setCashuPaymentFailed(false)}
+              classNames={{
+                body: "py-6 ",
+                backdrop: "bg-[#292f46]/50 backdrop-opacity-60",
+                header: "border-b-[1px] border-[#292f46]",
+                footer: "border-t-[1px] border-[#292f46]",
+                closeButton: "hover:bg-black/5 active:bg-white/10",
+              }}
+              isDismissable={true}
+              scrollBehavior={"normal"}
+              placement={"center"}
+              size="2xl"
+            >
+              <ModalContent>
+                <ModalHeader className="flex items-center justify-center text-light-text dark:text-dark-text">
+                  <XCircleIcon className="h-6 w-6 text-red-500" />
+                  <div className="ml-2">Purchase failed!</div>
+                </ModalHeader>
+                <ModalBody className="flex flex-col overflow-hidden text-light-text dark:text-dark-text">
+                  <div className="flex items-center justify-center">
+                    You didn&apos;t have enough balance in your wallet to pay.
+                  </div>
+                </ModalBody>
+              </ModalContent>
+            </Modal>
+          </>
+        ) : null}
+      </>
+    </StorefrontThemeWrapper>
   );
 }

@@ -9,8 +9,6 @@ import {
   Select,
   SelectItem,
   Switch,
-  Tabs,
-  Tab,
 } from "@nextui-org/react";
 
 import { ShopMapContext } from "@/utils/context/context";
@@ -23,7 +21,19 @@ import { createNostrShopEvent } from "@/utils/nostr/nostr-helper-functions";
 import { FileUploaderButton } from "@/components/utility-components/file-uploader";
 import ShopstrSpinner from "@/components/utility-components/shopstr-spinner";
 import currencySelection from "@/public/currencySelection.json";
-import { StorefrontConfig, StorefrontColorScheme } from "@/utils/types/types";
+import {
+  StorefrontConfig,
+  StorefrontColorScheme,
+  StorefrontSection,
+  StorefrontSectionType,
+  StorefrontPage,
+  StorefrontFooter,
+  StorefrontNavLink,
+} from "@/utils/types/types";
+import SectionEditor from "./storefront/section-editor";
+import FooterEditor from "./storefront/footer-editor";
+import PageEditor from "./storefront/page-editor";
+import StorefrontPreviewModal from "./storefront/storefront-preview-modal";
 
 interface ShopProfileFormProps {
   isOnboarding?: boolean;
@@ -51,12 +61,85 @@ const GOOGLE_FONTS = [
 ];
 
 const DEFAULT_COLORS: StorefrontColorScheme = {
-  primary: "#FFD23F",
-  secondary: "#1E293B",
-  accent: "#3B82F6",
-  background: "#FFFFFF",
-  text: "#000000",
+  primary: "#a438ba",
+  secondary: "#212121",
+  accent: "#a655f7",
+  background: "#ffffff",
+  text: "#212121",
 };
+
+const COLOR_PRESETS: { name: string; colors: StorefrontColorScheme }[] = [
+  {
+    name: "Shopstr",
+    colors: {
+      primary: "#a438ba",
+      secondary: "#212121",
+      accent: "#a655f7",
+      background: "#ffffff",
+      text: "#212121",
+    },
+  },
+  {
+    name: "Forest",
+    colors: {
+      primary: "#22C55E",
+      secondary: "#14532D",
+      accent: "#86EFAC",
+      background: "#F0FDF4",
+      text: "#14532D",
+    },
+  },
+  {
+    name: "Ocean",
+    colors: {
+      primary: "#0EA5E9",
+      secondary: "#0C4A6E",
+      accent: "#38BDF8",
+      background: "#F0F9FF",
+      text: "#0C4A6E",
+    },
+  },
+  {
+    name: "Sunset",
+    colors: {
+      primary: "#F97316",
+      secondary: "#7C2D12",
+      accent: "#FB923C",
+      background: "#FFF7ED",
+      text: "#431407",
+    },
+  },
+  {
+    name: "Berry",
+    colors: {
+      primary: "#A855F7",
+      secondary: "#3B0764",
+      accent: "#C084FC",
+      background: "#FAF5FF",
+      text: "#3B0764",
+    },
+  },
+  {
+    name: "Earth",
+    colors: {
+      primary: "#A16207",
+      secondary: "#422006",
+      accent: "#CA8A04",
+      background: "#FEFCE8",
+      text: "#422006",
+    },
+  },
+  {
+    name: "Dark",
+    colors: {
+      primary: "#a438ba",
+      secondary: "#111827",
+      accent: "#a655f7",
+      background: "#1F2937",
+      text: "#F9FAFB",
+    },
+  },
+];
 
 const SLUG_RESERVED = [
   "www",
@@ -102,7 +185,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
   const [freeShippingCurrency, setFreeShippingCurrency] =
     useState<string>("USD");
 
-  const [storefront, setStorefront] = useState<StorefrontConfig>({});
   const [colors, setColors] = useState<StorefrontColorScheme>(DEFAULT_COLORS);
   const [shopSlug, setShopSlug] = useState("");
   const [slugInput, setSlugInput] = useState("");
@@ -110,14 +192,43 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     "idle" | "checking" | "saved" | "error" | "taken"
   >("idle");
   const [slugMessage, setSlugMessage] = useState("");
+  const [siteHost, setSiteHost] = useState("shopstr.market");
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setSiteHost(window.location.hostname);
+    }
+  }, []);
   const [customDomain, setCustomDomain] = useState("");
-  const [customDomainStatus, setCustomDomainStatus] = useState<
-    "idle" | "saved" | "error"
-  >("idle");
-  const [customDomainMessage, setCustomDomainMessage] = useState("");
-  const [customDomainInstructions, setCustomDomainInstructions] =
-    useState<any>(null);
+  const [domainInfo, setDomainInfo] = useState<{
+    domain: string;
+    verified: boolean;
+  } | null>(null);
+  const [domainStatus, setDomainStatus] = useState<"idle" | "saved" | "error">(
+    "idle"
+  );
+  const [domainMessage, setDomainMessage] = useState("");
+  const [domainInstructions, setDomainInstructions] = useState<any>(null);
   const [isSavingStorefront, setIsSavingStorefront] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>("basic");
+
+  const [productLayout, setProductLayout] = useState<
+    "grid" | "list" | "featured"
+  >("grid");
+  const [landingPageStyle, setLandingPageStyle] = useState<
+    "classic" | "hero" | "minimal"
+  >("hero");
+  const [fontHeading, setFontHeading] = useState("");
+  const [fontBody, setFontBody] = useState("");
+  const [sections, setSections] = useState<StorefrontSection[]>([]);
+  const [pages, setPages] = useState<StorefrontPage[]>([]);
+  const [footer, setFooter] = useState<StorefrontFooter>({
+    showPoweredBy: true,
+  });
+  const [navLinks, setNavLinks] = useState<StorefrontNavLink[]>([]);
+  const [showCommunityPage, setShowCommunityPage] = useState(false);
+  const [showWalletPage, setShowWalletPage] = useState(false);
+  const [contactEmail, setContactEmail] = useState("");
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   const { signer, pubkey: userPubkey } = useContext(SignerContext);
   const shopContext = useContext(ShopMapContext);
@@ -159,14 +270,22 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       }
       if (shop.content.storefront) {
         const sf = shop.content.storefront;
-        setStorefront(sf);
-        if (sf.colorScheme) {
-          setColors({ ...DEFAULT_COLORS, ...sf.colorScheme });
-        }
+        if (sf.colorScheme) setColors({ ...DEFAULT_COLORS, ...sf.colorScheme });
         if (sf.shopSlug) {
           setShopSlug(sf.shopSlug);
           setSlugInput(sf.shopSlug);
         }
+        if (sf.productLayout) setProductLayout(sf.productLayout);
+        if (sf.landingPageStyle) setLandingPageStyle(sf.landingPageStyle);
+        if (sf.fontHeading) setFontHeading(sf.fontHeading);
+        if (sf.fontBody) setFontBody(sf.fontBody);
+        if (sf.sections) setSections(sf.sections);
+        if (sf.pages) setPages(sf.pages);
+        if (sf.footer) setFooter(sf.footer);
+        if (sf.navLinks) setNavLinks(sf.navLinks);
+        if (sf.showCommunityPage) setShowCommunityPage(sf.showCommunityPage);
+        if (sf.showWalletPage) setShowWalletPage(sf.showWalletPage);
+        if (sf.contactEmail) setContactEmail(sf.contactEmail);
       }
     }
     setIsFetchingShop(false);
@@ -179,6 +298,10 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         .then((data) => {
           if (data?.domain) {
             setCustomDomain(data.domain);
+            setDomainInfo({
+              domain: data.domain,
+              verified: data.verified ?? false,
+            });
           }
         })
         .catch(() => {});
@@ -205,8 +328,24 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       transformedData.freeShippingThreshold = thresholdValue;
       transformedData.freeShippingCurrency = freeShippingCurrency;
     }
-    if (Object.keys(storefront).length > 0) {
-      transformedData.storefront = storefront;
+    if (shopSlug) {
+      const storefrontConfig: StorefrontConfig = {
+        colorScheme: colors,
+        productLayout,
+        landingPageStyle,
+        shopSlug,
+        customDomain: customDomain || undefined,
+        fontHeading: fontHeading || undefined,
+        fontBody: fontBody || undefined,
+        sections: sections.length > 0 ? sections : undefined,
+        pages: pages.length > 0 ? pages : undefined,
+        footer,
+        navLinks: navLinks.length > 0 ? navLinks : undefined,
+        showCommunityPage: showCommunityPage || undefined,
+        showWalletPage: showWalletPage || undefined,
+        contactEmail: contactEmail || undefined,
+      };
+      transformedData.storefront = storefrontConfig;
     }
     await createNostrShopEvent(
       nostr!,
@@ -248,7 +387,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       if (res.ok) {
         setShopSlug(data.slug);
         setSlugInput(data.slug);
-        setStorefront((prev) => ({ ...prev, shopSlug: data.slug }));
         setSlugStatus("saved");
         setSlugMessage(`✓ Your storefront is at /shop/${data.slug}`);
       } else if (res.status === 409) {
@@ -264,15 +402,66 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     }
   };
 
+  const handleRemoveStorefront = async () => {
+    if (!userPubkey) return;
+    const confirmed = window.confirm(
+      "Are you sure you want to remove your storefront? This will delete your shop URL, custom domain, and reset all storefront settings."
+    );
+    if (!confirmed) return;
+    try {
+      await fetch("/api/storefront/register-slug", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pubkey: userPubkey }),
+      });
+      setShopSlug("");
+      setSlugInput("");
+      setCustomDomain("");
+      setDomainInfo(null);
+      setColors(DEFAULT_COLORS);
+      setProductLayout("grid");
+      setLandingPageStyle("hero");
+      setSections([]);
+      setPages([]);
+      setFooter({ showPoweredBy: true });
+      setNavLinks([]);
+      setShowCommunityPage(false);
+      setShowWalletPage(false);
+      setSlugStatus("idle");
+      setSlugMessage("");
+
+      const shopMap = shopContext.shopData;
+      const shop = shopMap.has(userPubkey)
+        ? shopMap.get(userPubkey)
+        : undefined;
+      if (shop) {
+        const updatedContent = { ...shop.content };
+        delete updatedContent.storefront;
+        await createNostrShopEvent(
+          nostr!,
+          signer!,
+          JSON.stringify(updatedContent)
+        );
+        shopContext.updateShopData({
+          pubkey: userPubkey,
+          content: updatedContent,
+          created_at: 0,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to remove storefront:", error);
+    }
+  };
+
   const saveCustomDomain = async () => {
     if (!shopSlug) {
-      setCustomDomainStatus("error");
-      setCustomDomainMessage("Set up a shop URL first");
+      setDomainStatus("error");
+      setDomainMessage("Set up a shop URL first");
       return;
     }
     if (!customDomain || !customDomain.includes(".")) {
-      setCustomDomainStatus("error");
-      setCustomDomainMessage("Enter a valid domain");
+      setDomainStatus("error");
+      setDomainMessage("Enter a valid domain");
       return;
     }
     try {
@@ -283,31 +472,63 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
       });
       const data = await res.json();
       if (res.ok) {
-        setCustomDomainStatus("saved");
-        setCustomDomainMessage(
-          "Domain saved! Follow the DNS instructions below."
-        );
-        setCustomDomainInstructions(data.instructions);
+        setDomainStatus("saved");
+        setDomainMessage("Domain saved! Follow the DNS instructions below.");
+        setDomainInstructions(data.instructions);
+        setDomainInfo({
+          domain: data.domain || customDomain,
+          verified: data.verified ?? false,
+        });
       } else {
-        setCustomDomainStatus("error");
-        setCustomDomainMessage(data.error || "Failed to save domain");
+        setDomainStatus("error");
+        setDomainMessage(data.error || "Failed to save domain");
       }
     } catch {
-      setCustomDomainStatus("error");
-      setCustomDomainMessage("Failed to connect to server");
+      setDomainStatus("error");
+      setDomainMessage("Failed to connect to server");
     }
   };
 
-  const saveStorefront = async (updates: Partial<StorefrontConfig>) => {
-    const newSf = { ...storefront, ...updates };
-    setStorefront(newSf);
-    setIsSavingStorefront(true);
+  const handleRemoveCustomDomain = async () => {
+    if (!userPubkey) return;
+    try {
+      await fetch("/api/storefront/custom-domain", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pubkey: userPubkey }),
+      });
+      setCustomDomain("");
+      setDomainInfo(null);
+      setDomainStatus("idle");
+      setDomainMessage("");
+      setDomainInstructions(null);
+    } catch {}
+  };
 
+  const buildStorefrontConfig = (): StorefrontConfig => ({
+    colorScheme: colors,
+    productLayout,
+    landingPageStyle,
+    shopSlug: shopSlug || undefined,
+    customDomain: customDomain || undefined,
+    fontHeading: fontHeading || undefined,
+    fontBody: fontBody || undefined,
+    sections: sections.length > 0 ? sections : undefined,
+    pages: pages.length > 0 ? pages : undefined,
+    footer,
+    navLinks: navLinks.length > 0 ? navLinks : undefined,
+    showCommunityPage: showCommunityPage || undefined,
+    showWalletPage: showWalletPage || undefined,
+    contactEmail: contactEmail || undefined,
+  });
+
+  const saveStorefront = async () => {
+    const newSf = buildStorefrontConfig();
+    setIsSavingStorefront(true);
     const shopMap = shopContext.shopData;
     const shop = shopMap.has(userPubkey!)
       ? shopMap.get(userPubkey!)
       : undefined;
-
     const transformedData: any = {
       name: shop?.content?.name || "",
       about: shop?.content?.about || "",
@@ -325,7 +546,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         shop.content.freeShippingThreshold;
       transformedData.freeShippingCurrency = shop.content.freeShippingCurrency;
     }
-
     await createNostrShopEvent(
       nostr!,
       signer!,
@@ -345,8 +565,33 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
 
   return (
     <>
-      <Tabs aria-label="Shop settings" className="mb-4 w-full">
-        <Tab key="basic" title="Basic Info">
+      <div className="mb-6 flex w-full border-b-2 border-black dark:border-gray-600">
+        <button
+          type="button"
+          className={`px-6 py-3 text-sm font-semibold transition-colors ${
+            activeTab === "basic"
+              ? "border-b-4 border-shopstr-purple text-shopstr-purple dark:border-shopstr-yellow dark:text-shopstr-yellow"
+              : "text-gray-500 hover:text-light-text dark:hover:text-dark-text"
+          }`}
+          onClick={() => setActiveTab("basic")}
+        >
+          Basic Info
+        </button>
+        <button
+          type="button"
+          className={`px-6 py-3 text-sm font-semibold transition-colors ${
+            activeTab === "storefront"
+              ? "border-b-4 border-shopstr-purple text-shopstr-purple dark:border-shopstr-yellow dark:text-shopstr-yellow"
+              : "text-gray-500 hover:text-light-text dark:hover:text-dark-text"
+          }`}
+          onClick={() => setActiveTab("storefront")}
+        >
+          Storefront
+        </button>
+      </div>
+
+      {activeTab === "basic" && (
+        <>
           <div className="mb-20 h-40 rounded-lg bg-light-fg dark:bg-dark-fg">
             <div className="relative flex h-40 items-center justify-center rounded-lg bg-shopstr-purple-light dark:bg-dark-fg">
               {watchBanner && (
@@ -515,24 +760,23 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
               Save Shop
             </Button>
           </form>
-        </Tab>
+        </>
+      )}
 
-        <Tab key="storefront" title="Storefront">
-          <div className="space-y-8 py-4">
-            <div
-              className="rounded-lg border-2 border-black bg-light-fg p-4 dark:bg-dark-fg"
-              style={{ boxShadow: "4px 4px 0 black" }}
-            >
-              <h3 className="mb-2 text-lg font-bold text-light-text dark:text-dark-text">
+      {activeTab === "storefront" && (
+        <>
+          <div className="space-y-6 py-2">
+            {/* Shop URL */}
+            <div className="pb-2">
+              <p className="pb-1 text-lg font-semibold text-light-text dark:text-dark-text">
                 Shop URL
-              </h3>
-              <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
-                Choose a unique URL for your storefront. This will be your
-                shop&apos;s public address.
+              </p>
+              <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
+                Choose a unique URL for your storefront.
               </p>
               <div className="flex gap-2">
-                <div className="flex items-center rounded-l-md border border-r-0 border-black bg-gray-100 px-3 py-2 text-sm dark:bg-gray-800">
-                  shopstr.store/shop/
+                <div className="flex items-center rounded-l-md border border-r-0 border-gray-300 bg-light-fg px-3 py-2 text-sm text-light-text dark:border-gray-600 dark:bg-dark-fg dark:text-dark-text">
+                  {siteHost}/shop/
                 </div>
                 <Input
                   className="flex-1"
@@ -544,9 +788,7 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                     setSlugStatus("idle");
                     setSlugMessage("");
                   }}
-                  classNames={{
-                    inputWrapper: "rounded-l-none",
-                  }}
+                  classNames={{ inputWrapper: "rounded-l-none" }}
                 />
                 <Button
                   className={`${SHOPSTRBUTTONCLASSNAMES}`}
@@ -574,80 +816,142 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   href={`/shop/${shopSlug}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-2 inline-block text-sm text-blue-600 underline dark:text-blue-400"
+                  className="mt-2 inline-block text-sm text-shopstr-purple underline dark:text-shopstr-yellow"
                 >
-                  Preview your storefront →
+                  {siteHost}/shop/{shopSlug} →
                 </a>
               )}
             </div>
 
-            <div
-              className="rounded-lg border-2 border-black bg-light-fg p-4 dark:bg-dark-fg"
-              style={{ boxShadow: "4px 4px 0 black" }}
-            >
-              <h3 className="mb-2 text-lg font-bold text-light-text dark:text-dark-text">
+            <hr className="border-light-fg dark:border-dark-fg" />
+
+            {/* Landing Page Style */}
+            <div className="pb-2">
+              <p className="pb-3 text-lg font-semibold text-light-text dark:text-dark-text">
                 Landing Page Style
-              </h3>
-              <div className="grid grid-cols-3 gap-3">
-                {(["hero", "classic", "minimal"] as const).map((style) => (
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {[
+                  {
+                    value: "hero" as const,
+                    label: "Hero",
+                    desc: "Large banner with shop info overlay",
+                  },
+                  {
+                    value: "classic" as const,
+                    label: "Classic",
+                    desc: "Banner image with info below",
+                  },
+                  {
+                    value: "minimal" as const,
+                    label: "Minimal",
+                    desc: "Clean, simple header",
+                  },
+                ].map((style) => (
                   <button
-                    key={style}
+                    key={style.value}
                     type="button"
-                    className={`rounded-md border-2 p-3 text-center text-sm font-semibold capitalize transition-colors ${
-                      (storefront.landingPageStyle || "hero") === style
+                    className={`flex-1 rounded-md border-2 p-3 text-left text-sm transition-all ${
+                      landingPageStyle === style.value
                         ? "border-shopstr-purple bg-shopstr-purple text-white"
-                        : "border-gray-200 hover:border-shopstr-purple-light"
+                        : "border-gray-200 text-light-text hover:border-shopstr-purple-light dark:border-gray-600 dark:text-dark-text dark:hover:border-shopstr-purple-light"
                     }`}
-                    onClick={() =>
-                      setStorefront((prev) => ({
-                        ...prev,
-                        landingPageStyle: style,
-                      }))
-                    }
+                    onClick={() => setLandingPageStyle(style.value)}
                   >
-                    {style}
+                    <span className="block font-semibold capitalize">
+                      {style.label}
+                    </span>
+                    <span className="block text-xs opacity-70">
+                      {style.desc}
+                    </span>
                   </button>
                 ))}
               </div>
             </div>
 
-            <div
-              className="rounded-lg border-2 border-black bg-light-fg p-4 dark:bg-dark-fg"
-              style={{ boxShadow: "4px 4px 0 black" }}
-            >
-              <h3 className="mb-2 text-lg font-bold text-light-text dark:text-dark-text">
+            <hr className="border-light-fg dark:border-dark-fg" />
+
+            {/* Product Layout */}
+            <div className="pb-2">
+              <p className="pb-3 text-lg font-semibold text-light-text dark:text-dark-text">
                 Product Layout
-              </h3>
-              <div className="grid grid-cols-3 gap-3">
-                {(["grid", "list", "featured"] as const).map((layout) => (
+              </p>
+              <div className="flex flex-wrap gap-3">
+                {[
+                  {
+                    value: "grid" as const,
+                    label: "Grid",
+                    desc: "Products in a grid",
+                  },
+                  {
+                    value: "list" as const,
+                    label: "List",
+                    desc: "Products in a list",
+                  },
+                  {
+                    value: "featured" as const,
+                    label: "Featured",
+                    desc: "Hero product + grid",
+                  },
+                ].map((layout) => (
                   <button
-                    key={layout}
+                    key={layout.value}
                     type="button"
-                    className={`rounded-md border-2 p-3 text-center text-sm font-semibold capitalize transition-colors ${
-                      (storefront.productLayout || "grid") === layout
+                    className={`flex-1 rounded-md border-2 p-3 text-left text-sm transition-all ${
+                      productLayout === layout.value
                         ? "border-shopstr-purple bg-shopstr-purple text-white"
-                        : "border-gray-200 hover:border-shopstr-purple-light"
+                        : "border-gray-200 text-light-text hover:border-shopstr-purple-light dark:border-gray-600 dark:text-dark-text dark:hover:border-shopstr-purple-light"
                     }`}
-                    onClick={() =>
-                      setStorefront((prev) => ({
-                        ...prev,
-                        productLayout: layout,
-                      }))
-                    }
+                    onClick={() => setProductLayout(layout.value)}
                   >
-                    {layout}
+                    <span className="block font-semibold capitalize">
+                      {layout.label}
+                    </span>
+                    <span className="block text-xs opacity-70">
+                      {layout.desc}
+                    </span>
                   </button>
                 ))}
               </div>
             </div>
 
-            <div
-              className="rounded-lg border-2 border-black bg-light-fg p-4 dark:bg-dark-fg"
-              style={{ boxShadow: "4px 4px 0 black" }}
-            >
-              <h3 className="mb-4 text-lg font-bold text-light-text dark:text-dark-text">
+            <hr className="border-light-fg dark:border-dark-fg" />
+
+            {/* Color Scheme */}
+            <div className="pb-2">
+              <p className="pb-3 text-lg font-semibold text-light-text dark:text-dark-text">
                 Color Scheme
-              </h3>
+              </p>
+              <div className="mb-4 flex flex-wrap gap-2">
+                {COLOR_PRESETS.map((preset) => (
+                  <button
+                    key={preset.name}
+                    type="button"
+                    onClick={() => setColors(preset.colors)}
+                    className={`flex items-center gap-2 rounded-lg border-2 px-3 py-1.5 text-sm font-medium text-light-text transition-all dark:text-dark-text ${
+                      JSON.stringify(colors) === JSON.stringify(preset.colors)
+                        ? "border-shopstr-purple bg-shopstr-purple/10"
+                        : "border-gray-200 hover:border-shopstr-purple-light dark:border-gray-600 dark:hover:border-gray-400"
+                    }`}
+                  >
+                    <div className="flex gap-1">
+                      <div
+                        className="h-4 w-4 rounded-full border border-gray-300"
+                        style={{ backgroundColor: preset.colors.primary }}
+                      />
+                      <div
+                        className="h-4 w-4 rounded-full border border-gray-300"
+                        style={{ backgroundColor: preset.colors.secondary }}
+                      />
+                      <div
+                        className="h-4 w-4 rounded-full border border-gray-300"
+                        style={{ backgroundColor: preset.colors.accent }}
+                      />
+                    </div>
+                    {preset.name}
+                  </button>
+                ))}
+              </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {(
                   [
@@ -666,32 +970,22 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                       <input
                         type="color"
                         value={colors[key]}
-                        onChange={(e) => {
-                          const newColors = {
-                            ...colors,
-                            [key]: e.target.value,
-                          };
-                          setColors(newColors);
-                          setStorefront((prev) => ({
+                        onChange={(e) =>
+                          setColors((prev) => ({
                             ...prev,
-                            colorScheme: newColors,
-                          }));
-                        }}
-                        className="h-10 w-16 cursor-pointer rounded border border-gray-200"
+                            [key]: e.target.value,
+                          }))
+                        }
+                        className="h-10 w-16 cursor-pointer rounded border border-gray-200 dark:border-gray-600"
                       />
                       <Input
                         variant="bordered"
                         value={colors[key]}
                         onChange={(e) => {
                           if (/^#[0-9A-Fa-f]{6}$/.test(e.target.value)) {
-                            const newColors = {
-                              ...colors,
-                              [key]: e.target.value,
-                            };
-                            setColors(newColors);
-                            setStorefront((prev) => ({
+                            setColors((prev) => ({
                               ...prev,
-                              colorScheme: newColors,
+                              [key]: e.target.value,
                             }));
                           }
                         }}
@@ -702,103 +996,267 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   </div>
                 ))}
               </div>
-              <div className="mt-4 flex gap-2">
-                <button
-                  type="button"
-                  className="rounded border border-black px-3 py-1.5 text-xs font-bold"
-                  onClick={() => {
-                    setColors(DEFAULT_COLORS);
-                    setStorefront((prev) => ({
-                      ...prev,
-                      colorScheme: DEFAULT_COLORS,
-                    }));
-                  }}
-                >
-                  Reset to Default
-                </button>
-              </div>
+              <button
+                type="button"
+                className="mt-4 text-sm text-gray-500 underline hover:text-light-text dark:text-gray-400 dark:hover:text-dark-text"
+                onClick={() => setColors(DEFAULT_COLORS)}
+              >
+                Reset to defaults
+              </button>
             </div>
 
-            <div
-              className="rounded-lg border-2 border-black bg-light-fg p-4 dark:bg-dark-fg"
-              style={{ boxShadow: "4px 4px 0 black" }}
-            >
-              <h3 className="mb-4 text-lg font-bold text-light-text dark:text-dark-text">
+            <hr className="border-light-fg dark:border-dark-fg" />
+
+            {/* Typography */}
+            <div className="pb-2">
+              <p className="pb-3 text-lg font-semibold text-light-text dark:text-dark-text">
                 Typography
-              </h3>
+              </p>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-sm font-medium">
-                    Heading Font
-                  </label>
-                  <Select
-                    variant="bordered"
-                    selectedKeys={[storefront.fontHeading || ""]}
-                    onChange={(e) =>
-                      setStorefront((prev) => ({
-                        ...prev,
-                        fontHeading: e.target.value,
-                      }))
-                    }
-                    aria-label="Heading font"
-                  >
-                    {GOOGLE_FONTS.map((f) => (
-                      <SelectItem key={f.value} value={f.value}>
-                        {f.label}
-                      </SelectItem>
-                    ))}
-                  </Select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium">
-                    Body Font
-                  </label>
-                  <Select
-                    variant="bordered"
-                    selectedKeys={[storefront.fontBody || ""]}
-                    onChange={(e) =>
-                      setStorefront((prev) => ({
-                        ...prev,
-                        fontBody: e.target.value,
-                      }))
-                    }
-                    aria-label="Body font"
-                  >
-                    {GOOGLE_FONTS.map((f) => (
-                      <SelectItem key={f.value} value={f.value}>
-                        {f.label}
-                      </SelectItem>
-                    ))}
-                  </Select>
-                </div>
+                <Select
+                  className="text-light-text dark:text-dark-text"
+                  classNames={{ label: "text-light-text dark:text-dark-text" }}
+                  variant="bordered"
+                  label="Heading Font"
+                  labelPlacement="outside"
+                  selectedKeys={[fontHeading]}
+                  onChange={(e) => setFontHeading(e.target.value)}
+                  aria-label="Heading font"
+                >
+                  {GOOGLE_FONTS.map((f) => (
+                    <SelectItem key={f.value} value={f.value}>
+                      {f.label}
+                    </SelectItem>
+                  ))}
+                </Select>
+                <Select
+                  className="text-light-text dark:text-dark-text"
+                  classNames={{ label: "text-light-text dark:text-dark-text" }}
+                  variant="bordered"
+                  label="Body Font"
+                  labelPlacement="outside"
+                  selectedKeys={[fontBody]}
+                  onChange={(e) => setFontBody(e.target.value)}
+                  aria-label="Body font"
+                >
+                  {GOOGLE_FONTS.map((f) => (
+                    <SelectItem key={f.value} value={f.value}>
+                      {f.label}
+                    </SelectItem>
+                  ))}
+                </Select>
               </div>
             </div>
 
-            <div
-              className="rounded-lg border-2 border-black bg-light-fg p-4 dark:bg-dark-fg"
-              style={{ boxShadow: "4px 4px 0 black" }}
-            >
-              <h3 className="mb-4 text-lg font-bold text-light-text dark:text-dark-text">
-                Pages
-              </h3>
-              <div className="space-y-3">
+            <hr className="border-light-fg dark:border-dark-fg" />
+
+            {/* Navigation Links */}
+            <div className="pb-2">
+              <p className="pb-1 text-lg font-semibold text-light-text dark:text-dark-text">
+                Navigation Links
+              </p>
+              <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
+                Define the top navigation links for your storefront. Leave empty
+                to use default navigation.
+              </p>
+              <div className="space-y-2">
+                {navLinks.map((link, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <Input
+                      variant="bordered"
+                      size="sm"
+                      value={link.label}
+                      onChange={(e) => {
+                        const updated = [...navLinks];
+                        updated[idx] = { ...link, label: e.target.value };
+                        setNavLinks(updated);
+                      }}
+                      placeholder="Label"
+                      className="w-32"
+                    />
+                    <Input
+                      variant="bordered"
+                      size="sm"
+                      value={link.href}
+                      onChange={(e) => {
+                        const updated = [...navLinks];
+                        updated[idx] = { ...link, href: e.target.value };
+                        setNavLinks(updated);
+                      }}
+                      placeholder="URL or page slug"
+                      className="flex-1"
+                    />
+                    <label className="flex items-center gap-1 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
+                      <input
+                        type="checkbox"
+                        checked={link.isPage || false}
+                        onChange={(e) => {
+                          const updated = [...navLinks];
+                          updated[idx] = { ...link, isPage: e.target.checked };
+                          setNavLinks(updated);
+                        }}
+                      />
+                      Page
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setNavLinks(navLinks.filter((_, i) => i !== idx))
+                      }
+                      className="text-xs text-red-500"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setNavLinks([...navLinks, { label: "", href: "" }])
+                }
+                className="mt-2 text-sm text-shopstr-purple hover:underline dark:text-shopstr-yellow"
+              >
+                + Add Nav Link
+              </button>
+            </div>
+
+            <hr className="border-light-fg dark:border-dark-fg" />
+
+            {/* Homepage Sections */}
+            <div className="pb-2">
+              <p className="pb-1 text-lg font-semibold text-light-text dark:text-dark-text">
+                Homepage Sections
+              </p>
+              <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
+                Build your storefront homepage by adding and arranging content
+                sections. If no sections are added, the landing page style above
+                is used instead.
+              </p>
+              <div className="space-y-2">
+                {sections.map((section, idx) => (
+                  <SectionEditor
+                    key={section.id}
+                    section={section}
+                    onChange={(updated) => {
+                      const newSections = [...sections];
+                      newSections[idx] = updated;
+                      setSections(newSections);
+                    }}
+                    onRemove={() =>
+                      setSections(sections.filter((_, i) => i !== idx))
+                    }
+                    onMoveUp={() => {
+                      if (idx === 0) return;
+                      const newSections = [...sections];
+                      [newSections[idx - 1], newSections[idx]] = [
+                        newSections[idx]!,
+                        newSections[idx - 1]!,
+                      ];
+                      setSections(newSections);
+                    }}
+                    onMoveDown={() => {
+                      if (idx === sections.length - 1) return;
+                      const newSections = [...sections];
+                      [newSections[idx], newSections[idx + 1]] = [
+                        newSections[idx + 1]!,
+                        newSections[idx]!,
+                      ];
+                      setSections(newSections);
+                    }}
+                    isFirst={idx === 0}
+                    isLast={idx === sections.length - 1}
+                  />
+                ))}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {(
+                  [
+                    { type: "hero" as StorefrontSectionType, label: "Hero" },
+                    { type: "about" as StorefrontSectionType, label: "About" },
+                    {
+                      type: "story" as StorefrontSectionType,
+                      label: "Our Story",
+                    },
+                    {
+                      type: "products" as StorefrontSectionType,
+                      label: "Products",
+                    },
+                    {
+                      type: "testimonials" as StorefrontSectionType,
+                      label: "Testimonials",
+                    },
+                    { type: "faq" as StorefrontSectionType, label: "FAQ" },
+                    {
+                      type: "ingredients" as StorefrontSectionType,
+                      label: "Ingredients",
+                    },
+                    {
+                      type: "comparison" as StorefrontSectionType,
+                      label: "Comparison",
+                    },
+                    { type: "text" as StorefrontSectionType, label: "Text" },
+                    { type: "image" as StorefrontSectionType, label: "Image" },
+                    {
+                      type: "contact" as StorefrontSectionType,
+                      label: "Contact",
+                    },
+                    {
+                      type: "reviews" as StorefrontSectionType,
+                      label: "Reviews",
+                    },
+                  ] as const
+                ).map((st) => (
+                  <button
+                    key={st.type}
+                    type="button"
+                    onClick={() =>
+                      setSections([
+                        ...sections,
+                        {
+                          id: `section-${Date.now()}-${Math.random()
+                            .toString(36)
+                            .slice(2, 6)}`,
+                          type: st.type,
+                          enabled: true,
+                        },
+                      ])
+                    }
+                    className="rounded border border-gray-300 px-2 py-1 text-xs font-medium text-gray-600 hover:border-shopstr-purple hover:text-shopstr-purple dark:border-gray-600 dark:text-gray-400 dark:hover:border-shopstr-yellow dark:hover:text-shopstr-yellow"
+                  >
+                    + {st.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <hr className="border-light-fg dark:border-dark-fg" />
+
+            {/* Custom Pages */}
+            <div className="pb-2">
+              <PageEditor pages={pages} onChange={setPages} />
+            </div>
+
+            <hr className="border-light-fg dark:border-dark-fg" />
+
+            {/* Built-in Pages */}
+            <div className="pb-2">
+              <p className="pb-3 text-lg font-semibold text-light-text dark:text-dark-text">
+                Built-in Pages
+              </p>
+              <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium text-light-text dark:text-dark-text">
                       Community Page
                     </p>
-                    <p className="text-sm text-gray-500">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
                       Show a community discussion page
                     </p>
                   </div>
                   <Switch
-                    isSelected={!!storefront.showCommunityPage}
-                    onValueChange={(v) =>
-                      setStorefront((prev) => ({
-                        ...prev,
-                        showCommunityPage: v,
-                      }))
-                    }
+                    isSelected={showCommunityPage}
+                    onValueChange={setShowCommunityPage}
                   />
                 </div>
                 <div className="flex items-center justify-between">
@@ -806,30 +1264,76 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                     <p className="font-medium text-light-text dark:text-dark-text">
                       Wallet Page
                     </p>
-                    <p className="text-sm text-gray-500">
-                      Show a wallet page for buyers
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Show a Bitcoin wallet page for buyers
                     </p>
                   </div>
                   <Switch
-                    isSelected={!!storefront.showWalletPage}
-                    onValueChange={(v) =>
-                      setStorefront((prev) => ({ ...prev, showWalletPage: v }))
-                    }
+                    isSelected={showWalletPage}
+                    onValueChange={setShowWalletPage}
                   />
                 </div>
               </div>
             </div>
 
-            <div
-              className="rounded-lg border-2 border-black bg-light-fg p-4 dark:bg-dark-fg"
-              style={{ boxShadow: "4px 4px 0 black" }}
-            >
-              <h3 className="mb-2 text-lg font-bold text-light-text dark:text-dark-text">
+            <hr className="border-light-fg dark:border-dark-fg" />
+
+            {/* Contact Us */}
+            <div className="pb-2">
+              <p className="pb-1 text-lg font-semibold text-light-text dark:text-dark-text">
+                Contact Us
+              </p>
+              <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
+                A &quot;Contact&quot; link is shown on your storefront by
+                default. Clicking it opens a Nostr DM inquiry with you directly
+                within your storefront. If you prefer to use email instead,
+                enter your address below.
+              </p>
+              <Input
+                label="Contact Email"
+                labelPlacement="outside"
+                variant="bordered"
+                type="email"
+                placeholder="hello@yourshop.com"
+                value={contactEmail}
+                onChange={(e) => setContactEmail(e.target.value)}
+                classNames={{
+                  label: "text-light-text dark:text-dark-text font-medium pb-1",
+                }}
+              />
+            </div>
+
+            <hr className="border-light-fg dark:border-dark-fg" />
+
+            {/* Footer */}
+            <div className="pb-2">
+              <p className="pb-1 text-lg font-semibold text-light-text dark:text-dark-text">
+                Footer
+              </p>
+              <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
+                Customize the footer at the bottom of your storefront.
+              </p>
+              <FooterEditor
+                footer={footer}
+                onChange={setFooter}
+                shopName={watch("name")}
+              />
+            </div>
+
+            <hr className="border-light-fg dark:border-dark-fg" />
+
+            {/* Custom Domain */}
+            <div className="pb-2">
+              <p className="pb-1 text-lg font-semibold text-light-text dark:text-dark-text">
                 Custom Domain
-              </h3>
-              <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
-                Use your own domain name for your storefront. Requires DNS
-                configuration.
+              </p>
+              <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
+                Use your own domain name for your storefront. Add a CNAME record
+                pointing to{" "}
+                <code className="rounded bg-light-fg px-1 text-xs dark:bg-dark-fg">
+                  shopstr.market
+                </code>
+                .
               </p>
               {!shopSlug && (
                 <p className="mb-3 rounded bg-yellow-50 p-2 text-sm text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400">
@@ -844,9 +1348,9 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   value={customDomain}
                   onChange={(e) => {
                     setCustomDomain(e.target.value.toLowerCase().trim());
-                    setCustomDomainStatus("idle");
-                    setCustomDomainMessage("");
-                    setCustomDomainInstructions(null);
+                    setDomainStatus("idle");
+                    setDomainMessage("");
+                    setDomainInstructions(null);
                   }}
                   isDisabled={!shopSlug}
                 />
@@ -855,21 +1359,46 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   onPress={saveCustomDomain}
                   isDisabled={!shopSlug || !customDomain}
                 >
-                  Save
+                  {domainInfo ? "Update" : "Connect"}
                 </Button>
+                {domainInfo && (
+                  <Button
+                    className="border-2 border-red-500 bg-transparent font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+                    onPress={handleRemoveCustomDomain}
+                  >
+                    Remove
+                  </Button>
+                )}
               </div>
-              {customDomainMessage && (
+              {domainMessage && (
                 <p
                   className={`mt-2 text-sm ${
-                    customDomainStatus === "saved"
-                      ? "text-green-600"
-                      : "text-red-600"
+                    domainStatus === "saved" ? "text-green-600" : "text-red-600"
                   }`}
                 >
-                  {customDomainMessage}
+                  {domainMessage}
                 </p>
               )}
-              {customDomainInstructions && (
+              {domainInfo && (
+                <div className="mt-3 flex items-center gap-2 text-sm">
+                  <span
+                    className={`inline-block h-2 w-2 flex-shrink-0 rounded-full ${
+                      domainInfo.verified ? "bg-green-500" : "bg-yellow-500"
+                    }`}
+                  />
+                  <span className="text-light-text dark:text-dark-text">
+                    {domainInfo.domain} —{" "}
+                    {domainInfo.verified ? "Verified" : "Pending verification"}
+                  </span>
+                </div>
+              )}
+              {domainInfo && !domainInfo.verified && (
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Add a CNAME record: <strong>{domainInfo.domain}</strong> →{" "}
+                  <strong>shopstr.market</strong>
+                </p>
+              )}
+              {domainInstructions && (
                 <div className="mt-4 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm dark:border-blue-800 dark:bg-blue-900/20">
                   <p className="mb-2 font-semibold text-blue-800 dark:text-blue-200">
                     DNS Configuration Required
@@ -877,29 +1406,97 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                   <p className="text-blue-700 dark:text-blue-300">
                     Add this DNS record at your domain registrar:
                   </p>
-                  <div className="mt-2 rounded bg-white p-2 font-mono text-xs dark:bg-black/20">
-                    <div>Type: {customDomainInstructions.type}</div>
-                    <div>Host: {customDomainInstructions.host}</div>
-                    <div>Value: {customDomainInstructions.value}</div>
+                  <div className="mt-2 rounded bg-light-bg p-2 font-mono text-xs dark:bg-dark-bg">
+                    <div>Type: {domainInstructions.type}</div>
+                    <div>Host: {domainInstructions.host}</div>
+                    <div>Value: {domainInstructions.value}</div>
                   </div>
                   <p className="mt-2 text-xs text-blue-600 dark:text-blue-400">
-                    {customDomainInstructions.note}
+                    {domainInstructions.note}
                   </p>
                 </div>
               )}
             </div>
 
+            <hr className="border-light-fg dark:border-dark-fg" />
+
+            {/* Preview + Save */}
+            <div className="rounded-lg border-2 border-dashed border-light-fg p-4 dark:border-dark-fg">
+              <p className="mb-3 text-sm font-medium text-light-text dark:text-dark-text">
+                Preview your storefront before saving to see how it will look to
+                visitors.
+              </p>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsPreviewOpen(true)}
+                  className={`${SHOPSTRBUTTONCLASSNAMES} rounded-lg px-4 py-2 text-sm font-bold`}
+                >
+                  Preview Storefront
+                </button>
+                {shopSlug && (
+                  <a
+                    href={`/shop/${shopSlug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-shopstr-purple underline dark:text-shopstr-yellow"
+                  >
+                    {siteHost}/shop/{shopSlug} →
+                  </a>
+                )}
+              </div>
+              <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
+                Preview shows approximate appearance. Save to publish your
+                changes to the live storefront.
+              </p>
+            </div>
+
             <Button
               className={`w-full ${SHOPSTRBUTTONCLASSNAMES}`}
-              onPress={() => saveStorefront(storefront)}
+              onPress={saveStorefront}
               isDisabled={isSavingStorefront}
               isLoading={isSavingStorefront}
             >
               Save Storefront Settings
             </Button>
+
+            {/* Remove Storefront */}
+            {shopSlug && (
+              <div className="pt-2">
+                <Button
+                  className="border-2 border-red-500 bg-transparent font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
+                  onPress={handleRemoveStorefront}
+                >
+                  Remove Storefront
+                </Button>
+                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                  This will delete your shop URL, custom domain, and reset all
+                  storefront customization.
+                </p>
+              </div>
+            )}
           </div>
-        </Tab>
-      </Tabs>
+        </>
+      )}
+
+      <StorefrontPreviewModal
+        isOpen={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        shopName={watch("name")}
+        shopAbout={watch("about")}
+        pictureUrl={watch("picture")}
+        bannerUrl={watch("banner")}
+        colors={colors}
+        productLayout={productLayout}
+        landingPageStyle={landingPageStyle}
+        fontHeading={fontHeading}
+        fontBody={fontBody}
+        sections={sections}
+        pages={pages}
+        footer={footer}
+        navLinks={navLinks}
+        shopSlug={shopSlug}
+      />
     </>
   );
 };
