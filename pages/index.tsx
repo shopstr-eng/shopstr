@@ -28,8 +28,22 @@ export default function Landing() {
   const productEventContext = useContext(ProductContext);
 
   const [parsedProducts, setParsedProducts] = useState<ProductData[]>([]);
+  const [listingCount, setListingCount] = useState<number | null>(null);
+  const [sellerCount, setSellerCount] = useState<number | null>(null);
 
   const signerContext = useContext(SignerContext);
+
+  useEffect(() => {
+    fetch("/api/db/marketplace-stats")
+      .then((r) => r.json())
+      .then((data) => {
+        if (typeof data.listingCount === "number")
+          setListingCount(data.listingCount);
+        if (typeof data.sellerCount === "number")
+          setSellerCount(data.sellerCount);
+      })
+      .catch(() => {});
+  }, []);
   useEffect(() => {
     if (router.pathname === "/" && signerContext.isLoggedIn) {
       router.push("/marketplace");
@@ -333,7 +347,9 @@ export default function Landing() {
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-xl bg-light-fg p-6 text-center shadow-md dark:bg-dark-fg">
               <p className="text-3xl font-bold text-shopstr-purple dark:text-shopstr-yellow">
-                5,500+
+                {listingCount === null
+                  ? "…"
+                  : listingCount.toLocaleString()}
               </p>
               <p className="mt-2 text-sm text-light-text dark:text-dark-text">
                 Active listings on Shopstr right now
@@ -341,7 +357,9 @@ export default function Landing() {
             </div>
             <div className="rounded-xl bg-light-fg p-6 text-center shadow-md dark:bg-dark-fg">
               <p className="text-3xl font-bold text-shopstr-purple dark:text-shopstr-yellow">
-                900+
+                {sellerCount === null
+                  ? "…"
+                  : sellerCount.toLocaleString()}
               </p>
               <p className="mt-2 text-sm text-light-text dark:text-dark-text">
                 Sellers with active shops on Shopstr

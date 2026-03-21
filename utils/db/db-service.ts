@@ -1175,6 +1175,34 @@ export async function deleteDiscountCode(
   }
 }
 
+// Marketplace stats: listing count + distinct seller count
+export async function fetchMarketplaceStats(): Promise<{
+  listingCount: number;
+  sellerCount: number;
+}> {
+  const dbPool = getDbPool();
+  let client;
+  try {
+    client = await dbPool.connect();
+    const result = await client.query<{
+      listing_count: string;
+      seller_count: string;
+    }>(
+      `SELECT COUNT(*) AS listing_count, COUNT(DISTINCT pubkey) AS seller_count FROM product_events`
+    );
+    const row = result.rows[0];
+    return {
+      listingCount: parseInt(row?.listing_count ?? "0", 10) || 0,
+      sellerCount: parseInt(row?.seller_count ?? "0", 10) || 0,
+    };
+  } catch (err) {
+    console.error("fetchMarketplaceStats error:", err);
+    return { listingCount: 0, sellerCount: 0 };
+  } finally {
+    if (client) client.release();
+  }
+}
+
 // Close the database pool
 export async function closeDbPool(): Promise<void> {
   if (pool) {
