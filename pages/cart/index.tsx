@@ -113,6 +113,7 @@ export default function Component() {
   }>(Object.fromEntries(products.map((product) => [product.id, false])));
   const [isBeingPaid, setIsBeingPaid] = useState(false);
   const [sfSellerPubkey, setSfSellerPubkey] = useState("");
+  const [sfShopSlug, setSfShopSlug] = useState("");
   const [excludedItemCount, setExcludedItemCount] = useState(0);
 
   const [invoiceIsPaid, setInvoiceIsPaid] = useState(false);
@@ -176,13 +177,22 @@ export default function Component() {
   const router = useRouter();
 
   useEffect(() => {
-    const stored = sessionStorage.getItem("sf_seller_pubkey");
+    const stored =
+      sessionStorage.getItem("sf_seller_pubkey") ||
+      localStorage.getItem("sf_seller_pubkey");
     if (stored) setSfSellerPubkey(stored);
+    const storedSlug =
+      sessionStorage.getItem("sf_shop_slug") ||
+      localStorage.getItem("sf_shop_slug");
+    if (storedSlug) setSfShopSlug(storedSlug);
   }, []);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const sfPk = sessionStorage.getItem("sf_seller_pubkey") || "";
+      const sfPk =
+        sessionStorage.getItem("sf_seller_pubkey") ||
+        localStorage.getItem("sf_seller_pubkey") ||
+        "";
       const fullCart: ProductData[] = localStorage.getItem("cart")
         ? JSON.parse(localStorage.getItem("cart") as string)
         : [];
@@ -706,9 +716,11 @@ export default function Component() {
                                       }
                                       onClick={() =>
                                         router.push(
-                                          `/marketplace/${getSellerNpub(
-                                            sellerPubkey
-                                          )}`
+                                          sfShopSlug
+                                            ? `/shop/${sfShopSlug}`
+                                            : `/marketplace/${getSellerNpub(
+                                                sellerPubkey
+                                              )}`
                                         )
                                       }
                                     >
@@ -752,7 +764,11 @@ export default function Component() {
                   <Button
                     className={SHOPSTRBUTTONCLASSNAMES}
                     size="lg"
-                    onClick={() => router.push("/marketplace")}
+                    onClick={() =>
+                      router.push(
+                        sfShopSlug ? `/shop/${sfShopSlug}` : "/marketplace"
+                      )
+                    }
                   >
                     Continue Shopping
                   </Button>

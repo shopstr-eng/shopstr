@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 
+import { useEffect } from "react";
 import HomeFeed from "@/components/home/home-feed";
 
 export default function SellerView({
@@ -13,6 +14,15 @@ export default function SellerView({
   selectedSection: string;
   setSelectedSection: (value: string) => void;
 }) {
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("sf_seller_pubkey");
+      sessionStorage.removeItem("sf_shop_slug");
+      localStorage.removeItem("sf_seller_pubkey");
+      localStorage.removeItem("sf_shop_slug");
+    }
+  }, []);
+
   return (
     <>
       {!focusedPubkey && (

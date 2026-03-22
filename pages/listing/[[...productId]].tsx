@@ -52,7 +52,9 @@ const Listing = () => {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const pk = sessionStorage.getItem("sf_seller_pubkey");
+      const pk =
+        sessionStorage.getItem("sf_seller_pubkey") ||
+        localStorage.getItem("sf_seller_pubkey");
       if (pk) setSfSellerPubkey(pk);
     }
   }, []);
@@ -103,6 +105,13 @@ const Listing = () => {
       }
 
       if (matchingEvent) {
+        if (sfSellerPubkey && matchingEvent.pubkey !== sfSellerPubkey) {
+          setSfSellerPubkey("");
+          sessionStorage.removeItem("sf_seller_pubkey");
+          sessionStorage.removeItem("sf_shop_slug");
+          localStorage.removeItem("sf_seller_pubkey");
+          localStorage.removeItem("sf_shop_slug");
+        }
         setRawEvent(matchingEvent);
         let parsed;
         if (matchingEvent.kind === 1) {

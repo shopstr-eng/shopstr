@@ -54,13 +54,20 @@ export default function OrderSummary() {
   const [orderData, setOrderData] = useState<OrderSummaryData | null>(null);
   const [latestProducts, setLatestProducts] = useState<ProductData[]>([]);
   const [sfSellerPubkey, setSfSellerPubkey] = useState("");
+  const [sfShopSlug, setSfShopSlug] = useState("");
   const { isLoggedIn } = useContext(SignerContext);
   const productContext = useContext(ProductContext);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const pk = sessionStorage.getItem("sf_seller_pubkey");
+      const pk =
+        sessionStorage.getItem("sf_seller_pubkey") ||
+        localStorage.getItem("sf_seller_pubkey");
       if (pk) setSfSellerPubkey(pk);
+      const slug =
+        sessionStorage.getItem("sf_shop_slug") ||
+        localStorage.getItem("sf_shop_slug");
+      if (slug) setSfShopSlug(slug);
     }
   }, []);
 
@@ -70,6 +77,7 @@ export default function OrderSummary() {
       try {
         const data = JSON.parse(stored);
         setOrderData(data);
+        sessionStorage.removeItem("orderSummary");
         if (data.sellerPubkey && !sfSellerPubkey) {
           setSfSellerPubkey(data.sellerPubkey);
         }
@@ -429,7 +437,11 @@ export default function OrderSummary() {
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button
                 className={SHOPSTRBUTTONCLASSNAMES + " flex-1"}
-                onClick={() => router.push("/marketplace")}
+                onClick={() =>
+                  router.push(
+                    sfShopSlug ? `/shop/${sfShopSlug}` : "/marketplace"
+                  )
+                }
                 size="lg"
                 startContent={<ShoppingBagIcon className="h-5 w-5" />}
               >
@@ -449,7 +461,16 @@ export default function OrderSummary() {
                   </Button>
                   <Button
                     className="flex-1 bg-gray-200 text-light-text dark:bg-gray-700 dark:text-dark-text"
-                    onClick={() => router.push("/orders?isInquiry=true")}
+                    onClick={() => {
+                      const npub = orderData?.sellerPubkey
+                        ? nip19.npubEncode(orderData.sellerPubkey)
+                        : null;
+                      router.push(
+                        npub
+                          ? `/orders?pk=${npub}&isInquiry=true`
+                          : "/orders?isInquiry=true"
+                      );
+                    }}
                     size="lg"
                     startContent={
                       <ChatBubbleLeftRightIcon className="h-5 w-5" />

@@ -79,9 +79,11 @@ export default function StorefrontThemeWrapper({
   useEffect(() => {
     if (sellerPubkey) {
       sessionStorage.setItem("sf_seller_pubkey", sellerPubkey);
+      localStorage.setItem("sf_seller_pubkey", sellerPubkey);
     }
     if (storefront?.shopSlug) {
       sessionStorage.setItem("sf_shop_slug", storefront.shopSlug);
+      localStorage.setItem("sf_shop_slug", storefront.shopSlug);
     }
   }, [sellerPubkey, storefront?.shopSlug]);
 

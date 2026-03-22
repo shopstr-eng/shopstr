@@ -117,9 +117,11 @@ export default function StorefrontLayout({
   useEffect(() => {
     if (shopPubkey) {
       sessionStorage.setItem("sf_seller_pubkey", shopPubkey);
+      localStorage.setItem("sf_seller_pubkey", shopPubkey);
     }
     if (shopSlug) {
       sessionStorage.setItem("sf_shop_slug", shopSlug);
+      localStorage.setItem("sf_shop_slug", shopSlug);
     }
   }, [shopPubkey, shopSlug]);
 
