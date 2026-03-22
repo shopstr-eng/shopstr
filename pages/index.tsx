@@ -69,7 +69,7 @@ export default function Landing() {
   return (
     <div className="min-h-screen w-full bg-light-bg bg-gradient-to-b from-light-bg to-light-fg dark:bg-dark-bg dark:from-dark-bg dark:to-dark-fg">
       {/* Hero Section */}
-      <div className="bg-pattern-grid absolute inset-0 opacity-5"></div>
+      <div className="bg-pattern-grid pointer-events-none absolute inset-0 opacity-5"></div>
       <section className="container mx-auto flex flex-col items-center justify-center px-4 pb-24 pt-28 text-center">
         <div className="relative mb-8">
           <Image

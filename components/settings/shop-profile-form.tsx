@@ -199,15 +199,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     }
   }, []);
   const [customDomain, setCustomDomain] = useState("");
-  const [domainInfo, setDomainInfo] = useState<{
-    domain: string;
-    verified: boolean;
-  } | null>(null);
-  const [domainStatus, setDomainStatus] = useState<"idle" | "saved" | "error">(
-    "idle"
-  );
-  const [domainMessage, setDomainMessage] = useState("");
-  const [domainInstructions, setDomainInstructions] = useState<any>(null);
   const [isSavingStorefront, setIsSavingStorefront] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("basic");
 
@@ -298,10 +289,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         .then((data) => {
           if (data?.domain) {
             setCustomDomain(data.domain);
-            setDomainInfo({
-              domain: data.domain,
-              verified: data.verified ?? false,
-            });
           }
         })
         .catch(() => {});
@@ -451,58 +438,6 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
     } catch (error) {
       console.error("Failed to remove storefront:", error);
     }
-  };
-
-  const saveCustomDomain = async () => {
-    if (!shopSlug) {
-      setDomainStatus("error");
-      setDomainMessage("Set up a shop URL first");
-      return;
-    }
-    if (!customDomain || !customDomain.includes(".")) {
-      setDomainStatus("error");
-      setDomainMessage("Enter a valid domain");
-      return;
-    }
-    try {
-      const res = await fetch("/api/storefront/custom-domain", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pubkey: userPubkey, domain: customDomain }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setDomainStatus("saved");
-        setDomainMessage("Domain saved! Follow the DNS instructions below.");
-        setDomainInstructions(data.instructions);
-        setDomainInfo({
-          domain: data.domain || customDomain,
-          verified: data.verified ?? false,
-        });
-      } else {
-        setDomainStatus("error");
-        setDomainMessage(data.error || "Failed to save domain");
-      }
-    } catch {
-      setDomainStatus("error");
-      setDomainMessage("Failed to connect to server");
-    }
-  };
-
-  const handleRemoveCustomDomain = async () => {
-    if (!userPubkey) return;
-    try {
-      await fetch("/api/storefront/custom-domain", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pubkey: userPubkey }),
-      });
-      setCustomDomain("");
-      setDomainInfo(null);
-      setDomainStatus("idle");
-      setDomainMessage("");
-      setDomainInstructions(null);
-    } catch {}
   };
 
   const buildStorefrontConfig = (): StorefrontConfig => ({
@@ -763,7 +698,17 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
         </>
       )}
 
-      {activeTab === "storefront" && (
+      {activeTab === "storefront" && isOnboarding && (
+        <div className="rounded-lg border-3 border-black bg-gray-50 p-4 dark:bg-dark-fg">
+          <p className="text-sm text-gray-600 dark:text-dark-text">
+            <span className="font-bold text-black dark:text-dark-text">
+              Custom storefront & page settings
+            </span>{" "}
+            are available after onboarding in your shop settings.
+          </p>
+        </div>
+      )}
+      {activeTab === "storefront" && !isOnboarding && (
         <>
           <div className="space-y-6 py-2">
             {/* Shop URL */}
@@ -1328,94 +1273,23 @@ const ShopProfileForm = ({ isOnboarding = false }: ShopProfileFormProps) => {
                 Custom Domain
               </p>
               <p className="pb-3 text-sm text-gray-500 dark:text-gray-400">
-                Use your own domain name for your storefront. Add a CNAME record
-                pointing to{" "}
+                Want to use your own domain (e.g.,{" "}
                 <code className="rounded bg-light-fg px-1 text-xs dark:bg-dark-fg">
-                  shopstr.market
+                  shop.yourdomain.com
                 </code>
-                .
+                ) for your storefront? We can help set that up for you.
               </p>
-              {!shopSlug && (
-                <p className="mb-3 rounded bg-yellow-50 p-2 text-sm text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400">
-                  Set up your shop URL first before configuring a custom domain.
-                </p>
-              )}
-              <div className="flex gap-2">
-                <Input
-                  className="flex-1"
-                  variant="bordered"
-                  placeholder="shop.yourdomain.com"
-                  value={customDomain}
-                  onChange={(e) => {
-                    setCustomDomain(e.target.value.toLowerCase().trim());
-                    setDomainStatus("idle");
-                    setDomainMessage("");
-                    setDomainInstructions(null);
-                  }}
-                  isDisabled={!shopSlug}
-                />
-                <Button
-                  className={`${SHOPSTRBUTTONCLASSNAMES}`}
-                  onPress={saveCustomDomain}
-                  isDisabled={!shopSlug || !customDomain}
-                >
-                  {domainInfo ? "Update" : "Connect"}
-                </Button>
-                {domainInfo && (
-                  <Button
-                    className="border-2 border-red-500 bg-transparent font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
-                    onPress={handleRemoveCustomDomain}
-                  >
-                    Remove
-                  </Button>
-                )}
-              </div>
-              {domainMessage && (
-                <p
-                  className={`mt-2 text-sm ${
-                    domainStatus === "saved" ? "text-green-600" : "text-red-600"
-                  }`}
-                >
-                  {domainMessage}
-                </p>
-              )}
-              {domainInfo && (
-                <div className="mt-3 flex items-center gap-2 text-sm">
-                  <span
-                    className={`inline-block h-2 w-2 flex-shrink-0 rounded-full ${
-                      domainInfo.verified ? "bg-green-500" : "bg-yellow-500"
-                    }`}
-                  />
-                  <span className="text-light-text dark:text-dark-text">
-                    {domainInfo.domain} —{" "}
-                    {domainInfo.verified ? "Verified" : "Pending verification"}
-                  </span>
-                </div>
-              )}
-              {domainInfo && !domainInfo.verified && (
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Add a CNAME record: <strong>{domainInfo.domain}</strong> →{" "}
-                  <strong>shopstr.market</strong>
-                </p>
-              )}
-              {domainInstructions && (
-                <div className="mt-4 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm dark:border-blue-800 dark:bg-blue-900/20">
-                  <p className="mb-2 font-semibold text-blue-800 dark:text-blue-200">
-                    DNS Configuration Required
-                  </p>
-                  <p className="text-blue-700 dark:text-blue-300">
-                    Add this DNS record at your domain registrar:
-                  </p>
-                  <div className="mt-2 rounded bg-light-bg p-2 font-mono text-xs dark:bg-dark-bg">
-                    <div>Type: {domainInstructions.type}</div>
-                    <div>Host: {domainInstructions.host}</div>
-                    <div>Value: {domainInstructions.value}</div>
-                  </div>
-                  <p className="mt-2 text-xs text-blue-600 dark:text-blue-400">
-                    {domainInstructions.note}
-                  </p>
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={() =>
+                  router.push(
+                    "/orders?pk=npub15dc33fyg3cpd9r58vlqge2hh8dy6hkkrjxkhluv2xpyfreqkmsesesyv6e&isInquiry=true"
+                  )
+                }
+                className="inline-block rounded-lg border-3 border-black bg-white px-4 py-2 text-sm font-bold text-black hover:bg-gray-100 dark:border-gray-500 dark:bg-dark-fg dark:text-dark-text dark:hover:bg-dark-bg"
+              >
+                Contact Us
+              </button>
             </div>
 
             <hr className="border-light-fg dark:border-dark-fg" />

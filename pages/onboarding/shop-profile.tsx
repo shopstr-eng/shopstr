@@ -40,7 +40,7 @@ const OnboardingShopProfile = () => {
 
             <ShopProfileForm isOnboarding={true} />
 
-            <div className="flex justify-center">
+            <div className="mt-6 flex justify-center">
               <Button
                 className={SHOPSTRBUTTONCLASSNAMES}
                 onClick={handleFinish}
