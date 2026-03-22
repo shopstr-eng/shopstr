@@ -347,9 +347,7 @@ export default function Landing() {
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-xl bg-light-fg p-6 text-center shadow-md dark:bg-dark-fg">
               <p className="text-3xl font-bold text-shopstr-purple dark:text-shopstr-yellow">
-                {listingCount === null
-                  ? "…"
-                  : listingCount.toLocaleString()}
+                {listingCount === null ? "…" : listingCount.toLocaleString()}
               </p>
               <p className="mt-2 text-sm text-light-text dark:text-dark-text">
                 Active listings on Shopstr right now
@@ -357,9 +355,7 @@ export default function Landing() {
             </div>
             <div className="rounded-xl bg-light-fg p-6 text-center shadow-md dark:bg-dark-fg">
               <p className="text-3xl font-bold text-shopstr-purple dark:text-shopstr-yellow">
-                {sellerCount === null
-                  ? "…"
-                  : sellerCount.toLocaleString()}
+                {sellerCount === null ? "…" : sellerCount.toLocaleString()}
               </p>
               <p className="mt-2 text-sm text-light-text dark:text-dark-text">
                 Sellers with active shops on Shopstr
@@ -691,27 +687,6 @@ export default function Landing() {
                     alt="Nostr"
                     width={32}
                     height={32}
-                    className="hidden dark:block"
-                  />
-                </a>
-                <a
-                  href="https://x.com/shopstrmarkets"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="transition-transform hover:scale-110"
-                >
-                  <Image
-                    src="/x-logo-black.png"
-                    alt="X"
-                    width={24}
-                    height={24}
-                    className="block dark:hidden"
-                  />
-                  <Image
-                    src="/x-logo-white.png"
-                    alt="X"
-                    width={24}
-                    height={24}
                     className="hidden dark:block"
                   />
                 </a>

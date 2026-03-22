@@ -63,14 +63,6 @@ body {
   overflow-wrap: break-word;
 }
 
-.shadow-neo {
-  box-shadow: 4px 4px 0 0 rgba(0, 0, 0, 1);
-}
-
-.dark .shadow-neo {
-  box-shadow: 4px 4px 0 0 rgba(0, 0, 0, 0.6);
-}
-
 body.sf-active [data-main-nav] {
   display: none !important;
 }

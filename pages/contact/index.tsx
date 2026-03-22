@@ -1,7 +1,6 @@
 import Head from "next/head";
 import Link from "next/link";
 import {
-  ChatBubbleLeftRightIcon,
   CodeBracketIcon,
   GlobeAltIcon,
   QuestionMarkCircleIcon,
@@ -19,10 +18,7 @@ const structuredData = {
     "@type": "Organization",
     name: "Shopstr",
     url: "https://shopstr.market",
-    sameAs: [
-      "https://github.com/shopstr-eng/shopstr",
-      "https://x.com/shopstrmarkets",
-    ],
+    sameAs: ["https://github.com/shopstr-eng/shopstr"],
   },
 };
 
@@ -45,16 +41,6 @@ const channels = [
       "For bug reports, feature requests, or technical questions, open an issue or discussion on the GitHub repository. All development happens in the open.",
     cta: "Open an Issue",
     href: "https://github.com/shopstr-eng/shopstr/issues",
-    external: true,
-  },
-  {
-    icon: ChatBubbleLeftRightIcon,
-    title: "X (Twitter)",
-    handle: "@shopstrmarkets",
-    description:
-      "Follow @shopstrmarkets on X for news, product updates, and community highlights from the Bitcoin and Nostr ecosystem.",
-    cta: "Follow on X",
-    href: "https://x.com/shopstrmarkets",
     external: true,
   },
   {

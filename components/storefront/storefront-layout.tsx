@@ -44,9 +44,9 @@ import StorefrontPolicyPage from "./storefront-policy-page";
 
 const DEFAULT_COLORS: StorefrontColorScheme = {
   primary: "#a438ba",
-  secondary: "#212121",
+  secondary: "#f5f5f5",
   accent: "#a655f7",
-  background: "#ffffff",
+  background: "#e8e8e8",
   text: "#212121",
 };
 
@@ -320,9 +320,6 @@ export default function StorefrontLayout({
 
   const themedCss = `
     body.sf-active [data-overlay-container] .border-black { border-color: var(--sf-secondary) !important; }
-    body.sf-active [data-overlay-container] .shadow-neo {
-      box-shadow: 4px 4px 0 var(--sf-secondary) !important;
-    }
     body.sf-active [data-overlay-container] .bg-white { background-color: var(--sf-bg) !important; }
     body.sf-active [data-overlay-container] .text-black { color: var(--sf-text) !important; }
     body.sf-active [data-overlay-container] .bg-primary-yellow { background-color: var(--sf-primary) !important; }

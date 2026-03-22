@@ -62,20 +62,20 @@ const GOOGLE_FONTS = [
 
 const DEFAULT_COLORS: StorefrontColorScheme = {
   primary: "#a438ba",
-  secondary: "#212121",
+  secondary: "#f5f5f5",
   accent: "#a655f7",
-  background: "#ffffff",
+  background: "#e8e8e8",
   text: "#212121",
 };
 
 const COLOR_PRESETS: { name: string; colors: StorefrontColorScheme }[] = [
   {
-    name: "Shopstr",
+    name: "Default",
     colors: {
       primary: "#a438ba",
-      secondary: "#212121",
+      secondary: "#f5f5f5",
       accent: "#a655f7",
-      background: "#ffffff",
+      background: "#e8e8e8",
       text: "#212121",
     },
   },
@@ -132,11 +132,11 @@ const COLOR_PRESETS: { name: string; colors: StorefrontColorScheme }[] = [
   {
     name: "Dark",
     colors: {
-      primary: "#a438ba",
-      secondary: "#111827",
-      accent: "#a655f7",
-      background: "#1F2937",
-      text: "#F9FAFB",
+      primary: "#fcd34d",
+      secondary: "#4d4c4e",
+      accent: "#fef08a",
+      background: "#212121",
+      text: "#e8e8e8",
     },
   },
 ];

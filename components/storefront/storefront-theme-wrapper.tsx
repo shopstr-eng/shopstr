@@ -20,9 +20,9 @@ import StorefrontFooterComponent from "./storefront-footer";
 
 const DEFAULT_COLORS: StorefrontColorScheme = {
   primary: "#a438ba",
-  secondary: "#212121",
+  secondary: "#f5f5f5",
   accent: "#a655f7",
-  background: "#ffffff",
+  background: "#e8e8e8",
   text: "#212121",
 };
 
@@ -185,9 +185,6 @@ export default function StorefrontThemeWrapper({
     .storefront-themed .hover\\:text-primary-blue:hover { color: var(--sf-accent) !important; }
     .storefront-themed .border-primary-yellow { border-color: var(--sf-primary) !important; }
     .storefront-themed .border-black { border-color: var(--sf-secondary) !important; }
-    .storefront-themed .shadow-neo {
-      box-shadow: 4px 4px 0 var(--sf-secondary) !important;
-    }
     .storefront-themed .bg-white { background-color: var(--sf-bg) !important; }
     .storefront-themed .text-black { color: var(--sf-text) !important; }
     .storefront-themed .text-gray-500 { color: color-mix(in srgb, var(--sf-text) 50%, transparent) !important; }
@@ -196,9 +193,6 @@ export default function StorefrontThemeWrapper({
     .storefront-themed .hover\\:bg-blue-200:hover { background-color: color-mix(in srgb, var(--sf-accent) 25%, var(--sf-bg)) !important; }
 
     body.sf-active [data-overlay-container] .border-black { border-color: var(--sf-secondary) !important; }
-    body.sf-active [data-overlay-container] .shadow-neo {
-      box-shadow: 4px 4px 0 var(--sf-secondary) !important;
-    }
     body.sf-active [data-overlay-container] .bg-white { background-color: var(--sf-bg) !important; }
     body.sf-active [data-overlay-container] .text-black { color: var(--sf-text) !important; }
     body.sf-active [data-overlay-container] .bg-primary-yellow { background-color: var(--sf-primary) !important; }
