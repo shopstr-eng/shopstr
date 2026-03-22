@@ -53,7 +53,7 @@ export default function StorefrontHero({
 
         <h1
           className="text-4xl font-bold md:text-5xl"
-          style={{ color: colors.background }}
+          style={{ color: colors.text }}
         >
           {shopName}
         </h1>
@@ -61,7 +61,7 @@ export default function StorefrontHero({
         {shopAbout && (
           <p
             className="mt-4 max-w-xl text-lg"
-            style={{ color: colors.background + "CC" }}
+            style={{ color: colors.text + "CC" }}
           >
             {shopAbout}
           </p>
@@ -69,7 +69,7 @@ export default function StorefrontHero({
 
         <div
           className="mt-6 flex items-center gap-6 text-sm"
-          style={{ color: colors.background + "99" }}
+          style={{ color: colors.text + "99" }}
         >
           <span className="flex items-center gap-1">
             <span
